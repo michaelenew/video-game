@@ -15,6 +15,7 @@ Start with the [combat kernel](combat-kernel.md) — every class document assume
 | [shifter.md](shifter.md) | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Decided |
 | [elementalist.md](elementalist.md) | Decided |
+| [parked.md](parked.md) | Parked — progression and equipment |
 
 ## Roster
 
@@ -30,9 +31,29 @@ Start with the [combat kernel](combat-kernel.md) — every class document assume
 
 ## Next decisions
 
-1. **Statera ascension.** The one unresolved core mechanic.
-2. **Arena size and shape.** Determines whether a space-denying class can ever corner
-   anyone, and whether pushback-as-the-cost-of-blocking has teeth.
-3. **Control scheme pass.** The key map predates the new system, no-cooldowns, and the
-   block proposal. See [defense.md](defense.md).
-4. **Bow as a universal secondary** — specification.
+The focus is **building the six core classes**. Progression and equipment are parked; see
+[parked.md](parked.md).
+
+1. **An ability spec template.** Every class needs recosting for no cooldowns, and without
+   a shared format for what an ability *is* — frame windows, resource cost, mechanic
+   interaction — six kits get written six different ways. Cheap, and it unblocks all of them.
+2. **Statera ascension.** The one unresolved core mechanic. Proposal is in
+   [statera.md](statera.md).
+3. **Class kits**, written against the template. The Bulwark is greenfield and stress-tests
+   the new defensive system; the Reaver, Elementalist, and Blood mage mostly need recosting
+   and reconciling of duplicate versions in the archive.
+4. **Arena size and shape.** Determines whether a space-denying class can corner anyone, and
+   whether pushback has teeth.
+5. **Control scheme pass.** The archived key map predates the new system, no cooldowns, and
+   the block proposal.
+
+## Per-class blockers
+
+| Class | What it needs |
+| --- | --- |
+| Statera | Ascension resolved, then a kit written against the new meter |
+| Bulwark | A full kit. Unblocked by [defense.md](defense.md) |
+| Shifter | Kit written out, including the form-swap ending matrix. Rename |
+| Shadow Reaver | Decide whether there is any mobility with no shadow placed, then recost |
+| Elementalist | Reconcile the two overlapping kit versions in the archive, then recost |
+| Blood mage | Recost. Now tunable — was blocked on TTK |

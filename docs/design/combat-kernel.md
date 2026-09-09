@@ -88,8 +88,8 @@ damage. Special attacks are the guard breakers.
 - **Arena size and shape.** Directly determines whether a committed, space-denying class
   can ever corner anyone.
 - **Stocks or a single health pool** in versus.
-- **The bow as a universal secondary.** See [gatekeeper-retirement.md](gatekeeper-retirement.md).
-  Decided in principle, unspecified in detail.
+- **Progression and equipment are parked** until the core classes are built. See
+  [parked.md](parked.md), which also covers the bow.
 - **Forced engagement in versus.** At 60-second TTK, two players who both decline to
   approach produce nothing. Whether the answer is a shrinking arena, an objective, or
   purely class-level pressure is undecided.
