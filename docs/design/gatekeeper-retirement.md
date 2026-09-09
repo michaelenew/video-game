@@ -41,16 +41,13 @@ Elementalist's shoot-through-your-own-object combo.
 
 ## The ranged hole
 
-The Gatekeeper existed to be the ranged physical damage dealer. That hole is filled by a
-**weapon, not a class**.
+The Gatekeeper existed to be the ranged physical damage dealer. **The roster does not
+backfill that role**, and the hole is not treated as one.
 
-Bows already exist in the weapon system. Let any class equip one as a secondary for a weak
-poke. This dissolves the balance problem entirely — a bow that is everyone's off-hand can
-be tuned weak-but-useful precisely because it is not carrying a class's damage budget —
-and it costs a fraction of what a class costs to build.
+In a closed arena fighter, "nobody has a long-range poke" is a legitimate design choice
+rather than a gap — most Smash characters have no real projectile. The Elementalist already
+covers mid-range control, so no meaningful role is lost.
 
-The Elementalist already covers mid-range control, so the roster does not lose a
-meaningful role.
-
-Specification of the bow as a universal secondary is open. See
-[combat-kernel.md](combat-kernel.md).
+A bow as a universal secondary was proposed as a fill and is **parked**, leaning against.
+See [parked.md](parked.md) for the reasoning. The secondary slot itself is not parked — the
+shield occupies it, and shield-or-nothing is already a real choice.
