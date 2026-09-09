@@ -1,6 +1,13 @@
 # Design notes
 
-Markdown export of the **Game notes** folder in Google Drive, converted on 2026-09-09.
+Two layers:
+
+- **[`design/`](design/README.md)** — current working design. Start at the
+  [combat kernel](design/combat-kernel.md). These documents supersede the archive below.
+- **Everything else on this page** — the 2016–2019 source archive, exported from the
+  **Game notes** Google Drive folder on 2026-09-09. Kept as reference, not as spec.
+
+## Archive
 
 Each file carries front matter recording the source document's title, Drive file ID,
 Drive URL, and the time it was last modified in Drive, so a later re-sync can tell
