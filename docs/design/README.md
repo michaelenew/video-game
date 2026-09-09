@@ -15,7 +15,22 @@ Start with the [combat kernel](combat-kernel.md) — every class document assume
 | [shifter.md](shifter.md) | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Decided |
 | [elementalist.md](elementalist.md) | Decided |
+| [ability-spec.md](ability-spec.md) | Proposed |
 | [parked.md](parked.md) | Parked — progression and equipment |
+
+## Class kits
+
+Six abilities each, plus an auto and the mechanic input. Written against
+[ability-spec.md](ability-spec.md).
+
+| Kit | Mechanic / what abilities spend |
+| --- | --- |
+| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position |
+| [Elementalist](kits/elementalist.md) | Structure slots on the field |
+| [Blood mage](kits/blood-mage.md) | Health |
+| [Statera](kits/statera.md) | Meter position — ascension still open |
+| [Shifter](kits/shifter.md) | Rush charge and which form you end in |
+| [Bulwark](kits/bulwark.md) | Shield position |
 
 ## Roster
 
@@ -49,11 +64,13 @@ The focus is **building the six core classes**. Progression and equipment are pa
 
 ## Per-class blockers
 
-| Class | What it needs |
+| Class | What it still needs |
 | --- | --- |
-| Statera | Ascension resolved, then a kit written against the new meter |
-| Bulwark | A full kit. Unblocked by [defense.md](defense.md) |
-| Shifter | Kit written out, including the form-swap ending matrix. Rename |
-| Shadow Reaver | Decide whether there is any mobility with no shadow placed, then recost |
-| Elementalist | Reconcile the two overlapping kit versions in the archive, then recost |
-| Blood mage | Recost. Now tunable — was blocked on TTK |
+| Statera | Ascension resolved. The kit is written around the gap |
+| Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
+| Shifter | Whether the mid-animation swap costs Rush. Rename |
+| Shadow Reaver | Whether the shadow has collision |
+| Elementalist | Structure cap of three is a readability guess, not a balance one |
+| Blood mage | Health cost as flat or percentage. Downstream of TTK either way |
+
+All six need frame counts and damage numbers, which need a prototype.
