@@ -8,7 +8,8 @@ Start with the [combat kernel](combat-kernel.md) — every class document assume
 
 | Document | Status |
 | --- | --- |
-| [combat-kernel.md](combat-kernel.md) | Decided; block/parry still open |
+| [combat-kernel.md](combat-kernel.md) | Decided |
+| [defense.md](defense.md) | Proposed |
 | [statera.md](statera.md) | Meter decided; ascension is an open proposal |
 | [bulwark.md](bulwark.md) | Proposed |
 | [shifter.md](shifter.md) | Decided |
@@ -29,7 +30,9 @@ Start with the [combat kernel](combat-kernel.md) — every class document assume
 
 ## Next decisions
 
-1. **Block and parry.** Blocks both the Bulwark and the Shifter.
-2. **Statera ascension.** The one unresolved core mechanic.
-3. **Arena size and shape.** Determines whether a space-denying class can ever corner anyone.
+1. **Statera ascension.** The one unresolved core mechanic.
+2. **Arena size and shape.** Determines whether a space-denying class can ever corner
+   anyone, and whether pushback-as-the-cost-of-blocking has teeth.
+3. **Control scheme pass.** The key map predates the new system, no-cooldowns, and the
+   block proposal. See [defense.md](defense.md).
 4. **Bow as a universal secondary** — specification.

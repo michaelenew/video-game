@@ -76,19 +76,12 @@ needs re-expression before it can be used.
 
 These block class work and should be settled next.
 
-### Block and parry — unspecified
+### Block and parry — proposed, see [defense.md](defense.md)
 
-There is no block or parry system defined anywhere in the notes. The Shifter has
-"raise shield, scroll back to brace" and "parrying gives a stacking increased resistance
-buff"; nothing else exists.
-
-This is now a kernel decision, not a class detail, because **two** classes depend on it
-(Shifter and Bulwark). Needs answers to:
-
-- What does blocking cost? Is there chip damage?
-- Is there a parry window with a reward, or only damage reduction?
-- Can blocking be broken, and by what?
-- Does blocking work against melee, projectiles, or both?
+Was unspecified and blocking two classes. Now proposed: dodge is universal and evasive,
+block is shield-gated and positional, parry is the opening frames of block and rewards
+with a stagger, and blocking costs space through pushback rather than health through chip
+damage. Special attacks are the guard breakers.
 
 ### Other open items
 

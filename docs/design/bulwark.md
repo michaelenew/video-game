@@ -105,15 +105,15 @@ one committed approach tool. The thrown shield plus leap is that tool.
 
 ## Dependencies
 
-- **Block and parry are unspecified.** See [combat-kernel.md](combat-kernel.md). This
-  class cannot be specified until that system exists.
+- **Block and parry** are proposed in [defense.md](defense.md), which was the blocker on
+  specifying this class. It supplies facing-arc blocking, pushback resistance as the
+  Bulwark's class trait, parry-gated staggers, and the distinction between the shield as a
+  projectile-stopping volume and as a melee guard state.
 - **Shared blocking implementation.** The shield blocking projectiles and Elementalist
   structures blocking projectiles should be one system, not two.
 
 ## Open questions
 
-- Does the held shield block from behind, or only in the facing arc? Facing-arc is more
-  interesting and more punishable.
 - Can the planted shield be destroyed, or only bypassed?
 - Does the shield block allies' projectiles in coop? Friendly-fire blocking is a real
   coordination mechanic but can be maddening.
