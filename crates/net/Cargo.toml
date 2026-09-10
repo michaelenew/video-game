@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-ggrs = "0.11.1"
+ggrs = { version = "0.11.1", features = ["sync-send"] }
 sim = { path = "../sim" }
 
 # `ggrs` plugs in here. It is not vendored yet because this environment cannot

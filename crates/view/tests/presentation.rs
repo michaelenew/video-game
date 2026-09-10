@@ -158,6 +158,7 @@ fn input_at(action: Action, into: u16, total: u16, frame: u32) -> PoseInput {
         frames_total: total,
         speed: 0.0,
         grounded: true,
+        crouching: false,
         sim_frame: frame,
     }
 }
@@ -212,6 +213,7 @@ fn pose_of(w: &World) -> view::Pose {
         frames_total: 0,
         speed: 0.0,
         grounded: p.grounded,
+        crouching: p.crouching,
         sim_frame: w.frame,
     })
 }

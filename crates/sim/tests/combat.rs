@@ -175,3 +175,50 @@ fn players_can_stand_on_the_platforms() {
     let y = w.players[0].pos.y.to_f32_for_render();
     assert!(y >= 0.0, "fell through the floor to y={y}");
 }
+
+#[test]
+fn crouching_ducks_an_overhead_but_not_a_mid() {
+    // Slam is an overhead; Bash is a mid. Crouch beats one and loses to the
+    // other, which is what stops it being a free defensive option.
+    let mut standing = engaged();
+    run(&mut standing, 45, L | SHIFT, 0);
+    assert!(
+        standing.players[1].health < MAX_HEALTH,
+        "setup did not connect while standing"
+    );
+
+    let mut mid = engaged();
+    run(&mut mid, 20, L, Input::CROUCH);
+    assert!(
+        mid.players[1].health < MAX_HEALTH,
+        "a mid was ducked; crouch beats everything"
+    );
+
+    let mut ducked = engaged();
+    run(&mut ducked, 45, L | SHIFT, Input::CROUCH);
+    assert_eq!(
+        ducked.players[1].health, MAX_HEALTH,
+        "crouch failed to duck the overhead"
+    );
+}
+
+#[test]
+fn crouching_is_slower_than_walking() {
+    let mut walk = World::new();
+    run(&mut walk, 30, Input::D, 0);
+    let mut duck = World::new();
+    run(&mut duck, 30, Input::D | Input::CROUCH, 0);
+    assert!(
+        duck.players[0].pos.x.raw() < walk.players[0].pos.x.raw(),
+        "crouch-walking was not slower"
+    );
+}
+
+#[test]
+fn crouch_releases_when_the_key_does() {
+    let mut w = World::new();
+    run(&mut w, 5, Input::CROUCH, 0);
+    assert!(w.players[0].crouching);
+    run(&mut w, 5, 0, 0);
+    assert!(!w.players[0].crouching, "stayed crouched after release");
+}

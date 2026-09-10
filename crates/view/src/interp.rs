@@ -25,6 +25,7 @@ pub struct PlayerView {
     pub frames_left: u16,
     pub health: i32,
     pub grounded: bool,
+    pub crouching: bool,
     /// Horizontal speed, for locomotion posing.
     pub speed: f32,
 }
@@ -89,6 +90,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         frames_left: c.action.frames_left(),
         health: c.health,
         grounded: c.grounded,
+        crouching: c.crouching,
         speed,
     }
 }

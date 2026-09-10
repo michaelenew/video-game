@@ -25,6 +25,10 @@ pub type PlayerId = usize;
 const GRAVITY: Fx = Fx::ratio(-30, 1);
 const MOVE_SPEED: Fx = Fx::ratio(7, 1);
 const GUARD_MOVE_SPEED: Fx = Fx::ratio(2, 1);
+const CROUCH_MOVE_SPEED: Fx = Fx::ratio(3, 1);
+/// Crouching lowers the hurtbox to this fraction of standing height, so high
+/// attacks pass over. Low attacks are the counter.
+const CROUCH_HEIGHT_SCALE: Fx = Fx::ratio(55, 100);
 const JUMP_SPEED: Fx = Fx::ratio(9, 1);
 const GROUND_Y: Fx = Fx::ZERO;
 
@@ -80,6 +84,9 @@ struct MoveData {
     unblockable: bool,
     /// Requires the shield in hand.
     needs_shield: bool,
+    /// Whether this connects with a crouching opponent. An overhead does not,
+    /// which is what makes crouch a real option against a committed swing.
+    hits_crouching: bool,
 }
 
 const MOVES: [MoveData; 3] = [
@@ -96,6 +103,7 @@ const MOVES: [MoveData; 3] = [
         knockback: Fx::ratio(4, 1),
         unblockable: false,
         needs_shield: true,
+        hits_crouching: true,
     },
     // Slam -- committed. Heavily punishable, heavily rewarding.
     MoveData {
@@ -110,6 +118,8 @@ const MOVES: [MoveData; 3] = [
         knockback: Fx::ratio(11, 1),
         unblockable: false,
         needs_shield: true,
+        // An overhead. Ducking it is the whole reason to crouch.
+        hits_crouching: false,
     },
     // Grapple -- beats guard outright, loses badly to dodge. The payoff for a
     // read, not something to throw out.
@@ -125,6 +135,7 @@ const MOVES: [MoveData; 3] = [
         knockback: Fx::ratio(6, 1),
         unblockable: true,
         needs_shield: true,
+        hits_crouching: true,
     },
 ];
 
@@ -276,6 +287,18 @@ pub struct Player {
     pub mechanic: i32,
     pub shield: Shield,
     pub rounds_won: u8,
+    pub crouching: bool,
+}
+
+impl Player {
+    /// Height of the hurtbox. Crouching ducks under anything aimed high.
+    pub fn hurt_height(&self) -> Fx {
+        if self.crouching {
+            arena::BODY_HEIGHT.mul(CROUCH_HEIGHT_SCALE)
+        } else {
+            arena::BODY_HEIGHT
+        }
+    }
 }
 
 impl Default for Player {
@@ -291,6 +314,7 @@ impl Default for Player {
             mechanic: 0,
             shield: Shield::Held,
             rounds_won: 0,
+            crouching: false,
         }
     }
 }
@@ -443,6 +467,7 @@ impl World {
             h.write_i32(p.mechanic);
             h.write_u32(p.grounded as u32);
             h.write_u32(p.hit_used as u32);
+            h.write_u32(p.crouching as u32);
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
             let kind = match p.action {
@@ -517,6 +542,13 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     }
     let m = &MOVES[kind as usize];
 
+    // Overheads miss a crouching defender. Expressed as a property of the move
+    // rather than as hitbox geometry, because that is what players read and
+    // what a frame table can state.
+    if defender.crouching && !m.hits_crouching {
+        return None;
+    }
+
     let centre = attacker.pos.add(attacker.facing.scale(m.reach));
     let delta = defender.pos.sub(centre);
     if delta.flat_len().raw() > m.radius.add(BODY_RADIUS).raw() {
@@ -584,6 +616,9 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
 
     let want_guard = input.has(Input::RIGHT) && p.shield.in_hand();
     let (ax, az) = input.move_axis();
+    // Crouch is a stance, not an action: it holds while the key is down and
+    // only while you are otherwise free to move.
+    p.crouching = input.has(Input::CROUCH) && p.grounded && p.action.actionable();
 
     p.action = match p.action {
         Action::Dodge { left } if left > 0 => Action::Dodge { left: left - 1 },
@@ -665,9 +700,14 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         p.vel.x = p.vel.x.mul(Fx::ratio(93, 100));
         p.vel.z = p.vel.z.mul(Fx::ratio(93, 100));
     } else if p.action.actionable() && (ax != 0 || az != 0) {
+        let speed = if p.crouching {
+            CROUCH_MOVE_SPEED
+        } else {
+            MOVE_SPEED
+        };
         let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
-        p.vel.x = dir.x.mul(MOVE_SPEED);
-        p.vel.z = dir.z.mul(MOVE_SPEED);
+        p.vel.x = dir.x.mul(speed);
+        p.vel.z = dir.z.mul(speed);
     } else if p.action.guarding() && (ax != 0 || az != 0) {
         let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
         p.vel.x = dir.x.mul(GUARD_MOVE_SPEED);

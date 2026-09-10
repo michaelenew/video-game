@@ -20,6 +20,9 @@ impl Input {
     pub const S: u16 = 1 << 6;
     pub const D: u16 = 1 << 7;
     pub const SPACE: u16 = 1 << 8;
+    /// Crouch. Lowers your hurtbox and slows you -- the answer to a high
+    /// attack, and the reason not every whiff is free.
+    pub const CROUCH: u16 = 1 << 9;
 
     pub const fn has(self, bit: u16) -> bool {
         self.0 & bit != 0
