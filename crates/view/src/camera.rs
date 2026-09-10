@@ -130,15 +130,60 @@ impl CameraRig {
             *axis += (target - *axis) * smoothing;
         }
 
+        // Arena geometry must never get between the camera and the fight.
+        // An auto-framing camera cannot solve occlusion by rotating, because
+        // the angle it wants is the angle that reads -- so pull in instead.
+        let clear = unobstructed_distance(self.focus, self.yaw, self.cfg.height, self.distance);
+
         Framing {
             eye: [
-                self.focus[0] + self.yaw.cos() * self.distance,
-                self.focus[1] + self.cfg.height,
-                self.focus[2] + self.yaw.sin() * self.distance,
+                self.focus[0] + self.yaw.cos() * clear,
+                self.focus[1] + self.cfg.height * (clear / self.distance).clamp(0.35, 1.0),
+                self.focus[2] + self.yaw.sin() * clear,
             ],
             look_at: self.focus,
         }
     }
+}
+
+/// Longest distance along the camera arm that stays out of the level geometry.
+///
+/// Marches the segment rather than solving it analytically: the arena is a
+/// handful of boxes and this runs once a frame on the render side, where exact
+/// determinism does not matter.
+fn unobstructed_distance(focus: [f32; 3], yaw: f32, height: f32, want: f32) -> f32 {
+    const STEPS: usize = 24;
+    const PADDING: f32 = 0.45;
+    let mut clear = want;
+    for step in 1..=STEPS {
+        let t = want * step as f32 / STEPS as f32;
+        let p = [
+            focus[0] + yaw.cos() * t,
+            focus[1] + height * (t / want),
+            focus[2] + yaw.sin() * t,
+        ];
+        if inside_geometry(p, PADDING) {
+            clear = (t - want / STEPS as f32).max(2.5);
+            break;
+        }
+    }
+    clear
+}
+
+fn inside_geometry(p: [f32; 3], pad: f32) -> bool {
+    sim::arena::SOLIDS.iter().any(|s| {
+        let lo = [
+            s.min.x.to_f32_for_render() - pad,
+            s.min.y.to_f32_for_render() - pad,
+            s.min.z.to_f32_for_render() - pad,
+        ];
+        let hi = [
+            s.max.x.to_f32_for_render() + pad,
+            s.max.y.to_f32_for_render() + pad,
+            s.max.z.to_f32_for_render() + pad,
+        ];
+        (0..3).all(|i| p[i] > lo[i] && p[i] < hi[i])
+    })
 }
 
 /// Frame-rate independent smoothing. A raw `t` per frame converges at different

@@ -196,6 +196,37 @@ const GUARD: Pose = Pose {
     ],
 };
 
+/// Dodge roll: low and tucked. Must read as clearly evasive from across the
+/// arena, because the opponent has to be able to tell a dodge from a walk.
+const ROLL: Pose = Pose {
+    parts: [
+        PartTransform {
+            pos: [0.0, 0.52, 0.10],
+            rot: [-1.05, 0.0, 0.0],
+        },
+        PartTransform {
+            pos: [0.0, 0.86, 0.34],
+            rot: [-0.90, 0.0, 0.0],
+        },
+        PartTransform {
+            pos: [-0.36, 0.62, 0.26],
+            rot: [-1.30, 0.0, 0.45],
+        },
+        PartTransform {
+            pos: [0.36, 0.62, 0.26],
+            rot: [-1.30, 0.0, -0.45],
+        },
+        PartTransform {
+            pos: [-0.18, 0.30, -0.22],
+            rot: [-1.10, 0.0, 0.0],
+        },
+        PartTransform {
+            pos: [0.18, 0.30, -0.28],
+            rot: [-1.30, 0.0, 0.0],
+        },
+    ],
+};
+
 /// Recoil: knocked off balance, arms trailing.
 const RECOIL: Pose = Pose {
     parts: [
@@ -274,6 +305,12 @@ pub fn pose_for(input: PoseInput) -> Pose {
         }
         Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => {
             blend(&RECOIL, &NEUTRAL, ease_in_out(t * 0.7))
+        }
+        Action::Dodge { .. } => {
+            // Snap into the roll and come out of it, so the invulnerable
+            // frames and the vulnerable recovery look different.
+            let out = ease_in_out((t * 1.8 - 0.8).clamp(0.0, 1.0));
+            blend(&ROLL, &NEUTRAL, out)
         }
         Action::Free => {
             if !input.grounded {

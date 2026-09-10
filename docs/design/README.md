@@ -111,8 +111,9 @@ crates/game   Bevy app. Rendering only.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
-**Run it:** `cargo run -p game` — 3D arena, character standins, auto-framing camera.
-`DEMO=1` drives player one from a script. `./scripts/screenshot.sh` renders headlessly.
+**Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
+overlay on F1, local two-player, training dummy on 1-4. `DEMO=1` scripts player one and
+`DEBUG_OVERLAY=1` starts with the overlay on; `./scripts/screenshot.sh` renders headlessly.
 
 **Tune frame data:** `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
