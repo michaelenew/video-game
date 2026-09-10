@@ -10,6 +10,11 @@ use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
 
 pub mod ggrs_glue;
+pub mod p2p;
+
+/// Re-exported so the front end never depends on GGRS directly. Networking is
+/// this crate's business.
+pub use ggrs;
 pub use ggrs_glue::{NetInput, SessionConfig, handle_requests};
 
 /// What a rollback session needs from a simulation.

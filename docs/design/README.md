@@ -115,6 +115,10 @@ crates/web    WebAssembly build and the browser frame-data tool.
 overlay on F1, local two-player, training dummy on 1-4. `DEMO=1` scripts player one and
 `DEBUG_OVERLAY=1` starts with the overlay on; `./scripts/screenshot.sh` renders headlessly.
 
+**Play someone:** `game --port 47811 --peer <their-ip>:47812`. Rollback netcode, no server.
+`./scripts/p2p-localhost.sh` runs both ends locally;
+`cargo run -p net --bin p2p_localhost` checks two peers stay in sync over real UDP.
+
 **Tune frame data:** `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
 

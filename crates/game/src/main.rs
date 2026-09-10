@@ -22,6 +22,39 @@ use view::interp::TickClock;
 use view::pose::{PARTS, Part, PoseInput, part_size, pose_for};
 use view::{CameraRig, camera::RigConfig, interpolate};
 
+/// How the match is being driven.
+///
+/// Local is the training mode. Online routes every tick through GGRS, which
+/// owns when to save, load and advance -- the simulation only has to do those
+/// three things correctly.
+enum Driver {
+    Local,
+    Online {
+        session: Box<net::ggrs::P2PSession<net::SessionConfig>>,
+        handle: usize,
+        desynced: bool,
+    },
+}
+
+/// `game` for training mode, or:
+///
+///     game --port 47801 --peer 192.168.1.20:47802
+///
+/// Both peers derive who is player one from the two addresses, so there is no
+/// server and no lobby.
+fn parse_args() -> Option<(u16, std::net::SocketAddr)> {
+    let args: Vec<String> = std::env::args().collect();
+    let get = |flag: &str| {
+        args.iter()
+            .position(|a| a == flag)
+            .and_then(|i| args.get(i + 1))
+            .cloned()
+    };
+    let port: u16 = get("--port")?.parse().ok()?;
+    let peer: std::net::SocketAddr = get("--peer")?.parse().ok()?;
+    Some((port, peer))
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -65,6 +98,7 @@ pub struct Sim {
     paused: bool,
     step_once: bool,
     dummy: Dummy,
+    driver: Driver,
 }
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
@@ -80,6 +114,33 @@ enum Dummy {
 impl Default for Sim {
     fn default() -> Self {
         let w = World::new();
+        let driver = match parse_args() {
+            Some((port, peer)) => {
+                let local: std::net::SocketAddr =
+                    format!("127.0.0.1:{port}").parse().expect("local addr");
+                let handle = net::p2p::local_handle_for(local, peer);
+                match net::p2p::start(port, peer, handle) {
+                    Ok(session) => {
+                        eprintln!(
+                            "online: port {port} to {peer}, you are player {}",
+                            handle + 1
+                        );
+                        Driver::Online {
+                            session: Box::new(session),
+                            handle,
+                            desynced: false,
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "could not start the session ({e}); falling back to training mode"
+                        );
+                        Driver::Local
+                    }
+                }
+            }
+            None => Driver::Local,
+        };
         Sim {
             prev: w.clone(),
             cur: w,
@@ -87,6 +148,7 @@ impl Default for Sim {
             paused: false,
             step_once: false,
             dummy: Dummy::Idle,
+            driver,
         }
     }
 }
@@ -291,16 +353,80 @@ fn tick_sim(
         Dummy::Human => read_player_two(&keys),
     };
 
-    let ticks = if sim.paused {
-        u32::from(std::mem::take(&mut sim.step_once))
-    } else {
-        sim.clock.advance(time.delta_secs())
+    match &mut sim.driver {
+        Driver::Local => {
+            let ticks = if sim.paused {
+                u32::from(std::mem::take(&mut sim.step_once))
+            } else {
+                sim.clock.advance(time.delta_secs())
+            };
+            for _ in 0..ticks {
+                sim.prev = sim.cur.clone();
+                sim.cur.advance([local, dummy]);
+            }
+        }
+        Driver::Online { .. } => {
+            let ticks = sim.clock.advance(time.delta_secs());
+            for _ in 0..ticks {
+                step_online(&mut sim, local);
+            }
+        }
+    }
+}
+
+/// One networked tick.
+///
+/// GGRS decides when to save, load and advance; `handle_requests` services
+/// those against the simulation. Rollbacks land here as a load followed by
+/// several advances, all inside one call.
+fn step_online(sim: &mut Sim, local: SimInput) {
+    let Driver::Online {
+        session,
+        handle,
+        desynced,
+    } = &mut sim.driver
+    else {
+        return;
     };
 
-    for _ in 0..ticks {
-        sim.prev = sim.cur.clone();
-        let inputs = [local, dummy];
-        sim.cur.advance(inputs);
+    session.poll_remote_clients();
+    for event in session.events() {
+        match event {
+            net::ggrs::GgrsEvent::DesyncDetected { frame, .. } => {
+                // Should be impossible: the simulation is integer-only and
+                // SyncTest covers it. If it happens, say so loudly rather than
+                // letting the two players drift apart in silence.
+                eprintln!("DESYNC at frame {frame}");
+                *desynced = true;
+            }
+            net::ggrs::GgrsEvent::Disconnected { addr } => eprintln!("peer {addr} disconnected"),
+            net::ggrs::GgrsEvent::NetworkInterrupted { addr, .. } => {
+                eprintln!("peer {addr} interrupted")
+            }
+            _ => {}
+        }
+    }
+
+    if session.current_state() != net::ggrs::SessionState::Running {
+        return;
+    }
+
+    if session
+        .add_local_input(*handle, net::NetInput(local.0))
+        .is_err()
+    {
+        // Too far ahead of the peer. Waiting is the correct response.
+        return;
+    }
+
+    let prev = sim.cur.clone();
+    match session.advance_frame() {
+        Ok(requests) => {
+            net::handle_requests(&mut sim.cur, requests);
+            sim.prev = prev;
+        }
+        Err(net::ggrs::GgrsError::PredictionThreshold) => {}
+        Err(e) => eprintln!("advance failed: {e}"),
     }
 }
 
@@ -311,13 +437,18 @@ fn demo_mode() -> bool {
 }
 
 fn demo_input(frame: u32) -> SimInput {
-    let beat = frame % 180;
+    let beat = frame % 480;
     let mut v = 0u16;
     match beat {
-        0..=54 => v |= SimInput::D,                         // walk in
-        55..=70 => v |= SimInput::LEFT,                     // bash
-        90..=120 => v |= SimInput::A,                       // back off
-        130..=150 => v |= SimInput::SHIFT | SimInput::LEFT, // slam
+        0..=70 => v |= SimInput::D,                         // close the gap
+        75..=78 => v |= SimInput::LEFT,                     // bash
+        110..=126 => v |= SimInput::RIGHT,                  // guard
+        150..=153 => v |= SimInput::SHIFT | SimInput::LEFT, // slam
+        190..=215 => v |= SimInput::CROUCH,                 // duck
+        240..=243 => v |= SimInput::SPACE | SimInput::A,    // dodge back
+        280..=283 => v |= SimInput::MIDDLE,                 // throw the shield
+        340..=343 => v |= SimInput::MIDDLE,                 // recall it
+        410..=440 => v |= SimInput::A,                      // reset spacing
         _ => {}
     }
     SimInput(v)
@@ -387,6 +518,9 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     if keys.pressed(KeyCode::Space) {
         v |= SimInput::SPACE;
     }
+    if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::KeyC) {
+        v |= SimInput::CROUCH;
+    }
     SimInput(v)
 }
 
@@ -418,6 +552,7 @@ fn apply_poses(
             frames_total: total,
             speed: p.speed,
             grounded: p.grounded,
+            crouching: p.crouching,
             sim_frame: frame.sim_frame,
         });
         let t = pose.get(bp.part);

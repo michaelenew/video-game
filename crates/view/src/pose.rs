@@ -72,6 +72,7 @@ pub struct PoseInput {
     pub frames_total: u16,
     pub speed: f32,
     pub grounded: bool,
+    pub crouching: bool,
     /// Simulation frame. Deterministic, so cyclic motion driven from it is too.
     pub sim_frame: u32,
 }
@@ -227,6 +228,37 @@ const ROLL: Pose = Pose {
     ],
 };
 
+/// Crouch: low and compact. Has to read from across the arena, because the
+/// attacker needs to know their overhead will whiff.
+const CROUCH: Pose = Pose {
+    parts: [
+        PartTransform {
+            pos: [0.0, 0.56, 0.0],
+            rot: [0.30, 0.0, 0.0],
+        },
+        PartTransform {
+            pos: [0.0, 1.00, 0.10],
+            rot: [0.20, 0.0, 0.0],
+        },
+        PartTransform {
+            pos: [-0.40, 0.66, 0.10],
+            rot: [-0.55, 0.0, 0.25],
+        },
+        PartTransform {
+            pos: [0.40, 0.66, 0.10],
+            rot: [-0.55, 0.0, -0.25],
+        },
+        PartTransform {
+            pos: [-0.20, 0.22, 0.04],
+            rot: [0.80, 0.0, 0.0],
+        },
+        PartTransform {
+            pos: [0.20, 0.22, 0.04],
+            rot: [0.80, 0.0, 0.0],
+        },
+    ],
+};
+
 /// Recoil: knocked off balance, arms trailing.
 const RECOIL: Pose = Pose {
     parts: [
@@ -315,6 +347,8 @@ pub fn pose_for(input: PoseInput) -> Pose {
         Action::Free => {
             if !input.grounded {
                 AIRBORNE
+            } else if input.crouching {
+                CROUCH
             } else {
                 locomotion(input)
             }

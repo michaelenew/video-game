@@ -252,8 +252,10 @@ Everything below builds and passes today.
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
-| Bulwark kit | Bash, Slam, Guard, parry, Grapple, shield throw/recall/leap, dodge |
+| Bulwark kit | Bash, Slam, Guard, parry, Grapple, shield throw/recall/leap |
+| Universal movement | Jump, dodge with i-frames, crouch that ducks overheads |
 | Round flow | Knockout, round wins, reset |
+| **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
 
 The move set is a **Bulwark stand-in**, not a finished class: a fast poke, a committed slam,
@@ -265,11 +267,9 @@ did**, so every class implemented from here is checked from its first commit.
 
 ## Next
 
-1. **Direct-IP peer to peer.** GGRS is wired and SyncTest passes; what is missing is the
-   socket and a room handshake.
-2. **A second class.** The Bellator exercises the form-swap window, which nothing else uses.
-3. **glTF standins.** The pose function's signature does not change, only what it returns.
+1. **A second class.** The Bellator exercises the form-swap window, which nothing else uses.
+2. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
-4. **Crouch** from the archived control notes. Jump and dodge exist.
-5. **Feel.** Frame counts, camera smoothing, movement speed, knockback. These need hands on
+3. **NAT traversal**, when the game leaves the LAN.
+4. **Feel.** Frame counts, camera smoothing, movement speed, knockback. These need hands on
    the controls, not reasoning.
