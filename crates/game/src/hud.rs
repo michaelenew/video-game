@@ -5,7 +5,7 @@
 //! of startup feels right without seeing that it was fourteen.
 
 use bevy::prelude::*;
-use sim::state::{Action, Phase, move_frames};
+use sim::state::{Action, Phase};
 
 const P1: Color = Color::srgb(0.29, 0.66, 1.0);
 const P2: Color = Color::srgb(1.0, 0.54, 0.30);
@@ -93,9 +93,9 @@ pub fn setup(mut commands: Commands) {
                 ));
                 bottom.spawn((
                     Text::new(
-                        "WASD move / Space jump / Space+dir dodge / J bash / Shift+J slam\n\
-                         K guard / L shield throw+recall / Shift+L grapple\n\
-                         1-4 dummy / F1 debug / P pause / ] step / R reset",
+                        "WASD move / Space jump / Space+dir dodge / Ctrl crouch\n\
+                         J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
+                         Tab class / 1-4 dummy / F1 debug / P pause / ] step / R reset",
                     ),
                     TextFont {
                         font_size: 13.0,
@@ -159,13 +159,22 @@ pub fn update(
     }
 
     for (tag, mut text) in states.iter_mut() {
-        *text = Text::new(describe(&sim.cur.players[tag.0]));
+        let p = &sim.cur.players[tag.0];
+        *text = Text::new(format!(
+            "{}\n{}\n{}",
+            p.class.name(),
+            describe(p),
+            mechanic(p)
+        ));
     }
 
     if let Ok(mut t) = rounds.single_mut() {
+        // The simulation frame rides along with the score so a screenshot says
+        // which moment it caught. Two captures of "the same" pose are only
+        // comparable if you can see they are the same frame.
         *t = Text::new(format!(
-            "{} - {}",
-            sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won
+            "{} - {}   f{}",
+            sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won, sim.cur.frame
         ));
     }
 
@@ -178,12 +187,29 @@ pub fn update(
     }
 }
 
+/// The class mechanic in one line -- where the shield is, which form is out,
+/// how deep the meter runs. Without it the mechanics are invisible.
+fn mechanic(p: &sim::state::Player) -> String {
+    use sim::class::alloc_free::Summary;
+    match p.mechanic.summary() {
+        Summary::Text(t) => t.to_string(),
+        Summary::Value(label, v) => format!("{label}: {v}"),
+    }
+}
+
 /// The action, and how many frames of it remain. `4/3/10` alongside it is the
 /// move's startup, active and recovery, so a number can be judged in context.
 fn describe(p: &sim::state::Player) -> String {
     let phase_of = |kind: u8, name: &str, left: u16| {
-        let (s, a, r) = move_frames(kind);
-        format!("{name} {left}f   [{s}/{a}/{r}]")
+        let m = sim::moves::get(p.class, kind);
+        format!(
+            "{} {name} {left}f   [{}/{}/{}]  {:+} blk",
+            m.name,
+            m.startup,
+            m.active,
+            m.recovery,
+            m.on_block()
+        )
     };
     match p.action {
         Action::Free => "free".into(),

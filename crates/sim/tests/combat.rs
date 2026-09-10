@@ -102,7 +102,7 @@ fn throwing_the_shield_gives_up_blocking() {
     let mut w = World::new();
     run(&mut w, 2, M, 0);
     assert!(
-        !w.players[0].shield.in_hand(),
+        !w.players[0].shield().unwrap().in_hand(),
         "shield did not leave the hand"
     );
     run(&mut w, 20, R, 0);
@@ -118,16 +118,16 @@ fn a_thrown_shield_plants_and_can_be_recalled() {
     run(&mut w, 2, M, 0);
     run(&mut w, 60, 0, 0);
     assert!(
-        matches!(w.players[0].shield, Shield::Planted { .. }),
+        matches!(w.players[0].shield(), Some(Shield::Planted { .. })),
         "shield never came to rest: {:?}",
-        w.players[0].shield
+        w.players[0].shield()
     );
     run(&mut w, 2, M, 0);
     run(&mut w, 90, 0, 0);
     assert!(
-        w.players[0].shield.in_hand(),
+        w.players[0].shield().unwrap().in_hand(),
         "recall never returned the shield: {:?}",
-        w.players[0].shield
+        w.players[0].shield()
     );
 }
 

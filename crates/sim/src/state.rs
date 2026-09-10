@@ -8,136 +8,41 @@
 //! Actions are frame-data state machines, which is how fighting games are built
 //! anyway.
 //!
-//! The move set below is a Bulwark stand-in -- a fast poke, a committed slam,
-//! and the guard/parry layer from `defense.md`. Both players use it, so a
-//! sandbox match is a mirror. It exists to make the frame vocabulary concrete,
-//! not because the Bulwark is finished.
+//! Feel numbers live in [`crate::tuning`]; move tables live in
+//! [`crate::moves`]. Neither belongs inline here — they change constantly and
+//! need to be findable. See `docs/design/feel-log.md`.
 
 use crate::DT;
-use crate::arena::{self, BODY_RADIUS};
+use crate::arena;
+pub use crate::class::Shield;
+use crate::class::{self, BURN_PER_TICK_AT_MAX, Class, Form, METER_DEEP, METER_MAX, Mechanic};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
+use crate::moves;
+use crate::tuning as t;
 
 pub const MAX_PLAYERS: usize = 2;
 pub type PlayerId = usize;
 
-const GRAVITY: Fx = Fx::ratio(-30, 1);
-const MOVE_SPEED: Fx = Fx::ratio(7, 1);
-const GUARD_MOVE_SPEED: Fx = Fx::ratio(2, 1);
-const CROUCH_MOVE_SPEED: Fx = Fx::ratio(3, 1);
-/// Crouching lowers the hurtbox to this fraction of standing height, so high
-/// attacks pass over. Low attacks are the counter.
-const CROUCH_HEIGHT_SCALE: Fx = Fx::ratio(55, 100);
-const JUMP_SPEED: Fx = Fx::ratio(9, 1);
 const GROUND_Y: Fx = Fx::ZERO;
 
-/// How fast facing rotates toward the opponent, per tick. Guarding is slower,
-/// which is what makes the facing arc a real cost.
-const TURN_RATE: Fx = Fx::ratio(25, 100);
-const GUARD_TURN_RATE: Fx = Fx::ratio(6, 100);
+/// Move slots are positional and mean the same thing on every class, which is
+/// what lets one control scheme drive six kits. See `controls.md`.
+pub const SLOT_POKE: u8 = 0;
+pub const SLOT_COMMITTED: u8 = 1;
+pub const SLOT_SPECIAL: u8 = 2;
+pub use crate::tuning::MAX_HEALTH;
 
-/// Guard covers a frontal arc, not a bubble. Threshold is the cosine of the
-/// half-angle: 0.5 is a 120-degree arc.
-const GUARD_ARC_COS: Fx = Fx::ratio(1, 2);
-
-/// Frames at the start of a guard that parry instead of blocking.
-const PARRY_WINDOW: u16 = 4;
-const PARRY_STAGGER: u16 = 34;
-
-/// Dodge: universal, evasive, committed to a direction. Invulnerable for the
-/// opening frames, then recovering and vulnerable -- so it beats a read and
-/// loses to a delayed attack. See `defense.md`.
-const DODGE_FRAMES: u16 = 22;
-const DODGE_IFRAMES: u16 = 10;
-const DODGE_SPEED: Fx = Fx::ratio(17, 1);
-
-/// Shield flight.
+/// Shield flight, Bulwark only.
 const SHIELD_SPEED: Fx = Fx::ratio(19, 1);
 const SHIELD_RANGE: Fx = Fx::from_int(9);
 const SHIELD_DAMAGE: i32 = 85;
 const SHIELD_RADIUS: Fx = Fx::ratio(45, 100);
-/// Leaping to the shield is the Bulwark's approach tool.
 const LEAP_SPEED: Fx = Fx::ratio(15, 1);
 
-/// Pause after a knockout before the next round starts.
-const ROUND_OVER_FRAMES: u16 = 150;
-pub const MAX_HEALTH: i32 = 1000;
-
-/// Move identifiers.
-pub const MOVE_BASH: u8 = 0;
-pub const MOVE_SLAM: u8 = 1;
-pub const MOVE_GRAPPLE: u8 = 2;
-
-struct MoveData {
-    startup: u16,
-    active: u16,
-    recovery: u16,
-    damage: i32,
-    reach: Fx,
-    radius: Fx,
-    hitstun: u16,
-    blockstun: u16,
-    knockback: Fx,
-    /// Ignores guard entirely. The answer to a turtling opponent, and the
-    /// reason blocking is not a solved strategy. See `defense.md`.
-    unblockable: bool,
-    /// Requires the shield in hand.
-    needs_shield: bool,
-    /// Whether this connects with a crouching opponent. An overhead does not,
-    /// which is what makes crouch a real option against a committed swing.
-    hits_crouching: bool,
-}
-
-const MOVES: [MoveData; 3] = [
-    // Bash -- fast poke. Safe-ish on block.
-    MoveData {
-        startup: 4,
-        active: 3,
-        recovery: 10,
-        damage: 60,
-        reach: Fx::ratio(3, 2),
-        radius: Fx::ratio(9, 10),
-        hitstun: 14,
-        blockstun: 8,
-        knockback: Fx::ratio(4, 1),
-        unblockable: false,
-        needs_shield: true,
-        hits_crouching: true,
-    },
-    // Slam -- committed. Heavily punishable, heavily rewarding.
-    MoveData {
-        startup: 14,
-        active: 4,
-        recovery: 24,
-        damage: 170,
-        reach: Fx::ratio(2, 1),
-        radius: Fx::ratio(7, 5),
-        hitstun: 26,
-        blockstun: 16,
-        knockback: Fx::ratio(11, 1),
-        unblockable: false,
-        needs_shield: true,
-        // An overhead. Ducking it is the whole reason to crouch.
-        hits_crouching: false,
-    },
-    // Grapple -- beats guard outright, loses badly to dodge. The payoff for a
-    // read, not something to throw out.
-    MoveData {
-        startup: 20,
-        active: 3,
-        recovery: 30,
-        damage: 210,
-        reach: Fx::ratio(11, 10),
-        radius: Fx::ratio(8, 10),
-        hitstun: 40,
-        blockstun: 0,
-        knockback: Fx::ratio(6, 1),
-        unblockable: true,
-        needs_shield: true,
-        hits_crouching: true,
-    },
-];
+/// Shadow leash, Reaver only. Past this the shadow snaps back.
+const SHADOW_LEASH: Fx = Fx::from_int(8);
 
 /// What a character is currently doing. Durations are frame counts, matching
 /// the `startup / active / recovery` vocabulary in `ability-spec.md`.
@@ -156,7 +61,7 @@ pub enum Action {
         kind: u8,
         left: u16,
     },
-    /// `held` counts up. The first `PARRY_WINDOW` frames parry.
+    /// `held` counts up. The first `t::PARRY_WINDOW` frames parry.
     Guard {
         held: u16,
     },
@@ -188,7 +93,7 @@ impl Action {
 
     /// Invulnerable frames of a dodge. Nothing else grants invulnerability.
     pub const fn invulnerable(self) -> bool {
-        matches!(self, Action::Dodge { left } if left + DODGE_IFRAMES > DODGE_FRAMES)
+        matches!(self, Action::Dodge { left } if left + t::DODGE_IFRAMES > t::DODGE_FRAMES)
     }
 
     /// Blocking costs a vulnerable window, so it is never a safe default.
@@ -229,37 +134,6 @@ impl Action {
     }
 }
 
-/// Where the shield is. Its position is independent of the character, which is
-/// the whole mechanic -- see `bulwark.md`. Held, planted, or in flight.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Shield {
-    Held,
-    Planted {
-        pos: V3,
-    },
-    /// `outbound` is the throw; otherwise it is coming home.
-    Flying {
-        pos: V3,
-        vel: V3,
-        outbound: bool,
-        travelled: Fx,
-    },
-}
-
-impl Shield {
-    pub const fn in_hand(self) -> bool {
-        matches!(self, Shield::Held)
-    }
-
-    /// Where it is in the world, if it is not in hand.
-    pub const fn world_pos(self) -> Option<V3> {
-        match self {
-            Shield::Held => None,
-            Shield::Planted { pos } | Shield::Flying { pos, .. } => Some(pos),
-        }
-    }
-}
-
 /// Match flow.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
@@ -283,18 +157,52 @@ pub struct Player {
     pub grounded: bool,
     /// True once the current active window has connected, so a move hits once.
     pub hit_used: bool,
-    /// Class mechanic resource. Interpretation is per class.
-    pub mechanic: i32,
-    pub shield: Shield,
+    pub class: Class,
+    pub mechanic: Mechanic,
     pub rounds_won: u8,
     pub crouching: bool,
 }
 
 impl Player {
+    pub fn new(class: Class) -> Player {
+        Player {
+            class,
+            mechanic: class.starting_mechanic(),
+            ..Player::default()
+        }
+    }
+
+    /// The Bulwark's shield, if this is one.
+    pub fn shield(&self) -> Option<Shield> {
+        match self.mechanic {
+            Mechanic::Shield(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Can this class act right now given its mechanic? Gated moves need the
+    /// mechanic in a particular state; ungated ones never do.
+    pub fn mechanic_ready(&self, kind: u8) -> bool {
+        if !moves::get(self.class, kind).needs_mechanic {
+            return match self.mechanic {
+                // The Bulwark's ordinary moves need the shield in hand.
+                Mechanic::Shield(sh) => sh.in_hand(),
+                _ => true,
+            };
+        }
+        match self.mechanic {
+            Mechanic::Shield(sh) => sh.in_hand(),
+            Mechanic::Shadow { at } => at.is_some(),
+            Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
+            Mechanic::Meter { value } => value.abs() >= METER_DEEP,
+            Mechanic::Forms { .. } | Mechanic::Blood => true,
+        }
+    }
+
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
     pub fn hurt_height(&self) -> Fx {
         if self.crouching {
-            arena::BODY_HEIGHT.mul(CROUCH_HEIGHT_SCALE)
+            arena::BODY_HEIGHT.mul(t::CROUCH_HEIGHT_SCALE)
         } else {
             arena::BODY_HEIGHT
         }
@@ -311,8 +219,8 @@ impl Default for Player {
             action: Action::Free,
             grounded: true,
             hit_used: false,
-            mechanic: 0,
-            shield: Shield::Held,
+            class: Class::Bulwark,
+            mechanic: Mechanic::Shield(Shield::Held),
             rounds_won: 0,
             crouching: false,
         }
@@ -329,19 +237,28 @@ pub struct World {
 
 impl World {
     pub fn new() -> World {
+        World::with_classes([Class::Bulwark; MAX_PLAYERS])
+    }
+
+    /// Start a match with a chosen class per side.
+    pub fn with_classes(classes: [Class; MAX_PLAYERS]) -> World {
         let mut w = World {
             frame: 0,
             players: [Player::default(); MAX_PLAYERS],
             phase: Phase::Fighting,
         };
+        for (p, class) in w.players.iter_mut().zip(classes.iter()) {
+            *p = Player::new(*class);
+        }
         w.reset_positions();
         w
     }
 
-    /// Put both fighters back on their marks. Keeps round wins.
+    /// Put both fighters back on their marks. Keeps round wins and classes.
     fn reset_positions(&mut self) {
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
+            let class = p.class;
             let side = if i == 0 { -4 } else { 4 };
             *p = Player {
                 pos: V3::new(Fx::from_int(side), GROUND_Y, Fx::ZERO),
@@ -351,7 +268,7 @@ impl World {
                     Fx::ZERO,
                 ),
                 rounds_won: wins,
-                ..Player::default()
+                ..Player::new(class)
             };
         }
     }
@@ -394,20 +311,23 @@ impl World {
                 self.players[attacker].hit_used = true;
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
-                        left: PARRY_STAGGER,
+                        left: t::PARRY_STAGGER,
                     };
                 }
             }
         }
 
         // A thrown shield is its own threat while it travels.
-        let shields = [self.players[0].shield, self.players[1].shield];
+        let shields = [self.players[0].shield(), self.players[1].shield()];
         for (owner, shield) in shields.iter().enumerate() {
             let target = 1 - owner;
-            if let Shield::Flying { pos, .. } = *shield {
+            let Some(Shield::Flying { pos, .. }) = *shield else {
+                continue;
+            };
+            {
                 let victim = self.players[target];
                 let d = victim.pos.sub(pos);
-                let hit_range = SHIELD_RADIUS.add(BODY_RADIUS);
+                let hit_range = SHIELD_RADIUS.add(t::BODY_RADIUS);
                 let vertical = d.y.abs().raw() < arena::BODY_HEIGHT.raw();
                 if vertical && d.flat_len().raw() < hit_range.raw() && !victim.action.invulnerable()
                 {
@@ -425,7 +345,7 @@ impl World {
                         },
                     );
                     // Contact drops it where it struck.
-                    self.players[owner].shield = Shield::Planted { pos };
+                    self.players[owner].mechanic = Mechanic::Shield(Shield::Planted { pos });
                 }
             }
         }
@@ -446,7 +366,7 @@ impl World {
                 }
                 self.phase = Phase::RoundOver {
                     winner,
-                    left: ROUND_OVER_FRAMES,
+                    left: t::ROUND_OVER_FRAMES,
                 };
             }
         }
@@ -464,7 +384,6 @@ impl World {
                 h.write_i32(v.z.raw());
             }
             h.write_i32(p.health);
-            h.write_i32(p.mechanic);
             h.write_u32(p.grounded as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
@@ -478,31 +397,8 @@ impl World {
             };
             h.write_u32(kind as u32);
             h.write_u32(p.rounds_won as u32);
-            match p.shield {
-                Shield::Held => h.write_u32(0),
-                Shield::Planted { pos } => {
-                    h.write_u32(1);
-                    h.write_i32(pos.x.raw());
-                    h.write_i32(pos.y.raw());
-                    h.write_i32(pos.z.raw());
-                }
-                Shield::Flying {
-                    pos,
-                    vel,
-                    outbound,
-                    travelled,
-                } => {
-                    h.write_u32(2);
-                    h.write_i32(pos.x.raw());
-                    h.write_i32(pos.y.raw());
-                    h.write_i32(pos.z.raw());
-                    h.write_i32(vel.x.raw());
-                    h.write_i32(vel.y.raw());
-                    h.write_i32(vel.z.raw());
-                    h.write_u32(outbound as u32);
-                    h.write_i32(travelled.raw());
-                }
-            }
+            h.write_u32(p.class as u32);
+            hash_mechanic(&mut h, &p.mechanic);
         }
         match self.phase {
             Phase::Fighting => h.write_u32(0),
@@ -540,7 +436,7 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     if attacker.hit_used || defender.action.invulnerable() {
         return None;
     }
-    let m = &MOVES[kind as usize];
+    let m = moves::get(attacker.class, kind);
 
     // Overheads miss a crouching defender. Expressed as a property of the move
     // rather than as hitbox geometry, because that is what players read and
@@ -549,24 +445,36 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
         return None;
     }
 
-    let centre = attacker.pos.add(attacker.facing.scale(m.reach));
+    // The Bellator's form multiplies reach and damage rather than each form
+    // having its own table -- three numbers instead of three move lists.
+    let (reach_mul, damage_mul) = match attacker.mechanic {
+        Mechanic::Forms { form, .. } => {
+            let (r, d, _) = form.modifiers();
+            (r, d)
+        }
+        _ => (Fx::ONE, Fx::ONE),
+    };
+
+    let centre = attacker
+        .pos
+        .add(attacker.facing.scale(m.reach.mul(reach_mul)));
     let delta = defender.pos.sub(centre);
-    if delta.flat_len().raw() > m.radius.add(BODY_RADIUS).raw() {
+    if delta.flat_len().raw() > m.radius.add(t::BODY_RADIUS).raw() {
         return None;
     }
 
     // Was the defender facing the attack? Guard covers an arc, not a bubble.
     let to_attacker = attacker.pos.sub(defender.pos).normalized();
-    let facing_it = defender.facing.dot(to_attacker).raw() >= GUARD_ARC_COS.raw();
+    let facing_it = defender.facing.dot(to_attacker).raw() >= t::GUARD_ARC_COS.raw();
     // A grapple goes through guard entirely. That is what stops blocking from
     // being a solved strategy -- see defense.md.
     let guarding = !m.unblockable && defender.action.guarding() && facing_it;
     let parried = !m.unblockable
-        && matches!(defender.action, Action::Guard { held } if held < PARRY_WINDOW)
+        && matches!(defender.action, Action::Guard { held } if held < t::PARRY_WINDOW)
         && facing_it;
 
     Some(Hit {
-        damage: m.damage,
+        damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
         knockback: m.knockback,
@@ -605,16 +513,16 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
     if to_opp.flat_len().raw() > 0 {
         let target = V3::new(to_opp.x, Fx::ZERO, to_opp.z).normalized();
         let rate = if p.action.guarding() {
-            GUARD_TURN_RATE
+            t::GUARD_TURN_RATE
         } else {
-            TURN_RATE
+            t::TURN_RATE
         };
         p.facing = p.facing.add(target.sub(p.facing).scale(rate)).normalized();
     }
 
-    step_shield(p);
+    step_mechanic(p);
 
-    let want_guard = input.has(Input::RIGHT) && p.shield.in_hand();
+    let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
     let (ax, az) = input.move_axis();
     // Crouch is a stance, not an action: it holds while the key is down and
     // only while you are otherwise free to move.
@@ -629,7 +537,7 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         },
         Action::Startup { kind, .. } => Action::Active {
             kind,
-            left: MOVES[kind as usize].active,
+            left: moves::get(p.class, kind).active,
         },
         Action::Active { kind, left } if left > 0 => Action::Active {
             kind,
@@ -637,7 +545,7 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         },
         Action::Active { kind, .. } => Action::Recovery {
             kind,
-            left: MOVES[kind as usize].recovery,
+            left: moves::get(p.class, kind).recovery,
         },
         Action::Recovery { kind, left } if left > 0 => Action::Recovery {
             kind,
@@ -661,30 +569,34 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
             // Space plus a direction dodges; space alone jumps. See controls.md.
             if input.has(Input::SPACE) && (ax != 0 || az != 0) && p.grounded {
                 let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
-                p.vel.x = dir.x.mul(DODGE_SPEED);
-                p.vel.z = dir.z.mul(DODGE_SPEED);
-                Action::Dodge { left: DODGE_FRAMES }
-            } else if input.has(Input::MIDDLE) && input.has(Input::SHIFT) && p.shield.in_hand() {
+                p.vel.x = dir.x.mul(t::DODGE_SPEED);
+                p.vel.z = dir.z.mul(t::DODGE_SPEED);
+                Action::Dodge {
+                    left: t::DODGE_FRAMES,
+                }
+            } else if input.has(Input::MIDDLE)
+                && input.has(Input::SHIFT)
+                && p.shield().is_some_and(|sh| sh.in_hand())
+            {
                 p.hit_used = false;
                 Action::Startup {
-                    kind: MOVE_GRAPPLE,
-                    left: MOVES[MOVE_GRAPPLE as usize].startup,
+                    kind: SLOT_SPECIAL,
+                    left: moves::get(p.class, 2).startup,
                 }
             } else if input.has(Input::MIDDLE) {
-                shield_action(p);
+                mechanic_action(p);
                 Action::Free
-            } else if input.has(Input::LEFT)
-                && (p.shield.in_hand() || !MOVES[MOVE_BASH as usize].needs_shield)
-            {
+            } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
-                    MOVE_SLAM
+                    SLOT_COMMITTED
                 } else {
-                    MOVE_BASH
+                    SLOT_POKE
                 };
                 p.hit_used = false;
+                steer_meter(p, input, kind);
                 Action::Startup {
                     kind,
-                    left: MOVES[kind as usize].startup,
+                    left: moves::get(p.class, kind).startup,
                 }
             } else if want_guard {
                 Action::Guard { held: 0 }
@@ -701,17 +613,17 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         p.vel.z = p.vel.z.mul(Fx::ratio(93, 100));
     } else if p.action.actionable() && (ax != 0 || az != 0) {
         let speed = if p.crouching {
-            CROUCH_MOVE_SPEED
+            t::CROUCH_MOVE_SPEED
         } else {
-            MOVE_SPEED
+            t::MOVE_SPEED
         };
         let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
         p.vel.x = dir.x.mul(speed);
         p.vel.z = dir.z.mul(speed);
     } else if p.action.guarding() && (ax != 0 || az != 0) {
         let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
-        p.vel.x = dir.x.mul(GUARD_MOVE_SPEED);
-        p.vel.z = dir.z.mul(GUARD_MOVE_SPEED);
+        p.vel.x = dir.x.mul(t::GUARD_MOVE_SPEED);
+        p.vel.z = dir.z.mul(t::GUARD_MOVE_SPEED);
     } else if p.action.stunned() {
         // Knockback decays rather than stopping dead.
         p.vel.x = p.vel.x.mul(Fx::ratio(86, 100));
@@ -722,12 +634,12 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
     }
 
     if input.has(Input::SPACE) && ax == 0 && az == 0 && p.grounded && p.action.actionable() {
-        p.vel.y = JUMP_SPEED;
+        p.vel.y = t::JUMP_SPEED;
         p.grounded = false;
     }
 
     if !p.grounded {
-        p.vel.y = p.vel.y.add(GRAVITY.mul(DT));
+        p.vel.y = p.vel.y.add(t::GRAVITY.mul(DT));
     }
 
     p.pos = p.pos.add(p.vel.scale(DT));
@@ -738,95 +650,240 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
     p.grounded = r.grounded;
 }
 
-/// Throw, recall, or leap -- one button, decided by where the shield is.
+/// The middle-click mechanic action, per class.
 ///
-/// Throw commits you: you are faster and cannot block until it comes back.
-/// Recalling it damages along the return path, and reactivating mid-flight
-/// leaps you to it instead, which is the Bulwark's approach tool.
-fn shield_action(p: &mut Player) {
-    p.shield = match p.shield {
-        Shield::Held => Shield::Flying {
-            pos: p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)),
-            vel: p.facing.scale(SHIELD_SPEED),
-            outbound: true,
-            travelled: Fx::ZERO,
-        },
-        Shield::Planted { pos } => {
-            let to_owner = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)).sub(pos);
-            Shield::Flying {
-                pos,
-                vel: to_owner.normalized().scale(SHIELD_SPEED),
-                outbound: false,
-                travelled: Fx::ZERO,
-            }
+/// One button means something different on every class, which is where the
+/// identity lives -- see `controls.md`. Everything else about the control
+/// scheme is shared.
+fn mechanic_action(p: &mut Player) {
+    match p.mechanic {
+        // Throw commits you: faster, exposed, and unable to block until it is
+        // back. Recall damages along the return path; reactivating mid-flight
+        // leaps you to it, which is the Bulwark's approach tool.
+        Mechanic::Shield(shield) => {
+            p.mechanic = Mechanic::Shield(match shield {
+                Shield::Held => Shield::Flying {
+                    pos: p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)),
+                    vel: p.facing.scale(SHIELD_SPEED),
+                    outbound: true,
+                    travelled: Fx::ZERO,
+                },
+                Shield::Planted { pos } => {
+                    let to_owner = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)).sub(pos);
+                    Shield::Flying {
+                        pos,
+                        vel: to_owner.normalized().scale(SHIELD_SPEED),
+                        outbound: false,
+                        travelled: Fx::ZERO,
+                    }
+                }
+                Shield::Flying {
+                    pos,
+                    vel,
+                    outbound,
+                    travelled,
+                } => {
+                    let to_shield = pos.sub(p.pos);
+                    if to_shield.flat_len().raw() > Fx::ONE.raw() {
+                        let dir = V3::new(to_shield.x, Fx::ZERO, to_shield.z).normalized();
+                        p.vel.x = dir.x.mul(LEAP_SPEED);
+                        p.vel.z = dir.z.mul(LEAP_SPEED);
+                        p.vel.y = Fx::ratio(6, 1);
+                        p.grounded = false;
+                    }
+                    Shield::Flying {
+                        pos,
+                        vel,
+                        outbound,
+                        travelled,
+                    }
+                }
+            });
         }
-        // Reactivating mid-flight leaps you to it.
-        Shield::Flying {
+
+        // Cycle the weapon form. Every move's reach, damage and recovery are
+        // multiplied by it, so this is three kits from one table.
+        Mechanic::Forms { form, rush_charged } => {
+            let next = match form {
+                Form::Hammer => Form::Sword,
+                Form::Sword => Form::Spear,
+                Form::Spear => Form::Hammer,
+            };
+            p.mechanic = Mechanic::Forms {
+                form: next,
+                rush_charged,
+            };
+        }
+
+        // Place the shadow ahead, or reclaim it. Mobility and setup are the
+        // same action, which is what keeps the Reaver from being denied its
+        // movement.
+        Mechanic::Shadow { at } => {
+            p.mechanic = Mechanic::Shadow {
+                at: match at {
+                    None => Some(p.pos.add(p.facing.scale(Fx::from_int(3)))),
+                    Some(_) => None,
+                },
+            };
+        }
+
+        // Spawn a structure ahead. A fourth collapses the oldest, so the cap
+        // is the resource.
+        Mechanic::Structures(mut slots) => {
+            let spot = p.pos.add(p.facing.scale(Fx::ratio(5, 2)));
+            if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
+                *free = Some(spot);
+            } else {
+                slots.rotate_left(1);
+                slots[class::MAX_STRUCTURES - 1] = Some(spot);
+            }
+            p.mechanic = Mechanic::Structures(slots);
+        }
+
+        // Health is the resource; there is no separate button.
+        Mechanic::Blood => {}
+
+        // The meter is steered by which button attacks, not by this one.
+        Mechanic::Meter { .. } => {}
+    }
+}
+
+/// Per-tick mechanic upkeep: shields in flight, shadows on a leash, the meter
+/// burning at depth.
+fn step_mechanic(p: &mut Player) {
+    match p.mechanic {
+        Mechanic::Shield(Shield::Flying {
             pos,
             vel,
             outbound,
             travelled,
-        } => {
-            let to_shield = pos.sub(p.pos);
-            if to_shield.flat_len().raw() > Fx::ONE.raw() {
-                let dir = V3::new(to_shield.x, Fx::ZERO, to_shield.z).normalized();
-                p.vel.x = dir.x.mul(LEAP_SPEED);
-                p.vel.z = dir.z.mul(LEAP_SPEED);
-                p.vel.y = Fx::ratio(6, 1);
-                p.grounded = false;
-            }
-            Shield::Flying {
-                pos,
-                vel,
-                outbound,
-                travelled,
+        }) => {
+            let step = vel.scale(DT);
+            let next = pos.add(step);
+            let gone = travelled.add(step.flat_len());
+            p.mechanic = Mechanic::Shield(if outbound {
+                if gone.raw() >= SHIELD_RANGE.raw() {
+                    Shield::Planted { pos: next }
+                } else {
+                    Shield::Flying {
+                        pos: next,
+                        vel,
+                        outbound,
+                        travelled: gone,
+                    }
+                }
+            } else {
+                let hand = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+                if next.sub(hand).flat_len().raw() < Fx::ONE.raw() {
+                    Shield::Held
+                } else {
+                    // Home in, so the return does not miss a moving owner.
+                    let dir = hand.sub(next).normalized().scale(SHIELD_SPEED);
+                    Shield::Flying {
+                        pos: next,
+                        vel: dir,
+                        outbound,
+                        travelled: gone,
+                    }
+                }
+            });
+        }
+
+        // Leaving the leash snaps the shadow back.
+        Mechanic::Shadow { at: Some(spot) } => {
+            if spot.sub(p.pos).flat_len().raw() > SHADOW_LEASH.raw() {
+                p.mechanic = Mechanic::Shadow { at: None };
             }
         }
+
+        // Past the deep threshold the forces burn you. Relief comes from
+        // coming back inside the line, not from a reward -- see dual-mage.md.
+        Mechanic::Meter { value } => {
+            let depth = value.abs();
+            if depth > METER_DEEP {
+                let over = depth - METER_DEEP;
+                let span = (METER_MAX - METER_DEEP).max(1);
+                let burn = (BURN_PER_TICK_AT_MAX * over) / span;
+                p.health = (p.health - burn.max(1)).max(1);
+            }
+        }
+
+        _ => {}
+    }
+}
+
+/// Attacking steers the Dual mage's meter: left darker, right lighter, and
+/// stronger moves push harder. Nothing else moves it, so every step is a
+/// consequence of a decision the player made.
+fn steer_meter(p: &mut Player, input: Input, kind: u8) {
+    let Mechanic::Meter { value } = p.mechanic else {
+        return;
+    };
+    let push = 4 + (moves::get(p.class, kind).damage / 40);
+    let delta = if input.has(Input::LEFT) {
+        -push
+    } else if input.has(Input::RIGHT) {
+        push
+    } else {
+        0
+    };
+    p.mechanic = Mechanic::Meter {
+        value: (value + delta).clamp(-METER_MAX, METER_MAX),
     };
 }
 
-/// Move a thrown shield. Outbound flights plant at maximum range; returning
-/// flights come back to the hand.
-fn step_shield(p: &mut Player) {
-    let Shield::Flying {
-        pos,
-        vel,
-        outbound,
-        travelled,
-    } = p.shield
-    else {
-        return;
-    };
-    let step = vel.scale(DT);
-    let next = pos.add(step);
-    let gone = travelled.add(step.flat_len());
-
-    if outbound {
-        if gone.raw() >= SHIELD_RANGE.raw() {
-            p.shield = Shield::Planted { pos: next };
-        } else {
-            p.shield = Shield::Flying {
-                pos: next,
-                vel,
-                outbound,
-                travelled: gone,
-            };
+fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
+    match m {
+        Mechanic::Shield(Shield::Held) => h.write_u32(0),
+        Mechanic::Shield(Shield::Planted { pos }) => {
+            h.write_u32(1);
+            hash_v3(h, pos);
         }
-    } else {
-        let hand = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
-        if next.sub(hand).flat_len().raw() < Fx::ONE.raw() {
-            p.shield = Shield::Held;
-        } else {
-            // Home in, so the return does not miss a moving owner.
-            let dir = hand.sub(next).normalized().scale(SHIELD_SPEED);
-            p.shield = Shield::Flying {
-                pos: next,
-                vel: dir,
-                outbound,
-                travelled: gone,
-            };
+        Mechanic::Shield(Shield::Flying {
+            pos,
+            vel,
+            outbound,
+            travelled,
+        }) => {
+            h.write_u32(2);
+            hash_v3(h, pos);
+            hash_v3(h, vel);
+            h.write_u32(*outbound as u32);
+            h.write_i32(travelled.raw());
+        }
+        Mechanic::Forms { form, rush_charged } => {
+            h.write_u32(3);
+            h.write_u32(*form as u32);
+            h.write_u32(*rush_charged as u32);
+        }
+        Mechanic::Shadow { at } => {
+            h.write_u32(4);
+            match at {
+                Some(pos) => hash_v3(h, pos),
+                None => h.write_u32(0),
+            }
+        }
+        Mechanic::Structures(slots) => {
+            h.write_u32(5);
+            for slot in slots {
+                match slot {
+                    Some(pos) => hash_v3(h, pos),
+                    None => h.write_u32(0),
+                }
+            }
+        }
+        Mechanic::Blood => h.write_u32(6),
+        Mechanic::Meter { value } => {
+            h.write_u32(7);
+            h.write_i32(*value);
         }
     }
+}
+
+fn hash_v3(h: &mut Fnv, v: &V3) {
+    h.write_i32(v.x.raw());
+    h.write_i32(v.y.raw());
+    h.write_i32(v.z.raw());
 }
 
 /// Let a body come to rest without accepting input. Used during the pause
@@ -835,7 +892,7 @@ fn settle(p: &mut Player) {
     p.vel.x = p.vel.x.mul(Fx::ratio(88, 100));
     p.vel.z = p.vel.z.mul(Fx::ratio(88, 100));
     if !p.grounded {
-        p.vel.y = p.vel.y.add(GRAVITY.mul(DT));
+        p.vel.y = p.vel.y.add(t::GRAVITY.mul(DT));
     }
     p.pos = p.pos.add(p.vel.scale(DT));
     let r = arena::resolve(p.pos, p.vel, p.grounded);
@@ -848,7 +905,7 @@ fn settle(p: &mut Player) {
 fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
     let delta = players[1].pos.sub(players[0].pos);
     let dist = delta.flat_len();
-    let min = BODY_RADIUS.add(BODY_RADIUS);
+    let min = t::BODY_RADIUS.add(t::BODY_RADIUS);
     if dist.raw() == 0 || dist.raw() >= min.raw() {
         return;
     }
@@ -881,12 +938,11 @@ impl Fnv {
 }
 
 /// Frame data for a move, for debug overlays and design docs.
-pub fn move_frames(kind: u8) -> (u16, u16, u16) {
-    let m = &MOVES[kind as usize];
-    (m.startup, m.active, m.recovery)
+pub fn move_frames(class: Class, kind: u8) -> (u16, u16, u16) {
+    moves::frames(class, kind)
 }
 
 /// Parry window length, exposed for debug overlays.
 pub const fn parry_window() -> u16 {
-    PARRY_WINDOW
+    t::PARRY_WINDOW
 }

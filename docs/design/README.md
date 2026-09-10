@@ -98,16 +98,17 @@ character progression.
 
 ## 6 · Implementation
 
-Rust, three crates, simulation as a pure function. See
-[architecture.md](architecture.md). The scaffold builds and its determinism and
-rollback harnesses pass; combat content is a stub on purpose, so every class
-implemented from here is determinism-checked from its first commit.
+Rust, six crates, simulation as a pure function. See
+[architecture.md](architecture.md). All six classes have their mechanic and three
+exemplar moves, peer-to-peer rollback play works over real UDP, and 64 tests cover
+determinism, combat relationships and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
 crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, camera framing, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
+crates/anim   Offline animation factory. Never runs in the game.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
@@ -122,13 +123,36 @@ overlay on F1, local two-player, training dummy on 1-4. `DEMO=1` scripts player 
 `./scripts/p2p-localhost.sh` runs both ends locally;
 `cargo run -p net --bin p2p_localhost` checks two peers stay in sync over real UDP.
 
-**Tune frame data:** `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
+**Pick classes:** `game --p1 bellator --p2 elementalist`, or Tab to cycle in-game.
+
+**Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
+on-hit advantage. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
 
-## 7 · Next
+**Animation:** `cargo run -p anim --bin bake` regenerates the baked clips from the recipes
+in `crates/anim/src/bin/bake.rs`. F2 toggles baked playback in-game.
 
-1. **One real class in `sim`** — where `slow` and `committed` become frame counts.
-2. **Capsule collision and hitboxes.**
-3. **Bevy front end**, capsules and debug hitboxes only, no art. Where feel gets tuned.
+## 7 · The feel harness
+
+Tuning happens in fragments over a long time, so the results have to outlive the
+session that found them.
+
+- **[feel-log.md](feel-log.md)** — what was changed, why, and what it actually felt
+  like. Reverted experiments are the most valuable entries; keep them.
+- **`crates/sim/src/tuning.rs`** — every feel number in one place, each with a
+  comment saying where it came from.
+- **`crates/sim/tests/feel.rs`** — pins the *relationships* that must hold no matter
+  how the numbers move: every attack is punishable on block, every class can beat a
+  turtle, a parry pays for itself, the dodge outruns a walk. These found six real
+  design gaps on the day they were written.
+
+A number is a guess until someone plays against it. A relationship is a design
+decision, and belongs in a test.
+
+## 8 · Next
+
+1. **Play it against a person.** Everything else is downstream of that.
+2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
+   whether the 4-frame parry window is findable by a human.
+3. Fill out the kits beyond three moves per class.
 4. **Arena size and shape.**
-5. Per-class open items above, most of which want the prototype anyway.

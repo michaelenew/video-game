@@ -7,7 +7,8 @@
 //! Toggle with F1.
 
 use bevy::prelude::*;
-use sim::state::{Action, Shield, move_frames};
+use sim::class::Mechanic;
+use sim::state::Action;
 use view::Frame;
 
 #[derive(Resource)]
@@ -54,10 +55,12 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         // Live hitbox. Only drawn during active frames, which is the point --
         // if you can see it, it can hit you.
         if let Action::Active { kind, .. } = p.action {
-            let (reach, radius) = hitbox_shape(kind);
+            // Straight from the move table, so the overlay cannot drift from
+            // what actually hits.
+            let m = sim::moves::get(sim.cur.players[i].class, kind);
             gizmos.sphere(
-                Isometry3d::from_translation(centre + facing * reach),
-                radius,
+                Isometry3d::from_translation(centre + facing * m.reach.to_f32_for_render()),
+                m.radius.to_f32_for_render(),
                 HITBOX,
             );
         }
@@ -81,30 +84,28 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             gizmos.line(centre, centre + facing * 1.5, colour);
         }
 
-        // The shield, wherever it is.
-        if let Some(sp) = shield_pos(&sim.cur.players[i].shield) {
-            gizmos.sphere(Isometry3d::from_translation(sp), 0.45, SHIELD);
+        // The class mechanic, wherever it lives in the world.
+        for spot in mechanic_markers(&sim.cur.players[i].mechanic) {
+            gizmos.sphere(Isometry3d::from_translation(spot), 0.45, SHIELD);
         }
     }
 }
 
-fn shield_pos(s: &Shield) -> Option<Vec3> {
-    s.world_pos().map(|v| {
+/// Anything the class mechanic has placed in the world: a thrown shield, a
+/// shadow, structures. Drawn identically because the point is "your mechanic
+/// is over there", not what shape it is.
+fn mechanic_markers(m: &Mechanic) -> Vec<Vec3> {
+    let v3 = |v: sim::V3| {
         Vec3::new(
             v.x.to_f32_for_render(),
             v.y.to_f32_for_render(),
             v.z.to_f32_for_render(),
         )
-    })
-}
-
-/// Mirrors the reach and radius in `sim::state`. Derived from the frame table
-/// so the two cannot silently drift apart on timing.
-fn hitbox_shape(kind: u8) -> (f32, f32) {
-    let _ = move_frames(kind);
-    match kind {
-        sim::state::MOVE_BASH => (1.5, 0.9),
-        sim::state::MOVE_SLAM => (2.0, 1.4),
-        _ => (1.1, 0.8),
+    };
+    match m {
+        Mechanic::Shield(s) => s.world_pos().map(v3).into_iter().collect(),
+        Mechanic::Shadow { at } => at.map(v3).into_iter().collect(),
+        Mechanic::Structures(slots) => slots.iter().filter_map(|s| s.map(v3)).collect(),
+        _ => Vec::new(),
     }
 }

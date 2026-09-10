@@ -7,6 +7,7 @@
 //! Floating point is fine on this side of the boundary. `sim` is integer-only
 //! because determinism demands it; nothing here feeds back into the simulation.
 
+pub mod baked;
 pub mod camera;
 pub mod interp;
 pub mod pose;

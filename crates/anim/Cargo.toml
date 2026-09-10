@@ -1,0 +1,12 @@
+[package]
+name = "anim"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# The animation factory. Runs offline to *generate* motion; the game plays back
+# what it bakes. Nothing here ships in the hot path, which is why it is allowed
+# to be expensive and why it does not need to be deterministic.
+[dependencies]
+view = { path = "../view" }
