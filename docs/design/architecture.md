@@ -20,6 +20,16 @@ crates/web    WebAssembly build and the browser frame-data tool.
 reversible, and it means the parts that must be *correct* rather than pretty --
 interpolation, camera framing, posing -- are unit tested without a window.
 
+## Toolchain
+
+**Rust 1.85 or newer.** The floor is Bevy 0.16's declared MSRV, not our use of
+edition 2024 -- dropping the workspace to edition 2021 would not lower it.
+
+`rust-toolchain.toml` pins the channel and pulls in the wasm target, so
+`rustup update` is all a stale install needs. The symptom of being behind is a
+manifest parse error naming `edition2024`, which is misleading: the edition is
+the first thing Cargo trips over, not the actual constraint.
+
 ## What rollback actually demands
 
 Three requirements, and they decide the engine question — not performance, and not

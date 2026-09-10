@@ -1,0 +1,11 @@
+# Rust 1.85 or newer is required. That floor comes from Bevy 0.16, which
+# declares rust-version = "1.85.0" -- dropping the workspace to edition 2021
+# would not lower it.
+#
+# rustup reads this file automatically, so `rustup update` is all a stale
+# toolchain needs. The wasm target is listed so the browser frame-data tool
+# (./crates/web/build-sandbox.sh) builds without extra setup.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
