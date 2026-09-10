@@ -1,0 +1,196 @@
+---
+status: proposed
+decided: 2026-09-10
+---
+
+# Controls
+
+Mouse and keyboard first. A controller scheme is more standard and easier and can follow.
+
+The reference points are platform fighters, which get their feel by **removing a dimension**
+so the controls stay small. This game keeps 3D movement, so the compensation is that
+direction is *discretised* — four inputs, not a stick — and modifiers do the rest.
+
+## The grammar
+
+Four sentences, and everything else follows:
+
+1. **Click means attack.**
+2. **Shift means use an ability**, otherwise you get a basic move.
+3. **WASD means move.**
+4. **Space means you move *more* than you otherwise would.** Alone it jumps; with a
+   direction it dodges.
+
+**Shift beats WASD when both are held.** So holding a direction while pressing shift+click
+still gives you the shift ability, and you keep moving during it (where the ability allows).
+This guarantees a move-while-casting option always exists, and it costs nothing, since
+directional abilities and shift abilities were never going to be used simultaneously anyway.
+
+## The option space
+
+| Modifier | × | Button |
+| --- | --- | --- |
+| none · `w` · `a`/`d` · `s` · `shift` | | `L` · `R` · `M` (scroll click) · `LR` (both) |
+
+Five by four is **20 distinct offensive inputs at any moment**, before airborne variants.
+`a` and `d` mirror each other, which is why they count once.
+
+That is a large space. It is not a target.
+
+### Do not fill all twenty
+
+Ship each class with autos, the six-ability kit, and a handful of directional basics. Leave
+slots empty. Smash has roughly eighteen moves per character and they are only legible
+because they group into families — tilts, smashes, aerials, specials. Twenty times two for
+airborne, filled in at prototype stage, produces a class nobody can read.
+
+Empty slots are headroom for the later specialisation layer, not a gap.
+
+## What each region means
+
+This is the part that keeps twenty inputs learnable — each region has one job, and it is the
+same job on every class.
+
+| Region | Meaning |
+| --- | --- |
+| **Unmodified `L`/`R`/`M`** | Autos **and the class mechanic.** This is where identity lives, and it is different on every class. |
+| **Direction + click** | Basic moves. A shared vocabulary — roughly the same shapes on every class. The two casters are the exception. |
+| **Shift + click** | The six-ability kit. |
+| **Space + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** |
+
+That last row does real work. The Bellator's Rush and the Reaver's Shadow dash *are* their
+dodges rather than extra inputs. For the Reaver this is what makes movement and shadow
+placement the same action, which is the fix that keeps the class from being denied its
+mobility.
+
+### Airborne
+
+Grounded and airborne should differ, as they do in every platform fighter. For the prototype,
+differentiate **the directional basics only** and let abilities behave the same in the air.
+A full second moveset per class is a later problem.
+
+---
+
+## Dual mage
+
+The mechanic is on the primary buttons, and it is not optional.
+
+**`L` always moves you darker. `R` always moves you lighter.** Every input, not just autos.
+
+| Input | Result |
+| --- | --- |
+| `L` / `R` | Dark / light auto. **Changes your mode on contact** — a whiff steers nothing |
+| direction + `L`/`R` | Basic moves, in dark or light form |
+| `shift` + `L`/`R` | Abilities, in dark or light form |
+| `M` / `LR` | Gated finishers — Judgement and Eclipse |
+| `shift` + `M` / `shift` + `LR` | Ordinary abilities. Push further along your current path |
+
+`M` and `LR` are neither left nor right, so they cannot pick a direction. They push you
+further down whichever path you are already on. The grammar stays consistent: **direction
+comes from side-ness, and only left and right have it.**
+
+**Autos have a slight range boost** — the beings inside extend your reach. This matters
+mechanically, not just as flavour: steering requires landing hits, so the class needs the
+reach to steer under pressure.
+
+**Steering is not optional.** You cannot cast without moving the bar, and you cannot move the
+bar without committing to a side. This replaces the earlier tap-versus-hold proposal, which
+put the direction choice in a modifier the player could ignore.
+
+> **One reservation, for the prototype to settle.** `M` and `LR` are the slowest and least
+> reliable inputs on most mice, and they are carrying the finishers — the class's payoff.
+> The argument for keeping them there is Smash's: a heavy, deliberate input suits a heavy,
+> deliberate move, and the finishers are depth-gated so the input is dead most of the time.
+> The argument against is that a dropped payoff in a 60-second match feels terrible. If it
+> proves bad, swap the finishers onto `shift`+`L`/`R` and move the ordinary abilities out.
+
+## Bellator
+
+**`L` / `M` / `R` are sword / hammer / spear.** Pressing a form you are not currently in
+triggers the switch, animated from whatever the current context is.
+
+**This means the mid-animation swap needs no new input.** Press a different form's button
+during active frames and you get the cross-form ending. The mechanic and the control are the
+same thing, which is the strongest argument that the mechanic is right.
+
+| Input | Result |
+| --- | --- |
+| `L` / `M` / `R` | Auto in that form, or switch to it if you are in another |
+| `L`/`M`/`R` during active frames | The swap. Changes the move's tail |
+| `w` + any click | Charge attack |
+| `a`/`d` + any click | Lateral. Directional knockback — the combo backbone |
+| `s` + any click | Low / grounded attack |
+| `shift` + click | Abilities. Shift versus no-shift is **bigger versus smaller, and different in kind** |
+| `space` + direction | **Rush.** The class's dodge is its chargeable, bankable dash, and it still cancels recovery |
+
+Direction plus click carries most of the class's feel. These want varied, semi-directional
+knockback so that where you hit from determines where they go — that is what makes the
+combo game read.
+
+## Bulwark
+
+| Input | Result |
+| --- | --- |
+| `L` | Off-hand melee auto |
+| `R` (hold) | **Guard.** Opening frames are the parry |
+| `M` | **Throw** when held, **Recall** when planted. Reactivate mid-flight to leap to it |
+| `shift` + `L` | Bash |
+| `shift` + `R` | Slam |
+| `shift` + `M` | Grapple |
+| direction + `L` | Basic moves |
+| `LR` | Reserved — the candidate slot for a dedicated ally-cover stance |
+
+Shield position lives on `M`, so the whole three-state mechanic is one button with context.
+Guard on the right button matches every game where alt-fire is the defensive option.
+
+## Shadow Reaver
+
+A half-caster. Click abilities should feel like real melee — strong individually rather than
+combo-dependent — and the shadow abilities should reward being close and fast.
+
+| Input | Result |
+| --- | --- |
+| `L` / `R` | Melee autos, alternating hands. First auto after reclaiming the shadow hits harder |
+| direction + click | **Shadow control** — send it, swap to it, recall it |
+| `shift` + click | Executioner, Guillotine lotus, Deadly mistake |
+| `space` + direction | **Shadow dash.** The dodge places the shadow |
+
+Putting shadow control on the directional basics is what makes the class read as a
+half-caster: the shadow is steered with the same inputs that other classes use for basic
+attacks.
+
+## Elementalist and Blood mage
+
+The two full casters. **Every open slot is a unique spell, including the directional
+basics** — these classes have no generic basic moves at all, which is itself the
+differentiation.
+
+### Elementalist
+
+| Input | Result |
+| --- | --- |
+| `L` | Ranged bolt auto |
+| `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
+| direction + click | Fissure, Quake, Ice blast |
+| `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |
+
+### Blood mage
+
+| Input | Result |
+| --- | --- |
+| `L` | Melee auto with lifesteal |
+| `R` | **Rend.** Press again to reactivate — the signature second decision |
+| direction + click | Cripple, Black spike, Affliction |
+| `shift` + click | Reaper's debt, Seal of the unforgiven |
+
+## Open questions
+
+- **`q` and `e`.** Currently unused. Twenty inputs is already more than a prototype needs, so
+  they stay free. If `M` and `LR` prove unreliable, `q` and `e` are the natural replacements
+  — they are fast, adjacent to WASD, and cost no finger travel.
+- **Does `s` + click mean "low attack" or "defensive option"?** It should mean one thing
+  across all classes. Low attack is the platform-fighter convention.
+- **Camera-relative or character-relative direction?** Determines whether `a`/`d` really do
+  mirror. Camera-relative is standard in third person and probably correct.
+- **Held versus tapped clicks.** Several mechanics already want hold (Guard, charge attacks,
+  Rush). Whether hold is a universal modifier or per-ability is unresolved.

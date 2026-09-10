@@ -1,7 +1,7 @@
 ---
 status: proposed
 decided: 2026-09-09
-sources: docs/combat-design/elementalist-skills.md, docs/combat-design/class-builds.md
+sources: docs/archive/combat-design/elementalist-skills.md, docs/archive/combat-design/class-builds.md
 ---
 
 # Elementalist — kit
@@ -28,6 +28,8 @@ this kit takes the `elementalist-skills.md` version, which is the later document
 **Earth is always equipped** — it is what generates structures. A second element slots
 alongside it. This kit specifies **earth plus fire**; ice, air, and lightning are the
 specialisation axis for later.
+
+Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 

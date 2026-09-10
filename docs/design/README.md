@@ -1,73 +1,103 @@
-# Design
+# Design — current state
 
-Working design documents. These supersede the material under
-[`../combat-design/`](../combat-design/), which is the 2016–2019 source archive exported
-from Google Drive and is kept as reference, not as spec.
+Everything currently decided, proposed, or parked, in one place. This supersedes
+[`../archive/`](../archive/README.md), which is 2016–2019 source material kept for reference.
 
-Start with the [combat kernel](combat-kernel.md) — every class document assumes it.
+**Start here:** [combat kernel](combat-kernel.md) → [controls](controls.md) →
+[ability spec](ability-spec.md) → a class kit.
 
-| Document | Status |
+---
+
+## 1 · Settled
+
+**Frame.** Peer-to-peer, isolated battle arena. Coop against monsters, or versus. 3D third
+person, with ability spectacle as an explicit goal. Smash-like — spatial commitment, whiff
+punishment, reads — not Tekken-like. The closed arena is deliberate: far less art than an
+open world.
+
+**No cooldowns.** Abilities cost **frames** (primary) and **the class mechanic** (secondary).
+There is no universal resource bar.
+
+**Time to kill.** ~60 seconds versus. 1–20 minutes coop, by fight difficulty.
+
+**Defense splits into two verbs.** Dodge is universal and evasive. Block is shield-gated and
+positional, covering a facing arc rather than a bubble. Blocking costs **space and a
+vulnerable window** — knockback plus stunlock, no chip damage, no guard meter. Parry is the
+opening frames of block and rewards with a stagger. Special attacks are the guard breakers.
+
+**Control grammar.** Click = attack. Shift = ability. WASD = move. Space = move more. Shift
+beats WASD when both are held.
+
+**Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
+poke is a design choice in a closed arena, not a gap.
+
+## 2 · The roster
+
+| Class | Mechanic — what abilities spend | Primary buttons | State |
+| --- | --- | --- | --- |
+| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position | `L`/`R` melee autos | Strong |
+| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` bolt · `R` Raise | Strong |
+| [Blood mage](kits/blood-mage.md) | Health | `L` auto · `R` Rend | Decent |
+| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto | Reworked |
+| [Bellator](kits/bellator.md) | Rush charge, and which form you end in | `L`/`M`/`R` = sword/hammer/spear | Reworked |
+| [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
+| ~~Gatekeeper~~ | — | — | Retired |
+
+*Dual mage was Statera. Bellator was Shifter.*
+
+Each kit is **six abilities plus an auto and the mechanic input** — enough for a real match,
+few enough to balance and to read in third person.
+
+## 3 · Documents
+
+| Document | Covers | Status |
+| --- | --- | --- |
+| [combat-kernel.md](combat-kernel.md) | No cooldowns, TTK, what that breaks | Decided |
+| [controls.md](controls.md) | Input grammar, per-class schemes | Proposed |
+| [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
+| [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
+| [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
+| [bellator.md](bellator.md) | Forms and the mid-animation swap | Decided |
+| [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
+| [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
+| [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
+| [parked.md](parked.md) | Progression and equipment | **Parked** |
+
+## 4 · Open
+
+Nothing here blocks a prototype.
+
+| Item | Question |
 | --- | --- |
-| [combat-kernel.md](combat-kernel.md) | Decided |
-| [defense.md](defense.md) | Proposed |
-| [dual-mage.md](dual-mage.md) | Meter decided; ascension is an open proposal |
-| [bulwark.md](bulwark.md) | Proposed |
-| [bellator.md](bellator.md) | Decided |
-| [gatekeeper-retirement.md](gatekeeper-retirement.md) | Decided |
-| [elementalist.md](elementalist.md) | Decided |
-| [ability-spec.md](ability-spec.md) | Proposed |
-| [parked.md](parked.md) | Parked — progression and equipment |
-
-## Class kits
-
-Six abilities each, plus an auto and the mechanic input. Written against
-[ability-spec.md](ability-spec.md).
-
-| Kit | Mechanic / what abilities spend |
-| --- | --- |
-| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position |
-| [Elementalist](kits/elementalist.md) | Structure slots on the field |
-| [Blood mage](kits/blood-mage.md) | Health |
-| [Dual mage](kits/dual-mage.md) | Meter position — ascension still open |
-| [Bellator](kits/bellator.md) | Rush charge and which form you end in |
-| [Bulwark](kits/bulwark.md) | Shield position |
-
-## Roster
-
-| Class | State |
-| --- | --- |
-| Shadow Reaver | Strong. Mobility no longer gated on shadow placement. |
-| Elementalist | Strong. Structure ruling settled; archive versions reconciled. |
-| Blood mage | Decent. Now tunable — was blocked on TTK. |
-| Dual mage | *Formerly Statera.* Meter reworked to two forms per ability. Ascension unresolved. |
-| Bellator | *Formerly Shifter.* Mid-animation form swap is the core addition. |
-| Bulwark | New. Replaces the Gatekeeper. |
-| ~~Gatekeeper~~ | Retired. |
-
-## Next decisions
-
-The focus is **building the six core classes**. Progression and equipment are parked; see
-[parked.md](parked.md).
-
-1. **Dual mage ascension.** The one unresolved core mechanic. Proposal is in
-   [dual-mage.md](dual-mage.md).
-2. **A prototype**, to start putting real numbers on the frame vocabulary. The Bulwark
-   exercises the whole defensive layer; the Bellator exercises the swap window, which
-   nothing else uses.
-3. **Arena size and shape.** Determines whether a space-denying class can corner anyone, and
-   whether block pushback has teeth.
-4. **Control scheme pass.** The archived key map predates the new system, no cooldowns, the
-   block proposal, and the Dual mage's tap/hold form select.
-
-## Per-class blockers
-
-| Class | What it still needs |
-| --- | --- |
-| Dual mage | Ascension resolved. The kit is written around the gap |
+| **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
+| **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
+| **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
+| **Airborne movesets** | Prototype differentiates directional basics only |
+| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Bellator | Whether the mid-animation swap costs Rush |
 | Shadow Reaver | Whether the shadow has collision |
 | Elementalist | Structure cap of three is a readability guess, not a balance one |
-| Blood mage | Health cost as flat or percentage. Downstream of TTK either way |
+| Blood mage | Health cost flat or percentage |
 
-All six need frame counts and damage numbers, which need a prototype.
+## 5 · Parked — not slated for initial implementation
+
+**Progression and equipment.** See [parked.md](parked.md). The classes are the product; a
+build system has nothing to modify until they exist.
+
+The leading proposal is **offensive items as auto-attack modifiers** — mild buffs that change
+playstyle rather than power, letting a class spec toward offence, defence or utility without
+changing identity, with unlocks forming the early ramp. Its open risk is that some modifiers
+may be too central to be optional.
+
+Two conclusions there should only be reopened deliberately: vertical character power is
+corrosive to a skill-gates-content thesis, and competitive versus is incompatible with
+character progression.
+
+## 6 · Next
+
+1. **Prototype a class** and start putting real numbers on the frame vocabulary. The Bulwark
+   exercises the whole defensive layer; the Bellator exercises the swap window, which nothing
+   else uses.
+2. **Arena size and shape.**
+3. Per-class open items above, most of which want the prototype anyway.

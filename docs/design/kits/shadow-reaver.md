@@ -1,7 +1,7 @@
 ---
 status: proposed
 decided: 2026-09-09
-sources: docs/combat-design/shadow-reaver-skills.md, docs/combat-design/class-builds.md
+sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat-design/class-builds.md
 ---
 
 # Shadow Reaver — kit
@@ -18,6 +18,8 @@ damaging and slowing anything on the way.
 having a shadow already placed, which loses hard to an opponent who denies the setup.
 Fixed by making the baseline dash *create* the shadow — so movement and setup are the same
 action, and the class can never be left standing still.
+
+Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 

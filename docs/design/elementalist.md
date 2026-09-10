@@ -1,7 +1,7 @@
 ---
 status: decided
 decided: 2026-09-09
-extends: docs/combat-design/elementalist-skills.md
+extends: docs/archive/combat-design/elementalist-skills.md
 ---
 
 # Elementalist

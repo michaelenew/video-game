@@ -30,6 +30,8 @@ with no timing or state involved — which is why a planted shield keeps blockin
 are elsewhere. As a *guard state* it handles melee, with stunlock and parry timing. Only the
 second requires you to be holding it.
 
+Input map in [../controls.md](../controls.md).
+
 ## Auto attack
 
 Short melee with the off hand. Unremarkable on purpose — the class does not win by autoing.

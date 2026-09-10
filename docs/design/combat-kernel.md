@@ -1,13 +1,13 @@
 ---
 status: decided
 decided: 2026-09-09
-supersedes: partially supersedes docs/combat-design/*
+supersedes: partially supersedes docs/archive/combat-design/*
 ---
 
 # Combat kernel
 
 The rules every class is designed against. Where an older document under
-`docs/combat-design/` conflicts with this one, this one wins — those documents are
+`docs/archive/combat-design/` conflicts with this one, this one wins — those documents are
 revisions written against the old system and are kept as source material, not as spec.
 
 ## Frame

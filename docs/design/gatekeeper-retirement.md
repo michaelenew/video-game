@@ -1,7 +1,7 @@
 ---
 status: decided
 decided: 2026-09-09
-retires: docs/combat-design/gatekeeper-skills.md
+retires: docs/archive/combat-design/gatekeeper-skills.md
 ---
 
 # Gatekeeper — retired

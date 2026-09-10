@@ -1,7 +1,7 @@
 ---
 status: proposed
 decided: 2026-09-09
-sources: docs/combat-design/blood-mage-skills.md, docs/combat-design/class-builds.md
+sources: docs/archive/combat-design/blood-mage-skills.md, docs/archive/combat-design/class-builds.md
 ---
 
 # Blood mage — kit
@@ -21,6 +21,8 @@ guessed.
 
 Naturally deals increased damage to disabled enemies — carried forward from the archive as
 the class's damage identity.
+
+Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 

@@ -42,6 +42,36 @@ roof.
 
 ## Ideas worth keeping
 
+### Offensive items modify the auto attack — the leading proposal
+
+**Auto attacks become a loadout choice.** Items offer mild buffs that *qualitatively change
+playstyle* rather than adding power, and unlocking more of them as you progress is itself the
+early ramp.
+
+| Class | Candidate auto modifiers |
+| --- | --- |
+| Dual mage | Dash after auto · speed boost on hit |
+| Bulwark | Slow on hit · mark an enemy for bonus damage |
+| Bellator | A three-hit passive |
+| Shadow Reaver | Bleed · poison |
+| Elementalist | Any structure interaction |
+| Blood mage | Mark for life drain |
+
+This lets every class spec toward **offence, defence, or utility to suit the situation
+without changing its identity**, which is exactly what a sidegrade system is supposed to do.
+
+It is the strongest of the three ideas here, for reasons that are structural:
+
+- **Autos are used constantly**, so a modifier is felt every second rather than occasionally.
+- **There is exactly one ability to modify per class**, so the combinatorial problem that
+  kills per-weapon ability variants does not arise at all.
+- It reads to the player as *playstyle*, not as *power*.
+
+**The open risk, and it is a real one:** some of these may be too central to be optional.
+Dash-after-auto and speed-on-hit would both change how the Dual mage plays so much that they
+might belong in the base kit rather than in a loadout. That call needs the class in hand —
+play it first, decide after.
+
 ### Equipment modifies the class mechanic, not individual abilities
 
 The blocker on a TF2-style sidegrade system is combinatorial: TF2 works because a class has
