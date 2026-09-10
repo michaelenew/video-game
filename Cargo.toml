@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/net", "crates/game"]
+members = ["crates/sim", "crates/net", "crates/game", "crates/web"]
 
 [workspace.package]
 edition = "2024"
@@ -18,3 +18,10 @@ opt-level = 1
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# The wasm sandbox: small and fast matters more than compile time.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+panic = "abort"
+strip = true

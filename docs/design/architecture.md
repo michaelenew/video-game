@@ -10,8 +10,9 @@ rendering or networking.
 
 ```
 crates/sim    Deterministic simulation. Zero dependencies, no floating point.
-crates/net    Rollback session. Shaped like the GGRS handler.
-crates/game   Front end. Headless soak today, Bevy app later.
+crates/net    Rollback session. GGRS wired, plus a dependency-free local harness.
+crates/game   Headless soak / CI determinism check.
+crates/web    WebAssembly build and the browser sandbox.
 ```
 
 ## What rollback actually demands
@@ -110,19 +111,43 @@ determinism argument.
 **Peer to peer, rollback from day one.** The prototype needs no server: create a room and
 connect two peers directly by IP.
 
-`net` defines a `Rollback` trait — `advance` / `save` / `load` / `checksum` — shaped
-deliberately like the GGRS session handler, so adding `ggrs` locally is an impl block
-rather than a redesign. GGRS is the Rust reimplementation of GGPO, and it handles input
-prediction, rollback, and the periodic checksum exchange, which means **desync detection is
-largely free**.
+**GGRS is wired.** It is the Rust reimplementation of GGPO and handles input prediction,
+rollback, and the periodic checksum exchange, which means **desync detection is largely
+free**. `handle_requests` services its save / load / advance requests against the
+simulation; that function is the entire integration.
 
-`LocalSession` runs the real predict-and-rollback loop against a simulated peer, with no
-sockets and no second machine. That is the harness that catches non-determinism while it is
-still cheap to fix.
+GGRS requires its input type to be `serde`-serialisable, so the wire type `NetInput` lives
+in `net` rather than putting a dependency on `sim` — whose zero-dependency status is a
+guarantee, not an accident. The wire format is **two bytes per player per frame**.
+
+**GGRS SyncTest is the strictest determinism check available.** It replays locally with
+forced rollbacks and compares its own checksums across re-simulations. It runs in
+`crates/net/tests/ggrs_synctest.rs` over 1200 frames and should be the first test to fail
+if the simulation ever stops being a pure function.
+
+`LocalSession` is a second, dependency-free harness that runs the same predict-and-rollback
+loop against a simulated peer. It is kept because it is readable — when SyncTest reports a
+desync, `LocalSession` is where you can watch one happen.
 
 **Honest about "no server ever":** true for the prototype and for LAN. Direct-IP
 connections between arbitrary home networks eventually need NAT traversal, which means a
 small STUN or relay service. Not needed now; worth not being surprised by later.
+
+## The browser sandbox
+
+`crates/web` compiles the simulation to WebAssembly and `build-sandbox.sh` inlines it into
+one self-contained HTML file — no server, no fetch, no CORS. Open the file.
+
+It is a **training mode**, not a demo: hitbox and guard-arc overlays, a frame-data timeline
+per player, pause and single-frame stepping, quarter-speed, dummy modes, and the live desync
+checksum. Frame-stepping is the point — it is how frame data gets tuned.
+
+The exported surface is a handful of C-ABI functions returning raw fixed point; JavaScript
+divides by 65536 to draw. **No wasm-bindgen**, so the module has zero imports and comes to
+about 21 KB. Float conversion happens on the far side of the boundary, which keeps the
+simulation integer-only.
+
+It runs the *real* simulation. Anything felt in the browser is what the game does.
 
 ## Current state
 
@@ -132,22 +157,28 @@ Everything below builds and passes today.
 | --- | --- |
 | `Fx` fixed point, vectors, trig | Working, tested |
 | `Input` bitfield | Matches [controls.md](controls.md) |
-| `World`, tick function, checksum | Placeholder movement and a generic committed attack |
-| `Rollback` trait, `LocalSession` | Working, tested against ground truth |
-| Determinism and rollback test suites | 12 tests |
+| `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
+| GGRS integration + SyncTest | Passing over 1200 frames |
+| `LocalSession` readable harness | Passing against ground truth |
+| Test suites | 15 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
+| Browser sandbox | `./crates/web/build-sandbox.sh` |
 
-The combat content is deliberately a stub — one generic attack with placeholder frame
-counts. The point of this scaffold is that **the determinism harness exists before the
-gameplay does**, so every class implemented from here is checked from its first commit.
+The move set is a **Bulwark stand-in**, not a finished class: a fast poke, a committed slam,
+and the guard/parry layer from [defense.md](defense.md). Both players use it, so a sandbox
+match is a mirror. It exists to make the frame vocabulary concrete.
+
+The point of the scaffold is that **the determinism harness existed before the gameplay
+did**, so every class implemented from here is checked from its first commit.
 
 ## Next
 
-1. **One real class in `sim`.** The Bulwark exercises the whole defensive layer; the
-   Bellator exercises the form-swap window, which nothing else uses. This is where the
-   `slow` / `committed` vocabulary in the kits becomes frame counts.
-2. **Capsule collision and hitboxes.**
-3. **Bevy front end** — capsules and debug hitbox rendering, no art. This is how fighting
-   games are prototyped, and it is where feel gets tuned.
-4. **GGRS**, then two instances on one machine under artificial latency, before any network.
-5. **Direct-IP peer to peer.**
+1. **Finish the Bulwark**, then a second class. The Bellator exercises the form-swap window,
+   which nothing else uses. Tune against the browser sandbox.
+2. **Capsule-versus-static geometry.** Player bodies already separate; the arena is still a
+   flat plane with walls.
+3. **Direct-IP peer to peer.** GGRS is wired; what is missing is the socket and a room
+   handshake.
+4. **Bevy front end** for the 3D view. The browser sandbox covers frame-data work, so this
+   is about the third-person camera and the visual reward of using abilities — which is a
+   different job, and a later one.

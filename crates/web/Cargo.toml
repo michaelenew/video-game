@@ -1,0 +1,16 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sim = { path = "../sim" }
+
+# No wasm-bindgen. The exported surface is a handful of C-ABI functions
+# returning raw fixed-point integers; JavaScript does the float conversion for
+# rendering. Keeps the module tiny and the boundary explicit.

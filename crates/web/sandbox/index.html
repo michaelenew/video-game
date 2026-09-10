@@ -1,0 +1,428 @@
+<title>Arena Frame Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root{
+  --ground:#0d1014; --panel:#151a21; --panel-2:#1b222c; --line:#242e3b;
+  --ink:#ccd6e4; --dim:#6d7a8c; --faint:#414d5c;
+  --p1:#4aa8ff; --p2:#ff8a4c;
+  --startup:#ffb400; --active:#ff3b4e; --recovery:#5b7fd4;
+  --guard:#35d0a0; --parry:#7bffcf; --stun:#b06de8;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ui:"Chakra Petch",system-ui,-apple-system,Segoe UI,sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--ui); font-size:14px; line-height:1.5;
+  padding-block:24px; padding-left:20px; padding-right:20px;
+}
+.wrap{max-width:1120px; margin:0 auto; display:flex; flex-direction:column; gap:18px}
+
+header{display:flex; flex-wrap:wrap; align-items:baseline; gap:14px}
+h1{
+  font-size:22px; font-weight:700; margin:0; letter-spacing:.02em;
+  text-wrap:balance;
+}
+.sub{color:var(--dim); font-size:13px}
+.badge{
+  font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--guard); border:1px solid color-mix(in srgb,var(--guard) 40%,transparent);
+  padding:3px 8px; border-radius:3px;
+}
+
+.stage{
+  background:var(--panel); border:1px solid var(--line); border-radius:6px;
+  padding:14px; display:flex; flex-direction:column; gap:12px;
+}
+canvas{
+  width:100%; height:auto; display:block; background:#0a0d11;
+  border:1px solid var(--line); border-radius:4px; touch-action:none;
+}
+
+.transport{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+button{
+  font-family:var(--ui); font-size:13px; font-weight:600; letter-spacing:.02em;
+  color:var(--ink); background:var(--panel-2); border:1px solid var(--line);
+  padding:7px 13px; border-radius:4px; cursor:pointer;
+}
+button:hover{border-color:var(--faint); background:#212a35}
+button[aria-pressed="true"]{
+  background:color-mix(in srgb,var(--p1) 18%,var(--panel-2));
+  border-color:color-mix(in srgb,var(--p1) 55%,transparent); color:#e8f2ff;
+}
+button:focus-visible{outline:2px solid var(--p1); outline-offset:2px}
+.spacer{flex:1 1 auto; min-width:8px}
+.readout{
+  font-family:var(--mono); font-size:12px; color:var(--dim);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.readout b{color:var(--ink); font-weight:500}
+
+.rail{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px}
+.pstate{
+  background:var(--panel); border:1px solid var(--line); border-radius:6px;
+  padding:13px 15px; display:flex; flex-direction:column; gap:10px;
+  border-top:2px solid var(--who);
+}
+.pstate.p1{--who:var(--p1)} .pstate.p2{--who:var(--p2)}
+.pname{
+  display:flex; align-items:baseline; gap:9px;
+  font-weight:700; letter-spacing:.05em; text-transform:uppercase; font-size:12px;
+  color:var(--who);
+}
+.pname span{color:var(--dim); font-weight:400; letter-spacing:0; text-transform:none; font-size:12px}
+.hp{height:7px; background:#0a0d11; border-radius:2px; overflow:hidden}
+.hp i{display:block; height:100%; background:var(--who); transition:width .08s linear}
+.phase{
+  display:flex; align-items:center; gap:9px;
+  font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums;
+}
+.chip{
+  padding:2px 8px; border-radius:3px; font-size:11px; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; color:#0d1014;
+}
+.kv{
+  display:grid; grid-template-columns:auto 1fr; gap:2px 12px;
+  font-family:var(--mono); font-size:11.5px; font-variant-numeric:tabular-nums;
+}
+.kv dt{color:var(--dim)} .kv dd{margin:0}
+
+.timeline{display:flex; flex-direction:column; gap:5px}
+.tl-label{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--faint);
+}
+.bars{display:flex; height:11px; gap:2px; border-radius:2px; overflow:hidden}
+.bars i{display:block; opacity:.32}
+.bars i.on{opacity:1}
+
+.legend{
+  background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:14px 16px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:16px 24px;
+}
+.legend h2{
+  font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--dim); margin:0 0 7px; font-weight:600;
+}
+.keys{display:grid; grid-template-columns:auto 1fr; gap:4px 11px; font-size:12.5px; align-items:baseline}
+kbd{
+  font-family:var(--mono); font-size:11px; background:var(--panel-2);
+  border:1px solid var(--line); border-bottom-width:2px; border-radius:3px;
+  padding:1px 6px; color:var(--ink); white-space:nowrap;
+}
+.keys span{color:var(--dim)}
+.swatches{display:flex; flex-direction:column; gap:5px; font-size:12.5px}
+.sw{display:flex; align-items:center; gap:8px; color:var(--dim)}
+.sw i{width:11px; height:11px; border-radius:2px; flex:none}
+footer{color:var(--faint); font-size:12px; line-height:1.6}
+footer code{font-family:var(--mono); font-size:11.5px; color:var(--dim)}
+@media (max-width:640px){ .rail{grid-template-columns:1fr} }
+@media (prefers-reduced-motion:reduce){ .hp i{transition:none} }
+</style>
+<div class="wrap">
+  <header>
+    <h1>Arena Frame Lab</h1>
+    <span class="badge" id="simbadge">wasm · 60 Hz</span>
+    <span class="sub">Training mode for the deterministic combat sim. Same Rust that runs in the game, compiled to WebAssembly.</span>
+  </header>
+
+  <div class="stage">
+    <canvas id="view" width="1060" height="600" aria-label="Top-down arena view"></canvas>
+    <div class="transport">
+      <button id="playpause" aria-pressed="true">Pause</button>
+      <button id="step">Step 1 frame</button>
+      <button id="slow" aria-pressed="false">Slow ¼×</button>
+      <button id="reset">Reset</button>
+      <span class="spacer"></span>
+      <span class="readout">frame <b id="frame">0</b> &nbsp;·&nbsp; checksum <b id="sum">—</b></span>
+    </div>
+  </div>
+
+  <div class="rail">
+    <section class="pstate p1">
+      <div class="pname">Player 1 <span>you — WASD, J, K</span></div>
+      <div class="hp"><i id="hp0" style="width:100%"></i></div>
+      <div class="phase"><span class="chip" id="chip0">free</span><span id="ph0">idle</span></div>
+      <div class="timeline">
+        <div class="tl-label">Frame data</div>
+        <div class="bars" id="bars0"></div>
+      </div>
+      <dl class="kv">
+        <dt>pos</dt><dd id="pos0">0.00, 0.00</dd>
+        <dt>health</dt><dd id="h0">1000</dd>
+      </dl>
+    </section>
+
+    <section class="pstate p2">
+      <div class="pname">Player 2 <span id="p2mode">dummy — idle</span></div>
+      <div class="hp"><i id="hp1" style="width:100%"></i></div>
+      <div class="phase"><span class="chip" id="chip1">free</span><span id="ph1">idle</span></div>
+      <div class="timeline">
+        <div class="tl-label">Frame data</div>
+        <div class="bars" id="bars1"></div>
+      </div>
+      <div class="transport">
+        <button data-dummy="0" aria-pressed="true">Idle</button>
+        <button data-dummy="1" aria-pressed="false">Block</button>
+        <button data-dummy="2" aria-pressed="false">Attack</button>
+        <button data-dummy="3" aria-pressed="false">2P human</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="legend">
+    <div>
+      <h2>Player 1</h2>
+      <div class="keys">
+        <kbd>W A S D</kbd><span>move</span>
+        <kbd>Space</kbd><span>jump</span>
+        <kbd>J</kbd><span>Bash — fast poke</span>
+        <kbd>Shift</kbd>+<kbd>J</kbd><span>Slam — committed</span>
+        <kbd>K</kbd><span>Guard — hold</span>
+      </div>
+    </div>
+    <div>
+      <h2>Player 2 <span style="text-transform:none;letter-spacing:0">(human mode)</span></h2>
+      <div class="keys">
+        <kbd>↑ ← ↓ →</kbd><span>move</span>
+        <kbd>/</kbd><span>jump</span>
+        <kbd>.</kbd><span>Bash</span>
+        <kbd>,</kbd><span>Guard</span>
+      </div>
+    </div>
+    <div>
+      <h2>Phases</h2>
+      <div class="swatches">
+        <div class="sw"><i style="background:var(--startup)"></i>Startup — committed, no hitbox</div>
+        <div class="sw"><i style="background:var(--active)"></i>Active — hitbox live</div>
+        <div class="sw"><i style="background:var(--recovery)"></i>Recovery — punishable</div>
+        <div class="sw"><i style="background:var(--guard)"></i>Guard — 120° arc, slow turn</div>
+        <div class="sw"><i style="background:var(--parry)"></i>Parry — first 4 frames of guard</div>
+        <div class="sw"><i style="background:var(--stun)"></i>Stun — block, hit, or staggered</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Guard covers a frontal arc, not a bubble, and turning is slow while you hold it — walk around a blocking opponent and hit the back.
+    Blocking takes no chip damage; it costs knockback and a window where you cannot act.
+    The first four frames of a guard <strong style="color:var(--parry)">parry</strong> instead, staggering the attacker for 34 frames.
+    <br><br>
+    Frame data comes from <code>MOVES</code> in <code>crates/sim/src/state.rs</code> — Bash is 4/3/10, Slam is 14/4/24.
+    The checksum is what peers compare to detect desync.
+  </footer>
+</div>
+<script>
+const FX = 65536, HZ = 60;
+const IN = { L:1, R:2, M:4, SHIFT:8, W:16, A:32, S:64, D:128, SPACE:256 };
+const PHASE = ["free","startup","active","recovery","guard","blockstun","hitstun","stagger"];
+const COLOR = {
+  free:"#6d7a8c", startup:"#ffb400", active:"#ff3b4e", recovery:"#5b7fd4",
+  guard:"#35d0a0", blockstun:"#b06de8", hitstun:"#b06de8", stagger:"#b06de8"
+};
+const P = ["#4aa8ff","#ff8a4c"];
+
+let wasm = null, playing = true, slow = false, stepOnce = false, dummy = 0, acc = 0, last = 0;
+const held = new Set();
+const $ = id => document.getElementById(id);
+const cv = $("view"), ctx = cv.getContext("2d");
+
+addEventListener("keydown", e => {
+  if ([" ","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","/"].includes(e.key)) e.preventDefault();
+  held.add(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+  if (e.key === "p") togglePlay();
+  if (e.key === "]") { stepOnce = true; playing = false; syncPlayBtn(); }
+});
+addEventListener("keyup", e => held.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+addEventListener("blur", () => held.clear());
+
+function p1Input() {
+  let v = 0;
+  if (held.has("w")) v |= IN.W;
+  if (held.has("a")) v |= IN.A;
+  if (held.has("s")) v |= IN.S;
+  if (held.has("d")) v |= IN.D;
+  if (held.has(" ")) v |= IN.SPACE;
+  if (held.has("Shift")) v |= IN.SHIFT;
+  if (held.has("j")) v |= IN.L;
+  if (held.has("k")) v |= IN.R;
+  return v;
+}
+
+function p2Input(frame) {
+  if (dummy === 1) return IN.R;                       // hold guard
+  if (dummy === 2) return frame % 48 < 2 ? IN.L : 0;  // attack on a cadence
+  if (dummy === 3) {
+    let v = 0;
+    if (held.has("ArrowUp")) v |= IN.W;
+    if (held.has("ArrowLeft")) v |= IN.A;
+    if (held.has("ArrowDown")) v |= IN.S;
+    if (held.has("ArrowRight")) v |= IN.D;
+    if (held.has("/")) v |= IN.SPACE;
+    if (held.has(".")) v |= IN.L;
+    if (held.has(",")) v |= IN.R;
+    return v;
+  }
+  return 0;
+}
+
+// ---- rendering -------------------------------------------------------------
+const UNIT = 34, ARENA = 14;
+function sx(x){ return cv.width/2 + x*UNIT; }
+function sy(z){ return cv.height/2 + z*UNIT; }
+
+function draw() {
+  const e = wasm;
+  ctx.fillStyle = "#0a0d11";
+  ctx.fillRect(0,0,cv.width,cv.height);
+
+  // floor grid
+  ctx.strokeStyle = "#141b24"; ctx.lineWidth = 1;
+  for (let g = -ARENA; g <= ARENA; g += 2) {
+    ctx.beginPath(); ctx.moveTo(sx(g), sy(-ARENA)); ctx.lineTo(sx(g), sy(ARENA)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx(-ARENA), sy(g)); ctx.lineTo(sx(ARENA), sy(g)); ctx.stroke();
+  }
+  ctx.strokeStyle = "#2a3644"; ctx.lineWidth = 2;
+  ctx.strokeRect(sx(-ARENA), sy(-ARENA), 2*ARENA*UNIT, 2*ARENA*UNIT);
+
+  for (let i = 0; i < 2; i++) {
+    const x = e.p_x(i)/FX, y = e.p_y(i)/FX, z = e.p_z(i)/FX;
+    const fx = e.p_fx(i)/FX, fz = e.p_fz(i)/FX;
+    const phase = PHASE[e.p_action(i)];
+    const lift = y * UNIT * 0.55;
+
+    // ground shadow, so height reads in a top-down view
+    if (y > 0.01) {
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      ctx.beginPath(); ctx.ellipse(sx(x), sy(z), UNIT*0.42, UNIT*0.22, 0, 0, 7); ctx.fill();
+    }
+
+    const cxp = sx(x), cyp = sy(z) - lift;
+
+    // guard arc: 120 degrees of frontal coverage
+    if (phase === "guard") {
+      const a = Math.atan2(fz, fx), half = Math.PI/3;
+      const parrying = e.p_left(i) < e.parry_window();
+      ctx.fillStyle = parrying ? "rgba(123,255,207,.30)" : "rgba(53,208,160,.16)";
+      ctx.strokeStyle = parrying ? "#7bffcf" : "#35d0a0";
+      ctx.lineWidth = parrying ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.moveTo(cxp, cyp);
+      ctx.arc(cxp, cyp, UNIT*1.5, a-half, a+half); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+
+    // live hitbox
+    const hr = e.hit_r(i)/FX;
+    if (hr > 0) {
+      ctx.fillStyle = "rgba(255,59,78,.24)";
+      ctx.strokeStyle = "#ff3b4e"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sx(e.hit_x(i)/FX), sy(e.hit_z(i)/FX) - lift, hr*UNIT, 0, 7);
+      ctx.fill(); ctx.stroke();
+    }
+
+    // body
+    ctx.fillStyle = P[i];
+    ctx.strokeStyle = COLOR[phase]; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cxp, cyp, UNIT*0.5, 0, 7); ctx.fill(); ctx.stroke();
+
+    // facing wedge
+    ctx.strokeStyle = "#0a0d11"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cxp, cyp);
+    ctx.lineTo(cxp + fx*UNIT*0.5, cyp + fz*UNIT*0.5); ctx.stroke();
+
+    ctx.fillStyle = "#0a0d11";
+    ctx.font = "700 13px 'JetBrains Mono',monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(String(i+1), cxp, cyp);
+  }
+}
+
+// ---- panels ----------------------------------------------------------------
+function bars(el, phase, left, kind) {
+  const e = wasm;
+  if (kind === 0xffffffff || phase === "free" || phase === "guard") {
+    el.innerHTML = `<i class="on" style="flex:1;background:${COLOR[phase]}"></i>`;
+    return;
+  }
+  const s = e.move_startup(kind), a = e.move_active(kind), r = e.move_recovery(kind);
+  const seg = [["startup",s],["active",a],["recovery",r]];
+  el.innerHTML = seg.map(([n,c]) =>
+    `<i class="${n===phase?"on":""}" style="flex:${c};background:${COLOR[n]}"></i>`).join("");
+}
+
+function panels() {
+  const e = wasm;
+  $("frame").textContent = e.sim_frame();
+  const lo = e.sim_checksum_lo()>>>0, hi = e.sim_checksum_hi()>>>0;
+  $("sum").textContent = (hi.toString(16).padStart(8,"0") + lo.toString(16).padStart(8,"0"));
+
+  for (let i = 0; i < 2; i++) {
+    const phase = PHASE[e.p_action(i)], left = e.p_left(i), kind = e.p_kind(i)>>>0;
+    const hp = Math.max(0, e.p_health(i));
+    $("hp"+i).style.width = (hp/10) + "%";
+    if (i === 0) $("h0").textContent = hp;
+    const chip = $("chip"+i);
+    chip.textContent = phase;
+    chip.style.background = COLOR[phase];
+    const isParry = phase === "guard" && left < e.parry_window();
+    if (isParry) { chip.textContent = "parry"; chip.style.background = COLOR.parry; }
+    $("ph"+i).textContent = phase === "free" ? "actionable"
+      : phase === "guard" ? `held ${left}f`
+      : `${left}f left`;
+    bars($("bars"+i), phase, left, kind);
+    if (i === 0) $("pos0").textContent =
+      `${(e.p_x(0)/FX).toFixed(2)}, ${(e.p_z(0)/FX).toFixed(2)}`;
+  }
+}
+
+// ---- loop ------------------------------------------------------------------
+function tick(now) {
+  requestAnimationFrame(tick);
+  if (!wasm) return;
+  const dt = Math.min(0.25, (now - last)/1000 || 0); last = now;
+  const rate = slow ? HZ/4 : HZ;
+
+  if (playing) { acc += dt * rate; }
+  let steps = 0;
+  while (acc >= 1 && steps < 8) { advance(); acc -= 1; steps++; }
+  if (stepOnce) { advance(); stepOnce = false; }
+
+  draw(); panels();
+}
+
+function advance() {
+  wasm.sim_advance(p1Input(), p2Input(wasm.sim_frame()));
+}
+
+function togglePlay(){ playing = !playing; syncPlayBtn(); }
+function syncPlayBtn(){
+  const b = $("playpause");
+  b.textContent = playing ? "Pause" : "Play";
+  b.setAttribute("aria-pressed", String(playing));
+}
+
+$("playpause").onclick = togglePlay;
+$("step").onclick = () => { stepOnce = true; playing = false; syncPlayBtn(); };
+$("slow").onclick = e => { slow = !slow; e.currentTarget.setAttribute("aria-pressed", String(slow)); };
+$("reset").onclick = () => { wasm.sim_reset(); acc = 0; };
+document.querySelectorAll("[data-dummy]").forEach(b => b.onclick = () => {
+  dummy = +b.dataset.dummy;
+  document.querySelectorAll("[data-dummy]").forEach(o =>
+    o.setAttribute("aria-pressed", String(o === b)));
+  $("p2mode").textContent = "dummy — " + b.textContent.toLowerCase();
+});
+
+// ---- boot ------------------------------------------------------------------
+const WASM_B64 = "__WASM_B64__";
+const bytes = Uint8Array.from(atob(WASM_B64), c => c.charCodeAt(0));
+WebAssembly.instantiate(bytes.buffer, {}).then(r => {
+  wasm = r.instance.exports;
+  $("simbadge").textContent = `wasm · ${HZ} Hz · ${(bytes.length/1024).toFixed(0)} KB`;
+  syncPlayBtn();
+  requestAnimationFrame(t => { last = t; tick(t); });
+}).catch(err => {
+  $("simbadge").textContent = "wasm failed to load";
+  $("simbadge").style.color = "#ff3b4e";
+  console.error(err);
+});
+</script>

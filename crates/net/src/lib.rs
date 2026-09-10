@@ -9,6 +9,9 @@
 use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
 
+pub mod ggrs_glue;
+pub use ggrs_glue::{NetInput, SessionConfig, handle_requests};
+
 /// What a rollback session needs from a simulation.
 pub trait Rollback {
     type Snapshot: Clone;
