@@ -3,6 +3,10 @@
 #
 #   ./scripts/screenshot.sh [out.png] [seconds]
 #
+# SHOT_FRAME=N stops the simulation on frame N first, so two runs compare the
+# same moment. BAKED_ANIM=0 captures the procedural poses instead of the baked
+# ones. DEBUG_OVERLAY=1 draws the frame-data readout.
+#
 # Useful in a container with no display, and as a way to see what a change did
 # without launching the game. Needs Xvfb, ImageMagick and a Vulkan driver:
 #

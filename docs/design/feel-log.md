@@ -81,6 +81,15 @@ as they get tested.
 - **Is block stunlock long enough to make blocking a real cost?**
 - **Does crouch see enough use?** It only beats overheads, and there is one.
 
+### Animation
+
+- Does the baked overhead read as *heavy*, or just as *slow*? The lag budget
+  says it arrives on time; whether it lands with weight is a human judgement.
+- Roll and recoil are placeholders. The roll in particular has no sense of
+  the body compressing and unfolding.
+- Should hitstun drive the recoil clip's playback rate, or is a fixed-length
+  clip clearer to read? Fixed length is easier to reason about in frames.
+
 ### Camera
 - **Does the auto-frame pull in too aggressively when fighters close?**
 - **Is the perpendicular angle right, or should it favour player one's side?**
@@ -99,3 +108,42 @@ as they get tested.
 **Why** They needed to be *something* to be judged. Chosen so the relationships
 in `tests/feel.rs` hold, not because any individual number is believed.
 **Verdict** open — awaiting first real match.
+
+### 2026-09-10 — baked animation, first pass
+**Changed** Added an offline animation factory (`crates/anim`) and a baked
+clip table for poke, overhead, guard-in, roll and recoil. Toggle with **F2**;
+`BAKED_ANIM=0` starts with the old procedural poses.
+**Why** Hand-keyed poses read as a slideshow. The parts that make motion look
+alive — the arm trailing the shoulder, the overshoot at the end of a swing —
+are exactly the parts that are miserable to key by hand, and easy for a
+spring-damper to generate. Baking offline keeps `pose = f(state)`, so none of
+this touches rollback.
+**Verdict** kept. Reads clearly better than the procedural poses on the poke
+and the overhead. Roll and recoil are adequate, not good.
+
+### 2026-09-10 — "heavy" was making moves invisible
+**Changed** `Looseness` presets no longer take a spring frequency. Each part is
+now described by **lag in frames** and **ring**, and the frequency is derived.
+HEAVY went from roughly six frames of lag on the torso to 2.4.
+**Why** The first pass expressed weight as a low spring frequency. A spring
+chasing a moving target settles into a lag of about `2·ring/frequency`, so a
+low frequency does not mean *heavy*, it means *late*. The Bulwark's slam had a
+14-frame startup and its silhouette had barely moved by frame 5 — the opponent
+was supposed to be reading that windup and deciding whether to block, and there
+was nothing on screen to read.
+**Verdict** kept, and this is the useful lesson: weight should read as
+follow-through and settle, never as delay. A heavy part still has to *arrive on
+time*, it just carries past the mark and takes longer to stop wobbling. Pinned
+by `the_lag_knob_means_what_it_says` and `heavy_parts_arrive_late_but_not_absent`.
+
+### 2026-09-10 — the demo replay was not frame-exact
+**Changed** Scripted and dummy inputs are now sampled once per simulation tick
+instead of once per rendered frame.
+**Why** One rendered frame can cover several simulation ticks. Reusing a single
+input sample across all of them smeared the demo script's four-frame presses
+into whatever the frame rate happened to be, so two runs of the same script
+diverged. Two screenshots of "the same moment" were two different moments.
+**Verdict** kept. `SHOT_FRAME=N` now stops the simulation on an exact frame and
+the frame number is drawn next to the score, so a capture says which moment it
+caught. Comparisons across a long, fragmented experiment are only worth
+anything if they are reproducible.

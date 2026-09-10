@@ -169,9 +169,12 @@ pub fn update(
     }
 
     if let Ok(mut t) = rounds.single_mut() {
+        // The simulation frame rides along with the score so a screenshot says
+        // which moment it caught. Two captures of "the same" pose are only
+        // comparable if you can see they are the same frame.
         *t = Text::new(format!(
-            "{} - {}",
-            sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won
+            "{} - {}   f{}",
+            sim.cur.players[0].rounds_won, sim.cur.players[1].rounds_won, sim.cur.frame
         ));
     }
 

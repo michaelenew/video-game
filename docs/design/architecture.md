@@ -175,6 +175,45 @@ is imperceptible. Blend state does not belong in the snapshot.
 
 A test replays a frame the way a rollback would and asserts the pose is identical.
 
+## The animation factory
+
+`crates/anim` is an **offline** tool. It never runs in the game.
+
+Hand-keyed poses read as a slideshow, because the parts that make motion look
+alive -- an arm trailing the shoulder it hangs from, a swing carrying past its
+target and settling back -- are precisely the parts that are miserable to key by
+hand. They are, however, exactly what a spring-damper produces for free.
+
+So an animation is authored as **a handful of poses and a looseness setting**,
+and the solver fills in everything between them:
+
+```text
+recipe (keys + looseness)  --[springs, offline]-->  a table of poses, one per frame
+```
+
+`cargo run -p anim --bin bake` runs the solver and writes
+`crates/view/src/baked.rs`. **Playback is then an array index by frame**, which
+is why this changes nothing about rollback: `pose = f(state)` still holds, and a
+rollback re-indexes the same table with the same frame and gets the same pose.
+
+Generated Rust source rather than a data file, on purpose: no loader, no asset
+path, no runtime parsing, and a diff shows exactly what changed when an
+animation is retuned.
+
+### Looseness is expressed in frames, not in spring frequency
+
+Each part is described by **lag** (how many frames it runs behind the keys) and
+**ring** (how far it overshoots on arrival, where `1.0` never overshoots).
+
+This is not cosmetic API taste. A damped spring chasing a moving target settles
+into a steady lag of about `2·ring/frequency`. The first pass at this file
+expressed weight as a *low frequency*, which does not mean heavy -- it means
+late. The Bulwark's slam has a 14-frame startup and its silhouette had barely
+moved by frame 5, so there was nothing on screen for the opponent to read while
+they were supposed to be deciding whether to block. **Weight must read as
+follow-through, never as delay.** Splitting lag from ring makes that mistake
+hard to repeat, and two tests pin it.
+
 ## Render interpolation
 
 The simulation is locked to 60 Hz; displays are not. `view::interp` keeps the
@@ -258,7 +297,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 15 tests |
+| Test suites | 64 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -267,19 +306,26 @@ Everything below builds and passes today.
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
+| **All six classes** | **`game --p1 bellator --p2 elementalist`**, or Tab to cycle |
+| Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
+| Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
+| **Animation factory** | **`cargo run -p anim --bin bake`** — F2 toggles baked playback |
+| Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BAKED_ANIM=0` for procedural poses |
 
-The move set is a **Bulwark stand-in**, not a finished class: a fast poke, a committed slam,
-and the guard/parry layer from [defense.md](defense.md). Both players use it, so a sandbox
-match is a mirror. It exists to make the frame vocabulary concrete.
+Each class has its **class mechanic** and **three exemplar moves** -- a poke, a committed
+move, and a special -- not a finished kit. Enough to find out how the classes feel against
+each other, which is the only question a dummy cannot answer.
 
 The point of the scaffold is that **the determinism harness existed before the gameplay
 did**, so every class implemented from here is checked from its first commit.
 
 ## Next
 
-1. **A second class.** The Bellator exercises the form-swap window, which nothing else uses.
-2. **glTF standins.** The pose function's signature does not change, only what it returns.
+1. **Play it against a person.** Everything below is downstream of that. The open
+   questions in [feel-log.md](feel-log.md) are written so an answer can be recorded
+   against them rather than lost.
+2. **More clips.** Five baked animations cover the shared vocabulary; per-class moves
+   still fall back to procedural poses.
+3. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
-3. **NAT traversal**, when the game leaves the LAN.
-4. **Feel.** Frame counts, camera smoothing, movement speed, knockback. These need hands on
-   the controls, not reasoning.
+4. **NAT traversal**, when the game leaves the LAN.

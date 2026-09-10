@@ -61,10 +61,40 @@ impl Pose {
     }
 }
 
+/// Which baked clip, if any, this action should play.
+///
+/// The caller picks, because it is the side that knows what move is running --
+/// whether it is an overhead, how long it lasts. `view` does not read the move
+/// tables.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Clip {
+    Poke,
+    Overhead,
+    GuardIn,
+    Roll,
+    Recoil,
+}
+
+impl Clip {
+    fn frames(self) -> &'static [Pose] {
+        match self {
+            Clip::Poke => &crate::baked::POKE,
+            Clip::Overhead => &crate::baked::OVERHEAD,
+            Clip::GuardIn => &crate::baked::GUARD_IN,
+            Clip::Roll => &crate::baked::ROLL,
+            Clip::Recoil => &crate::baked::RECOIL,
+        }
+    }
+}
+
 /// Everything posing is allowed to depend on. All of it comes from the
 /// simulation snapshot.
 #[derive(Clone, Copy, Debug)]
 pub struct PoseInput {
+    /// Which baked clip to play, and how far into it. `None` falls back to the
+    /// procedural poses, which is the toggle: baked animation can be switched
+    /// off wholesale if it ever costs more than it is worth.
+    pub clip: Option<(Clip, u16)>,
     pub action: Action,
     /// Frames elapsed within the current action.
     pub frames_into: u16,
@@ -321,6 +351,15 @@ const AIRBORNE: Pose = Pose {
 
 /// The whole animation system.
 pub fn pose_for(input: PoseInput) -> Pose {
+    // Baked playback is a lookup by frame, so it stays a pure function of
+    // simulation state and rollback is unaffected. See `anim`.
+    if let Some((clip, elapsed)) = input.clip {
+        let frames = clip.frames();
+        if !frames.is_empty() {
+            return frames[(elapsed as usize).min(frames.len() - 1)];
+        }
+    }
+
     let t = phase_progress(input);
 
     match input.action {

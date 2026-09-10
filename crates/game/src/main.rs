@@ -144,8 +144,15 @@ pub struct Sim {
     pub clock: TickClock,
     paused: bool,
     step_once: bool,
+    /// `SHOT_FRAME=N` runs to frame N and stops. Makes a screenshot land on an
+    /// exact simulation frame instead of wherever `sleep` happened to leave it,
+    /// which is what turns "does this look right" into a repeatable comparison.
+    stop_at: Option<u32>,
     dummy: Dummy,
     driver: Driver,
+    /// Baked animation on or off. A toggle because it is new, and because
+    /// playback cost should be measurable against the procedural path.
+    baked_anim: bool,
 }
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
@@ -196,8 +203,16 @@ impl Default for Sim {
             step_once: false,
             dummy: Dummy::Idle,
             driver,
+            // `BAKED_ANIM=0` starts with the procedural poses instead, so the
+            // two can be captured back to back without a keypress.
+            baked_anim: std::env::var("BAKED_ANIM").as_deref() != Ok("0"),
+            stop_at: env_num("SHOT_FRAME"),
         }
     }
+}
+
+fn env_num(key: &str) -> Option<u32> {
+    std::env::var(key).ok()?.parse().ok()
 }
 
 #[derive(Resource)]
@@ -378,6 +393,9 @@ fn tick_sim(
         // stays in one place.
         show.0 = !show.0;
     }
+    if keys.just_pressed(KeyCode::F2) {
+        sim.baked_anim = !sim.baked_anim;
+    }
     if keys.just_pressed(KeyCode::Tab) {
         // Cycle player one's class. Restarts the match, since a class change
         // mid-round would leave the mechanic in someone else's state.
@@ -402,24 +420,8 @@ fn tick_sim(
         }
     }
 
-    let local = if demo_mode() {
-        demo_input(sim.cur.frame)
-    } else {
-        read_input(&keys, &mouse)
-    };
-    let dummy = match sim.dummy {
-        Dummy::Idle => SimInput::default(),
-        Dummy::Block => SimInput(SimInput::RIGHT),
-        // Attacks on a cadence, so the parry window is practisable.
-        Dummy::Attack => {
-            if sim.cur.frame % 70 < 2 {
-                SimInput(SimInput::LEFT)
-            } else {
-                SimInput::default()
-            }
-        }
-        Dummy::Human => read_player_two(&keys),
-    };
+    let held = read_input(&keys, &mouse);
+    let held_two = read_player_two(&keys);
 
     match &mut sim.driver {
         Driver::Local => {
@@ -429,13 +431,27 @@ fn tick_sim(
                 sim.clock.advance(time.delta_secs())
             };
             for _ in 0..ticks {
+                if sim.stop_at.is_some_and(|n| sim.cur.frame >= n) {
+                    sim.paused = true;
+                    break;
+                }
+                // Scripted inputs are resampled per simulation tick, not per
+                // rendered frame. One render frame can cover several ticks, and
+                // reusing a sample across them smears a four-frame press into
+                // whatever the frame rate happened to be -- which makes two
+                // runs of the same script diverge.
+                let pair = [
+                    scripted_or(demo_mode().then(|| demo_input(sim.cur.frame)), held),
+                    dummy_input(sim.dummy, sim.cur.frame, held_two),
+                ];
                 sim.prev = sim.cur.clone();
-                sim.cur.advance([local, dummy]);
+                sim.cur.advance(pair);
             }
         }
         Driver::Online { .. } => {
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
+                let local = scripted_or(demo_mode().then(|| demo_input(sim.cur.frame)), held);
                 step_online(&mut sim, local);
             }
         }
@@ -495,6 +511,22 @@ fn step_online(sim: &mut Sim, local: SimInput) {
         }
         Err(net::ggrs::GgrsError::PredictionThreshold) => {}
         Err(e) => eprintln!("advance failed: {e}"),
+    }
+}
+
+fn scripted_or(scripted: Option<SimInput>, live: SimInput) -> SimInput {
+    scripted.unwrap_or(live)
+}
+
+/// The training partner. `Attack` runs on a cadence so the parry window is
+/// something you can actually practise against.
+fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
+    match mode {
+        Dummy::Idle => SimInput::default(),
+        Dummy::Block => SimInput(SimInput::RIGHT),
+        Dummy::Attack if frame % 70 < 2 => SimInput(SimInput::LEFT),
+        Dummy::Attack => SimInput::default(),
+        Dummy::Human => live,
     }
 }
 
@@ -613,8 +645,14 @@ fn apply_poses(
 
     for (bp, mut tf) in parts.iter_mut() {
         let p = frame.players[bp.owner];
-        let (into, total) = phase_frames(&p, sim.cur.players[bp.owner].class);
+        let class = sim.cur.players[bp.owner].class;
+        let (into, total) = phase_frames(&p, class);
         let pose = pose_for(PoseInput {
+            clip: if sim.baked_anim {
+                clip_for(&p, class)
+            } else {
+                None
+            },
             action: p.action,
             frames_into: into,
             frames_total: total,
@@ -626,6 +664,41 @@ fn apply_poses(
         let t = pose.get(bp.part);
         tf.translation = Vec3::new(t.pos[0], t.pos[1], t.pos[2]);
         tf.rotation = Quat::from_euler(EulerRot::XYZ, t.rot[0], t.rot[1], t.rot[2]);
+    }
+}
+
+/// Which baked clip an action maps to, and how far into it.
+///
+/// The game side picks, because it is what knows the move tables. `view` stays
+/// ignorant of what an overhead is.
+fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip, u16)> {
+    use sim::state::Action;
+    use view::pose::Clip;
+    let elapsed = |kind: u8, phase: u8, left: u16| -> u16 {
+        let (s, a, r) = sim::moves::frames(class, kind);
+        match phase {
+            0 => s.saturating_sub(left),
+            1 => s + a.saturating_sub(left),
+            _ => s + a + r.saturating_sub(left),
+        }
+    };
+    let attack_clip = |kind: u8| {
+        if sim::moves::get(class, kind).hits_crouching {
+            Clip::Poke
+        } else {
+            Clip::Overhead
+        }
+    };
+    match p.action {
+        Action::Startup { kind, left } => Some((attack_clip(kind), elapsed(kind, 0, left))),
+        Action::Active { kind, left } => Some((attack_clip(kind), elapsed(kind, 1, left))),
+        Action::Recovery { kind, left } => Some((attack_clip(kind), elapsed(kind, 2, left))),
+        Action::Guard { held } => Some((Clip::GuardIn, held)),
+        Action::Dodge { left } => Some((Clip::Roll, 22u16.saturating_sub(left))),
+        Action::HitStun { left } | Action::BlockStun { left } | Action::Stagger { left } => {
+            Some((Clip::Recoil, 26u16.saturating_sub(left)))
+        }
+        Action::Free => None,
     }
 }
 

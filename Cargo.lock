@@ -111,6 +111,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "anim"
+version = "0.1.0"
+dependencies = [
+ "view",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
