@@ -1,0 +1,12 @@
+[package]
+name = "view"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# No engine dependency, on purpose. Everything here is presentation logic that
+# can be unit tested without a window: interpolation, camera framing, posing.
+# The Bevy layer in `game` should be thin enough to read in one sitting.
+[dependencies]
+sim = { path = "../sim" }
