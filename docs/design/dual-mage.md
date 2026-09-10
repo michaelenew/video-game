@@ -2,7 +2,7 @@
 status: mostly decided; ascension is an open proposal
 decided: 2026-09-10
 formerly: Statera
-supersedes: docs/combat-design/statera-skills.md (resource system), docs/combat-design/class-builds.md (Statera section)
+supersedes: docs/archive/combat-design/statera-skills.md (resource system), docs/archive/combat-design/class-builds.md (Statera section)
 ---
 
 # Dual mage
@@ -40,10 +40,10 @@ The original design put human, balanced, and divine on a single axis of *how muc
 and CDR you get*, which made the middle a strictly worse version of the ends. That could
 not be fixed by tuning, because all three states were the same quantity.
 
-## Every ability has two forms, and you choose at cast
+## Every ability has two forms, and the button picks
 
-**Each ability exists in a Light form and a Dark form. The player picks which one they are
-casting, every time.** Casting a form pushes the meter toward that side.
+**Left click always moves you darker. Right click always moves you lighter.** Every input —
+autos, directional basics, shift abilities — not just some of them.
 
 Power scales with meter depth rather than snapping between states:
 
@@ -53,10 +53,28 @@ Power scales with meter depth rather than snapping between states:
 | Step (Dark) | Short dash, minor drain | Long drain-dash, large steal |
 
 **Centre is not a third form.** It is the position where both forms are available and both
-are weak — most options, least power. That property now falls out of the mechanic instead
-of being asserted.
+are weak — most options, least power. That property falls out of the mechanic instead of
+being asserted.
 
-### Why this, and not a neutral form at centre
+### Autos are the steering wheel
+
+The autos are dark (left) and light (right), and **they change your mode on contact**. A
+whiff steers nothing, so steering requires landing hits.
+
+**Autos have a slight range boost**, powered by the beings inside. That is mechanical, not
+decorative: if steering depends on connecting, the class needs the reach to steer while
+under pressure.
+
+**Steering is not optional.** You cannot cast without moving the bar, and you cannot move the
+bar without committing to a side. An earlier draft put the direction choice on a tap-versus-
+hold modifier, which made it something the player could ignore; direction belongs in the
+input the player uses constantly.
+
+Scroll click and both-click are neither left nor right, so they cannot pick a direction —
+they push you **further along whichever path you are already on**. Direction comes from
+side-ness, and only left and right have it.
+
+### Why not a neutral form at centre
 
 An earlier draft gave each ability three states — a neutral behaviour at centre, plus Light
 and Dark at depth. That breaks at zero: a neutral form has no side, so at centre nothing
@@ -64,24 +82,12 @@ votes and the meter cannot leave the middle. Two incompatible ideas had been mer
 *abilities have sides* and *abilities transform with position*. They work at depth and fail
 at the origin.
 
-Two forms chosen at cast fixes it and makes the class's stated identity literal: **which
-abilities you use votes for which side you are moving toward.**
-
 ### Oscillating is possible, and correctly weak
 
-Cast Light, cast Dark, sit at centre indefinitely — and never threaten anything. Power
-requires repeated commitment to one side. That is the right shape, and because the player
-is always choosing rather than being pushed, nothing is ever taken away from them.
+Alternate left and right autos and sit at centre indefinitely — and never threaten anything.
+Power requires repeated commitment to one side.
 
-### Input
-
-**Tap the ability key for one side, hold for the other.** No extra keys, and hold already
-exists in the game's vocabulary.
-
-The alternative worth keeping in mind is **two hands** — left casts Dark, right casts
-Light, which is thematically ideal and uses the existing separate left/right hand actions.
-It becomes the better option if the class ever wants a hold-to-charge ability, since that
-would collide with hold-to-invert.
+See [controls.md](controls.md) for the full input map.
 
 ## Coming back
 
@@ -89,15 +95,12 @@ Two return paths at different prices:
 
 | Path | Cost | Speed |
 | --- | --- | --- |
-| Cast the far-side form | Weak effect — you are casting against the grain | Slow |
-| **Auto attack** | Requires melee range | Fast |
+| Cast toward the far side | Weak effect — you are casting against the grain | Slow |
+| **Auto attack the far side** | Requires melee range, and requires landing it | Fast |
 
-Auto attacks pull toward centre. This preserves the melee-mage identity — closing distance
-is how you recover *quickly*, which forces the class into melee exactly when it is most
-powerful and most fragile — while meaning you are never helpless if you cannot get there.
-
-Note the auto idea already exists in the source notes as "Auto attacks remove resource,
-gaining extra range and scaling with magic damage."
+This preserves the melee-mage identity — closing distance is how you recover *quickly*, which
+forces the class into melee exactly when it is most powerful and most fragile — while meaning
+you are never helpless if you cannot get there.
 
 ## The burn
 
@@ -121,112 +124,96 @@ sits, under pressure, while also managing physical position, is the mastery curv
 The player is solving a two-dimensional positioning problem: where they stand, and where
 they sit on the meter.
 
-## Ascension — OPEN PROPOSAL
+## Ascension
 
-> **Status: unresolved.** The section below is a proposal for review, not a decision. The
-> design constraints beneath it are settled; the mechanism is not.
+**Accepted in shape.** A timed nova: fast, short, the ride is the reward, and you fall off a
+cliff if you do not execute. Numbers below need the prototype.
 
-### Constraints this must satisfy
+### Entry — there is no ascend button
 
-1. Ascension is a **strategy** — hard to live through, but sometimes the right call.
-2. Immense damage, immense personal risk, all-or-nothing.
-3. A second or two before everything collapses.
-4. It must be **repeatable** across a match. A biggest-coolest-moment behind a threshold
-   you can only cross once does not work.
-5. The exit must be a **big bang**, not an anticlimactic scramble back down with autos.
-6. It must *feel* like loss of control while remaining mechanically satisfying.
-7. **No RNG.** Random output turns the tense last moments of a match into a dice roll.
-8. Thematically coherent — it should not require the player to do *more of the thing that
-   got them there* in order to escape it.
+Ascension happens **when you max the bar by casting**. It is not a separate input, and it is
+not free. You drove there, one cast at a time, which is what keeps it a decision without
+making it a button you mash on cooldown.
 
-### The reframe
+### While ascended — roughly three seconds
+
+- **Your health drains rapidly.** Somewhere between half and all of your bar over the
+  duration, depending on how it feels. **This drain is the clock** — no separate timer.
+- **Casting pulls some health back. Landing a hit pulls back more.**
+- **No dodge, no block, no cancel.** Every defensive option is gone.
+- **Movement is ability-driven only.** You move by casting, using the dashes and blinks in the
+  kit. Offence and mobility become the same resource.
+- **Abilities fire in their largest form.** You do not choose power level.
+
+Tying the refund to casting *and especially to hitting* is what makes this work moment to
+moment. You are not filling a quota to be checked at the end — you are staying alive one
+connection at a time, and every whiff is felt immediately.
+
+### Loss of control, without loss of input
 
 **Loss of control does not mean loss of input. It means losing the ability to decline.**
 
-In a fighting game, control *is* the option to not commit — to wait, block, dodge,
-reposition, do nothing. That is the entire neutral game. Remove the option to not act, and
-you have genuine loss of control with every input still mattering completely.
+In a fighting game, control *is* the option to not commit — to wait, block, dodge, reposition,
+do nothing. Remove that, and you have genuine loss of control with every input still
+mattering completely. The analogy is a car with the accelerator stuck: you still steer, you
+cannot stop.
 
-The analogy is a car with the accelerator stuck to the floor. You still steer. You cannot
-stop.
+### Exit — graduated, not binary
 
-### Entry
+At the end, **you are stunned if you did not reach the damage threshold, and the closer you
+got, the shorter the stun.**
 
-Ascension is **voluntary**, triggered by an input that becomes available once the meter is
-past a deep threshold on either side. The player chooses it, knowing the quota and the
-clock.
+A continuous landing is much better than a pass/fail one. A near-miss reads as a near-miss
+rather than a disaster, which is what lets players learn the timing instead of fearing it. It
+also softens the mode-scaling problem — the difference between a coop boss and a mobile duel
+opponent becomes a matter of degree rather than success versus catastrophe.
 
-If the meter reaches the hard cap **without** the player choosing, ascension triggers anyway
-on worse terms — reduced clock, or an increased quota. This keeps meter management
-meaningful while making the deliberate entry the skill expression.
+### Counterplay
 
-### While ascended
+This is what keeps it from degenerating into a race to nova every match. Opponents beat it by:
 
-Duration is short — target ~3 seconds, tunable.
+- **Playing defensively and evasively** — deny the hits, and the health refund never comes.
+- **CC** — a stagger or root during the window is devastating, because you cannot dodge out.
+- **Strategic blocking** — eat the damage on a shield to deny the threshold.
 
-- **No dodge, no block, no cancel.** Every defensive option is gone.
-- **Movement is ability-driven only.** Normal locomotion is suppressed; you move by casting,
-  using the dashes and blinks built into the kit. Offence and mobility become the same
-  resource.
-- **Abilities fire in their largest form.** The player does not choose power level.
-- **A hard clock.** The state is collapsing from the moment it starts.
+Every class and every monster has at least one of these, so it is always answerable. Note the
+class-level consequence: **the Bulwark is ascension's hard counter**, since blocking is
+exactly the tool that denies the threshold.
 
-Every frame pushes the player forward. They cannot back off, wait, or defend. The only
-available verb is *attack* — loss of control, felt precisely, with full agency retained.
+You win with it by **timing it for when your opponent is already vulnerable** and comboing
+them into oblivion — not by reaching it as fast as possible.
 
-### The quota and the discharge
+### Why this does not require doing more of what caused it
 
-Ascension carries a **damage quota**.
-
-- Meet it before the clock expires → **discharge**. A large detonation that expels the force
-  and returns the Dual mage to centre. The big bang, and both the mechanical reward and the
-  visual payoff.
-- Miss it → the state collapses. The Dual mage is dumped to centre at a sliver of health
-  with the burn lingering briefly. In a 60-second match this is usually losing, but not
-  automatically fatal.
-
-### Why this does not violate constraint 8
-
-The objection to "abilities remove resource once ascended" is that it makes no sense to do
-more of the thing that caused the problem. The resolution is that these are **two different
-verbs**:
-
-- Normal deep play: abilities **accumulate**. You are gathering power.
-- Ascension: abilities **vent**. You are getting it out of you.
-
-The discharge is expulsion, not accumulation. You are frantically dumping the force into the
-world because that is the only way to survive holding it.
+Normal deep play **accumulates** — you are gathering power. Ascension **vents** — you are
+getting it out of you, and the refund on hit is that expulsion paying you back. Different
+verbs, so casting your way out is coherent rather than circular.
 
 ### Separation from the normal loop
 
-| | Push out | Pull back |
+| | Push out | Come back |
 | --- | --- | --- |
-| **Normal play** | Cast toward a side | Far-side casts (slow), autos (fast) |
-| **Ascension** | (n/a — no meter) | Discharge on quota |
+| **Normal play** | Cast toward a side | Far-side casts (slow), far-side autos (fast) |
+| **Ascension** | (n/a — no meter) | Survive the drain; graduated stun on exit |
 
 You never auto your way down from ascension — that is the anticlimax, and it is structurally
-excluded, since during ascension the meter is not the operative resource. Because the
-discharge returns you to centre, ascension is repeatable within a match.
+excluded, since during ascension the meter is not the operative resource.
 
 ### Asymmetry between the sides
 
-- **Light ascension** — burst and zone flavour. Quota met by large clean hits. A gamble on
-  landing a read.
-- **Dark ascension** — drain and lifesteal flavour. Quota met by sustained contact. A gamble
-  on staying attached.
+- **Light ascension** — burst and zone flavour. Refunds come from large clean hits. A gamble
+  on landing reads.
+- **Dark ascension** — drain and lifesteal flavour. Refunds come from sustained contact. A
+  gamble on staying attached.
 
-Different failure modes, same all-or-nothing shape, which makes the choice of which edge to
-ride strategic rather than cosmetic.
+Different failure modes, same shape, which makes which edge you ride strategic rather than
+cosmetic.
 
-### Known risk — quota scaling across modes
+### Open on ascension
 
-A flat damage quota is trivially easy to meet in a 20-minute coop fight against a large
-stationary boss, and very hard against one mobile player in versus. Left unaddressed,
-ascension becomes a safe rotation button in coop and a desperation play in versus.
-
-Options, undecided: scale the quota with encounter or target count; express it as a fraction
-of a target's health; or shorten the clock enough that the big abilities must land cleanly
-even against a boss.
+- The drain percentage, the refund rates, the threshold, and the stun curve. All prototype
+  questions.
+- Whether the threshold should scale with target count, so coop and versus feel comparable.
 
 ## Open questions
 

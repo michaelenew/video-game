@@ -2,7 +2,7 @@
 status: decided
 decided: 2026-09-10
 formerly: Shifter
-supersedes: docs/combat-design/shifter-skills.md
+supersedes: docs/archive/combat-design/shifter-skills.md
 ---
 
 # Bellator

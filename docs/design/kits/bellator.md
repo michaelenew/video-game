@@ -2,7 +2,7 @@
 status: proposed
 decided: 2026-09-10
 formerly: Shifter
-sources: docs/combat-design/shifter-skills.md
+sources: docs/archive/combat-design/shifter-skills.md
 depends: ../bellator.md
 ---
 
@@ -27,6 +27,8 @@ where the art efficiency comes from.
 
 **Rush** is a stored charge that both dashes and **cancels the recovery of any move**. One
 charge. It is the only way out of a committed tail, so spending it is always a real decision.
+
+Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 

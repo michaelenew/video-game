@@ -1,7 +1,7 @@
 ---
 status: proposed
 decided: 2026-09-09
-replaces: docs/combat-design/gatekeeper-skills.md
+replaces: docs/archive/combat-design/gatekeeper-skills.md
 ---
 
 # Bulwark

@@ -1,8 +1,8 @@
 ---
-status: proposed — ascension still open
+status: proposed
 decided: 2026-09-10
 formerly: Statera
-sources: docs/combat-design/statera-skills.md, docs/combat-design/class-builds.md
+sources: docs/archive/combat-design/statera-skills.md, docs/archive/combat-design/class-builds.md
 depends: ../dual-mage.md
 ---
 
@@ -16,21 +16,28 @@ meaningless without it.
 
 ## Mechanic — the two-pole meter
 
-- **Every ability has a Light form and a Dark form.** Tap for one, hold for the other.
-  Casting a form pushes the meter toward that side; stronger abilities push harder.
+- **Left click moves you darker, right click moves you lighter** — every input, not just
+  autos. Stronger abilities push harder. Scroll click and both-click have no side, so they
+  push further along your current path.
 - **Power scales continuously with depth.** The same cast is weak at centre and large at
   the edge. Centre is where both forms are available and both are weak.
-- **Coming back:** cast the far-side form (slow, weak — you are casting against the grain)
-  or auto attack (fast, but melee range only).
+- **Coming back:** cast toward the far side (slow, weak — casting against the grain) or land
+  a far-side auto (fast, but melee range only).
 - Past a depth threshold you take a burn that stops the moment you come back inside.
 
-**Ascension is not in this kit.** It is an open proposal in
-[../dual-mage.md](../dual-mage.md) and slots in as a seventh input once resolved.
+**Ascension has no input.** It triggers when you max the bar by casting. See
+[../dual-mage.md](../dual-mage.md).
+
+Full input map in [../controls.md](../controls.md).
 
 ## Auto attack
 
-Melee, moderate. Pulls the meter toward centre — the fast return, and the reason the class
-has to close distance exactly when it is strongest.
+Two autos: **left is dark, right is light**, and they **change your mode on contact** — a
+whiff steers nothing. They carry a slight range boost, powered by the beings inside, which
+matters because steering depends on connecting.
+
+The autos are the steering wheel. Landing the far-side auto is the fast way back toward
+centre, and the reason the class has to close distance exactly when it is strongest.
 
 **Tempest** (passive): abilities mark enemies on hit. Autoing a marked enemy consumes the
 mark for bonus damage and a short burst of movement speed. This is what makes closing to
@@ -38,7 +45,7 @@ centre attractive rather than a chore.
 
 ## Core abilities
 
-Four slots. Each has both forms; both are always castable.
+Four slots on `shift` + click. Left click casts the dark form, right the light form.
 
 ### Step
 **Startup** fast · **Recovery** short · **Range** short
@@ -77,8 +84,8 @@ Hitting it with any other ability dashes you to the impact point, keeping moment
 
 ## Finishers — gated by depth
 
-These have only one form each, and are available only past a depth threshold on their own
-side. They are the reason to leave centre.
+On `M` (scroll click) and `LR` (both buttons), unmodified. One form each, available only past
+a depth threshold on their own side. They are the reason to leave centre.
 
 ### Judgement — Light
 **Startup** slow, delayed · **Recovery** committed · **Range** medium · **Mechanic** pushes
@@ -107,7 +114,8 @@ available and always weak.
 
 ## Open questions
 
-- **Ascension.** The one blocking item. See [../dual-mage.md](../dual-mage.md).
+- **Are `M` and `LR` reliable enough to carry the finishers?** They are the slowest inputs on
+  most mice and these are the payoff moves. See [../controls.md](../controls.md).
 - Should the finishers be visibly greyed out from the wrong side, or hidden entirely?
   Greyed is friendlier and teaches the mechanic; hidden is cleaner to read.
 - Does Divide's dash-to-impact work with either form of the ability that hits it, or only
