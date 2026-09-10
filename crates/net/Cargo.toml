@@ -1,0 +1,18 @@
+[package]
+name = "net"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+sim = { path = "../sim" }
+
+# `ggrs` plugs in here. It is not vendored yet because this environment cannot
+# reach crates.io; add it when working locally:
+#
+#   ggrs = "0.10"
+#
+# `Rollback` below is deliberately shaped like the GGRS session handler
+# (advance / save / load / checksum), so wiring it up is an impl block rather
+# than a redesign.

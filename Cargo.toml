@@ -1,0 +1,20 @@
+[workspace]
+resolver = "3"
+members = ["crates/sim", "crates/net", "crates/game"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "UNLICENSED"
+
+# Determinism: the simulation must produce bit-identical results on every
+# machine. Contraction (fusing a*b+c into an FMA) is a per-target codegen
+# decision, so it is disabled workspace-wide as a belt-and-braces measure.
+# The real defence is that `sim` uses no floating point at all -- see
+# docs/design/architecture.md.
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

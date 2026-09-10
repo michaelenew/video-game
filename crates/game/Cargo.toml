@@ -1,0 +1,19 @@
+[package]
+name = "game"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+sim = { path = "../sim" }
+net = { path = "../net" }
+
+# `bevy` plugs in here. Not vendored yet because this environment cannot reach
+# crates.io; add it when working locally:
+#
+#   bevy = "0.15"
+#
+# Until then `src/main.rs` is a headless soak that drives the simulation and
+# verifies determinism, which is useful in its own right and stays useful as a
+# CI check after the renderer exists.
