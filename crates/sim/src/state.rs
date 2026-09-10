@@ -41,9 +41,29 @@ const GUARD_ARC_COS: Fx = Fx::ratio(1, 2);
 const PARRY_WINDOW: u16 = 4;
 const PARRY_STAGGER: u16 = 34;
 
+/// Dodge: universal, evasive, committed to a direction. Invulnerable for the
+/// opening frames, then recovering and vulnerable -- so it beats a read and
+/// loses to a delayed attack. See `defense.md`.
+const DODGE_FRAMES: u16 = 22;
+const DODGE_IFRAMES: u16 = 10;
+const DODGE_SPEED: Fx = Fx::ratio(17, 1);
+
+/// Shield flight.
+const SHIELD_SPEED: Fx = Fx::ratio(19, 1);
+const SHIELD_RANGE: Fx = Fx::from_int(9);
+const SHIELD_DAMAGE: i32 = 85;
+const SHIELD_RADIUS: Fx = Fx::ratio(45, 100);
+/// Leaping to the shield is the Bulwark's approach tool.
+const LEAP_SPEED: Fx = Fx::ratio(15, 1);
+
+/// Pause after a knockout before the next round starts.
+const ROUND_OVER_FRAMES: u16 = 150;
+pub const MAX_HEALTH: i32 = 1000;
+
 /// Move identifiers.
 pub const MOVE_BASH: u8 = 0;
 pub const MOVE_SLAM: u8 = 1;
+pub const MOVE_GRAPPLE: u8 = 2;
 
 struct MoveData {
     startup: u16,
@@ -55,9 +75,14 @@ struct MoveData {
     hitstun: u16,
     blockstun: u16,
     knockback: Fx,
+    /// Ignores guard entirely. The answer to a turtling opponent, and the
+    /// reason blocking is not a solved strategy. See `defense.md`.
+    unblockable: bool,
+    /// Requires the shield in hand.
+    needs_shield: bool,
 }
 
-const MOVES: [MoveData; 2] = [
+const MOVES: [MoveData; 3] = [
     // Bash -- fast poke. Safe-ish on block.
     MoveData {
         startup: 4,
@@ -69,6 +94,8 @@ const MOVES: [MoveData; 2] = [
         hitstun: 14,
         blockstun: 8,
         knockback: Fx::ratio(4, 1),
+        unblockable: false,
+        needs_shield: true,
     },
     // Slam -- committed. Heavily punishable, heavily rewarding.
     MoveData {
@@ -81,6 +108,23 @@ const MOVES: [MoveData; 2] = [
         hitstun: 26,
         blockstun: 16,
         knockback: Fx::ratio(11, 1),
+        unblockable: false,
+        needs_shield: true,
+    },
+    // Grapple -- beats guard outright, loses badly to dodge. The payoff for a
+    // read, not something to throw out.
+    MoveData {
+        startup: 20,
+        active: 3,
+        recovery: 30,
+        damage: 210,
+        reach: Fx::ratio(11, 10),
+        radius: Fx::ratio(8, 10),
+        hitstun: 40,
+        blockstun: 0,
+        knockback: Fx::ratio(6, 1),
+        unblockable: true,
+        needs_shield: true,
     },
 ];
 
@@ -114,6 +158,12 @@ pub enum Action {
     Stagger {
         left: u16,
     },
+    /// Committed evasive roll. Invulnerable for its opening frames, then
+    /// recovering and vulnerable -- so it beats a read and loses to a delayed
+    /// attack.
+    Dodge {
+        left: u16,
+    },
 }
 
 impl Action {
@@ -123,6 +173,11 @@ impl Action {
 
     pub const fn guarding(self) -> bool {
         matches!(self, Action::Guard { .. })
+    }
+
+    /// Invulnerable frames of a dodge. Nothing else grants invulnerability.
+    pub const fn invulnerable(self) -> bool {
+        matches!(self, Action::Dodge { left } if left + DODGE_IFRAMES > DODGE_FRAMES)
     }
 
     /// Blocking costs a vulnerable window, so it is never a safe default.
@@ -144,6 +199,7 @@ impl Action {
             Action::BlockStun { .. } => 5,
             Action::HitStun { .. } => 6,
             Action::Stagger { .. } => 7,
+            Action::Dodge { .. } => 8,
         }
     }
 
@@ -155,10 +211,53 @@ impl Action {
             | Action::Recovery { left, .. }
             | Action::BlockStun { left }
             | Action::HitStun { left }
-            | Action::Stagger { left } => left,
+            | Action::Stagger { left }
+            | Action::Dodge { left } => left,
             Action::Guard { held } => held,
         }
     }
+}
+
+/// Where the shield is. Its position is independent of the character, which is
+/// the whole mechanic -- see `bulwark.md`. Held, planted, or in flight.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Shield {
+    Held,
+    Planted {
+        pos: V3,
+    },
+    /// `outbound` is the throw; otherwise it is coming home.
+    Flying {
+        pos: V3,
+        vel: V3,
+        outbound: bool,
+        travelled: Fx,
+    },
+}
+
+impl Shield {
+    pub const fn in_hand(self) -> bool {
+        matches!(self, Shield::Held)
+    }
+
+    /// Where it is in the world, if it is not in hand.
+    pub const fn world_pos(self) -> Option<V3> {
+        match self {
+            Shield::Held => None,
+            Shield::Planted { pos } | Shield::Flying { pos, .. } => Some(pos),
+        }
+    }
+}
+
+/// Match flow.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Phase {
+    Fighting,
+    /// `winner` is a player index, or `u8::MAX` for a double knockout.
+    RoundOver {
+        winner: u8,
+        left: u16,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -175,6 +274,8 @@ pub struct Player {
     pub hit_used: bool,
     /// Class mechanic resource. Interpretation is per class.
     pub mechanic: i32,
+    pub shield: Shield,
+    pub rounds_won: u8,
 }
 
 impl Default for Player {
@@ -188,6 +289,8 @@ impl Default for Player {
             grounded: true,
             hit_used: false,
             mechanic: 0,
+            shield: Shield::Held,
+            rounds_won: 0,
         }
     }
 }
@@ -197,6 +300,7 @@ impl Default for Player {
 pub struct World {
     pub frame: u32,
     pub players: [Player; MAX_PLAYERS],
+    pub phase: Phase,
 }
 
 impl World {
@@ -204,11 +308,28 @@ impl World {
         let mut w = World {
             frame: 0,
             players: [Player::default(); MAX_PLAYERS],
+            phase: Phase::Fighting,
         };
-        w.players[0].pos = V3::new(Fx::from_int(-4), GROUND_Y, Fx::ZERO);
-        w.players[1].pos = V3::new(Fx::from_int(4), GROUND_Y, Fx::ZERO);
-        w.players[1].facing = V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO);
+        w.reset_positions();
         w
+    }
+
+    /// Put both fighters back on their marks. Keeps round wins.
+    fn reset_positions(&mut self) {
+        for (i, p) in self.players.iter_mut().enumerate() {
+            let wins = p.rounds_won;
+            let side = if i == 0 { -4 } else { 4 };
+            *p = Player {
+                pos: V3::new(Fx::from_int(side), GROUND_Y, Fx::ZERO),
+                facing: V3::new(
+                    if i == 0 { Fx::ONE } else { Fx::ONE.neg() },
+                    Fx::ZERO,
+                    Fx::ZERO,
+                ),
+                rounds_won: wins,
+                ..Player::default()
+            };
+        }
     }
 
     /// Advance exactly one tick. This is the whole simulation.
@@ -216,8 +337,26 @@ impl World {
     /// Must stay a pure function of `(self, inputs)`: no clocks, no randomness
     /// that is not seeded from state, no iteration over unordered collections.
     pub fn advance(&mut self, inputs: [Input; MAX_PLAYERS]) {
-        let opponent_pos = [self.players[1].pos, self.players[0].pos];
+        self.frame = self.frame.wrapping_add(1);
 
+        if let Phase::RoundOver { winner, left } = self.phase {
+            if left > 0 {
+                self.phase = Phase::RoundOver {
+                    winner,
+                    left: left - 1,
+                };
+                // Bodies still settle during the pause; nothing else acts.
+                for p in self.players.iter_mut() {
+                    settle(p);
+                }
+                return;
+            }
+            self.reset_positions();
+            self.phase = Phase::Fighting;
+            return;
+        }
+
+        let opponent_pos = [self.players[1].pos, self.players[0].pos];
         for i in 0..MAX_PLAYERS {
             step_player(&mut self.players[i], inputs[i], opponent_pos[i]);
         }
@@ -237,8 +376,56 @@ impl World {
             }
         }
 
+        // A thrown shield is its own threat while it travels.
+        let shields = [self.players[0].shield, self.players[1].shield];
+        for (owner, shield) in shields.iter().enumerate() {
+            let target = 1 - owner;
+            if let Shield::Flying { pos, .. } = *shield {
+                let victim = self.players[target];
+                let d = victim.pos.sub(pos);
+                let hit_range = SHIELD_RADIUS.add(BODY_RADIUS);
+                let vertical = d.y.abs().raw() < arena::BODY_HEIGHT.raw();
+                if vertical && d.flat_len().raw() < hit_range.raw() && !victim.action.invulnerable()
+                {
+                    let dir = V3::new(d.x, Fx::ZERO, d.z).normalized();
+                    apply_hit(
+                        &mut self.players[target],
+                        Hit {
+                            damage: SHIELD_DAMAGE,
+                            hitstun: 18,
+                            blockstun: 10,
+                            knockback: Fx::ratio(7, 1),
+                            dir,
+                            blocked: victim.action.guarding(),
+                            parried: false,
+                        },
+                    );
+                    // Contact drops it where it struck.
+                    self.players[owner].shield = Shield::Planted { pos };
+                }
+            }
+        }
+
         separate_bodies(&mut self.players);
-        self.frame = self.frame.wrapping_add(1);
+
+        // Knockout check last, so the killing blow is fully applied first.
+        if matches!(self.phase, Phase::Fighting) {
+            let down = [self.players[0].health <= 0, self.players[1].health <= 0];
+            if down[0] || down[1] {
+                let winner = match down {
+                    [true, true] => u8::MAX,
+                    [true, false] => 1,
+                    _ => 0,
+                };
+                if winner != u8::MAX {
+                    self.players[winner as usize].rounds_won += 1;
+                }
+                self.phase = Phase::RoundOver {
+                    winner,
+                    left: ROUND_OVER_FRAMES,
+                };
+            }
+        }
     }
 
     /// Cheap and portable. Used for desync detection: peers exchange checksums
@@ -265,6 +452,40 @@ impl World {
                 _ => 0,
             };
             h.write_u32(kind as u32);
+            h.write_u32(p.rounds_won as u32);
+            match p.shield {
+                Shield::Held => h.write_u32(0),
+                Shield::Planted { pos } => {
+                    h.write_u32(1);
+                    h.write_i32(pos.x.raw());
+                    h.write_i32(pos.y.raw());
+                    h.write_i32(pos.z.raw());
+                }
+                Shield::Flying {
+                    pos,
+                    vel,
+                    outbound,
+                    travelled,
+                } => {
+                    h.write_u32(2);
+                    h.write_i32(pos.x.raw());
+                    h.write_i32(pos.y.raw());
+                    h.write_i32(pos.z.raw());
+                    h.write_i32(vel.x.raw());
+                    h.write_i32(vel.y.raw());
+                    h.write_i32(vel.z.raw());
+                    h.write_u32(outbound as u32);
+                    h.write_i32(travelled.raw());
+                }
+            }
+        }
+        match self.phase {
+            Phase::Fighting => h.write_u32(0),
+            Phase::RoundOver { winner, left } => {
+                h.write_u32(1);
+                h.write_u32(winner as u32);
+                h.write_u32(left as u32);
+            }
         }
         h.finish()
     }
@@ -291,7 +512,7 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
-    if attacker.hit_used {
+    if attacker.hit_used || defender.action.invulnerable() {
         return None;
     }
     let m = &MOVES[kind as usize];
@@ -305,9 +526,12 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     // Was the defender facing the attack? Guard covers an arc, not a bubble.
     let to_attacker = attacker.pos.sub(defender.pos).normalized();
     let facing_it = defender.facing.dot(to_attacker).raw() >= GUARD_ARC_COS.raw();
-    let guarding = defender.action.guarding() && facing_it;
-    let parried =
-        matches!(defender.action, Action::Guard { held } if held < PARRY_WINDOW) && facing_it;
+    // A grapple goes through guard entirely. That is what stops blocking from
+    // being a solved strategy -- see defense.md.
+    let guarding = !m.unblockable && defender.action.guarding() && facing_it;
+    let parried = !m.unblockable
+        && matches!(defender.action, Action::Guard { held } if held < PARRY_WINDOW)
+        && facing_it;
 
     Some(Hit {
         damage: m.damage,
@@ -356,9 +580,14 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         p.facing = p.facing.add(target.sub(p.facing).scale(rate)).normalized();
     }
 
-    let want_guard = input.has(Input::RIGHT);
+    step_shield(p);
+
+    let want_guard = input.has(Input::RIGHT) && p.shield.in_hand();
+    let (ax, az) = input.move_axis();
 
     p.action = match p.action {
+        Action::Dodge { left } if left > 0 => Action::Dodge { left: left - 1 },
+        Action::Dodge { .. } => Action::Free,
         Action::Startup { kind, left } if left > 0 => Action::Startup {
             kind,
             left: left - 1,
@@ -394,7 +623,24 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
             }
         }
         Action::Free => {
-            if input.has(Input::LEFT) {
+            // Space plus a direction dodges; space alone jumps. See controls.md.
+            if input.has(Input::SPACE) && (ax != 0 || az != 0) && p.grounded {
+                let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
+                p.vel.x = dir.x.mul(DODGE_SPEED);
+                p.vel.z = dir.z.mul(DODGE_SPEED);
+                Action::Dodge { left: DODGE_FRAMES }
+            } else if input.has(Input::MIDDLE) && input.has(Input::SHIFT) && p.shield.in_hand() {
+                p.hit_used = false;
+                Action::Startup {
+                    kind: MOVE_GRAPPLE,
+                    left: MOVES[MOVE_GRAPPLE as usize].startup,
+                }
+            } else if input.has(Input::MIDDLE) {
+                shield_action(p);
+                Action::Free
+            } else if input.has(Input::LEFT)
+                && (p.shield.in_hand() || !MOVES[MOVE_BASH as usize].needs_shield)
+            {
                 let kind = if input.has(Input::SHIFT) {
                     MOVE_SLAM
                 } else {
@@ -414,9 +660,11 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
     };
 
     // Horizontal movement. Free at full speed, guarding at a crawl, otherwise
-    // only carried momentum from knockback.
-    let (ax, az) = input.move_axis();
-    if p.action.actionable() && (ax != 0 || az != 0) {
+    // only carried momentum from a dodge or knockback.
+    if matches!(p.action, Action::Dodge { .. }) {
+        p.vel.x = p.vel.x.mul(Fx::ratio(93, 100));
+        p.vel.z = p.vel.z.mul(Fx::ratio(93, 100));
+    } else if p.action.actionable() && (ax != 0 || az != 0) {
         let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
         p.vel.x = dir.x.mul(MOVE_SPEED);
         p.vel.z = dir.z.mul(MOVE_SPEED);
@@ -433,7 +681,7 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         p.vel.z = Fx::ZERO;
     }
 
-    if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
+    if input.has(Input::SPACE) && ax == 0 && az == 0 && p.grounded && p.action.actionable() {
         p.vel.y = JUMP_SPEED;
         p.grounded = false;
     }
@@ -444,6 +692,112 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
 
     p.pos = p.pos.add(p.vel.scale(DT));
 
+    let r = arena::resolve(p.pos, p.vel, p.grounded);
+    p.pos = r.pos;
+    p.vel = r.vel;
+    p.grounded = r.grounded;
+}
+
+/// Throw, recall, or leap -- one button, decided by where the shield is.
+///
+/// Throw commits you: you are faster and cannot block until it comes back.
+/// Recalling it damages along the return path, and reactivating mid-flight
+/// leaps you to it instead, which is the Bulwark's approach tool.
+fn shield_action(p: &mut Player) {
+    p.shield = match p.shield {
+        Shield::Held => Shield::Flying {
+            pos: p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)),
+            vel: p.facing.scale(SHIELD_SPEED),
+            outbound: true,
+            travelled: Fx::ZERO,
+        },
+        Shield::Planted { pos } => {
+            let to_owner = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)).sub(pos);
+            Shield::Flying {
+                pos,
+                vel: to_owner.normalized().scale(SHIELD_SPEED),
+                outbound: false,
+                travelled: Fx::ZERO,
+            }
+        }
+        // Reactivating mid-flight leaps you to it.
+        Shield::Flying {
+            pos,
+            vel,
+            outbound,
+            travelled,
+        } => {
+            let to_shield = pos.sub(p.pos);
+            if to_shield.flat_len().raw() > Fx::ONE.raw() {
+                let dir = V3::new(to_shield.x, Fx::ZERO, to_shield.z).normalized();
+                p.vel.x = dir.x.mul(LEAP_SPEED);
+                p.vel.z = dir.z.mul(LEAP_SPEED);
+                p.vel.y = Fx::ratio(6, 1);
+                p.grounded = false;
+            }
+            Shield::Flying {
+                pos,
+                vel,
+                outbound,
+                travelled,
+            }
+        }
+    };
+}
+
+/// Move a thrown shield. Outbound flights plant at maximum range; returning
+/// flights come back to the hand.
+fn step_shield(p: &mut Player) {
+    let Shield::Flying {
+        pos,
+        vel,
+        outbound,
+        travelled,
+    } = p.shield
+    else {
+        return;
+    };
+    let step = vel.scale(DT);
+    let next = pos.add(step);
+    let gone = travelled.add(step.flat_len());
+
+    if outbound {
+        if gone.raw() >= SHIELD_RANGE.raw() {
+            p.shield = Shield::Planted { pos: next };
+        } else {
+            p.shield = Shield::Flying {
+                pos: next,
+                vel,
+                outbound,
+                travelled: gone,
+            };
+        }
+    } else {
+        let hand = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+        if next.sub(hand).flat_len().raw() < Fx::ONE.raw() {
+            p.shield = Shield::Held;
+        } else {
+            // Home in, so the return does not miss a moving owner.
+            let dir = hand.sub(next).normalized().scale(SHIELD_SPEED);
+            p.shield = Shield::Flying {
+                pos: next,
+                vel: dir,
+                outbound,
+                travelled: gone,
+            };
+        }
+    }
+}
+
+/// Let a body come to rest without accepting input. Used during the pause
+/// between rounds.
+fn settle(p: &mut Player) {
+    p.vel.x = p.vel.x.mul(Fx::ratio(88, 100));
+    p.vel.z = p.vel.z.mul(Fx::ratio(88, 100));
+    if !p.grounded {
+        p.vel.y = p.vel.y.add(GRAVITY.mul(DT));
+    }
+    p.pos = p.pos.add(p.vel.scale(DT));
     let r = arena::resolve(p.pos, p.vel, p.grounded);
     p.pos = r.pos;
     p.vel = r.vel;

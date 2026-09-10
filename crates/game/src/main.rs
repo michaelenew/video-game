@@ -6,8 +6,14 @@
 //! stays reversible.
 //!
 //! Controls, per `docs/design/controls.md`:
-//!   WASD move · Space jump · J or Left click attack · Shift+J slam
-//!   K or Right click guard · R reset · P pause · ] step one frame
+//!   WASD move · Space jump · Space+direction dodge
+//!   J bash · Shift+J slam · K guard · L shield throw/recall · Shift+L grapple
+//!   1-4 dummy mode · F1 debug overlay · P pause · ] step one frame · R reset
+//!
+//! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
+
+mod debug;
+mod hud;
 
 use bevy::prelude::*;
 use sim::state::MAX_PLAYERS;
@@ -29,8 +35,20 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
         .init_resource::<Sim>()
         .init_resource::<Rig>()
-        .add_systems(Startup, setup)
-        .add_systems(Update, (tick_sim, apply_poses, drive_camera).chain())
+        .init_resource::<debug::ShowDebug>()
+        .add_systems(Startup, (setup, hud::setup))
+        .add_systems(
+            Update,
+            (
+                tick_sim,
+                apply_poses,
+                place_shields,
+                drive_camera,
+                hud::update,
+                debug::draw,
+            )
+                .chain(),
+        )
         .run();
 }
 
@@ -40,13 +58,23 @@ fn main() {
 
 /// The simulation, plus the previous snapshot so the renderer can interpolate.
 #[derive(Resource)]
-struct Sim {
-    prev: World,
-    cur: World,
-    clock: TickClock,
+pub struct Sim {
+    pub prev: World,
+    pub cur: World,
+    pub clock: TickClock,
     paused: bool,
     step_once: bool,
-    dummy_guards: bool,
+    dummy: Dummy,
+}
+
+/// Training-mode opponent. Player two is a scripted dummy until someone takes
+/// the second set of keys.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Dummy {
+    Idle,
+    Block,
+    Attack,
+    Human,
 }
 
 impl Default for Sim {
@@ -58,7 +86,7 @@ impl Default for Sim {
             clock: TickClock::new(),
             paused: false,
             step_once: false,
-            dummy_guards: false,
+            dummy: Dummy::Idle,
         }
     }
 }
@@ -83,6 +111,9 @@ struct BodyPart {
 
 #[derive(Component)]
 struct MainCamera;
+
+#[derive(Component)]
+struct ShieldMesh(usize);
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -164,6 +195,40 @@ fn setup(
                     ));
                 }
             });
+
+        // The shield is a separate object because its position is independent
+        // of the character -- that is the whole mechanic. See bulwark.md.
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.75, 0.9, 0.14))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: Color::srgb(0.92, 0.76, 0.38),
+                perceptual_roughness: 0.5,
+                ..default()
+            })),
+            Transform::default(),
+            Visibility::Hidden,
+            ShieldMesh(owner),
+        ));
+    }
+}
+
+/// A shield in hand rides on the character; a thrown one sits in the world.
+fn place_shields(
+    sim: Res<Sim>,
+    mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
+) {
+    for (tag, mut tf, mut vis) in shields.iter_mut() {
+        match sim.cur.players[tag.0].shield.world_pos() {
+            Some(pos) => {
+                *vis = Visibility::Inherited;
+                tf.translation = Vec3::new(
+                    pos.x.to_f32_for_render(),
+                    pos.y.to_f32_for_render(),
+                    pos.z.to_f32_for_render(),
+                );
+            }
+            None => *vis = Visibility::Hidden,
+        }
     }
 }
 
@@ -177,6 +242,7 @@ fn tick_sim(
     mouse: Res<ButtonInput<MouseButton>>,
     time: Res<Time>,
     mut sim: ResMut<Sim>,
+    mut show: ResMut<debug::ShowDebug>,
 ) {
     if keys.just_pressed(KeyCode::KeyP) {
         sim.paused = !sim.paused;
@@ -185,13 +251,25 @@ fn tick_sim(
         sim.step_once = true;
         sim.paused = true;
     }
+    if keys.just_pressed(KeyCode::F1) {
+        // Toggled here rather than in the debug module so all input reading
+        // stays in one place.
+        show.0 = !show.0;
+    }
     if keys.just_pressed(KeyCode::KeyR) {
         let w = World::new();
         sim.prev = w.clone();
         sim.cur = w;
     }
-    if keys.just_pressed(KeyCode::KeyB) {
-        sim.dummy_guards = !sim.dummy_guards;
+    for (key, mode) in [
+        (KeyCode::Digit1, Dummy::Idle),
+        (KeyCode::Digit2, Dummy::Block),
+        (KeyCode::Digit3, Dummy::Attack),
+        (KeyCode::Digit4, Dummy::Human),
+    ] {
+        if keys.just_pressed(key) {
+            sim.dummy = mode;
+        }
     }
 
     let local = if demo_mode() {
@@ -199,10 +277,18 @@ fn tick_sim(
     } else {
         read_input(&keys, &mouse)
     };
-    let dummy = if sim.dummy_guards {
-        SimInput(SimInput::RIGHT)
-    } else {
-        SimInput::default()
+    let dummy = match sim.dummy {
+        Dummy::Idle => SimInput::default(),
+        Dummy::Block => SimInput(SimInput::RIGHT),
+        // Attacks on a cadence, so the parry window is practisable.
+        Dummy::Attack => {
+            if sim.cur.frame % 70 < 2 {
+                SimInput(SimInput::LEFT)
+            } else {
+                SimInput::default()
+            }
+        }
+        Dummy::Human => read_player_two(&keys),
     };
 
     let ticks = if sim.paused {
@@ -233,6 +319,39 @@ fn demo_input(frame: u32) -> SimInput {
         90..=120 => v |= SimInput::A,                       // back off
         130..=150 => v |= SimInput::SHIFT | SimInput::LEFT, // slam
         _ => {}
+    }
+    SimInput(v)
+}
+
+/// Second set of keys, so two people can play on one keyboard.
+fn read_player_two(keys: &ButtonInput<KeyCode>) -> SimInput {
+    let mut v = 0u16;
+    if keys.pressed(KeyCode::Period) {
+        v |= SimInput::LEFT;
+    }
+    if keys.pressed(KeyCode::Comma) {
+        v |= SimInput::RIGHT;
+    }
+    if keys.pressed(KeyCode::Slash) {
+        v |= SimInput::MIDDLE;
+    }
+    if keys.pressed(KeyCode::ShiftRight) {
+        v |= SimInput::SHIFT;
+    }
+    if keys.pressed(KeyCode::ArrowUp) {
+        v |= SimInput::W;
+    }
+    if keys.pressed(KeyCode::ArrowLeft) {
+        v |= SimInput::A;
+    }
+    if keys.pressed(KeyCode::ArrowDown) {
+        v |= SimInput::S;
+    }
+    if keys.pressed(KeyCode::ArrowRight) {
+        v |= SimInput::D;
+    }
+    if keys.pressed(KeyCode::ControlRight) {
+        v |= SimInput::SPACE;
     }
     SimInput(v)
 }

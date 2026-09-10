@@ -254,3 +254,27 @@ fn walking_moves_the_legs_and_idling_does_not() {
     assert!(leg(&pose_for(moving)) > 0.1, "legs did not swing");
     assert!(leg(&pose_for(idle)) < 0.01, "idle legs are swinging");
 }
+
+#[test]
+fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
+    // The arena has platforms around x = +/-7. Put the fight beside one so the
+    // camera arm has to pass through it, and check the camera does not end up
+    // buried in geometry.
+    let mut rig = CameraRig::new(RigConfig::default());
+    let mut framing = rig.update(0.016, [-7.0, 0.0, -3.0], [-7.0, 0.0, 3.0]);
+    for _ in 0..200 {
+        framing = rig.update(0.016, [-7.0, 0.0, -3.0], [-7.0, 0.0, 3.0]);
+    }
+    let inside = sim::arena::SOLIDS.iter().any(|s| {
+        (0..3).all(|i| {
+            let lo = [s.min.x, s.min.y, s.min.z][i].to_f32_for_render();
+            let hi = [s.max.x, s.max.y, s.max.z][i].to_f32_for_render();
+            framing.eye[i] > lo && framing.eye[i] < hi
+        })
+    });
+    assert!(
+        !inside,
+        "camera ended up inside arena geometry at {:?}",
+        framing.eye
+    );
+}
