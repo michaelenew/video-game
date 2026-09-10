@@ -7,14 +7,19 @@
 //! See `docs/design/architecture.md` for why the boundary sits where it does.
 
 pub mod arena;
+pub mod class;
 pub mod fixed;
 pub mod input;
 pub mod math;
+pub mod moves;
 pub mod state;
+pub mod tuning;
 
+pub use class::{Class, Mechanic};
 pub use fixed::Fx;
 pub use input::Input;
 pub use math::V3;
+pub use moves::Move;
 pub use state::{PlayerId, World};
 
 /// Simulation rate. Fighting games are authored in frames, and every duration

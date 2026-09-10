@@ -11,6 +11,10 @@
 //!   1-4 dummy mode · F1 debug overlay · P pause · ] step one frame · R reset
 //!
 //! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
+//!
+//! Pick classes with `--p1 <class> --p2 <class>`, or cycle player one's class
+//! in-game with Tab. Names are matched loosely: bulwark, bellator, reaver,
+//! elementalist, blood, dual.
 
 mod debug;
 mod hud;
@@ -42,6 +46,49 @@ enum Driver {
 ///
 /// Both peers derive who is player one from the two addresses, so there is no
 /// server and no lobby.
+/// Loose class-name matching, so `--p1 reaver` works without remembering the
+/// full name.
+fn parse_class(name: &str) -> Option<sim::Class> {
+    use sim::Class::*;
+    let n = name.to_lowercase();
+    ALL.iter()
+        .copied()
+        .find(|c| {
+            c.name().to_lowercase().replace(' ', "").starts_with(&n) || matches(n.as_str(), *c)
+        })
+        .or(match n.as_str() {
+            "reaver" | "shadow" => Some(ShadowReaver),
+            "blood" => Some(BloodMage),
+            "dual" => Some(DualMage),
+            _ => None,
+        })
+}
+
+const ALL: [sim::Class; 6] = sim::class::ALL_CLASSES;
+
+fn matches(n: &str, c: sim::Class) -> bool {
+    c.name().to_lowercase().contains(n) && !n.is_empty()
+}
+
+fn arg(flag: &str) -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter()
+        .position(|a| a == flag)
+        .and_then(|i| args.get(i + 1))
+        .cloned()
+}
+
+fn chosen_classes() -> [sim::Class; 2] {
+    [
+        arg("--p1")
+            .and_then(|n| parse_class(&n))
+            .unwrap_or(sim::Class::Bulwark),
+        arg("--p2")
+            .and_then(|n| parse_class(&n))
+            .unwrap_or(sim::Class::Bulwark),
+    ]
+}
+
 fn parse_args() -> Option<(u16, std::net::SocketAddr)> {
     let args: Vec<String> = std::env::args().collect();
     let get = |flag: &str| {
@@ -113,7 +160,7 @@ enum Dummy {
 
 impl Default for Sim {
     fn default() -> Self {
-        let w = World::new();
+        let w = World::with_classes(chosen_classes());
         let driver = match parse_args() {
             Some((port, peer)) => {
                 let local: std::net::SocketAddr =
@@ -274,13 +321,26 @@ fn setup(
     }
 }
 
+/// Where the class mechanic sits in the world, if anywhere. A shield in hand
+/// rides on the character and draws nothing; a thrown one, a placed shadow or a
+/// raised structure all get a marker.
+fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
+    use sim::class::Mechanic;
+    match m {
+        Mechanic::Shield(s) => s.world_pos(),
+        Mechanic::Shadow { at } => *at,
+        Mechanic::Structures(slots) => slots.iter().flatten().next().copied(),
+        _ => None,
+    }
+}
+
 /// A shield in hand rides on the character; a thrown one sits in the world.
 fn place_shields(
     sim: Res<Sim>,
     mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in shields.iter_mut() {
-        match sim.cur.players[tag.0].shield.world_pos() {
+        match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
             Some(pos) => {
                 *vis = Visibility::Inherited;
                 tf.translation = Vec3::new(
@@ -318,8 +378,16 @@ fn tick_sim(
         // stays in one place.
         show.0 = !show.0;
     }
+    if keys.just_pressed(KeyCode::Tab) {
+        // Cycle player one's class. Restarts the match, since a class change
+        // mid-round would leave the mechanic in someone else's state.
+        let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
+        let w = World::with_classes([ALL[next], sim.cur.players[1].class]);
+        sim.prev = w.clone();
+        sim.cur = w;
+    }
     if keys.just_pressed(KeyCode::KeyR) {
-        let w = World::new();
+        let w = World::with_classes([sim.cur.players[0].class, sim.cur.players[1].class]);
         sim.prev = w.clone();
         sim.cur = w;
     }
@@ -545,7 +613,7 @@ fn apply_poses(
 
     for (bp, mut tf) in parts.iter_mut() {
         let p = frame.players[bp.owner];
-        let (into, total) = phase_frames(&p);
+        let (into, total) = phase_frames(&p, sim.cur.players[bp.owner].class);
         let pose = pose_for(PoseInput {
             action: p.action,
             frames_into: into,
@@ -562,8 +630,9 @@ fn apply_poses(
 }
 
 /// How far into the current phase, and how long that phase runs.
-fn phase_frames(p: &view::PlayerView) -> (u16, u16) {
-    use sim::state::{Action, move_frames};
+fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
+    use sim::state::Action;
+    let move_frames = |k: u8| sim::moves::frames(class, k);
     match p.action {
         Action::Startup { kind, left } => {
             let total = move_frames(kind).0;

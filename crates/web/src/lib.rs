@@ -116,27 +116,24 @@ fn hitbox(i: u32) -> Option<(sim::V3, Fx)> {
     let Action::Active { kind, .. } = pl.action else {
         return None;
     };
-    // Mirrors the reach/radius table in sim::state. Kept in sync by the
-    // frame-data accessor below rather than duplicated numbers.
-    let (reach, radius) = match kind {
-        0 => (Fx::ratio(3, 2), Fx::ratio(9, 10)),
-        _ => (Fx::ratio(2, 1), Fx::ratio(7, 5)),
-    };
-    Some((pl.pos.add(pl.facing.scale(reach)), radius))
+    // Straight from the move table, so the overlay cannot drift from the
+    // simulation the way a duplicated constant would.
+    let m = sim::moves::get(pl.class, kind);
+    Some((pl.pos.add(pl.facing.scale(m.reach)), m.radius))
 }
 
 /// Frame data for the debug overlay: startup, active, recovery.
 #[unsafe(no_mangle)]
 pub extern "C" fn move_startup(kind: u32) -> u32 {
-    move_frames(kind as u8).0 as u32
+    move_frames(world().players[0].class, kind as u8).0 as u32
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn move_active(kind: u32) -> u32 {
-    move_frames(kind as u8).1 as u32
+    move_frames(world().players[0].class, kind as u8).1 as u32
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn move_recovery(kind: u32) -> u32 {
-    move_frames(kind as u8).2 as u32
+    move_frames(world().players[0].class, kind as u8).2 as u32
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn parry_window() -> u32 {
