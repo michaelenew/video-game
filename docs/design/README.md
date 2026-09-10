@@ -4,7 +4,8 @@ Everything currently decided, proposed, or parked, in one place. This supersedes
 [`../archive/`](../archive/README.md), which is 2016–2019 source material kept for reference.
 
 **Start here:** [combat kernel](combat-kernel.md) → [controls](controls.md) →
-[ability spec](ability-spec.md) → a class kit.
+[ability spec](ability-spec.md) → a class kit. For implementation, see
+[architecture](architecture.md).
 
 ---
 
@@ -61,6 +62,7 @@ few enough to balance and to read in third person.
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
+| [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -94,10 +96,23 @@ Two conclusions there should only be reopened deliberately: vertical character p
 corrosive to a skill-gates-content thesis, and competitive versus is incompatible with
 character progression.
 
-## 6 · Next
+## 6 · Implementation
 
-1. **Prototype a class** and start putting real numbers on the frame vocabulary. The Bulwark
-   exercises the whole defensive layer; the Bellator exercises the swap window, which nothing
-   else uses.
-2. **Arena size and shape.**
-3. Per-class open items above, most of which want the prototype anyway.
+Rust, three crates, simulation as a pure function. See
+[architecture.md](architecture.md). The scaffold builds and its determinism and
+rollback harnesses pass; combat content is a stub on purpose, so every class
+implemented from here is determinism-checked from its first commit.
+
+```
+crates/sim    Deterministic simulation. Zero deps, no floating point.
+crates/net    Rollback session. Shaped like the GGRS handler.
+crates/game   Front end. Headless soak today, Bevy later.
+```
+
+## 7 · Next
+
+1. **One real class in `sim`** — where `slow` and `committed` become frame counts.
+2. **Capsule collision and hitboxes.**
+3. **Bevy front end**, capsules and debug hitboxes only, no art. Where feel gets tuned.
+4. **Arena size and shape.**
+5. Per-class open items above, most of which want the prototype anyway.
