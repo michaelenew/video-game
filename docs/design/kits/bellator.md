@@ -1,16 +1,15 @@
 ---
 status: proposed
-decided: 2026-09-09
+decided: 2026-09-10
+formerly: Shifter
 sources: docs/combat-design/shifter-skills.md
-depends: ../shifter.md
+depends: ../bellator.md
 ---
 
-# Shifter — kit
+# Bellator — kit
 
 **Identity.** Range bands and flow. Three weapon forms, and the depth is in changing form
 *inside* an animation so the move ends differently than it started.
-
-Rename pending — **Nuvaes** is the working candidate. See [../shifter.md](../shifter.md).
 
 ## Mechanic — forms and the mid-animation swap
 
@@ -70,7 +69,7 @@ your autos are unarmed — short, weak, fast. The class's only ranged option and
 **Startup** instant · **Recovery** medium · **Range** self
 
 A short parry stance using the shared defensive system. Successful parries stagger the
-attacker and additionally give the Shifter a stacking resistance buff, per
+attacker and additionally give the Bellator a stacking resistance buff, per
 [../defense.md](../defense.md).
 
 ## The swap matrix — Drive

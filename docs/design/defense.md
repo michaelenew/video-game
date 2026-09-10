@@ -7,7 +7,7 @@ resolves: the block/parry open question in combat-kernel.md
 # Defense — dodge, block, parry
 
 The defensive layer. Unblocks the [Bulwark](bulwark.md) and the
-[Shifter](shifter.md), both of which were waiting on it.
+[Bellator](bellator.md), both of which were waiting on it.
 
 ## The central split
 
@@ -125,7 +125,7 @@ This is the right reward because:
 - It makes the [Bulwark](bulwark.md)'s design line — true staggers gated behind hard
   conditions like a successful parry — actually work.
 
-The Shifter's existing "parrying gives a stacking increased resistance buff" survives as a
+The Bellator's existing "parrying gives a stacking increased resistance buff" survives as a
 **class-specific** addition on top of the universal stagger reward, not as the base
 behaviour.
 
@@ -153,9 +153,9 @@ That is the correct triangle.
 - **Bulwark** — the whole kit becomes specifiable. Facing-arc block, pushback resistance,
   parry-gated staggers, grapple as the anti-turtle read, and the planted-shield projectile
   volume all now have rules.
-- **Shifter** — "raise shield, scroll back to brace" fits as a shield-form behaviour; the
+- **Bellator** — "raise shield, scroll back to brace" fits as a shield-form behaviour; the
   stacking resistance buff sits on top of the universal parry stagger.
-- **Statera** — ascension explicitly removes dodge *and* block. This system is what makes
+- **Dual mage** — ascension explicitly removes dodge *and* block. This system is what makes
   that loss concrete and severe.
 - **Everyone else** — dodge is the baseline defensive verb; a shield secondary is an
   option that trades offence for the block/parry layer plus cast stagger resistance.
