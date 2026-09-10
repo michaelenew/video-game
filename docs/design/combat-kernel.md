@@ -47,7 +47,7 @@ Consequences that flow from the 60-second versus number:
 
 - A 2–3 second burst window is roughly 5% of a match. Burst states can be short and
   still be decisive.
-- Health-as-resource classes (Blood mage, Statera) are tunable now that TTK is fixed.
+- Health-as-resource classes (Blood mage, Dual mage) are tunable now that TTK is fixed.
   They were previously blocked on this number.
 - Sustain and healing must be small. In a 60-second match, meaningful healing trivially
   becomes a stall strategy.
@@ -61,8 +61,8 @@ needs re-expression before it can be used.
   no meaning. Proposed replacement: **Affinity reduces ability recovery frames**. That is
   the direct analogue — it was always "how soon can I act again" — and it keeps the stat
   meaningful without reintroducing cooldowns.
-- **The entire Statera resource system** — human/balanced/divine are defined as 20% /
-  40% / 95% CDR. Fully reworked in [statera.md](statera.md).
+- **The entire Dual mage resource system** — human/balanced/divine are defined as 20% /
+  40% / 95% CDR. Fully reworked in [dual-mage.md](dual-mage.md).
 - **Weapon enchantments** — "Taking damage reduces all cooldowns based on the percentage
   of your current health lost" (Evolution 2) and "Ravenous ... grants cooldown reduction"
   (Evolution 3). Both need new effects.

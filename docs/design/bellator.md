@@ -1,16 +1,15 @@
 ---
 status: decided
-decided: 2026-09-09
+decided: 2026-09-10
+formerly: Shifter
 supersedes: docs/combat-design/shifter-skills.md
 ---
 
-# Shifter
+# Bellator
 
-## Naming
-
-"Shifter" does double duty with the weapon-shift verb and reads as a plain word. Rename.
-Working candidates from the source notes: **Nuvaes** (from "new metal", Latin) or
-**Proeli** (from the word for "fighter"). Nuvaes reads better. Not final.
+Formerly **Shifter**, which did double duty with the weapon-shift verb and read as a plain
+word. *Bellator* is Latin for a warrior or combatant, which suits a class descended from the
+old cities' professional duelling champions.
 
 ## Identity
 

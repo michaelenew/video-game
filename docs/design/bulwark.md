@@ -26,11 +26,11 @@ missing from the set, this is the one worth a class slot:
 
 ## Lore hook
 
-The Shifter comes from the old cities' duel tradition — the aristocrat's individual
+The Bellator comes from the old cities' duel tradition — the aristocrat's individual
 champion. The new cities had no aristocracy and no duel tradition; they were villages that
 banded together and organised collective defence.
 
-**Shifter = the individual champion. Bulwark = the communal defender.** The contrast uses
+**Bellator = the individual champion. Bulwark = the communal defender.** The contrast uses
 lore that is already written.
 
 ## Committed, not slow
