@@ -111,6 +111,9 @@ crates/game   Bevy app. Rendering only.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
+**Requires Rust 1.85+** (Bevy 0.16's MSRV). `rustup update` if Cargo complains about
+`edition2024` -- that error names the symptom, not the cause.
+
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
 overlay on F1, local two-player, training dummy on 1-4. `DEMO=1` scripts player one and
 `DEBUG_OVERLAY=1` starts with the overlay on; `./scripts/screenshot.sh` renders headlessly.
