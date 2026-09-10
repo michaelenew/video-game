@@ -14,6 +14,7 @@
 //! not because the Bulwark is finished.
 
 use crate::DT;
+use crate::arena::{self, BODY_RADIUS};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
@@ -26,8 +27,6 @@ const MOVE_SPEED: Fx = Fx::ratio(7, 1);
 const GUARD_MOVE_SPEED: Fx = Fx::ratio(2, 1);
 const JUMP_SPEED: Fx = Fx::ratio(9, 1);
 const GROUND_Y: Fx = Fx::ZERO;
-const ARENA_HALF: Fx = Fx::from_int(14);
-const BODY_RADIUS: Fx = Fx::ratio(1, 2);
 
 /// How fast facing rotates toward the opponent, per tick. Guarding is slower,
 /// which is what makes the facing arc a real cost.
@@ -445,14 +444,10 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
 
     p.pos = p.pos.add(p.vel.scale(DT));
 
-    if p.pos.y.raw() <= GROUND_Y.raw() {
-        p.pos.y = GROUND_Y;
-        p.vel.y = Fx::ZERO;
-        p.grounded = true;
-    }
-
-    p.pos.x = p.pos.x.clamp(ARENA_HALF.neg(), ARENA_HALF);
-    p.pos.z = p.pos.z.clamp(ARENA_HALF.neg(), ARENA_HALF);
+    let r = arena::resolve(p.pos, p.vel, p.grounded);
+    p.pos = r.pos;
+    p.vel = r.vel;
+    p.grounded = r.grounded;
 }
 
 /// Bodies are solid. Push them apart symmetrically so neither index wins.

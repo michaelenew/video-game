@@ -105,12 +105,17 @@ implemented from here is determinism-checked from its first commit.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
-crates/net    Rollback session. GGRS wired; SyncTest passing.
-crates/game   Headless soak / CI determinism check.
-crates/web    WebAssembly build and the browser training mode.
+crates/net    Rollback session (GGRS) + headless soak.
+crates/view   Interpolation, camera framing, posing. No engine dependency.
+crates/game   Bevy app. Rendering only.
+crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
-Play it: `./crates/web/build-sandbox.sh` writes a single self-contained HTML file.
+**Run it:** `cargo run -p game` — 3D arena, character standins, auto-framing camera.
+`DEMO=1` drives player one from a script. `./scripts/screenshot.sh` renders headlessly.
+
+**Tune frame data:** `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
+hitbox overlays and frame stepping.
 
 ## 7 · Next
 

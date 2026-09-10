@@ -8,12 +8,8 @@ license.workspace = true
 [dependencies]
 sim = { path = "../sim" }
 net = { path = "../net" }
+view = { path = "../view" }
 
-# `bevy` plugs in here. Not vendored yet because this environment cannot reach
-# crates.io; add it when working locally:
-#
-#   bevy = "0.15"
-#
-# Until then `src/main.rs` is a headless soak that drives the simulation and
-# verifies determinism, which is useful in its own right and stays useful as a
-# CI check after the renderer exists.
+# Default features minus the ones a 3D arena prototype does not need. Keeps
+# compile times down without giving up rendering, glTF or PBR.
+bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "multi_threaded", "tonemapping_luts", "x11"] }

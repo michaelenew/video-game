@@ -6,6 +6,7 @@
 //!
 //! See `docs/design/architecture.md` for why the boundary sits where it does.
 
+pub mod arena;
 pub mod fixed;
 pub mod input;
 pub mod math;
