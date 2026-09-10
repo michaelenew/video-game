@@ -105,9 +105,12 @@ implemented from here is determinism-checked from its first commit.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
-crates/net    Rollback session. Shaped like the GGRS handler.
-crates/game   Front end. Headless soak today, Bevy later.
+crates/net    Rollback session. GGRS wired; SyncTest passing.
+crates/game   Headless soak / CI determinism check.
+crates/web    WebAssembly build and the browser training mode.
 ```
+
+Play it: `./crates/web/build-sandbox.sh` writes a single self-contained HTML file.
 
 ## 7 · Next
 

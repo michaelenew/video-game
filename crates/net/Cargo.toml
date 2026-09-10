@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+ggrs = "0.11.1"
 sim = { path = "../sim" }
 
 # `ggrs` plugs in here. It is not vendored yet because this environment cannot
@@ -16,3 +17,9 @@ sim = { path = "../sim" }
 # `Rollback` below is deliberately shaped like the GGRS session handler
 # (advance / save / load / checksum), so wiring it up is an impl block rather
 # than a redesign.
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# GGRS ships a SyncTest session that replays with forced rollbacks and compares
+# its own checksums. It is the standard way to catch non-determinism, and it is
+# stricter than the hand-rolled harness in tests/rollback.rs.
