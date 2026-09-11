@@ -39,7 +39,7 @@ const FOV_STEP: f32 = 2.0;
 
 /// How far behind the fighter the camera sits, in metres.
 pub const MIN_DISTANCE: f32 = 3.0;
-pub const MAX_DISTANCE: f32 = 14.0;
+pub const MAX_DISTANCE: f32 = 18.0;
 const DISTANCE_STEP: f32 = 0.4;
 
 /// Which number a key press is reaching for.
@@ -69,7 +69,7 @@ impl Default for Settings {
             // 45-degree view from six metres reads as cramped in an arena you
             // are meant to be moving around inside.
             fov: 58.0,
-            distance: 7.0,
+            distance: 10.9,
             other: BTreeMap::new(),
         }
     }
