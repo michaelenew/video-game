@@ -49,6 +49,11 @@ A spike erupts at the target area after a delay, damaging and slowing. Enemies n
 tethered to it, draining health per second for several seconds. Tethers can be broken by
 leaving. Returns health and a burst of movement speed when it expires or all tethers break.
 
+> **Implemented** (shift + click). The field drains on a tick and slows anyone inside it. The
+> slow is the part that matters: damage alone makes a puddle you step out of, and the slow is
+> what makes leaving cost time — which is what turns it into something you put *between*
+> yourself and someone else. The tether-break payout is not in yet.
+
 ### Cripple
 **Startup** fast · **Recovery** short · **Range** short · **Mechanic** low cost; no return
 

@@ -149,6 +149,7 @@ fn main() {
                 tick_sim,
                 apply_poses,
                 place_shields,
+                place_effects,
                 drive_camera,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
@@ -337,6 +338,24 @@ struct MainCamera;
 #[derive(Component)]
 struct ShieldMesh(usize);
 
+/// One drawable piece of a persistent effect. Two per effect, because a fire
+/// pillar is two volumes and drawing it as one would misrepresent the thing you
+/// are trying to walk around.
+#[derive(Component)]
+struct EffectMesh {
+    slot: usize,
+    part: usize,
+}
+
+/// Materials for the persistent effects, made once. Which one an entity wears
+/// changes as slots are reused, so they are kept rather than rebuilt.
+#[derive(Resource)]
+struct EffectLook {
+    fire: Handle<StandardMaterial>,
+    blood: Handle<StandardMaterial>,
+    stone: Handle<StandardMaterial>,
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -452,6 +471,107 @@ fn setup(
             Visibility::Hidden,
             ShieldMesh(owner),
         ));
+    }
+
+    // A fixed pool, one pair of cylinders per effect slot, because the
+    // simulation's effect array is itself fixed. Spawning and despawning meshes
+    // as effects come and go would put allocation on the rollback path.
+    let unit = meshes.add(Cylinder::new(0.5, 1.0));
+    let look = EffectLook {
+        fire: materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 0.45, 0.12),
+            emissive: LinearRgba::rgb(2.4, 0.8, 0.15),
+            perceptual_roughness: 0.9,
+            ..default()
+        }),
+        blood: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.35, 0.03, 0.09),
+            emissive: LinearRgba::rgb(0.5, 0.0, 0.12),
+            perceptual_roughness: 0.95,
+            ..default()
+        }),
+        stone: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.52, 0.50, 0.47),
+            perceptual_roughness: 0.95,
+            ..default()
+        }),
+    };
+    for slot in 0..sim::effects::MAX_EFFECTS {
+        for part in 0..2 {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.stone.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                EffectMesh { slot, part },
+            ));
+        }
+    }
+    commands.insert_resource(look);
+}
+
+/// Put the effect meshes where the simulation says its effects are.
+///
+/// Shape comes from the same `pillar_volumes` the hit test uses, so what you
+/// see standing in the arena is what will actually catch you. A renderer that
+/// reconstructed the shape itself would drift from the rule, and a fire pillar
+/// that looks bigger than it hits is worse than no fire pillar.
+fn place_effects(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &EffectMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    use sim::effects::EffectKind;
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let Some(effect) = sim.cur.effects[tag.slot] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let at = Vec3::new(
+            effect.pos.x.to_f32_for_render(),
+            effect.pos.y.to_f32_for_render(),
+            effect.pos.z.to_f32_for_render(),
+        );
+        let (skin, shape) = match effect.kind {
+            EffectKind::FirePillar => {
+                let (base, column) = effect.pillar_volumes();
+                let it = if tag.part == 0 { base } else { column };
+                (
+                    look.fire.clone(),
+                    Some((
+                        it.radius.to_f32_for_render(),
+                        it.bottom.to_f32_for_render(),
+                        it.top.to_f32_for_render(),
+                    )),
+                )
+            }
+            // A field, drawn as the slab it is: you are in it or you are not.
+            EffectKind::BlackSpike if tag.part == 0 => (
+                look.blood.clone(),
+                Some((effect.field_radius().to_f32_for_render(), 0.0, 0.12)),
+            ),
+            EffectKind::Structure if tag.part == 0 => (
+                look.stone.clone(),
+                Some((effect.field_radius().to_f32_for_render(), 0.0, 1.8)),
+            ),
+            _ => (look.stone.clone(), None),
+        };
+        let Some((radius, bottom, top)) = shape else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let height = (top - bottom).max(0.01);
+        *vis = Visibility::Inherited;
+        if mat.0 != skin {
+            mat.0 = skin;
+        }
+        tf.translation = at + Vec3::Y * (bottom + height * 0.5);
+        tf.scale = Vec3::new(radius * 2.0, height, radius * 2.0);
     }
 }
 
@@ -701,8 +821,9 @@ fn demo_input(w: &sim::World, frame: u32) -> SimInput {
         190..=215 => v |= SimInput::CROUCH,                 // duck
         240..=243 => v |= SimInput::SHIFT | SimInput::S,    // dodge back
         250..=252 => v |= SimInput::SPACE,                  // jump
-        280..=283 => v |= SimInput::MIDDLE,                 // throw the shield
-        340..=343 => v |= SimInput::MIDDLE,                 // recall it
+        280..=283 => v |= SimInput::MECHANIC,               // throw the shield
+        300..=303 => v |= SimInput::SPECIAL,                // the class special
+        340..=343 => v |= SimInput::MECHANIC,               // recall it
         410..=440 => v |= SimInput::S,                      // reset spacing
         _ => {}
     }
@@ -721,7 +842,10 @@ fn read_player_two(keys: &ButtonInput<KeyCode>) -> SimInput {
         v |= SimInput::RIGHT;
     }
     if keys.pressed(KeyCode::Slash) {
-        v |= SimInput::MIDDLE;
+        v |= SimInput::SPECIAL;
+    }
+    if keys.pressed(KeyCode::KeyL) {
+        v |= SimInput::MECHANIC;
     }
     if keys.pressed(KeyCode::ShiftRight) {
         v |= SimInput::SHIFT;
@@ -754,8 +878,14 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     if keys.pressed(KeyCode::KeyK) || mouse.pressed(MouseButton::Right) {
         v |= SimInput::RIGHT;
     }
-    if keys.pressed(KeyCode::KeyL) || mouse.pressed(MouseButton::Middle) {
-        v |= SimInput::MIDDLE;
+    // Q and E, not a chord on a click. The special and the mechanic are the
+    // two things a class does that nothing else does; burying them under a
+    // modifier made them feel optional.
+    if keys.pressed(KeyCode::KeyQ) {
+        v |= SimInput::SPECIAL;
+    }
+    if keys.pressed(KeyCode::KeyE) || mouse.pressed(MouseButton::Middle) {
+        v |= SimInput::MECHANIC;
     }
     if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
         v |= SimInput::SHIFT;
@@ -852,9 +982,10 @@ fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip
         Action::Recovery { kind, left } => Some((attack_clip(kind), elapsed(kind, 2, left))),
         Action::Guard { held } => Some((Clip::GuardIn, held)),
         Action::Dodge { left } => Some((Clip::Roll, 22u16.saturating_sub(left))),
-        Action::HitStun { left } | Action::BlockStun { left } | Action::Stagger { left } => {
-            Some((Clip::Recoil, 26u16.saturating_sub(left)))
-        }
+        Action::HitStun { left }
+        | Action::BlockStun { left }
+        | Action::Stagger { left }
+        | Action::Held { left } => Some((Clip::Recoil, 26u16.saturating_sub(left))),
         Action::Free => None,
     }
 }

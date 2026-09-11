@@ -55,6 +55,11 @@ A committed forward attack. The illustrative case for the swap matrix — see be
 A rising attack that launches. In sword form it throws the weapon upward at the apex, where
 it hangs briefly before falling.
 
+> **Implemented** (`Q`). It leaps, and it **takes whoever it catches up with it** — both
+> fighters leave the ground. Either half alone is a different move: without the lift it is a
+> launcher you cannot follow up on, without the launch it is an escape. The smash-down
+> counterpart waits on aerials being their own moves rather than the grounded ones.
+
 ### Sweep
 **Startup** fast · **Recovery** medium · **Range** melee, wide arc
 

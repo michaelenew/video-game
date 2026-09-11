@@ -26,7 +26,9 @@ positional, covering a facing arc rather than a bubble. Blocking costs **space a
 vulnerable window** — knockback plus stunlock, no chip damage, no guard meter. Parry is the
 opening frames of block and rewards with a stagger. Special attacks are the guard breakers.
 
-**Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Was: *click = attack, shift =
+**Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Now: *click = attack, shift +
+click = the committed version, shift + direction = dodge, WASD = move, space = jump, `Q` = the
+class special, `E` = the class mechanic, mouse = where.* Was: *click = attack, shift =
 ability, WASD = move, space = move more, shift beats WASD.* The last two did not survive
 contact with the sandbox. **Space now always jumps** — a vertical takeoff and nothing else —
 and **shift plus a direction dodges**. Space plus a direction used to dodge, which meant

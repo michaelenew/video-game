@@ -329,6 +329,53 @@ table, which is already determinism-safe.
 so it stays renderer-local. Splitting the two along "does this decide anything?" keeps the
 wire format honest: four bytes per player per frame.
 
+## Persistent effects
+
+Until the classes were filled in, every attack was an instant: a hitbox that existed for a few
+frames and was gone. Three of the six are built on the opposite idea — a fire pillar that grows
+where it was planted, a drain field that punishes standing still, structures that change the
+shape of the arena. Those have to outlive the move that made them, and that makes them
+simulation state.
+
+`crates/sim/src/effects.rs` holds them in a **fixed array, not a `Vec`**. Effects are
+snapshotted and restored on every rollback, so a heap allocation per re-simulated frame would
+be the single most expensive thing in the tick. The cap also turns "what happens when you
+spam it" into a decision rather than an emergent property: the oldest one goes.
+
+Three rules follow from rollback and are worth stating because they are not obvious:
+
+- **Growth is a function of `age`, never accumulated.** A pillar's radius is computed from how
+  many frames it has existed, so replaying frame 90 twice produces the same pillar both times.
+  An effect that grew by adding to itself each tick would drift with every rollback.
+- **Effects act after both fighters have stepped.** Standing in a fire pillar costs you whether
+  you walked in or were knocked in. Checking before movement would let someone walk through a
+  pillar untouched on the frame they entered it.
+- **An effect never hurts its owner.** A fire pillar you cannot stand beside is a fire pillar
+  you cannot use.
+
+### The fire pillar is two volumes, not one
+
+A wide base and a taller, only slightly wider column above it. They are different threats: the
+base is what catches someone walking past, the column is what stops them jumping over. Growing
+them together would collapse two decisions into one, and the pillar would end up either
+useless against a jump or unavoidable on the ground. The base spreads **out** as it ages; the
+column reaches **up**.
+
+### Structures are reconciled in one direction
+
+The Elementalist's mechanic slots are *intent* — what the button asked for. The effects are
+what actually stands in the arena, takes up space and weathers away. Each frame the slots
+spawn any structure they gained and are then rebuilt from what is still standing. Two lists
+that each edited themselves would eventually disagree about what is in the arena, and the fire
+pillar asks that question every time it is thrown.
+
+### A grab is a state, not a stun
+
+`Action::Held` pins the victim to their captor at arm's length and moves them with him. It is
+not hitstun with a longer timer: hitstun is something you recover from where you stand, and a
+grab is something that takes you somewhere. That is what makes it worth beating guard with,
+and what makes whiffing it a commitment for both fighters.
+
 ## The debug overlay draws what the rules use
 
 **F1.** Hitboxes while they are out, hurtboxes always, guard arcs, facing, and wherever the
@@ -534,17 +581,19 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 152 tests |
+| Test suites | 163 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
-| Bulwark kit | Bash, Slam, Guard, parry, Grapple, shield throw/recall/leap |
+| Bulwark kit | Bash, Slam, Guard, parry, Grapple — which actually **holds** you — shield throw/recall/leap |
+| Persistent effects | Fire pillar (two growing volumes), black spike (drain + slow), structures that expire |
+| Uppercut | Leaps, and takes whoever it catches into the air with it |
 | Universal movement | Variable-height jump, shift-dodge with i-frames, once-per-jump airdodge, crouch |
 | Air movement | Quake-style acceleration, per-class jump/gravity/fall/steering, per-move aerial hang |
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
-| **The Oven** | **F7** — 307 live tuning knobs, searchable, with bake-and-push |
+| **The Oven** | **F7** — 396 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Dev mode | `./scripts/dev.sh` — wireframes, the Oven and the class pickers |
 | Round flow | Knockout, round wins, reset |

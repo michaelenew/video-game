@@ -357,6 +357,7 @@ fn describe(p: &sim::state::Player) -> String {
         Action::BlockStun { left } => format!("blockstun {left}f"),
         Action::HitStun { left } => format!("hitstun {left}f"),
         Action::Stagger { left } => format!("STAGGER {left}f"),
+        Action::Held { left } => format!("HELD {left}f"),
     }
 }
 

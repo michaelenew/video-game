@@ -37,7 +37,10 @@ pub struct Input {
 impl Input {
     pub const LEFT: u16 = 1 << 0;
     pub const RIGHT: u16 = 1 << 1;
-    pub const MIDDLE: u16 = 1 << 2;
+    /// The class special -- **Q**. Its own button rather than a modifier on a
+    /// click, because it is one of the three attacks and reading it should not
+    /// require reading a modifier first.
+    pub const SPECIAL: u16 = 1 << 2;
     pub const SHIFT: u16 = 1 << 3;
     pub const W: u16 = 1 << 4;
     pub const A: u16 = 1 << 5;
@@ -47,6 +50,9 @@ impl Input {
     /// Crouch. Lowers your hurtbox and slows you -- the answer to a high
     /// attack, and the reason not every whiff is free.
     pub const CROUCH: u16 = 1 << 9;
+    /// The class mechanic -- **E**. Throw the shield, change form, place the
+    /// shadow, raise a structure. Not an attack, so it is not a click.
+    pub const MECHANIC: u16 = 1 << 10;
 
     /// Buttons only, looking down the positive X axis.
     pub const fn new(bits: u16) -> Input {
@@ -92,7 +98,7 @@ impl Input {
     }
 
     pub const fn any_click(self) -> bool {
-        self.bits & (Input::LEFT | Input::RIGHT | Input::MIDDLE) != 0
+        self.bits & (Input::LEFT | Input::RIGHT | Input::SPECIAL) != 0
     }
 
     /// Shift beats WASD when both are held, so a move-while-casting option

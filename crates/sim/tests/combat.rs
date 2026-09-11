@@ -8,7 +8,9 @@ use sim::{Input, World};
 
 const L: u16 = Input::LEFT;
 const R: u16 = Input::RIGHT;
-const M: u16 = Input::MIDDLE;
+/// The class special -- Q -- and the class mechanic -- E.
+const Q: u16 = Input::SPECIAL;
+const E: u16 = Input::MECHANIC;
 const SHIFT: u16 = Input::SHIFT;
 
 /// Aim angles for two fighters looking at each other, which is how they spawn.
@@ -70,7 +72,7 @@ fn a_grapple_goes_through_guard() {
     // The answer to a turtling opponent. Without this, blocking is solved.
     let mut w = engaged();
     let before = w.players[1].health;
-    run(&mut w, 40, M | SHIFT, R);
+    run(&mut w, 40, Q, R);
     assert!(
         w.players[1].health < before,
         "grapple was blocked; guard is unbeatable"
@@ -116,7 +118,7 @@ fn dodging_evades_an_attack_that_would_otherwise_land() {
 #[test]
 fn throwing_the_shield_gives_up_blocking() {
     let mut w = World::new();
-    run(&mut w, 2, M, 0);
+    run(&mut w, 2, E, 0);
     assert!(
         !w.players[0].shield().unwrap().in_hand(),
         "shield did not leave the hand"
@@ -131,14 +133,14 @@ fn throwing_the_shield_gives_up_blocking() {
 #[test]
 fn a_thrown_shield_plants_and_can_be_recalled() {
     let mut w = World::new();
-    run(&mut w, 2, M, 0);
+    run(&mut w, 2, E, 0);
     run(&mut w, 60, 0, 0);
     assert!(
         matches!(w.players[0].shield(), Some(Shield::Planted { .. })),
         "shield never came to rest: {:?}",
         w.players[0].shield()
     );
-    run(&mut w, 2, M, 0);
+    run(&mut w, 2, E, 0);
     run(&mut w, 90, 0, 0);
     assert!(
         w.players[0].shield().unwrap().in_hand(),
