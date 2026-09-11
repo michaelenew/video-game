@@ -163,25 +163,20 @@ pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>) {
             egui::ScrollArea::vertical()
                 .max_height(420.0)
                 .show(ui, |ui| {
-                    // One header per family, in the order `all_knobs` defines:
-                    // universal rules, then air, then move data. Grouping has to
-                    // happen here rather than per knob -- a header per knob
-                    // collides on widget identity and egui says so loudly.
-                    let mut i = 0;
-                    while i < matching.len() {
-                        let family = matching[i].family();
-                        let start = i;
-                        while i < matching.len() && matching[i].family() == family {
-                            i += 1;
-                        }
+                    // One header per family. Grouping is `oven::grouped`, which
+                    // gathers a family wherever its members sit in the registry
+                    // rather than assuming they are adjacent -- appending a knob
+                    // is what keeps baked indices stable, so they usually are
+                    // not.
+                    for (family, members) in oven::grouped(&matching) {
                         egui::CollapsingHeader::new(&family)
                             .id_salt(&family)
                             // Searching means you already know what you want, so
                             // results come open rather than making you click in.
                             .default_open(!needle.is_empty())
                             .show(ui, |ui| {
-                                for knob in &matching[start..i] {
-                                    knob_row(ui, *knob);
+                                for knob in members {
+                                    knob_row(ui, knob);
                                 }
                             });
                     }

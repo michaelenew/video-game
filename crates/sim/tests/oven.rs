@@ -183,3 +183,57 @@ fn families_group_the_way_a_person_would_look_for_them() {
         );
     }
 }
+
+#[test]
+fn each_family_is_collected_once() {
+    // The palette draws one collapsing header per family and keys it by name,
+    // so a family appearing twice is a duplicate widget — which is exactly what
+    // happened when two air scalars were appended to the end of the registry
+    // and the grouping assumed families were contiguous.
+    let all = oven::all_knobs();
+    let groups = oven::grouped(&all);
+
+    let mut names: Vec<&String> = groups.iter().map(|(name, _)| name).collect();
+    let before = names.len();
+    names.sort();
+    names.dedup();
+    assert_eq!(before, names.len(), "a family is listed more than once");
+
+    let total: usize = groups.iter().map(|(_, members)| members.len()).sum();
+    assert_eq!(total, all.len(), "grouping lost or duplicated a knob");
+}
+
+#[test]
+fn a_family_is_gathered_even_when_its_knobs_are_scattered() {
+    // The property that matters, stated directly: appending a knob to the end
+    // of the registry — which is what keeps every baked index valid — must not
+    // split its family in the palette.
+    let all = oven::all_knobs();
+    let air: Vec<Knob> = all
+        .iter()
+        .copied()
+        .filter(|k| k.family() == "Air")
+        .collect();
+    assert!(air.len() > 2, "not enough air scalars to be a real test");
+
+    // They are genuinely not adjacent, or this would prove nothing.
+    let positions: Vec<usize> = all
+        .iter()
+        .enumerate()
+        .filter(|(_, k)| k.family() == "Air")
+        .map(|(i, _)| i)
+        .collect();
+    let contiguous = positions.windows(2).all(|w| w[1] == w[0] + 1);
+    assert!(
+        !contiguous,
+        "the air knobs are contiguous, so this test is not exercising the bug"
+    );
+
+    let groups = oven::grouped(&all);
+    let found = groups
+        .iter()
+        .filter(|(name, _)| name == "Air")
+        .collect::<Vec<_>>();
+    assert_eq!(found.len(), 1, "the Air family was split across headers");
+    assert_eq!(found[0].1.len(), air.len(), "the Air family lost a knob");
+}

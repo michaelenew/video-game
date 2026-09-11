@@ -443,6 +443,18 @@ Pointer and keyboard are claimed separately. Hovering a slider must not stop the
 responding; a focused text field must stop it entirely, because `J`, `K` and `L` are attack
 keys and searching the Oven for a move name would otherwise play a sequence.
 
+### Families are gathered, not adjacent
+
+The palette draws one collapsing header per family, keyed by name. Grouping walks the whole
+registry and collects a family wherever its members sit, rather than treating a family as a run
+of neighbouring knobs.
+
+That distinction is load-bearing rather than fussy. **Appending a knob to the end of the
+registry is what keeps every existing index in `tuned.rs` valid**, so a new knob almost always
+arrives a long way from its relatives. The first version grouped by adjacency and drew a second
+"Air" header the moment two air scalars were appended — egui flagged it as a duplicate widget,
+correctly.
+
 ### Baking
 
 `crates/sim/src/tuned.rs` is generated and is the single source of truth for values. `moves.rs`
@@ -511,7 +523,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 147 tests |
+| Test suites | 149 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |

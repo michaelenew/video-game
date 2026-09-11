@@ -464,6 +464,27 @@ impl Knob {
     }
 }
 
+/// Knobs collected under their family, each family appearing once, in the order
+/// families are first met.
+///
+/// Deliberately not "runs of adjacent knobs sharing a family". The registry's
+/// order is a *storage* concern — appending a new knob to the end is what keeps
+/// every existing index in `tuned.rs` valid, so a knob almost always arrives
+/// away from its relatives. The first version of the palette grouped by
+/// adjacency and drew a second "Air" header the moment two air scalars were
+/// appended, which egui flagged as a duplicate widget.
+pub fn grouped(knobs: &[Knob]) -> Vec<(String, Vec<Knob>)> {
+    let mut out: Vec<(String, Vec<Knob>)> = Vec::new();
+    for knob in knobs {
+        let family = knob.family();
+        match out.iter_mut().find(|(name, _)| *name == family) {
+            Some((_, members)) => members.push(*knob),
+            None => out.push((family, vec![*knob])),
+        }
+    }
+    out
+}
+
 /// Every knob, in a stable order: universal rules, then air, then move data.
 pub fn all_knobs() -> Vec<Knob> {
     let mut out: Vec<Knob> = Scalar::ALL.iter().map(|s| Knob::Scalar(*s)).collect();
