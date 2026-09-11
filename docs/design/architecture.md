@@ -382,7 +382,7 @@ it is describing.
 
 ## The Oven: tuning while it runs
 
-**F7.** Every tuned number in the game — 304 of them — editable in a palette that floats over
+**F7.** Every tuned number in the game — 306 of them — editable in a palette that floats over
 the arena, with a **bake** button that writes them back to the repository and pushes.
 
 Feel work is a loop: change a number, play it, change it again. The loop is only as fast as
@@ -428,10 +428,15 @@ which of them an input belongs to. egui tracks it; `UiFocus` copies the answer s
 game systems can read, a frame behind — which is fine, since a pointer over the panel this
 frame is still over it next.
 
-**While the Oven is open the cursor is yours.** No click captures it. That rule is deliberately
-blunt: releasing only while the pointer hovers the panel is more flexible and still wrong,
-because the first click after F7 gets spent handing the cursor back rather than landing on a
-widget. The keyboard keeps playing, so a value can be dragged and then felt with W and J
+**F7 hands the cursor back. Clicking the arena takes it again. Escape returns it to the Oven.**
+
+Three lines, and it took three attempts to get there. Releasing only while the pointer hovers
+the panel leaves the first click after F7 spent on getting the pointer back. Never capturing
+while the Oven is open means closing the panel to play. What both missed is that *clicking the
+arena* is a different event from *clicking* — once the rule distinguishes them there is nothing
+left to learn.
+
+The keyboard keeps playing throughout, so a value can be dragged and then felt with W and J
 without closing anything.
 
 Pointer and keyboard are claimed separately. Hovering a slider must not stop the fighter
@@ -506,7 +511,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 138 tests |
+| Test suites | 143 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -516,7 +521,7 @@ Everything below builds and passes today.
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
-| **The Oven** | **F7** — 304 live tuning knobs, searchable, with bake-and-push |
+| **The Oven** | **F7** — 306 live tuning knobs, searchable, with bake-and-push |
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |

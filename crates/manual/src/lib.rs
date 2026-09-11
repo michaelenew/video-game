@@ -100,7 +100,11 @@ pub const SECTIONS: &[Section] = &[
                 "Crouch. Ducks overheads, costs you speed.",
                 "Ctrl crouch",
             ),
-            s("J or left click", "Poke. The fast one.", "J poke"),
+            s(
+                "J or left click",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding.",
+                "J poke",
+            ),
             s(
                 "Shift + J",
                 "The committed attack. Slower, hurts, roots you.",

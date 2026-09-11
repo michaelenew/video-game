@@ -453,3 +453,40 @@ pointer hovered the panel, which is more flexible and still wrong: the first cli
 spent getting the cursor back, because the pointer is wherever the camera left it. "Open means
 the cursor is yours" has nothing to learn and nowhere to oscillate. The keyboard keeps playing,
 so you can drag a value and immediately feel it with W and J without closing anything.
+
+### 2026-09-11 — aerials slow the rise instead of deleting it
+**Changed** An aerial now damps vertical speed toward zero over its hang window rather than
+setting it to zero, and gravity stays off for the whole window. A poke thrown in the air also
+shoves you a little in the direction you are holding.
+**Why** Reported: the dead stop was jarring, and cancelling the momentum outright is not the
+right model. The control over jump height that attacking gives is worth keeping.
+**Verdict** kept. The distinction is the useful part: **float and punch are separate knobs and
+were fighting over one.** Zeroing the velocity gave punch at the cost of any sense of momentum;
+leaving gravity on would have given float at the cost of impact. Damping the speed while holding
+gravity off gives both, and they are now tunable independently — `Aerial hang damping` and the
+per-move `Aerial hang`, plus `Aerial poke boost`, all in the Oven.
+
+The shove belongs to the poke alone. A committed move that also repositioned you would be
+strictly better than a poke, which is the sort of thing that quietly deletes a move from the
+game.
+
+**The first bake round-tripped correctly**, and the numbers that came back were a real
+retuning: takeoff 8 → 17.7, gravity −24 → −42, air acceleration 11 → 14, air speed cap 1.5 →
+2.03. A much snappier, heavier jump. Two things fell out of that worth recording. Appending new
+scalars to the end of the enum leaves every existing index untouched, so a baked file survives
+the addition with a two-line patch — worth knowing before ever inserting one in the middle. And
+`a_jump_lasts_long_enough_to_do_something_with` failed, because the floatiest class went to 94
+frames against a ceiling of 90. That is the harness working: a tuning decision, not a bug, so
+the bound widened to 110 and the reason is recorded here. The assertion exists to catch a number
+wrong by an order of magnitude, not to police taste.
+
+### 2026-09-11 — moving between the Oven and the game
+**Changed** F7 hands the cursor back; clicking the arena takes it again even with the Oven open;
+Escape returns it to the Oven.
+**Why** The previous rule — cursor always free while the Oven is open — fixed the slider problem
+but made going back to play require closing the panel.
+**Verdict** kept. Worth noting the shape: the first version was too clever (release only while
+hovering the panel, which left the first click after F7 spent on getting the pointer back), the
+second too blunt (never capture while open, which meant closing the panel to play). What was
+missing from both was that *clicking the arena* is a different event from *clicking*. Once the
+rule distinguishes those, it is three lines and there is nothing to learn.

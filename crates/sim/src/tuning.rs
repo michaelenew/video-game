@@ -220,3 +220,24 @@ pub fn poke_mobility() -> u8 {
 pub fn attack_root_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AttackRootDecay))
 }
+
+/// How much vertical speed survives each frame of an aerial's hang.
+///
+/// The first version deleted it outright, which read as the game snatching the
+/// jump away mid-rise. Slowing the momentum instead keeps the extra control
+/// over jump height that attacking gives you, without the lurch: you feel the
+/// rise bleed off rather than stop.
+pub fn air_stall_damp() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirStallDamp))
+}
+
+/// A small shove in the direction you are holding, when a poke is thrown in the
+/// air.
+///
+/// The basic attack is the one you throw constantly, so this is what makes
+/// attacking part of air movement rather than a pause in it -- the hang gives
+/// it float, the shove gives it punch. Clamped by the air speed cap like any
+/// other air movement, so it cannot be chained into crossing the arena.
+pub fn air_attack_boost() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirAttackBoost))
+}
