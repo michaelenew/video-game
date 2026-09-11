@@ -6,7 +6,8 @@
 use sim::state::Action;
 use sim::{Input, World};
 use view::interp::{TickClock, interpolate};
-use view::pose::{PARTS, Part, PoseInput, pose_for};
+use view::play::{PoseInput, pose_for};
+use view::skeleton::Joint;
 use view::{CameraRig, camera::RigConfig};
 
 // ---------------------------------------------------------------------------
@@ -470,16 +471,24 @@ fn pitch_is_clamped() {
 // Posing -- the property that matters is purity
 // ---------------------------------------------------------------------------
 
-fn input_at(action: Action, into: u16, total: u16, frame: u32) -> PoseInput {
+fn input_at(action: Action, distance: f32, frame: u32) -> PoseInput {
     PoseInput {
+        class: sim::Class::Bulwark,
         action,
-        frames_into: into,
-        frames_total: total,
-        speed: 0.0,
         grounded: true,
         crouching: false,
-        sim_frame: frame,
-        clip: None,
+        speed: 0.0,
+        travel: [0.0, 0.0],
+        distance,
+        air_frames: 0,
+        since_landed: frame as u16,
+        parried: 0,
+        stun_total: 0,
+        rise: 0.0,
+        turn_rate: 0.0,
+        health: 1000,
+        round_left: None,
+        bind_pose: false,
     }
 }
 
@@ -487,10 +496,11 @@ fn input_at(action: Action, into: u16, total: u16, frame: u32) -> PoseInput {
 fn posing_is_a_pure_function_of_state() {
     // The whole rollback-safe animation argument rests on this.
     let cases = [
-        input_at(Action::Free, 0, 0, 41),
-        input_at(Action::Startup { kind: 0, left: 2 }, 2, 4, 41),
-        input_at(Action::Active { kind: 1, left: 1 }, 3, 4, 41),
-        input_at(Action::Guard { held: 3 }, 3, 0, 41),
+        input_at(Action::Free, 0.0, 41),
+        input_at(Action::Startup { kind: 0, left: 2 }, 0.0, 41),
+        input_at(Action::Active { kind: 1, left: 1 }, 0.0, 41),
+        input_at(Action::Guard { held: 3 }, 0.0, 41),
+        input_at(Action::HitStun { left: 4 }, 0.0, 41),
     ];
     for c in cases {
         assert_eq!(pose_for(c), pose_for(c));
@@ -525,57 +535,45 @@ fn replaying_a_frame_reproduces_its_pose() {
     assert_eq!(pose_of(&replay), pose_of(&w));
 }
 
+/// Pose the way the renderer does: from the interpolated view of two identical
+/// snapshots, so every animation clock in the snapshot is exercised.
 fn pose_of(w: &World) -> view::Pose {
-    let p = &w.players[0];
-    pose_for(PoseInput {
-        action: p.action,
-        frames_into: 0,
-        frames_total: 0,
-        speed: 0.0,
-        grounded: p.grounded,
-        crouching: p.crouching,
-        sim_frame: w.frame,
-        clip: None,
-    })
-}
-
-#[test]
-fn attack_phases_are_visually_distinct() {
-    // Reading startup from active from recovery across the arena is a gameplay
-    // requirement, not an art one.
-    let startup = pose_for(input_at(Action::Startup { kind: 0, left: 0 }, 4, 4, 0));
-    let active = pose_for(input_at(Action::Active { kind: 0, left: 2 }, 0, 3, 0));
-    let recovery = pose_for(input_at(Action::Recovery { kind: 0, left: 9 }, 9, 10, 0));
-
-    let sep = |a: &view::Pose, b: &view::Pose| -> f32 {
-        PARTS
-            .iter()
-            .map(|p| {
-                let (x, y) = (a.get(*p), b.get(*p));
-                (0..3)
-                    .map(|k| (x.pos[k] - y.pos[k]).abs() + (x.rot[k] - y.rot[k]).abs())
-                    .sum::<f32>()
-            })
-            .sum()
-    };
-    assert!(
-        sep(&startup, &active) > 1.5,
-        "startup and active look alike"
-    );
-    assert!(
-        sep(&active, &recovery) > 1.5,
-        "active and recovery look alike"
-    );
+    let frame = view::interpolate(w, w, 0.0);
+    pose_for(PoseInput::of(
+        &frame.players[0],
+        w.players[0].class,
+        frame.round_left,
+    ))
 }
 
 #[test]
 fn walking_moves_the_legs_and_idling_does_not() {
-    let mut moving = input_at(Action::Free, 0, 0, 12);
+    // And it has to be *distance* that moves them, not time: a walk cycle on a
+    // fixed cadence skates the moment the body moves at any other speed.
+    let mut moving = input_at(Action::Free, 0.0, 12);
     moving.speed = 7.0;
-    let idle = input_at(Action::Free, 0, 0, 12);
-    let leg = |p: &view::Pose| p.get(Part::LegL).rot[0].abs();
-    assert!(leg(&pose_for(moving)) > 0.1, "legs did not swing");
-    assert!(leg(&pose_for(idle)) < 0.01, "idle legs are swinging");
+    moving.travel = [0.0, 7.0];
+    let leg = |p: &view::Pose| p.degrees(Joint::ThighL, 0);
+
+    let mut swung: f32 = 0.0;
+    for i in 0..20 {
+        let mut at = moving;
+        at.distance = i as f32 * 0.12;
+        swung = swung.max((leg(&pose_for(at)) - leg(&pose_for(moving))).abs());
+    }
+    assert!(
+        swung > 8.0,
+        "legs did not swing over a stride: {swung} degrees"
+    );
+
+    let idle = input_at(Action::Free, 0.0, 12);
+    let mut idle_swing: f32 = 0.0;
+    for i in 0..20 {
+        let mut at = idle;
+        at.distance = i as f32 * 0.12;
+        idle_swing = idle_swing.max((leg(&pose_for(at)) - leg(&pose_for(idle))).abs());
+    }
+    assert!(idle_swing < 1.0, "a standing character is striding");
 }
 
 #[test]

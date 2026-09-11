@@ -184,13 +184,18 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "F2",
-                "Toggle baked animation against the procedural poses.",
-                "F2 baked anim",
+                "Freeze the skeleton at rest. Tells a bad clip from a bad rig.",
+                "F2 bind pose",
             ),
             s(
                 "F7",
                 "The Oven: every tuned number in the game, live.",
                 "F7 oven",
+            ),
+            s(
+                "F9",
+                "The animation hub: every clip, editable while it runs.",
+                "F9 animation",
             ),
         ],
     },
@@ -247,6 +252,10 @@ pub const SECTIONS: &[Section] = &[
                 "Re-bake the animation clips from their recipes.",
             ),
             e(
+                "cargo run -p anim --bin preview -- <clip>",
+                "Draw a clip as a contact sheet PNG, into target/anim-preview. Add --feet for a per-frame table of what each foot is doing, or --all for everything.",
+            ),
+            e(
                 "cargo run -p net --bin soak",
                 "Headless rollback soak: thousands of frames, checked for divergence.",
             ),
@@ -291,8 +300,8 @@ pub const SECTIONS: &[Section] = &[
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e(
-                "BAKED_ANIM=0",
-                "Start with procedural poses instead of baked clips.",
+                "BIND_POSE=1",
+                "Start with the skeleton frozen at rest, for checking proportions.",
             ),
             e("OVEN=1", "Start with the Oven open."),
             e(

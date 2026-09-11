@@ -28,6 +28,28 @@ pub struct PlayerView {
     pub crouching: bool,
     /// Horizontal speed, for locomotion posing.
     pub speed: f32,
+    /// Which way the body is moving relative to where it is facing: `x` is
+    /// strafe (positive is the character's right), `z` is forward. This is what
+    /// picks between the walk, the backpedal and the two sidesteps, and it has
+    /// to come from velocity rather than from the input because a shove or a
+    /// dodge moves you in directions you never asked for.
+    pub travel: [f32; 2],
+    /// Ground covered, in metres, wrapping. Drives the stride so feet land
+    /// where the body actually is rather than on a fixed cadence.
+    pub distance: f32,
+    pub air_frames: u16,
+    pub since_landed: u16,
+    pub parried: u16,
+    /// What the current stun was when it started, so a flinch can be picked by
+    /// severity rather than guessed at halfway through.
+    pub stun_total: u16,
+    /// Vertical speed, which is what separates rising from falling.
+    pub rise: f32,
+    /// How fast the character is turning, in turns per second, signed: positive
+    /// is to the character's right. Derived from the two snapshots rather than
+    /// stored, because a rotation between two frames *is* the turn rate and
+    /// putting a second copy in the snapshot would only let it disagree.
+    pub turn_rate: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -36,6 +58,9 @@ pub struct Frame {
     /// Simulation frame of the newer snapshot. Deterministic, so it is safe to
     /// drive cyclic animation from.
     pub sim_frame: u32,
+    /// Frames left of the between-rounds pause, when a round has ended. This
+    /// is the clock the loser's collapse runs on.
+    pub round_left: Option<u16>,
 }
 
 /// Blend two snapshots. `alpha` is the fraction of a tick elapsed since `cur`.
@@ -55,6 +80,10 @@ pub fn interpolate(prev: &World, cur: &World, alpha: f32) -> Frame {
     Frame {
         players,
         sim_frame: cur.frame,
+        round_left: match cur.phase {
+            sim::state::Phase::RoundOver { left, .. } => Some(left),
+            sim::state::Phase::Fighting => None,
+        },
     }
 }
 
@@ -83,6 +112,22 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
 
     let speed = (fx(c.vel.x).powi(2) + fx(c.vel.z).powi(2)).sqrt();
 
+    // Velocity in the character's own frame: forward along the facing, strafe
+    // across it.
+    let (fwd, side) = (facing, [facing[2], 0.0, -facing[0]]);
+    let vel = [fx(c.vel.x), 0.0, fx(c.vel.z)];
+    let travel = [
+        vel[0] * side[0] + vel[2] * side[2],
+        vel[0] * fwd[0] + vel[2] * fwd[2],
+    ];
+
+    // Signed angle from the previous facing to the current one, per second.
+    let prev = [fx(p.facing.x), 0.0, fx(p.facing.z)];
+    let cur = [fx(c.facing.x), 0.0, fx(c.facing.z)];
+    let cross = prev[2] * cur[0] - prev[0] * cur[2];
+    let dot = (prev[0] * cur[0] + prev[2] * cur[2]).clamp(-1.0, 1.0);
+    let turn_rate = cross.atan2(dot) / std::f32::consts::TAU * crate::TICK_HZ;
+
     PlayerView {
         pos,
         facing,
@@ -92,6 +137,14 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         grounded: c.grounded,
         crouching: c.crouching,
         speed,
+        travel,
+        distance: c.distance as f32 / crate::FX,
+        air_frames: c.air_frames,
+        since_landed: c.since_landed,
+        parried: c.parried,
+        stun_total: c.stun_total,
+        rise: fx(c.vel.y),
+        turn_rate,
     }
 }
 

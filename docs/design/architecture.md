@@ -153,20 +153,15 @@ small STUN or relay service. Not needed now; worth not being surprised by later.
 **Pose is a pure function of simulation state.**
 
 ```text
-pose = f(action, frames_into_action, speed, grounded, sim_frame)
+pose = f(action, frames into it, distance walked, airtime, turn rate, health)
 ```
 
 No accumulated animation time, no independently ticking player. Rollback
 re-simulates past frames, so anything animating on its own clock pops and slides
-every time a rollback happens. `sim_frame` is part of the snapshot, so driving
-cyclic motion (walk cycles, idle breathing) from it stays deterministic.
-
-**This is the reason primitive standins come before glTF.** Writing transforms by
-hand forces the pure-function shape. Reaching for Bevy's `AnimationPlayer` the way
-the documentation shows -- play a clip, let it advance -- builds exactly the thing
-rollback breaks. When skeletal animation lands, the rule is that the player is
-never allowed to advance itself; its time is set explicitly from simulation state
-every frame.
+every time a rollback happens. Every input above comes out of the snapshot --
+including five fields in `Player` that exist purely for the renderer, because
+**animation state belongs in the snapshot** and a walk cycle or a landing that
+runs off the renderer's own clock slides every time a rollback happens.
 
 One nuance keeps this from being painful: **gameplay-relevant pose must be pure;
 cosmetic smoothing may be renderer-local and is allowed to pop.** A rollback is
@@ -175,44 +170,12 @@ is imperceptible. Blend state does not belong in the snapshot.
 
 A test replays a frame the way a rollback would and asserts the pose is identical.
 
-## The animation factory
-
-`crates/anim` is an **offline** tool. It never runs in the game.
-
-Hand-keyed poses read as a slideshow, because the parts that make motion look
-alive -- an arm trailing the shoulder it hangs from, a swing carrying past its
-target and settling back -- are precisely the parts that are miserable to key by
-hand. They are, however, exactly what a spring-damper produces for free.
-
-So an animation is authored as **a handful of poses and a looseness setting**,
-and the solver fills in everything between them:
-
-```text
-recipe (keys + looseness)  --[springs, offline]-->  a table of poses, one per frame
-```
-
-`cargo run -p anim --bin bake` runs the solver and writes
-`crates/view/src/baked.rs`. **Playback is then an array index by frame**, which
-is why this changes nothing about rollback: `pose = f(state)` still holds, and a
-rollback re-indexes the same table with the same frame and gets the same pose.
-
-Generated Rust source rather than a data file, on purpose: no loader, no asset
-path, no runtime parsing, and a diff shows exactly what changed when an
-animation is retuned.
-
-### Looseness is expressed in frames, not in spring frequency
-
-Each part is described by **lag** (how many frames it runs behind the keys) and
-**ring** (how far it overshoots on arrival, where `1.0` never overshoots).
-
-This is not cosmetic API taste. A damped spring chasing a moving target settles
-into a steady lag of about `2·ring/frequency`. The first pass at this file
-expressed weight as a *low frequency*, which does not mean heavy -- it means
-late. The Bulwark's slam has a 14-frame startup and its silhouette had barely
-moved by frame 5, so there was nothing on screen for the opponent to read while
-they were supposed to be deciding whether to block. **Weight must read as
-follow-through, never as delay.** Splitting lag from ring makes that mistake
-hard to repeat, and two tests pin it.
+The rest of it -- the skeleton, the sign conventions, how a clip is authored,
+what every clip is held to, and the hub -- is in
+[animation.md](animation.md). `crates/anim` generates motion offline and bakes it
+into a table the game reads by index, so playback is an array lookup and
+rollback is unaffected. The game links the crate for one reason: the hub re-runs
+the solver on every edit so a change can be seen immediately.
 
 ## Render interpolation
 
@@ -721,8 +684,10 @@ Everything below builds and passes today.
 | **All six classes** | **`game --p1 champion --p2 elementalist`**, or Tab to cycle |
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
-| **Animation factory** | **`cargo run -p anim --bin bake`** — F2 toggles baked playback |
-| Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BAKED_ANIM=0` for procedural poses |
+| **Skeleton** | **Sixteen joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
+| **Animation factory** | **`cargo run -p anim --bin bake`**; `--bin preview` draws a clip as a PNG |
+| **Animation hub** | **F9** — every clip, live: timeline, spline editor, joint sliders, save and bake |
+| Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BIND_POSE=1` freezes the rig at rest |
 
 Each class has its **class mechanic** and **three exemplar moves** -- a poke, a committed
 move, and a special -- not a finished kit. Enough to find out how the classes feel against
@@ -736,8 +701,8 @@ did**, so every class implemented from here is checked from its first commit.
 1. **Play it against a person.** Everything below is downstream of that. The open
    questions in [feel-log.md](feel-log.md) are written so an answer can be recorded
    against them rather than lost.
-2. **More clips.** Five baked animations cover the shared vocabulary; per-class moves
-   still fall back to procedural poses.
+2. **Mechanic animations.** Throwing the shield, placing the shadow, changing form. They
+   need a clock in the simulation the way attacks have one.
 3. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
 4. **NAT traversal**, when the game leaves the LAN.

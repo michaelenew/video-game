@@ -201,6 +201,37 @@ pub struct Player {
     /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
     /// so the victim can be kept at arm's length rather than merely stunned.
     pub held_by: u8,
+
+    // -- Animation clocks ---------------------------------------------------
+    //
+    // These four exist for the renderer and change nothing about combat. They
+    // are here rather than there because *animation state belongs in the
+    // snapshot*: rollback re-simulates past frames, and a walk cycle or a
+    // landing that runs off the renderer's own clock slides and pops every
+    // time it happens. See `docs/design/architecture.md`.
+    /// Horizontal distance walked, in 1/65536 of a metre, wrapping.
+    ///
+    /// A walk cycle driven from the frame counter skates: the feet keep the
+    /// same cadence whether the body is crawling or sprinting. Driven from
+    /// distance, a footfall happens every stride's worth of ground covered,
+    /// which is the definition of not sliding. Wrapping is harmless -- the
+    /// renderer only ever takes it modulo a stride.
+    pub distance: u32,
+    /// Frames off the ground, saturating. On the ground it holds how long the
+    /// last flight was, which is what tells a hop from a fall.
+    pub air_frames: u16,
+    /// Frames since touching down, saturating. Zero while airborne.
+    pub since_landed: u16,
+    /// Frames left of the parry flourish. A parry costs the defender nothing
+    /// and is easy to miss; this is what lets them see that they got it.
+    pub parried: u16,
+    /// How long the stun currently being served was when it started.
+    ///
+    /// `Action::HitStun { left }` counts down and never says what it counted
+    /// down *from*, so the renderer cannot tell a graze from a Slam. It needs
+    /// to: those get different animations, and picking between them halfway
+    /// through would visibly switch clips mid-flinch.
+    pub stun_total: u16,
 }
 
 impl Player {
@@ -269,6 +300,11 @@ impl Default for Player {
             slowed: 0,
             mechanic_held: false,
             held_by: NOBODY,
+            distance: 0,
+            air_frames: 0,
+            since_landed: 0,
+            parried: 0,
+            stun_total: 0,
         }
     }
 }
@@ -338,6 +374,7 @@ impl World {
                 // Bodies still settle during the pause; nothing else acts.
                 for p in self.players.iter_mut() {
                     settle(p);
+                    advance_clocks(p);
                 }
                 return;
             }
@@ -348,6 +385,7 @@ impl World {
 
         for (p, input) in self.players.iter_mut().zip(inputs) {
             step_player(p, input);
+            advance_clocks(p);
         }
 
         // What a move does *as it comes out*, on its first active frame: the
@@ -388,6 +426,8 @@ impl World {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
                     };
+                    self.players[attacker].stun_total = t::parry_stagger();
+                    self.players[defender].parried = PARRY_FLOURISH;
                 }
             }
         }
@@ -493,6 +533,11 @@ impl World {
             h.write_u32(p.air_stall as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
+            h.write_u32(p.distance);
+            h.write_u32(p.air_frames as u32);
+            h.write_u32(p.since_landed as u32);
+            h.write_u32(p.parried as u32);
+            h.write_u32(p.stun_total as u32);
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
             let kind = match p.action {
@@ -646,6 +691,7 @@ fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.blocked {
         // No chip damage. The cost of blocking is knockback plus a window
         // where you cannot act -- see defense.md.
+        defender.stun_total = hit.blockstun;
         defender.action = Action::BlockStun {
             left: hit.blockstun,
         };
@@ -659,11 +705,13 @@ fn apply_hit(defender: &mut Player, hit: Hit) {
             // A grab is not knockback. The victim is pinned to the grabber and
             // goes wherever they go, which is what makes a grab a commitment
             // for *both* of them rather than a shove with a longer stun.
+            defender.stun_total = hit.grabs;
             defender.action = Action::Held { left: hit.grabs };
             defender.held_by = hit.by;
             defender.vel.x = Fx::ZERO;
             defender.vel.z = Fx::ZERO;
         } else {
+            defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
         }
         if hit.launch.raw() > 0 {
@@ -1296,6 +1344,39 @@ fn hash_v3(h: &mut Fnv, v: &V3) {
     h.write_i32(v.x.raw());
     h.write_i32(v.y.raw());
     h.write_i32(v.z.raw());
+}
+
+/// How long the parry flourish plays for. Frames, and long enough to be seen
+/// without outlasting the stagger it earned.
+pub const PARRY_FLOURISH: u16 = 14;
+
+/// Advance the four clocks the renderer needs and combat does not.
+///
+/// Every one of them is a fact about what just happened -- how far you have
+/// walked, how long you have been in the air -- rather than a decision, which
+/// is why they can live here without complicating anything. Being in the
+/// snapshot is the whole point: a rollback rewinds them with everything else,
+/// so a landing that gets re-simulated lands the same way twice.
+fn advance_clocks(p: &mut Player) {
+    if p.grounded {
+        // `air_frames` deliberately keeps its value on the ground: it is how
+        // long the last flight lasted, which is the only thing that can tell a
+        // hop's landing from a long fall's. Clearing it on touchdown would
+        // throw away the one number the landing animation needs.
+        p.since_landed = p.since_landed.saturating_add(1);
+    } else {
+        if p.since_landed > 0 {
+            p.air_frames = 0;
+        }
+        p.since_landed = 0;
+        p.air_frames = p.air_frames.saturating_add(1);
+    }
+    p.parried = p.parried.saturating_sub(1);
+
+    // Ground covered this frame, in the same 16.16 units the position is in.
+    // Horizontal only: falling is not walking.
+    let step = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len().mul(DT);
+    p.distance = p.distance.wrapping_add(step.raw().max(0) as u32);
 }
 
 /// Let a body come to rest without accepting input. Used during the pause

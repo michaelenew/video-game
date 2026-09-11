@@ -79,6 +79,7 @@ few enough to balance and to read in third person.
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
+| [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -121,15 +122,15 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 152 tests cover
-determinism, combat relationships, camera and animation.
+exemplar moves, peer-to-peer rollback play works over real UDP, and 218 tests cover
+determinism, combat relationships, camera, kinematics and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
 crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
-crates/anim   Offline animation factory. Never runs in the game.
+crates/anim   Animation factory: recipes, the solver, contact sheets. See animation.md.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```

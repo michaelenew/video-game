@@ -37,6 +37,12 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "pub const PARRY_FLOURISH: u16 = 14",
+        "How long the parry's celebration animation plays. It is a renderer clock kept \
+         in the snapshot so it survives a rollback; it decides nothing about combat, \
+         and tuning it would change how long a flourish lasts and nothing else.",
+    ),
+    (
         "const QUARTER_TURN: Fx = Fx::from_raw(1 << 14)",
         "An angle unit, not a quantity. A quarter of the u16 turn space, exact by construction.",
     ),
