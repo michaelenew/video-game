@@ -718,3 +718,235 @@ fn an_airdodge_is_not_a_second_jump() {
         "the airdodge gained height"
     );
 }
+
+/// Apex height and airtime in frames for a jump held for `hold` frames.
+fn jump_profile(class: sim::class::Class, hold: u32) -> (f32, u32) {
+    let mut w = World::with_classes([class, class]);
+    let mut apex = 0.0f32;
+    let mut frames = 0;
+    for i in 0..240 {
+        let bits = if i < hold { Input::SPACE } else { 0 };
+        w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        let p = &w.players[0];
+        apex = apex.max(p.pos.y.to_f32_for_render());
+        if i > 0 && p.grounded {
+            frames = i;
+            break;
+        }
+    }
+    (apex, frames)
+}
+
+#[test]
+fn holding_the_jump_button_goes_higher() {
+    // Variable jump height. Without it there is one jump arc, and every
+    // approach through the air is the same approach.
+    for class in ALL_CLASSES {
+        let (short, short_time) = jump_profile(class, 1);
+        let (full, full_time) = jump_profile(class, 60);
+        assert!(
+            full > short * 1.35,
+            "{}: full hop {full:.2}m is barely taller than the short hop {short:.2}m",
+            class.name()
+        );
+        assert!(
+            full_time > short_time,
+            "{}: holding the button did not buy any airtime",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn a_jump_lasts_long_enough_to_do_something_with() {
+    // Verticality is meant to be part of the positioning game. A third of a
+    // second in the air is a commitment that is over before you have read the
+    // situation you jumped into.
+    for class in ALL_CLASSES {
+        let (_, full_time) = jump_profile(class, 60);
+        assert!(
+            (40..=90).contains(&full_time),
+            "{}: a full hop lasts {full_time} frames",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn releasing_the_jump_button_is_final() {
+    // Otherwise the sustain is a button to mash rather than a decision, and
+    // jump height stops being something you chose.
+    // Measured only until the fighter lands. Running longer catches the *next*
+    // jump, which a still-held button starts immediately -- the first draft of
+    // this test failed on exactly that and was measuring two jumps against one.
+    let apex_of = |resurrect: bool| {
+        let mut w = World::new();
+        let mut apex = 0.0f32;
+        for i in 0..120 {
+            let held = i < 4 || (resurrect && i > 6);
+            w.advance([
+                Input::aimed(if held { Input::SPACE } else { 0 }, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
+            if i > 0 && w.players[0].grounded {
+                break;
+            }
+            apex = apex.max(w.players[0].pos.y.to_f32_for_render());
+        }
+        apex
+    };
+    let apex = (apex_of(false), apex_of(true));
+    assert!(
+        (apex.0 - apex.1).abs() < 0.01,
+        "re-pressing jump resurrected a cut jump: {:.2}m against {:.2}m",
+        apex.1,
+        apex.0
+    );
+}
+
+/// Horizontal speed and heading after jumping forward and then holding `bits`.
+fn air_drift(bits: u16, frames: u32) -> (f32, f32) {
+    let mut w = World::new();
+    // Walk up to speed, then take off carrying it.
+    press(&mut w, Input::W, 12);
+    press(&mut w, Input::SPACE | Input::W, 1);
+    press(&mut w, bits, frames);
+    let v = w.players[0].vel;
+    let (x, z) = (v.x.to_f32_for_render(), v.z.to_f32_for_render());
+    ((x * x + z * z).sqrt(), z.atan2(x).to_degrees())
+}
+
+#[test]
+fn holding_forward_in_the_air_buys_nothing() {
+    // The Quake property. Input accelerates you along the component of your
+    // motion you have *not* already spent, so pointing where you are already
+    // going has nothing left to add.
+    let (fwd_speed, fwd_heading) = air_drift(Input::W, 20);
+    let (drift_speed, drift_heading) = air_drift(0, 20);
+    assert!(
+        (fwd_speed - drift_speed).abs() < 0.05,
+        "holding forward added {:.2} of speed",
+        fwd_speed - drift_speed
+    );
+    assert!(
+        (fwd_heading - drift_heading).abs() < 0.5,
+        "holding forward turned you {:.1} degrees",
+        fwd_heading - drift_heading
+    );
+}
+
+#[test]
+fn strafing_redirects_you_when_holding_forward_cannot() {
+    // Same twenty frames, same fighter, same speed. The only difference is
+    // which direction the input points relative to the motion already there.
+    let baseline = air_drift(0, 20);
+    let forward = air_drift(Input::W, 20);
+    let strafe = air_drift(Input::D, 20);
+
+    let moved = |a: (f32, f32), b: (f32, f32)| (a.1 - b.1).abs();
+    assert!(
+        moved(strafe, baseline) > 5.0,
+        "strafing turned you only {:.1} degrees",
+        moved(strafe, baseline)
+    );
+    assert!(
+        moved(strafe, baseline) > moved(forward, baseline) * 10.0,
+        "strafing is not meaningfully better than holding forward"
+    );
+}
+
+#[test]
+fn turning_while_strafing_compounds_the_redirect() {
+    // Where the skill actually lives. A single strafe spends a fixed budget and
+    // stops; turning the camera as you hold it keeps redefining which direction
+    // counts as "perpendicular", so the budget refills against the new heading.
+    // A player who does not turn gets one nudge; a player who does can carve.
+    let fixed = air_drift(Input::D, 30).1;
+
+    let mut w = World::new();
+    press(&mut w, Input::W, 12);
+    press(&mut w, Input::SPACE | Input::W, 1);
+    for i in 0..30 {
+        // Sweep the aim while holding the strafe, which is the technique.
+        let aim = (i as u32 * 380) as u16;
+        w.advance([Input::aimed(Input::D, aim), Input::aimed(0, LOOK_LEFT)]);
+    }
+    let v = w.players[0].vel;
+    let carved =
+        v.z.to_f32_for_render()
+            .atan2(v.x.to_f32_for_render())
+            .to_degrees();
+    let baseline = air_drift(0, 30).1;
+
+    assert!(
+        (carved - baseline).abs() > (fixed - baseline).abs() * 1.5,
+        "turning while strafing bought nothing: carved {:.1}, fixed {:.1}, baseline {:.1}",
+        carved,
+        fixed,
+        baseline
+    );
+}
+
+#[test]
+fn momentum_carries_in_the_air() {
+    // Letting go of the stick mid-jump should not stop you dead. This is the
+    // difference between a jump being a commitment and a jump being a hover.
+    let (drift, _) = air_drift(0, 20);
+    assert!(drift > 5.0, "momentum evaporated in the air: {drift:.2}");
+}
+
+#[test]
+fn air_speed_has_a_ceiling() {
+    // A deliberate divergence from Source. A player who can cross the whole
+    // arena from anywhere has removed spacing from the game.
+    let cap = (sim::tuning::MOVE_SPEED.to_f32_for_render()
+        * sim::tuning::AIR_SPEED_CAP.to_f32_for_render())
+        + 0.1;
+    // Alternate strafes, which is how you build speed if it can be built.
+    let mut w = World::new();
+    press(&mut w, Input::W, 12);
+    press(&mut w, Input::SPACE | Input::W, 1);
+    for i in 0..60 {
+        let bits = if (i / 4) % 2 == 0 { Input::D } else { Input::A };
+        press(&mut w, bits, 1);
+        let v = w.players[0].vel;
+        let speed = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
+        assert!(
+            speed <= cap,
+            "air speed reached {speed:.2}, over the {cap:.2} cap"
+        );
+    }
+}
+
+#[test]
+fn an_aerial_hangs_you_where_you_are() {
+    // Per-move, and the reason the air is worth attacking from at all.
+    let mut plain = World::new();
+    let mut striking = World::new();
+    press(&mut plain, Input::SPACE, 1);
+    press(&mut striking, Input::SPACE, 1);
+    // Let both rise, then one of them attacks.
+    press(&mut plain, 0, 20);
+    press(&mut striking, 0, 19);
+    press(&mut striking, L, 1);
+    assert!(
+        striking.players[0].air_stall > 0,
+        "an aerial armed no hang at all"
+    );
+    press(&mut plain, 0, 6);
+    press(&mut striking, 0, 6);
+    assert!(
+        striking.players[0].pos.y.raw() > plain.players[0].pos.y.raw(),
+        "the aerial did not delay the fall"
+    );
+}
+
+#[test]
+fn a_grounded_attack_does_not_hang_anything() {
+    let mut w = World::new();
+    press(&mut w, L, 1);
+    assert_eq!(
+        w.players[0].air_stall, 0,
+        "a grounded attack armed an air stall"
+    );
+}

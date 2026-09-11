@@ -61,6 +61,10 @@ Moving dodge onto shift retired **"shift beats WASD when both are held"**, which
 that guaranteed a move-while-casting option always existed. These are consequences, and none
 of them is settled:
 
+- **Move + heavy attack is currently impossible.** This is the sharp edge. Shift + direction is
+  a dodge and shift + click is the heavy version of an attack, so *holding a direction and
+  throwing a heavy* has no input — the dodge takes it. Known and accepted for now; it is the
+  first thing the attack grammar has to solve once movement is settled.
 - **Differentiating move + attack.** Directional attacks (`w`/`a`/`d`/`s` + click) still work,
   but the modifier space is tighter than it was and the option table below was written under
   the old rule.
@@ -195,7 +199,86 @@ dodges rather than extra inputs. For the Reaver this is what makes movement and 
 placement the same action, which is the fix that keeps the class from being denied its
 mobility.
 
-### Airborne — ⚠️ open
+## Movement
+
+Movement is the core of how the game feels, so it gets pinned down before the attack and
+ability grammar is settled around it.
+
+### The jump is variable and floaty
+
+Space is a vertical takeoff. **Hold it to go higher** — while the button is down and you are
+still rising, gravity is reduced, up to a cap. Releasing ends the sustain *for good*: a second
+press cannot resurrect a jump you already cut short, or the height stops being something you
+chose.
+
+Sustain rather than a cut-on-release. Both produce variable height; a cut makes the short hop
+feel like the jump was taken away from you, a sustain makes the tall one feel earned.
+
+Floaty on purpose. Verticality is meant to be part of the positioning game, and a jump you are
+airborne for a third of a second in is a commitment that is over before you have read the
+situation you jumped into. A full hop lasts **45 to 75 frames** depending on class — around a
+second — which is long enough for a beginner to notice where the other player went and do
+something about it.
+
+### Classes differ in the air first
+
+| | Jump | Gravity | Fall cap | Steering |
+| --- | --- | --- | --- | --- |
+| Bulwark | ×0.9 | ×1.2 | ×1.1 | 0.9 |
+| Bellator | ×1.0 | ×1.0 | ×1.0 | 1.2 |
+| Shadow Reaver | ×1.1 | ×0.9 | ×1.0 | 1.7 |
+| Elementalist | ×1.1 | ×0.9 | ×0.9 | 1.0 |
+| Blood mage | ×1.0 | ×1.0 | ×1.0 | 1.3 |
+| Dual mage | ×1.1 | ×0.8 | ×0.9 | 1.4 |
+
+Weight is the most legible difference a character can have. You can read it across the arena
+in the first second of a match, before you know a single one of their moves — so it carries
+identity for free, and every class sharing one jump arc would waste the channel. The Bulwark
+gets 45 frames of airtime and the Dual mage 74.
+
+`cargo run -p sim --bin frametable` prints these.
+
+### Air control is Quake's, not a second walk
+
+In the air, input **accelerates** rather than assigns, and the acceleration is granted against
+*the component of your motion you have not already spent*:
+
+```text
+head_room = air_speed − (velocity · wish_direction)
+```
+
+Point where you are already going and that projection is large, so there is nothing left to
+add — **holding forward in the air does essentially nothing**. Point across your motion and
+the projection is near zero, so you get the full budget, which **turns** your velocity without
+spending it.
+
+That is the whole reason air movement has a skill ceiling. A single strafe spends a fixed
+budget and stops; turning the camera while holding it keeps redefining which direction counts
+as perpendicular, so the budget refills against the new heading. A player who does not turn
+gets one nudge. A player who does can carve.
+
+**One deliberate divergence from Source:** horizontal air speed is capped at 1.5× the walk. In
+Source the gain is unbounded and that unboundedness became the genre; in a fighter built on
+spacing, a player who can reach any part of the arena from any other has removed spacing from
+the game. The cap is set high enough that good strafing is still rewarded, and whether it is
+set right is open.
+
+Momentum carries. Letting go of the stick mid-jump does not stop you — the difference between
+a jump being a commitment and a jump being a hover.
+
+### Aerials hang
+
+An attack thrown in the air suspends your fall for a few frames. It is a **per-move property**,
+because the hang *is* a move's air identity: a rising strike that holds you up for a beat plays
+completely differently from one that drops you through it, and both are worth having. Gravity
+is skipped outright rather than reduced, so the hang is a flat number of frames a player can
+learn rather than a curve they have to feel.
+
+Every aerial hangs a little by default — an attack that drops you straight through gives the
+air nothing to offer. Moves that want more say so; the Bulwark's Slam hangs twice as long as a
+poke.
+
+### Airborne attacks — ⚠️ open
 
 Grounded and airborne should differ, as they do in every platform fighter. The intended shape,
 **not yet settled and not yet implemented**: an aerial is a *variant of its grounded

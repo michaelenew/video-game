@@ -30,10 +30,44 @@ pub const GUARD_MOVE_SPEED: Fx = Fx::ratio(2, 1);
 /// Crouching is slower than walking, so ducking an overhead costs tempo.
 pub const CROUCH_MOVE_SPEED: Fx = Fx::ratio(3, 1);
 
-/// Chosen with GRAVITY so a standing jump lasts about 36 frames -- long enough
-/// to be a commitment, short enough not to be a stall.
-pub const JUMP_SPEED: Fx = Fx::ratio(9, 1);
-pub const GRAVITY: Fx = Fx::ratio(-30, 1);
+/// Takeoff speed, and the gravity it is chosen against.
+///
+/// Deliberately floatier than a first pass would pick. Verticality is meant to
+/// be part of the positioning game, and a jump you are only airborne for a third
+/// of a second in is one nobody has time to *do* anything with -- you commit,
+/// and it is over before you have read the situation you jumped into. A beginner
+/// needs long enough in the air to notice where the other player went.
+///
+/// Full hop apexes around 2.2 m over roughly a second; a short hop is about half
+/// that. Both are relationships the feel tests pin, not numbers to trust.
+pub const JUMP_SPEED: Fx = Fx::ratio(8, 1);
+pub const GRAVITY: Fx = Fx::ratio(-24, 1);
+
+/// Terminal velocity. Without one, a long fall arrives faster than anyone can
+/// react to, and per-class fall speed stops meaning anything at the bottom.
+pub const FALL_CAP: Fx = Fx::ratio(-21, 1);
+
+/// Gravity multiplier while the jump button is still held and you are rising.
+///
+/// This is what makes jump height variable: hold for a taller jump, tap for a
+/// short one, and everything in between. It is a *sustain* rather than a cut on
+/// release, because a cut makes the short hop feel like the jump was taken away
+/// from you, whereas a sustain makes the tall one feel earned.
+pub const JUMP_HOLD_GRAVITY: Fx = Fx::ratio(55, 100);
+
+/// How long the sustain can last. Beyond this, gravity is gravity.
+pub const JUMP_HOLD_FRAMES: u16 = 26;
+
+/// Air acceleration, Quake-style. See `state::air_accelerate`.
+pub const AIR_ACCEL: Fx = Fx::ratio(11, 1);
+
+/// Ceiling on horizontal air speed, as a multiple of the ground walk.
+///
+/// A deliberate divergence from Source, where strafing gains speed without
+/// bound and that unboundedness became the genre. In a fighter built on spacing,
+/// a player who can reach any part of the arena from any other has removed
+/// spacing from the game. Set high enough that good strafing is rewarded.
+pub const AIR_SPEED_CAP: Fx = Fx::ratio(3, 2);
 
 /// Turn rate toward the opponent, per tick, as a fraction of remaining error.
 pub const TURN_RATE: Fx = Fx::ratio(25, 100);

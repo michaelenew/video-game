@@ -26,7 +26,66 @@ pub const ALL_CLASSES: [Class; 6] = [
     Class::DualMage,
 ];
 
+/// How a class moves through the air.
+///
+/// Classes differ in the air before they differ anywhere else, the way they do
+/// in a platform fighter. Weight is the most legible difference a character can
+/// have: you can read it from across the arena in the first second of a match,
+/// before you know a single one of their moves.
+///
+/// Everything here is a multiplier on the universal constant in `tuning.rs`
+/// except `air_speed`, which is absolute because it is the Quake wish-speed cap
+/// and is not meaningfully "a fraction of walking".
+#[derive(Clone, Copy, Debug)]
+pub struct Mobility {
+    /// Multiplier on takeoff speed.
+    pub jump: Fx,
+    /// Multiplier on gravity. Above one is a fast-faller.
+    pub gravity: Fx,
+    /// Multiplier on terminal velocity.
+    pub fall_cap: Fx,
+    /// The air-control budget: how much speed a strafe may add per burst.
+    /// Small next to the walk speed on purpose -- it turns you, it does not
+    /// carry you.
+    pub air_speed: Fx,
+}
+
+const fn mobility(
+    jump: (i32, i32),
+    gravity: (i32, i32),
+    fall: (i32, i32),
+    air: (i32, i32),
+) -> Mobility {
+    Mobility {
+        jump: Fx::ratio(jump.0, jump.1),
+        gravity: Fx::ratio(gravity.0, gravity.1),
+        fall_cap: Fx::ratio(fall.0, fall.1),
+        air_speed: Fx::ratio(air.0, air.1),
+    }
+}
+
 impl Class {
+    /// Air stats. The numbers are guesses; the *spread* is the design.
+    pub const fn mobility(self) -> Mobility {
+        match self {
+            // Heavy. Low jump, falls hard, barely steers. Committing to the air
+            // should be a real decision for the class whose whole identity is
+            // holding ground.
+            Class::Bulwark => mobility((88, 100), (118, 100), (115, 100), (9, 10)),
+            // Middleweight baseline. Everything else is read against this.
+            Class::Bellator => mobility((1, 1), (1, 1), (1, 1), (12, 10)),
+            // The most mobile thing in the air, which is what a class built on
+            // repositioning should be.
+            Class::ShadowReaver => mobility((110, 100), (92, 100), (95, 100), (17, 10)),
+            // Floats, but steers poorly: a caster in the air is committed to
+            // where the jump was going to take them.
+            Class::Elementalist => mobility((105, 100), (85, 100), (88, 100), (10, 10)),
+            Class::BloodMage => mobility((1, 1), (98, 100), (1, 1), (13, 10)),
+            // The floatiest. Long hang time is the trade for being fragile.
+            Class::DualMage => mobility((112, 100), (80, 100), (85, 100), (14, 10)),
+        }
+    }
+
     pub const fn name(self) -> &'static str {
         match self {
             Class::Bulwark => "Bulwark",

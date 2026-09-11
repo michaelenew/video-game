@@ -59,6 +59,11 @@ as they get tested.
 - Should shift with no direction and no click do something? A spot dodge in place is the
   obvious candidate and costs one branch.
 - Is one airdodge per jump right, or does the air want a double jump as well?
+- Is 1.5× the walk the right air speed cap? It is the number holding spacing together and it
+  was picked, not derived.
+- Does the per-class steering spread (0.9 to 1.7) read as character, or just as some classes
+  being worse? A floaty class that also steers well may be strictly better.
+- Is a 6-frame default aerial hang "slight"? It is the number most likely to be wrong.
 - Does the airdodge want a landing-lag tail, the way platform fighters give it one? Right now
   it ends and you are free.
 - **Is 7 m/s the right walk speed?** Everything else is spaced against it. Too
@@ -346,3 +351,39 @@ Shift is now overloaded, and what disambiguates it is **a click**: shift with a 
 stronger version of that attack, shift with only a direction is a dodge. The click is checked
 first, so a committed move thrown while walking never comes out as a dodge — which is the same
 class of bug as the one being fixed, and worth a test rather than a comment.
+
+### 2026-09-11 — the movement pass
+**Changed** A floatier, taller, **variable-height** jump; per-class air stats; Quake-style air
+acceleration replacing direct velocity assignment; terminal velocity; and a per-move aerial
+hang. Full hops now run 45–74 frames depending on class, against 36 for everyone before.
+**Why** Verticality is meant to be part of the positioning game and a third of a second in the
+air is a commitment that is over before you have read the situation you jumped into. Air
+control was direct assignment, so you could reverse direction at the drop of a hat and a jump
+cost you nothing.
+**Verdict** kept. Notes worth keeping:
+
+**The air-control formula is the whole thing.** `head_room = air_speed − (velocity · wish)`.
+Because the budget is granted against the component of your motion you have *not* spent,
+holding forward does nothing and strafing across your motion turns you without costing speed.
+Nothing else needed to be added to make air movement expressive — the asymmetry falls out of
+one dot product.
+
+**A fixed strafe is a one-shot budget, not a rate.** With the aim held still you get about
+0.9 m/s sideways and then nothing, which is roughly seven degrees of turn. The skill is in
+turning the camera *while* strafing, which keeps redefining what counts as perpendicular so
+the budget refills against the new heading. The first version of the test held the aim still,
+measured seven degrees, and reported "there is no air control to express" — the test was
+wrong, and finding out why is what made the mechanic legible.
+
+**Capped air speed, unlike Source.** Unbounded gain became the genre there; here a player who
+can reach any part of the arena from any other has deleted spacing. Capped at 1.5× the walk.
+Whether that is the right number is open.
+
+**Sustain, not cut-on-release**, for variable height. Both give you a height range. A cut makes
+the short hop feel like the jump was taken away from you; a sustain makes the tall one feel
+earned. Releasing is final, so the height is a decision rather than something to mash for.
+
+One test bug worth remembering: the first "releasing jump is final" test ran for ninety frames
+and caught the *next* jump, which a still-held button starts the instant you land. It was
+comparing two jumps against one. Fixtures that run past a landing are measuring more than they
+think they are.

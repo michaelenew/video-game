@@ -262,3 +262,89 @@ fn a_poke_is_a_slow_not_a_stop_and_not_free() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Air
+// ---------------------------------------------------------------------------
+
+#[test]
+fn classes_are_not_the_same_in_the_air() {
+    // Weight is the most legible difference a character can have -- you can
+    // read it across the arena in the first second of a match, before you know
+    // a single one of their moves. If every class shared one jump arc, that
+    // whole channel would be unused.
+    let jumps: Vec<f32> = ALL_CLASSES
+        .iter()
+        .map(|c| c.mobility().jump.to_f32_for_render())
+        .collect();
+    let gravities: Vec<f32> = ALL_CLASSES
+        .iter()
+        .map(|c| c.mobility().gravity.to_f32_for_render())
+        .collect();
+    let spread = |v: &[f32]| {
+        let (lo, hi) = v
+            .iter()
+            .fold((f32::MAX, 0.0f32), |(l, h), x| (l.min(*x), h.max(*x)));
+        hi / lo
+    };
+    assert!(
+        spread(&jumps) > 1.15,
+        "every class jumps the same height: {jumps:?}"
+    );
+    assert!(
+        spread(&gravities) > 1.25,
+        "every class falls at the same rate: {gravities:?}"
+    );
+}
+
+#[test]
+fn air_control_is_weaker_than_walking_for_everyone() {
+    // The air is a commitment. A class that steers in the air as well as it
+    // walks on the ground has not committed to anything by jumping.
+    for class in ALL_CLASSES {
+        let air = class.mobility().air_speed;
+        assert!(
+            air.raw() < t::MOVE_SPEED.raw(),
+            "{}: air control ({}) is not weaker than walking",
+            class.name(),
+            air.to_f32_for_render()
+        );
+        assert!(
+            air.raw() > 0,
+            "{}: cannot steer in the air at all",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn nobody_hovers() {
+    // Gravity and terminal velocity must both stay positive multiples, or a
+    // class stops coming down and the whole positioning game with it.
+    for class in ALL_CLASSES {
+        let m = class.mobility();
+        assert!(m.gravity.raw() > 0, "{}: no gravity", class.name());
+        assert!(
+            m.fall_cap.raw() > 0,
+            "{}: no terminal velocity",
+            class.name()
+        );
+        assert!(m.jump.raw() > 0, "{}: cannot jump", class.name());
+    }
+}
+
+#[test]
+fn an_aerial_hang_is_shorter_than_the_move_that_carries_it() {
+    // A hang longer than the move is a float with an attack attached, not an
+    // attack with a float attached -- and it would let a whiffed aerial stay
+    // safe by simply remaining out of reach.
+    for (class, m) in every_move() {
+        assert!(
+            (m.air_stall as u16) < m.whiff_cost(),
+            "{class} {}: hangs for {} frames but only lasts {}",
+            m.name,
+            m.air_stall,
+            m.whiff_cost()
+        );
+    }
+}
