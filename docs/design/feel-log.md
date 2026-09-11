@@ -432,3 +432,24 @@ re-columnises generated arrays, so the file could never equal its generator unti
 `#[rustfmt::skip]`; and it strips a trailing blank line, which left the file permanently one
 byte different. Both were caught by the test that compares the committed file against a fresh
 emit — which is exactly the test that catches a stale bake later.
+
+### 2026-09-11 — the Oven kept stealing the mouse
+**Changed** While the Oven is open the cursor belongs to you: no click captures it. Clicks
+landing on the panel no longer reach the game, and typing in the search box no longer drives
+the fighter.
+**Why** Reported: every click in the palette re-grabbed the mouse for the camera, so changing a
+number meant pressing Escape between each one — the exact opposite of the rapid loop the Oven
+exists to provide.
+**Verdict** kept. Two things worth recording:
+
+**One bug, three symptoms.** The camera re-grabbing was the visible one. The same missing check
+also meant a click on a slider *threw a poke*, and typing in the search box moved the fighter
+and attacked — J, K and L are attack keys, so searching for "black spike" would have played a
+whole sequence. Game and editor share one window and one keyboard, and something has to say
+which of them an input belongs to; nothing did.
+
+**The rule got simpler rather than smarter.** The first fix released the cursor only while the
+pointer hovered the panel, which is more flexible and still wrong: the first click after F7 is
+spent getting the cursor back, because the pointer is wherever the camera left it. "Open means
+the cursor is yours" has nothing to learn and nowhere to oscillate. The keyboard keeps playing,
+so you can drag a value and immediately feel it with W and J without closing anything.

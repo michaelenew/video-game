@@ -421,6 +421,23 @@ saves nor restores them. But two peers running different rules would diverge sil
 exactly like a netcode bug. The tuning hash is folded into `World::checksum`, so a mismatched
 Oven is a desync on the first frame — an error message instead of a mystery.
 
+### Who owns the mouse
+
+The game and the editor share one window, one mouse and one keyboard, so something has to say
+which of them an input belongs to. egui tracks it; `UiFocus` copies the answer somewhere the
+game systems can read, a frame behind — which is fine, since a pointer over the panel this
+frame is still over it next.
+
+**While the Oven is open the cursor is yours.** No click captures it. That rule is deliberately
+blunt: releasing only while the pointer hovers the panel is more flexible and still wrong,
+because the first click after F7 gets spent handing the cursor back rather than landing on a
+widget. The keyboard keeps playing, so a value can be dragged and then felt with W and J
+without closing anything.
+
+Pointer and keyboard are claimed separately. Hovering a slider must not stop the fighter
+responding; a focused text field must stop it entirely, because `J`, `K` and `L` are attack
+keys and searching the Oven for a move name would otherwise play a sequence.
+
 ### Baking
 
 `crates/sim/src/tuned.rs` is generated and is the single source of truth for values. `moves.rs`
@@ -489,7 +506,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 134 tests |
+| Test suites | 138 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |

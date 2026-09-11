@@ -15,6 +15,23 @@ use sim::oven::{self, Knob, Unit};
 
 use crate::bake;
 
+/// Whether the palette is currently taking the mouse or the keyboard.
+///
+/// The game and the editor share one window and one set of input devices, so
+/// something has to say which of them a click belongs to. egui already tracks
+/// it; this copies the answer somewhere the game systems can read.
+///
+/// Sampled a frame behind, because the palette draws after the tick. That is
+/// fine and standard: a pointer that entered the panel this frame is still over
+/// it next frame.
+#[derive(Resource, Default)]
+pub struct UiFocus {
+    /// The pointer is over the palette, or dragging one of its widgets.
+    pub pointer: bool,
+    /// A text field has focus — the search box or the bake note.
+    pub keyboard: bool,
+}
+
 #[derive(Resource)]
 pub struct Palette {
     pub open: bool,
@@ -60,10 +77,33 @@ fn decimals(unit: Unit) -> usize {
     }
 }
 
-pub fn toggle(keys: Res<ButtonInput<KeyCode>>, mut palette: ResMut<Palette>) {
+pub fn toggle(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut palette: ResMut<Palette>,
+    mut focus: ResMut<UiFocus>,
+) {
     if keys.just_pressed(KeyCode::F7) {
         palette.open = !palette.open;
+        // Closing it hands the mouse straight back to the game rather than
+        // leaving a stale claim on it.
+        if !palette.open {
+            *focus = UiFocus::default();
+        }
     }
+}
+
+/// Ask egui what it is currently claiming.
+pub fn sample_focus(mut contexts: EguiContexts, palette: Res<Palette>, mut focus: ResMut<UiFocus>) {
+    if !palette.open {
+        *focus = UiFocus::default();
+        return;
+    }
+    let ctx = contexts.ctx_mut();
+    // `wants_pointer_input` alone is not enough: it is false while the pointer
+    // merely hovers the panel without a button down, which is exactly when a
+    // click is about to land on a slider.
+    focus.pointer = ctx.wants_pointer_input() || ctx.is_pointer_over_area();
+    focus.keyboard = ctx.wants_keyboard_input();
 }
 
 pub fn draw(mut contexts: EguiContexts, mut palette: ResMut<Palette>) {
