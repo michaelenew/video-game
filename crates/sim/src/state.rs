@@ -677,7 +677,7 @@ fn step_player(p: &mut Player, input: Input) {
                 && p.shield().is_some_and(|sh| sh.in_hand())
             {
                 p.hit_used = false;
-                arm_air_stall(p, SLOT_SPECIAL);
+                arm_aerial(p, SLOT_SPECIAL, input);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, 2).startup,
@@ -693,7 +693,7 @@ fn step_player(p: &mut Player, input: Input) {
                 };
                 p.hit_used = false;
                 steer_meter(p, input, kind);
-                arm_air_stall(p, kind);
+                arm_aerial(p, kind, input);
                 Action::Startup {
                     kind,
                     left: moves::get(p.class, kind).startup,
@@ -805,11 +805,18 @@ fn step_player(p: &mut Player, input: Input) {
 
     if !p.grounded {
         if p.air_stall > 0 {
-            // An aerial hangs you where you are for a few frames. Gravity is
-            // skipped rather than reduced, so the hang is a flat number of
-            // frames a player can learn rather than a curve they have to feel.
+            // An aerial hangs you for a few frames: gravity is held off, and
+            // whatever vertical speed you had **bleeds away** rather than being
+            // deleted.
+            //
+            // Deleting it read as the game snatching the jump out from under
+            // you mid-rise. The extra control over jump height that attacking
+            // gives is worth keeping -- it just has to arrive as a slowing
+            // rather than a stop, which is also what makes the hang read as
+            // float rather than a pause. Gravity staying off through the window
+            // is what keeps it punchy: you hang, you do not sag.
             p.air_stall -= 1;
-            p.vel.y = Fx::ZERO;
+            p.vel.y = p.vel.y.mul(t::air_stall_damp());
         } else {
             // Holding the jump button sustains the rise. Releasing ends it for
             // good -- `jump_hold` goes to zero rather than pausing, so tapping
@@ -845,10 +852,39 @@ fn step_player(p: &mut Player, input: Input) {
     }
 }
 
-/// Start an aerial's hang, if this one is being thrown in the air.
-fn arm_air_stall(p: &mut Player, kind: u8) {
-    if !p.grounded {
-        p.air_stall = moves::get(p.class, kind).air_stall;
+/// Start an aerial's hang, and its shove, if this one is thrown in the air.
+///
+/// The shove is the basic attack's alone. A poke is the move you throw
+/// constantly, so a small push in the direction you are holding is what makes
+/// attacking *part of* air movement rather than a pause in it: the hang
+/// supplies the float, the shove supplies the punch. The committed moves
+/// deliberately get none -- they are already a commitment, and one that also
+/// repositioned you would be strictly better than a poke.
+fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
+    if p.grounded {
+        return;
+    }
+    p.air_stall = moves::get(p.class, kind).air_stall;
+
+    let (ax, az) = input.move_axis();
+    if kind != SLOT_POKE || (ax == 0 && az == 0) {
+        return;
+    }
+    let dir = move_dir(input.aim_turns(), ax, az);
+    let boost = t::air_attack_boost();
+    p.vel.x = p.vel.x.add(dir.x.mul(boost));
+    p.vel.z = p.vel.z.add(dir.z.mul(boost));
+    clamp_air_speed(p);
+}
+
+/// Hold horizontal air speed under the ceiling. See `tuning::air_speed_cap`.
+fn clamp_air_speed(p: &mut Player) {
+    let cap = t::move_speed().mul(t::air_speed_cap());
+    let speed = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+    if speed.raw() > cap.raw() {
+        let scale = cap.div(speed);
+        p.vel.x = p.vel.x.mul(scale);
+        p.vel.z = p.vel.z.mul(scale);
     }
 }
 
@@ -878,14 +914,8 @@ fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
     p.vel.x = p.vel.x.add(wish.x.mul(step));
     p.vel.z = p.vel.z.add(wish.z.mul(step));
 
-    // A ceiling Source does not have. See `tuning::air_speed_cap()`.
-    let cap = t::move_speed().mul(t::air_speed_cap());
-    let speed = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
-    if speed.raw() > cap.raw() {
-        let scale = cap.div(speed);
-        p.vel.x = p.vel.x.mul(scale);
-        p.vel.z = p.vel.z.mul(scale);
-    }
+    // A ceiling Source does not have. See `tuning::air_speed_cap`.
+    clamp_air_speed(p);
 }
 
 /// The middle-click mechanic action, per class.

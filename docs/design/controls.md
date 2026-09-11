@@ -268,11 +268,25 @@ a jump being a commitment and a jump being a hover.
 
 ### Aerials hang
 
-An attack thrown in the air suspends your fall for a few frames. It is a **per-move property**,
+An attack thrown in the air holds gravity off for a few frames, and **slows** whatever vertical
+speed you had rather than deleting it. It is a **per-move property**,
 because the hang *is* a move's air identity: a rising strike that holds you up for a beat plays
 completely differently from one that drops you through it, and both are worth having. Gravity
 is skipped outright rather than reduced, so the hang is a flat number of frames a player can
 learn rather than a curve they have to feel.
+
+Deleting the rise was the first attempt and it read as the game snatching the jump out from
+under you. The extra control over jump height that attacking gives is worth keeping — it has to
+arrive as a slowing rather than a stop, which is also what makes the hang read as float instead
+of a pause. Gravity staying off through the window is what keeps it punchy: you hang, you do
+not sag.
+
+**A poke also shoves you the way you are holding.** The basic attack is the one you throw
+constantly, so this is what makes attacking *part of* air movement rather than a pause in it:
+the hang supplies the float, the shove supplies the punch. It needs a direction held, it is
+clamped by the air speed cap like any other air movement, and the committed moves get none —
+they are already a commitment, and one that also repositioned you would be strictly better than
+a poke.
 
 Every aerial hangs a little by default — an attack that drops you straight through gives the
 air nothing to offer. Moves that want more say so; the Bulwark's Slam hangs twice as long as a

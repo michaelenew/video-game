@@ -874,10 +874,28 @@ fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
 ///
 /// Extracted so the rule can be stated once and tested, rather than living
 /// inside a system where the only way to check it is to play the game.
-fn cursor_should_be_captured(escape: bool, oven_open: bool, clicked: bool, captured: bool) -> bool {
-    if escape || oven_open {
+///
+/// The Oven and the arena share a window, so the cursor has to move between
+/// them without ceremony:
+///
+/// - **Opening the Oven hands the cursor back**, so the first click after F7
+///   lands on a widget instead of being spent getting the pointer released.
+/// - **Clicking the arena takes it again**, even with the Oven open — that is
+///   how you go and feel the change you just made.
+/// - **Escape returns it to the Oven**, and is the way out of a captured
+///   window whether the Oven is open or not.
+///
+/// A click *on the panel* is not a click at the arena, which is the whole
+/// original bug: every drag of a slider was re-grabbing the mouse.
+fn cursor_should_be_captured(
+    escape: bool,
+    oven_just_opened: bool,
+    clicked_in_arena: bool,
+    captured: bool,
+) -> bool {
+    if escape || oven_just_opened {
         false
-    } else if clicked {
+    } else if clicked_in_arena {
         true
     } else {
         captured
@@ -890,7 +908,7 @@ fn mouse_look(
     mut motion: EventReader<MouseMotion>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
-    open: Res<palette::Palette>,
+    mut focus: ResMut<palette::UiFocus>,
     mut windows: Query<&mut Window>,
 ) {
     // Sensitivity, adjustable mid-match and written straight to disk. Two people
@@ -955,10 +973,11 @@ fn mouse_look(
     //
     // The keyboard keeps playing, so you can drag a value and immediately feel
     // it with W and J without closing anything.
+    let clicked = mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right);
     let want = cursor_should_be_captured(
         keys.just_pressed(KeyCode::Escape),
-        open.open,
-        mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right),
+        std::mem::take(&mut focus.just_opened),
+        clicked && !focus.pointer,
         look.grabbed,
     );
     if want != look.grabbed {
@@ -1017,25 +1036,36 @@ mod tests {
     use palette::UiFocus;
 
     #[test]
-    fn the_oven_keeps_the_cursor_while_it_is_open() {
-        // The bug: capturing on any click meant every drag of a slider grabbed
-        // the mouse back, so changing a number cost an Escape each time.
+    fn opening_the_oven_hands_the_cursor_back() {
+        // Otherwise the first click after F7 is spent releasing the pointer
+        // rather than landing on the slider you were reaching for.
         assert!(!cursor_should_be_captured(false, true, true, true));
-        assert!(!cursor_should_be_captured(false, true, false, true));
     }
 
     #[test]
-    fn clicking_the_arena_captures_when_the_oven_is_shut() {
-        assert!(cursor_should_be_captured(false, false, true, false));
-        // And a capture persists without needing the button held.
-        assert!(cursor_should_be_captured(false, false, false, true));
+    fn clicking_the_panel_does_not_take_the_cursor() {
+        // The original bug: every drag of a slider re-grabbed the mouse, so
+        // changing a number cost an Escape each time. A click the palette is
+        // claiming arrives here as `clicked_in_arena == false`.
         assert!(!cursor_should_be_captured(false, false, false, false));
     }
 
     #[test]
-    fn escape_always_releases() {
-        // Without a way out the window is a trap, and this runs windowed.
+    fn clicking_the_arena_takes_it_again_even_with_the_oven_open() {
+        // How you go and feel the change you just made, without closing
+        // anything. `oven_just_opened` is only true on the frame F7 is pressed.
+        assert!(cursor_should_be_captured(false, false, true, false));
+        // And a capture persists without needing the button held.
+        assert!(cursor_should_be_captured(false, false, false, true));
+    }
+
+    #[test]
+    fn escape_always_returns_it() {
+        // Back to the Oven when it is open, and out of a captured window when
+        // it is not. Without a way out the window is a trap, and this runs
+        // windowed on a desktop.
         assert!(!cursor_should_be_captured(true, false, true, true));
+        assert!(!cursor_should_be_captured(true, true, true, true));
     }
 
     #[test]
@@ -1045,13 +1075,13 @@ mod tests {
         // change you just made without closing the panel.
         let hovering = UiFocus {
             pointer: true,
-            keyboard: false,
+            ..UiFocus::default()
         };
         assert!(hovering.pointer && !hovering.keyboard);
 
         let typing = UiFocus {
-            pointer: false,
             keyboard: true,
+            ..UiFocus::default()
         };
         assert!(typing.keyboard, "a focused text field claims the keyboard");
 

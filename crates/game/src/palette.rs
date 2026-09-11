@@ -30,6 +30,9 @@ pub struct UiFocus {
     pub pointer: bool,
     /// A text field has focus — the search box or the bake note.
     pub keyboard: bool,
+    /// F7 was pressed this frame and the panel came up. Consumed by the camera,
+    /// which hands the cursor back so the first click lands on a widget.
+    pub just_opened: bool,
 }
 
 #[derive(Resource)]
@@ -84,9 +87,11 @@ pub fn toggle(
 ) {
     if keys.just_pressed(KeyCode::F7) {
         palette.open = !palette.open;
-        // Closing it hands the mouse straight back to the game rather than
-        // leaving a stale claim on it.
-        if !palette.open {
+        if palette.open {
+            focus.just_opened = true;
+        } else {
+            // Closing it hands the mouse straight back to the game rather than
+            // leaving a stale claim on it.
             *focus = UiFocus::default();
         }
     }
@@ -99,6 +104,8 @@ pub fn sample_focus(mut contexts: EguiContexts, palette: Res<Palette>, mut focus
         return;
     }
     let ctx = contexts.ctx_mut();
+    // `just_opened` is set by `toggle` and cleared by the camera that consumes
+    // it, so it is left alone here.
     // `wants_pointer_input` alone is not enough: it is false while the pointer
     // merely hovers the panel without a button down, which is exactly when a
     // click is about to land on a slider.

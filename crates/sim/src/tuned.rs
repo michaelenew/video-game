@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 28] = [
+pub const SCALARS: [i32; 30] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -36,6 +36,8 @@ pub const SCALARS: [i32; 28] = [
            36044, // body.crouch_height_(x) = 0.55
             1000, // match.max_health = 1000
              150, // match.round-over_pause = 150
+           40632, // air.aerial_hang_damping = 0.62
+          196608, // air.aerial_poke_boost = 3
 ];
 
 #[rustfmt::skip]

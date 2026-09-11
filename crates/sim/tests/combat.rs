@@ -773,8 +773,12 @@ fn a_jump_lasts_long_enough_to_do_something_with() {
     // situation you jumped into.
     for class in ALL_CLASSES {
         let (_, full_time) = jump_profile(class, 60);
+        // A wide bound on purpose. This exists to catch a number that is wrong
+        // by an order of magnitude, not to police taste -- the ceiling went
+        // from 90 to 110 when a tuning session pushed the floatiest class to 94
+        // frames, which is a decision rather than a bug.
         assert!(
-            (40..=90).contains(&full_time),
+            (40..=110).contains(&full_time),
             "{}: a full hop lasts {full_time} frames",
             class.name()
         );
@@ -923,6 +927,100 @@ fn air_speed_has_a_ceiling() {
         assert!(
             speed <= cap,
             "air speed reached {speed:.2}, over the {cap:.2} cap"
+        );
+    }
+}
+
+#[test]
+fn an_aerial_slows_the_rise_rather_than_deleting_it() {
+    // Setting vertical speed to zero read as the game snatching the jump out
+    // from under you mid-rise. The control over jump height is worth keeping;
+    // it has to arrive as a slowing.
+    let mut w = World::new();
+    press(&mut w, Input::SPACE, 1);
+    let rising = w.players[0].vel.y;
+    assert!(rising.raw() > 0, "fixture is not rising");
+
+    press(&mut w, L, 1);
+    let after = w.players[0].vel.y;
+    assert!(
+        after.raw() > 0,
+        "the attack deleted the rise outright: {}",
+        after.to_f32_for_render()
+    );
+    assert!(
+        after.raw() < rising.raw(),
+        "the attack did not slow the rise at all"
+    );
+
+    // And it keeps bleeding, rather than holding at whatever it landed on.
+    press(&mut w, 0, 3);
+    assert!(
+        w.players[0].vel.y.raw() < after.raw(),
+        "the rise stopped bleeding after one frame"
+    );
+}
+
+/// Horizontal speed one frame after `bits`, having just jumped.
+///
+/// Compared against the *same direction without the attack*, because holding a
+/// direction in the air accelerates you anyway — the first version of these
+/// tests measured against no input at all and was reading ordinary air control
+/// as the shove.
+fn airborne_nudge(bits: u16) -> i32 {
+    let mut w = World::new();
+    press(&mut w, Input::SPACE, 1);
+    press(&mut w, bits, 1);
+    w.players[0].vel.x.raw()
+}
+
+#[test]
+fn a_poke_in_the_air_shoves_you_the_way_you_are_holding() {
+    // What makes attacking part of air movement rather than a pause in it.
+    let drifting = airborne_nudge(Input::W);
+    let shoved = airborne_nudge(L | Input::W);
+    assert!(
+        shoved > drifting,
+        "a poke in the air added nothing over holding the direction: {shoved} against {drifting}"
+    );
+}
+
+#[test]
+fn the_shove_needs_a_direction_and_belongs_to_the_poke() {
+    // No direction held, no push -- it is a shove *somewhere*, not free speed.
+    assert_eq!(
+        airborne_nudge(L),
+        airborne_nudge(0),
+        "a poke with no direction still pushed"
+    );
+
+    // And the committed move gets none: it is already a commitment, and one
+    // that also repositioned you would be strictly better than a poke.
+    assert_eq!(
+        airborne_nudge(SHIFT | L | Input::W),
+        airborne_nudge(Input::W),
+        "the committed move repositioned you as well"
+    );
+}
+
+#[test]
+fn the_shove_cannot_break_the_air_speed_cap() {
+    // Otherwise poking repeatedly is a way across the arena, and spacing stops
+    // meaning anything.
+    let cap = (sim::tuning::move_speed().to_f32_for_render()
+        * sim::tuning::air_speed_cap().to_f32_for_render())
+        + 0.1;
+    let mut w = World::new();
+    press(&mut w, Input::W, 12);
+    press(&mut w, Input::SPACE | Input::W, 1);
+    for _ in 0..20 {
+        press(&mut w, L | Input::W, 1);
+        press(&mut w, Input::W, 2);
+        let v = w.players[0].vel;
+        let speed = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
+        assert!(
+            speed <= cap,
+            "poking reached {speed:.2}, over the {cap:.2} cap"
         );
     }
 }
