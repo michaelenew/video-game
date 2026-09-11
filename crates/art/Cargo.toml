@@ -1,0 +1,15 @@
+[package]
+name = "art"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# No engine dependency and no dependencies at all, for the same reason `view`
+# has none: everything here is a pure function from parameters to pixels, and
+# it should be testable without a window. The Bevy side is a handful of
+# `StandardMaterial`s built from what this crate returns.
+#
+# Floating point is fine here and nowhere near the simulation. Art is look,
+# not rules -- see the header of `lib.rs`.
+[dependencies]

@@ -22,6 +22,7 @@ mod debug;
 mod hud;
 mod palette;
 mod settings;
+mod surfaces;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -367,15 +368,6 @@ struct StructureMesh {
     index: usize,
 }
 
-/// Materials for the persistent effects, made once. Which one an entity wears
-/// changes as slots are reused, so they are kept rather than rebuilt.
-#[derive(Resource)]
-struct EffectLook {
-    fire: Handle<StandardMaterial>,
-    blood: Handle<StandardMaterial>,
-    stone: Handle<StandardMaterial>,
-}
-
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -384,8 +376,12 @@ fn setup(
     mut commands: Commands,
     settings: Res<settings::Settings>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    // Every material in the game, generated here and never loaded from disk.
+    // See `crates/art` -- and `docs/design/art.md` for why.
+    let skins = surfaces::Surfaces::build(MAX_PLAYERS, &mut images, &mut materials);
     commands.spawn((
         Camera3d::default(),
         // Bevy's default is a 45-degree vertical field of view, which is a
@@ -399,9 +395,19 @@ fn setup(
         MainCamera,
     ));
 
+    // The key light, and the numbers came down hard when the generated
+    // materials landed.
+    //
+    // The placeholders were flat colours around 0.02 reflectance -- darker
+    // than asphalt, darker than anything real -- and the lighting had been
+    // raised until they read. The generated materials are physically plausible
+    // (ground 0.06, stone 0.09, skin 0.22, which is asphalt, dark granite and
+    // skin), so the same lighting blew the arena out to near-white on the
+    // first capture. Lighting tuned against a non-physical albedo is a debt
+    // that comes due the moment the albedo becomes physical.
     commands.spawn((
         DirectionalLight {
-            illuminance: 11_000.0,
+            illuminance: 2_400.0,
             shadows_enabled: true,
             ..default()
         },
@@ -414,7 +420,7 @@ fn setup(
     // front of a void.
     commands.spawn((
         DirectionalLight {
-            illuminance: 3_200.0,
+            illuminance: 700.0,
             shadows_enabled: false,
             ..default()
         },
@@ -422,56 +428,74 @@ fn setup(
     ));
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.65, 0.72, 0.85),
-        brightness: 520.0,
+        brightness: 120.0,
         ..default()
     });
 
     // Floor.
-    let floor = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.13, 0.15, 0.18),
-        perceptual_roughness: 0.95,
-        ..default()
-    });
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(40.0, 40.0))),
-        MeshMaterial3d(floor),
+        Mesh3d(meshes.add(surfaces::tangented(
+            Plane3d::default().mesh().size(40.0, 40.0).build(),
+        ))),
+        MeshMaterial3d(skins.ground.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 
     // Arena geometry, straight from the simulation's own collision data. One
     // source of truth: if you can see it, you collide with it.
-    let stone = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.30, 0.34, 0.40),
-        perceptual_roughness: 0.9,
-        ..default()
-    });
     for solid in arena::SOLIDS.iter() {
         let min = fx3(solid.min);
         let max = fx3(solid.max);
         let size = max - min;
+        // One material per solid rather than one shared handle, because how
+        // many times the tile repeats is a property of the wall's size and a
+        // shared handle would stretch a two-metre tile across a thirty-metre
+        // wall. Six solids, so six materials -- cheap, and the alternative is
+        // a floor-to-ceiling smear.
+        let repeat = surfaces::repeat_for(
+            &art::materials::STONE,
+            Vec2::new(size.x.max(size.z), size.y),
+        );
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
-            MeshMaterial3d(stone.clone()),
+            Mesh3d(meshes.add(surfaces::tangented(
+                Cuboid::new(size.x, size.y, size.z).mesh().build(),
+            ))),
+            MeshMaterial3d(surfaces::build(
+                &art::materials::STONE,
+                repeat,
+                &mut images,
+                &mut materials,
+            )),
             Transform::from_translation((min + max) * 0.5),
         ));
     }
 
     // Fighters: a root per player, six primitive parts parented to it.
-    let colors = [Color::srgb(0.29, 0.66, 1.0), Color::srgb(1.0, 0.54, 0.30)];
-    for (owner, colour) in colors.iter().enumerate().take(MAX_PLAYERS) {
-        let skin = materials.add(StandardMaterial {
-            base_color: *colour,
-            perceptual_roughness: 0.65,
-            ..default()
-        });
+    //
+    // Four materials rather than one flat colour, assigned by what the part
+    // *is*: a bare head, an armoured torso, sleeved arms, booted legs. That is
+    // most of what makes a box read as a person, and it costs nothing -- the
+    // materials already exist. Identity rides on the cloth and the armour, not
+    // on the skin, so the arena never ends up with two blue things in it.
+    for owner in 0..MAX_PLAYERS {
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
                 for part in PARTS {
                     let s = part_size(part);
+                    let dressed = match part {
+                        view::pose::Part::Head => skins.skin[owner].clone(),
+                        view::pose::Part::Torso => skins.armour[owner].clone(),
+                        view::pose::Part::ArmL | view::pose::Part::ArmR => {
+                            skins.cloth[owner].clone()
+                        }
+                        _ => skins.leather.clone(),
+                    };
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(s[0], s[1], s[2]))),
-                        MeshMaterial3d(skin.clone()),
+                        Mesh3d(meshes.add(surfaces::tangented(
+                            Cuboid::new(s[0], s[1], s[2]).mesh().build(),
+                        ))),
+                        MeshMaterial3d(dressed),
                         Transform::default(),
                         BodyPart { owner, part },
                     ));
@@ -481,12 +505,10 @@ fn setup(
         // The shield is a separate object because its position is independent
         // of the character -- that is the whole mechanic. See bulwark.md.
         commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.75, 0.9, 0.14))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(0.92, 0.76, 0.38),
-                perceptual_roughness: 0.5,
-                ..default()
-            })),
+            Mesh3d(meshes.add(surfaces::tangented(
+                Cuboid::new(0.75, 0.9, 0.14).mesh().build(),
+            ))),
+            MeshMaterial3d(skins.armour[owner].clone()),
             Transform::default(),
             Visibility::Hidden,
             ShieldMesh(owner),
@@ -496,31 +518,12 @@ fn setup(
     // A fixed pool, one pair of cylinders per effect slot, because the
     // simulation's effect array is itself fixed. Spawning and despawning meshes
     // as effects come and go would put allocation on the rollback path.
-    let unit = meshes.add(Cylinder::new(0.5, 1.0));
-    let look = EffectLook {
-        fire: materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.45, 0.12),
-            emissive: LinearRgba::rgb(2.4, 0.8, 0.15),
-            perceptual_roughness: 0.9,
-            ..default()
-        }),
-        blood: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.35, 0.03, 0.09),
-            emissive: LinearRgba::rgb(0.5, 0.0, 0.12),
-            perceptual_roughness: 0.95,
-            ..default()
-        }),
-        stone: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.52, 0.50, 0.47),
-            perceptual_roughness: 0.95,
-            ..default()
-        }),
-    };
+    let unit = meshes.add(surfaces::tangented(Cylinder::new(0.5, 1.0).mesh().build()));
     for slot in 0..sim::effects::MAX_EFFECTS {
         for part in 0..2 {
             commands.spawn((
                 Mesh3d(unit.clone()),
-                MeshMaterial3d(look.fire.clone()),
+                MeshMaterial3d(skins.fire.clone()),
                 Transform::default(),
                 Visibility::Hidden,
                 EffectMesh { slot, part },
@@ -535,14 +538,14 @@ fn setup(
         for index in 0..sim::class::MAX_STRUCTURES {
             commands.spawn((
                 Mesh3d(unit.clone()),
-                MeshMaterial3d(look.stone.clone()),
+                MeshMaterial3d(skins.stone.clone()),
                 Transform::default(),
                 Visibility::Hidden,
                 StructureMesh { owner, index },
             ));
         }
     }
-    commands.insert_resource(look);
+    commands.insert_resource(skins);
 }
 
 /// Stop drawing the local fighter once the camera is inside them.
@@ -625,7 +628,7 @@ fn place_structures(
 /// that looks bigger than it hits is worse than no fire pillar.
 fn place_effects(
     sim: Res<Sim>,
-    look: Res<EffectLook>,
+    look: Res<surfaces::Surfaces>,
     mut meshes: Query<(
         &EffectMesh,
         &mut Transform,
@@ -692,12 +695,26 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
 }
 
 /// A shield in hand rides on the character; a thrown one sits in the world.
+///
+/// The same marker serves every class mechanic that has a position, so it also
+/// has to *look* like what it is. A thrown shield is metal and a planted shadow
+/// is not: they are opposite ends of the light range, and drawing both in
+/// burnished plate would make the Reaver's whole mechanic read as a dropped
+/// shield.
 fn place_shields(
     sim: Res<Sim>,
-    mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
+    skins: Res<surfaces::Surfaces>,
+    mut shields: Query<(
+        &ShieldMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
-    for (tag, mut tf, mut vis) in shields.iter_mut() {
-        match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
+    use sim::class::Mechanic;
+    for (tag, mut tf, mut vis, mut mat) in shields.iter_mut() {
+        let mechanic = &sim.cur.players[tag.0].mechanic;
+        match mechanic_world_pos(mechanic) {
             Some(pos) => {
                 *vis = Visibility::Inherited;
                 tf.translation = Vec3::new(
@@ -705,6 +722,14 @@ fn place_shields(
                     pos.y.to_f32_for_render(),
                     pos.z.to_f32_for_render(),
                 );
+                let wants = match mechanic {
+                    Mechanic::Shadow { .. } => skins.shadow.clone(),
+                    Mechanic::Structures(_) => skins.stone.clone(),
+                    _ => skins.armour[tag.0].clone(),
+                };
+                if mat.0 != wants {
+                    mat.0 = wants;
+                }
             }
             None => *vis = Visibility::Hidden,
         }

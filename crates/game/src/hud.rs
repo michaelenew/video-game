@@ -7,8 +7,20 @@
 use bevy::prelude::*;
 use sim::state::{Action, Phase};
 
-const P1: Color = Color::srgb(0.29, 0.66, 1.0);
-const P2: Color = Color::srgb(1.0, 0.54, 0.30);
+/// A player's colour, from the one place that decides them.
+///
+/// Not a pair of constants here, which is what these were. The bar above a
+/// fighter's head and the cloth on their back have to be the *same* colour or
+/// the identity channel is telling two stories, and two hand-written triples
+/// in two files is how they come apart. `art::palette` is the only thing that
+/// picks a player's colour, and it is the thing the colour-blindness and
+/// arena-contrast tests are run against -- a second copy here would be outside
+/// all of them.
+fn player(index: usize) -> Color {
+    let [r, g, b] = art::palette::player(index);
+    Color::LinearRgba(LinearRgba::rgb(r, g, b))
+}
+
 const INK: Color = Color::srgb(0.86, 0.90, 0.96);
 const DIM: Color = Color::srgb(0.52, 0.58, 0.67);
 
@@ -64,8 +76,8 @@ pub fn setup(mut commands: Commands) {
                 ..default()
             })
             .with_children(|top| {
-                spawn_class_button(top, 0, P1);
-                spawn_health(top, 0, P1);
+                spawn_class_button(top, 0, player(0));
+                spawn_health(top, 0, player(0));
                 top.spawn((
                     Text::new("0 - 0"),
                     TextFont {
@@ -75,8 +87,8 @@ pub fn setup(mut commands: Commands) {
                     TextColor(INK),
                     RoundText,
                 ));
-                spawn_health(top, 1, P2);
-                spawn_class_button(top, 1, P2);
+                spawn_health(top, 1, player(1));
+                spawn_class_button(top, 1, player(1));
             });
 
             // Middle: the round banner, empty while fighting.
@@ -111,7 +123,7 @@ pub fn setup(mut commands: Commands) {
                         font_size: 18.0,
                         ..default()
                     },
-                    TextColor(P1),
+                    TextColor(player(0)),
                     StateText(0),
                 ));
                 bottom.spawn((
@@ -151,7 +163,7 @@ pub fn setup(mut commands: Commands) {
                         font_size: 18.0,
                         ..default()
                     },
-                    TextColor(P2),
+                    TextColor(player(1)),
                     StateText(1),
                 ));
             });

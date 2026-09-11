@@ -247,6 +247,10 @@ pub const SECTIONS: &[Section] = &[
                 "Re-bake the animation clips from their recipes.",
             ),
             e(
+                "cargo run -p art --bin sheet",
+                "Every generated material as a PNG contact sheet: colour, relief, gloss and glow.",
+            ),
+            e(
                 "cargo run -p net --bin soak",
                 "Headless rollback soak: thousands of frames, checked for divergence.",
             ),

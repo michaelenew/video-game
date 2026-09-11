@@ -16,6 +16,11 @@ person, with ability spectacle as an explicit goal. Smash-like — spatial commi
 punishment, reads — not Tekken-like. The closed arena is deliberate: far less art than an
 open world.
 
+**Art.** Generated, not authored — there is no artist. Every material is a handful of
+numbers against one evaluator, and **hue is reserved as a gameplay channel**: saturated red
+means hostile, four spaced hues mean the four players, and the arena itself is almost
+colourless so that anything with colour in it is a thing that matters. See [art.md](art.md).
+
 **No cooldowns.** Abilities cost **frames** (primary) and **the class mechanic** (secondary).
 There is no universal resource bar.
 
@@ -79,6 +84,7 @@ few enough to balance and to read in third person.
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
+| [art.md](art.md) | Generated materials, the palette as a gameplay channel | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -130,6 +136,7 @@ crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
 crates/anim   Offline animation factory. Never runs in the game.
+crates/art    Generated materials. No engine dependency, no assets.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```

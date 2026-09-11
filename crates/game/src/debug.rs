@@ -23,7 +23,17 @@ impl Default for ShowDebug {
     }
 }
 
-const HITBOX: Color = Color::srgb(1.0, 0.23, 0.31);
+/// An active hitbox, in the hue the palette reserves for things that will hurt
+/// you. Same band the monsters will wear, on purpose: "this is dangerous" is
+/// one signal and should look like one signal.
+const HITBOX: Color = hostile();
+
+const fn hostile() -> Color {
+    // `const` cannot run the gamut search, so this is the reserved red written
+    // out. `the_overlay_uses_the_reserved_hostile_colour` checks it against
+    // `art::palette::HOSTILE` and fails if the palette moves without this.
+    Color::srgb(0.885, 0.291, 0.238)
+}
 /// An overhead: it passes over anyone crouching.
 const OVERHEAD: Color = Color::srgb(1.0, 0.62, 0.20);
 const HURTBOX: Color = Color::srgb(0.45, 0.72, 1.0);
@@ -252,5 +262,21 @@ mod tests {
             + (spent_overhead.1 - live_normal.1).abs()
             + (spent_overhead.2 - live_normal.2).abs();
         assert!(distance > 0.3, "colours too close: {distance}");
+    }
+
+    #[test]
+    fn the_overlay_uses_the_reserved_hostile_colour() {
+        // The overlay's red and the palette's hostile red have to be the same
+        // red. A `const` cannot run the gamut search that produces it, so the
+        // value is written out above -- which means it can drift, which means
+        // it needs a test. Without one, the palette could move and the overlay
+        // would go on flashing a colour that no longer means "hostile".
+        let want = art::palette::HOSTILE.to_linear();
+        let got = super::HITBOX.to_linear();
+        let diff = art::color::difference(want, [got.red, got.green, got.blue]);
+        assert!(
+            diff < 0.02,
+            "the overlay's hitbox red has drifted {diff:.3} from the palette's hostile red"
+        );
     }
 }

@@ -12,6 +12,7 @@ rendering or networking.
 crates/sim    Deterministic simulation. Zero dependencies, no floating point.
 crates/net    Rollback session (GGRS) + the headless soak binary.
 crates/view   Presentation logic: interpolation, camera framing, posing. No engine.
+crates/art    Generated materials: noise, perceptual colour, the texture bake. No engine.
 crates/game   Bevy app. Rendering only -- it owns no gameplay state.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
@@ -673,6 +674,24 @@ The walls are deliberately low. Tall ones read as a box and put geometry between
 the camera and the fight, which is exactly the thing an auto-framing camera
 cannot solve.
 
+## Art is generated, and sits on the camera's side of the checksum
+
+`crates/art` turns a handful of numbers into a material: stone, skin, cloth, armour, fire
+and five more, with no texture files anywhere. [art.md](art.md) is the whole argument; two
+things belong here because they are architecture rather than art.
+
+**It is outside the checksum, deliberately, for the reason the camera is.** Tuning values
+are folded into `World::checksum` so mistuned peers desync loudly, which is right for
+anything deciding what *happens* and wrong for anything deciding what you *see*. Two people
+playing each other must be able to run different texture resolutions and still agree on the
+fight. That is also why `art` may use floating point while `sim` may not.
+
+**The two clocks rule extends the one already stated for pose.** Anything a player reads as
+a fact about the fight -- how big the fire pillar is, whether a hitbox is live -- runs on
+`sim_frame`. Anything that is only texture -- flicker, drift, shimmer -- runs on the wall
+clock and is allowed to pop across a rollback. Backwards, and there is no crash: there is a
+*tell that lies*, which is the same failure the debug overlay exists to avoid.
+
 ## The browser sandbox
 
 `crates/web` compiles the simulation to WebAssembly and `build-sandbox.sh` inlines it into
@@ -722,6 +741,7 @@ Everything below builds and passes today.
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
 | **Animation factory** | **`cargo run -p anim --bin bake`** — F2 toggles baked playback |
+| **Generated materials** | **`cargo run -p art --bin sheet`** — ten materials, no assets. See [art.md](art.md) |
 | Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BAKED_ANIM=0` for procedural poses |
 
 Each class has its **class mechanic** and **three exemplar moves** -- a poke, a committed
