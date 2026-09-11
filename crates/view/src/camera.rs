@@ -71,7 +71,7 @@ pub struct RigConfig {
 impl Default for RigConfig {
     fn default() -> Self {
         RigConfig {
-            distance: 6.2,
+            distance: 7.0,
             look_height: 1.25,
             eye_lift: 2.7,
             shoulder: 1.15,
@@ -92,6 +92,15 @@ pub struct CameraRig {
 }
 
 impl CameraRig {
+    /// Change how far back the camera sits, live.
+    ///
+    /// Distance is a setting rather than a constant because it is the number
+    /// most often reached for when a camera feels wrong, and a value you have
+    /// to rebuild to try is a value that gets tried once.
+    pub fn set_distance(&mut self, distance: f32) {
+        self.cfg.distance = distance;
+    }
+
     pub fn new(cfg: RigConfig) -> CameraRig {
         CameraRig {
             cfg,

@@ -50,13 +50,25 @@ and the button will not answer.
 A reticle that says "here" when the answer is "not there" is worse than no reticle, and the
 moments it would lie are exactly the moments the answer matters.
 
-### Sensitivity
+### Settings
 
-`-` and `=` adjust mouse sensitivity mid-match, in multiplicative notches — sensitivity is
-felt as a ratio, so a fixed step is far too coarse at the bottom and imperceptible at the
-top. The value shows above the control legend and is written to
-`~/.config/arena/settings.conf` immediately. `ARENA_SETTINGS` overrides the path, which is
+Three numbers are adjustable mid-match. They show above the control legend and are written
+to `~/.config/arena/settings.conf` immediately. `ARENA_SETTINGS` overrides the path, which is
 how two people on one machine keep separate settings without a profile system.
+
+| Keys | Setting | Step |
+| --- | --- | --- |
+| `-` / `=` | mouse sensitivity | multiplicative |
+| `F3` / `F4` | vertical field of view, degrees | 2° |
+| `F5` / `F6` | camera distance, metres | 0.4 m |
+
+Sensitivity steps by a **ratio** and the other two by a fixed amount, because that is how
+each is perceived: a given ratio of sensitivity feels like the same change at any value,
+whereas two degrees of view is two degrees of view whether you are at 45 or at 90.
+
+Field of view and camera distance are settings rather than constants for a plain reason —
+they are the first numbers anyone reaches for when a camera feels wrong, and a value you have
+to rebuild to try is a value that gets tried once.
 
 Aim is quantised to 1/65536 of a turn and sent over the wire alongside the buttons, because
 where you look decides where you move and what you hit — which makes it gameplay, and

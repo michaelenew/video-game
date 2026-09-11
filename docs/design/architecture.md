@@ -258,6 +258,10 @@ the *aim point*, not the camera's own axis, because the two are deliberately dif
 **The camera is not in the snapshot.** Aim reaches the simulation as input, so peers agree on
 gameplay without the camera ever being rolled back.
 
+Field of view and distance are **settings, not constants** — 58 degrees vertical from seven
+metres is a starting point, not an answer. Bevy's default projection is 45 degrees, which is
+a portrait lens pointed at an arena you are meant to be moving around inside.
+
 ### The floor is not an obstacle to dodge, it is a surface to rest on
 
 Look up far enough and the camera arm wants to swing below the ground. There are two ways to
@@ -366,7 +370,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 87 tests |
+| Test suites | 88 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -374,7 +378,7 @@ Everything below builds and passes today.
 | Universal movement | Jump, dodge with i-frames, crouch that ducks overheads |
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
-| Settings | `~/.config/arena/settings.conf`, sensitivity on `-` / `=` |
+| Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |

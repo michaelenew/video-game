@@ -205,7 +205,7 @@ fn looking_up_walks_the_camera_down_to_the_ground() {
     let mut rig = CameraRig::new(RigConfig::default());
     // Clear of the platforms, which start five metres out and would otherwise
     // trigger the occlusion pull-in and confuse what is being measured.
-    let at = [3.0, 0.0, 0.0];
+    let at = [4.5, 0.0, 0.0];
     for _ in 0..200 {
         rig.update(0.016, at, 0.0, 0.0);
     }
@@ -232,7 +232,7 @@ fn looking_up_does_not_lunge_the_camera_at_the_fighter() {
     // The camera may close on the fighter once it is *on* the ground and has
     // nowhere else to go. It may not do so on the way down.
     let mut rig = CameraRig::new(RigConfig::default());
-    let at = [3.0, 0.0, 0.0];
+    let at = [4.5, 0.0, 0.0];
     for _ in 0..200 {
         rig.update(0.016, at, 0.0, 0.0);
     }
@@ -255,7 +255,7 @@ fn looking_up_does_not_lunge_the_camera_at_the_fighter() {
 fn the_camera_rides_along_the_ground_rather_than_hovering_over_it() {
     let cfg = RigConfig::default();
     let mut rig = CameraRig::new(cfg);
-    let at = [3.0, 0.0, 0.0];
+    let at = [4.5, 0.0, 0.0];
     for _ in 0..200 {
         rig.update(0.016, at, 0.0, cfg.pitch_limit);
     }

@@ -101,6 +101,11 @@ as they get tested.
 - Does a locked facing during a move read as commitment or as the game ignoring you?
 - Does the camera-relative dodge do the right thing when you dodge *toward* the camera?
 - Is 1.0 the right default sensitivity, and is an 8% notch the right step?
+- Is 58° the right default field of view? It is the number most likely to differ between
+  people, which is why it is a setting.
+- Does the camera want to pull *in* at melee range and back out at distance, rather than
+  holding one distance? The old auto-framing rig did that for free and it has not been
+  missed yet — but nobody has played a real match.
 - Does the crosshair sliding off centre during a committed move read as useful information,
   or just as the reticle glitching? The alternative is to freeze it in place and only dim it.
 - Should the crosshair show reach — whether the thing under it is actually within range of
@@ -239,3 +244,20 @@ shoulder was added and was only hidden by the broken clamp keeping the arm too s
 reach anything. And at full pitch the camera now sits on the ground close behind the fighter,
 who fills a good deal of the frame; whether the 57-degree pitch limit is too generous is a
 question for a match.
+
+### 2026-09-11 — it felt cramped
+**Changed** Vertical field of view 45° → 58°, camera distance 6.2 m → 7.0 m. Both are now
+settings, on `F3`/`F4` and `F5`/`F6`, saved like sensitivity.
+**Why** Reported as cramped. The field of view was Bevy's default 45°, which is a portrait
+lens pointed at an arena you are supposed to be moving around inside — it had never been set
+deliberately at all.
+**Verdict** kept. Worth recording what the first attempt got wrong: 62° at 7.6 m opened it up
+so far that all four walls were in frame and the fighters read as small. Both knobs shrink the
+subject, so they multiply rather than add, and reaching for both at full strength overshoots.
+The pair that landed gives roughly two thirds the subject size of before, not half.
+
+The more useful outcome is that this is the third camera-feel pass in a row, so field of view
+and distance became settings rather than constants. They are the first numbers anyone reaches
+for when a camera feels wrong, and a value you have to rebuild to try is a value that gets
+tried once. Candidate framings can now be rendered straight from the settings file without
+touching the code, which is how the two above were compared.
