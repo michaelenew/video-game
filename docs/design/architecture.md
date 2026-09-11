@@ -293,11 +293,22 @@ rather than an entry in `SOLIDS`.
 Looking down and looking up are not the same problem, and one arm length cannot serve both.
 
 **Down is close.** Looking at the ground means looking at the ground *near you* — that is what
-the gesture means. With a seven-metre arm the ray reaches the floor before it reaches the
-fighter, so steep angles put the middle of the screen behind your own heels. So the arm
-shortens and the eye drops toward the fighter's head as pitch goes down: by the bottom of the
-range the reticle sits just in front of their feet, and the fighter has risen to near the
-centre of the frame. That is the whole of "mouse down means bring the aim closer".
+the gesture means.
+
+The lever is the **orbit centre**: the point above the fighter that the camera swings around,
+and therefore the point that sits at the middle of the screen. Put it at height `h`, pitch down
+by `θ`, and the mark lands `h / tan(θ)` in front of the fighter. **The arm length cancels
+out.** So lowering the orbit centre as pitch goes down walks the reticle in to the fighter's own
+feet, and does it without touching how much of the fight you can see.
+
+An earlier version hauled the camera *in* instead. It moved the mark, but only as a side effect
+of trading away the view, and it read as the game zooming on you for pressing down. The arm is
+the player's sense of the space they are fighting in; pitch has no business with it.
+
+That the arm cancels has a second consequence worth having on purpose: **zooming does not change
+where you are aiming.** Camera distance is a comfort setting — pull back to see more of a big
+monster, push in for a small one — and a player who changes it has not also changed where their
+attacks land. There is a test for it.
 
 **Up runs out of third person.** The ordinary answer — walk the arm down toward the ground
 behind the fighter — reads well for the first forty degrees and then stops working: the arm is

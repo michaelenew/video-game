@@ -232,9 +232,11 @@ fn ground_mark(f: view::camera::Framing, at: [f32; 3]) -> Option<f32> {
 
 fn settled(pitch: f32) -> (view::camera::Framing, [f32; 3]) {
     let mut rig = CameraRig::new(RigConfig::default());
-    // Clear of the platforms, which start five metres out and would otherwise
-    // trigger the occlusion pull-in and confuse what is being measured.
-    let at = [4.5, 0.0, 0.0];
+    // Past the platforms in z, which reach four metres either side of the
+    // middle. The arm is eleven metres now, so a fixture in the middle of the
+    // arena sweeps the camera straight through one and the occlusion pull-in
+    // would be what these tests were measuring.
+    let at = [0.0, 0.0, 8.0];
     for _ in 0..200 {
         rig.update(0.016, at, 0.0, pitch);
     }
@@ -277,6 +279,101 @@ fn a_shallow_look_down_reaches_well_past_the_fighter() {
     assert!(
         far > near + 6.0,
         "the whole range of downward aim is {near:.1}m to {far:.1}m -- too little to steer"
+    );
+}
+
+#[test]
+fn zooming_out_does_not_move_where_you_are_aiming() {
+    // The property the whole rig is built on. The camera orbits a point above
+    // the fighter, so the mark on the ground is `orbit height / tan(pitch)` --
+    // the arm length cancels. That makes distance a pure comfort setting: a
+    // player who pulls the camera back to see more of the fight has not also
+    // changed where their attacks are going.
+    let mut cfg = RigConfig::default();
+    let at = [0.0, 0.0, 8.0];
+    let mut marks = Vec::new();
+    for distance in [5.0, 8.0, 11.0, 15.0] {
+        cfg.distance = distance;
+        let mut rig = CameraRig::new(cfg);
+        for _ in 0..200 {
+            rig.update(0.016, at, 0.0, -cfg.neutral_pitch);
+        }
+        let f = rig.update(0.016, at, 0.0, -cfg.neutral_pitch);
+        marks.push(ground_mark(f, at).expect("neutral pitch has to reach the floor"));
+    }
+    let spread = marks.iter().fold(f32::MIN, |a, b| a.max(*b))
+        - marks.iter().fold(f32::MAX, |a, b| a.min(*b));
+    assert!(
+        spread < 0.05,
+        "aim moved {spread:.2}m across the zoom range: {marks:?}"
+    );
+}
+
+#[test]
+fn looking_down_never_hauls_the_camera_in() {
+    // Reported: it should not zoom toward the character as you pan down. The
+    // aim comes in because the orbit centre drops, not because the view does.
+    let cfg = RigConfig::default();
+    let at = [0.0, 0.0, 8.0];
+    let level = flat_arm(
+        settled(-cfg.neutral_pitch).0,
+        [at[0], cfg.look_height, at[2]],
+    );
+    for step in 1..=10 {
+        let pitch = -(step as f32 / 10.0) * cfg.pitch_down;
+        let (f, at) = settled(pitch);
+        let flat = flat_arm(f, [at[0], cfg.look_height, at[2]]);
+        // Pitching down shortens the *flat* arm by cosine alone -- the camera
+        // rises over the fighter. What must not happen is the arm itself
+        // getting shorter.
+        let arm = (flat * flat + (f.eye[1] - cfg.look_height).powi(2)).sqrt();
+        assert!(
+            arm > cfg.distance * 0.9,
+            "at pitch {pitch:.2} the arm is {arm:.2}, down from {:.2}",
+            cfg.distance
+        );
+    }
+    assert!(level > 9.0, "fixture arm was already short: {level:.2}");
+}
+
+#[test]
+fn the_whole_fighter_is_in_frame_at_rest() {
+    // Reported: the feet were chopped off. The fighter has to sit below the
+    // middle of the screen -- that is what the orbit centre being above their
+    // head buys -- but inside the bottom of it.
+    let cfg = RigConfig::default();
+    let (f, at) = settled(-cfg.neutral_pitch);
+    let eye = [f.eye[0], f.eye[1], f.eye[2]];
+    let forward = {
+        let d = [
+            f.look_at[0] - eye[0],
+            f.look_at[1] - eye[1],
+            f.look_at[2] - eye[2],
+        ];
+        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        [d[0] / len, d[1] / len, d[2] / len]
+    };
+    // Angle below screen centre of the fighter's feet and head.
+    let angle_of = |point: [f32; 3]| {
+        let to = [point[0] - eye[0], point[1] - eye[1], point[2] - eye[2]];
+        let len = (to[0] * to[0] + to[1] * to[1] + to[2] * to[2]).sqrt();
+        let dot = (to[0] * forward[0] + to[1] * forward[1] + to[2] * forward[2]) / len;
+        dot.clamp(-1.0, 1.0).acos()
+    };
+    let feet = angle_of([at[0], 0.0, at[2]]);
+    let head = angle_of([at[0], 1.8, at[2]]);
+    // Half of a 58-degree vertical field of view, with a little margin for the
+    // HUD along the bottom.
+    let half_frame = 58f32.to_radians() / 2.0 * 0.85;
+    assert!(
+        feet < half_frame,
+        "the fighter's feet are {:.0} degrees off centre, past the {:.0} the frame holds",
+        feet.to_degrees(),
+        half_frame.to_degrees()
+    );
+    assert!(
+        head > 0.02,
+        "the fighter's head is on the crosshair; the orbit centre is not above them"
     );
 }
 

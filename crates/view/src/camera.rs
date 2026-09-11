@@ -52,12 +52,31 @@ pub struct RigConfig {
     pub distance: f32,
     /// Height above the fighter's feet that the camera arm pivots around.
     pub look_height: f32,
-    /// How far the eye is lifted above the pivot.
+    /// Height of the point the camera orbits, above the fighter's feet.
     ///
-    /// Without this the camera sits at head height and the fighter's own body
-    /// blots out whatever is directly ahead -- which, in a game about facing
-    /// someone, is the only thing you needed to see.
-    pub eye_lift: f32,
+    /// **This is the single most load-bearing number in the rig**, and it is
+    /// worth saying why, because it does two jobs that look unrelated.
+    ///
+    /// The camera sits on a sphere around this point, so the point is what
+    /// lands at the centre of the screen. Above the fighter's head, and the
+    /// fighter sits in the lower part of the frame with the view over their
+    /// shoulder. At head height, they are standing on the crosshair.
+    ///
+    /// It is also the *only* thing besides pitch that decides where the middle
+    /// of the screen meets the ground. Put the orbit centre at height `h` and
+    /// pitch down by `θ`, and the mark lands `h / tan(θ)` in front of the
+    /// fighter — the arm length cancels out entirely. That is why zooming does
+    /// not change your aim, and why bringing the reticle in close is a matter of
+    /// lowering this rather than of shortening the arm.
+    pub orbit_lift: f32,
+    /// Orbit height at full downward pitch.
+    ///
+    /// Lower, so that `h / tan(θ)` collapses to something near the fighter's own
+    /// feet rather than stopping a metre or two short. Lowering the orbit is
+    /// what "looking down brings the aim in" actually *is*; hauling the camera
+    /// closer was a different effect that happened to move the mark too, and it
+    /// cost the view.
+    pub overhead_orbit_lift: f32,
     /// How far to the side the eye sits.
     ///
     /// Not decoration. At melee range an opponent stands directly behind your
@@ -77,6 +96,13 @@ pub struct RigConfig {
     /// positioning game, so looking at what is above you cannot be a thing the
     /// camera refuses to do.
     pub pitch_up: f32,
+    /// Where the camera rests: a little below the horizon.
+    ///
+    /// Level is the wrong neutral for a game played on the ground. Resting a
+    /// few degrees down puts the mark out in front of the fighter where the
+    /// fight is, and leaves the whole upward range for the verticality without
+    /// spending any of it getting back to level.
+    pub neutral_pitch: f32,
     /// Pitch at which the rig starts climbing into the fighter's head.
     ///
     /// Below it, looking up walks the camera down toward the ground behind the
@@ -87,28 +113,21 @@ pub struct RigConfig {
     /// climbs to the fighter's eyes and the body stops being drawn -- you are
     /// simply panning the sky, which is what you were trying to do.
     pub sky_start: f32,
-    /// How far back the camera sits once it is looking straight down.
-    ///
-    /// Short. Looking down is looking at the ground *near you*, and a seven
-    /// metre arm puts the centre of the screen behind your own heels.
-    pub overhead_distance: f32,
-    /// Eye lift at full downward pitch. See `overhead_distance`.
-    pub overhead_lift: f32,
 }
 
 impl Default for RigConfig {
     fn default() -> Self {
         RigConfig {
-            distance: 7.0,
+            distance: 10.9,
             look_height: 1.25,
-            eye_lift: 2.7,
+            orbit_lift: 1.4,
+            overhead_orbit_lift: 0.0,
             shoulder: 1.15,
             smoothing: 0.35,
+            neutral_pitch: 0.26,
             pitch_down: 1.15,
             pitch_up: 1.45,
             sky_start: 0.8,
-            overhead_distance: 2.0,
-            overhead_lift: 1.5,
         }
     }
 }
@@ -190,8 +209,12 @@ impl CameraRig {
         let down = (-pitch / self.cfg.pitch_down).clamp(0.0, 1.0);
         let sky = smoothstep(self.cfg.sky_start, self.cfg.pitch_up, pitch);
 
-        let distance = lerp(self.cfg.distance, self.cfg.overhead_distance, down) * (1.0 - sky);
-        let eye_lift = lerp(self.cfg.eye_lift, self.cfg.overhead_lift, down) * (1.0 - sky);
+        // The arm does not change with pitch. It is the player's sense of how
+        // much of the fight they can see, and taking it away as they look down
+        // -- which an earlier version did -- trades the view for an aim point
+        // that the orbit height gives for free.
+        let distance = self.cfg.distance * (1.0 - sky);
+        let orbit = lerp(self.cfg.orbit_lift, self.cfg.overhead_orbit_lift, down) * (1.0 - sky);
         // The shoulder offset exists to slide the body out of the sightline.
         // Straight down it does not do that, it just swings the world; and in
         // the sky there is no body left to slide.
@@ -199,7 +222,7 @@ impl CameraRig {
 
         let mut offset = [
             -dir[0] * distance,
-            -dir[1] * distance + eye_lift,
+            -dir[1] * distance + orbit,
             -dir[2] * distance,
         ];
 

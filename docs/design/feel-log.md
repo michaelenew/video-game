@@ -812,3 +812,40 @@ up today: two things that must agree, each computing its own answer.
 so mistuned peers desync loudly. That is right for anything deciding what *happens* and wrong
 for anything deciding what you *see*: two people must be able to play each other at different
 fields of view. The rig's numbers sit with the other per-player camera settings instead.
+
+### 2026-09-11 — the camera sits back, and panning down no longer zooms
+**Reported** Too close at all times; it should not zoom toward the character as you pan down;
+neutral should rest ten to twenty degrees below the horizon; about 1.5× the setback with the
+same height; the model's feet were being cut off and the periphery was too tight.
+
+**Changed** The rig now orbits a point above the fighter, and that point is what does the work.
+
+- **Arm ~11m**, up from 7. Fighters range from small to large, so seeing enough of the space
+  matters as much as precision.
+- **Neutral pitch rests 15 degrees below the horizon.** Level is the wrong neutral for a game
+  played on the ground: resting slightly down puts the mark where the fight is and leaves the
+  whole upward range for verticality, instead of spending part of it getting back to level.
+- **Panning down no longer shortens the arm.** The aim comes in because the orbit centre drops
+  toward the fighter, which is a different mechanism with none of the cost.
+
+**The geometry is the whole argument.** With the camera on a sphere of radius `d` around a point
+`h` above the fighter, pitched down by `θ`, the mark on the ground lands at
+
+    h / tan(θ)
+
+in front of them — `d` cancels. Two things fall out of that, and both are properties worth
+having rather than accidents:
+
+**Lowering the orbit centre is the right lever for "bring the aim in".** At full downward pitch
+`tan θ` is large and `h` is small, so the mark collapses onto the fighter's feet. The previous
+version hauled the camera in instead; it moved the mark, but only by trading away the view, and
+it read as the game zooming on you for pressing down.
+
+**Zoom and aim are independent.** A player who pulls the camera back to see more of a large
+monster has not also changed where their attacks go. That makes distance an honest comfort
+setting rather than a balance decision, which matters for a game meant to cover small enemies
+and large ones. Asserted across a five-to-fifteen-metre range.
+
+**Verdict** kept. Three assertions came out of it that did not exist before: the whole fighter
+is in frame at rest (the reported chopped-off feet, stated as an angle against the field of
+view), looking down never shortens the arm, and zooming does not move the aim.
