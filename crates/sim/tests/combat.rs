@@ -766,20 +766,136 @@ fn holding_the_jump_button_goes_higher() {
     }
 }
 
+/// Frames before the fighter's feet clear a standing opponent's head.
+fn frames_to_clear_a_head(class: sim::class::Class) -> u32 {
+    let head = sim::tuning::body_height();
+    let mut w = World::with_classes([class, class]);
+    for i in 0..200 {
+        w.advance([
+            Input::aimed(Input::SPACE, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+        if w.players[0].pos.y.raw() > head.raw() {
+            return i;
+        }
+    }
+    u32::MAX
+}
+
+/// How far sideways a fighter gets by strafing for a whole jump.
+fn strafe_across_a_jump(class: sim::class::Class) -> f32 {
+    let mut w = World::with_classes([class, class]);
+    let start = w.players[0].pos;
+    for i in 0..200u32 {
+        let bits = if i < 30 {
+            Input::SPACE | Input::D
+        } else {
+            Input::D
+        };
+        w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        if i > 2 && w.players[0].grounded {
+            break;
+        }
+    }
+    w.players[0].pos.sub(start).flat_len().to_f32_for_render()
+}
+
+// The four tests below replaced a single assertion that a full hop lasted
+// between 40 and 110 frames. That was a number with no argument behind it: it
+// caught an order-of-magnitude mistake and otherwise just went off whenever
+// someone tuned the jump, which is the opposite of useful. What a jump has to
+// be is four separate things, and each of them is worth stating.
+
 #[test]
-fn a_jump_lasts_long_enough_to_do_something_with() {
-    // Verticality is meant to be part of the positioning game. A third of a
-    // second in the air is a commitment that is over before you have read the
-    // situation you jumped into.
+fn a_short_hop_clears_another_fighter() {
+    // The point of jumping in a game with bodies. If the quick option cannot
+    // get over someone, verticality is only for the committed full hop.
+    let head = sim::tuning::body_height().to_f32_for_render();
     for class in ALL_CLASSES {
-        let (_, full_time) = jump_profile(class, 60);
-        // A wide bound on purpose. This exists to catch a number that is wrong
-        // by an order of magnitude, not to police taste -- the ceiling went
-        // from 90 to 110 when a tuning session pushed the floatiest class to 94
-        // frames, which is a decision rather than a bug.
+        let (apex, _) = jump_profile(class, 1);
         assert!(
-            (40..=110).contains(&full_time),
-            "{}: a full hop lasts {full_time} frames",
+            apex > head,
+            "{}: a short hop reaches {apex:.1}m against a {head:.1}m fighter",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn a_full_hop_reaches_platform_fighter_heights() {
+    // Smash characters jump four or more times their own height. Every class
+    // should manage twice, and the floaty end should reach the four that makes
+    // the genre's verticality read as generous rather than as a hop.
+    let head = sim::tuning::body_height().to_f32_for_render();
+    let mut tallest: f32 = 0.0;
+    for class in ALL_CLASSES {
+        let (apex, _) = jump_profile(class, 60);
+        assert!(
+            apex > head * 2.0,
+            "{}: a full hop reaches {:.1} body heights",
+            class.name(),
+            apex / head
+        );
+        tallest = tallest.max(apex / head);
+    }
+    assert!(
+        tallest >= 4.0,
+        "nobody jumps four body heights; the tallest manages {tallest:.1}"
+    );
+}
+
+#[test]
+fn the_rise_is_fast_enough_not_to_be_a_sitting_duck() {
+    // Vulnerability while jumping is about how long you spend at head height
+    // where you can be hit, not about how long you are airborne in total --
+    // which is exactly why the airtime ceiling this replaced was measuring the
+    // wrong thing.
+    for class in ALL_CLASSES {
+        let frames = frames_to_clear_a_head(class);
+        assert!(
+            frames <= 12,
+            "{}: takes {frames} frames to get above a standing fighter",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn strafing_can_carry_you_clear_of_where_you_took_off() {
+    // A jump you cannot steer out of is a commitment with no counterplay of its
+    // own. Two body widths is enough to leave a melee hitbox that was aimed
+    // where you started.
+    let clear = sim::tuning::body_radius().to_f32_for_render() * 4.0;
+    for class in ALL_CLASSES {
+        let across = strafe_across_a_jump(class);
+        assert!(
+            across > clear,
+            "{}: strafing a whole jump moves you {across:.1}m, under the {clear:.1}m needed",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn a_jump_can_still_be_punished() {
+    // The other half: slow enough that an opponent can see it, react, and land
+    // something before you are back on the ground. This is a floor on airtime
+    // and there is deliberately no ceiling -- how high you go is a design
+    // choice, and a test should not be quietly capping it.
+    let fastest = ALL_CLASSES
+        .iter()
+        .map(|c| {
+            let m = sim::moves::get(*c, 0);
+            m.startup + m.active
+        })
+        .min()
+        .unwrap() as u32;
+    let needed = sim::tuning::HUMAN_REACTION_FRAMES as u32 + fastest;
+    for class in ALL_CLASSES {
+        let (_, airtime) = jump_profile(class, 1);
+        assert!(
+            airtime > needed,
+            "{}: a short hop lasts {airtime} frames, too short to react to and punish ({needed})",
             class.name()
         );
     }
