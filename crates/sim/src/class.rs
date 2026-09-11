@@ -200,6 +200,19 @@ impl Form {
 /// person, which matters more than the combo ceiling.
 pub const MAX_STRUCTURES: usize = 3;
 
+/// One raised structure.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Structure {
+    pub at: V3,
+    /// Frames since it was raised, saturating.
+    ///
+    /// It drives the rise out of the ground and **nothing else** -- structures
+    /// have no lifetime, and the last time they had one the Elementalist's
+    /// special quietly stopped working. An age is not a clock: this one stops
+    /// counting and the structure stays until a fourth is raised.
+    pub age: u16,
+}
+
 // ---------------------------------------------------------------------------
 // Dual mage
 // ---------------------------------------------------------------------------
@@ -225,7 +238,7 @@ pub enum Mechanic {
     Shadow {
         at: Option<V3>,
     },
-    Structures([Option<V3>; MAX_STRUCTURES]),
+    Structures([Option<Structure>; MAX_STRUCTURES]),
     /// Health is the resource, so there is no extra state to carry.
     Blood,
     Meter {

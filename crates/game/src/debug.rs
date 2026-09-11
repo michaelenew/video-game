@@ -159,7 +159,7 @@ fn mechanic_markers(m: &Mechanic) -> Vec<Vec3> {
     match m {
         Mechanic::Shield(s) => s.world_pos().map(v3).into_iter().collect(),
         Mechanic::Shadow { at } => at.map(v3).into_iter().collect(),
-        Mechanic::Structures(slots) => slots.iter().filter_map(|s| s.map(v3)).collect(),
+        Mechanic::Structures(slots) => slots.iter().flatten().map(|s| v3(s.at)).collect(),
         _ => Vec::new(),
     }
 }

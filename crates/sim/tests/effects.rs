@@ -221,6 +221,87 @@ fn a_fourth_structure_costs_the_first() {
     );
 }
 
+#[test]
+fn the_mechanic_fires_on_the_press_not_while_the_button_is_down() {
+    // Held, it used to re-fire every frame, and every class was wrong in its
+    // own way: the Bellator's form became a function of how many frames you
+    // happened to hold it, the Reaver's shadow toggled itself back off, the
+    // Bulwark's shield was pinned mid-throw and never planted, and the
+    // Elementalist spent all three structures on one spot in three frames.
+    for class in sim::class::ALL_CLASSES {
+        let mut w = World::with_classes([class, Class::Bulwark]);
+        let mut held = w.clone();
+        run(&mut held, 40, E, 0);
+        run(&mut w, 2, E, 0);
+        run(&mut w, 38, 0, 0);
+        assert_eq!(
+            held.players[0].mechanic,
+            w.players[0].mechanic,
+            "{}: holding the mechanic did something different from tapping it",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn holding_the_mechanic_raises_exactly_one_structure() {
+    let mut w = as_class(Class::Elementalist);
+    run(&mut w, 40, E, 0);
+    let Mechanic::Structures(slots) = w.players[0].mechanic else {
+        panic!("the Elementalist lost her mechanic");
+    };
+    assert_eq!(
+        slots.iter().flatten().count(),
+        1,
+        "one press should raise one structure"
+    );
+}
+
+#[test]
+fn a_second_press_raises_a_second_structure() {
+    // The edge must not latch: letting go and pressing again has to work.
+    let mut w = as_class(Class::Elementalist);
+    tap(&mut w, E, 4);
+    tap(&mut w, E, 4);
+    let Mechanic::Structures(slots) = w.players[0].mechanic else {
+        panic!("the Elementalist lost her mechanic");
+    };
+    assert_eq!(
+        slots.iter().flatten().count(),
+        2,
+        "the press edge latched, so the mechanic only ever fires once"
+    );
+}
+
+#[test]
+fn a_structure_climbs_out_of_the_ground_and_then_stops_counting() {
+    // It is earth. The age drives the rise and nothing else -- it must not
+    // become a lifetime by the back door, so it saturates rather than wrapping.
+    let mut w = as_class(Class::Elementalist);
+    tap(&mut w, E, 0);
+    let age_of = |w: &World| {
+        let Mechanic::Structures(slots) = w.players[0].mechanic else {
+            panic!("no mechanic")
+        };
+        slots.iter().flatten().next().expect("no structure").age
+    };
+    let fresh = age_of(&w);
+    assert!(
+        fresh < sim::tuning::structure_rise(),
+        "the structure was already up on the frame it was raised"
+    );
+    run(&mut w, 60, 0, 0);
+    assert!(
+        age_of(&w) >= sim::tuning::structure_rise(),
+        "the structure never finished rising"
+    );
+    run(&mut w, 3_000, 0, 0);
+    assert!(
+        w.players[0].mechanic_ready(SLOT_SPECIAL),
+        "the age turned back into a lifetime"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // The Blood mage
 // ---------------------------------------------------------------------------

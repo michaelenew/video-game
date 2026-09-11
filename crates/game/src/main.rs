@@ -545,17 +545,23 @@ fn place_structures(
             *vis = Visibility::Hidden;
             continue;
         };
-        let Some(at) = slots[tag.index] else {
+        let Some(raised) = slots[tag.index] else {
             *vis = Visibility::Hidden;
             continue;
         };
+        // It is earth: it climbs out of the floor rather than appearing in the
+        // air. The whole column slides up from fully buried, so the visible
+        // part grows from the ground and the silhouette is always a slab
+        // standing on the floor rather than a block hanging in it.
+        let rise = (raised.age as f32 / sim::tuning::structure_rise().max(1) as f32).min(1.0);
+        let height = 1.8;
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
-            at.x.to_f32_for_render(),
-            at.y.to_f32_for_render() + 0.9,
-            at.z.to_f32_for_render(),
+            raised.at.x.to_f32_for_render(),
+            raised.at.y.to_f32_for_render() + height * (rise - 0.5),
+            raised.at.z.to_f32_for_render(),
         );
-        tf.scale = Vec3::new(radius * 2.0, 1.8, radius * 2.0);
+        tf.scale = Vec3::new(radius * 2.0, height, radius * 2.0);
     }
 }
 
@@ -628,7 +634,7 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
     match m {
         Mechanic::Shield(s) => s.world_pos(),
         Mechanic::Shadow { at } => *at,
-        Mechanic::Structures(slots) => slots.iter().flatten().next().copied(),
+        Mechanic::Structures(slots) => slots.iter().flatten().next().map(|s| s.at),
         _ => None,
     }
 }

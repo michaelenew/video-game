@@ -17,7 +17,8 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
   resource — structures are spent by being consumed in combos, and hoarding them costs you
   new ones.
 
-> **Implemented** (`E`). Structures stand in the arena and **have no clock** — the cap is the
+> **Implemented** (`E`). One press raises one — they **climb out of the floor** over about a
+> quarter second, because they are earth. Structures stand in the arena and **have no clock** — the cap is the
 > only cost, exactly as written above. They briefly had a lifetime, which meant the fire
 > pillar (gated on having one out) silently stopped working ten seconds after you raised one.
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
