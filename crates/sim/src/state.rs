@@ -822,6 +822,12 @@ fn step_player(p: &mut Player, input: Input) {
             // good -- `jump_hold` goes to zero rather than pausing, so tapping
             // again cannot resurrect a jump you already cut short.
             let sustaining = input.has(Input::SPACE) && p.jump_hold > 0 && p.vel.y.raw() > 0;
+            // Letting go while still rising cuts what is left of the climb,
+            // once. `jump_hold` drops to zero immediately after, so a second
+            // press can neither cut again nor resurrect the jump.
+            if !sustaining && p.jump_hold > 0 && p.vel.y.raw() > 0 {
+                p.vel.y = p.vel.y.mul(t::jump_release_cut());
+            }
             if sustaining {
                 p.jump_hold -= 1;
             } else {

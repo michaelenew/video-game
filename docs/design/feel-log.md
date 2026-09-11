@@ -525,3 +525,35 @@ Where it stands now, against a 1.8 m fighter:
 | Elementalist | 4.8 m (2.7×) | 7.4 m (4.1×) | 6f | 9.8 m |
 | Blood mage | 3.8 m (2.1×) | 6.1 m (3.4×) | 6f | 8.3 m |
 | Dual mage | 5.8 m (3.2×) | 8.7 m (4.8×) | 5f | 11.1 m |
+
+### 2026-09-11 — the short hop was not short
+**Changed** Added a **release cut**: letting go of jump while rising keeps only a fraction of
+the remaining climb. Short hops went from about two thirds of a full hop to about a quarter.
+Full hops are byte-identical — 4.1, 6.0, 7.6, 7.4, 6.1, 8.7 m before and after.
+**Why** Reported: the minimum felt like half the maximum, and a quarter to a sixth would be
+better.
+**Verdict** kept, and this is a clean reversal worth recording. The sustain was chosen over a
+cut deliberately, and the reasoning is still in the log: *"a cut makes the short hop feel like
+the jump was taken away from you, whereas a sustain makes the tall one feel earned."*
+
+That was a claim about the **feel of a small difference** and it was fine as far as it went. It
+is simply the wrong tool for **range**. With only a sustain, the short hop is *exactly* the
+sustain multiplier of the full one — the multiplier is the ratio, definitionally — so a
+multiplier gentle enough to feel good leaves the floor at two thirds of the ceiling. There is no
+setting of it that produces a quarter without dragging the ceiling along.
+
+The cut lowers the floor and leaves the ceiling alone, because a full hop never releases while
+rising. And because apex goes as velocity squared, the cut has *squared* authority over the
+short hop: keeping 0.6 of the rise gives 0.36 of the height. That is why one number moved the
+ratio from 0.6 to 0.25 without touching anything else.
+
+Two assertions changed with it, and both were wrong rather than merely inconvenient:
+
+**"A short hop clears another fighter"** is now false by design. A short hop in a platform
+fighter is for throwing an aerial, not for crossing over someone — the full hop is for that. It
+was replaced with a ratio bound (an eighth to a third) and a floor that an aerial must fit
+inside the airtime, which is the thing that actually makes a short hop worth having.
+
+**"A jump can be punished"** was measured on the short hop. A short hop being hard to react to
+is *correct*: it is the fast, low-commitment option and platform fighters lean on exactly that.
+It now measures the full hop, which is the committed one.

@@ -118,7 +118,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 149 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 150 tests cover
 determinism, combat relationships, camera and animation.
 
 ```
@@ -133,6 +133,9 @@ crates/web    WebAssembly build and the browser frame-data tool.
 
 **Requires Rust 1.85+** (Bevy 0.16's MSRV). `rustup update` if Cargo complains about
 `edition2024` -- that error names the symptom, not the cause.
+
+**Working on it:** `./scripts/dev.sh` — hitbox wireframes and the Oven, both open. Extra
+arguments pass through, so `./scripts/dev.sh --p1 bellator` works.
 
 **What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,
 key, flag and environment variable, generated from the same tables the in-game legend reads.

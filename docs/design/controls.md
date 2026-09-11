@@ -207,12 +207,23 @@ ability grammar is settled around it.
 ### The jump is variable and floaty
 
 Space is a vertical takeoff. **Hold it to go higher** — while the button is down and you are
-still rising, gravity is reduced, up to a cap. Releasing ends the sustain *for good*: a second
-press cannot resurrect a jump you already cut short, or the height stops being something you
-chose.
+still rising, gravity is reduced, up to a cap. **Letting go cuts what is left of the climb**,
+once: a second press cannot resurrect a jump you already cut short, or the height stops being
+something you chose.
 
-Sustain rather than a cut-on-release. Both produce variable height; a cut makes the short hop
-feel like the jump was taken away from you, a sustain makes the tall one feel earned.
+Both mechanisms are needed, and it took a wrong turn to see why. The sustain alone was chosen
+first, on the grounds that a cut makes a short hop feel like the jump was taken away from you
+while a sustain makes the tall one feel earned. That is true of the *feel* and useless for the
+*range*: with only a sustain, the short hop is exactly the sustain multiplier of the full one,
+so a multiplier gentle enough to feel good leaves the floor at about two thirds of the ceiling.
+That is not a second option, it is the same jump slightly lower.
+
+The release cut lowers the floor without touching the ceiling — a full hop never releases while
+rising, so it is untouched — and the short hop scales with the *square* of the cut, since apex
+goes as velocity squared. Short hops now land at about a quarter of a full hop.
+
+A short hop is deliberately too low to cross over another fighter; the full hop is for that.
+What makes it worth having is that an aerial fits inside it.
 
 Floaty on purpose, and **high** on purpose. Verticality is part of the positioning game, and
 Smash characters routinely jump four or more times their own height. A full hop here reaches

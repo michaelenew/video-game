@@ -241,3 +241,19 @@ pub fn air_stall_damp() -> Fx {
 pub fn air_attack_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirAttackBoost))
 }
+
+/// Fraction of your upward speed kept when you let go of jump while rising.
+///
+/// The sustain alone cannot give a short hop worth having. Holding reduces
+/// gravity, so the only thing separating a tap from a hold is that multiplier —
+/// which means the short hop is *exactly* that fraction of the full one, and a
+/// sustain gentle enough to feel good leaves the floor at about two thirds of
+/// the ceiling. A platform fighter wants a quarter or less.
+///
+/// Cutting the velocity on release is the knob that lowers the floor without
+/// touching the ceiling: the full hop never releases while rising, so it is
+/// untouched, and the short hop scales with the *square* of this because apex
+/// goes as velocity squared.
+pub fn jump_release_cut() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JumpReleaseCut))
+}

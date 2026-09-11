@@ -30,7 +30,7 @@ XVFB=$!
 trap 'kill $XVFB 2>/dev/null || true' EXIT
 sleep 2
 
-DISPLAY=":$DISPLAY_NUM" DEMO="${DEMO:-1}" ./target/debug/game >/tmp/game-shot.log 2>&1 &
+DISPLAY=":$DISPLAY_NUM" DEMO="${DEMO:-1}" ./target/debug/game ${GAME_ARGS:-} >/tmp/game-shot.log 2>&1 &
 GAME=$!
 trap 'kill $GAME 2>/dev/null || true; kill $XVFB 2>/dev/null || true' EXIT
 sleep "$WAIT"
