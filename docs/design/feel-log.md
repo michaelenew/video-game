@@ -99,6 +99,9 @@ as they get tested.
 
 ### The Oven
 
+- A knob appended to the registry lands away from its family, which is fine for the palette
+  now but means the *bake order* and the *reading order* diverge over time. Worth revisiting if
+  the generated file becomes hard to scan.
 - Curves. Several of these want to be splines rather than scalars — knockback that varies with
   damage, acceleration that eases. The store is integers so a curve is a new `Unit` and a new
   widget rather than a rewrite.
