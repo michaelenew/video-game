@@ -652,3 +652,33 @@ decision anybody made, just a consequence of a shared array with one rule.
 Two regression tests, both phrased as the thing that broke: a structure survives fifty seconds
 of doing nothing and the special still comes out, and twenty casts in a row never cost a
 structure.
+
+### Open — the autos are due a pass, as a set
+Not a bug list, a rework. Recorded so the next pass starts from the measurement rather than
+rediscovering it.
+
+**Ranged autos have a hole in front of them.** A hitbox is a circle centred `reach` ahead, so a
+move with more reach than radius cannot connect inside the gap. The Elementalist's Bolt is
+reach 4, radius 0.7:
+
+| Gap | Damage |
+| --- | --- |
+| 8.00 m | 0 |
+| 5.67 m | 0 |
+| 3.33 m | 45 |
+| 1.00 m | 0 — standing on top of them |
+
+Melee moves hide this because their radius covers their own reach. It is a property of the
+one-circle hit test, not of any class.
+
+**Deliberately not fixed in isolation**, because the whole set is changing:
+
+- The Elementalist's autos should **push her structures around**, and more generally interact
+  with persistent effects. That is a different shape from "a circle at range", so retuning the
+  circle now would be work done twice.
+- The melee classes' autos need **reshaping**, not just renumbering.
+- Everyone's autos need their **timing** tuned.
+
+Whether the hit test stays one circle, becomes a swept capsule from the fighter to the reach
+point, or ranged autos become real projectiles is a decision for that pass. All three fix the
+table above; they differ in what else they make possible.
