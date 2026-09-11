@@ -1,6 +1,8 @@
 //! Combat rules. These encode design decisions, so a failure here means either
 //! a bug or a decision that changed without the documents changing.
 
+use sim::class::ALL_CLASSES;
+use sim::fixed::Fx;
 use sim::state::{Action, MAX_HEALTH, Phase, Shield};
 use sim::{Input, World};
 
@@ -459,4 +461,129 @@ fn releasing_a_direction_still_stops_you_crisply() {
     let v = w.players[0].vel;
     let after = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
     assert_eq!(after, 0.0, "walking now coasts");
+}
+
+// ---------------------------------------------------------------------------
+// The hitbox the overlay draws
+// ---------------------------------------------------------------------------
+
+/// A world with player one mid-swing and player two parked at `gap` from the
+/// centre of the attack volume, along the attack direction.
+fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
+    use sim::state::hitbox;
+
+    let mut w = World::with_classes([class, class]);
+    // Out of the way while the swing starts, so nothing connects early.
+    w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
+
+    for _ in 0..40 {
+        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        if hitbox(&w.players[0]).is_some() {
+            break;
+        }
+    }
+    let hb = hitbox(&w.players[0]).expect("never reached an active frame");
+
+    // Exactly the threshold the hit test uses: the attack radius plus the
+    // defender's body radius, which is why the overlay draws both cylinders.
+    let threshold =
+        (hb.radius.to_f32_for_render() + sim::tuning::BODY_RADIUS.to_f32_for_render()) * gap_factor;
+    w.players[1].pos = sim::V3::new(
+        hb.centre
+            .x
+            .add(Fx::ratio((threshold * 1000.0) as i32, 1000)),
+        w.players[1].pos.y,
+        hb.centre.z,
+    );
+    w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    w
+}
+
+#[test]
+fn the_drawn_hitbox_is_the_one_that_hits() {
+    // The overlay draws `state::hitbox`, and the hit test uses it too. This
+    // pins that they agree at the boundary, for every class -- including the
+    // Bellator, whose weapon form multiplies reach and which an overlay
+    // rebuilding the box from the move table on its own would get wrong.
+    for class in ALL_CLASSES {
+        let inside = swinging_at(class, 0.8);
+        assert!(
+            inside.players[1].health < MAX_HEALTH,
+            "{class:?}: a defender well inside the drawn box was not hit"
+        );
+        let outside = swinging_at(class, 1.3);
+        assert_eq!(
+            outside.players[1].health, MAX_HEALTH,
+            "{class:?}: a defender well outside the drawn box was hit anyway"
+        );
+    }
+}
+
+#[test]
+fn nothing_is_drawn_when_no_attack_is_out() {
+    // If the overlay could draw a box outside active frames it would be
+    // claiming a threat that does not exist.
+    use sim::state::hitbox;
+    let mut w = World::new();
+    assert!(hitbox(&w.players[0]).is_none(), "idle fighter has a hitbox");
+
+    let mut seen_active = false;
+    let mut seen_gap = false;
+    for _ in 0..40 {
+        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        let out = hitbox(&w.players[0]).is_some();
+        let active = matches!(w.players[0].action, sim::state::Action::Active { .. });
+        assert_eq!(out, active, "hitbox and active frames disagree");
+        seen_active |= active;
+        seen_gap |= seen_active && !active;
+    }
+    assert!(seen_active && seen_gap, "fixture never covered both states");
+}
+
+#[test]
+fn spent_distinguishes_a_whiff_from_a_landed_hit() {
+    // The overlay dims a volume that is still out but can no longer hit.
+    //
+    // Worth being precise about what that shows. At point blank a move
+    // connects on the very frame its box appears, so a landed hit is drawn
+    // dim for every frame you can see it. The bright state is therefore what a
+    // *whiff* looks like: out, and still looking for someone. That is the more
+    // useful reading anyway -- "did that touch anything" is the question you
+    // are asking when you step through the frames.
+    use sim::state::hitbox;
+
+    let mut whiff = World::new();
+    let mut whiff_live = 0;
+    let mut whiff_spent = 0;
+    for _ in 0..30 {
+        whiff.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        if let Some(hb) = hitbox(&whiff.players[0]) {
+            if hb.spent {
+                whiff_spent += 1;
+            } else {
+                whiff_live += 1;
+            }
+        }
+    }
+    assert!(
+        whiff_live > 0,
+        "a whiffing attack never showed a live volume"
+    );
+    assert_eq!(
+        whiff_spent, 0,
+        "an attack that hit nothing was marked as having spent its hit"
+    );
+
+    let mut landed = engaged();
+    let mut landed_spent = 0;
+    for _ in 0..30 {
+        landed.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        if hitbox(&landed.players[0]).is_some_and(|hb| hb.spent) {
+            landed_spent += 1;
+        }
+    }
+    assert!(
+        landed_spent > 0,
+        "a connecting attack never marked its volume spent"
+    );
 }

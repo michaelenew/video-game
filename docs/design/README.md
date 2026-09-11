@@ -100,7 +100,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 94 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 99 tests cover
 determinism, combat relationships, camera and animation.
 
 ```
@@ -116,7 +116,7 @@ crates/web    WebAssembly build and the browser frame-data tool.
 `edition2024` -- that error names the symptom, not the cause.
 
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
-overlay on F1, local two-player, training dummy on 1-4. Click to capture the mouse, Escape
+overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4. Click to capture the mouse, Escape
 to release. `DEMO=1` scripts player one and `DEBUG_OVERLAY=1` starts with the overlay on;
 `./scripts/screenshot.sh` renders headlessly.
 

@@ -329,6 +329,36 @@ table, which is already determinism-safe.
 so it stays renderer-local. Splitting the two along "does this decide anything?" keeps the
 wire format honest: four bytes per player per frame.
 
+## The debug overlay draws what the rules use
+
+**F1.** Hitboxes while they are out, hurtboxes always, guard arcs, facing, and wherever the
+class mechanic is sitting.
+
+The attack volume comes from `sim::state::hitbox`, which the hit test itself calls. That is
+not tidiness — it is the difference between an overlay and a *second implementation of the
+rules that can disagree with the first*. The previous version rebuilt the box from the move
+table and so ignored the Bellator's weapon form, which multiplies reach: it drew a spear as
+though it were a sword. An overlay that can drift is worse than none, because it is
+confidently wrong at the exact moment you are using it to work out why something missed.
+
+Three things it has to get right, and did not before:
+
+**It is a cylinder, not a sphere.** The hit test compares *flat* distance and says nothing
+about height. You cannot duck under an attack or jump over one — whether an overhead beats a
+crouch is a property of the move (`hits_crouching`), not of its geometry. A sphere would imply
+a vertical extent the rules do not have.
+
+**Hurtboxes are drawn too.** The test threshold is the attack radius *plus the defender's body
+radius*, so drawing only the attack circle makes every hitbox look smaller than it acts. With
+both cylinders drawn, "do these touch" is exactly "does this connect".
+
+**Hue and brightness carry different facts.** Hue says what kind of attack it is — ordinary or
+overhead. Brightness says whether it still has its hit. Folding the two together lost the
+overhead signal the moment a move connected, which is precisely when you are stepping through
+frames to see what happened. Worth knowing what the dim state actually shows: at point-blank
+range a move connects on the very frame its box appears, so a landed hit is dim for every
+frame you can see it. Bright means *out and still looking for someone* — a whiff.
+
 ## Arena geometry
 
 `sim::arena` is a fixed array of axis-aligned boxes resolved along the axis of
@@ -370,7 +400,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 94 tests |
+| Test suites | 99 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |

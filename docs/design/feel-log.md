@@ -289,3 +289,30 @@ One thing the repository caught rather than me: printing the new speeds in the f
 used `f32`, and the no-floats guard failed because that binary lives under `crates/sim/src`.
 Formatted from the fixed-point raw value with integer arithmetic instead. The rule is worth
 more than a convenient `{:.1}`.
+
+### 2026-09-11 — hitbox wireframes that cannot lie
+**Changed** The debug overlay (F1) now draws attack volumes as wireframe cylinders while they
+are out, and every fighter's hurtbox all the time. The volume comes from a new
+`sim::state::hitbox`, which the hit test itself calls.
+**Why** Asked for, to see what is happening. The overlay that existed drew a small sphere and
+was wrong in three ways at once.
+**Verdict** kept. The three ways are the useful part:
+
+It **rebuilt the box from the move table**, so it ignored the Bellator's weapon form, which
+multiplies reach — it drew a spear as though it were a sword. Now there is one function and
+the hit test calls it too, with a test pinning that they agree at the boundary for every
+class. An overlay that can drift from the rule it illustrates is worse than no overlay.
+
+It drew a **sphere**, implying you could duck under or jump over an attack. The test compares
+flat distance only; height is expressed entirely through `hits_crouching`. A cylinder says
+that and a sphere does not.
+
+It drew **only the attack radius**, but the threshold is that plus the defender's body radius
+— so every hitbox looked smaller than it acted. Drawing both cylinders makes "do these touch"
+mean exactly "does this connect".
+
+One thing learned while checking it: at point-blank a move connects on the very frame its box
+appears, so a landed hit is drawn dim for every frame you can see. The bright state is what a
+*whiff* looks like. I spent a while comparing two screenshots of the same dim state against
+each other before writing a test that settled it in a second — worth remembering that
+screenshot forensics is the slow way to answer a question that an assertion answers exactly.
