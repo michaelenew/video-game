@@ -100,7 +100,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 76 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 84 tests cover
 determinism, combat relationships, camera and animation.
 
 ```
@@ -123,6 +123,9 @@ to release. `DEMO=1` scripts player one and `DEBUG_OVERLAY=1` starts with the ov
 **Controls are camera-relative.** The mouse aims; `W` is away from the camera, not along a
 world axis; attacks go where you look. Facing locks the moment a move starts, so you commit
 to a direction when you commit to the move. See [controls.md](controls.md).
+
+**Sensitivity** is on `-` / `=` and saves to `~/.config/arena/settings.conf` as you change it.
+Set `ARENA_SETTINGS` to keep separate settings per person on a shared machine.
 
 **Play someone:** `game --port 47811 --peer <their-ip>:47812`. Rollback netcode, no server.
 `./scripts/p2p-localhost.sh` runs both ends locally;

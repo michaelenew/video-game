@@ -24,6 +24,9 @@ pub struct RoundText;
 #[derive(Component)]
 pub struct Banner;
 
+#[derive(Component)]
+pub struct SensitivityText;
+
 pub fn setup(mut commands: Commands) {
     commands
         .spawn(Node {
@@ -92,17 +95,37 @@ pub fn setup(mut commands: Commands) {
                     StateText(0),
                 ));
                 bottom.spawn((
-                    Text::new(
-                        "Mouse aims / click to capture, Esc to release\n\
-                         WASD move (camera-relative) / Space jump / Space+dir dodge / Ctrl crouch\n\
-                         J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
-                         Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset",
-                    ),
-                    TextFont {
-                        font_size: 13.0,
+                    Node {
+                        flex_direction: FlexDirection::Column,
+                        align_items: AlignItems::Center,
+                        row_gap: Val::Px(4.0),
                         ..default()
                     },
-                    TextColor(DIM),
+                    children![
+                        (
+                            Text::new("mouse 1.00"),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            TextColor(INK),
+                            SensitivityText,
+                        ),
+                        (
+                            Text::new(
+                                "Mouse aims / click to capture, Esc to release\n\
+                         WASD move (camera-relative) / Space jump / Space+dir dodge / Ctrl crouch\n\
+                         J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
+                         Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset\n\
+                         - / = mouse sensitivity",
+                            ),
+                            TextFont {
+                                font_size: 13.0,
+                                ..default()
+                            },
+                            TextColor(DIM),
+                        ),
+                    ],
                 ));
                 bottom.spawn((
                     Text::new("free"),
@@ -142,18 +165,41 @@ fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
 
 /// Bevy needs these disjointness bounds spelled out, and inline they are
 /// unreadable. Naming them keeps the signature legible.
-type StateQuery<'w, 's> =
-    Query<'w, 's, (&'static StateText, &'static mut Text), (Without<RoundText>, Without<Banner>)>;
-type RoundQuery<'w, 's> = Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>)>;
-type BannerQuery<'w, 's> = Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>)>;
+// Each of these touches `&mut Text`, so every one has to be provably disjoint
+// from the others or Bevy refuses the system at run time. The marker components
+// are what makes them disjoint; the `Without` bounds are what proves it.
+type StateQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static StateText, &'static mut Text),
+    (
+        Without<RoundText>,
+        Without<Banner>,
+        Without<SensitivityText>,
+    ),
+>;
+type RoundQuery<'w, 's> =
+    Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<SensitivityText>)>;
+type BannerQuery<'w, 's> =
+    Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<SensitivityText>)>;
+type SensitivityQuery<'w, 's> =
+    Query<'w, 's, &'static mut Text, (With<SensitivityText>, Without<RoundText>, Without<Banner>)>;
 
 pub fn update(
     sim: Res<crate::Sim>,
+    settings: Res<crate::settings::Settings>,
     mut bars: Query<(&HealthBar, &mut Node)>,
     mut states: StateQuery,
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
+    mut sensitivity: SensitivityQuery,
 ) {
+    if settings.is_changed() {
+        if let Ok(mut t) = sensitivity.single_mut() {
+            *t = Text::new(format!("mouse {:.2}", settings.sensitivity));
+        }
+    }
+
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
         node.width = Val::Percent(100.0 * hp / sim::state::MAX_HEALTH as f32);

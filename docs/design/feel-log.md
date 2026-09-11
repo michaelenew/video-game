@@ -100,6 +100,11 @@ as they get tested.
   to a wall?
 - Does a locked facing during a move read as commitment or as the game ignoring you?
 - Does the camera-relative dodge do the right thing when you dodge *toward* the camera?
+- Is 1.0 the right default sensitivity, and is an 8% notch the right step?
+- Does the crosshair sliding off centre during a committed move read as useful information,
+  or just as the reticle glitching? The alternative is to freeze it in place and only dim it.
+- Should the crosshair show reach — whether the thing under it is actually within range of
+  the move you are about to throw?
 - **Does the auto-frame pull in too aggressively when fighters close?**
 - **Is the perpendicular angle right, or should it favour player one's side?**
 - **Does occlusion pull-in read as a camera bug when it fires?**
@@ -198,3 +203,17 @@ one looks along the floor at the *inside* faces of the walls, which the key ligh
 reaches. They rendered as flat black and the fight appeared to happen in front of a void.
 **Verdict** kept, but this is a stopgap — the lighting was built for a camera that no longer
 exists and deserves a proper pass.
+
+### 2026-09-11 — sensitivity, and a crosshair that does not lie
+**Changed** Mouse sensitivity is adjustable in-game on `-` / `=`, shown on screen, and saved
+to `~/.config/arena/settings.conf`. Added a crosshair.
+**Why** Sensitivity was one hardcoded number, which does not survive two people sharing a
+keyboard. The steps are multiplicative because sensitivity is felt as a ratio: 0.5 to 0.6 is
+a large change and 5.0 to 5.1 is not one you can feel.
+**Verdict** kept. The interesting half is the crosshair. The obvious build is a cross painted
+at screen centre — but facing locks when a move starts and lags while guarding, so for a real
+fraction of every match the camera points somewhere the attack will not go. A centred reticle
+would be confidently wrong exactly when it matters. So it is projected from where the fighter
+is actually pointed: still in the middle while facing tracks aim, sliding off when it does
+not, dimmed while committed. Whether the slide reads as *information* or as *the crosshair
+being broken* is a question for a real match.
