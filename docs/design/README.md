@@ -56,11 +56,11 @@ poke is a design choice in a closed arena, not a gap.
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` bolt · `R` Raise | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` auto · `R` Rend | Decent |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto | Reworked |
-| [Bellator](kits/bellator.md) | Rush charge, and which form you end in | `L`/`M`/`R` = sword/hammer/spear | Reworked |
+| [Champion](kits/champion.md) | Rush charge, and which form you end in | `L`/`M`/`R` = sword/hammer/spear | Reworked |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
 | ~~Gatekeeper~~ | — | — | Retired |
 
-*Dual mage was Statera. Bellator was Shifter.*
+*Dual mage was Statera. Champion was Bellator, and Shifter before that.*
 
 Each kit is **six abilities plus an auto and the mechanic input** — enough for a real match,
 few enough to balance and to read in third person.
@@ -74,7 +74,7 @@ few enough to balance and to read in third person.
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
 | [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
-| [bellator.md](bellator.md) | Forms and the mid-animation swap | Decided |
+| [champion.md](champion.md) | Forms and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
@@ -87,6 +87,7 @@ Nothing here blocks a prototype.
 
 | Item | Question |
 | --- | --- |
+| **Class names, across the board** | ⚠️ **Newly open.** *Bellator* became **Champion** on 2026-09-11. The old name was accurate — Latin for a combatant, and the class descends from the old cities' duelling champions — but it was the only Latin name on a roster of plain English ones and read as belonging to a different game. That is a reason to look at all six rather than one. Bulwark, Elementalist, Blood mage and Dual mage are *descriptions*; Shadow Reaver and Champion are *titles*. Worth deciding which register the roster is in before any of them reach a player |
 | **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
 | **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
@@ -97,7 +98,7 @@ Nothing here blocks a prototype.
 | **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
 | Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
-| Bellator | Whether the mid-animation swap costs Rush |
+| Champion | Whether the mid-animation swap costs Rush |
 | Shadow Reaver | Whether the shadow has collision |
 | Elementalist | Structure cap of three is a readability guess, not a balance one |
 | Blood mage | Health cost flat or percentage |
@@ -137,7 +138,7 @@ crates/web    WebAssembly build and the browser frame-data tool.
 `edition2024` -- that error names the symptom, not the cause.
 
 **Working on it:** `./scripts/dev.sh` — hitbox wireframes, the Oven, and a class picker beside each health bar. Extra
-arguments pass through, so `./scripts/dev.sh --p1 bellator` works.
+arguments pass through, so `./scripts/dev.sh --p1 champion` works.
 
 **What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,
 key, flag and environment variable, generated from the same tables the in-game legend reads.
@@ -159,7 +160,7 @@ to keep separate settings per person on a shared machine.
 `./scripts/p2p-localhost.sh` runs both ends locally;
 `cargo run -p net --bin p2p_localhost` checks two peers stay in sync over real UDP.
 
-**Pick classes:** `game --p1 bellator --p2 elementalist`, or Tab to cycle in-game.
+**Pick classes:** `game --p1 champion --p2 elementalist`, or Tab to cycle in-game.
 
 **Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
 on-hit advantage. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with

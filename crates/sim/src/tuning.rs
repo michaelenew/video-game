@@ -418,7 +418,7 @@ pub fn settle_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SettleDecay))
 }
 
-/// Reach, damage and recovery multipliers for one of the Bellator's forms.
+/// Reach, damage and recovery multipliers for one of the Champion's forms.
 /// Three kits from one move table, so these nine numbers are most of the class.
 pub fn form_modifiers(form: crate::class::Form) -> (Fx, Fx, Fx) {
     use crate::class::Form;

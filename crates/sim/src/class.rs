@@ -10,7 +10,7 @@ use crate::math::V3;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Class {
     Bulwark,
-    Bellator,
+    Champion,
     ShadowReaver,
     Elementalist,
     BloodMage,
@@ -19,7 +19,7 @@ pub enum Class {
 
 pub const ALL_CLASSES: [Class; 6] = [
     Class::Bulwark,
-    Class::Bellator,
+    Class::Champion,
     Class::ShadowReaver,
     Class::Elementalist,
     Class::BloodMage,
@@ -73,7 +73,7 @@ impl Class {
             // holding ground.
             Class::Bulwark => mobility((88, 100), (118, 100), (115, 100), (9, 10)),
             // Middleweight baseline. Everything else is read against this.
-            Class::Bellator => mobility((1, 1), (1, 1), (1, 1), (12, 10)),
+            Class::Champion => mobility((1, 1), (1, 1), (1, 1), (12, 10)),
             // The most mobile thing in the air, which is what a class built on
             // repositioning should be.
             Class::ShadowReaver => mobility((110, 100), (92, 100), (95, 100), (17, 10)),
@@ -89,7 +89,7 @@ impl Class {
     pub const fn name(self) -> &'static str {
         match self {
             Class::Bulwark => "Bulwark",
-            Class::Bellator => "Bellator",
+            Class::Champion => "Champion",
             Class::ShadowReaver => "Shadow Reaver",
             Class::Elementalist => "Elementalist",
             Class::BloodMage => "Blood mage",
@@ -101,7 +101,7 @@ impl Class {
     pub const fn resource(self) -> &'static str {
         match self {
             Class::Bulwark => "shield position",
-            Class::Bellator => "rush charge and weapon form",
+            Class::Champion => "rush charge and weapon form",
             Class::ShadowReaver => "shadow position",
             Class::Elementalist => "structure slots",
             Class::BloodMage => "health",
@@ -112,7 +112,7 @@ impl Class {
     pub fn starting_mechanic(self) -> Mechanic {
         match self {
             Class::Bulwark => Mechanic::Shield(Shield::Held),
-            Class::Bellator => Mechanic::Forms {
+            Class::Champion => Mechanic::Forms {
                 form: Form::Sword,
                 rush_charged: true,
             },
@@ -158,7 +158,7 @@ impl Shield {
 }
 
 // ---------------------------------------------------------------------------
-// Bellator
+// Champion
 // ---------------------------------------------------------------------------
 
 /// Three range bands. The form multiplies every move rather than each form

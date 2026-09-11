@@ -52,7 +52,7 @@ early ramp.
 | --- | --- |
 | Dual mage | Dash after auto · speed boost on hit |
 | Bulwark | Slow on hit · mark an enemy for bonus damage |
-| Bellator | A three-hit passive |
+| Champion | A three-hit passive |
 | Shadow Reaver | Bleed · poison |
 | Elementalist | Any structure interaction |
 | Blood mage | Mark for life drain |
@@ -86,7 +86,7 @@ mechanic** each class is built on:
 | Shadow Reaver | The shadow | Leash length, return speed, persistence |
 | Elementalist | Structures | Size, count per cast, durability, lifetime |
 | Dual mage | The meter | Safe-band width, auto pull strength, ability push force |
-| Bellator | Weapon forms | Which forms are available, swap window length |
+| Champion | Weapon forms | Which forms are available, swap window length |
 | Bulwark | The shield | Width, stunlock duration |
 | Blood mage | Health cost | Health-to-power conversion, lifesteal efficiency |
 
@@ -139,7 +139,7 @@ rewards a playstyle rather than a slider that makes you tankier.
 - **The old weapon system is mostly the MMO treadmill.** Experience, evolution tiers,
   refinement, the three enchantment tiers, and stat multipliers are all vertical. What
   survives regardless is the shield as an equipped secondary, and weapon "size" affecting
-  animation speed — though that reads as a class or form property, and the Bellator already
+  animation speed — though that reads as a class or form property, and the Champion already
   uses it that way.
 - **Versus and coop may want different gear rules.** Matchup-driven swapping is good in
   coop and bad in versus; raw-power stats are exactly what a competitive mode would ban.
@@ -147,7 +147,7 @@ rewards a playstyle rather than a slider that makes you tankier.
 - **Six classes is a smaller variety problem than it looks.** Monster Hunter's variety comes
   mostly from having 14 weapon types, which map onto *classes* here, not equipment. But
   several classes contain internal modes that function like separate weapon types — fire
-  vs ice vs earth Elementalist, the Bellator's three forms, the Dual mage's two poles, Reaver
+  vs ice vs earth Elementalist, the Champion's three forms, the Dual mage's two poles, Reaver
   with and without the shadow. Counted that way the effective roster is nearer 12–15, and
   intra-class specialisation is a variety lever that costs nothing extra, since the
   ability-slotting system already decides which sub-identity is being played.

@@ -13,7 +13,7 @@
 //! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
 //!
 //! Pick classes with `--p1 <class> --p2 <class>`, or cycle player one's class
-//! in-game with Tab. Names are matched loosely: bulwark, bellator, reaver,
+//! in-game with Tab. Names are matched loosely: bulwark, champion, reaver,
 //! elementalist, blood, dual.
 
 mod bake;

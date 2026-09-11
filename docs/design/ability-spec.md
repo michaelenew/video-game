@@ -22,7 +22,7 @@ Under no cooldowns, an ability needs a cost. There are two, and neither is a man
 | Elementalist | Structure slots on the field |
 | Blood mage | Health |
 | Dual mage | Meter position |
-| Bellator | Rush charge, and which form you are left in |
+| Champion | Rush charge, and which form you are left in |
 | Bulwark | Shield position |
 
 **No universal resource bar.** Each class's economy *is* its identity, which means every

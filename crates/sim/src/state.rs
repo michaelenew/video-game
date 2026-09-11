@@ -570,7 +570,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         return None;
     };
     let m = moves::get(p.class, kind);
-    // The Bellator's form multiplies reach rather than each form having its own
+    // The Champion's form multiplies reach rather than each form having its own
     // table. Applying it here, once, is why the overlay cannot disagree with
     // the hit test about where a spear reaches.
     let reach_mul = match p.mechanic {
@@ -712,14 +712,14 @@ fn step_player(p: &mut Player, input: Input) {
     // with extra steps. The camera still snaps wherever the mouse goes -- it is
     // the character who cannot reorient that fast.
     // The mechanic fires on the **press**, not while the button is down. Held,
-    // it used to re-fire every frame: the Bellator's form became a function of
+    // it used to re-fire every frame: the Champion's form became a function of
     // how many frames you happened to hold it for, the Reaver's shadow toggled
     // itself back off, the Bulwark's shield was pinned mid-throw and never
     // planted, and the Elementalist spent all three structures on one spot in
     // three frames. A button whose meaning depends on how long you hold it is a
     // button you cannot use.
     // The mechanic fires on the **press**, not while the button is down. Held,
-    // it used to re-fire every frame: the Bellator's form became a function of
+    // it used to re-fire every frame: the Champion's form became a function of
     // how many frames you happened to hold it, the Reaver's shadow toggled
     // itself back off, the Bulwark's shield was pinned mid-throw and never
     // planted, and the Elementalist spent all three structures on one spot in
