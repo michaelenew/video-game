@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+manual = { path = "../manual" }
 sim = { path = "../sim" }
 net = { path = "../net" }
 view = { path = "../view" }

@@ -112,13 +112,11 @@ pub fn setup(mut commands: Commands) {
                             SensitivityText,
                         ),
                         (
-                            Text::new(
-                                "Mouse aims / click to capture, Esc to release\n\
-                         WASD move (camera-relative) / Space jump / Shift+dir dodge / Ctrl crouch\n\
-                         J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
-                         Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset\n\
-                         - / = mouse / F3 F4 fov / F5 F6 camera distance / F7 oven",
-                            ),
+                            // Generated from `crates/manual`, which the
+                            // `--help` text reads too. The legend used to be a
+                            // hand-kept copy of the key handlers and had
+                            // already drifted once.
+                            Text::new(manual::legend()),
                             TextFont {
                                 font_size: 13.0,
                                 ..default()

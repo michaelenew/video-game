@@ -359,6 +359,27 @@ frames to see what happened. Worth knowing what the dim state actually shows: at
 range a move connects on the very frame its box appears, so a landed hit is dim for every
 frame you can see it. Bright means *out and still looking for someone* — a whiff.
 
+## Help that cannot go stale
+
+`./scripts/help.sh` — or `cargo run -p game -- --help` — prints every command, key, flag and
+environment variable.
+
+`crates/manual` holds the tables, and is **the source of truth rather than a document about
+one**. The in-game legend is generated from the same entries, and `--help` returns before Bevy
+starts because the crate has no dependencies.
+
+Help maintained separately from the thing it describes is wrong within a month, and wrong help
+is worse than none: it sends you looking for a feature that moved. So four tests read the
+game's own source and fail if it responds to anything the manual does not mention — every
+`KeyCode`, every environment variable, every command-line flag, and every binary and script in
+the repository. The legend was already a hand-kept copy of the key handlers that had drifted
+once; it is now assembled from the entries, so there is nowhere for the two to disagree.
+
+The interesting failure was in the tests rather than the code. The first flag check scanned all
+of `crates/game/src` and reported `--abbrev-ref` and `--cached` as undocumented features — they
+are git's flags, passed through by the bake step. A completeness test has to know whose surface
+it is describing.
+
 ## The Oven: tuning while it runs
 
 **F7.** Every tuned number in the game — 304 of them — editable in a palette that floats over
@@ -468,7 +489,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 129 tests |
+| Test suites | 134 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -479,6 +500,7 @@ Everything below builds and passes today.
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
 | **The Oven** | **F7** — 304 live tuning knobs, searchable, with bake-and-push |
+| Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |

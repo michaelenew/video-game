@@ -108,6 +108,12 @@ fn parse_args() -> Option<(u16, std::net::SocketAddr)> {
 }
 
 fn main() {
+    // `--help` before anything else, so asking what the flags are does not
+    // require a window, a GPU, or the patience to wait for Bevy to start.
+    if std::env::args().any(|a| a == "--help" || a == "-h") {
+        print!("{}", manual::render());
+        return;
+    }
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {

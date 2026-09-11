@@ -118,7 +118,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 129 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 134 tests cover
 determinism, combat relationships, camera and animation.
 
 ```
@@ -127,11 +127,15 @@ crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
 crates/anim   Offline animation factory. Never runs in the game.
+crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
 **Requires Rust 1.85+** (Bevy 0.16's MSRV). `rustup update` if Cargo complains about
 `edition2024` -- that error names the symptom, not the cause.
+
+**What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,
+key, flag and environment variable, generated from the same tables the in-game legend reads.
 
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
 overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4. Click to capture the mouse, Escape
