@@ -8,7 +8,7 @@
 
 use ggrs::{PlayerType, SessionBuilder};
 use net::{NetInput, SessionConfig, handle_requests};
-use sim::World;
+use sim::{Input, World};
 
 #[test]
 fn ggrs_synctest_finds_no_desync() {
@@ -34,7 +34,10 @@ fn ggrs_synctest_finds_no_desync() {
     for frame in 0..1200u32 {
         for handle in 0..2 {
             session
-                .add_local_input(handle, NetInput((next() & 0x1ff) as u16))
+                .add_local_input(
+                    handle,
+                    NetInput::from(Input::aimed((next() & 0x1ff) as u16, next() as u16)),
+                )
                 .expect("add input");
         }
         // A mismatch surfaces here as GgrsError::MismatchedChecksum.

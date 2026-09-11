@@ -15,8 +15,8 @@ fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
     (0..frames)
         .map(|_| {
             [
-                Input((next() & 0x1ff) as u16),
-                Input((next() & 0x1ff) as u16),
+                Input::aimed((next() & 0x1ff) as u16, next() as u16),
+                Input::aimed((next() & 0x1ff) as u16, next() as u16),
             ]
         })
         .collect()

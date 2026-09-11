@@ -19,12 +19,13 @@
 mod debug;
 mod hud;
 
+use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
 use view::pose::{PARTS, Part, PoseInput, part_size, pose_for};
-use view::{CameraRig, camera::RigConfig, interpolate};
+use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate};
 
 /// How the match is being driven.
 ///
@@ -116,10 +117,14 @@ fn main() {
         .init_resource::<Sim>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
+        .init_resource::<Look>()
         .add_systems(Startup, (setup, hud::setup))
         .add_systems(
             Update,
             (
+                // Mouse look runs first: aim is an input to the tick, not a
+                // decoration applied after it.
+                mouse_look,
                 tick_sim,
                 apply_poses,
                 place_shields,
@@ -211,8 +216,60 @@ impl Default for Sim {
     }
 }
 
+impl Sim {
+    /// Which fighter this client drives. Online it is the GGRS handle; locally
+    /// it is always player one, with player two on the second key set.
+    fn local_player(&self) -> usize {
+        match self.driver {
+            Driver::Online { handle, .. } => handle.min(1),
+            Driver::Local => 0,
+        }
+    }
+}
+
 fn env_num(key: &str) -> Option<u32> {
     std::env::var(key).ok()?.parse().ok()
+}
+
+/// Where each local player is looking. Renderer-side state: the yaw is
+/// quantised and handed to the simulation as input, but the float itself never
+/// crosses the wire and never enters a snapshot.
+///
+/// Pitch is here and nowhere else. It moves the camera and changes nothing
+/// about the fight, so it has no business in the simulation.
+#[derive(Resource)]
+struct Look {
+    yaw: f32,
+    pitch: f32,
+    /// Player two's yaw, for two people on one keyboard. They have no mouse, so
+    /// they turn with keys.
+    yaw_two: f32,
+    /// Radians per pixel of mouse movement.
+    sensitivity: f32,
+    grabbed: bool,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Look {
+            // Player one spawns at -X looking toward +X, where player two is.
+            yaw: 0.0,
+            pitch: 0.12,
+            yaw_two: std::f32::consts::PI,
+            sensitivity: 0.0025,
+            grabbed: false,
+        }
+    }
+}
+
+impl Look {
+    fn aim(&self) -> u16 {
+        aim_from_radians(self.yaw)
+    }
+
+    fn aim_two(&self) -> u16 {
+        aim_from_radians(self.yaw_two)
+    }
 }
 
 #[derive(Resource)]
@@ -262,9 +319,22 @@ fn setup(
         },
         Transform::from_xyz(6.0, 14.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+    // A second, dimmer light from behind and opposite, with no shadows. The
+    // old camera looked down on the arena from outside it; this one looks along
+    // the floor at the inside faces of the walls, which the key light never
+    // reaches. Without a fill they read as flat black and the fight happens in
+    // front of a void.
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 3_200.0,
+            shadows_enabled: false,
+            ..default()
+        },
+        Transform::from_xyz(-8.0, 6.0, -7.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
     commands.insert_resource(AmbientLight {
         color: Color::srgb(0.65, 0.72, 0.85),
-        brightness: 240.0,
+        brightness: 520.0,
         ..default()
     });
 
@@ -283,7 +353,7 @@ fn setup(
     // Arena geometry, straight from the simulation's own collision data. One
     // source of truth: if you can see it, you collide with it.
     let stone = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.21, 0.24, 0.29),
+        base_color: Color::srgb(0.30, 0.34, 0.40),
         perceptual_roughness: 0.9,
         ..default()
     });
@@ -378,6 +448,7 @@ fn tick_sim(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     time: Res<Time>,
+    look: Res<Look>,
     mut sim: ResMut<Sim>,
     mut show: ResMut<debug::ShowDebug>,
 ) {
@@ -420,8 +491,8 @@ fn tick_sim(
         }
     }
 
-    let held = read_input(&keys, &mouse);
-    let held_two = read_player_two(&keys);
+    let held = read_input(&keys, &mouse).looking(look.aim());
+    let held_two = read_player_two(&keys).looking(look.aim_two());
 
     match &mut sim.driver {
         Driver::Local => {
@@ -441,7 +512,10 @@ fn tick_sim(
                 // whatever the frame rate happened to be -- which makes two
                 // runs of the same script diverge.
                 let pair = [
-                    scripted_or(demo_mode().then(|| demo_input(sim.cur.frame)), held),
+                    scripted_or(
+                        demo_mode().then(|| demo_input(&sim.cur, sim.cur.frame)),
+                        held,
+                    ),
                     dummy_input(sim.dummy, sim.cur.frame, held_two),
                 ];
                 sim.prev = sim.cur.clone();
@@ -451,7 +525,10 @@ fn tick_sim(
         Driver::Online { .. } => {
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
-                let local = scripted_or(demo_mode().then(|| demo_input(sim.cur.frame)), held);
+                let local = scripted_or(
+                    demo_mode().then(|| demo_input(&sim.cur, sim.cur.frame)),
+                    held,
+                );
                 step_online(&mut sim, local);
             }
         }
@@ -496,7 +573,7 @@ fn step_online(sim: &mut Sim, local: SimInput) {
     }
 
     if session
-        .add_local_input(*handle, net::NetInput(local.0))
+        .add_local_input(*handle, net::NetInput::from(local))
         .is_err()
     {
         // Too far ahead of the peer. Waiting is the correct response.
@@ -523,8 +600,8 @@ fn scripted_or(scripted: Option<SimInput>, live: SimInput) -> SimInput {
 fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
     match mode {
         Dummy::Idle => SimInput::default(),
-        Dummy::Block => SimInput(SimInput::RIGHT),
-        Dummy::Attack if frame % 70 < 2 => SimInput(SimInput::LEFT),
+        Dummy::Block => SimInput::new(SimInput::RIGHT),
+        Dummy::Attack if frame % 70 < 2 => SimInput::new(SimInput::LEFT),
         Dummy::Attack => SimInput::default(),
         Dummy::Human => live,
     }
@@ -536,22 +613,33 @@ fn demo_mode() -> bool {
     std::env::var("DEMO").is_ok_and(|v| v == "1")
 }
 
-fn demo_input(frame: u32) -> SimInput {
+/// Quantised angle of a flat direction.
+///
+/// Floating point here is safe despite the determinism rules: this produces an
+/// *input*, and inputs are transmitted rather than recomputed. A peer replays
+/// the integer that arrived, never this function.
+fn aim_toward(v: sim::V3) -> u16 {
+    aim_from_radians(v.z.to_f32_for_render().atan2(v.x.to_f32_for_render()))
+}
+
+fn demo_input(w: &sim::World, frame: u32) -> SimInput {
     let beat = frame % 480;
     let mut v = 0u16;
     match beat {
-        0..=70 => v |= SimInput::D,                         // close the gap
+        0..=70 => v |= SimInput::W,                         // close the gap
         75..=78 => v |= SimInput::LEFT,                     // bash
         110..=126 => v |= SimInput::RIGHT,                  // guard
         150..=153 => v |= SimInput::SHIFT | SimInput::LEFT, // slam
         190..=215 => v |= SimInput::CROUCH,                 // duck
-        240..=243 => v |= SimInput::SPACE | SimInput::A,    // dodge back
+        240..=243 => v |= SimInput::SPACE | SimInput::S,    // dodge back
         280..=283 => v |= SimInput::MIDDLE,                 // throw the shield
         340..=343 => v |= SimInput::MIDDLE,                 // recall it
-        410..=440 => v |= SimInput::A,                      // reset spacing
+        410..=440 => v |= SimInput::S,                      // reset spacing
         _ => {}
     }
-    SimInput(v)
+    // The script looks at its opponent, which is what a player would do and
+    // what makes "forward" mean "toward the fight".
+    SimInput::aimed(v, aim_toward(w.players[1].pos.sub(w.players[0].pos)))
 }
 
 /// Second set of keys, so two people can play on one keyboard.
@@ -584,7 +672,7 @@ fn read_player_two(keys: &ButtonInput<KeyCode>) -> SimInput {
     if keys.pressed(KeyCode::ControlRight) {
         v |= SimInput::SPACE;
     }
-    SimInput(v)
+    SimInput::new(v)
 }
 
 fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> SimInput {
@@ -621,7 +709,7 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::KeyC) {
         v |= SimInput::CROUCH;
     }
-    SimInput(v)
+    SimInput::new(v)
 }
 
 /// Place every character part from the interpolated snapshot.
@@ -723,18 +811,77 @@ fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
     }
 }
 
+/// Mouse look, and the cursor grab that makes it usable.
+///
+/// Deliberately not rate-limited or smoothed. The mouse is the aim, and any
+/// filtering between the hand and the crosshair is felt immediately even when
+/// it cannot be named.
+fn mouse_look(
+    mut look: ResMut<Look>,
+    mut motion: EventReader<MouseMotion>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut windows: Query<&mut Window>,
+) {
+    let limit = view::camera::RigConfig::default().pitch_limit;
+    if look.grabbed {
+        let sensitivity = look.sensitivity;
+        let (mut dx, mut dy) = (0.0, 0.0);
+        for ev in motion.read() {
+            dx += ev.delta.x;
+            dy += ev.delta.y;
+        }
+        look.yaw += dx * sensitivity;
+        look.pitch = (look.pitch - dy * sensitivity).clamp(-limit, limit);
+    } else {
+        motion.clear();
+    }
+
+    // Player two turns with keys, since there is only one mouse.
+    let turn = 0.045;
+    if keys.pressed(KeyCode::Semicolon) {
+        look.yaw_two -= turn;
+    }
+    if keys.pressed(KeyCode::Quote) {
+        look.yaw_two += turn;
+    }
+
+    // Click to capture, Escape to release. Without a release the window is a
+    // trap, and this runs windowed on a desktop.
+    let want = if keys.just_pressed(KeyCode::Escape) {
+        false
+    } else if mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right) {
+        true
+    } else {
+        look.grabbed
+    };
+    if want != look.grabbed {
+        look.grabbed = want;
+        if let Ok(mut window) = windows.single_mut() {
+            window.cursor_options.grab_mode = if want {
+                bevy::window::CursorGrabMode::Locked
+            } else {
+                bevy::window::CursorGrabMode::None
+            };
+            window.cursor_options.visible = !want;
+        }
+    }
+}
+
 fn drive_camera(
     sim: Res<Sim>,
     time: Res<Time>,
+    look: Res<Look>,
     mut rig: ResMut<Rig>,
     mut cam: Query<&mut Transform, With<MainCamera>>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    let framing = rig.0.update(
-        time.delta_secs(),
-        frame.players[0].pos,
-        frame.players[1].pos,
-    );
+    // The camera follows whichever fighter this client is driving.
+    let me = sim.local_player();
+    let yaw = if me == 0 { look.yaw } else { look.yaw_two };
+    let framing = rig
+        .0
+        .update(time.delta_secs(), frame.players[me].pos, yaw, look.pitch);
     if let Ok(mut tf) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);

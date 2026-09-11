@@ -297,9 +297,8 @@ impl World {
             return;
         }
 
-        let opponent_pos = [self.players[1].pos, self.players[0].pos];
-        for i in 0..MAX_PLAYERS {
-            step_player(&mut self.players[i], inputs[i], opponent_pos[i]);
+        for (p, input) in self.players.iter_mut().zip(inputs) {
+            step_player(p, input);
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
@@ -506,18 +505,50 @@ fn apply_hit(defender: &mut Player, hit: Hit) {
     }
 }
 
-fn step_player(p: &mut Player, input: Input, opponent: V3) {
-    // Turn toward the opponent. Slower while guarding, which is what makes the
-    // facing arc cost something.
-    let to_opp = opponent.sub(p.pos);
-    if to_opp.flat_len().raw() > 0 {
-        let target = V3::new(to_opp.x, Fx::ZERO, to_opp.z).normalized();
-        let rate = if p.action.guarding() {
-            t::GUARD_TURN_RATE
-        } else {
-            t::TURN_RATE
-        };
-        p.facing = p.facing.add(target.sub(p.facing).scale(rate)).normalized();
+/// Turn a stick reading into a world direction, given where the player looks.
+///
+/// `W` is away from the camera, `D` is to its right. This is the whole of
+/// "camera-relative movement", and it is why aim has to be simulation input:
+/// the same button means a different direction depending on it.
+pub fn move_dir(aim: Fx, ax: i32, az: i32) -> V3 {
+    if ax == 0 && az == 0 {
+        return V3::ZERO;
+    }
+    let forward = V3::from_turns(aim);
+    let right = V3::from_turns(aim.add(QUARTER_TURN));
+    forward
+        .scale(Fx::from_int(az))
+        .add(right.scale(Fx::from_int(ax)))
+        .normalized()
+}
+
+/// A quarter turn in `Fx`, matching `Input::QUARTER_TURN`.
+const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
+
+fn step_player(p: &mut Player, input: Input) {
+    // Facing comes from the mouse. Where you look is where you are pointed, and
+    // where you are pointed is where your attacks go.
+    //
+    // Two exceptions, and both are load-bearing:
+    //
+    // Once a move has started, facing is **locked**. Otherwise the mouse would
+    // drag a live hitbox around during its active frames, and a whiff could be
+    // rescued by turning after the fact -- which would take whiff punishment,
+    // most of the game, out behind the shed. Commitment is spatial here; you
+    // commit to a direction when you commit to the move.
+    //
+    // While guarding, facing turns at a limited rate. Guard covers an arc, not
+    // a bubble (see defense.md), and an arc you can flip instantly is a bubble
+    // with extra steps. The camera still snaps wherever the mouse goes -- it is
+    // the character who cannot reorient that fast.
+    let look = V3::from_turns(input.aim_turns());
+    if p.action.actionable() || p.action.stunned() {
+        p.facing = look;
+    } else if p.action.guarding() {
+        p.facing = p
+            .facing
+            .add(look.sub(p.facing).scale(t::GUARD_TURN_RATE))
+            .normalized();
     }
 
     step_mechanic(p);
@@ -568,7 +599,7 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         Action::Free => {
             // Space plus a direction dodges; space alone jumps. See controls.md.
             if input.has(Input::SPACE) && (ax != 0 || az != 0) && p.grounded {
-                let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
+                let dir = move_dir(input.aim_turns(), ax, az);
                 p.vel.x = dir.x.mul(t::DODGE_SPEED);
                 p.vel.z = dir.z.mul(t::DODGE_SPEED);
                 Action::Dodge {
@@ -617,11 +648,11 @@ fn step_player(p: &mut Player, input: Input, opponent: V3) {
         } else {
             t::MOVE_SPEED
         };
-        let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
+        let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(speed);
         p.vel.z = dir.z.mul(speed);
     } else if p.action.guarding() && (ax != 0 || az != 0) {
-        let dir = V3::new(Fx::from_int(ax), Fx::ZERO, Fx::from_int(az)).normalized();
+        let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(t::GUARD_MOVE_SPEED);
         p.vel.z = dir.z.mul(t::GUARD_MOVE_SPEED);
     } else if p.action.stunned() {

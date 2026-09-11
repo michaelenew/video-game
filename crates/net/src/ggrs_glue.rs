@@ -10,19 +10,25 @@ use sim::state::MAX_PLAYERS;
 use sim::{Input, World};
 
 /// Wire format for one player's input. This is the only game data that crosses
-/// the network: two bytes per player per frame.
+/// the network: four bytes per player per frame.
+///
+/// Buttons in the high half, aim angle in the low half. Aim is on the wire
+/// because movement and attacks resolve relative to where the player looks, so
+/// the look angle is gameplay -- and gameplay has to match on both peers to the
+/// bit. Carrying it as input means rollback predicts and corrects it with the
+/// same machinery as a button press, and the camera never enters the snapshot.
 #[derive(Copy, Clone, PartialEq, Eq, Default, Debug, Serialize, Deserialize)]
-pub struct NetInput(pub u16);
+pub struct NetInput(pub u32);
 
 impl From<NetInput> for Input {
     fn from(n: NetInput) -> Input {
-        Input(n.0)
+        Input::aimed((n.0 >> 16) as u16, n.0 as u16)
     }
 }
 
 impl From<Input> for NetInput {
     fn from(i: Input) -> NetInput {
-        NetInput(i.0)
+        NetInput((i.bits as u32) << 16 | i.aim as u32)
     }
 }
 

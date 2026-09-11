@@ -16,7 +16,7 @@ use view::{CameraRig, camera::RigConfig};
 fn walked(frames: u32) -> World {
     let mut w = World::new();
     for _ in 0..frames {
-        w.advance([Input(Input::D), Input::default()]);
+        w.advance([Input::new(Input::W), Input::default()]);
     }
     w
 }
@@ -58,7 +58,7 @@ fn facing_stays_unit_length_through_a_turn() {
 fn discrete_state_comes_from_the_newer_snapshot() {
     // There is no meaningful halfway point between startup frame 3 and 4.
     let mut prev = World::new();
-    prev.advance([Input(Input::LEFT), Input::default()]);
+    prev.advance([Input::new(Input::LEFT), Input::default()]);
     let mut cur = prev.clone();
     cur.advance([Input::default(), Input::default()]);
     let f = interpolate(&prev, &cur, 0.5);
@@ -101,50 +101,109 @@ fn alpha_stays_in_range() {
 // Camera
 // ---------------------------------------------------------------------------
 
-#[test]
-fn camera_pulls_back_as_fighters_separate() {
-    let mut rig = CameraRig::new(RigConfig::default());
-    rig.update(0.016, [-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]);
-    let close = rig.distance();
-    for _ in 0..240 {
-        rig.update(0.016, [-9.0, 0.0, 0.0], [9.0, 0.0, 0.0]);
-    }
-    assert!(rig.distance() > close, "{} !> {close}", rig.distance());
+/// Flat direction from a fighter to the point at the centre of their screen.
+///
+/// This, and not the eye-to-target vector, is what "where you look" means: the
+/// eye sits off to one shoulder, so the camera's own axis is deliberately not
+/// the aim axis. What has to be true is that the crosshair sits straight ahead
+/// of the fighter.
+fn aim_dir(f: view::camera::Framing, player: [f32; 3]) -> (f32, f32) {
+    let (dx, dz) = (f.look_at[0] - player[0], f.look_at[2] - player[2]);
+    let len = (dx * dx + dz * dz).sqrt();
+    (dx / len, dz / len)
 }
 
 #[test]
-fn camera_never_whips_around_when_fighters_cross() {
-    // The perpendicular flips by 180 degrees when the fighters swap sides.
-    // Without shortest-path plus a rate limit, the camera spins.
+fn the_camera_sits_behind_the_fighter() {
     let mut rig = CameraRig::new(RigConfig::default());
-    for _ in 0..120 {
-        rig.update(0.016, [-3.0, 0.0, 0.0], [3.0, 0.0, 0.0]);
-    }
-    let mut worst: f32 = 0.0;
-    let mut last = rig.yaw();
-    for step in 0..120 {
-        // Slide them through each other.
-        let x = 3.0 - step as f32 * 0.05;
-        rig.update(0.016, [-x, 0.0, 0.0], [x, 0.0, 0.0]);
-        let delta = (rig.yaw() - last)
-            .abs()
-            .min(std::f32::consts::TAU - (rig.yaw() - last).abs());
-        worst = worst.max(delta);
-        last = rig.yaw();
-    }
-    let limit = RigConfig::default().max_yaw_rate * 0.016 * 1.05;
+    let cfg = RigConfig::default();
+    let f = rig.update(0.016, [2.0, 0.0, -1.0], 0.0, 0.0);
+    // Looking down +X means the camera is at smaller X than the fighter.
+    assert!(f.eye[0] < 2.0, "camera at {} is not behind", f.eye[0]);
+    // And it aims past them, not at them, so they are not standing in front of
+    // whatever you are trying to look at.
     assert!(
-        worst <= limit,
-        "yaw jumped {worst} rad in one frame (limit {limit})"
+        (f.look_at[0] - (2.0 + cfg.look_ahead)).abs() < 0.01,
+        "aim point at {} is not ahead of the fighter",
+        f.look_at[0]
+    );
+    assert!((f.look_at[2] - -1.0).abs() < 0.01, "aim drifted sideways");
+    assert!(f.eye[1] > 0.0, "camera is underground");
+    assert!(
+        f.eye[1] > f.look_at[1],
+        "camera should look down on the fight, not up at it"
     );
 }
 
 #[test]
-fn camera_looks_between_the_fighters() {
+fn the_camera_and_the_simulation_agree_on_forward() {
+    // The invariant that makes camera-relative movement work at all. If the
+    // renderer's yaw convention and `move_dir`'s disagree, W walks sideways
+    // and nothing about the code looks wrong. Both are checked against each
+    // other here rather than each against itself.
+    for eighth in 0..8u32 {
+        let aim = (eighth * (u16::MAX as u32 + 1) / 8) as u16;
+        let radians = aim as f32 / 65536.0 * std::f32::consts::TAU;
+
+        let mut rig = CameraRig::new(RigConfig::default());
+        let (cx, cz) = aim_dir(
+            rig.update(0.016, [0.0, 0.0, 0.0], radians, 0.0),
+            [0.0, 0.0, 0.0],
+        );
+
+        let sim_fwd = sim::state::move_dir(Input::aimed(0, aim).aim_turns(), 0, 1);
+        let (sx, sz) = (sim_fwd.x.to_f32_for_render(), sim_fwd.z.to_f32_for_render());
+        assert!(
+            (cx - sx).abs() < 0.02 && (cz - sz).abs() < 0.02,
+            "at {aim}: camera looks ({cx:.3}, {cz:.3}), W walks ({sx:.3}, {sz:.3})"
+        );
+    }
+}
+
+#[test]
+fn strafe_is_perpendicular_to_forward() {
+    // D should be exactly ninety degrees off W, at every aim angle, or
+    // circle-strafing drifts.
+    for eighth in 0..8u32 {
+        let aim = Input::aimed(0, (eighth * (u16::MAX as u32 + 1) / 8) as u16).aim_turns();
+        let fwd = sim::state::move_dir(aim, 0, 1);
+        let right = sim::state::move_dir(aim, 1, 0);
+        let dot = fwd.dot(right).to_f32_for_render();
+        assert!(dot.abs() < 0.01, "forward . right = {dot}");
+    }
+}
+
+#[test]
+fn the_mouse_is_never_smoothed() {
+    // A smoothed mouse feels broken in a way players cannot name. The camera
+    // must be looking exactly where asked on the very frame it is asked.
     let mut rig = CameraRig::new(RigConfig::default());
-    let f = rig.update(0.016, [-4.0, 0.0, 2.0], [6.0, 0.0, -2.0]);
-    assert!((f.look_at[0] - 1.0).abs() < 0.01, "x {}", f.look_at[0]);
-    assert!((f.look_at[2] - 0.0).abs() < 0.01, "z {}", f.look_at[2]);
+    for _ in 0..60 {
+        rig.update(0.016, [0.0, 0.0, 0.0], 0.0, 0.0);
+    }
+    let turned = rig.update(0.016, [0.0, 0.0, 0.0], std::f32::consts::FRAC_PI_2, 0.0);
+    let (dx, dz) = aim_dir(turned, [0.0, 0.0, 0.0]);
+    assert!(
+        dx.abs() < 0.02 && (dz - 1.0).abs() < 0.02,
+        "camera lagged the mouse: ({dx:.3}, {dz:.3})"
+    );
+}
+
+#[test]
+fn pitch_is_clamped() {
+    let mut rig = CameraRig::new(RigConfig::default());
+    let cfg = RigConfig::default();
+    for pitch in [-10.0, 10.0] {
+        let f = rig.update(0.016, [0.0, 0.0, 0.0], 0.0, pitch);
+        let rise = f.look_at[1] - f.eye[1];
+        let run = ((f.look_at[0] - f.eye[0]).powi(2) + (f.look_at[2] - f.eye[2]).powi(2)).sqrt();
+        let got = rise.atan2(run);
+        assert!(
+            got.abs() <= cfg.pitch_limit + 0.01,
+            "pitched to {got} past the {} limit",
+            cfg.pitch_limit
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +244,7 @@ fn replaying_a_frame_reproduces_its_pose() {
     let script: Vec<_> = (0..40u32)
         .map(|i| {
             [
-                Input(if i % 9 == 0 { Input::LEFT } else { Input::D }),
+                Input::new(if i % 9 == 0 { Input::LEFT } else { Input::W }),
                 Input::default(),
             ]
         })
@@ -265,20 +324,35 @@ fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
     // camera arm has to pass through it, and check the camera does not end up
     // buried in geometry.
     let mut rig = CameraRig::new(RigConfig::default());
-    let mut framing = rig.update(0.016, [-7.0, 0.0, -3.0], [-7.0, 0.0, 3.0]);
+    // Beside the left-hand platform, not on it: looking away from the platform
+    // swings the camera arm straight through it.
+    let spot = [-4.0, 0.0, 0.0];
+    // Let the smoothed focus settle, then sweep the whole circle: the player
+    // can look anywhere, so every angle has to be safe, not just the easy ones.
     for _ in 0..200 {
-        framing = rig.update(0.016, [-7.0, 0.0, -3.0], [-7.0, 0.0, 3.0]);
+        rig.update(0.016, spot, 0.0, 0.0);
     }
-    let inside = sim::arena::SOLIDS.iter().any(|s| {
-        (0..3).all(|i| {
-            let lo = [s.min.x, s.min.y, s.min.z][i].to_f32_for_render();
-            let hi = [s.max.x, s.max.y, s.max.z][i].to_f32_for_render();
-            framing.eye[i] > lo && framing.eye[i] < hi
-        })
-    });
-    assert!(
-        !inside,
-        "camera ended up inside arena geometry at {:?}",
-        framing.eye
-    );
+    for step in 0..64 {
+        let yaw = step as f32 / 64.0 * std::f32::consts::TAU;
+        for pitch in [-0.8, 0.0, 0.8] {
+            let framing = rig.update(0.016, spot, yaw, pitch);
+            let inside = sim::arena::SOLIDS.iter().any(|s| {
+                (0..3).all(|i| {
+                    let lo = [s.min.x, s.min.y, s.min.z][i].to_f32_for_render();
+                    let hi = [s.max.x, s.max.y, s.max.z][i].to_f32_for_render();
+                    framing.eye[i] > lo && framing.eye[i] < hi
+                })
+            });
+            assert!(
+                !inside,
+                "camera inside geometry at yaw {yaw:.2} pitch {pitch}: {:?}",
+                framing.eye
+            );
+            assert!(
+                framing.eye[1] > 0.0,
+                "camera underground at yaw {yaw:.2} pitch {pitch}: {:?}",
+                framing.eye
+            );
+        }
+    }
 }

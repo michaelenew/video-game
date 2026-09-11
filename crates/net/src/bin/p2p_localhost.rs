@@ -8,7 +8,7 @@
 //!     cargo run -p net --bin p2p_localhost
 
 use net::{NetInput, handle_requests, p2p};
-use sim::World;
+use sim::{Input, World};
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -108,7 +108,7 @@ fn run_peer(
             continue;
         }
 
-        let input = NetInput((next() & 0x1ff) as u16);
+        let input = NetInput::from(Input::aimed((next() & 0x1ff) as u16, next() as u16));
         match session.add_local_input(local_handle, input) {
             Ok(()) => {}
             Err(ggrs::GgrsError::PredictionThreshold) => {

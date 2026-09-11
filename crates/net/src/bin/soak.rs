@@ -69,7 +69,7 @@ fn input_script(frames: u32) -> Vec<[Input; MAX_PLAYERS]> {
     };
     (0..frames)
         .map(|_| {
-            let mut mk = || Input((next() & 0x1ff) as u16);
+            let mut mk = || Input::aimed((next() & 0x1ff) as u16, next() as u16);
             [mk(), mk()]
         })
         .collect()

@@ -27,7 +27,7 @@ pub extern "C" fn sim_reset() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn sim_advance(a: u32, b: u32) {
-    world().advance([Input(a as u16), Input(b as u16)]);
+    world().advance([Input::new(a as u16), Input::new(b as u16)]);
 }
 
 #[unsafe(no_mangle)]

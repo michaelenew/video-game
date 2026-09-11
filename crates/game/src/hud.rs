@@ -93,9 +93,10 @@ pub fn setup(mut commands: Commands) {
                 ));
                 bottom.spawn((
                     Text::new(
-                        "WASD move / Space jump / Space+dir dodge / Ctrl crouch\n\
+                        "Mouse aims / click to capture, Esc to release\n\
+                         WASD move (camera-relative) / Space jump / Space+dir dodge / Ctrl crouch\n\
                          J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
-                         Tab class / 1-4 dummy / F1 debug / P pause / ] step / R reset",
+                         Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset",
                     ),
                     TextFont {
                         font_size: 13.0,

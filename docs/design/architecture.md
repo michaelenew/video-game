@@ -229,32 +229,68 @@ slides, because blinks and swaps are real moves in several kits.
 
 ## The camera
 
-**The control scheme frees the camera.** Aim comes from WASD, facing is
-automatic, and the mouse buttons are attacks -- nothing needs mouse-look. So the
-camera frames the fight the way a 3D fighting game does: perpendicular to the
-line between the fighters, pulling back as they separate.
+Third-person, behind the fighter, and the player owns it. **Aim is the camera**: where you
+look is where you are pointed, and where you are pointed is where your attacks go.
 
-That is a readability win in 1v1 and it removes a control problem entirely. It is
-a consequence of the control scheme rather than an independent choice.
+It used to be an auto-framing rig that sat perpendicular to the line between the two
+fighters, keeping both in profile the way a 3D fighting game does. That was a good idea
+under a control scheme where nothing needed mouse-look — but it was a *consequence* of that
+scheme rather than an independent choice, and once attacks are aimed the premise is gone.
+It also only ever worked for 1v1; "frame both fighters" means nothing in coop against four
+monsters. It has been deleted rather than kept behind a flag. A lock-on camera is a
+controller feature and can come back when there is a controller.
 
-Two details are load-bearing, and both have tests. The perpendicular has two
-solutions, so the rig takes the nearer one -- otherwise the camera whips 180
-degrees every time the fighters cross, which they do constantly. And smoothing is
-frame-rate independent, or the camera feels different on different monitors for
-no reason the player can see.
+Three rules hold it together:
 
-Camera state is renderer-local and deliberately *not* in the snapshot. A rollback
-should not rewind the camera.
+**Yaw and pitch are never smoothed.** They are the mouse. Any filtering between the hand and
+the crosshair is felt immediately even when it cannot be named. Only the focus *position* is
+smoothed, so the camera glides over the character's footsteps instead of jittering with them.
 
-## The camera cannot rotate away from occlusion
+**The eye sits off one shoulder; the aim point does not.** At melee range an opponent stands
+directly behind your own fighter from a centred camera, and raising the camera does not fix
+it — a body is wider than a sightline. So the eye slides sideways while the point at the
+centre of the screen stays on the look axis, straight ahead of the fighter. The offset costs
+nothing in aiming precision; it only moves the character out of the way. The test asserts
+the *aim point*, not the camera's own axis, because the two are deliberately different.
 
-An auto-framing camera picks the angle that reads best -- perpendicular to the
-fighters. When geometry sits on that line, rotating to avoid it would give up the
-framing that is the whole point. So the rig **pulls in** instead, marching the
-camera arm and stopping short of anything solid.
+**The camera is not in the snapshot.** Aim reaches the simulation as input, so peers agree on
+gameplay without the camera ever being rolled back.
 
-That is why the walls are low and why there are only two platforms: every solid
-object is a potential occluder, and the cheapest fix is to have few of them.
+### The camera pulls in rather than turning away
+
+Level geometry must never get between the camera and the fighter. The arm marches back from
+the focus and stops short of anything solid. It does not swing around the obstruction,
+because the angle is the player's and taking the mouse away to dodge a wall is worse than
+briefly sitting close to the character's back. The minimum arm length is deliberately tiny:
+an arm that refuses to shorten will happily hold the camera *inside* a wall when a fighter
+stands against one. The floor gets its own clamp, since it is a plane the simulation handles
+rather than an entry in `SOLIDS`.
+
+## Aim is an input, not a camera read
+
+This is the part that makes camera-relative movement compatible with rollback.
+
+Movement and attacks resolve relative to where the player looks. That makes the look angle
+gameplay state, and every peer must agree on it bit-for-bit or the simulations diverge. There
+were two ways to get that:
+
+1. Make the camera deterministic and part of the snapshot.
+2. Send the look angle as input.
+
+The second is much cheaper and does not constrain the camera at all. Aim travels in the input
+packet next to the buttons, so it is predicted and corrected by the machinery that already
+exists, and the renderer stays free to do whatever it likes.
+
+It is quantised to **1/65536 of a turn, as an integer**. Integer turns rather than radians for
+three reasons: every `u16` is a valid angle, adding past a full turn wraps exactly and for
+free, and because `Fx` is 16.16 the raw `u16` *is* the fractional part of a turn already — so
+converting to the simulation's angle type is a widening cast with no rounding for two machines
+to disagree about. Trigonometry goes through the existing `sin_turns` / `cos_turns` lookup
+table, which is already determinism-safe.
+
+**Pitch is deliberately not sent.** It moves the camera and changes nothing in the simulation,
+so it stays renderer-local. Splitting the two along "does this decide anything?" keeps the
+wire format honest: four bytes per player per frame.
 
 ## Arena geometry
 
@@ -297,12 +333,13 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 64 tests |
+| Test suites | 76 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
 | Bulwark kit | Bash, Slam, Guard, parry, Grapple, shield throw/recall/leap |
 | Universal movement | Jump, dodge with i-frames, crouch that ducks overheads |
+| **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |

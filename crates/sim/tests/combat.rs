@@ -9,9 +9,15 @@ const R: u16 = Input::RIGHT;
 const M: u16 = Input::MIDDLE;
 const SHIFT: u16 = Input::SHIFT;
 
+/// Aim angles for two fighters looking at each other, which is how they spawn.
+/// Movement and attacks are camera-relative now, so a test that does not say
+/// where a fighter is looking is not saying what its buttons mean.
+const LOOK_RIGHT: u16 = 0;
+const LOOK_LEFT: u16 = 1 << 15;
+
 fn run(w: &mut World, frames: u32, a: u16, b: u16) {
     for _ in 0..frames {
-        w.advance([Input(a), Input(b)]);
+        w.advance([Input::aimed(a, LOOK_RIGHT), Input::aimed(b, LOOK_LEFT)]);
     }
 }
 
@@ -19,7 +25,7 @@ fn run(w: &mut World, frames: u32, a: u16, b: u16) {
 /// apart at seven units per second, so this needs more than a second.
 fn engaged() -> World {
     let mut w = World::new();
-    run(&mut w, 90, Input::D, 0);
+    run(&mut w, 90, Input::W, 0);
     let gap = w.players[1]
         .pos
         .sub(w.players[0].pos)
@@ -68,12 +74,15 @@ fn a_grapple_goes_through_guard() {
 #[test]
 fn a_dodge_has_invulnerable_frames_then_stops_having_them() {
     let mut w = World::new();
-    w.advance([Input(Input::SPACE | Input::D), Input::default()]);
+    w.advance([
+        Input::aimed(Input::SPACE | Input::W, LOOK_RIGHT),
+        Input::aimed(0, LOOK_LEFT),
+    ]);
     assert!(
         w.players[0].action.invulnerable(),
         "dodge did not start invulnerable"
     );
-    run(&mut w, 20, Input::SPACE | Input::D, 0);
+    run(&mut w, 20, Input::SPACE | Input::W, 0);
     assert!(
         !w.players[0].action.invulnerable(),
         "dodge stayed invulnerable to the end -- nothing would ever punish it"
@@ -158,7 +167,7 @@ fn the_next_round_starts_fresh() {
 #[test]
 fn walls_keep_players_inside_the_arena() {
     let mut w = World::new();
-    run(&mut w, 400, Input::D, Input::A);
+    run(&mut w, 400, Input::W, Input::W);
     for (i, p) in w.players.iter().enumerate() {
         let x = p.pos.x.to_f32_for_render();
         assert!(x.abs() < 14.5, "player {i} escaped the arena at x={x}");
@@ -169,9 +178,9 @@ fn walls_keep_players_inside_the_arena() {
 fn players_can_stand_on_the_platforms() {
     let mut w = World::new();
     // Walk onto the left platform and jump.
-    run(&mut w, 60, Input::A, 0);
+    run(&mut w, 60, Input::S, 0);
     run(&mut w, 40, Input::SPACE, 0);
-    run(&mut w, 60, Input::D, 0);
+    run(&mut w, 60, Input::W, 0);
     let y = w.players[0].pos.y.to_f32_for_render();
     assert!(y >= 0.0, "fell through the floor to y={y}");
 }
@@ -205,9 +214,9 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
 #[test]
 fn crouching_is_slower_than_walking() {
     let mut walk = World::new();
-    run(&mut walk, 30, Input::D, 0);
+    run(&mut walk, 30, Input::W, 0);
     let mut duck = World::new();
-    run(&mut duck, 30, Input::D | Input::CROUCH, 0);
+    run(&mut duck, 30, Input::W | Input::CROUCH, 0);
     assert!(
         duck.players[0].pos.x.raw() < walk.players[0].pos.x.raw(),
         "crouch-walking was not slower"
@@ -221,4 +230,141 @@ fn crouch_releases_when_the_key_does() {
     assert!(w.players[0].crouching);
     run(&mut w, 5, 0, 0);
     assert!(!w.players[0].crouching, "stayed crouched after release");
+}
+
+// ---------------------------------------------------------------------------
+// Aim -- movement and attacks resolve relative to where you are looking
+// ---------------------------------------------------------------------------
+
+/// Direction player one sets off in, given a button and an aim.
+///
+/// One frame, and the velocity rather than the displacement: walk far enough
+/// and the arena walls have an opinion, which is correct behaviour but not what
+/// is under test here.
+fn walk_dir(bits: u16, aim: u16) -> (f32, f32) {
+    let mut w = World::new();
+    w.advance([Input::aimed(bits, aim), Input::aimed(0, LOOK_LEFT)]);
+    let v = w.players[0].vel;
+    let (x, z) = (v.x.to_f32_for_render(), v.z.to_f32_for_render());
+    let len = (x * x + z * z).sqrt();
+    assert!(len > 0.5, "did not set off at all: {len}");
+    (x / len, z / len)
+}
+
+#[test]
+fn forward_is_wherever_you_are_looking() {
+    // The whole point of camera-relative movement. W is not a world direction.
+    for eighth in 0..8u32 {
+        let aim = (eighth * 65536 / 8) as u16;
+        let turns = Input::aimed(0, aim).aim_turns();
+        let want = sim::state::move_dir(turns, 0, 1);
+        let (ux, uz) = walk_dir(Input::W, aim);
+        let (wx, wz) = (want.x.to_f32_for_render(), want.z.to_f32_for_render());
+        assert!(
+            (ux - wx).abs() < 0.05 && (uz - wz).abs() < 0.05,
+            "aim {aim}: walked ({ux:.2}, {uz:.2}), expected ({wx:.2}, {wz:.2})"
+        );
+    }
+}
+
+#[test]
+fn strafing_is_sideways_not_forwards() {
+    // D at aim zero should move along +Z, not +X. If these ever collapse into
+    // each other, circle-strafing turns into walking in.
+    let (fx, fz) = walk_dir(Input::W, 0);
+    let (sx, sz) = walk_dir(Input::D, 0);
+    assert!(
+        fx > 0.9 && fz.abs() < 0.1,
+        "forward went ({fx:.2}, {fz:.2})"
+    );
+    assert!(sz > 0.9 && sx.abs() < 0.1, "strafe went ({sx:.2}, {sz:.2})");
+}
+
+#[test]
+fn you_attack_where_you_look() {
+    // Aim away and the same button that would have landed a hit whiffs.
+    let mut facing = engaged();
+    run(&mut facing, 20, L, 0);
+    assert!(
+        facing.players[1].health < MAX_HEALTH,
+        "a poke at point blank did not connect"
+    );
+
+    let mut away = engaged();
+    for _ in 0..20 {
+        // Looking backwards, the opponent is behind you.
+        away.advance([Input::aimed(L, LOOK_LEFT), Input::aimed(0, LOOK_LEFT)]);
+    }
+    assert_eq!(
+        away.players[1].health, MAX_HEALTH,
+        "an attack aimed away from the opponent still hit them"
+    );
+}
+
+#[test]
+fn facing_locks_once_a_move_has_started() {
+    // Otherwise the mouse drags a live hitbox around during its active frames,
+    // and any whiff can be rescued after the fact by turning -- which takes
+    // whiff punishment, most of the game, off the table.
+    let mut w = engaged();
+    w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    let committed = w.players[0].facing;
+    // Now swing the aim hard while the move runs.
+    for step in 1..12 {
+        let spun = (step * 5000) as u16;
+        w.advance([Input::aimed(0, spun), Input::aimed(0, LOOK_LEFT)]);
+    }
+    let drifted = committed.sub(w.players[0].facing).flat_len();
+    assert!(
+        drifted.to_f32_for_render() < 0.01,
+        "facing moved {} during the move",
+        drifted.to_f32_for_render()
+    );
+}
+
+#[test]
+fn a_guard_cannot_spin_to_cover_everything() {
+    // Guard is an arc, and an arc you can flip instantly is a bubble.
+    let mut w = engaged();
+    run(&mut w, 5, R, 0);
+    assert!(w.players[0].action.guarding(), "fixture is not guarding");
+    let before = w.players[0].facing;
+    // Whip the aim a full half turn and hold it there for a few frames.
+    for _ in 0..4 {
+        w.advance([
+            Input::aimed(R, LOOK_RIGHT.wrapping_add(1 << 15)),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    let turned = before.dot(w.players[0].facing).to_f32_for_render();
+    assert!(
+        turned > 0.5,
+        "guard turned {turned} of the way round in four frames"
+    );
+}
+
+#[test]
+fn aim_survives_a_rollback() {
+    // Aim is input, so it has to replay exactly like a button press does.
+    let script: Vec<[Input; 2]> = (0..60u32)
+        .map(|i| {
+            [
+                Input::aimed(if i % 7 == 0 { L } else { Input::W }, (i * 997) as u16),
+                Input::aimed(0, LOOK_LEFT),
+            ]
+        })
+        .collect();
+    let mut live = World::new();
+    for i in &script[..30] {
+        live.advance(*i);
+    }
+    let snapshot = live.clone();
+    for i in &script[30..] {
+        live.advance(*i);
+    }
+    let mut replay = snapshot;
+    for i in &script[30..] {
+        replay.advance(*i);
+    }
+    assert_eq!(live.checksum(), replay.checksum(), "rollback diverged");
 }

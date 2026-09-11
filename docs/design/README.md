@@ -100,13 +100,13 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 64 tests cover
-determinism, combat relationships and animation.
+exemplar moves, peer-to-peer rollback play works over real UDP, and 76 tests cover
+determinism, combat relationships, camera and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
 crates/net    Rollback session (GGRS) + headless soak.
-crates/view   Interpolation, camera framing, posing. No engine dependency.
+crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
 crates/anim   Offline animation factory. Never runs in the game.
 crates/web    WebAssembly build and the browser frame-data tool.
@@ -116,8 +116,13 @@ crates/web    WebAssembly build and the browser frame-data tool.
 `edition2024` -- that error names the symptom, not the cause.
 
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
-overlay on F1, local two-player, training dummy on 1-4. `DEMO=1` scripts player one and
-`DEBUG_OVERLAY=1` starts with the overlay on; `./scripts/screenshot.sh` renders headlessly.
+overlay on F1, local two-player, training dummy on 1-4. Click to capture the mouse, Escape
+to release. `DEMO=1` scripts player one and `DEBUG_OVERLAY=1` starts with the overlay on;
+`./scripts/screenshot.sh` renders headlessly.
+
+**Controls are camera-relative.** The mouse aims; `W` is away from the camera, not along a
+world axis; attacks go where you look. Facing locks the moment a move starts, so you commit
+to a direction when you commit to the move. See [controls.md](controls.md).
 
 **Play someone:** `game --port 47811 --peer <their-ip>:47812`. Rollback netcode, no server.
 `./scripts/p2p-localhost.sh` runs both ends locally;
