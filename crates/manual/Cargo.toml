@@ -1,0 +1,14 @@
+[package]
+name = "manual"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "manual"
+path = "src/lib.rs"
+
+[[bin]]
+name = "manual"
+path = "src/main.rs"
+
+[dependencies]
