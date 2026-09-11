@@ -12,6 +12,7 @@
 
 use sim::class::ALL_CLASSES;
 use sim::moves::{self, Move};
+use sim::state::{SLOT_COMMITTED, SLOT_POKE};
 use sim::tuning as t;
 
 fn every_move() -> impl Iterator<Item = (&'static str, &'static Move)> {
@@ -220,5 +221,44 @@ fn every_class_has_the_same_number_of_exemplar_moves() {
     let first = counts[0].1;
     for (name, n) in &counts {
         assert_eq!(*n, first, "{name} has {n} moves, others have {first}");
+    }
+}
+
+#[test]
+fn hindrance_is_proportional_to_commitment() {
+    // The rule, stated once: the more a move commits you, the more it takes
+    // your feet away. A poke that rooted you as hard as a slam would make the
+    // two feel the same to throw, which is the opposite of what the frame data
+    // is trying to say.
+    for class in ALL_CLASSES {
+        let poke = moves::get(class, SLOT_POKE);
+        let committed = moves::get(class, SLOT_COMMITTED);
+        assert!(
+            poke.mobility > committed.mobility,
+            "{class:?}: the poke '{}' hinders you no less than '{}'",
+            poke.name,
+            committed.name
+        );
+        assert!(
+            committed.roots(),
+            "{class:?}: '{}' is a committed move that lets you keep walking",
+            committed.name
+        );
+    }
+}
+
+#[test]
+fn a_poke_is_a_slow_not_a_stop_and_not_free() {
+    // Both failure modes are real. Rooted reads as the game snatching the
+    // controls; unhindered removes the spacing cost of throwing it at all, and
+    // spacing is most of neutral.
+    for class in ALL_CLASSES {
+        let poke = moves::get(class, SLOT_POKE);
+        assert!(
+            poke.mobility >= 30 && poke.mobility <= 80,
+            "{class:?}: '{}' keeps {}% of walking speed",
+            poke.name,
+            poke.mobility
+        );
     }
 }

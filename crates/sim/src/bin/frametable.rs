@@ -6,11 +6,26 @@
 //! On-block advantage decides whether a move is safe to throw out, and it is
 //! the number to look at when a class feels oppressive or feeble.
 
+use sim::Fx;
 use sim::class::ALL_CLASSES;
 use sim::moves;
 use sim::tuning as t;
 
 fn main() {
+    // Movement speeds, because how much a move takes your feet away is part of
+    // the same tuning surface as its frame data.
+    //
+    // Formatted with integer arithmetic rather than a cast to `f32`: this file
+    // lives under `crates/sim/src`, and the no-floats guard covers all of it.
+    // That is the guard working, not the guard being awkward -- the rule is
+    // worth more than a convenient `{:.1}`.
+    println!(
+        "walk {}  |  poking {}  |  crouching {}  |  guarding {}  |  committed 0",
+        tenths(t::MOVE_SPEED),
+        tenths(t::MOVE_SPEED.mul(Fx::ratio(t::POKE_MOBILITY as i32, 100))),
+        tenths(t::CROUCH_MOVE_SPEED),
+        tenths(t::GUARD_MOVE_SPEED),
+    );
     println!(
         "reaction {}f  |  parry window {}f  |  dodge {}f ({} invulnerable)\n",
         t::HUMAN_REACTION_FRAMES,
@@ -36,6 +51,9 @@ fn main() {
             if m.needs_mechanic {
                 notes.push("needs mechanic");
             }
+            if m.roots() {
+                notes.push("roots you");
+            }
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
@@ -58,4 +76,11 @@ fn main() {
         "On block is the safety number: negative means punishable, and every move\n\
          should be. Record what you change in docs/design/feel-log.md."
     );
+}
+
+/// One decimal place, without touching floating point.
+fn tenths(v: Fx) -> String {
+    // Rounded, not truncated: 4.199 should read as 4.2, not 4.1.
+    let t = (v.raw() as i64 * 10 + (1 << 15)) >> 16;
+    format!("{}.{}", t / 10, (t % 10).abs())
 }

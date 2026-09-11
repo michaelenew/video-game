@@ -39,6 +39,32 @@ Two consequences are worth stating because they are design, not implementation:
   and an arc you can flip instantly *is* a bubble. The camera still goes wherever the mouse
   goes; it is the character who cannot reorient that fast.
 
+### Hindrance is proportional to commitment
+
+A move takes your feet away in proportion to how much it commits you.
+
+| | Speed |
+| --- | --- |
+| Free | 7.0 |
+| Throwing a poke | 4.2 |
+| Crouching | 3.0 |
+| Guarding | 2.0 |
+| Committed move | 0 — rooted |
+
+Rooting is what commitment *means*, and it is right for the heavy moves: spacing only matters
+if choosing to swing costs you the ability to reposition. It is wrong for a fast poke. The
+poke is the neutral tool, thrown constantly, and stopping dead for every one makes neutral
+sticky and reads as the game taking the controls away. Slowing you keeps the cost — you
+cannot close or escape at full speed while swinging — without the lurch.
+
+Even where rooting is correct, arriving at rooted takes about four frames rather than one.
+The snap from a full walk to nothing was the jarring part, not the rooting. The distance slid
+while bleeding off is about twenty centimetres: nothing for spacing, everything for how it
+reads.
+
+`cargo run -p sim --bin frametable` prints these alongside the frame data, and marks which
+moves root you.
+
 ### The crosshair tells you where the attack goes, not where the camera points
 
 Those two are the same most of the time, and deliberately not the same during a committed

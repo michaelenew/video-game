@@ -65,6 +65,11 @@ as they get tested.
   option, so its distance sets the whole neutral spacing game.
 
 ### Attacks
+
+- Is 4.2 the right speed while poking, and should it differ per class? A spear poke and a
+  hammer poke arguably should not hinder the same amount.
+- Should mobility vary *across* a move's phases — free during startup, rooted through
+  recovery? That is a common shape and might read better than a flat rate.
 - **Is Bash at 4 frames of startup too fast to react to?** Human reaction is
   roughly 15 frames at 60 Hz, so a 4-frame move is unreactable by design. That
   is correct for a poke you are meant to *anticipate*, but it may make neutral
@@ -261,3 +266,26 @@ and distance became settings rather than constants. They are the first numbers a
 for when a camera feels wrong, and a value you have to rebuild to try is a value that gets
 tried once. Candidate framings can now be rendered straight from the settings file without
 touching the code, which is how the two above were compared.
+
+### 2026-09-11 — the dead stop on every basic attack
+**Changed** A poke now slows you to 4.2 rather than rooting you (walk is 7.0, crouch 3.0,
+guard 2.0). Committed moves still root — but they bleed the speed off over about four frames
+instead of snapping to zero in one.
+**Why** Reported as jarring. Every attack, poke included, hit a single line that set
+horizontal velocity to zero, so the basic attack you throw constantly snapped you from a full
+walk to a dead stop in one frame.
+**Verdict** kept. Three options were on the table — much briefer, a slow, or no hindrance —
+and the answer that generalises is **hindrance proportional to commitment**. No hindrance
+removes the spacing cost of throwing a poke, and spacing is most of neutral. A briefer root
+leaves two snaps bracketing the move instead of one. A slow keeps a real cost and is
+continuous.
+
+The separable half is worth noting on its own: the *snap* and the *rooting* were two different
+complaints wearing one coat. Rooting a committed move is correct design; arriving at rooted in
+a single frame is not, and fixing that costs about twenty centimetres of slide and no spacing
+at all.
+
+One thing the repository caught rather than me: printing the new speeds in the frame table
+used `f32`, and the no-floats guard failed because that binary lives under `crates/sim/src`.
+Formatted from the fixed-point raw value with integer arithmetic instead. The rule is worth
+more than a convenient `{:.1}`.

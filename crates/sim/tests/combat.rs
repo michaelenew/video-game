@@ -368,3 +368,95 @@ fn aim_survives_a_rollback() {
     }
     assert_eq!(live.checksum(), replay.checksum(), "rollback diverged");
 }
+
+// ---------------------------------------------------------------------------
+// How much a move hinders you
+// ---------------------------------------------------------------------------
+
+/// Horizontal speed after holding `bits` for `frames` from a standing start.
+fn speed_after(bits: u16, frames: u32) -> f32 {
+    let mut w = World::new();
+    for _ in 0..frames {
+        w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    }
+    let v = w.players[0].vel;
+    (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt()
+}
+
+#[test]
+fn poking_slows_you_without_stopping_you() {
+    // Reported as jarring: every basic attack snapped you from a full walk to a
+    // dead stop, and the basic attack is the move you throw constantly.
+    let walking = speed_after(Input::W, 10);
+    let poking = speed_after(Input::W | L, 10);
+    assert!(walking > 6.0, "fixture is not walking: {walking}");
+    assert!(
+        poking > 1.0,
+        "a poke still stops you dead: {poking} while walking is {walking}"
+    );
+    assert!(
+        poking < walking * 0.85,
+        "a poke costs nothing: {poking} against a walk of {walking}"
+    );
+}
+
+#[test]
+fn a_committed_move_still_roots_you() {
+    // The other half of the rule. Rooting is what commitment *means*; if the
+    // heavy moves stopped rooting, spacing would stop mattering.
+    let slam = speed_after(Input::W | SHIFT | L, 20);
+    assert!(
+        slam < 0.3,
+        "a committed move let you keep walking at {slam}"
+    );
+}
+
+#[test]
+fn coming_to_rest_inside_a_move_is_not_instant() {
+    // The snap was the jarring part, not the rooting. A rooting move should
+    // bleed the speed off over a few frames.
+    let mut w = World::new();
+    for _ in 0..10 {
+        w.advance([
+            Input::aimed(Input::W, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    w.advance([
+        Input::aimed(SHIFT | L, LOOK_RIGHT),
+        Input::aimed(0, LOOK_LEFT),
+    ]);
+    let v = w.players[0].vel;
+    let first = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
+    assert!(
+        first > 1.0,
+        "velocity snapped to {first} on the first frame of the move"
+    );
+
+    for _ in 0..8 {
+        w.advance([
+            Input::aimed(SHIFT | L, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    let v = w.players[0].vel;
+    let settled = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
+    assert!(settled < 0.3, "never came to rest: {settled}");
+}
+
+#[test]
+fn releasing_a_direction_still_stops_you_crisply() {
+    // The decay is for moves that root you, not for ordinary walking. Letting
+    // go of W while free should stop you on the spot, or movement turns to ice.
+    let mut w = World::new();
+    for _ in 0..10 {
+        w.advance([
+            Input::aimed(Input::W, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    let v = w.players[0].vel;
+    let after = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
+    assert_eq!(after, 0.0, "walking now coasts");
+}
