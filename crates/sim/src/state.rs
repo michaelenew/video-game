@@ -200,6 +200,9 @@ pub struct Player {
     /// Frames of slow left. A drain field sets it and it counts down, so the
     /// slow has a tail and does not flicker on the field's boundary.
     pub slowed: u16,
+    /// Was the mechanic button down last frame? Part of the snapshot, so the
+    /// press edge survives rollback.
+    pub mechanic_held: bool,
     /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
     /// so the victim can be kept at arm's length rather than merely stunned.
     pub held_by: u8,
@@ -269,6 +272,7 @@ impl Default for Player {
             rounds_won: 0,
             crouching: false,
             slowed: 0,
+            mechanic_held: false,
             held_by: NOBODY,
         }
     }
@@ -488,6 +492,7 @@ impl World {
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
+            h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
@@ -711,6 +716,27 @@ fn step_player(p: &mut Player, input: Input) {
     // a bubble (see defense.md), and an arc you can flip instantly is a bubble
     // with extra steps. The camera still snaps wherever the mouse goes -- it is
     // the character who cannot reorient that fast.
+    // The mechanic fires on the **press**, not while the button is down. Held,
+    // it used to re-fire every frame: the Bellator's form became a function of
+    // how many frames you happened to hold it for, the Reaver's shadow toggled
+    // itself back off, the Bulwark's shield was pinned mid-throw and never
+    // planted, and the Elementalist spent all three structures on one spot in
+    // three frames. A button whose meaning depends on how long you hold it is a
+    // button you cannot use.
+    // The mechanic fires on the **press**, not while the button is down. Held,
+    // it used to re-fire every frame: the Bellator's form became a function of
+    // how many frames you happened to hold it, the Reaver's shadow toggled
+    // itself back off, the Bulwark's shield was pinned mid-throw and never
+    // planted, and the Elementalist spent all three structures on one spot in
+    // three frames. A button whose meaning depends on how long you hold it is a
+    // button you cannot use.
+    //
+    // The previous frame's state lives on the fighter rather than in a
+    // renderer-side "just pressed", because rollback re-runs these frames: the
+    // edge has to be recomputed from the snapshot, not remembered outside it.
+    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    p.mechanic_held = input.has(Input::MECHANIC);
+
     let look = V3::from_turns(input.aim_turns());
     if p.action.actionable() || p.action.stunned() {
         p.facing = look;
@@ -783,7 +809,7 @@ fn step_player(p: &mut Player, input: Input) {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, 2).startup,
                 }
-            } else if input.has(Input::MECHANIC) {
+            } else if pressed_mechanic {
                 mechanic_action(p);
                 Action::Free
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
@@ -1105,12 +1131,15 @@ fn mechanic_action(p: &mut Player) {
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
         // is the resource.
         Mechanic::Structures(mut slots) => {
-            let spot = p.pos.add(p.facing.scale(Fx::ratio(5, 2)));
+            let raised = class::Structure {
+                at: p.pos.add(p.facing.scale(Fx::ratio(5, 2))),
+                age: 0,
+            };
             if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
-                *free = Some(spot);
+                *free = Some(raised);
             } else {
                 slots.rotate_left(1);
-                slots[class::MAX_STRUCTURES - 1] = Some(spot);
+                slots[class::MAX_STRUCTURES - 1] = Some(raised);
             }
             p.mechanic = Mechanic::Structures(slots);
         }
@@ -1169,6 +1198,16 @@ fn step_mechanic(p: &mut Player) {
             if spot.sub(p.pos).flat_len().raw() > SHADOW_LEASH.raw() {
                 p.mechanic = Mechanic::Shadow { at: None };
             }
+        }
+
+        // Structures count up while they finish rising. Saturating, because
+        // this is not a lifetime: once a structure is out of the ground the
+        // number stops mattering and the structure stays.
+        Mechanic::Structures(mut slots) => {
+            for slot in slots.iter_mut().flatten() {
+                slot.age = slot.age.saturating_add(1);
+            }
+            p.mechanic = Mechanic::Structures(slots);
         }
 
         // Past the deep threshold the forces burn you. Relief comes from
@@ -1242,7 +1281,10 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(5);
             for slot in slots {
                 match slot {
-                    Some(pos) => hash_v3(h, pos),
+                    Some(s) => {
+                        hash_v3(h, &s.at);
+                        h.write_u32(s.age as u32);
+                    }
                     None => h.write_u32(0),
                 }
             }

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 47] = [
+pub const SCALARS: [i32; 48] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -55,6 +55,7 @@ pub const SCALARS: [i32; 47] = [
            45875, // effects.structure_radius = 0.7
               18, // effects.slow_duration = 18
               26, // effects.fire_pillar_tick = 26
+              14, // effects.structure_rise = 14
 ];
 
 #[rustfmt::skip]

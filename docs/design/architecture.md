@@ -382,6 +382,22 @@ on a clock; a structure is spent by raising a fourth. Those are different rules,
 different homes. Structures render from a pool driven straight off the mechanic, which is the
 only thing that owns them.
 
+### The mechanic fires on the press, and the edge lives in the snapshot
+
+Held, the mechanic button used to re-fire every frame, and every class was wrong in its own way:
+the Bellator's form became a function of how many frames you happened to hold it, the Reaver's
+shadow toggled itself back off, the Bulwark's shield was pinned mid-throw and never planted, and
+the Elementalist spent all three structures on one spot in three frames.
+
+"Was it down last frame" is a **single bool on the fighter**, not a renderer-side `just_pressed`.
+Rollback re-runs these frames, so the edge has to be recomputed from the snapshot; a flag kept
+outside the simulation would report a press on every re-simulated frame and none of the above
+would be fixed. It costs one bit in the checksum.
+
+The attack buttons deliberately still repeat while held. Mashing a poke is normal for the genre
+and the move's own recovery frames are the rate limit. The mechanic has no recovery frames,
+which is why it needed the edge and they do not.
+
 ### A grab is a state, not a stun
 
 `Action::Held` pins the victim to their captor at arm's length and moves them with him. It is

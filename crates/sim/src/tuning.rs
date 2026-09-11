@@ -314,6 +314,12 @@ pub fn spike_drain() -> i32 {
     oven::scalar(Scalar::SpikeDrain)
 }
 
+/// Frames a structure takes to climb out of the ground. Cosmetic: it is earth,
+/// so it comes up through the floor rather than appearing in the air.
+pub fn structure_rise() -> u16 {
+    oven::scalar(Scalar::StructureRise) as u16
+}
+
 /// How wide a structure stands. Visual size and, later, what a fire pillar
 /// detonates -- structures have no clock, so there is no lifetime beside it.
 pub fn structure_radius() -> Fx {

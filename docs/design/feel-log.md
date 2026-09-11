@@ -682,3 +682,46 @@ one-circle hit test, not of any class.
 Whether the hit test stays one circle, becomes a swept capsule from the fighter to the reach
 point, or ranged autos become real projectiles is a decision for that pass. All three fix the
 table above; they differ in what else they make possible.
+
+### 2026-09-11 — the mechanic button fired every frame you held it
+**Reported** The Elementalist raises a structure once per frame while `E` is held; it should be
+one per press.
+
+**It was every class**, and each was broken in its own way. Measured, holding `E` for thirty
+frames:
+
+| Class | What you got |
+| --- | --- |
+| Bulwark | Shield pinned mid-throw — re-thrown every frame, so it never travelled and never planted |
+| Bellator | Form cycled thirty times; which one you end on is a function of how long you held |
+| Shadow Reaver | Shadow placed and unplaced every frame; released on an even count, so no shadow |
+| Elementalist | All three structures spent in three frames, stacked on one spot |
+
+**Fix** The mechanic fires on the **press**. One bool on the fighter — was it down last frame —
+and the edge is recomputed from the snapshot, which is what makes it survive rollback. A
+renderer-side "just pressed" would report a press on every re-simulated frame and fix nothing.
+
+**No cooldown, and this is the reason.** A cooldown was the obvious next thought and it is the
+wrong tool twice over. It would be a second mechanism doing the cap's job — three structures is
+already the resource, and a fourth already costs the first. And [the frame](README.md) says
+abilities cost **frames**, not cooldowns; if raising a structure should cost commitment, the
+honest form is recovery frames on the mechanic, which is one knob and belongs with the abilities
+pass rather than bolted on here. The press edge is the whole of the reported bug.
+
+Attack buttons still repeat while held, on purpose: mashing a poke is normal for the genre, and
+a move's own recovery frames are the rate limit. The mechanic has none, which is exactly why it
+needed the edge.
+
+### 2026-09-11 — structures come up out of the ground
+**Changed** A structure climbs out of the floor over about a quarter second instead of appearing
+in the air. It is earth.
+
+**How it stays honest under rollback:** the structure carries an `age` that the renderer reads.
+Tempting to put the timer in the renderer, since this is pure decoration — but rollback jumps
+the world backwards, and a renderer-side timer would disagree with the fighter it belongs to
+after every correction.
+
+The risk worth naming is that this is the *second* time structures have carried a counter, and
+the first time it was a lifetime that silently killed the class's special. So: it **saturates**,
+nothing reads it but the renderer, and there is a test asserting a structure still works after
+fifty seconds — the counter cannot become a clock again without that test going red.
