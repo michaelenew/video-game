@@ -377,6 +377,9 @@ pub fn pose_for(input: PoseInput) -> Pose {
         Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => {
             blend(&RECOIL, &NEUTRAL, ease_in_out(t * 0.7))
         }
+        // Held: the recoil, and it does not relax. Being grabbed should read as
+        // continuous, not as a hit you are walking off.
+        Action::Held { .. } => RECOIL,
         Action::Dodge { .. } => {
             // Snap into the roll and come out of it, so the invulnerable
             // frames and the vulnerable recovery look different.

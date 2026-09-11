@@ -20,15 +20,34 @@ direction is *discretised* — four inputs, not a stick — and modifiers do the
 
 ## The grammar
 
-Five sentences, and everything else follows:
+Six sentences, and everything else follows:
 
 1. **Click means attack.**
 2. **Shift means use an ability** when a click comes with it, and **dodge** when only a
    direction does.
 3. **WASD means move.**
 4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
-5. **The mouse means *where*.** You look with it, you are pointed where you look, and
+5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
+   class does, each on its own key.
+6. **The mouse means *where*.** You look with it, you are pointed where you look, and
    your attacks go where you are pointed.
+
+### Why the special and the mechanic left the mouse
+
+They used to be middle click and shift + middle click. Two problems, and the second is the
+real one.
+
+The small problem: middle click is a scroll wheel on most hands, and pressing it reliably in
+a fight is not a thing people can do.
+
+The **large** problem: those two inputs are the class. The fire pillar, the uppercut, the
+grapple, the shield throw — everything that makes a Bulwark not an Elementalist lives there.
+Putting the class identity behind a modifier on the least reachable button said "this is the
+optional one", and it played that way: people finished a match without ever pressing it.
+`Q` and `E` are two of the three keys a left hand already rests next to.
+
+This costs nothing elsewhere. Shift + click stays the committed attack, and no other input
+moved.
 
 ### Why space stopped being clever
 
@@ -189,10 +208,15 @@ same job on every class.
 
 | Region | Meaning |
 | --- | --- |
-| **Unmodified `L`/`R`/`M`** | Autos **and the class mechanic.** This is where identity lives, and it is different on every class. |
+| **Unmodified `L`/`R`** | Autos. The neutral vocabulary, roughly shared across classes. |
+| **`Q` and `E`** | The class special and the class mechanic. This is where identity lives, and it is different on every class. |
 | **Direction + click** | Basic moves. A shared vocabulary — roughly the same shapes on every class. The two casters are the exception. |
 | **Shift + click** | The six-ability kit. |
 | **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
+
+The prototype binds the first three of these: left click pokes, shift + left click is the
+committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` stand in for the
+clicks on keyboards where that is easier.
 
 That last row does real work. The Bellator's Rush and the Reaver's Shadow dash *are* their
 dodges rather than extra inputs. For the Reaver this is what makes movement and shadow

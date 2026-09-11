@@ -257,3 +257,75 @@ pub fn air_attack_boost() -> Fx {
 pub fn jump_release_cut() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpReleaseCut))
 }
+
+// ---------------------------------------------------------------------------
+// Persistent effects
+// ---------------------------------------------------------------------------
+
+/// How often a field effect damages. The number in the move table is per tick,
+/// not per frame -- a field hitting every frame would do sixty times its listed
+/// damage a second.
+pub fn effect_tick_frames() -> u16 {
+    oven::scalar(Scalar::EffectTickFrames) as u16
+}
+
+/// The fire pillar grows. It starts narrow and short, and the two halves grow
+/// differently: the base spreads *out* and the column reaches *up*, so the
+/// threat to someone on the ground and the threat to someone jumping over
+/// arrive on different schedules.
+pub fn pillar_base_radius_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarBaseRadiusStart))
+}
+pub fn pillar_base_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarBaseRadius))
+}
+pub fn pillar_base_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarBaseHeight))
+}
+pub fn pillar_radius_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarRadiusStart))
+}
+pub fn pillar_column_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarColumnRadius))
+}
+pub fn pillar_height_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarHeightStart))
+}
+pub fn pillar_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarHeight))
+}
+pub fn pillar_life() -> u16 {
+    oven::scalar(Scalar::PillarLife) as u16
+}
+
+pub fn spike_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeRadius))
+}
+pub fn spike_life() -> u16 {
+    oven::scalar(Scalar::SpikeLife) as u16
+}
+/// Movement multiplier while standing in a drain field.
+pub fn spike_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeSlow))
+}
+pub fn spike_drain() -> i32 {
+    oven::scalar(Scalar::SpikeDrain)
+}
+
+pub fn structure_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StructureRadius))
+}
+pub fn structure_life() -> u16 {
+    oven::scalar(Scalar::StructureLife) as u16
+}
+
+/// How long a slow lingers after leaving the field that applied it. Without a
+/// tail the slow flickers on the boundary.
+pub fn slow_frames() -> u16 {
+    oven::scalar(Scalar::SlowFrames) as u16
+}
+
+/// Damage a fire pillar deals each tick to anyone inside either of its volumes.
+pub fn pillar_damage() -> i32 {
+    oven::scalar(Scalar::PillarDamage)
+}

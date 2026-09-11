@@ -40,6 +40,18 @@ pub struct Move {
     /// differently from one that drops you through it, and both are worth
     /// having. Zero means gravity never stops.
     pub air_stall: u16,
+    /// Upward speed given to whoever this hits. The Bellator's uppercut takes
+    /// people into the air with it; most moves leave them on the ground.
+    pub launch: Fx,
+    /// Upward speed the *attacker* gains when the move starts. A leaping move
+    /// commits you to the air along with your victim.
+    pub self_lift: Fx,
+    /// On hit, hold the victim for this many frames at arm's length. Zero is a
+    /// normal hit; anything else is a grab.
+    pub grabs: u16,
+    /// Which persistent effect this move leaves behind, if any.
+    /// See `effects::EffectKind::from_code`.
+    pub effect: u8,
     /// Percent of walking speed you keep while the move runs.
     ///
     /// Zero roots you, which is what commitment means and is correct for the
@@ -115,6 +127,21 @@ const NAMES: [[&str; SLOTS]; 6] = [
 
 pub const SLOTS: usize = 3;
 
+/// The keys that throw a given slot's move.
+///
+/// Kept next to the move table so the Oven can print it beside the numbers: the
+/// first question anyone asks about a knob is "which button is this", and
+/// answering it in the same header removes a lookup from every tuning pass.
+/// The bindings themselves are read by `crates/game` and documented in
+/// `crates/manual`; this is the label, not the binding.
+pub const fn binding(slot: usize) -> &'static str {
+    match slot {
+        0 => "LMB",
+        1 => "Shift+LMB",
+        _ => "Q",
+    }
+}
+
 /// Build a move from the live tuning store.
 ///
 /// By value rather than by reference: the numbers can change between frames, so
@@ -140,6 +167,10 @@ pub fn get(class: Class, kind: u8) -> Move {
         needs_mechanic: raw(F::NeedsMechanic) != 0,
         mobility: raw(F::Mobility) as u8,
         air_stall: raw(F::AirStall) as u16,
+        launch: Fx::from_raw(raw(F::Launch)),
+        self_lift: Fx::from_raw(raw(F::SelfLift)),
+        grabs: raw(F::Grabs) as u16,
+        effect: raw(F::Effect) as u8,
     }
 }
 

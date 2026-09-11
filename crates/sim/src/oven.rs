@@ -145,6 +145,23 @@ scalars! {
     AirStallDamp,     "Air",      "Aerial hang damping",    Fixed,   0,         fx(1,1);
     AirAttackBoost,   "Air",      "Aerial poke boost",      Fixed,   0,         fx(10,1);
     JumpReleaseCut,   "Air",      "Rise kept on release",   Fixed,   fx(1,10),  fx(1,1);
+    EffectTickFrames, "Effects",  "Damage tick interval",   Frames,  1,         60;
+    PillarBaseRadiusStart, "Effects", "Pillar base radius, new",  Fixed, fx(1,10), fx(6,1);
+    PillarBaseRadius, "Effects",  "Pillar base radius, grown", Fixed, fx(1,10), fx(6,1);
+    PillarBaseHeight, "Effects",  "Pillar base height",     Fixed,   fx(1,10),  fx(4,1);
+    PillarRadiusStart,"Effects",  "Pillar column radius, new", Fixed, fx(1,10), fx(6,1);
+    PillarColumnRadius,"Effects", "Pillar column radius, grown", Fixed, fx(1,10), fx(6,1);
+    PillarHeightStart,"Effects",  "Pillar height, new",     Fixed,   fx(1,10),  fx(20,1);
+    PillarHeight,     "Effects",  "Pillar height, grown",   Fixed,   fx(1,10),  fx(20,1);
+    PillarLife,       "Effects",  "Pillar lifetime",        Frames,  10,        600;
+    SpikeRadius,      "Effects",  "Black spike radius",     Fixed,   fx(1,10),  fx(8,1);
+    SpikeLife,        "Effects",  "Black spike lifetime",   Frames,  10,        600;
+    SpikeSlow,        "Effects",  "Black spike slow (x)",   Fixed,   0,         fx(1,1);
+    SpikeDrain,       "Effects",  "Black spike drain",      Int,     0,         200;
+    StructureRadius,  "Effects",  "Structure radius",       Fixed,   fx(1,10),  fx(4,1);
+    StructureLife,    "Effects",  "Structure lifetime",     Frames,  10,        1200;
+    SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
+    PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +217,12 @@ pub enum MoveField {
     Unblockable,
     HitsCrouching,
     NeedsMechanic,
+    // Appended, so field indices 0..13 keep the meaning the baked file was
+    // written with. Only the stride changes, which the migration handled.
+    Launch,
+    SelfLift,
+    Grabs,
+    Effect,
 }
 
 impl MoveField {
@@ -218,6 +241,10 @@ impl MoveField {
         MoveField::Unblockable,
         MoveField::HitsCrouching,
         MoveField::NeedsMechanic,
+        MoveField::Launch,
+        MoveField::SelfLift,
+        MoveField::Grabs,
+        MoveField::Effect,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -236,6 +263,10 @@ impl MoveField {
             MoveField::Unblockable => "Unblockable",
             MoveField::HitsCrouching => "Hits crouching",
             MoveField::NeedsMechanic => "Needs mechanic",
+            MoveField::Launch => "Launch",
+            MoveField::SelfLift => "Self lift",
+            MoveField::Grabs => "Grab hold",
+            MoveField::Effect => "Leaves behind",
         }
     }
 
@@ -252,6 +283,8 @@ impl MoveField {
             MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
                 Unit::Flag
             }
+            MoveField::Grabs => Unit::Frames,
+            MoveField::Effect => Unit::Int,
             _ => Unit::Fixed,
         }
     }
@@ -269,9 +302,10 @@ impl MoveField {
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 31;
+pub const SCALAR_COUNT: usize = 48;
 pub const AIR_COUNT: usize = CLASSES * 4;
-pub const MOVE_COUNT: usize = CLASSES * SLOTS * 14;
+pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
+pub const MOVE_FIELDS: usize = 18;
 
 // ---------------------------------------------------------------------------
 // The live store
@@ -306,7 +340,7 @@ pub fn set_air(class: Class, field: AirField, raw: i32) {
 }
 
 fn move_index(class: Class, slot: usize, field: MoveField) -> usize {
-    (class as usize * SLOTS + slot) * 14 + field as usize
+    (class as usize * SLOTS + slot) * MOVE_FIELDS + field as usize
 }
 
 pub fn move_field(class: Class, slot: usize, field: MoveField) -> i32 {
@@ -387,9 +421,12 @@ impl Knob {
         match self {
             Knob::Scalar(s) => s.family().to_string(),
             Knob::Air(c, _) => format!("Air · {}", c.name()),
-            Knob::Move(c, slot, _) => {
-                format!("{} · {}", c.name(), crate::moves::get(c, slot as u8).name)
-            }
+            Knob::Move(c, slot, _) => format!(
+                "{} · {} [{}]",
+                c.name(),
+                crate::moves::get(c, slot as u8).name,
+                crate::moves::binding(slot)
+            ),
         }
     }
 

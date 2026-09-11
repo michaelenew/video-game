@@ -8,6 +8,7 @@
 
 use bevy::prelude::*;
 use sim::class::Mechanic;
+use sim::effects::EffectKind;
 use sim::state::Action;
 use view::Frame;
 
@@ -32,6 +33,11 @@ const GUARD: Color = Color::srgb(0.21, 0.82, 0.63);
 const PARRY: Color = Color::srgb(0.48, 1.0, 0.81);
 const FACING: Color = Color::srgb(0.85, 0.88, 0.95);
 const SHIELD: Color = Color::srgb(0.98, 0.78, 0.35);
+/// Persistent effects. A fire pillar and a drain field are hitboxes that
+/// outlive their move, so they are drawn in the hitbox family of colours.
+const PILLAR: Color = Color::srgb(1.0, 0.55, 0.15);
+const FIELD: Color = Color::srgb(0.85, 0.20, 0.35);
+const STRUCTURE: Color = Color::srgb(0.70, 0.70, 0.68);
 
 pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
     if !show.0 {
@@ -103,6 +109,46 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         // The class mechanic, wherever it lives in the world.
         for spot in mechanic_markers(&sim.cur.players[i].mechanic) {
             gizmos.sphere(Isometry3d::from_translation(spot), 0.45, SHIELD);
+        }
+    }
+
+    // Persistent effects, drawn as the volumes the simulation tests against --
+    // the fire pillar's two slabs separately, because they are two threats.
+    for effect in sim.cur.effects.iter().flatten() {
+        let at = Vec3::new(
+            effect.pos.x.to_f32_for_render(),
+            effect.pos.y.to_f32_for_render(),
+            effect.pos.z.to_f32_for_render(),
+        );
+        match effect.kind {
+            EffectKind::FirePillar => {
+                let (base, column) = effect.pillar_volumes();
+                for slab in [base, column] {
+                    let bottom = slab.bottom.to_f32_for_render();
+                    let top = slab.top.to_f32_for_render();
+                    cylinder(
+                        &mut gizmos,
+                        at + Vec3::Y * bottom,
+                        slab.radius.to_f32_for_render(),
+                        (top - bottom).max(0.01),
+                        PILLAR,
+                    );
+                }
+            }
+            EffectKind::BlackSpike => cylinder(
+                &mut gizmos,
+                at,
+                effect.field_radius().to_f32_for_render(),
+                0.12,
+                FIELD,
+            ),
+            EffectKind::Structure => cylinder(
+                &mut gizmos,
+                at,
+                effect.field_radius().to_f32_for_render(),
+                1.8,
+                STRUCTURE,
+            ),
         }
     }
 }

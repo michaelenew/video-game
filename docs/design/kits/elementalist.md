@@ -16,6 +16,10 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 - **Cap of three on the field.** Spawning a fourth collapses the oldest. That cap is the
   resource — structures are spent by being consumed in combos, and hoarding them costs you
   new ones.
+
+> **Implemented** (`E`). Structures are objects standing in the arena with a lifetime, not a
+> list of coordinates. The cap holds, and the clock is a second cost: hoarding them loses them
+> anyway.
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
   short distances with attacks, but cannot combo through them nearly as well. See
   [../elementalist.md](../elementalist.md).
@@ -64,6 +68,12 @@ detonates it for a much wider blast
 
 A focused pillar of flame with a small staggering core and a moderate surrounding area.
 The bread-and-butter structure detonation.
+
+> **Implemented** (`Q`). The pillar is two volumes rather than one: it starts narrow and
+> short, then the **base spreads out** while the **column reaches up** and widens only
+> slightly. The base is what catches someone walking past it; the column is what stops them
+> jumping over. It burns everyone but the Elementalist, on a tick rather than every frame, and
+> it stands long after her recovery frames are over.
 
 ### Flame spitter
 **Startup** fast · **Recovery** medium · **Range** medium, channelled · **Mechanic** on a

@@ -573,3 +573,55 @@ And the manual's completeness test caught F8 before the commit — it failed wit
 handles keys this test does not know how to spell"*, then again with *"the manual never mentions
 them"*. Exactly the two ways that could have gone stale, both caught by machinery rather than by
 remembering.
+
+### 2026-09-11 — the classes got the things that make them classes
+**Changed** Five pieces, all of them the same piece: the moves that only one class has now do
+what the kit documents say they do.
+
+- **Fire pillar** (Elementalist) plants a pillar that outlives the move. It starts narrow and
+  short and grows into a **wide base** and a **taller, only slightly wider column** — two
+  volumes, two threats.
+- **Structures** (Elementalist) are real things standing in the arena with a lifetime, not a
+  list of coordinates. A fourth costs the first; the clock costs all of them eventually.
+- **Black spike** (Blood mage) leaves a field that **drains and slows** anyone standing in it.
+- **Uppercut** (Bellator) leaps, and **takes whoever it catches into the air with it**.
+- **Grapple** (Bulwark) actually grabs: the victim is pinned at arm's length and goes where
+  the Bulwark goes until it ends.
+
+**Why** They were all documented and none of them existed. The specials were, in fact,
+*unreachable* — the gate on the special slot asked whether the fighter had a shield in hand,
+which is true only of the Bulwark, so five of the six classes had a button that did nothing.
+That is the kind of bug that hides behind a plausible-looking condition.
+
+**Verdict** kept, with three notes worth keeping.
+
+**Two volumes is the whole fire pillar.** A single growing cylinder makes "can I walk around
+it" and "can I jump over it" the same question, and the answer has to be the same for both.
+Splitting them lets the base spread wide enough to be a wall while the column stays narrow
+enough that a jump is a real answer — at the cost of climbing high enough that the jump has to
+be *timed*. Two numbers, two decisions.
+
+**The slow is what makes the drain a wall.** Damage alone makes a puddle you step out of. The
+slow makes leaving cost time, which is what turns it into something you put *between* yourself
+and someone else. That was in the class doc as a single clause and it turns out to be the
+entire mechanic.
+
+**Growth is computed from age, never accumulated.** A pillar's radius is a function of how many
+frames it has existed. An effect that grew by adding to itself each tick would drift every time
+a rollback replayed those frames, and it would drift *differently* on each peer — a desync that
+only appears under packet loss, which is the worst kind to find.
+
+### 2026-09-11 — the special and the mechanic moved to Q and E
+**Changed** The class special was shift + middle click and the class mechanic was middle click.
+They are now **`Q`** and **`E`**.
+**Why** Reported, and correct. Middle click is a scroll wheel on most hands.
+**Verdict** kept, and the reason is bigger than the ergonomics.
+
+Those two inputs *are* the class. Everything that makes a Bulwark not an Elementalist lives
+there. Putting them behind the least reachable button, one of them under a modifier, said "these
+are the optional ones" — and they played that way. A whole match could go by without either
+being pressed, which means a whole match could go by without the class mattering.
+
+The Oven now prints the binding in each move's family header — `Bulwark · Grapple [Q]` — because
+the first question anyone asks while tuning a number is which button it belongs to, and
+answering it in the header removes a lookup from every pass.

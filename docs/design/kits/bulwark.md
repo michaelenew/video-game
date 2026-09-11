@@ -84,6 +84,10 @@ shield held
 A command grab. Beats blocking outright, loses badly to dodge. Long startup and a punishing
 tail — this is the payoff for a read on a turtling opponent, not something to throw out.
 
+> **Implemented** (`Q`). It grabs: the victim is pinned at the Bulwark's arm's length and goes
+> where he goes until the hold ends. Not hitstun with a longer timer — hitstun is something you
+> recover from where you stand, and a grab is something that takes you somewhere.
+
 ## Playing it
 
 Hold space with Guard and Bash, aimed so that the only open approach is the one you want

@@ -163,11 +163,19 @@ fn the_tuning_is_part_of_the_desync_checksum() {
 #[test]
 fn families_group_the_way_a_person_would_look_for_them() {
     // Three hundred numbers need families to be navigable at all. Each move
-    // gets its own, named for the move, because "Bulwark · Bash" is how someone
-    // asks for it.
+    // gets its own, named for the move and **for the key that throws it**,
+    // because "Bulwark · Bash" is how someone asks for it and "which button is
+    // this" is the next thing they ask.
     let knobs = oven::all_knobs();
     let families: Vec<String> = knobs.iter().map(|k| k.family()).collect();
-    for expected in ["Movement", "Air", "Defence", "Match", "Bulwark · Bash"] {
+    for expected in [
+        "Movement",
+        "Air",
+        "Defence",
+        "Match",
+        "Bulwark · Bash [LMB]",
+        "Bulwark · Grapple [Q]",
+    ] {
         assert!(
             families.iter().any(|f| f == expected),
             "no family called {expected}"

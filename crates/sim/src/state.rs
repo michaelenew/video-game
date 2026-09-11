@@ -16,6 +16,7 @@ use crate::DT;
 use crate::arena;
 pub use crate::class::Shield;
 use crate::class::{self, BURN_PER_TICK_AT_MAX, Class, Form, METER_DEEP, METER_MAX, Mechanic};
+use crate::effects::{Effect, EffectKind, MAX_EFFECTS};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
@@ -29,6 +30,9 @@ const GROUND_Y: Fx = Fx::ZERO;
 
 /// Move slots are positional and mean the same thing on every class, which is
 /// what lets one control scheme drive six kits. See `controls.md`.
+/// `held_by` when nobody is holding you.
+pub const NOBODY: u8 = u8::MAX;
+
 pub const SLOT_POKE: u8 = 0;
 pub const SLOT_COMMITTED: u8 = 1;
 pub const SLOT_SPECIAL: u8 = 2;
@@ -80,6 +84,12 @@ pub enum Action {
     Dodge {
         left: u16,
     },
+    /// Caught by a grab. You cannot act, and you are dragged to whoever has
+    /// you, which is what makes a grab different from a long stun: it moves
+    /// you, so the grabber decides where the next exchange happens.
+    Held {
+        left: u16,
+    },
 }
 
 impl Action {
@@ -111,7 +121,10 @@ impl Action {
     pub const fn stunned(self) -> bool {
         matches!(
             self,
-            Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. }
+            Action::BlockStun { .. }
+                | Action::HitStun { .. }
+                | Action::Stagger { .. }
+                | Action::Held { .. }
         )
     }
 
@@ -125,6 +138,7 @@ impl Action {
             Action::BlockStun { .. } => 5,
             Action::HitStun { .. } => 6,
             Action::Stagger { .. } => 7,
+            Action::Held { .. } => 9,
             Action::Dodge { .. } => 8,
         }
     }
@@ -138,6 +152,7 @@ impl Action {
             | Action::BlockStun { left }
             | Action::HitStun { left }
             | Action::Stagger { left }
+            | Action::Held { left }
             | Action::Dodge { left } => left,
             Action::Guard { held } => held,
         }
@@ -182,6 +197,12 @@ pub struct Player {
     pub mechanic: Mechanic,
     pub rounds_won: u8,
     pub crouching: bool,
+    /// Frames of slow left. A drain field sets it and it counts down, so the
+    /// slow has a tail and does not flicker on the field's boundary.
+    pub slowed: u16,
+    /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
+    /// so the victim can be kept at arm's length rather than merely stunned.
+    pub held_by: u8,
 }
 
 impl Player {
@@ -247,6 +268,8 @@ impl Default for Player {
             mechanic: Mechanic::Shield(Shield::Held),
             rounds_won: 0,
             crouching: false,
+            slowed: 0,
+            held_by: NOBODY,
         }
     }
 }
@@ -257,6 +280,8 @@ pub struct World {
     pub frame: u32,
     pub players: [Player; MAX_PLAYERS],
     pub phase: Phase,
+    /// Things moves have left behind. Fixed size: see `effects`.
+    pub effects: [Option<Effect>; MAX_EFFECTS],
 }
 
 impl World {
@@ -270,6 +295,7 @@ impl World {
             frame: 0,
             players: [Player::default(); MAX_PLAYERS],
             phase: Phase::Fighting,
+            effects: [None; MAX_EFFECTS],
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -321,15 +347,43 @@ impl World {
             return;
         }
 
+        let mechanics_before = [self.players[0].mechanic, self.players[1].mechanic];
         for (p, input) in self.players.iter_mut().zip(inputs) {
             step_player(p, input);
+        }
+
+        // What a move does *as it comes out*, on its first active frame: the
+        // leap of a leaping move, and whatever it leaves standing in the world.
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            let Action::Active { kind, left } = p.action else {
+                continue;
+            };
+            let m = moves::get(p.class, kind);
+            if left != m.active {
+                continue;
+            }
+            if m.self_lift.raw() > 0 {
+                self.players[i].vel.y = m.self_lift;
+                self.players[i].grounded = false;
+            }
+            if let Some(kind) = EffectKind::from_code(m.effect) {
+                let spot = p.pos.add(p.facing.scale(m.reach));
+                spawn_effect(
+                    &mut self.effects,
+                    kind,
+                    i as u8,
+                    V3::new(spot.x, Fx::ZERO, spot.z),
+                );
+            }
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
         let snapshot = self.players;
         for attacker in 0..MAX_PLAYERS {
             let defender = 1 - attacker;
-            if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender]) {
+            if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
+            {
                 apply_hit(&mut self.players[defender], hit);
                 self.players[attacker].hit_used = true;
                 if hit.parried {
@@ -362,6 +416,9 @@ impl World {
                             hitstun: 18,
                             blockstun: 10,
                             knockback: Fx::ratio(7, 1),
+                            launch: Fx::ZERO,
+                            grabs: 0,
+                            by: owner as u8,
                             dir,
                             blocked: victim.action.guarding(),
                             parried: false,
@@ -373,7 +430,10 @@ impl World {
             }
         }
 
+        sync_structures(&mut self.players, &mut self.effects, &mechanics_before);
+        step_effects(&mut self.effects, &mut self.players);
         separate_bodies(&mut self.players);
+        drag_the_held(&mut self.players);
 
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) {
@@ -408,6 +468,18 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(crate::oven::hash());
         h.write_u32(self.frame);
+        for e in &self.effects {
+            match e {
+                Some(e) => {
+                    h.write_u32(e.kind as u32 + 1);
+                    h.write_u32(e.owner as u32);
+                    h.write_u32(e.age as u32);
+                    h.write_u32(e.life as u32);
+                    hash_v3(&mut h, &e.pos);
+                }
+                None => h.write_u32(0),
+            }
+        }
         for p in &self.players {
             for v in [p.pos, p.vel, p.facing] {
                 h.write_i32(v.x.raw());
@@ -417,6 +489,8 @@ impl World {
             h.write_i32(p.health);
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
+            h.write_u32(p.slowed as u32);
+            h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
             h.write_u32(p.hit_used as u32);
@@ -458,6 +532,14 @@ struct Hit {
     hitstun: u16,
     blockstun: u16,
     knockback: Fx,
+    /// Upward speed handed to the victim. This is what takes someone off the
+    /// ground with an uppercut instead of shoving them along it.
+    launch: Fx,
+    /// Frames the victim is held at the attacker's arm's length. Zero is a
+    /// normal hit.
+    grabs: u16,
+    /// Who threw it, so a grab knows whose arm to hang from.
+    by: u8,
     dir: V3,
     blocked: bool,
     parried: bool,
@@ -506,7 +588,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     })
 }
 
-fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
+fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
@@ -548,6 +630,9 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
         hitstun: m.hitstun,
         blockstun: m.blockstun,
         knockback: m.knockback,
+        launch: m.launch,
+        grabs: m.grabs,
+        by,
         dir: attacker.facing,
         blocked: guarding,
         parried,
@@ -570,9 +655,25 @@ fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.z = hit.dir.z.mul(hit.knockback);
     } else {
         defender.health = (defender.health - hit.damage).max(0);
-        defender.action = Action::HitStun { left: hit.hitstun };
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
+        if hit.grabs > 0 {
+            // A grab is not knockback. The victim is pinned to the grabber and
+            // goes wherever they go, which is what makes a grab a commitment
+            // for *both* of them rather than a shove with a longer stun.
+            defender.action = Action::Held { left: hit.grabs };
+            defender.held_by = hit.by;
+            defender.vel.x = Fx::ZERO;
+            defender.vel.z = Fx::ZERO;
+        } else {
+            defender.action = Action::HitStun { left: hit.hitstun };
+        }
+        if hit.launch.raw() > 0 {
+            // Taken off the ground. Launch *sets* vertical speed rather than
+            // adding to it, so being hit on the way down does not cancel out.
+            defender.vel.y = hit.launch;
+            defender.grounded = false;
+        }
     }
 }
 
@@ -658,6 +759,11 @@ fn step_player(p: &mut Player, input: Input) {
         Action::BlockStun { left } if left > 0 => Action::BlockStun { left: left - 1 },
         Action::HitStun { left } if left > 0 => Action::HitStun { left: left - 1 },
         Action::Stagger { left } if left > 0 => Action::Stagger { left: left - 1 },
+        Action::Held { left } if left > 0 => Action::Held { left: left - 1 },
+        Action::Held { .. } => {
+            p.held_by = NOBODY;
+            Action::Free
+        }
         Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => Action::Free,
         Action::Guard { held } => {
             if want_guard {
@@ -672,17 +778,14 @@ fn step_player(p: &mut Player, input: Input) {
             // Clicks are checked before the dodge, which is what disambiguates
             // shift. Shift with a click is the stronger version of that attack;
             // shift with only a direction is a dodge. See controls.md.
-            if input.has(Input::MIDDLE)
-                && input.has(Input::SHIFT)
-                && p.shield().is_some_and(|sh| sh.in_hand())
-            {
+            if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
                 p.hit_used = false;
                 arm_aerial(p, SLOT_SPECIAL, input);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, 2).startup,
                 }
-            } else if input.has(Input::MIDDLE) {
+            } else if input.has(Input::MECHANIC) {
                 mechanic_action(p);
                 Action::Free
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
@@ -773,16 +876,16 @@ fn step_player(p: &mut Player, input: Input) {
             t::move_speed()
         };
         let dir = move_dir(input.aim_turns(), ax, az);
-        p.vel.x = dir.x.mul(speed);
-        p.vel.z = dir.z.mul(speed);
+        p.vel.x = dir.x.mul(dragged(p, speed));
+        p.vel.z = dir.z.mul(dragged(p, speed));
     } else if p.action.guarding() && steering {
         let dir = move_dir(input.aim_turns(), ax, az);
-        p.vel.x = dir.x.mul(t::guard_move_speed());
-        p.vel.z = dir.z.mul(t::guard_move_speed());
+        p.vel.x = dir.x.mul(dragged(p, t::guard_move_speed()));
+        p.vel.z = dir.z.mul(dragged(p, t::guard_move_speed()));
     } else if let (Some(speed), true) = (attack_speed, steering) {
         let dir = move_dir(input.aim_turns(), ax, az);
-        p.vel.x = dir.x.mul(speed);
-        p.vel.z = dir.z.mul(speed);
+        p.vel.x = dir.x.mul(dragged(p, speed));
+        p.vel.z = dir.z.mul(dragged(p, speed));
     } else if p.action.attack_kind().is_some() {
         // Rooted, or steering nothing. Bleed the speed off over a few frames
         // rather than snapping to a halt: the snap was the jarring part, not
@@ -1224,4 +1327,201 @@ pub fn move_frames(class: Class, kind: u8) -> (u16, u16, u16) {
 /// Parry window length, exposed for debug overlays.
 pub fn parry_window() -> u16 {
     t::parry_window()
+}
+
+/// Age every effect, apply what it does, and drop the expired.
+///
+/// Effects act *after* both fighters have stepped, so standing in a field for a
+/// frame costs you whether you walked in or were knocked in. The alternative --
+/// checking before movement -- would let someone walk through a fire pillar
+/// untouched on the frame they entered it.
+fn step_effects(effects: &mut [Option<Effect>; MAX_EFFECTS], players: &mut [Player; MAX_PLAYERS]) {
+    for slot in effects.iter_mut() {
+        let Some(effect) = slot else { continue };
+        effect.age += 1;
+        if effect.age >= effect.life {
+            *slot = None;
+            continue;
+        }
+        apply_effect(*effect, players);
+    }
+    for p in players.iter_mut() {
+        p.slowed = p.slowed.saturating_sub(1);
+    }
+}
+
+fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
+    let radius = t::body_radius();
+    let height = t::body_height();
+    for (i, p) in players.iter_mut().enumerate() {
+        // An effect never touches the fighter who made it. A fire pillar you
+        // cannot stand next to is a fire pillar you cannot use.
+        if i as u8 == effect.owner || p.health <= 0 {
+            continue;
+        }
+        match effect.kind {
+            EffectKind::FirePillar => {
+                let (base, column) = effect.pillar_volumes();
+                let caught = base.contains(effect.pos, p.pos, radius, height)
+                    || column.contains(effect.pos, p.pos, radius, height);
+                if caught && effect.ticks_now() {
+                    p.health = (p.health - t::pillar_damage()).max(0);
+                }
+            }
+            EffectKind::BlackSpike => {
+                let flat = V3::new(
+                    p.pos.x.sub(effect.pos.x),
+                    Fx::ZERO,
+                    p.pos.z.sub(effect.pos.z),
+                )
+                .flat_len();
+                if flat.raw() <= effect.field_radius().add(radius).raw() {
+                    // Drain *and* slow: the field punishes standing in it and
+                    // makes leaving it slow, which is what turns a damage
+                    // puddle into a positioning tool.
+                    p.slowed = t::slow_frames();
+                    if effect.ticks_now() {
+                        p.health = (p.health - t::spike_drain()).max(0);
+                    }
+                }
+            }
+            // Terrain. It does nothing on its own; it is a thing the
+            // Elementalist's other moves are aimed at.
+            EffectKind::Structure => {}
+        }
+    }
+}
+
+/// Keep a grabbed fighter at their captor's arm's length.
+fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
+    let snapshot = *players;
+    for victim in players.iter_mut() {
+        let Action::Held { .. } = victim.action else {
+            continue;
+        };
+        let by = victim.held_by as usize;
+        if by >= MAX_PLAYERS {
+            continue;
+        }
+        let holder = &snapshot[by];
+        let reach = t::body_radius().add(t::body_radius());
+        victim.pos.x = holder.pos.x.add(holder.facing.x.mul(reach));
+        victim.pos.z = holder.pos.z.add(holder.facing.z.mul(reach));
+        victim.pos.y = holder.pos.y;
+        victim.vel = V3::ZERO;
+        victim.grounded = holder.grounded;
+    }
+}
+
+/// Put an effect into the world, replacing the oldest if the board is full.
+fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], kind: EffectKind, owner: u8, pos: V3) {
+    let life = match kind {
+        EffectKind::FirePillar => t::pillar_life(),
+        EffectKind::BlackSpike => t::spike_life(),
+        EffectKind::Structure => t::structure_life(),
+    };
+    let effect = Effect {
+        kind,
+        owner,
+        pos,
+        age: 0,
+        life,
+    };
+    if let Some(free) = effects.iter_mut().find(|s| s.is_none()) {
+        *free = Some(effect);
+        return;
+    }
+    // Full. The oldest goes, so spamming replaces rather than being ignored --
+    // a cap that silently swallows an input is worse than one that visibly
+    // recycles.
+    let oldest = effects
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| e.map(|e| (i, e.age)))
+        .max_by_key(|(_, age)| *age)
+        .map(|(i, _)| i);
+    if let Some(i) = oldest {
+        effects[i] = Some(effect);
+    }
+}
+
+/// Reconcile the Elementalist's structure slots with the structures that are
+/// actually standing.
+///
+/// The slots are intent -- what her mechanic button asked for. The effects are
+/// the things that exist, take up space and weather away. This runs the
+/// relationship in one direction only: a slot that gained a position spawns a
+/// structure, and then the slots are rebuilt from whatever is still standing.
+/// Two lists that each edit themselves would eventually disagree about what is
+/// in the arena, and the fire pillar asks that question every time it is thrown.
+fn sync_structures(
+    players: &mut [Player; MAX_PLAYERS],
+    effects: &mut [Option<Effect>; MAX_EFFECTS],
+    before: &[Mechanic; MAX_PLAYERS],
+) {
+    for i in 0..MAX_PLAYERS {
+        let Mechanic::Structures(slots) = players[i].mechanic else {
+            continue;
+        };
+        let was = match before[i] {
+            Mechanic::Structures(was) => was,
+            _ => [None; class::MAX_STRUCTURES],
+        };
+        for at in slots.iter().flatten() {
+            let already = was.iter().flatten().any(|old| same_spot(*old, *at));
+            if !already {
+                make_room_for_structure(effects, i as u8);
+                spawn_effect(effects, EffectKind::Structure, i as u8, *at);
+            }
+        }
+        let mut rebuilt = [None; class::MAX_STRUCTURES];
+        let standing = effects
+            .iter()
+            .flatten()
+            .filter(|e| matches!(e.kind, EffectKind::Structure) && e.owner == i as u8);
+        for (slot, effect) in rebuilt.iter_mut().zip(standing) {
+            *slot = Some(effect.pos);
+        }
+        players[i].mechanic = Mechanic::Structures(rebuilt);
+    }
+}
+
+/// Collapse an owner's oldest structure if they are already at their cap.
+///
+/// The cap is the resource -- a fourth structure costs you your first -- so it
+/// is enforced where structures are actually made, not where they are recorded.
+fn make_room_for_structure(effects: &mut [Option<Effect>; MAX_EFFECTS], owner: u8) {
+    let mine: Vec<usize> = effects
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| {
+            e.is_some_and(|e| matches!(e.kind, EffectKind::Structure) && e.owner == owner)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    if mine.len() < class::MAX_STRUCTURES {
+        return;
+    }
+    let oldest = mine
+        .iter()
+        .max_by_key(|i| effects[**i].map(|e| e.age).unwrap_or(0));
+    if let Some(&i) = oldest {
+        effects[i] = None;
+    }
+}
+
+fn same_spot(a: V3, b: V3) -> bool {
+    a.x.raw() == b.x.raw() && a.z.raw() == b.z.raw()
+}
+
+/// Walking speed after whatever is slowing you.
+///
+/// A slow is a positioning tool, not a damage one: the Blood mage's field hurts
+/// while you stand in it and makes leaving it take longer, which is what turns
+/// a puddle of damage into a wall.
+fn dragged(p: &Player, speed: Fx) -> Fx {
+    if p.slowed == 0 {
+        return speed;
+    }
+    speed.mul(t::spike_slow())
 }
