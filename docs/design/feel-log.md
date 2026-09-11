@@ -557,3 +557,19 @@ inside the airtime, which is the thing that actually makes a short hop worth hav
 **"A jump can be punished"** was measured on the short hop. A short hop being hard to react to
 is *correct*: it is the fast, low-commitment option and platform fighters lean on exactly that.
 It now measures the full hop, which is the committed one.
+
+### 2026-09-11 — class pickers on the health bars
+**Changed** A click-to-cycle button beside each player's health bar, showing that player's
+class. F8 toggles them; on under `--dev`.
+**Why** Tab cycled player one only, and switching player two meant a relaunch with `--p2`.
+**Verdict** kept. Two notes.
+
+They are the **third** thing sharing the pointer, after the arena and the Oven, and they route
+through the same `UiFocus`. That is worth having built properly the first time: the question
+"whose click is this" now has one answer rather than one per widget, so adding the next piece of
+interface is a line rather than a bug.
+
+And the manual's completeness test caught F8 before the commit — it failed with *"the game
+handles keys this test does not know how to spell"*, then again with *"the manual never mentions
+them"*. Exactly the two ways that could have gone stale, both caught by machinery rather than by
+remembering.

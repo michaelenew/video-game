@@ -130,6 +130,7 @@ fn main() {
         .init_resource::<Look>()
         .init_resource::<palette::Palette>()
         .init_resource::<palette::UiFocus>()
+        .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -141,6 +142,7 @@ fn main() {
                 // Who owns the mouse and keyboard this frame, before anything
                 // reads them.
                 palette::sample_focus,
+                hud::sample_button_focus,
                 // Mouse look runs next: aim is an input to the tick, not a
                 // decoration applied after it.
                 mouse_look,
@@ -148,7 +150,10 @@ fn main() {
                 apply_poses,
                 place_shields,
                 drive_camera,
+                hud::toggle_class_buttons,
+                hud::class_buttons,
                 hud::update,
+                hud::update_class_buttons,
                 crosshair::update,
                 debug::draw,
                 palette::toggle,

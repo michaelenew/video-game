@@ -158,6 +158,11 @@ pub const SECTIONS: &[Section] = &[
                 "Cycle player one's class. Restarts the match.",
                 "Tab class",
             ),
+            s(
+                "F8",
+                "Show or hide the class pickers beside each health bar. On under --dev. Clicking one cycles that player's class, and it needs a free cursor -- which is what the Oven gives you.",
+                "F8 class pickers",
+            ),
             s("R", "Reset the match.", "R reset"),
             s("P", "Pause.", "P pause"),
             s("]", "Step one frame. Pauses if it was running.", "] step"),
