@@ -438,11 +438,55 @@ struct Hit {
     parried: bool,
 }
 
+/// The attack volume a fighter currently has out.
+///
+/// Exists so the debug overlay draws *the thing the hit test uses* rather than
+/// its own reconstruction of it. An overlay that can drift from the rule it
+/// illustrates is worse than no overlay: it is confidently wrong at exactly the
+/// moment you are trying to work out why something did not connect.
+#[derive(Clone, Copy, Debug)]
+pub struct Hitbox {
+    /// Flat centre, at the attacker's own height.
+    pub centre: V3,
+    /// The attack's radius. A defender is hit when their body circle overlaps
+    /// this one, so the test threshold is this plus `BODY_RADIUS`.
+    pub radius: Fx,
+    /// False means an overhead: it passes over a crouching defender.
+    pub hits_crouching: bool,
+    pub unblockable: bool,
+    /// The move has already connected this swing and cannot connect again.
+    /// Still drawn, because it is still visibly out.
+    pub spent: bool,
+}
+
+/// The attack volume out this frame, if any. `None` outside active frames.
+pub fn hitbox(p: &Player) -> Option<Hitbox> {
+    let Action::Active { kind, .. } = p.action else {
+        return None;
+    };
+    let m = moves::get(p.class, kind);
+    // The Bellator's form multiplies reach rather than each form having its own
+    // table. Applying it here, once, is why the overlay cannot disagree with
+    // the hit test about where a spear reaches.
+    let reach_mul = match p.mechanic {
+        Mechanic::Forms { form, .. } => form.modifiers().0,
+        _ => Fx::ONE,
+    };
+    Some(Hitbox {
+        centre: p.pos.add(p.facing.scale(m.reach.mul(reach_mul))),
+        radius: m.radius,
+        hits_crouching: m.hits_crouching,
+        unblockable: m.unblockable,
+        spent: p.hit_used,
+    })
+}
+
 fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
-    if attacker.hit_used || defender.action.invulnerable() {
+    let box_out = hitbox(attacker)?;
+    if box_out.spent || defender.action.invulnerable() {
         return None;
     }
     let m = moves::get(attacker.class, kind);
@@ -450,25 +494,17 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     // Overheads miss a crouching defender. Expressed as a property of the move
     // rather than as hitbox geometry, because that is what players read and
     // what a frame table can state.
-    if defender.crouching && !m.hits_crouching {
+    if defender.crouching && !box_out.hits_crouching {
         return None;
     }
 
-    // The Bellator's form multiplies reach and damage rather than each form
-    // having its own table -- three numbers instead of three move lists.
-    let (reach_mul, damage_mul) = match attacker.mechanic {
-        Mechanic::Forms { form, .. } => {
-            let (r, d, _) = form.modifiers();
-            (r, d)
-        }
-        _ => (Fx::ONE, Fx::ONE),
+    let damage_mul = match attacker.mechanic {
+        Mechanic::Forms { form, .. } => form.modifiers().1,
+        _ => Fx::ONE,
     };
 
-    let centre = attacker
-        .pos
-        .add(attacker.facing.scale(m.reach.mul(reach_mul)));
-    let delta = defender.pos.sub(centre);
-    if delta.flat_len().raw() > m.radius.add(t::BODY_RADIUS).raw() {
+    let delta = defender.pos.sub(box_out.centre);
+    if delta.flat_len().raw() > box_out.radius.add(t::BODY_RADIUS).raw() {
         return None;
     }
 
