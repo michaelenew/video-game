@@ -34,6 +34,13 @@ pub struct Move {
     /// Requires the class mechanic to be in a particular state -- shield in
     /// hand, shadow placed, meter deep enough. Enforced per class.
     pub needs_mechanic: bool,
+    /// Frames this move suspends your fall when thrown in the air.
+    ///
+    /// Per move rather than universal, because the hang *is* the move's air
+    /// identity: a rising strike that holds you up for a beat plays completely
+    /// differently from one that drops you through it, and both are worth
+    /// having. Zero means gravity never stops.
+    pub air_stall: u16,
     /// Percent of walking speed you keep while the move runs.
     ///
     /// Zero roots you, which is what commitment means and is correct for the
@@ -98,7 +105,19 @@ const fn mv(
         hits_crouching: true,
         needs_mechanic: false,
         mobility: 0,
+        air_stall: AIR_STALL_DEFAULT,
     }
+}
+
+/// Every aerial hangs a little by default: an attack that drops you straight
+/// through it gives the air nothing to offer, and verticality is meant to be
+/// part of the positioning game. Moves that want more or less say so.
+const AIR_STALL_DEFAULT: u16 = 6;
+
+/// Suspend the fall for this many frames instead of the default.
+const fn floats(mut m: Move, frames: u16) -> Move {
+    m.air_stall = frames;
+    m
 }
 
 /// Keep this fraction of walking speed through the move.
@@ -132,7 +151,10 @@ pub const BULWARK: &[Move] = &[
         POKE_MOBILITY,
     ),
     // The overhead. Heavily punishable if read, heavily rewarding if not.
-    overhead(mv("Slam", (14, 4, 24), 170, (2, 1), (7, 5), (32, 16), 11)),
+    floats(
+        overhead(mv("Slam", (14, 4, 24), 170, (2, 1), (7, 5), (32, 16), 11)),
+        12,
+    ),
     // Beats guard outright, loses badly to dodge.
     unblockable(mv(
         "Grapple",

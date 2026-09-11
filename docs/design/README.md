@@ -36,6 +36,13 @@ That moves dodge onto shift, where the ability modifier already lived, so the pa
 grammar that depended on "shift beats WASD" are **open again** rather than settled. See
 [controls.md](controls.md) §Open and §4 below.
 
+**Movement.** Space jumps, and holding it goes higher. Floaty on purpose — a full hop is
+around a second, because verticality is part of the positioning game and a beginner needs time
+in the air to use it. Classes differ in the air before they differ anywhere else: jump height,
+gravity, fall speed and steering all vary. Air control is Quake's — holding forward buys
+nothing, strafing across your motion turns you, and turning the camera while strafing is where
+the skill ceiling is. Aerials suspend the fall for a per-move number of frames.
+
 **Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
 poke is a design choice in a closed arena, not a gap.
 
@@ -81,6 +88,7 @@ Nothing here blocks a prototype.
 | **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
 | **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
+| **Move + heavy attack** | ⚠️ **Known gap.** Shift+direction dodges and shift+click is the heavy, so holding a direction while throwing a heavy has no input — the dodge eats it. Deferred deliberately: movement settles first, then the attack grammar is built around it |
 | **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
 | **Aerials** | ⚠️ **Newly open, and the intended direction.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. Nothing is implemented; airborne currently gives the grounded move |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
@@ -110,7 +118,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 106 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 120 tests cover
 determinism, combat relationships, camera and animation.
 
 ```

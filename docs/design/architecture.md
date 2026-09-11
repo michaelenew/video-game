@@ -400,12 +400,13 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 106 tests |
+| Test suites | 120 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
 | Bulwark kit | Bash, Slam, Guard, parry, Grapple, shield throw/recall/leap |
-| Universal movement | Jump (always vertical), shift-dodge with i-frames, once-per-jump airdodge, crouch |
+| Universal movement | Variable-height jump, shift-dodge with i-frames, once-per-jump airdodge, crouch |
+| Air movement | Quake-style acceleration, per-class jump/gravity/fall/steering, per-move aerial hang |
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |

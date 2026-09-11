@@ -165,6 +165,12 @@ pub struct Player {
     pub health: i32,
     pub action: Action,
     pub grounded: bool,
+    /// Frames of jump sustain left. Set on takeoff, spent while the button is
+    /// held and you are rising, and zeroed the moment it is released -- so a
+    /// re-press cannot extend a jump you already let go of.
+    pub jump_hold: u16,
+    /// Frames of suspended fall from an aerial attack. See `Move::air_stall`.
+    pub air_stall: u16,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -233,6 +239,8 @@ impl Default for Player {
             health: 1000,
             action: Action::Free,
             grounded: true,
+            jump_hold: 0,
+            air_stall: 0,
             air_dodged: false,
             hit_used: false,
             class: Class::Bulwark,
@@ -401,6 +409,8 @@ impl World {
             h.write_i32(p.health);
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
+            h.write_u32(p.jump_hold as u32);
+            h.write_u32(p.air_stall as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
             h.write_u32(p.action.tag());
@@ -604,6 +614,7 @@ fn step_player(p: &mut Player, input: Input) {
             .normalized();
     }
 
+    let mob = p.class.mobility();
     step_mechanic(p);
 
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
@@ -658,6 +669,7 @@ fn step_player(p: &mut Player, input: Input) {
                 && p.shield().is_some_and(|sh| sh.in_hand())
             {
                 p.hit_used = false;
+                arm_air_stall(p, SLOT_SPECIAL);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, 2).startup,
@@ -673,6 +685,7 @@ fn step_player(p: &mut Player, input: Input) {
                 };
                 p.hit_used = false;
                 steer_meter(p, input, kind);
+                arm_air_stall(p, kind);
                 Action::Startup {
                     kind,
                     left: moves::get(p.class, kind).startup,
@@ -732,6 +745,19 @@ fn step_player(p: &mut Player, input: Input) {
     if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(Fx::ratio(93, 100));
         p.vel.z = p.vel.z.mul(Fx::ratio(93, 100));
+    } else if p.action.stunned() {
+        // Knockback decays rather than stopping dead, in the air as on the
+        // ground. Checked before the airborne branch so a hit connecting
+        // mid-jump is not immediately steered out of.
+        p.vel.x = p.vel.x.mul(Fx::ratio(86, 100));
+        p.vel.z = p.vel.z.mul(Fx::ratio(86, 100));
+    } else if !p.grounded {
+        // In the air, input *accelerates* rather than assigns. Momentum is
+        // conserved when you let go, which is the whole difference between a
+        // jump being a commitment and a jump being a hover.
+        if steering {
+            air_accelerate(p, move_dir(input.aim_turns(), ax, az), mob.air_speed);
+        }
     } else if p.action.actionable() && steering {
         let speed = if p.crouching {
             t::CROUCH_MOVE_SPEED
@@ -749,10 +775,6 @@ fn step_player(p: &mut Player, input: Input) {
         let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(speed);
         p.vel.z = dir.z.mul(speed);
-    } else if p.action.stunned() {
-        // Knockback decays rather than stopping dead.
-        p.vel.x = p.vel.x.mul(Fx::ratio(86, 100));
-        p.vel.z = p.vel.z.mul(Fx::ratio(86, 100));
     } else if p.action.attack_kind().is_some() {
         // Rooted, or steering nothing. Bleed the speed off over a few frames
         // rather than snapping to a halt: the snap was the jarring part, not
@@ -768,12 +790,38 @@ fn step_player(p: &mut Player, input: Input) {
     // direction while jumping carries your momentum up with you; it does not
     // turn the jump into something else.
     if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
-        p.vel.y = t::JUMP_SPEED;
+        p.vel.y = t::JUMP_SPEED.mul(mob.jump);
         p.grounded = false;
+        p.jump_hold = t::JUMP_HOLD_FRAMES;
     }
 
     if !p.grounded {
-        p.vel.y = p.vel.y.add(t::GRAVITY.mul(DT));
+        if p.air_stall > 0 {
+            // An aerial hangs you where you are for a few frames. Gravity is
+            // skipped rather than reduced, so the hang is a flat number of
+            // frames a player can learn rather than a curve they have to feel.
+            p.air_stall -= 1;
+            p.vel.y = Fx::ZERO;
+        } else {
+            // Holding the jump button sustains the rise. Releasing ends it for
+            // good -- `jump_hold` goes to zero rather than pausing, so tapping
+            // again cannot resurrect a jump you already cut short.
+            let sustaining = input.has(Input::SPACE) && p.jump_hold > 0 && p.vel.y.raw() > 0;
+            if sustaining {
+                p.jump_hold -= 1;
+            } else {
+                p.jump_hold = 0;
+            }
+            let mut gravity = t::GRAVITY.mul(mob.gravity);
+            if sustaining {
+                gravity = gravity.mul(t::JUMP_HOLD_GRAVITY);
+            }
+            p.vel.y = p.vel.y.add(gravity.mul(DT));
+            let floor = t::FALL_CAP.mul(mob.fall_cap);
+            if p.vel.y.raw() < floor.raw() {
+                p.vel.y = floor;
+            }
+        }
     }
 
     p.pos = p.pos.add(p.vel.scale(DT));
@@ -784,6 +832,51 @@ fn step_player(p: &mut Player, input: Input) {
     p.grounded = r.grounded;
     if p.grounded {
         p.air_dodged = false;
+        p.jump_hold = 0;
+        p.air_stall = 0;
+    }
+}
+
+/// Start an aerial's hang, if this one is being thrown in the air.
+fn arm_air_stall(p: &mut Player, kind: u8) {
+    if !p.grounded {
+        p.air_stall = moves::get(p.class, kind).air_stall;
+    }
+}
+
+/// Quake-style air acceleration, which is where air control gets its skill
+/// ceiling.
+///
+/// The whole trick is one line: `current` is the velocity **projected onto the
+/// direction you asked for**. Point where you are already going and the
+/// projection is large, so there is nothing left to add and holding forward does
+/// almost nothing. Point perpendicular to your motion and the projection is near
+/// zero, so you get the full budget -- which *turns* the velocity vector without
+/// spending it.
+///
+/// That is why strafing is expressive and holding forward is not: the game is
+/// not rewarding a faster input, it is rewarding an input aimed at the component
+/// of your motion you have not already used up.
+fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
+    let current = p.vel.x.mul(wish.x).add(p.vel.z.mul(wish.z));
+    let head_room = wish_speed.sub(current);
+    if head_room.raw() <= 0 {
+        return;
+    }
+    let mut step = t::AIR_ACCEL.mul(wish_speed).mul(DT);
+    if step.raw() > head_room.raw() {
+        step = head_room;
+    }
+    p.vel.x = p.vel.x.add(wish.x.mul(step));
+    p.vel.z = p.vel.z.add(wish.z.mul(step));
+
+    // A ceiling Source does not have. See `tuning::AIR_SPEED_CAP`.
+    let cap = t::MOVE_SPEED.mul(t::AIR_SPEED_CAP);
+    let speed = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+    if speed.raw() > cap.raw() {
+        let scale = cap.div(speed);
+        p.vel.x = p.vel.x.mul(scale);
+        p.vel.z = p.vel.z.mul(scale);
     }
 }
 

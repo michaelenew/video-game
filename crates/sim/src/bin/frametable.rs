@@ -35,7 +35,15 @@ fn main() {
     );
 
     for class in ALL_CLASSES {
+        let mob = class.mobility();
         println!("{}  --  spends {}", class.name(), class.resource());
+        println!(
+            "  air: jump x{}  gravity x{}  fall cap x{}  steering {}",
+            tenths(mob.jump),
+            tenths(mob.gravity),
+            tenths(mob.fall_cap),
+            tenths(mob.air_speed),
+        );
         println!(
             "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
             "move", "st", "act", "rec", "damage", "on block", "on hit"
@@ -50,6 +58,9 @@ fn main() {
             }
             if m.needs_mechanic {
                 notes.push("needs mechanic");
+            }
+            if m.air_stall > 0 {
+                notes.push("hangs");
             }
             if m.roots() {
                 notes.push("roots you");
