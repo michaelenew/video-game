@@ -129,6 +129,7 @@ fn main() {
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
         .init_resource::<palette::Palette>()
+        .init_resource::<palette::UiFocus>()
         .add_plugins(bevy_egui::EguiPlugin {
             enable_multipass_for_primary_context: false,
         })
@@ -137,7 +138,10 @@ fn main() {
         .add_systems(
             Update,
             (
-                // Mouse look runs first: aim is an input to the tick, not a
+                // Who owns the mouse and keyboard this frame, before anything
+                // reads them.
+                palette::sample_focus,
+                // Mouse look runs next: aim is an input to the tick, not a
                 // decoration applied after it.
                 mouse_look,
                 tick_sim,
@@ -479,9 +483,15 @@ fn tick_sim(
     mouse: Res<ButtonInput<MouseButton>>,
     time: Res<Time>,
     look: Res<Look>,
+    focus: Res<palette::UiFocus>,
     mut sim: ResMut<Sim>,
     mut show: ResMut<debug::ShowDebug>,
 ) {
+    // Typing in a text field must not also pause the match or cycle the class.
+    // F7 stays live regardless, since it is the way back out.
+    if focus.keyboard {
+        return;
+    }
     if keys.just_pressed(KeyCode::KeyP) {
         sim.paused = !sim.paused;
     }
@@ -521,8 +531,21 @@ fn tick_sim(
         }
     }
 
-    let held = read_input(&keys, &mouse).looking(look.aim());
-    let held_two = read_player_two(&keys).looking(look.aim_two());
+    // Input the palette is claiming belongs to the palette. Clicking a slider
+    // used to throw a poke as well, and typing in the search box drove the
+    // fighter around -- J, K and L are attack keys.
+    let held = if focus.pointer || focus.keyboard {
+        SimInput::default()
+    } else {
+        read_input(&keys, &mouse)
+    }
+    .looking(look.aim());
+    let held_two = if focus.keyboard {
+        SimInput::default()
+    } else {
+        read_player_two(&keys)
+    }
+    .looking(look.aim_two());
 
     match &mut sim.driver {
         Driver::Local => {
@@ -847,12 +870,27 @@ fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
 /// Deliberately not rate-limited or smoothed. The mouse is the aim, and any
 /// filtering between the hand and the crosshair is felt immediately even when
 /// it cannot be named.
+/// Whether the cursor should be locked to the window this frame.
+///
+/// Extracted so the rule can be stated once and tested, rather than living
+/// inside a system where the only way to check it is to play the game.
+fn cursor_should_be_captured(escape: bool, oven_open: bool, clicked: bool, captured: bool) -> bool {
+    if escape || oven_open {
+        false
+    } else if clicked {
+        true
+    } else {
+        captured
+    }
+}
+
 fn mouse_look(
     mut look: ResMut<Look>,
     mut settings: ResMut<settings::Settings>,
     mut motion: EventReader<MouseMotion>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
+    open: Res<palette::Palette>,
     mut windows: Query<&mut Window>,
 ) {
     // Sensitivity, adjustable mid-match and written straight to disk. Two people
@@ -903,13 +941,26 @@ fn mouse_look(
 
     // Click to capture, Escape to release. Without a release the window is a
     // trap, and this runs windowed on a desktop.
-    let want = if keys.just_pressed(KeyCode::Escape) {
-        false
-    } else if mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right) {
-        true
-    } else {
-        look.grabbed
-    };
+    //
+    // A click the palette is claiming is not a click at the arena. Without this
+    // every drag of a slider re-grabbed the mouse, so tuning a number meant
+    // pressing Escape between each one -- which is the opposite of the rapid
+    // loop the Oven exists to provide.
+    // One rule, so there is nothing to learn: **while the Oven is open the
+    // cursor is yours.** Capturing on any click meant every drag of a slider
+    // re-grabbed the mouse and tuning a number cost an Escape each time, which
+    // is the opposite of the rapid loop the Oven exists to provide. Releasing
+    // only while the pointer hovers the panel would still have left the first
+    // click after F7 spent on getting the cursor back.
+    //
+    // The keyboard keeps playing, so you can drag a value and immediately feel
+    // it with W and J without closing anything.
+    let want = cursor_should_be_captured(
+        keys.just_pressed(KeyCode::Escape),
+        open.open,
+        mouse.just_pressed(MouseButton::Left) || mouse.just_pressed(MouseButton::Right),
+        look.grabbed,
+    );
     if want != look.grabbed {
         look.grabbed = want;
         if let Ok(mut window) = windows.single_mut() {
@@ -958,4 +1009,56 @@ fn fx3(v: sim::V3) -> Vec3 {
         v.y.to_f32_for_render(),
         v.z.to_f32_for_render(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use palette::UiFocus;
+
+    #[test]
+    fn the_oven_keeps_the_cursor_while_it_is_open() {
+        // The bug: capturing on any click meant every drag of a slider grabbed
+        // the mouse back, so changing a number cost an Escape each time.
+        assert!(!cursor_should_be_captured(false, true, true, true));
+        assert!(!cursor_should_be_captured(false, true, false, true));
+    }
+
+    #[test]
+    fn clicking_the_arena_captures_when_the_oven_is_shut() {
+        assert!(cursor_should_be_captured(false, false, true, false));
+        // And a capture persists without needing the button held.
+        assert!(cursor_should_be_captured(false, false, false, true));
+        assert!(!cursor_should_be_captured(false, false, false, false));
+    }
+
+    #[test]
+    fn escape_always_releases() {
+        // Without a way out the window is a trap, and this runs windowed.
+        assert!(!cursor_should_be_captured(true, false, true, true));
+    }
+
+    #[test]
+    fn the_palette_takes_input_only_when_it_is_using_it() {
+        // Pointer and keyboard are claimed separately on purpose: hovering a
+        // slider must not stop W and J from working, or you could not feel the
+        // change you just made without closing the panel.
+        let hovering = UiFocus {
+            pointer: true,
+            keyboard: false,
+        };
+        assert!(hovering.pointer && !hovering.keyboard);
+
+        let typing = UiFocus {
+            pointer: false,
+            keyboard: true,
+        };
+        assert!(typing.keyboard, "a focused text field claims the keyboard");
+
+        let idle = UiFocus::default();
+        assert!(
+            !idle.pointer && !idle.keyboard,
+            "a shut palette claims nothing"
+        );
+    }
 }
