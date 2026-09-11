@@ -135,6 +135,7 @@ fn main() {
             enable_multipass_for_primary_context: false,
         })
         .insert_resource(settings::Settings::load())
+        .init_resource::<InsideOwnHead>()
         .add_systems(Startup, (setup, hud::setup, crosshair::setup))
         .add_systems(
             Update,
@@ -152,6 +153,7 @@ fn main() {
                 place_effects,
                 place_structures,
                 drive_camera,
+                hide_own_body,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
                 hud::update,
@@ -315,6 +317,13 @@ impl Look {
 
 #[derive(Resource)]
 struct Rig(CameraRig);
+
+/// How far the camera has climbed into the local fighter's head, 0 to 1.
+///
+/// Lives outside the rig because the renderer needs it and the rig should not
+/// know about meshes.
+#[derive(Resource, Default)]
+struct InsideOwnHead(f32);
 
 impl Default for Rig {
     fn default() -> Self {
@@ -531,6 +540,34 @@ fn setup(
         }
     }
     commands.insert_resource(look);
+}
+
+/// Stop drawing the local fighter once the camera is inside them.
+///
+/// Past the handover the eye is at the fighter's own eyes, so their head fills
+/// the screen and there is nothing to see but the inside of a box. Hidden
+/// rather than faded: these are untextured primitives, and a half-transparent
+/// one reads as a rendering fault rather than as your own body.
+///
+/// Only ever the fighter this client is driving. The other one is what you are
+/// trying to look at.
+fn hide_own_body(
+    sim: Res<Sim>,
+    inside: Res<InsideOwnHead>,
+    mut parts: Query<(&BodyPart, &mut Visibility)>,
+) {
+    let me = sim.local_player();
+    let gone = inside.0 > 0.5;
+    for (part, mut vis) in parts.iter_mut() {
+        if part.owner != me {
+            continue;
+        }
+        *vis = if gone {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+    }
 }
 
 /// Put the structure meshes where the Elementalist's mechanic says they are.
@@ -1143,7 +1180,7 @@ fn mouse_look(
         settings.save();
     }
 
-    let limit = view::camera::RigConfig::default().pitch_limit;
+    let rig_cfg = view::camera::RigConfig::default();
     if look.grabbed {
         let sensitivity = settings.radians_per_pixel();
         let (mut dx, mut dy) = (0.0, 0.0);
@@ -1152,7 +1189,7 @@ fn mouse_look(
             dy += ev.delta.y;
         }
         look.yaw += dx * sensitivity;
-        look.pitch = (look.pitch - dy * sensitivity).clamp(-limit, limit);
+        look.pitch = (look.pitch - dy * sensitivity).clamp(-rig_cfg.pitch_down, rig_cfg.pitch_up);
     } else {
         motion.clear();
     }
@@ -1208,6 +1245,7 @@ fn drive_camera(
     look: Res<Look>,
     settings: Res<settings::Settings>,
     mut rig: ResMut<Rig>,
+    mut inside: ResMut<InsideOwnHead>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
     if settings.is_changed() {
@@ -1220,6 +1258,7 @@ fn drive_camera(
     let framing = rig
         .0
         .update(time.delta_secs(), frame.players[me].pos, yaw, look.pitch);
+    inside.0 = framing.first_person;
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);

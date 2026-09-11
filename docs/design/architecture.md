@@ -288,6 +288,39 @@ an arm that refuses to shorten will happily hold the camera *inside* a wall when
 stands against one. The floor gets its own clamp, since it is a plane the simulation handles
 rather than an entry in `SOLIDS`.
 
+### Pitch is two different cameras, blended
+
+Looking down and looking up are not the same problem, and one arm length cannot serve both.
+
+**Down is close.** Looking at the ground means looking at the ground *near you* — that is what
+the gesture means. With a seven-metre arm the ray reaches the floor before it reaches the
+fighter, so steep angles put the middle of the screen behind your own heels. So the arm
+shortens and the eye drops toward the fighter's head as pitch goes down: by the bottom of the
+range the reticle sits just in front of their feet, and the fighter has risen to near the
+centre of the frame. That is the whole of "mouse down means bring the aim closer".
+
+**Up runs out of third person.** The ordinary answer — walk the arm down toward the ground
+behind the fighter — reads well for the first forty degrees and then stops working: the arm is
+on the floor, the body is between you and the sky, and every bump in the terrain shoves the
+view. Past `sky_start` the rig climbs into the fighter's own eyes, the floor and geometry
+clamps fade out, and the body stops being drawn. You are panning the sky, which is what you
+were trying to do. Hidden rather than faded, because these are untextured primitives and a
+half-transparent one reads as a rendering fault rather than as your own body.
+
+Both blends are smoothstepped rather than linear. The blend swaps the whole rig over, and a
+linear handover makes the camera visibly change its mind at exactly the angles where the player
+is holding the mouse still.
+
+### Why the camera is not in the Oven
+
+Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera is
+deliberately outside that rule, and the reason is the checksum: tuning values are folded into
+`World::checksum()` so mistuned peers desync loudly, which is right for anything that decides
+what happens and wrong for anything that decides what you see. Two people playing each other
+must be able to run different fields of view and different camera distances without the match
+falling apart. Those three already live in `settings.conf` per player; the rig's own numbers
+sit beside them in `RigConfig`.
+
 ### The crosshair is not painted at screen centre
 
 It is projected from the point the fighter is pointed at, one aim-length ahead — the same

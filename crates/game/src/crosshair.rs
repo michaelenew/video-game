@@ -102,16 +102,28 @@ pub fn setup(mut commands: Commands) {
 
 /// The world point the fighter is actually pointed at.
 ///
-/// Deliberately the same distance ahead that the camera aims at, so the two
-/// coincide exactly when facing and aim agree -- which is what makes a reticle
-/// that sits still mean "your attack goes where you are looking" and one that
-/// drifts mean "it does not".
-fn aim_point(pos: [f32; 3], facing: [f32; 3], cfg: &view::camera::RigConfig) -> Vec3 {
-    Vec3::new(
-        pos[0] + facing[0] * cfg.look_ahead,
-        pos[1] + cfg.look_height,
-        pos[2] + facing[2] * cfg.look_ahead,
-    )
+/// **The camera's own centre ray, turned by however far the fighter's facing
+/// lags the camera's.** Built that way rather than from a distance ahead of the
+/// fighter, because screen centre now follows the full look direction: an aim
+/// point constructed independently would have to re-derive the pitch, the eye
+/// lift and the shoulder offset, and the first time one of those changed the
+/// reticle would start lying. Turning the ray the camera is already using
+/// cannot drift from it.
+///
+/// Facing is yaw only -- pitch is renderer-local and attacks are flat -- so the
+/// difference between the two is a rotation about Y and nothing else.
+fn aim_point(eye: Vec3, forward: Vec3, facing: [f32; 3]) -> Vec3 {
+    const FAR: f32 = 64.0;
+    let camera_yaw = forward.z.atan2(forward.x);
+    let facing_yaw = facing[2].atan2(facing[0]);
+    let turn = facing_yaw - camera_yaw;
+    let (sin, cos) = turn.sin_cos();
+    let turned = Vec3::new(
+        forward.x * cos - forward.z * sin,
+        forward.y,
+        forward.x * sin + forward.z * cos,
+    );
+    eye + turned * FAR
 }
 
 type CamQuery<'w, 's> =
@@ -134,7 +146,7 @@ pub fn update(
     let me = sim.local_player();
     let p = &frame.players[me];
 
-    let target = aim_point(p.pos, p.facing, &view::camera::RigConfig::default());
+    let target = aim_point(cam_tf.translation(), cam_tf.forward().as_vec3(), p.facing);
 
     match camera.world_to_viewport(cam_tf, target) {
         Ok(screen) => {
@@ -170,19 +182,23 @@ mod tests {
         // drift apart, a still crosshair stops meaning anything.
         let cfg = RigConfig::default();
         for eighth in 0..8 {
-            let yaw = eighth as f32 / 8.0 * std::f32::consts::TAU;
-            let pos = [1.5, 0.0, -2.0];
-            let facing = [yaw.cos(), 0.0, yaw.sin()];
+            for pitch in [-0.9f32, -0.3, 0.0, 0.5, 1.2] {
+                let yaw = eighth as f32 / 8.0 * std::f32::consts::TAU;
+                let pos = [1.5, 0.0, -2.0];
+                let facing = [yaw.cos(), 0.0, yaw.sin()];
 
-            let mut rig = CameraRig::new(cfg);
-            let framing = rig.update(0.016, pos, yaw, 0.0);
-            let point = aim_point(pos, facing, &cfg);
+                let mut rig = CameraRig::new(cfg);
+                let framing = rig.update(0.016, pos, yaw, pitch);
+                let eye = Vec3::from_array(framing.eye);
+                let forward = (Vec3::from_array(framing.look_at) - eye).normalize();
+                let point = aim_point(eye, forward, facing);
 
-            let look = Vec3::from_array(framing.look_at);
-            assert!(
-                point.distance(look) < 0.01,
-                "at yaw {yaw:.2}: crosshair at {point:?}, screen centre at {look:?}"
-            );
+                let centre = eye + forward * 64.0;
+                assert!(
+                    point.distance(centre) < 0.05,
+                    "at yaw {yaw:.2} pitch {pitch:.2}: crosshair {point:?}, centre {centre:?}"
+                );
+            }
         }
     }
 
@@ -196,8 +212,10 @@ mod tests {
         let mut rig = CameraRig::new(cfg);
         // Looking a quarter turn away from where the fighter is committed.
         let framing = rig.update(0.016, pos, std::f32::consts::FRAC_PI_2, 0.0);
-        let committed = aim_point(pos, [1.0, 0.0, 0.0], &cfg);
-        let centre = Vec3::from_array(framing.look_at);
+        let eye = Vec3::from_array(framing.eye);
+        let forward = (Vec3::from_array(framing.look_at) - eye).normalize();
+        let committed = aim_point(eye, forward, [1.0, 0.0, 0.0]);
+        let centre = eye + forward * 64.0;
         assert!(
             committed.distance(centre) > 1.0,
             "reticle stayed put while facing and aim disagreed"
