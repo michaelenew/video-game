@@ -10,11 +10,12 @@
 
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::tuning as t;
 
-/// Player collision volume: a vertical cylinder. Capsule-ish is close enough
-/// when nothing rolls or ragdolls.
-pub const BODY_RADIUS: Fx = Fx::ratio(1, 2);
-pub const BODY_HEIGHT: Fx = Fx::ratio(18, 10);
+// The body is a vertical cylinder -- capsule-ish is close enough when nothing
+// rolls or ragdolls -- and its size lives in the Oven. It used to be a `const`
+// here as well as a knob there, which meant tuning the body changed what
+// attacks could reach but not what walls could stop.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Solid {
@@ -93,13 +94,13 @@ pub fn resolve(mut pos: V3, mut vel: V3, was_grounded: bool) -> Resolved {
     for solid in SOLIDS.iter() {
         // Expand the box by the body radius horizontally, so the body can be
         // treated as a point in X and Z.
-        let min_x = solid.min.x.sub(BODY_RADIUS);
-        let max_x = solid.max.x.add(BODY_RADIUS);
-        let min_z = solid.min.z.sub(BODY_RADIUS);
-        let max_z = solid.max.z.add(BODY_RADIUS);
+        let min_x = solid.min.x.sub(t::body_radius());
+        let max_x = solid.max.x.add(t::body_radius());
+        let min_z = solid.min.z.sub(t::body_radius());
+        let max_z = solid.max.z.add(t::body_radius());
 
         let feet = pos.y;
-        let head = pos.y.add(BODY_HEIGHT);
+        let head = pos.y.add(t::body_height());
 
         let inside = pos.x.raw() > min_x.raw()
             && pos.x.raw() < max_x.raw()
@@ -129,7 +130,7 @@ pub fn resolve(mut pos: V3, mut vel: V3, was_grounded: bool) -> Resolved {
                 }
                 grounded = true;
             } else {
-                pos.y = solid.min.y.sub(BODY_HEIGHT);
+                pos.y = solid.min.y.sub(t::body_height());
                 if vel.y.raw() > 0 {
                     vel.y = Fx::ZERO;
                 }
@@ -170,10 +171,10 @@ fn supported(pos: V3) -> bool {
         return true;
     }
     SOLIDS.iter().any(|s| {
-        pos.x.raw() > s.min.x.sub(BODY_RADIUS).raw()
-            && pos.x.raw() < s.max.x.add(BODY_RADIUS).raw()
-            && pos.z.raw() > s.min.z.sub(BODY_RADIUS).raw()
-            && pos.z.raw() < s.max.z.add(BODY_RADIUS).raw()
+        pos.x.raw() > s.min.x.sub(t::body_radius()).raw()
+            && pos.x.raw() < s.max.x.add(t::body_radius()).raw()
+            && pos.z.raw() > s.min.z.sub(t::body_radius()).raw()
+            && pos.z.raw() < s.max.z.add(t::body_radius()).raw()
             && pos.y.sub(s.max.y).abs().raw() <= SKIN.raw()
     })
 }

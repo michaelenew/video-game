@@ -183,12 +183,12 @@ impl Form {
 
     /// Reach, damage, and recovery multipliers. Hammer hits hardest and
     /// recovers slowest; spear reaches furthest and hits weakest.
-    pub const fn modifiers(self) -> (Fx, Fx, Fx) {
-        match self {
-            Form::Hammer => (Fx::ratio(80, 100), Fx::ratio(135, 100), Fx::ratio(130, 100)),
-            Form::Sword => (Fx::ONE, Fx::ONE, Fx::ONE),
-            Form::Spear => (Fx::ratio(155, 100), Fx::ratio(78, 100), Fx::ratio(95, 100)),
-        }
+    ///
+    /// Nine numbers that are most of the class -- three kits out of one move
+    /// table -- so they live in the Oven with everything else that decides how
+    /// a fighter feels.
+    pub fn modifiers(self) -> (Fx, Fx, Fx) {
+        crate::tuning::form_modifiers(self)
     }
 }
 
@@ -217,13 +217,10 @@ pub struct Structure {
 // Dual mage
 // ---------------------------------------------------------------------------
 
-/// Meter runs -100 (deep Dark) to +100 (deep Light). Zero is centre: most
-/// options, least power.
-pub const METER_MAX: i32 = 100;
-/// Past this depth the finishers unlock and the burn starts.
-pub const METER_DEEP: i32 = 65;
-/// Health lost per tick while past the deep threshold, scaled by how far.
-pub const BURN_PER_TICK_AT_MAX: i32 = 3;
+// The meter runs from deep Dark to deep Light, with zero at the centre: most
+// options, least power. Its range, the depth at which finishers unlock and the
+// burn starts, and how hard it burns are all in the Oven -- see
+// `tuning::meter_max`, `meter_deep` and `meter_burn`.
 
 // ---------------------------------------------------------------------------
 

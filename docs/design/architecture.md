@@ -561,6 +561,52 @@ afternoon.
 
 `cargo run -p sim --bin bake_tuning` does the same write without launching the game.
 
+### Every magnitude is reachable from the Oven, and a test says so
+
+A feel number written straight into the code is invisible to the Oven *and* to the bake, so the
+only way to change it is a recompile — which is the exact thing the harness exists to avoid.
+Worse, it can silently disagree with the knob meant to control it. `crates/sim/tests/knobs.rs`
+was written after finding precisely that: `arena.rs` collided against a hardcoded body radius
+while the hit test used the Oven's, so tuning the body made fighters a different size to walls
+than to attacks.
+
+The rule it enforces: **in the simulation, an `Fx` built from a literal, or a `const` of a
+numeric type, is a tuning value.** It belongs in the Oven, or it belongs in the test's `EXEMPT`
+table with a sentence saying why it is not. A second test asserts every exemption has a real
+reason, because an exemption nobody had to justify is just a way to silence the check.
+
+It found thirty-two on the first run — the Bellator's nine form multipliers, which are most of
+that class; the Bulwark's shield speed, range, damage and knockback; the Reaver's leash; all
+three velocity decays; the Dual mage's whole meter. None of them were tunable, and all of them
+are the kind of number you want to move while watching the game move.
+
+Four files are excluded and the reasons are in the test: `input.rs` is the wire format, and
+`curve.rs`, `fixed.rs` and `math.rs` are arithmetic — the `3` in a cubic Bézier is the
+definition of a cubic Bézier, and changing it would not change how anything feels, it would
+stop the curve being a curve.
+
+The known gap is inline integers: a `damage: 85` written in a struct literal is not caught,
+only a named `const`. Fixing that means parsing rather than scanning, and the named-const rule
+already covers the shape these actually take.
+
+## Curves: what the time is spent doing
+
+A single number says *how long*. A curve says what happens during it. A structure rising out of
+the ground over a quarter second can be a steady slide or a hold followed by an eruption, and
+those are different things to play against even though the duration is identical.
+
+The shape is a **cubic Bézier from (0,0) to (1,1) with two handles** — the same four numbers as
+a CSS easing. Four because it is the smallest thing that can express hold-then-burst *and* be
+edited by dragging two points, which is what the curve editor will do when it exists. Until
+then they are four ordinary knobs in the Oven, baked like everything else: the data model is
+already right, only the widget is missing.
+
+Evaluation solves for the curve parameter by **bisection with a fixed iteration count**, not
+Newton. Newton converges faster, but its step count depends on the handles, so the answer would
+vary with the shape — and a value that depends on how hard it was to compute is not something
+two peers can agree on. Twenty halvings puts the bracket below what 16.16 can represent, at the
+same cost every time.
+
 ### Not yet
 
 Curves. Several of these want to be splines rather than scalars — a knockback that varies with

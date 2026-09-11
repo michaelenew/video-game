@@ -8,6 +8,7 @@
 
 pub mod arena;
 pub mod class;
+pub mod curve;
 pub mod effects;
 pub mod fixed;
 pub mod input;
