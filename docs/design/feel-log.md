@@ -91,6 +91,15 @@ as they get tested.
   clip clearer to read? Fixed length is easier to reason about in frames.
 
 ### Camera
+
+- Is the mouse sensitivity in the right range? It is currently one number with no in-game
+  way to change it, which is not good enough for more than one person to play.
+- Does the camera distance work at both melee and full-screen range, or does it want to
+  pull in when close the way the old rig pulled back when far?
+- Is the shoulder offset on the correct side, and should it swap when you put your back
+  to a wall?
+- Does a locked facing during a move read as commitment or as the game ignoring you?
+- Does the camera-relative dodge do the right thing when you dodge *toward* the camera?
 - **Does the auto-frame pull in too aggressively when fighters close?**
 - **Is the perpendicular angle right, or should it favour player one's side?**
 - **Does occlusion pull-in read as a camera bug when it fires?**
@@ -147,3 +156,45 @@ diverged. Two screenshots of "the same moment" were two different moments.
 the frame number is drawn next to the score, so a capture says which moment it
 caught. Comparisons across a long, fragmented experiment are only worth
 anything if they are reproducible.
+
+### 2026-09-11 — the camera became the aim
+**Changed** Deleted the auto-framing camera. Third-person, behind the fighter, mouse-look,
+and the player owns it. Movement is camera-relative — `W` is away from the camera, not along
+a world axis — and attacks go where the camera points.
+**Why** The old rig framed both fighters in profile and swung on its own. It was explicitly
+a *consequence* of a control scheme in which nothing needed mouse-look, and aimed attacks
+break that premise. It was also 1v1-only: framing "both fighters" means nothing in coop.
+**Verdict** kept. Not judged in a real match yet; the open questions below are the ones a
+match has to answer.
+
+### 2026-09-11 — a centred camera hides your opponent
+**Changed** The eye sits about a metre to one side. The aim point does not move with it.
+**Why** First pass put the camera directly behind the fighter. At melee range — which is
+most of this game — your own body sits exactly between the camera and the person you are
+fighting. Raising the camera does not fix it: a body is wider than a sightline. This is
+why over-the-shoulder cameras exist.
+**Verdict** kept. Worth noting the shape of the fix: the *eye* moved and the aim point
+stayed on the look axis, so the crosshair is still straight ahead of the fighter and
+nothing was traded away for the visibility. The test had to be rewritten to assert the aim
+point rather than the camera's own axis — the old test only passed because the two used to
+coincide.
+
+### 2026-09-11 — facing locks when a move starts
+**Changed** During startup, active and recovery frames, the mouse moves the camera but not
+the fighter. Guard turns at a limited rate rather than snapping.
+**Why** With facing tied to the mouse, an uncommitted facing means dragging a live hitbox
+around during its active frames — every whiff becomes rescuable by turning after the fact,
+and whiff punishment is most of the game. The guard case is the same argument: an arc you
+can flip instantly is a bubble with extra steps.
+**Verdict** kept, and this is the one most likely to need tuning. Whether a locked facing
+feels *committed* or just *unresponsive* is exactly the sort of thing that cannot be
+reasoned out. The guard turn rate in particular is a single number pulled out of the air.
+
+### 2026-09-11 — the arena was too dark to read from the new angle
+**Changed** Added an unshadowed fill light from the opposite side, roughly doubled ambient,
+lightened the stone.
+**Why** Not a taste change. The old camera looked down into the arena from outside it; this
+one looks along the floor at the *inside* faces of the walls, which the key light never
+reaches. They rendered as flat black and the fight appeared to happen in front of a void.
+**Verdict** kept, but this is a stopgap — the lighting was built for a camera that no longer
+exists and deserves a proper pass.

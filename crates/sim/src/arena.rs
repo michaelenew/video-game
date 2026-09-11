@@ -44,8 +44,9 @@ pub const WALL_HEIGHT: Fx = Fx::ratio(3, 2);
 /// without an edge.
 ///
 /// The walls are deliberately low. Tall ones read as a box and put geometry
-/// between the camera and the fight, which is exactly the thing an auto-framing
-/// camera cannot solve.
+/// between the camera and the fight, and the camera's only answer is to pull in
+/// toward the fighter's back -- it will not turn away, because the angle
+/// belongs to the player.
 pub const SOLIDS: [Solid; 6] = [
     // Walls, one unit thick, sitting just outside the play area.
     Solid::new(

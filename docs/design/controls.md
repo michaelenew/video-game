@@ -13,13 +13,35 @@ direction is *discretised* — four inputs, not a stick — and modifiers do the
 
 ## The grammar
 
-Four sentences, and everything else follows:
+Five sentences, and everything else follows:
 
 1. **Click means attack.**
 2. **Shift means use an ability**, otherwise you get a basic move.
 3. **WASD means move.**
 4. **Space means you move *more* than you otherwise would.** Alone it jumps; with a
    direction it dodges.
+5. **The mouse means *where*.** You look with it, you are pointed where you look, and
+   your attacks go where you are pointed.
+
+## Everything is relative to the camera
+
+`W` is away from the camera, not along some world axis. `D` is to the camera's right.
+Aim is the camera direction. The player turns by turning the camera; there is no separate
+turn control and no auto-facing.
+
+Two consequences are worth stating because they are design, not implementation:
+
+- **Facing locks the instant a move starts.** During startup, active and recovery frames
+  the mouse moves the camera but not the fighter. Otherwise you could drag a live hitbox
+  around during its active frames and rescue a whiff by turning after the fact, and whiff
+  punishment is most of the game. You commit to a direction when you commit to the move.
+- **Guard turns slowly.** Guard covers an arc rather than a bubble ([defense.md](defense.md)),
+  and an arc you can flip instantly *is* a bubble. The camera still goes wherever the mouse
+  goes; it is the character who cannot reorient that fast.
+
+Aim is quantised to 1/65536 of a turn and sent over the wire alongside the buttons, because
+where you look decides where you move and what you hit — which makes it gameplay, and
+gameplay has to match on both machines exactly. See [architecture.md](architecture.md).
 
 **Shift beats WASD when both are held.** So holding a direction while pressing shift+click
 still gives you the shift ability, and you keep moving during it (where the ability allows).

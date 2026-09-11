@@ -1,6 +1,6 @@
 //! Vector math over fixed point.
 
-use crate::fixed::Fx;
+use crate::fixed::{Fx, cos_turns, sin_turns};
 
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
 pub struct V3 {
@@ -52,6 +52,16 @@ impl V3 {
         } else {
             V3::new(self.x.div(l), self.y.div(l), self.z.div(l))
         }
+    }
+
+    /// Unit vector in the horizontal plane for an angle in turns.
+    ///
+    /// The convention for the whole game: an angle of zero looks down positive
+    /// X, and increasing angle swings toward positive Z. The renderer places
+    /// the camera with the same convention, which is what makes "forward" mean
+    /// the same thing to the simulation and to the player's eyes.
+    pub fn from_turns(turns: Fx) -> V3 {
+        V3::new(cos_turns(turns), Fx::ZERO, sin_turns(turns))
     }
 
     /// Horizontal plane only. Most gameplay distance checks want this.
