@@ -16,8 +16,9 @@ pub struct ShowDebug(pub bool);
 
 impl Default for ShowDebug {
     fn default() -> Self {
-        // On by default under DEMO so headless screenshots show the overlay.
-        ShowDebug(std::env::var("DEBUG_OVERLAY").is_ok_and(|v| v == "1"))
+        // On by default under DEMO so headless screenshots show the overlay,
+        // and always under `--dev`.
+        ShowDebug(crate::dev_mode() || std::env::var("DEBUG_OVERLAY").is_ok_and(|v| v == "1"))
     }
 }
 

@@ -144,6 +144,7 @@ scalars! {
     RoundOverFrames,  "Match",    "Round-over pause",       Frames,  30,        600;
     AirStallDamp,     "Air",      "Aerial hang damping",    Fixed,   0,         fx(1,1);
     AirAttackBoost,   "Air",      "Aerial poke boost",      Fixed,   0,         fx(10,1);
+    JumpReleaseCut,   "Air",      "Rise kept on release",   Fixed,   fx(1,10),  fx(1,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +269,7 @@ impl MoveField {
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 30;
+pub const SCALAR_COUNT: usize = 31;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * 14;
 

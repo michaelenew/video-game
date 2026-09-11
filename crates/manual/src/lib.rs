@@ -51,6 +51,14 @@ pub const SECTIONS: &[Section] = &[
                 "cargo run -p game",
                 "The prototype: 3D arena, two fighters, live frame data.",
             ),
+            e(
+                "./scripts/dev.sh",
+                "Full development mode: hitbox wireframes and the Oven, both open. Passes extra arguments through.",
+            ),
+            e(
+                "cargo run -p game -- --dev",
+                "The same, if you would rather not use the script.",
+            ),
             e("cargo run -p game -- --help", "This text."),
             e(
                 "cargo run -p game -- --p1 <class> --p2 <class>",
@@ -254,6 +262,7 @@ pub const SECTIONS: &[Section] = &[
                 "./crates/web/build-sandbox.sh",
                 "A self-contained browser frame-data tool.",
             ),
+            e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),
         ],
     },

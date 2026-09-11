@@ -254,6 +254,16 @@ fn env_f32(key: &str) -> Option<f32> {
     std::env::var(key).ok()?.parse().ok()
 }
 
+/// `--dev` turns everything on at once: hitbox and hurtbox wireframes, and the
+/// Oven.
+///
+/// It exists because that combination *is* the working mode right now, and a
+/// mode you reach for every session should not need two keypresses and a
+/// reminder of which two.
+pub fn dev_mode() -> bool {
+    std::env::args().any(|a| a == "--dev")
+}
+
 fn env_num(key: &str) -> Option<u32> {
     std::env::var(key).ok()?.parse().ok()
 }

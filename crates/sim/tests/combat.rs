@@ -807,15 +807,40 @@ fn strafe_across_a_jump(class: sim::class::Class) -> f32 {
 // be is four separate things, and each of them is worth stating.
 
 #[test]
-fn a_short_hop_clears_another_fighter() {
-    // The point of jumping in a game with bodies. If the quick option cannot
-    // get over someone, verticality is only for the committed full hop.
-    let head = sim::tuning::body_height().to_f32_for_render();
+fn a_short_hop_is_a_fraction_of_a_full_one() {
+    // The whole point of a variable jump. With only the gravity sustain
+    // separating them, the short hop was *exactly* the sustain multiplier of
+    // the full one -- about two thirds, which is not a second option, it is the
+    // same jump slightly lower. A platform fighter wants a quarter or less.
     for class in ALL_CLASSES {
-        let (apex, _) = jump_profile(class, 1);
+        let (short, _) = jump_profile(class, 1);
+        let (full, _) = jump_profile(class, 60);
+        let ratio = short / full;
         assert!(
-            apex > head,
-            "{}: a short hop reaches {apex:.1}m against a {head:.1}m fighter",
+            (0.12..=0.33).contains(&ratio),
+            "{}: a short hop is {:.0}% of a full one ({short:.1}m against {full:.1}m)",
+            class.name(),
+            ratio * 100.0
+        );
+    }
+}
+
+#[test]
+fn a_short_hop_is_long_enough_to_throw_an_aerial() {
+    // It is deliberately too low to cross over someone -- that is what the full
+    // hop is for -- so what makes it worth having is that an aerial fits inside
+    // it. If the fastest poke cannot start and finish before you land, the
+    // short hop is just a stumble.
+    let shortest = ALL_CLASSES
+        .iter()
+        .map(|c| sim::moves::get(*c, 0).whiff_cost())
+        .min()
+        .unwrap() as u32;
+    for class in ALL_CLASSES {
+        let (_, airtime) = jump_profile(class, 1);
+        assert!(
+            airtime > shortest,
+            "{}: a short hop lasts {airtime} frames, less than the {shortest} a poke needs",
             class.name()
         );
     }
@@ -877,11 +902,14 @@ fn strafing_can_carry_you_clear_of_where_you_took_off() {
 }
 
 #[test]
-fn a_jump_can_still_be_punished() {
-    // The other half: slow enough that an opponent can see it, react, and land
-    // something before you are back on the ground. This is a floor on airtime
-    // and there is deliberately no ceiling -- how high you go is a design
-    // choice, and a test should not be quietly capping it.
+fn a_full_hop_can_still_be_punished() {
+    // Slow enough that an opponent can see it, react, and land something before
+    // you are back down. Measured on the *full* hop, because that is the
+    // committed option: a short hop being hard to react to is correct -- it is
+    // the fast, low-commitment one, and platform fighters lean on exactly that.
+    //
+    // A floor, with deliberately no ceiling. How high you go is a design choice
+    // and a test should not be quietly capping it.
     let fastest = ALL_CLASSES
         .iter()
         .map(|c| {
@@ -892,10 +920,10 @@ fn a_jump_can_still_be_punished() {
         .unwrap() as u32;
     let needed = sim::tuning::HUMAN_REACTION_FRAMES as u32 + fastest;
     for class in ALL_CLASSES {
-        let (_, airtime) = jump_profile(class, 1);
+        let (_, airtime) = jump_profile(class, 60);
         assert!(
             airtime > needed,
-            "{}: a short hop lasts {airtime} frames, too short to react to and punish ({needed})",
+            "{}: a full hop lasts {airtime} frames, too short to react to and punish ({needed})",
             class.name()
         );
     }

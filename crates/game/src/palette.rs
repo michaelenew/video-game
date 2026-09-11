@@ -46,8 +46,9 @@ pub struct Palette {
 impl Default for Palette {
     fn default() -> Self {
         Palette {
-            // `OVEN=1` starts it open, so a headless capture can see it.
-            open: std::env::var("OVEN").is_ok_and(|v| v == "1"),
+            // `OVEN=1` starts it open, so a headless capture can see it, and
+            // `--dev` starts it open because that is the working mode.
+            open: crate::dev_mode() || std::env::var("OVEN").is_ok_and(|v| v == "1"),
             // Presetting the search lets a headless capture show real rows.
             search: std::env::var("OVEN_SEARCH").unwrap_or_default(),
             message: String::new(),
