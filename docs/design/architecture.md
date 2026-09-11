@@ -266,6 +266,21 @@ an arm that refuses to shorten will happily hold the camera *inside* a wall when
 stands against one. The floor gets its own clamp, since it is a plane the simulation handles
 rather than an entry in `SOLIDS`.
 
+### The crosshair is not painted at screen centre
+
+It is projected from the point the fighter is pointed at, one aim-length ahead — the same
+distance the camera aims at, so the two coincide exactly when facing matches aim.
+
+That sounds like a long way round for "draw a cross in the middle", and it is the whole
+point. Facing locks when a move starts and lags while guarding, so for a meaningful fraction
+of every match the camera is pointed somewhere the attack will not go. A reticle nailed to
+the centre would be confidently wrong precisely when the player needs it to be right. This
+one drifts off centre instead, and dims while you are committed.
+
+A test checks it against `CameraRig` itself rather than against a restatement of the same
+arithmetic: if the rig's aim point and the crosshair's ever diverge, a still crosshair stops
+meaning anything.
+
 ## Aim is an input, not a camera read
 
 This is the part that makes camera-relative movement compatible with rollback.
@@ -333,13 +348,15 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 76 tests |
+| Test suites | 84 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
 | Bulwark kit | Bash, Slam, Guard, parry, Grapple, shield throw/recall/leap |
 | Universal movement | Jump, dodge with i-frames, crouch that ducks overheads |
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
+| Crosshair | Projected from facing, so it is honest during a committed move |
+| Settings | `~/.config/arena/settings.conf`, sensitivity on `-` / `=` |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |

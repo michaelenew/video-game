@@ -39,6 +39,25 @@ Two consequences are worth stating because they are design, not implementation:
   and an arc you can flip instantly *is* a bubble. The camera still goes wherever the mouse
   goes; it is the character who cannot reorient that fast.
 
+### The crosshair tells you where the attack goes, not where the camera points
+
+Those two are the same most of the time, and deliberately not the same during a committed
+move or a lagging guard. The reticle is placed by projecting the point the fighter is
+actually pointed at, so it sits still in the middle of the screen while facing tracks aim
+and slides off to the side when it does not. It dims while you are committed to something
+and the button will not answer.
+
+A reticle that says "here" when the answer is "not there" is worse than no reticle, and the
+moments it would lie are exactly the moments the answer matters.
+
+### Sensitivity
+
+`-` and `=` adjust mouse sensitivity mid-match, in multiplicative notches — sensitivity is
+felt as a ratio, so a fixed step is far too coarse at the bottom and imperceptible at the
+top. The value shows above the control legend and is written to
+`~/.config/arena/settings.conf` immediately. `ARENA_SETTINGS` overrides the path, which is
+how two people on one machine keep separate settings without a profile system.
+
 Aim is quantised to 1/65536 of a turn and sent over the wire alongside the buttons, because
 where you look decides where you move and what you hit — which makes it gameplay, and
 gameplay has to match on both machines exactly. See [architecture.md](architecture.md).

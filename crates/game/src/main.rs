@@ -16,8 +16,10 @@
 //! in-game with Tab. Names are matched loosely: bulwark, bellator, reaver,
 //! elementalist, blood, dual.
 
+mod crosshair;
 mod debug;
 mod hud;
+mod settings;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -118,7 +120,8 @@ fn main() {
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
-        .add_systems(Startup, (setup, hud::setup))
+        .insert_resource(settings::Settings::load())
+        .add_systems(Startup, (setup, hud::setup, crosshair::setup))
         .add_systems(
             Update,
             (
@@ -130,6 +133,7 @@ fn main() {
                 place_shields,
                 drive_camera,
                 hud::update,
+                crosshair::update,
                 debug::draw,
             )
                 .chain(),
@@ -244,8 +248,6 @@ struct Look {
     /// Player two's yaw, for two people on one keyboard. They have no mouse, so
     /// they turn with keys.
     yaw_two: f32,
-    /// Radians per pixel of mouse movement.
-    sensitivity: f32,
     grabbed: bool,
 }
 
@@ -256,7 +258,6 @@ impl Default for Look {
             yaw: 0.0,
             pitch: 0.12,
             yaw_two: std::f32::consts::PI,
-            sensitivity: 0.0025,
             grabbed: false,
         }
     }
@@ -818,14 +819,34 @@ fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
 /// it cannot be named.
 fn mouse_look(
     mut look: ResMut<Look>,
+    mut settings: ResMut<settings::Settings>,
     mut motion: EventReader<MouseMotion>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut windows: Query<&mut Window>,
 ) {
+    // Sensitivity, adjustable mid-match and written straight to disk. Two people
+    // sharing a machine should not have to agree on one number, and a setting
+    // you have to quit and edit a file to change is a setting nobody changes.
+    let mut changed = false;
+    for (key, up) in [
+        (KeyCode::Minus, false),
+        (KeyCode::NumpadSubtract, false),
+        (KeyCode::Equal, true),
+        (KeyCode::NumpadAdd, true),
+    ] {
+        if keys.just_pressed(key) {
+            settings.nudge(up);
+            changed = true;
+        }
+    }
+    if changed {
+        settings.save();
+    }
+
     let limit = view::camera::RigConfig::default().pitch_limit;
     if look.grabbed {
-        let sensitivity = look.sensitivity;
+        let sensitivity = settings.radians_per_pixel();
         let (mut dx, mut dy) = (0.0, 0.0);
         for ev in motion.read() {
             dx += ev.delta.x;
