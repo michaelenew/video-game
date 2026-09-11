@@ -9,7 +9,6 @@
 
 use crate::class::Class;
 use crate::fixed::Fx;
-use crate::tuning::POKE_MOBILITY;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Move {
@@ -80,227 +79,73 @@ impl Move {
     }
 }
 
-/// Shorthand so the tables below stay readable.
-const fn mv(
-    name: &'static str,
-    frames: (u16, u16, u16),
-    damage: i32,
-    reach: (i32, i32),
-    radius: (i32, i32),
-    stun: (u16, u16),
-    knockback: i32,
-) -> Move {
+// ---------------------------------------------------------------------------
+// The roster
+// ---------------------------------------------------------------------------
+//
+// Names and prose only. **The numbers live in the Oven** (`crates/sim/oven.rs`,
+// baked to `tuned.rs`), because they are edited in the running game and written
+// back from there -- keeping a second copy here would guarantee the two drift,
+// and a move table that disagrees with the game is worse than no table.
+//
+// `cargo run -p sim --bin frametable` prints the current values.
+
+/// Three exemplar moves per class, in slot order: poke, committed, special.
+const NAMES: [[&str; SLOTS]; 6] = [
+    // Bulwark -- committed, not slow. Wins by denying space.
+    //   Bash: fast poke, slightly minus on block so it is not a free mash.
+    //   Slam: the overhead. Heavily punishable if read, heavily rewarding if not.
+    //   Grapple: beats guard outright, loses badly to dodge.
+    ["Bash", "Slam", "Grapple"],
+    // Bellator -- range bands and flow. Form multiplies everything.
+    ["Sweep", "Drive", "Uppercut"],
+    // Shadow Reaver -- two bodies. Options are a function of the line between them.
+    //   Guillotine: blades erupt from the shadow, so it needs one placed.
+    ["Slash", "Executioner", "Guillotine"],
+    // Elementalist -- terrain author. Ranged, and creates its own targets.
+    //   Fire pillar: detonates a structure for a wider blast, so it wants one out.
+    ["Bolt", "Fissure", "Fire pillar"],
+    // Blood mage -- sustain through aggression. Everything costs health.
+    //   Reaper's debt: committed and directional, you cannot turn while it channels.
+    ["Rend", "Black spike", "Reaper's debt"],
+    // Dual mage -- melee mage riding between two forces.
+    //   Judgement: a finisher, only past the deep threshold on its own side.
+    ["Step strike", "Lance", "Judgement"],
+];
+
+pub const SLOTS: usize = 3;
+
+/// Build a move from the live tuning store.
+///
+/// By value rather than by reference: the numbers can change between frames, so
+/// there is no `'static` to borrow from any more. A `Move` is small and copied
+/// a handful of times a frame.
+pub fn get(class: Class, kind: u8) -> Move {
+    use crate::oven::{self, MoveField as F};
+    let slot = (kind as usize).min(SLOTS - 1);
+    let raw = |f: F| oven::move_field(class, slot, f);
     Move {
-        name,
-        startup: frames.0,
-        active: frames.1,
-        recovery: frames.2,
-        damage,
-        reach: Fx::ratio(reach.0, reach.1),
-        radius: Fx::ratio(radius.0, radius.1),
-        hitstun: stun.0,
-        blockstun: stun.1,
-        knockback: Fx::ratio(knockback, 1),
-        unblockable: false,
-        hits_crouching: true,
-        needs_mechanic: false,
-        mobility: 0,
-        air_stall: AIR_STALL_DEFAULT,
+        name: NAMES[class as usize][slot],
+        startup: raw(F::Startup) as u16,
+        active: raw(F::Active) as u16,
+        recovery: raw(F::Recovery) as u16,
+        damage: raw(F::Damage),
+        reach: Fx::from_raw(raw(F::Reach)),
+        radius: Fx::from_raw(raw(F::Radius)),
+        hitstun: raw(F::Hitstun) as u16,
+        blockstun: raw(F::Blockstun) as u16,
+        knockback: Fx::from_raw(raw(F::Knockback)),
+        unblockable: raw(F::Unblockable) != 0,
+        hits_crouching: raw(F::HitsCrouching) != 0,
+        needs_mechanic: raw(F::NeedsMechanic) != 0,
+        mobility: raw(F::Mobility) as u8,
+        air_stall: raw(F::AirStall) as u16,
     }
 }
 
-/// Every aerial hangs a little by default: an attack that drops you straight
-/// through it gives the air nothing to offer, and verticality is meant to be
-/// part of the positioning game. Moves that want more or less say so.
-const AIR_STALL_DEFAULT: u16 = 6;
-
-/// Suspend the fall for this many frames instead of the default.
-const fn floats(mut m: Move, frames: u16) -> Move {
-    m.air_stall = frames;
-    m
-}
-
-/// Keep this fraction of walking speed through the move.
-const fn mobile(mut m: Move, percent: u8) -> Move {
-    m.mobility = percent;
-    m
-}
-
-const fn overhead(mut m: Move) -> Move {
-    m.hits_crouching = false;
-    m
-}
-
-const fn unblockable(mut m: Move) -> Move {
-    m.unblockable = true;
-    m
-}
-
-const fn gated(mut m: Move) -> Move {
-    m.needs_mechanic = true;
-    m
-}
-
-// ---------------------------------------------------------------------------
-// Bulwark -- committed, not slow. Wins by denying space.
-// ---------------------------------------------------------------------------
-pub const BULWARK: &[Move] = &[
-    // Fast poke. Slightly minus on block, so it is not a free mash.
-    mobile(
-        mv("Bash", (4, 3, 10), 60, (3, 2), (9, 10), (14, 8), 4),
-        POKE_MOBILITY,
-    ),
-    // The overhead. Heavily punishable if read, heavily rewarding if not.
-    floats(
-        overhead(mv("Slam", (14, 4, 24), 170, (2, 1), (7, 5), (32, 16), 11)),
-        12,
-    ),
-    // Beats guard outright, loses badly to dodge.
-    unblockable(mv(
-        "Grapple",
-        (20, 3, 30),
-        210,
-        (11, 10),
-        (8, 10),
-        (40, 0),
-        6,
-    )),
-];
-
-// ---------------------------------------------------------------------------
-// Bellator -- range bands and flow. Form multiplies everything.
-// ---------------------------------------------------------------------------
-pub const BELLATOR: &[Move] = &[
-    mobile(
-        mv("Sweep", (6, 3, 12), 65, (17, 10), (11, 10), (14, 9), 5),
-        POKE_MOBILITY,
-    ),
-    mv("Drive", (11, 3, 20), 140, (2, 1), (1, 1), (24, 14), 9),
-    overhead(mv(
-        "Uppercut",
-        (16, 4, 24),
-        165,
-        (16, 10),
-        (12, 10),
-        (34, 15),
-        12,
-    )),
-];
-
-// ---------------------------------------------------------------------------
-// Shadow Reaver -- two bodies. Options are a function of the line between them.
-// ---------------------------------------------------------------------------
-pub const SHADOW_REAVER: &[Move] = &[
-    mobile(
-        mv("Slash", (5, 3, 11), 62, (14, 10), (12, 10), (14, 8), 4),
-        POKE_MOBILITY,
-    ),
-    overhead(mv(
-        "Executioner",
-        (16, 4, 26),
-        185,
-        (17, 10),
-        (13, 10),
-        (34, 17),
-        10,
-    )),
-    // Blades erupt from the shadow, so it needs one placed.
-    gated(mv(
-        "Guillotine",
-        (9, 5, 16),
-        120,
-        (0, 1),
-        (16, 10),
-        (22, 12),
-        6,
-    )),
-];
-
-// ---------------------------------------------------------------------------
-// Elementalist -- terrain author. Ranged, and creates its own targets.
-// ---------------------------------------------------------------------------
-pub const ELEMENTALIST: &[Move] = &[
-    mobile(
-        mv("Bolt", (7, 2, 13), 45, (4, 1), (7, 10), (14, 6), 2),
-        POKE_MOBILITY,
-    ),
-    mv("Fissure", (13, 4, 22), 110, (7, 1), (11, 10), (27, 14), 6),
-    // Detonates a structure for a much wider blast, so it wants one out.
-    gated(overhead(mv(
-        "Fire pillar",
-        (17, 5, 24),
-        175,
-        (5, 1),
-        (2, 1),
-        (34, 16),
-        8,
-    ))),
-];
-
-// ---------------------------------------------------------------------------
-// Blood mage -- sustain through aggression. Everything costs health.
-// ---------------------------------------------------------------------------
-pub const BLOOD_MAGE: &[Move] = &[
-    mobile(
-        mv("Rend", (6, 3, 13), 55, (3, 1), (9, 10), (16, 7), 3),
-        POKE_MOBILITY,
-    ),
-    mv(
-        "Black spike",
-        (18, 4, 20),
-        150,
-        (5, 2),
-        (16, 10),
-        (26, 15),
-        5,
-    ),
-    // Committed and directional: you cannot turn while it channels.
-    unblockable(mv(
-        "Reaper's debt",
-        (22, 5, 28),
-        230,
-        (5, 2),
-        (2, 1),
-        (36, 0),
-        9,
-    )),
-];
-
-// ---------------------------------------------------------------------------
-// Dual mage -- melee mage riding between two forces.
-// ---------------------------------------------------------------------------
-pub const DUAL_MAGE: &[Move] = &[
-    mobile(
-        mv("Step strike", (5, 3, 12), 58, (15, 10), (1, 1), (14, 8), 4),
-        POKE_MOBILITY,
-    ),
-    mv("Lance", (10, 4, 18), 125, (4, 1), (8, 10), (22, 13), 6),
-    // A finisher: only past the deep threshold on its own side.
-    gated(overhead(mv(
-        "Judgement",
-        (20, 5, 26),
-        215,
-        (3, 1),
-        (11, 5),
-        (30, 18),
-        10,
-    ))),
-];
-
-pub const fn table(class: Class) -> &'static [Move] {
-    match class {
-        Class::Bulwark => BULWARK,
-        Class::Bellator => BELLATOR,
-        Class::ShadowReaver => SHADOW_REAVER,
-        Class::Elementalist => ELEMENTALIST,
-        Class::BloodMage => BLOOD_MAGE,
-        Class::DualMage => DUAL_MAGE,
-    }
-}
-
-pub fn get(class: Class, kind: u8) -> &'static Move {
-    let t = table(class);
-    &t[(kind as usize).min(t.len() - 1)]
+/// All three of a class's moves, live.
+pub fn table(class: Class) -> [Move; SLOTS] {
+    [get(class, 0), get(class, 1), get(class, 2)]
 }
 
 /// Frame data for a move, for debug overlays and documents.

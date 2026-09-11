@@ -13,3 +13,4 @@ view = { path = "../view" }
 # Default features minus the ones a 3D arena prototype does not need. Keeps
 # compile times down without giving up rendering, glTF or PBR.
 bevy = { version = "0.16", default-features = false, features = ["bevy_asset", "bevy_core_pipeline", "bevy_pbr", "bevy_gltf", "bevy_render", "bevy_scene", "bevy_window", "bevy_winit", "multi_threaded", "tonemapping_luts", "x11", "bevy_ui", "bevy_text", "bevy_gizmos", "default_font"] }
+bevy_egui = { version = "0.34", default-features = false, features = ["render", "bevy_picking", "default_fonts"] }

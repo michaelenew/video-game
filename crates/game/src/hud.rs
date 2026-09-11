@@ -117,7 +117,7 @@ pub fn setup(mut commands: Commands) {
                          WASD move (camera-relative) / Space jump / Shift+dir dodge / Ctrl crouch\n\
                          J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
                          Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset\n\
-                         - / = mouse / F3 F4 fov / F5 F6 camera distance",
+                         - / = mouse / F3 F4 fov / F5 F6 camera distance / F7 oven",
                             ),
                             TextFont {
                                 font_size: 13.0,
@@ -204,7 +204,7 @@ pub fn update(
 
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
-        node.width = Val::Percent(100.0 * hp / sim::state::MAX_HEALTH as f32);
+        node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
     }
 
     for (tag, mut text) in states.iter_mut() {

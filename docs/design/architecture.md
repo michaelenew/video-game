@@ -359,6 +359,74 @@ frames to see what happened. Worth knowing what the dim state actually shows: at
 range a move connects on the very frame its box appears, so a landed hit is dim for every
 frame you can see it. Bright means *out and still looking for someone* — a whiff.
 
+## The Oven: tuning while it runs
+
+**F7.** Every tuned number in the game — 304 of them — editable in a palette that floats over
+the arena, with a **bake** button that writes them back to the repository and pushes.
+
+Feel work is a loop: change a number, play it, change it again. The loop is only as fast as
+its slowest step, and with the values compiled in that step is a rebuild — so in practice you
+change one number, wait, and lose the comparison you were trying to make. Worse, a session of
+tuning ends as something you have to remember and retype.
+
+### One representation for three hundred numbers
+
+Every knob is an **`i32`**. Fixed-point values are their raw 16.16 bits, frame counts are
+frames, health is health, flags are 0 or 1. A `Unit` says how to read it back.
+
+That uniformity is what makes the rest cheap: one store, one editor widget, one file format,
+one search index. Three hundred parameters each needing their own would have been a UI project
+rather than an afternoon.
+
+### Two ways in, because three hundred needs both
+
+**Families** group knobs the way you think about them — Movement, Air, Defence, Body, Match,
+one per class's air stats, one per move. **Search** matches labels, families and identifiers
+for when you already know the name. Either alone is unusable at this size: families with no
+search means scrolling past two hundred things, search with no families means you can only find
+what you can already name.
+
+### `sim` stays float-free
+
+The Oven lives inside `sim`, which has no floating point anywhere as a determinism guarantee.
+An editor is not a good enough reason to put the first one in, so slider bounds are stored in
+raw units and the baked file's human-readable comments are formatted with integer arithmetic.
+The `f32` conversion for the sliders lives in the palette, on the renderer side of the line.
+
+### Mistuned peers desync loudly
+
+Tuning values are **rules, not state**: they never change during a frame, so rollback neither
+saves nor restores them. But two peers running different rules would diverge silently and look
+exactly like a netcode bug. The tuning hash is folded into `World::checksum`, so a mismatched
+Oven is a desync on the first frame — an error message instead of a mystery.
+
+### Baking
+
+`crates/sim/src/tuned.rs` is generated and is the single source of truth for values. `moves.rs`
+keeps the move *names and prose*; its numbers live in the Oven, because a second copy would
+drift and a move table that disagrees with the game is worse than no table.
+
+The generated arrays carry `#[rustfmt::skip]` so the file stays byte-identical to what the
+emitter produces — otherwise `cargo fmt` re-columnises it, the file stops matching its
+generator, and the test that catches a stale bake has to be weakened to a fuzzy comparison.
+That test (`the_committed_file_is_what_the_oven_would_write`) is what catches a hand-edited
+`tuned.rs` or a bake that wrote the file but never got committed.
+
+Bake writes the file, formats it, commits it and pushes on whatever branch is checked out. It
+reports each step separately: a bake that wrote and committed but could not push is a
+*different* outcome from one that worked, and blurring the two would cost someone an
+afternoon.
+
+`cargo run -p sim --bin bake_tuning` does the same write without launching the game.
+
+### Not yet
+
+Curves. Several of these want to be splines rather than scalars — a knockback that varies with
+damage, an acceleration that eases. The store is integers precisely so that adding a curve type
+later is a new `Unit` and a new editor widget rather than a rewrite. Animation authoring is the
+other half the Oven is eventually meant to hold; today that lives in `crates/anim` and is baked
+offline.
+
 ## Arena geometry
 
 `sim::arena` is a fixed array of axis-aligned boxes resolved along the axis of
@@ -400,7 +468,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 120 tests |
+| Test suites | 129 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -410,6 +478,7 @@ Everything below builds and passes today.
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
+| **The Oven** | **F7** — 304 live tuning knobs, searchable, with bake-and-push |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |

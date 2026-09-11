@@ -97,6 +97,16 @@ as they get tested.
 - **Is block stunlock long enough to make blocking a real cost?**
 - **Does crouch see enough use?** It only beats overheads, and there is one.
 
+### The Oven
+
+- Curves. Several of these want to be splines rather than scalars — knockback that varies with
+  damage, acceleration that eases. The store is integers so a curve is a new `Unit` and a new
+  widget rather than a rewrite.
+- Should baking open a pull request rather than pushing to the branch? Pushing is right for a
+  solo session and probably wrong the moment someone else is on the branch.
+- The palette has no undo beyond revert-to-baked. A session that goes somewhere and wants to
+  come back two steps has to remember the numbers.
+
 ### Animation
 
 - Does the baked overhead read as *heavy*, or just as *slow*? The lag budget
@@ -387,3 +397,38 @@ One test bug worth remembering: the first "releasing jump is final" test ran for
 and caught the *next* jump, which a still-held button starts the instant you land. It was
 comparing two jumps against one. Fixtures that run past a landing are measuring more than they
 think they are.
+
+### 2026-09-11 — the Oven
+**Changed** Every tuned number in the game — 304 of them — is now runtime state, editable in a
+palette on **F7**, with a bake button that writes `crates/sim/src/tuned.rs` and pushes on the
+current branch. The hand-written constants in `tuning.rs`, the per-class air stats and the whole
+move table now read from it.
+**Why** Feel work is a loop and the loop was only as fast as a rebuild. In practice that meant
+changing one number, waiting, and losing the comparison you were trying to make — and a session
+of tuning ending as something to remember and retype rather than as a commit.
+**Verdict** kept. Things worth recording:
+
+**One representation carried the whole design.** Every knob is an `i32` — raw 16.16 bits for
+fixed point, frames for frames, 0/1 for flags — with a `Unit` saying how to read it. That is
+what made one store, one widget, one file format and one search index enough for three hundred
+parameters. Had they each kept their own type this would have been a UI project.
+
+**The 120 existing tests were the verification.** Converting 308 call sites from constants to
+accessors is the kind of change where one mis-wired knob hides for weeks. Because the tests
+exercise behaviour rather than values, a knob pointed at the wrong slot fails them immediately.
+Every one passed on the first run after the refactor, which is the only reason to believe it.
+
+**`sim` stayed float-free.** The obvious shortcut was an `f32` display helper inside the Oven,
+and the no-floats guard caught it. Slider bounds are stored raw and the baked comments are
+formatted with integer arithmetic instead; the `f32` conversion lives in the palette. An editor
+is not a good enough reason to put the first float in a deterministic simulation.
+
+**Mistuned peers now desync loudly.** Tuning is a rule rather than state, so rollback never
+carries it — but two peers tuned differently would diverge silently and look like a netcode bug.
+The tuning hash goes into `World::checksum`, which turns that into an error message.
+
+Two small things cost more time than they should have and are worth remembering. `cargo fmt`
+re-columnises generated arrays, so the file could never equal its generator until the arrays got
+`#[rustfmt::skip]`; and it strips a trailing blank line, which left the file permanently one
+byte different. Both were caught by the test that compares the committed file against a fresh
+emit — which is exactly the test that catches a stale bake later.

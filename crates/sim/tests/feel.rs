@@ -15,10 +15,11 @@ use sim::moves::{self, Move};
 use sim::state::{SLOT_COMMITTED, SLOT_POKE};
 use sim::tuning as t;
 
-fn every_move() -> impl Iterator<Item = (&'static str, &'static Move)> {
+fn every_move() -> impl Iterator<Item = (&'static str, Move)> {
+    // By value: move data is live now, so there is no `'static` table to borrow.
     ALL_CLASSES
         .iter()
-        .flat_map(|c| moves::table(*c).iter().map(move |m| (c.name(), m)))
+        .flat_map(|c| moves::table(*c).into_iter().map(move |m| (c.name(), m)))
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +126,7 @@ fn the_parry_window_is_a_read_not_a_reaction() {
     // Parry has to be anticipated. If the window were wider than reaction time
     // it would beat everything on sight and offence would stop existing.
     assert!(
-        t::PARRY_WINDOW < t::HUMAN_REACTION_FRAMES,
+        t::parry_window() < t::HUMAN_REACTION_FRAMES,
         "parry is reactable, which makes it strictly better than blocking"
     );
 }
@@ -136,10 +137,10 @@ fn a_parry_actually_pays_for_itself() {
     // would risk the tight window.
     let slowest_startup = every_move().map(|(_, m)| m.startup).max().unwrap();
     assert!(
-        t::PARRY_STAGGER > slowest_startup,
+        t::parry_stagger() > slowest_startup,
         "parry stagger ({}) is shorter than the slowest move's startup ({slowest_startup}); \
          a correct read cannot be cashed in",
-        t::PARRY_STAGGER
+        t::parry_stagger()
     );
 }
 
@@ -149,10 +150,10 @@ fn a_dodge_has_a_vulnerable_tail() {
     // Invulnerable for its whole duration would make dodge beat everything and
     // never be punished.
     assert!(
-        t::DODGE_IFRAMES < t::DODGE_FRAMES,
+        t::dodge_iframes() < t::dodge_frames(),
         "dodge is invulnerable for its entire duration"
     );
-    let tail = t::DODGE_FRAMES - t::DODGE_IFRAMES;
+    let tail = t::dodge_frames() - t::dodge_iframes();
     let fastest = every_move().map(|(_, m)| m.startup).min().unwrap();
     assert!(
         tail > fastest,
@@ -166,17 +167,17 @@ fn guard_is_an_arc_not_a_bubble() {
     // A full-circle guard cannot be walked around, which removes the whole
     // reason to reposition.
     assert!(
-        t::GUARD_ARC_COS.raw() > 0,
+        t::guard_arc_cos().raw() > 0,
         "guard covers 180 degrees or more; flanking a turtle is impossible"
     );
 }
 
 #[test]
 fn blocking_and_crouching_both_cost_mobility() {
-    assert!(t::GUARD_MOVE_SPEED.raw() < t::MOVE_SPEED.raw());
-    assert!(t::CROUCH_MOVE_SPEED.raw() < t::MOVE_SPEED.raw());
+    assert!(t::guard_move_speed().raw() < t::move_speed().raw());
+    assert!(t::crouch_move_speed().raw() < t::move_speed().raw());
     assert!(
-        t::GUARD_TURN_RATE.raw() < t::TURN_RATE.raw(),
+        t::guard_turn_rate().raw() < t::turn_rate().raw(),
         "guarding does not slow your turn, so the facing arc costs nothing"
     );
 }
@@ -191,8 +192,9 @@ fn time_to_kill_is_in_the_right_neighbourhood() {
     // so it is a sanity bound rather than a prediction: it catches damage
     // numbers that are wrong by an order of magnitude, not by 20%.
     for class in ALL_CLASSES {
-        let best = moves::table(class).iter().max_by_key(|m| m.damage).unwrap();
-        let hits_to_kill = t::MAX_HEALTH / best.damage;
+        let table = moves::table(class);
+        let best = table.iter().max_by_key(|m| m.damage).unwrap();
+        let hits_to_kill = t::max_health() / best.damage;
         assert!(
             (3..=30).contains(&hits_to_kill),
             "{}: {} kills in {hits_to_kill} hits",
@@ -205,7 +207,7 @@ fn time_to_kill_is_in_the_right_neighbourhood() {
 #[test]
 fn the_dodge_outruns_a_walk() {
     assert!(
-        t::DODGE_SPEED.raw() > t::MOVE_SPEED.raw(),
+        t::dodge_speed().raw() > t::move_speed().raw(),
         "dodging is slower than walking, so it is never worth the commitment"
     );
 }
@@ -304,7 +306,7 @@ fn air_control_is_weaker_than_walking_for_everyone() {
     for class in ALL_CLASSES {
         let air = class.mobility().air_speed;
         assert!(
-            air.raw() < t::MOVE_SPEED.raw(),
+            air.raw() < t::move_speed().raw(),
             "{}: air control ({}) is not weaker than walking",
             class.name(),
             air.to_f32_for_render()
@@ -340,7 +342,7 @@ fn an_aerial_hang_is_shorter_than_the_move_that_carries_it() {
     // safe by simply remaining out of reach.
     for (class, m) in every_move() {
         assert!(
-            (m.air_stall as u16) < m.whiff_cost(),
+            m.air_stall < m.whiff_cost(),
             "{class} {}: hangs for {} frames but only lasts {}",
             m.name,
             m.air_stall,

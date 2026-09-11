@@ -3,7 +3,7 @@
 
 use sim::class::ALL_CLASSES;
 use sim::fixed::Fx;
-use sim::state::{Action, MAX_HEALTH, Phase, Shield};
+use sim::state::{Action, Phase, Shield, max_health};
 use sim::{Input, World};
 
 const L: u16 = Input::LEFT;
@@ -50,7 +50,11 @@ fn blocking_costs_no_health_but_does_cost_a_vulnerable_window() {
     // No chip damage, per defense.md. The cost is knockback plus stunlock.
     let mut w = engaged();
     run(&mut w, 30, L, R);
-    assert_eq!(w.players[1].health, MAX_HEALTH, "blocking took chip damage");
+    assert_eq!(
+        w.players[1].health,
+        max_health(),
+        "blocking took chip damage"
+    );
     assert!(
         w.players[1].action.frames_left().max(u16::from(matches!(
             w.players[1].action,
@@ -96,14 +100,15 @@ fn dodging_evades_an_attack_that_would_otherwise_land() {
     let mut baseline = engaged();
     run(&mut baseline, 20, L, 0);
     assert!(
-        baseline.players[1].health < MAX_HEALTH,
+        baseline.players[1].health < max_health(),
         "setup did not connect"
     );
 
     let mut dodged = engaged();
     run(&mut dodged, 20, L, Input::SHIFT | Input::S);
     assert_eq!(
-        dodged.players[1].health, MAX_HEALTH,
+        dodged.players[1].health,
+        max_health(),
         "dodge failed to evade"
     );
 }
@@ -162,7 +167,7 @@ fn the_next_round_starts_fresh() {
     run(&mut w, 30, L, 0);
     run(&mut w, 200, 0, 0);
     assert!(matches!(w.phase, Phase::Fighting), "round never restarted");
-    assert_eq!(w.players[1].health, MAX_HEALTH, "health did not reset");
+    assert_eq!(w.players[1].health, max_health(), "health did not reset");
     assert_eq!(w.players[0].rounds_won, 1, "round wins were lost on reset");
 }
 
@@ -194,21 +199,22 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     let mut standing = engaged();
     run(&mut standing, 45, L | SHIFT, 0);
     assert!(
-        standing.players[1].health < MAX_HEALTH,
+        standing.players[1].health < max_health(),
         "setup did not connect while standing"
     );
 
     let mut mid = engaged();
     run(&mut mid, 20, L, Input::CROUCH);
     assert!(
-        mid.players[1].health < MAX_HEALTH,
+        mid.players[1].health < max_health(),
         "a mid was ducked; crouch beats everything"
     );
 
     let mut ducked = engaged();
     run(&mut ducked, 45, L | SHIFT, Input::CROUCH);
     assert_eq!(
-        ducked.players[1].health, MAX_HEALTH,
+        ducked.players[1].health,
+        max_health(),
         "crouch failed to duck the overhead"
     );
 }
@@ -288,7 +294,7 @@ fn you_attack_where_you_look() {
     let mut facing = engaged();
     run(&mut facing, 20, L, 0);
     assert!(
-        facing.players[1].health < MAX_HEALTH,
+        facing.players[1].health < max_health(),
         "a poke at point blank did not connect"
     );
 
@@ -298,7 +304,8 @@ fn you_attack_where_you_look() {
         away.advance([Input::aimed(L, LOOK_LEFT), Input::aimed(0, LOOK_LEFT)]);
     }
     assert_eq!(
-        away.players[1].health, MAX_HEALTH,
+        away.players[1].health,
+        max_health(),
         "an attack aimed away from the opponent still hit them"
     );
 }
@@ -486,8 +493,9 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
 
     // Exactly the threshold the hit test uses: the attack radius plus the
     // defender's body radius, which is why the overlay draws both cylinders.
-    let threshold =
-        (hb.radius.to_f32_for_render() + sim::tuning::BODY_RADIUS.to_f32_for_render()) * gap_factor;
+    let threshold = (hb.radius.to_f32_for_render()
+        + sim::tuning::body_radius().to_f32_for_render())
+        * gap_factor;
     w.players[1].pos = sim::V3::new(
         hb.centre
             .x
@@ -508,12 +516,13 @@ fn the_drawn_hitbox_is_the_one_that_hits() {
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(
-            inside.players[1].health < MAX_HEALTH,
+            inside.players[1].health < max_health(),
             "{class:?}: a defender well inside the drawn box was not hit"
         );
         let outside = swinging_at(class, 1.3);
         assert_eq!(
-            outside.players[1].health, MAX_HEALTH,
+            outside.players[1].health,
+            max_health(),
             "{class:?}: a defender well outside the drawn box was hit anyway"
         );
     }
@@ -899,8 +908,8 @@ fn momentum_carries_in_the_air() {
 fn air_speed_has_a_ceiling() {
     // A deliberate divergence from Source. A player who can cross the whole
     // arena from anywhere has removed spacing from the game.
-    let cap = (sim::tuning::MOVE_SPEED.to_f32_for_render()
-        * sim::tuning::AIR_SPEED_CAP.to_f32_for_render())
+    let cap = (sim::tuning::move_speed().to_f32_for_render()
+        * sim::tuning::air_speed_cap().to_f32_for_render())
         + 0.1;
     // Alternate strafes, which is how you build speed if it can be built.
     let mut w = World::new();

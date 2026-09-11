@@ -118,7 +118,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 120 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 129 tests cover
 determinism, combat relationships, camera and animation.
 
 ```
@@ -155,6 +155,11 @@ to keep separate settings per person on a shared machine.
 **Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
 on-hit advantage. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
+
+**Tune it while it runs:** **F7** opens the Oven — every tuned number in the game, grouped by
+family and searchable, adjusting live. The bake button writes them to `crates/sim/src/tuned.rs`
+and pushes on the current branch, so a tuning session ends as a reviewable diff.
+`cargo run -p sim --bin bake_tuning` does the same without launching the game.
 
 **Animation:** `cargo run -p anim --bin bake` regenerates the baked clips from the recipes
 in `crates/anim/src/bin/bake.rs`. F2 toggles baked playback in-game.
