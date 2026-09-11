@@ -98,3 +98,24 @@ pub const ROUND_OVER_FRAMES: u16 = 150;
 /// is not reactable. Roughly 250 ms, which is the usual figure for a simple
 /// visual reaction.
 pub const HUMAN_REACTION_FRAMES: u16 = 15;
+
+/// Percent of walking speed kept while throwing a fast poke.
+///
+/// Pokes are the neutral tool and get thrown constantly. Rooting you for every
+/// one made neutral sticky and read as the game snatching the controls away --
+/// reported as jarring, and it was. Slowing you keeps the cost without the
+/// lurch: you still cannot close or escape at full speed while swinging.
+///
+/// Sits between the crouch walk and the free walk, so "slowed by swinging" is a
+/// speed the player already has a feel for.
+pub const POKE_MOBILITY: u8 = 60;
+
+/// How much horizontal speed survives each frame of a move that roots you.
+///
+/// Rooting is correct for the committed moves -- that is what commitment means
+/// -- but arriving at rooted in a single frame is a snap from a full walk to
+/// nothing, which is the jarring part rather than the rooting itself. Over
+/// about four frames this bleeds off the speed instead. The distance slid is a
+/// few centimetres; it changes nothing about the spacing and everything about
+/// how it reads.
+pub const ATTACK_ROOT_DECAY: Fx = Fx::ratio(62, 100);

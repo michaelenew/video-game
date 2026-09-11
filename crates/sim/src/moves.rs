@@ -9,6 +9,7 @@
 
 use crate::class::Class;
 use crate::fixed::Fx;
+use crate::tuning::POKE_MOBILITY;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Move {
@@ -33,6 +34,15 @@ pub struct Move {
     /// Requires the class mechanic to be in a particular state -- shield in
     /// hand, shadow placed, meter deep enough. Enforced per class.
     pub needs_mechanic: bool,
+    /// Percent of walking speed you keep while the move runs.
+    ///
+    /// Zero roots you, which is what commitment means and is correct for the
+    /// heavy moves. It is wrong for a fast poke: the poke is the neutral tool,
+    /// thrown constantly, and stopping dead every time makes neutral sticky and
+    /// reads as the game snatching the controls away. Slowing you keeps the
+    /// cost -- you cannot close or escape at full speed while swinging --
+    /// without the lurch.
+    pub mobility: u8,
 }
 
 impl Move {
@@ -55,6 +65,11 @@ impl Move {
     /// Total commitment if it whiffs entirely.
     pub const fn whiff_cost(&self) -> u16 {
         self.startup + self.active + self.recovery
+    }
+
+    /// Whether the move pins you in place for its duration.
+    pub const fn roots(&self) -> bool {
+        self.mobility == 0
     }
 }
 
@@ -82,7 +97,14 @@ const fn mv(
         unblockable: false,
         hits_crouching: true,
         needs_mechanic: false,
+        mobility: 0,
     }
+}
+
+/// Keep this fraction of walking speed through the move.
+const fn mobile(mut m: Move, percent: u8) -> Move {
+    m.mobility = percent;
+    m
 }
 
 const fn overhead(mut m: Move) -> Move {
@@ -105,7 +127,10 @@ const fn gated(mut m: Move) -> Move {
 // ---------------------------------------------------------------------------
 pub const BULWARK: &[Move] = &[
     // Fast poke. Slightly minus on block, so it is not a free mash.
-    mv("Bash", (4, 3, 10), 60, (3, 2), (9, 10), (14, 8), 4),
+    mobile(
+        mv("Bash", (4, 3, 10), 60, (3, 2), (9, 10), (14, 8), 4),
+        POKE_MOBILITY,
+    ),
     // The overhead. Heavily punishable if read, heavily rewarding if not.
     overhead(mv("Slam", (14, 4, 24), 170, (2, 1), (7, 5), (32, 16), 11)),
     // Beats guard outright, loses badly to dodge.
@@ -124,7 +149,10 @@ pub const BULWARK: &[Move] = &[
 // Bellator -- range bands and flow. Form multiplies everything.
 // ---------------------------------------------------------------------------
 pub const BELLATOR: &[Move] = &[
-    mv("Sweep", (6, 3, 12), 65, (17, 10), (11, 10), (14, 9), 5),
+    mobile(
+        mv("Sweep", (6, 3, 12), 65, (17, 10), (11, 10), (14, 9), 5),
+        POKE_MOBILITY,
+    ),
     mv("Drive", (11, 3, 20), 140, (2, 1), (1, 1), (24, 14), 9),
     overhead(mv(
         "Uppercut",
@@ -141,7 +169,10 @@ pub const BELLATOR: &[Move] = &[
 // Shadow Reaver -- two bodies. Options are a function of the line between them.
 // ---------------------------------------------------------------------------
 pub const SHADOW_REAVER: &[Move] = &[
-    mv("Slash", (5, 3, 11), 62, (14, 10), (12, 10), (14, 8), 4),
+    mobile(
+        mv("Slash", (5, 3, 11), 62, (14, 10), (12, 10), (14, 8), 4),
+        POKE_MOBILITY,
+    ),
     overhead(mv(
         "Executioner",
         (16, 4, 26),
@@ -167,7 +198,10 @@ pub const SHADOW_REAVER: &[Move] = &[
 // Elementalist -- terrain author. Ranged, and creates its own targets.
 // ---------------------------------------------------------------------------
 pub const ELEMENTALIST: &[Move] = &[
-    mv("Bolt", (7, 2, 13), 45, (4, 1), (7, 10), (14, 6), 2),
+    mobile(
+        mv("Bolt", (7, 2, 13), 45, (4, 1), (7, 10), (14, 6), 2),
+        POKE_MOBILITY,
+    ),
     mv("Fissure", (13, 4, 22), 110, (7, 1), (11, 10), (27, 14), 6),
     // Detonates a structure for a much wider blast, so it wants one out.
     gated(overhead(mv(
@@ -185,7 +219,10 @@ pub const ELEMENTALIST: &[Move] = &[
 // Blood mage -- sustain through aggression. Everything costs health.
 // ---------------------------------------------------------------------------
 pub const BLOOD_MAGE: &[Move] = &[
-    mv("Rend", (6, 3, 13), 55, (3, 1), (9, 10), (16, 7), 3),
+    mobile(
+        mv("Rend", (6, 3, 13), 55, (3, 1), (9, 10), (16, 7), 3),
+        POKE_MOBILITY,
+    ),
     mv(
         "Black spike",
         (18, 4, 20),
@@ -211,7 +248,10 @@ pub const BLOOD_MAGE: &[Move] = &[
 // Dual mage -- melee mage riding between two forces.
 // ---------------------------------------------------------------------------
 pub const DUAL_MAGE: &[Move] = &[
-    mv("Step strike", (5, 3, 12), 58, (15, 10), (1, 1), (14, 8), 4),
+    mobile(
+        mv("Step strike", (5, 3, 12), 58, (15, 10), (1, 1), (14, 8), 4),
+        POKE_MOBILITY,
+    ),
     mv("Lance", (10, 4, 18), 125, (4, 1), (8, 10), (22, 13), 6),
     // A finisher: only past the deep threshold on its own side.
     gated(overhead(mv(

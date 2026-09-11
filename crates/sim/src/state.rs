@@ -91,6 +91,16 @@ impl Action {
         matches!(self, Action::Guard { .. })
     }
 
+    /// Which move is running, across all three of its phases.
+    pub const fn attack_kind(self) -> Option<u8> {
+        match self {
+            Action::Startup { kind, .. }
+            | Action::Active { kind, .. }
+            | Action::Recovery { kind, .. } => Some(kind),
+            _ => None,
+        }
+    }
+
     /// Invulnerable frames of a dodge. Nothing else grants invulnerability.
     pub const fn invulnerable(self) -> bool {
         matches!(self, Action::Dodge { left } if left + t::DODGE_IFRAMES > t::DODGE_FRAMES)
@@ -637,12 +647,25 @@ fn step_player(p: &mut Player, input: Input) {
         }
     };
 
-    // Horizontal movement. Free at full speed, guarding at a crawl, otherwise
-    // only carried momentum from a dodge or knockback.
+    // Horizontal movement.
+    //
+    // How much a move hinders you is proportional to how much it commits you.
+    // The heavy moves root you outright -- that is what commitment means, and
+    // it is the whole basis of spatial play here. A fast poke does not: it is
+    // the neutral tool, thrown constantly, and stopping dead every time made
+    // neutral sticky and read as the game taking the controls away.
+    let attack_speed = p
+        .action
+        .attack_kind()
+        .map(|kind| moves::get(p.class, kind).mobility)
+        .filter(|m| *m > 0)
+        .map(|m| t::MOVE_SPEED.mul(Fx::ratio(m as i32, 100)));
+    let steering = ax != 0 || az != 0;
+
     if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(Fx::ratio(93, 100));
         p.vel.z = p.vel.z.mul(Fx::ratio(93, 100));
-    } else if p.action.actionable() && (ax != 0 || az != 0) {
+    } else if p.action.actionable() && steering {
         let speed = if p.crouching {
             t::CROUCH_MOVE_SPEED
         } else {
@@ -651,14 +674,24 @@ fn step_player(p: &mut Player, input: Input) {
         let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(speed);
         p.vel.z = dir.z.mul(speed);
-    } else if p.action.guarding() && (ax != 0 || az != 0) {
+    } else if p.action.guarding() && steering {
         let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(t::GUARD_MOVE_SPEED);
         p.vel.z = dir.z.mul(t::GUARD_MOVE_SPEED);
+    } else if let (Some(speed), true) = (attack_speed, steering) {
+        let dir = move_dir(input.aim_turns(), ax, az);
+        p.vel.x = dir.x.mul(speed);
+        p.vel.z = dir.z.mul(speed);
     } else if p.action.stunned() {
         // Knockback decays rather than stopping dead.
         p.vel.x = p.vel.x.mul(Fx::ratio(86, 100));
         p.vel.z = p.vel.z.mul(Fx::ratio(86, 100));
+    } else if p.action.attack_kind().is_some() {
+        // Rooted, or steering nothing. Bleed the speed off over a few frames
+        // rather than snapping to a halt: the snap was the jarring part, not
+        // the rooting.
+        p.vel.x = p.vel.x.mul(t::ATTACK_ROOT_DECAY);
+        p.vel.z = p.vel.z.mul(t::ATTACK_ROOT_DECAY);
     } else {
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;
