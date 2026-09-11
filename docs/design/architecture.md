@@ -250,11 +250,29 @@ smoothed, so the camera glides over the character's footsteps instead of jitteri
 directly behind your own fighter from a centred camera, and raising the camera does not fix
 it — a body is wider than a sightline. So the eye slides sideways while the point at the
 centre of the screen stays on the look axis, straight ahead of the fighter. The offset costs
-nothing in aiming precision; it only moves the character out of the way. The test asserts
+nothing in aiming precision; it only moves the character out of the way. It is folded in
+*before* the geometry check, not after — a camera slid sideways after being cleared has not
+been cleared. The test asserts
 the *aim point*, not the camera's own axis, because the two are deliberately different.
 
 **The camera is not in the snapshot.** Aim reaches the simulation as input, so peers agree on
 gameplay without the camera ever being rolled back.
+
+### The floor is not an obstacle to dodge, it is a surface to rest on
+
+Look up far enough and the camera arm wants to swing below the ground. There are two ways to
+refuse that, and only one of them feels like anything.
+
+Shortening the arm is the wrong one. It hauls the camera in toward the fighter's head while
+its height never changes, so the rig reads as a **pole of fixed length** with the camera
+sliding down it — which is exactly what it felt like when the clamp compared the arm against
+the ground without counting the eye lift, and so fired about three metres early. A ten-degree
+glance upward pulled the camera halfway in.
+
+The right one is to clamp the eye's *height* and leave the arm alone. The camera descends,
+settles onto the ground, and rides along it at full distance. It still closes on the fighter
+as you keep looking up — but only once it is actually on the ground with nowhere left to go,
+which is the point at which closing in is the only thing left to do.
 
 ### The camera pulls in rather than turning away
 
@@ -348,7 +366,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 84 tests |
+| Test suites | 87 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |

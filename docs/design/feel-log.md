@@ -217,3 +217,25 @@ would be confidently wrong exactly when it matters. So it is projected from wher
 is actually pointed: still in the middle while facing tracks aim, sliding off when it does
 not, dimmed while committed. Whether the slide reads as *information* or as *the crosshair
 being broken* is a question for a real match.
+
+### 2026-09-11 — the pole under the camera
+**Changed** Looking up now lowers the camera to the ground and lets it ride along at full
+distance, instead of hauling it in toward the fighter's head at a fixed height.
+**Why** Reported as "it feels like there's a five foot pole under the camera", which was an
+exact description of the bug. The floor clamp compared the camera arm against the ground
+*without counting the eye lift*, so it fired about three metres early — a ten-degree glance
+upward already triggered it — and it resolved the imaginary collision by shortening the arm.
+The eye height was therefore pinned at exactly `floor + lift` while the camera slid in toward
+the head. A pole, with the camera on it.
+**Verdict** kept. The general lesson is the one worth keeping: **how you refuse an illegal
+camera position is itself a feel decision.** Shortening the arm and clamping the height both
+keep the camera above the floor, and they feel nothing alike. At a 23-degree look up the
+camera now stays at 92% of its distance instead of 36%.
+
+Two things fell out of it. Fixing the clamp let the camera reach far enough back to discover
+that the shoulder offset was being applied *after* the occlusion check — so the camera could
+be slid sideways into a platform that had just been cleared. That had been wrong since the
+shoulder was added and was only hidden by the broken clamp keeping the arm too short to
+reach anything. And at full pitch the camera now sits on the ground close behind the fighter,
+who fills a good deal of the frame; whether the 57-degree pitch limit is too generous is a
+question for a match.

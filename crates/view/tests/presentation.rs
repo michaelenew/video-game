@@ -189,6 +189,84 @@ fn the_mouse_is_never_smoothed() {
     );
 }
 
+/// Flat distance from the focus point to the eye.
+fn flat_arm(f: view::camera::Framing, focus: [f32; 3]) -> f32 {
+    let (dx, dz) = (f.eye[0] - focus[0], f.eye[2] - focus[2]);
+    (dx * dx + dz * dz).sqrt()
+}
+
+#[test]
+fn looking_up_walks_the_camera_down_to_the_ground() {
+    // It used to hang at a fixed height and haul itself in toward the
+    // fighter's head instead -- the floor clamp compared the arm against the
+    // ground without counting the eye lift, so it fired about three metres
+    // early and "solved" a collision that was not happening by shortening the
+    // arm. It read as a pole under the camera.
+    let mut rig = CameraRig::new(RigConfig::default());
+    // Clear of the platforms, which start five metres out and would otherwise
+    // trigger the occlusion pull-in and confuse what is being measured.
+    let at = [3.0, 0.0, 0.0];
+    for _ in 0..200 {
+        rig.update(0.016, at, 0.0, 0.0);
+    }
+
+    let mut last = f32::INFINITY;
+    let mut reached_the_ground = false;
+    for step in 0..=20 {
+        let pitch = step as f32 / 20.0 * RigConfig::default().pitch_limit;
+        let h = rig.update(0.016, at, 0.0, pitch).eye[1];
+        assert!(h <= last + 0.001, "camera rose at pitch {pitch:.2}");
+        last = h;
+        if (h - 0.3).abs() < 0.05 {
+            reached_the_ground = true;
+        }
+    }
+    assert!(
+        reached_the_ground,
+        "camera never got near the ground; lowest was {last}"
+    );
+}
+
+#[test]
+fn looking_up_does_not_lunge_the_camera_at_the_fighter() {
+    // The camera may close on the fighter once it is *on* the ground and has
+    // nowhere else to go. It may not do so on the way down.
+    let mut rig = CameraRig::new(RigConfig::default());
+    let at = [3.0, 0.0, 0.0];
+    for _ in 0..200 {
+        rig.update(0.016, at, 0.0, 0.0);
+    }
+    let focus = [at[0], RigConfig::default().look_height, at[2]];
+    let level = flat_arm(rig.update(0.016, at, 0.0, 0.0), focus);
+
+    // A modest look up, well before the camera can reach the floor.
+    let tilted = flat_arm(rig.update(0.016, at, 0.0, 0.4), focus);
+    assert!(
+        tilted > level * 0.85,
+        "a 23-degree look up pulled the camera from {level:.2} to {tilted:.2}"
+    );
+    assert!(
+        rig.update(0.016, at, 0.0, 0.4).eye[1] > 0.5,
+        "camera reached the ground far too early"
+    );
+}
+
+#[test]
+fn the_camera_rides_along_the_ground_rather_than_hovering_over_it() {
+    let cfg = RigConfig::default();
+    let mut rig = CameraRig::new(cfg);
+    let at = [3.0, 0.0, 0.0];
+    for _ in 0..200 {
+        rig.update(0.016, at, 0.0, cfg.pitch_limit);
+    }
+    let f = rig.update(0.016, at, 0.0, cfg.pitch_limit);
+    assert!(
+        (f.eye[1] - 0.3).abs() < 0.02,
+        "at full pitch the eye sits at {}, not on the ground",
+        f.eye[1]
+    );
+}
+
 #[test]
 fn pitch_is_clamped() {
     let mut rig = CameraRig::new(RigConfig::default());
