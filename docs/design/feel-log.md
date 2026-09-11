@@ -625,3 +625,30 @@ being pressed, which means a whole match could go by without the class mattering
 The Oven now prints the binding in each move's family header — `Bulwark · Grapple [Q]` — because
 the first question anyone asks while tuning a number is which button it belongs to, and
 answering it in the header removes a lookup from every pass.
+
+### 2026-09-11 — the special stopped working after about ten seconds
+**Reported** Playing Elementalist: cast fire pillar nine or so times in a row and `Q` stops
+doing anything. Raise a structure and you get nine more casts.
+
+**Cause** Structures had been given a **lifetime**, and the fire pillar is gated on having one
+out. Ten seconds after pressing `E` the structure expired and the class's main button went dead
+with no feedback. Nine casts is simply how long ten seconds takes.
+
+**Fix, by subtraction.** Structures were in the shared effects array. They do not belong there:
+an effect expires on a clock, a structure is spent by raising a fourth. Two different rules, so
+two different homes. Taking them out deleted the lifetime, the reconciliation pass that kept the
+mechanic's slots and the array agreeing, and the eviction rule that could quietly eat a
+structure when the board filled — about eighty lines of `state.rs`, all of it there to hold up a
+decision that should not have been made.
+
+**The rule worth keeping: reuse storage only when the lifetimes match.** "These are both
+persistent things in the world" was the wrong axis. The right question was "what makes this go
+away", and the two answers were different.
+
+Eviction now reaches **your own** effects only. It could previously drop the oldest of anything,
+which meant one fighter could delete the other's drain field by holding a button — not a
+decision anybody made, just a consequence of a shared array with one rule.
+
+Two regression tests, both phrased as the thing that broke: a structure survives fifty seconds
+of doing nothing and the special still comes out, and twenty casts in a row never cost a
+structure.

@@ -304,19 +304,20 @@ pub fn spike_radius() -> Fx {
 pub fn spike_life() -> u16 {
     oven::scalar(Scalar::SpikeLife) as u16
 }
+
 /// Movement multiplier while standing in a drain field.
 pub fn spike_slow() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SpikeSlow))
 }
+
 pub fn spike_drain() -> i32 {
     oven::scalar(Scalar::SpikeDrain)
 }
 
+/// How wide a structure stands. Visual size and, later, what a fire pillar
+/// detonates -- structures have no clock, so there is no lifetime beside it.
 pub fn structure_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StructureRadius))
-}
-pub fn structure_life() -> u16 {
-    oven::scalar(Scalar::StructureLife) as u16
 }
 
 /// How long a slow lingers after leaving the field that applied it. Without a

@@ -9,7 +9,7 @@
 
 use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
-use sim::state::{Action, MAX_PLAYERS};
+use sim::state::{Action, MAX_PLAYERS, SLOT_SPECIAL};
 use sim::{Input, World};
 
 const Q: u16 = Input::SPECIAL;
@@ -127,40 +127,95 @@ fn standing_in_a_fire_pillar_costs_you_and_standing_in_your_own_does_not() {
 }
 
 #[test]
-fn a_structure_stands_in_the_world_and_eventually_weathers_away() {
-    // The cap is a resource, and so is the clock. A structure that never
-    // expired would mean the Elementalist's third placement is free forever.
+fn a_structure_has_no_clock_and_keeps_the_special_alive() {
+    // This is the regression. Structures used to live in the effects array,
+    // which gave them a lifetime; the fire pillar is gated on having one out,
+    // so ten seconds after raising a structure the Elementalist's own special
+    // silently stopped working. A structure is a cap-of-three resource, and the
+    // only thing that spends it is raising a fourth.
     let mut w = as_class(Class::Elementalist);
     tap(&mut w, E, 4);
+    assert!(
+        w.players[0].mechanic_ready(SLOT_SPECIAL),
+        "fixture never raised a structure"
+    );
+    run(&mut w, 3_000, 0, 0); // fifty seconds of doing nothing
+    assert!(
+        w.players[0].mechanic_ready(SLOT_SPECIAL),
+        "the structure went away on its own, and took the special with it"
+    );
+    tap(&mut w, Q, 60);
     assert_eq!(
-        effects_of(&w, EffectKind::Structure).len(),
+        effects_of(&w, EffectKind::FirePillar).len(),
         1,
-        "the mechanic recorded a structure that does not exist in the arena"
+        "the special did not come out long after the structure was raised"
     );
-    let life = sim::tuning::structure_life() as u32;
-    run(&mut w, life + 4, 0, 0);
-    assert!(
-        effects_of(&w, EffectKind::Structure).is_empty(),
-        "structures never weather away"
+}
+
+#[test]
+fn casting_until_the_board_is_full_never_costs_a_structure() {
+    // The other half of the same bug: effects evicted the oldest of *anything*
+    // when the board filled, and a structure was the oldest thing on it.
+    let mut w = as_class(Class::Elementalist);
+    tap(&mut w, E, 4);
+    for _ in 0..20 {
+        tap(&mut w, Q, 12);
+        assert!(
+            w.players[0].mechanic_ready(SLOT_SPECIAL),
+            "casting the pillar ate the structure it needs"
+        );
+    }
+}
+
+#[test]
+fn one_fighter_cannot_spam_away_the_other_fighters_field() {
+    // Eviction reaches your own effects only. Otherwise holding a button would
+    // delete someone else's setup, which is not a decision anybody made.
+    let mut w = World::with_classes([Class::Elementalist, Class::BloodMage]);
+    for _ in 0..90 {
+        w.advance([
+            Input::aimed(0, LOOK_RIGHT),
+            Input::aimed(Input::W, LOOK_LEFT),
+        ]);
+    }
+    for _ in 0..2 {
+        w.advance([
+            Input::aimed(0, LOOK_RIGHT),
+            Input::aimed(Input::SHIFT | Input::LEFT, LOOK_LEFT),
+        ]);
+    }
+    run(&mut w, 60, 0, 0);
+    assert_eq!(
+        effects_of(&w, EffectKind::BlackSpike).len(),
+        1,
+        "fixture laid no field"
     );
-    let Mechanic::Structures(slots) = w.players[0].mechanic else {
-        panic!("the Elementalist lost her mechanic");
-    };
-    assert!(
-        slots.iter().all(|s| s.is_none()),
-        "her slots still claim a structure that is no longer standing"
+
+    tap(&mut w, E, 4);
+    for _ in 0..20 {
+        tap(&mut w, Q, 4);
+    }
+    assert_eq!(
+        effects_of(&w, EffectKind::BlackSpike).len(),
+        1,
+        "the Elementalist deleted the Blood mage's field by holding a button"
     );
 }
 
 #[test]
 fn a_fourth_structure_costs_the_first() {
+    // The cap is the resource. It is enforced by the mechanic, which is the
+    // only thing that owns structures.
     let mut w = as_class(Class::Elementalist);
     for _ in 0..4 {
         tap(&mut w, E, 2);
         run(&mut w, 10, Input::D, 0); // move, so each one lands somewhere new
     }
+    let Mechanic::Structures(slots) = w.players[0].mechanic else {
+        panic!("the Elementalist lost her mechanic");
+    };
     assert_eq!(
-        effects_of(&w, EffectKind::Structure).len(),
+        slots.iter().flatten().count(),
         sim::class::MAX_STRUCTURES,
         "the cap is not a cap"
     );

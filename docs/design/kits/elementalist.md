@@ -17,9 +17,9 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
   resource — structures are spent by being consumed in combos, and hoarding them costs you
   new ones.
 
-> **Implemented** (`E`). Structures are objects standing in the arena with a lifetime, not a
-> list of coordinates. The cap holds, and the clock is a second cost: hoarding them loses them
-> anyway.
+> **Implemented** (`E`). Structures stand in the arena and **have no clock** — the cap is the
+> only cost, exactly as written above. They briefly had a lifetime, which meant the fire
+> pillar (gated on having one out) silently stopped working ten seconds after you raised one.
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
   short distances with attacks, but cannot combo through them nearly as well. See
   [../elementalist.md](../elementalist.md).
