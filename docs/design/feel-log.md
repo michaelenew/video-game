@@ -55,6 +55,12 @@ Things the design cannot answer and only play can. Move these into dated entries
 as they get tested.
 
 ### Movement
+
+- Should shift with no direction and no click do something? A spot dodge in place is the
+  obvious candidate and costs one branch.
+- Is one airdodge per jump right, or does the air want a double jump as well?
+- Does the airdodge want a landing-lag tail, the way platform fighters give it one? Right now
+  it ends and you are free.
 - **Is 7 m/s the right walk speed?** Everything else is spaced against it. Too
   slow makes the arena feel large and approaches feel committal; too fast makes
   spacing imprecise.
@@ -316,3 +322,27 @@ appears, so a landed hit is drawn dim for every frame you can see. The bright st
 *whiff* looks like. I spent a while comparing two screenshots of the same dim state against
 each other before writing a test that settled it in a second — worth remembering that
 screenshot forensics is the slow way to answer a question that an assertion answers exactly.
+
+### 2026-09-11 — space stopped being clever
+**Changed** **Space always jumps**, a vertical takeoff whatever your feet are doing. **Shift
+plus a direction dodges.** Added an airdodge: shift plus a direction while airborne, once per
+airtime, which wipes vertical speed rather than adding to it.
+**Why** Reported from the sandbox: "I keep expecting to jump and not jumping." Space used to
+mean *you move more than you otherwise would* — alone it jumped, with a direction it dodged.
+That is a tidy sentence and it is wrong in the hand. You hold a direction almost all the time,
+so the jump button mostly did not jump.
+**Verdict** kept, and the lesson generalises past this one binding: **a button whose meaning
+depends on what you happen to be doing anyway is a button you cannot trust.** "Space means
+move more" was elegant as a rule and unusable as a control, and the elegance is what hid it —
+it reads as one idea rather than two bindings, so it never got examined as two.
+
+This is also the first settled decision to come back open. Dodge moving onto shift retired
+"shift beats WASD when both are held", which was the rule that guaranteed a move-while-casting
+option existed. Marked shifted in README §1 rather than quietly rewritten, with the knock-on
+questions listed as open rather than answered: how move+attack gets differentiated now, and
+aerials as variants of their grounded counterparts. Both are noted, neither is built.
+
+Shift is now overloaded, and what disambiguates it is **a click**: shift with a click is the
+stronger version of that attack, shift with only a direction is a dodge. The click is checked
+first, so a committed move thrown while walking never comes out as a dodge — which is the same
+class of bug as the one being fixed, and worth a test rather than a comment.

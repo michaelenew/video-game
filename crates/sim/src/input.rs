@@ -1,7 +1,8 @@
 //! Player input for one tick.
 //!
-//! Mirrors `docs/design/controls.md`. Click means attack, shift means ability,
-//! WASD means move, space means you move more than you otherwise would.
+//! Mirrors `docs/design/controls.md`. Click means attack, WASD means move,
+//! space means jump, and shift means an ability when a click comes with it or a
+//! dodge when only a direction does.
 //!
 //! Buttons are packed into a `u16` because inputs are what cross the wire every
 //! frame, and rollback sends several at once.

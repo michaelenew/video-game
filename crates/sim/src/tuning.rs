@@ -99,6 +99,16 @@ pub const ROUND_OVER_FRAMES: u16 = 150;
 /// visual reaction.
 pub const HUMAN_REACTION_FRAMES: u16 = 15;
 
+/// The airdodge: shorter and slower than the grounded one.
+///
+/// Shorter because you are already committed by being in the air -- the jump
+/// was the commitment, and stacking a long vulnerable tail on top of it would
+/// make any anti-air a guaranteed kill. Slower because a horizontal burst at
+/// ground-dodge speed, from a standing jump, crosses more of the arena than a
+/// dodge should.
+pub const AIR_DODGE_FRAMES: u16 = 16;
+pub const AIR_DODGE_SPEED: Fx = Fx::ratio(13, 1);
+
 /// Percent of walking speed kept while throwing a fast poke.
 ///
 /// Pokes are the neutral tool and get thrown constantly. Rooting you for every

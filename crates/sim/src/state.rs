@@ -165,6 +165,11 @@ pub struct Player {
     pub health: i32,
     pub action: Action,
     pub grounded: bool,
+    /// An airdodge has been spent this airtime. Reset on landing.
+    ///
+    /// Without it, airdodging repeatedly is free flight: each one is a fresh
+    /// burst of horizontal speed with invulnerability attached.
+    pub air_dodged: bool,
     /// True once the current active window has connected, so a move hits once.
     pub hit_used: bool,
     pub class: Class,
@@ -228,6 +233,7 @@ impl Default for Player {
             health: 1000,
             action: Action::Free,
             grounded: true,
+            air_dodged: false,
             hit_used: false,
             class: Class::Bulwark,
             mechanic: Mechanic::Shield(Shield::Held),
@@ -394,6 +400,7 @@ impl World {
             }
             h.write_i32(p.health);
             h.write_u32(p.grounded as u32);
+            h.write_u32(p.air_dodged as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
             h.write_u32(p.action.tag());
@@ -643,15 +650,10 @@ fn step_player(p: &mut Player, input: Input) {
             }
         }
         Action::Free => {
-            // Space plus a direction dodges; space alone jumps. See controls.md.
-            if input.has(Input::SPACE) && (ax != 0 || az != 0) && p.grounded {
-                let dir = move_dir(input.aim_turns(), ax, az);
-                p.vel.x = dir.x.mul(t::DODGE_SPEED);
-                p.vel.z = dir.z.mul(t::DODGE_SPEED);
-                Action::Dodge {
-                    left: t::DODGE_FRAMES,
-                }
-            } else if input.has(Input::MIDDLE)
+            // Clicks are checked before the dodge, which is what disambiguates
+            // shift. Shift with a click is the stronger version of that attack;
+            // shift with only a direction is a dodge. See controls.md.
+            if input.has(Input::MIDDLE)
                 && input.has(Input::SHIFT)
                 && p.shield().is_some_and(|sh| sh.in_hand())
             {
@@ -674,6 +676,35 @@ fn step_player(p: &mut Player, input: Input) {
                 Action::Startup {
                     kind,
                     left: moves::get(p.class, kind).startup,
+                }
+            } else if input.has(Input::SHIFT) && !input.any_click() && (ax != 0 || az != 0) {
+                // Shift plus a direction dodges. It used to be space plus a
+                // direction, which meant that pressing the jump button while
+                // moving -- which is most of the time -- did not jump. Space is
+                // now only ever a vertical takeoff.
+                let dir = move_dir(input.aim_turns(), ax, az);
+                if p.grounded {
+                    p.vel.x = dir.x.mul(t::DODGE_SPEED);
+                    p.vel.z = dir.z.mul(t::DODGE_SPEED);
+                    Action::Dodge {
+                        left: t::DODGE_FRAMES,
+                    }
+                } else if !p.air_dodged {
+                    // An airdodge, once per airtime. It commits you to a
+                    // direction in the air, where you otherwise have almost no
+                    // say, which is why it can only be spent once: a second one
+                    // would turn a jump into flight.
+                    p.air_dodged = true;
+                    p.vel.x = dir.x.mul(t::AIR_DODGE_SPEED);
+                    p.vel.z = dir.z.mul(t::AIR_DODGE_SPEED);
+                    // Vertical speed is wiped rather than added to, so an
+                    // airdodge is a sideways commitment and never a second jump.
+                    p.vel.y = Fx::ZERO;
+                    Action::Dodge {
+                        left: t::AIR_DODGE_FRAMES,
+                    }
+                } else {
+                    Action::Free
                 }
             } else if want_guard {
                 Action::Guard { held: 0 }
@@ -733,7 +764,10 @@ fn step_player(p: &mut Player, input: Input) {
         p.vel.z = Fx::ZERO;
     }
 
-    if input.has(Input::SPACE) && ax == 0 && az == 0 && p.grounded && p.action.actionable() {
+    // Space is a vertical takeoff, whatever your feet are doing. Holding a
+    // direction while jumping carries your momentum up with you; it does not
+    // turn the jump into something else.
+    if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
         p.vel.y = t::JUMP_SPEED;
         p.grounded = false;
     }
@@ -748,6 +782,9 @@ fn step_player(p: &mut Player, input: Input) {
     p.pos = r.pos;
     p.vel = r.vel;
     p.grounded = r.grounded;
+    if p.grounded {
+        p.air_dodged = false;
+    }
 }
 
 /// The middle-click mechanic action, per class.
