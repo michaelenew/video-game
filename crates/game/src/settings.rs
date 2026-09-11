@@ -22,16 +22,41 @@ pub const RADIANS_PER_PIXEL: f32 = 0.0025;
 pub const MIN_SENSITIVITY: f32 = 0.1;
 pub const MAX_SENSITIVITY: f32 = 10.0;
 
-/// One notch of adjustment, as a ratio.
+/// One notch of sensitivity, as a ratio.
 ///
 /// Multiplicative, not additive. Sensitivity is perceived as a ratio -- going
 /// from 0.5 to 0.6 is a large change and 5.0 to 5.1 is not one you can feel --
 /// so a fixed step would be far too coarse at the bottom and useless at the top.
 pub const STEP: f32 = 1.08;
 
+/// Vertical field of view, in degrees.
+///
+/// Degrees because that is the unit every other game's settings screen uses, so
+/// it is the number a player can carry between them.
+pub const MIN_FOV: f32 = 40.0;
+pub const MAX_FOV: f32 = 100.0;
+const FOV_STEP: f32 = 2.0;
+
+/// How far behind the fighter the camera sits, in metres.
+pub const MIN_DISTANCE: f32 = 3.0;
+pub const MAX_DISTANCE: f32 = 14.0;
+const DISTANCE_STEP: f32 = 0.4;
+
+/// Which number a key press is reaching for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Knob {
+    Sensitivity,
+    Fov,
+    Distance,
+}
+
 #[derive(Clone, Debug, PartialEq, Resource)]
 pub struct Settings {
     pub sensitivity: f32,
+    /// Vertical field of view, in degrees.
+    pub fov: f32,
+    /// Camera distance behind the fighter, in metres.
+    pub distance: f32,
     /// Keys we did not recognise, kept so saving does not discard them.
     other: BTreeMap<String, String>,
 }
@@ -40,6 +65,11 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             sensitivity: 1.0,
+            // Wider and further back than a default perspective camera. A
+            // 45-degree view from six metres reads as cramped in an arena you
+            // are meant to be moving around inside.
+            fov: 58.0,
+            distance: 7.0,
             other: BTreeMap::new(),
         }
     }
@@ -51,10 +81,41 @@ impl Settings {
         self.sensitivity * RADIANS_PER_PIXEL
     }
 
-    /// Step sensitivity up or down by one notch, clamped.
-    pub fn nudge(&mut self, up: bool) {
-        let factor = if up { STEP } else { 1.0 / STEP };
-        self.sensitivity = (self.sensitivity * factor).clamp(MIN_SENSITIVITY, MAX_SENSITIVITY);
+    /// Field of view in radians, which is what the renderer wants.
+    pub fn fov_radians(&self) -> f32 {
+        self.fov.to_radians()
+    }
+
+    /// Step one setting up or down by a notch, clamped.
+    ///
+    /// Sensitivity moves by a ratio and the other two by a fixed amount,
+    /// because that is how each is perceived: doubling a sensitivity feels like
+    /// a consistent change at any value, whereas two degrees of view is two
+    /// degrees of view whether you are at 45 or at 90.
+    pub fn nudge(&mut self, knob: Knob, up: bool) {
+        let sign = if up { 1.0 } else { -1.0 };
+        match knob {
+            Knob::Sensitivity => {
+                let factor = if up { STEP } else { 1.0 / STEP };
+                self.sensitivity =
+                    (self.sensitivity * factor).clamp(MIN_SENSITIVITY, MAX_SENSITIVITY);
+            }
+            Knob::Fov => {
+                self.fov = (self.fov + sign * FOV_STEP).clamp(MIN_FOV, MAX_FOV);
+            }
+            Knob::Distance => {
+                self.distance =
+                    (self.distance + sign * DISTANCE_STEP).clamp(MIN_DISTANCE, MAX_DISTANCE);
+            }
+        }
+    }
+
+    /// One line for the heads-up display.
+    pub fn label(&self) -> String {
+        format!(
+            "mouse {:.2}   fov {:.0}   dist {:.1}",
+            self.sensitivity, self.fov, self.distance
+        )
     }
 
     pub fn parse(text: &str) -> Settings {
@@ -68,17 +129,17 @@ impl Settings {
                 continue;
             };
             let (key, value) = (key.trim(), value.trim());
-            match key {
-                "sensitivity" => {
-                    // A corrupt or out-of-range value falls back to the default
-                    // rather than refusing to start. Nothing here is worth
-                    // failing a launch over.
-                    if let Ok(v) = value.parse::<f32>() {
-                        if v.is_finite() {
-                            s.sensitivity = v.clamp(MIN_SENSITIVITY, MAX_SENSITIVITY);
-                        }
-                    }
+            // A corrupt or out-of-range value falls back to the default rather
+            // than refusing to start. Nothing here is worth failing a launch
+            // over.
+            let number = value.parse::<f32>().ok().filter(|v| v.is_finite());
+            match (key, number) {
+                ("sensitivity", Some(v)) => {
+                    s.sensitivity = v.clamp(MIN_SENSITIVITY, MAX_SENSITIVITY)
                 }
+                ("fov", Some(v)) => s.fov = v.clamp(MIN_FOV, MAX_FOV),
+                ("camera_distance", Some(v)) => s.distance = v.clamp(MIN_DISTANCE, MAX_DISTANCE),
+                ("sensitivity" | "fov" | "camera_distance", None) => {}
                 _ => {
                     s.other.insert(key.to_string(), value.to_string());
                 }
@@ -90,7 +151,11 @@ impl Settings {
     pub fn to_text(&self) -> String {
         let mut out = String::from("# Arena prototype settings.\n");
         out.push_str("# sensitivity: mouse turn rate, 1.0 is the default feel.\n");
+        out.push_str("# fov: vertical field of view, degrees.\n");
+        out.push_str("# camera_distance: how far behind the fighter the camera sits, metres.\n");
         out.push_str(&format!("sensitivity = {:.3}\n", self.sensitivity));
+        out.push_str(&format!("fov = {:.1}\n", self.fov));
+        out.push_str(&format!("camera_distance = {:.2}\n", self.distance));
         for (key, value) in &self.other {
             out.push_str(&format!("{key} = {value}\n"));
         }
@@ -138,10 +203,14 @@ mod tests {
     #[test]
     fn a_saved_file_reads_back_the_same() {
         let mut s = Settings::default();
-        s.nudge(true);
-        s.nudge(true);
+        s.nudge(Knob::Sensitivity, true);
+        s.nudge(Knob::Sensitivity, true);
+        s.nudge(Knob::Fov, true);
+        s.nudge(Knob::Distance, false);
         let round = Settings::parse(&s.to_text());
         assert!((round.sensitivity - s.sensitivity).abs() < 0.001);
+        assert!((round.fov - s.fov).abs() < 0.05);
+        assert!((round.distance - s.distance).abs() < 0.005);
     }
 
     #[test]
@@ -150,6 +219,15 @@ mod tests {
         // having it silently deleted.
         let s = Settings::parse("sensitivity = 2.0\nsomething_new = yes\n");
         assert!(s.to_text().contains("something_new = yes"));
+    }
+
+    #[test]
+    fn a_known_key_with_a_bad_value_is_not_mistaken_for_an_unknown_one() {
+        // It must fall back to the default, not get copied through to the
+        // output as an opaque leftover -- which would write the file twice.
+        let s = Settings::parse("fov = banana\n");
+        assert_eq!(s.fov, Settings::default().fov);
+        assert_eq!(s.to_text().matches("fov =").count(), 1);
     }
 
     #[test]
@@ -171,23 +249,45 @@ mod tests {
             MIN_SENSITIVITY
         );
         assert_eq!(Settings::parse("sensitivity = inf").sensitivity, 1.0);
+        assert_eq!(Settings::parse("fov = 300").fov, MAX_FOV);
+        assert_eq!(
+            Settings::parse("camera_distance = 0").distance,
+            MIN_DISTANCE
+        );
     }
 
     #[test]
     fn nudging_is_symmetric_and_bounded() {
         let mut s = Settings::default();
-        s.nudge(true);
-        s.nudge(false);
-        assert!((s.sensitivity - 1.0).abs() < 0.0001, "{}", s.sensitivity);
+        for knob in [Knob::Sensitivity, Knob::Fov, Knob::Distance] {
+            let before = Settings::default();
+            s.nudge(knob, true);
+            s.nudge(knob, false);
+            assert!(
+                (s.sensitivity - before.sensitivity).abs() < 0.0001
+                    && (s.fov - before.fov).abs() < 0.0001
+                    && (s.distance - before.distance).abs() < 0.0001,
+                "{knob:?} did not come back"
+            );
+        }
 
-        for _ in 0..200 {
-            s.nudge(false);
+        for _ in 0..400 {
+            s.nudge(Knob::Sensitivity, false);
+            s.nudge(Knob::Fov, false);
+            s.nudge(Knob::Distance, false);
         }
         assert_eq!(s.sensitivity, MIN_SENSITIVITY);
+        assert_eq!(s.fov, MIN_FOV);
+        assert_eq!(s.distance, MIN_DISTANCE);
+
         for _ in 0..400 {
-            s.nudge(true);
+            s.nudge(Knob::Sensitivity, true);
+            s.nudge(Knob::Fov, true);
+            s.nudge(Knob::Distance, true);
         }
         assert_eq!(s.sensitivity, MAX_SENSITIVITY);
+        assert_eq!(s.fov, MAX_FOV);
+        assert_eq!(s.distance, MAX_DISTANCE);
     }
 
     #[test]

@@ -103,7 +103,7 @@ pub fn setup(mut commands: Commands) {
                     },
                     children![
                         (
-                            Text::new("mouse 1.00"),
+                            Text::new(""),
                             TextFont {
                                 font_size: 14.0,
                                 ..default()
@@ -117,7 +117,7 @@ pub fn setup(mut commands: Commands) {
                          WASD move (camera-relative) / Space jump / Space+dir dodge / Ctrl crouch\n\
                          J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
                          Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset\n\
-                         - / = mouse sensitivity",
+                         - / = mouse / F3 F4 fov / F5 F6 camera distance",
                             ),
                             TextFont {
                                 font_size: 13.0,
@@ -194,9 +194,11 @@ pub fn update(
     mut banner: BannerQuery,
     mut sensitivity: SensitivityQuery,
 ) {
+    // `is_changed` is true on the first run as well as after an edit, so the
+    // readout fills itself in without a separate startup path.
     if settings.is_changed() {
         if let Ok(mut t) = sensitivity.single_mut() {
-            *t = Text::new(format!("mouse {:.2}", settings.sensitivity));
+            *t = Text::new(settings.label());
         }
     }
 

@@ -283,6 +283,8 @@ struct Rig(CameraRig);
 
 impl Default for Rig {
     fn default() -> Self {
+        // Settings override this on the first frame; the default keeps the rig
+        // sane if the resource is somehow missing.
         Rig(CameraRig::new(RigConfig::default()))
     }
 }
@@ -308,11 +310,19 @@ struct ShieldMesh(usize);
 
 fn setup(
     mut commands: Commands,
+    settings: Res<settings::Settings>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn((
         Camera3d::default(),
+        // Bevy's default is a 45-degree vertical field of view, which is a
+        // portrait-lens view of an arena you are meant to be moving around
+        // inside. The real value is a setting; this is just the starting point.
+        Projection::Perspective(PerspectiveProjection {
+            fov: settings.fov_radians(),
+            ..default()
+        }),
         Transform::from_xyz(0.0, 6.0, 14.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
         MainCamera,
     ));
@@ -834,14 +844,18 @@ fn mouse_look(
     // sharing a machine should not have to agree on one number, and a setting
     // you have to quit and edit a file to change is a setting nobody changes.
     let mut changed = false;
-    for (key, up) in [
-        (KeyCode::Minus, false),
-        (KeyCode::NumpadSubtract, false),
-        (KeyCode::Equal, true),
-        (KeyCode::NumpadAdd, true),
+    for (key, knob, up) in [
+        (KeyCode::Minus, settings::Knob::Sensitivity, false),
+        (KeyCode::NumpadSubtract, settings::Knob::Sensitivity, false),
+        (KeyCode::Equal, settings::Knob::Sensitivity, true),
+        (KeyCode::NumpadAdd, settings::Knob::Sensitivity, true),
+        (KeyCode::F3, settings::Knob::Fov, false),
+        (KeyCode::F4, settings::Knob::Fov, true),
+        (KeyCode::F5, settings::Knob::Distance, false),
+        (KeyCode::F6, settings::Knob::Distance, true),
     ] {
         if keys.just_pressed(key) {
-            settings.nudge(up);
+            settings.nudge(knob, up);
             changed = true;
         }
     }
@@ -898,9 +912,13 @@ fn drive_camera(
     sim: Res<Sim>,
     time: Res<Time>,
     look: Res<Look>,
+    settings: Res<settings::Settings>,
     mut rig: ResMut<Rig>,
-    mut cam: Query<&mut Transform, With<MainCamera>>,
+    mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
+    if settings.is_changed() {
+        rig.0.set_distance(settings.distance);
+    }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
     // The camera follows whichever fighter this client is driving.
     let me = sim.local_player();
@@ -908,9 +926,14 @@ fn drive_camera(
     let framing = rig
         .0
         .update(time.delta_secs(), frame.players[me].pos, yaw, look.pitch);
-    if let Ok(mut tf) = cam.single_mut() {
+    if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);
+        if settings.is_changed() {
+            if let Projection::Perspective(p) = projection.as_mut() {
+                p.fov = settings.fov_radians();
+            }
+        }
     }
 }
 
