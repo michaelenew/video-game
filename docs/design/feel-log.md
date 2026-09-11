@@ -490,3 +490,35 @@ hovering the panel, which left the first click after F7 spent on getting the poi
 second too blunt (never capture while open, which meant closing the panel to play). What was
 missing from both was that *clicking the arena* is a different event from *clicking*. Once the
 rule distinguishes those, it is three lines and there is nothing to learn.
+
+### 2026-09-11 — the airtime ceiling came out
+**Changed** Deleted the assertion that a full hop lasts between 40 and 110 frames. Four
+assertions replaced it, one per thing a jump actually has to be: a short hop clears another
+fighter, a full hop reaches platform-fighter heights, the rise gets you above head height within
+12 frames, strafing carries you two body widths clear, and airtime exceeds reaction plus the
+fastest poke.
+**Why** The ceiling had no argument behind it. It caught an order-of-magnitude mistake and
+otherwise went off whenever anyone tuned the jump — it fired once already this week on a real
+tuning decision, and the response was to widen it, which is what a test with no argument behind
+it always gets.
+**Verdict** kept, and the general point is worth more than the change: **an assertion that
+cannot say why it holds is a speed bump, not a guard.** "Between 40 and 110 frames" survives
+exactly as long as nobody tunes anything. "The rise must clear a standing fighter's head inside
+twelve frames" keeps meaning the same thing after any retune, because it is phrased in terms of
+the fighters rather than the numbers.
+
+The specific mistake in the old one is instructive: it was measuring *total airtime* as a proxy
+for vulnerability, when vulnerability while jumping is about the time spent at head height where
+you can be hit. Those come apart the moment gravity and takeoff speed both go up, which is
+exactly what the last bake did.
+
+Where it stands now, against a 1.8 m fighter:
+
+| | Short hop | Full hop | Clears a head | Strafe across a jump |
+| --- | --- | --- | --- | --- |
+| Bulwark | 2.4 m (1.4×) | 4.1 m (2.3×) | 8f | 6.4 m |
+| Bellator | 3.7 m (2.1×) | 6.0 m (3.3×) | 6f | 8.2 m |
+| Shadow Reaver | 4.9 m (2.7×) | 7.6 m (4.2×) | 5f | 9.4 m |
+| Elementalist | 4.8 m (2.7×) | 7.4 m (4.1×) | 6f | 9.8 m |
+| Blood mage | 3.8 m (2.1×) | 6.1 m (3.4×) | 6f | 8.3 m |
+| Dual mage | 5.8 m (3.2×) | 8.7 m (4.8×) | 5f | 11.1 m |

@@ -214,11 +214,24 @@ chose.
 Sustain rather than a cut-on-release. Both produce variable height; a cut makes the short hop
 feel like the jump was taken away from you, a sustain makes the tall one feel earned.
 
-Floaty on purpose. Verticality is meant to be part of the positioning game, and a jump you are
-airborne for a third of a second in is a commitment that is over before you have read the
-situation you jumped into. A full hop lasts **45 to 75 frames** depending on class — around a
-second — which is long enough for a beginner to notice where the other player went and do
-something about it.
+Floaty on purpose, and **high** on purpose. Verticality is part of the positioning game, and
+Smash characters routinely jump four or more times their own height. A full hop here reaches
+**2.3 to 4.8 body heights** depending on class.
+
+There is deliberately **no ceiling on airtime**. What a jump has to be is four separate things,
+and each is worth stating on its own rather than collapsing into one frame count:
+
+- **High enough to clear another fighter**, on the *short* hop, or verticality belongs only to
+  the committed option.
+- **Fast enough not to be a sitting duck** — every class gets above a standing opponent's head
+  within 12 frames. Vulnerability while jumping is about the time spent at head height where
+  you can be hit, not about total airtime.
+- **Steerable enough to dodge** — strafing across a jump carries you at least two body widths
+  from where you took off, so a hitbox aimed where you started can be left behind.
+- **Slow enough to be punished** — airtime exceeds reaction time plus the fastest poke, so a
+  jump can be seen, answered and hit.
+
+`cargo run -p sim --bin frametable` prints the height and airtime for each class.
 
 ### Classes differ in the air first
 

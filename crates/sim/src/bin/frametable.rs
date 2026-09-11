@@ -35,8 +35,18 @@ fn main() {
     );
 
     for class in ALL_CLASSES {
+        let (short_apex, short_time) = jump_shape(class, 1);
+        let (full_apex, full_time) = jump_shape(class, 60);
         let mob = class.mobility();
         println!("{}  --  spends {}", class.name(), class.resource());
+        println!(
+            "  jump: short {}m {}f  |  full {}m {}f  |  {} body heights",
+            tenths(short_apex),
+            short_time,
+            tenths(full_apex),
+            full_time,
+            tenths(full_apex.div(t::body_height())),
+        );
         println!(
             "  air: jump x{}  gravity x{}  fall cap x{}  steering {}",
             tenths(mob.jump),
@@ -94,4 +104,26 @@ fn tenths(v: Fx) -> String {
     // Rounded, not truncated: 4.199 should read as 4.2, not 4.1.
     let t = (v.raw() as i64 * 10 + (1 << 15)) >> 16;
     format!("{}.{}", t / 10, (t % 10).abs())
+}
+
+/// Apex and airtime for a jump held `hold` frames.
+///
+/// Simulated rather than derived: gravity is per class, the sustain window
+/// caps the hold, and terminal velocity clips the fall, so the closed form
+/// would be a lie in three different places.
+fn jump_shape(class: sim::class::Class, hold: u32) -> (Fx, u32) {
+    let mut w = sim::World::with_classes([class, class]);
+    let mut apex = Fx::ZERO;
+    for i in 0..300u32 {
+        let bits = if i < hold { sim::Input::SPACE } else { 0 };
+        w.advance([sim::Input::new(bits), sim::Input::default()]);
+        let y = w.players[0].pos.y;
+        if y.raw() > apex.raw() {
+            apex = y;
+        }
+        if i > 0 && w.players[0].grounded {
+            return (apex, i);
+        }
+    }
+    (apex, 0)
 }
