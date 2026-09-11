@@ -114,7 +114,7 @@ pub fn setup(mut commands: Commands) {
                         (
                             Text::new(
                                 "Mouse aims / click to capture, Esc to release\n\
-                         WASD move (camera-relative) / Space jump / Space+dir dodge / Ctrl crouch\n\
+                         WASD move (camera-relative) / Space jump / Shift+dir dodge / Ctrl crouch\n\
                          J poke / Shift+J committed / K guard / L mechanic / Shift+L special\n\
                          Tab class / 1-4 dummy / F1 debug / F2 baked anim / P pause / ] step / R reset\n\
                          - / = mouse / F3 F4 fov / F5 F6 camera distance",

@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: partly unsettled
 decided: 2026-09-10
+revised: 2026-09-11
 ---
 
 # Controls
@@ -11,17 +12,65 @@ The reference points are platform fighters, which get their feel by **removing a
 so the controls stay small. This game keeps 3D movement, so the compensation is that
 direction is *discretised* — four inputs, not a stick — and modifiers do the rest.
 
+> **Revised 2026-09-11.** Sentence 4 below used to read *"space means you move more than you
+> otherwise would — alone it jumps, with a direction it dodges"*, and there was a sixth rule,
+> *"shift beats WASD when both are held"*. Neither survived the sandbox. Dodge has moved to
+> shift and space is now only ever a jump; the knock-on effects are listed under
+> [Open](#open-since-the-dodge-moved) and are **not settled**.
+
 ## The grammar
 
 Five sentences, and everything else follows:
 
 1. **Click means attack.**
-2. **Shift means use an ability**, otherwise you get a basic move.
+2. **Shift means use an ability** when a click comes with it, and **dodge** when only a
+   direction does.
 3. **WASD means move.**
-4. **Space means you move *more* than you otherwise would.** Alone it jumps; with a
-   direction it dodges.
+4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
 5. **The mouse means *where*.** You look with it, you are pointed where you look, and
    your attacks go where you are pointed.
+
+### Why space stopped being clever
+
+Space used to mean "you move more than you otherwise would": alone it jumped, with a direction
+it dodged. That is a tidy sentence and it is wrong in the hand. You are holding a direction
+almost all the time, so the jump button mostly did not jump — you pressed it expecting to
+leave the ground and dodged sideways instead. A button whose meaning depends on whether you
+happen to be walking is a button you cannot trust.
+
+Shift was already the "stronger version of this" modifier, so dodge went there.
+
+### What disambiguates shift
+
+**A click.** Shift with a click is the stronger version of that attack. Shift with only a
+direction is a dodge. The click is checked first, so a committed move thrown while walking
+never comes out as a dodge.
+
+### In the air
+
+- **Airdodge**: shift plus a direction, **once per airtime**. It wipes vertical speed rather
+  than adding to it, so it is a sideways commitment and never a second jump. A second one
+  would turn a jump into flight.
+- Space while airborne does nothing yet.
+- Airborne attacks are currently the grounded ones. That is a placeholder, not a decision —
+  see below.
+
+## Open since the dodge moved
+
+Moving dodge onto shift retired **"shift beats WASD when both are held"**, which was the rule
+that guaranteed a move-while-casting option always existed. These are consequences, and none
+of them is settled:
+
+- **Differentiating move + attack.** Directional attacks (`w`/`a`/`d`/`s` + click) still work,
+  but the modifier space is tighter than it was and the option table below was written under
+  the old rule.
+- **Aerials as variants.** The intended direction is that an airborne attack is a *variant of
+  its grounded counterpart* — the same move with different frame data — rather than a separate
+  move list. Nothing is implemented.
+- **Neutral shift.** Shift with no direction and no click does nothing. A spot dodge in place
+  is the obvious candidate.
+- **Double jump.** Space while airborne does nothing. The airdodge is the only air commitment
+  at present, which may be too few or exactly right.
 
 ## Everything is relative to the camera
 
@@ -114,6 +163,10 @@ directional abilities and shift abilities were never going to be used simultaneo
 Five by four is **20 distinct offensive inputs at any moment**, before airborne variants.
 `a` and `d` mirror each other, which is why they count once.
 
+> **This table predates the dodge move** and assumed "shift beats WASD". The counting still
+> holds — shift plus a click is still an ability — but the reasoning behind it should be
+> re-derived rather than trusted. See [Open](#open-since-the-dodge-moved).
+
 That is a large space. It is not a target.
 
 ### Do not fill all twenty
@@ -135,18 +188,24 @@ same job on every class.
 | **Unmodified `L`/`R`/`M`** | Autos **and the class mechanic.** This is where identity lives, and it is different on every class. |
 | **Direction + click** | Basic moves. A shared vocabulary — roughly the same shapes on every class. The two casters are the exception. |
 | **Shift + click** | The six-ability kit. |
-| **Space + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** |
+| **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
 
 That last row does real work. The Bellator's Rush and the Reaver's Shadow dash *are* their
 dodges rather than extra inputs. For the Reaver this is what makes movement and shadow
 placement the same action, which is the fix that keeps the class from being denied its
 mobility.
 
-### Airborne
+### Airborne — ⚠️ open
 
-Grounded and airborne should differ, as they do in every platform fighter. For the prototype,
-differentiate **the directional basics only** and let abilities behave the same in the air.
-A full second moveset per class is a later problem.
+Grounded and airborne should differ, as they do in every platform fighter. The intended shape,
+**not yet settled and not yet implemented**: an aerial is a *variant of its grounded
+counterpart* — the same move and the same identity, with different frame data — rather than a
+second move list per class. That keeps the vocabulary a player has learned on the ground worth
+something in the air, and keeps six classes from turning into twelve movesets.
+
+What exists today: **space is a vertical takeoff**, and **shift plus a direction is an
+airdodge, once per airtime**, which wipes vertical speed so it can never be a second jump.
+Airborne attacks are still the grounded ones.
 
 ---
 

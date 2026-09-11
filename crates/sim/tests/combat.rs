@@ -77,14 +77,14 @@ fn a_grapple_goes_through_guard() {
 fn a_dodge_has_invulnerable_frames_then_stops_having_them() {
     let mut w = World::new();
     w.advance([
-        Input::aimed(Input::SPACE | Input::W, LOOK_RIGHT),
+        Input::aimed(Input::SHIFT | Input::W, LOOK_RIGHT),
         Input::aimed(0, LOOK_LEFT),
     ]);
     assert!(
         w.players[0].action.invulnerable(),
         "dodge did not start invulnerable"
     );
-    run(&mut w, 20, Input::SPACE | Input::W, 0);
+    run(&mut w, 20, Input::SHIFT | Input::W, 0);
     assert!(
         !w.players[0].action.invulnerable(),
         "dodge stayed invulnerable to the end -- nothing would ever punish it"
@@ -101,7 +101,7 @@ fn dodging_evades_an_attack_that_would_otherwise_land() {
     );
 
     let mut dodged = engaged();
-    run(&mut dodged, 20, L, Input::SPACE | Input::S);
+    run(&mut dodged, 20, L, Input::SHIFT | Input::S);
     assert_eq!(
         dodged.players[1].health, MAX_HEALTH,
         "dodge failed to evade"
@@ -585,5 +585,136 @@ fn spent_distinguishes_a_whiff_from_a_landed_hit() {
     assert!(
         landed_spent > 0,
         "a connecting attack never marked its volume spent"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Jump, dodge, airdodge
+// ---------------------------------------------------------------------------
+
+fn press(w: &mut World, bits: u16, frames: u32) {
+    for _ in 0..frames {
+        w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    }
+}
+
+#[test]
+fn space_always_jumps_even_while_moving() {
+    // The whole complaint: space plus a direction used to dodge, so pressing
+    // jump while walking -- which is most of the time -- did not jump.
+    for bits in [
+        Input::SPACE,
+        Input::SPACE | Input::W,
+        Input::SPACE | Input::A,
+        Input::SPACE | Input::S,
+        Input::SPACE | Input::D,
+    ] {
+        let mut w = World::new();
+        press(&mut w, bits, 2);
+        assert!(
+            !w.players[0].grounded && w.players[0].vel.y.raw() > 0,
+            "space with {bits:b} did not leave the ground"
+        );
+        assert!(
+            !matches!(w.players[0].action, Action::Dodge { .. }),
+            "space with {bits:b} produced a dodge"
+        );
+    }
+}
+
+#[test]
+fn shift_plus_a_direction_dodges() {
+    let mut w = World::new();
+    press(&mut w, Input::SHIFT | Input::W, 1);
+    assert!(
+        matches!(w.players[0].action, Action::Dodge { .. }),
+        "shift plus a direction did not dodge: {:?}",
+        w.players[0].action
+    );
+    assert!(w.players[0].grounded, "a grounded dodge left the ground");
+}
+
+#[test]
+fn a_click_beats_a_dodge_when_shift_is_held() {
+    // Shift is overloaded: with a click it is the stronger version of that
+    // attack, with only a direction it is a dodge. The click has to win, or
+    // every committed move thrown while walking would come out as a dodge.
+    let mut w = World::new();
+    press(&mut w, Input::SHIFT | Input::W | L, 1);
+    assert!(
+        matches!(w.players[0].action, Action::Startup { .. }),
+        "shift+direction+click dodged instead of attacking: {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn you_can_airdodge_once_per_jump() {
+    let mut w = World::new();
+    press(&mut w, Input::SPACE, 2);
+    assert!(!w.players[0].grounded, "fixture never left the ground");
+
+    press(&mut w, Input::SHIFT | Input::W, 1);
+    assert!(
+        matches!(w.players[0].action, Action::Dodge { .. }),
+        "could not airdodge"
+    );
+    let first = w.players[0].vel.x.to_f32_for_render();
+    assert!(first > 5.0, "the airdodge carried no speed: {first}");
+
+    assert!(w.players[0].air_dodged, "the airdodge was not recorded");
+}
+
+#[test]
+fn a_second_airdodge_in_the_same_jump_is_refused() {
+    // Tested through the flag rather than by waiting out the first dodge:
+    // wiping vertical speed means you land before a second attempt is even
+    // possible, so a timing-based fixture would pass without exercising the
+    // gate at all.
+    let mut w = World::new();
+    press(&mut w, Input::SPACE, 2);
+    assert!(!w.players[0].grounded, "fixture never left the ground");
+    w.players[0].air_dodged = true;
+
+    press(&mut w, Input::SHIFT | Input::W, 1);
+    assert!(
+        !matches!(w.players[0].action, Action::Dodge { .. }),
+        "airdodged twice in one jump, which is flight"
+    );
+}
+
+#[test]
+fn landing_restores_the_airdodge() {
+    let mut w = World::new();
+    press(&mut w, Input::SPACE, 2);
+    press(&mut w, Input::SHIFT | Input::W, 1);
+    assert!(
+        w.players[0].air_dodged,
+        "airdodge was not recorded as spent"
+    );
+    press(&mut w, 0, 120);
+    assert!(w.players[0].grounded, "never came back down");
+    assert!(
+        !w.players[0].air_dodged,
+        "the airdodge was not restored on landing"
+    );
+}
+
+#[test]
+fn an_airdodge_is_not_a_second_jump() {
+    // It wipes vertical speed rather than adding to it, so it commits you
+    // sideways and can never be used to climb.
+    let mut w = World::new();
+    press(&mut w, Input::SPACE, 2);
+    let apex = w.players[0].pos.y;
+    press(&mut w, Input::SHIFT | Input::W, 1);
+    assert!(
+        w.players[0].vel.y.raw() <= 0,
+        "the airdodge left upward momentum"
+    );
+    press(&mut w, 0, 10);
+    assert!(
+        w.players[0].pos.y.raw() < apex.raw() + Fx::from_int(2).raw(),
+        "the airdodge gained height"
     );
 }

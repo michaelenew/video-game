@@ -26,8 +26,15 @@ positional, covering a facing arc rather than a bubble. Blocking costs **space a
 vulnerable window** — knockback plus stunlock, no chip damage, no guard meter. Parry is the
 opening frames of block and rewards with a stagger. Special attacks are the guard breakers.
 
-**Control grammar.** Click = attack. Shift = ability. WASD = move. Space = move more. Shift
-beats WASD when both are held.
+**Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Was: *click = attack, shift =
+ability, WASD = move, space = move more, shift beats WASD.* The last two did not survive
+contact with the sandbox. **Space now always jumps** — a vertical takeoff and nothing else —
+and **shift plus a direction dodges**. Space plus a direction used to dodge, which meant
+pressing jump while moving, which is most of the time, did not jump.
+
+That moves dodge onto shift, where the ability modifier already lived, so the parts of the
+grammar that depended on "shift beats WASD" are **open again** rather than settled. See
+[controls.md](controls.md) §Open and §4 below.
 
 **Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
 poke is a design choice in a closed arena, not a gap.
@@ -74,7 +81,10 @@ Nothing here blocks a prototype.
 | **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
 | **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
-| **Airborne movesets** | Prototype differentiates directional basics only |
+| **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
+| **Aerials** | ⚠️ **Newly open, and the intended direction.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. Nothing is implemented; airborne currently gives the grounded move |
+| **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
+| **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
 | Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Bellator | Whether the mid-animation swap costs Rush |
@@ -100,7 +110,7 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 99 tests cover
+exemplar moves, peer-to-peer rollback play works over real UDP, and 106 tests cover
 determinism, combat relationships, camera and animation.
 
 ```

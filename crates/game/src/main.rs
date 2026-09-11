@@ -6,7 +6,7 @@
 //! stays reversible.
 //!
 //! Controls, per `docs/design/controls.md`:
-//!   WASD move · Space jump · Space+direction dodge
+//!   WASD move · Space jump · Shift+direction dodge (airdodge once per jump)
 //!   J bash · Shift+J slam · K guard · L shield throw/recall · Shift+L grapple
 //!   1-4 dummy mode · F1 debug overlay · P pause · ] step one frame · R reset
 //!
@@ -647,7 +647,8 @@ fn demo_input(w: &sim::World, frame: u32) -> SimInput {
         110..=126 => v |= SimInput::RIGHT,                  // guard
         150..=153 => v |= SimInput::SHIFT | SimInput::LEFT, // slam
         190..=215 => v |= SimInput::CROUCH,                 // duck
-        240..=243 => v |= SimInput::SPACE | SimInput::S,    // dodge back
+        240..=243 => v |= SimInput::SHIFT | SimInput::S,    // dodge back
+        250..=252 => v |= SimInput::SPACE,                  // jump
         280..=283 => v |= SimInput::MIDDLE,                 // throw the shield
         340..=343 => v |= SimInput::MIDDLE,                 // recall it
         410..=440 => v |= SimInput::S,                      // reset spacing
