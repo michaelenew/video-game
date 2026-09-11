@@ -37,7 +37,6 @@ const SHIELD: Color = Color::srgb(0.98, 0.78, 0.35);
 /// outlive their move, so they are drawn in the hitbox family of colours.
 const PILLAR: Color = Color::srgb(1.0, 0.55, 0.15);
 const FIELD: Color = Color::srgb(0.85, 0.20, 0.35);
-const STRUCTURE: Color = Color::srgb(0.70, 0.70, 0.68);
 
 pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
     if !show.0 {
@@ -141,13 +140,6 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                 effect.field_radius().to_f32_for_render(),
                 0.12,
                 FIELD,
-            ),
-            EffectKind::Structure => cylinder(
-                &mut gizmos,
-                at,
-                effect.field_radius().to_f32_for_render(),
-                1.8,
-                STRUCTURE,
             ),
         }
     }

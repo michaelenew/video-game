@@ -159,7 +159,6 @@ scalars! {
     SpikeSlow,        "Effects",  "Black spike slow (x)",   Fixed,   0,         fx(1,1);
     SpikeDrain,       "Effects",  "Black spike drain",      Int,     0,         200;
     StructureRadius,  "Effects",  "Structure radius",       Fixed,   fx(1,10),  fx(4,1);
-    StructureLife,    "Effects",  "Structure lifetime",     Frames,  10,        1200;
     SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
     PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
 }
@@ -302,7 +301,7 @@ impl MoveField {
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 48;
+pub const SCALAR_COUNT: usize = 47;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;

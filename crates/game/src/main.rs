@@ -150,6 +150,7 @@ fn main() {
                 apply_poses,
                 place_shields,
                 place_effects,
+                place_structures,
                 drive_camera,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
@@ -347,6 +348,13 @@ struct EffectMesh {
     part: usize,
 }
 
+/// One of the Elementalist's structures.
+#[derive(Component)]
+struct StructureMesh {
+    owner: usize,
+    index: usize,
+}
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -500,14 +508,55 @@ fn setup(
         for part in 0..2 {
             commands.spawn((
                 Mesh3d(unit.clone()),
-                MeshMaterial3d(look.stone.clone()),
+                MeshMaterial3d(look.fire.clone()),
                 Transform::default(),
                 Visibility::Hidden,
                 EffectMesh { slot, part },
             ));
         }
     }
+
+    // Structures get their own pool, because they are not effects: they have no
+    // clock and they belong to the Elementalist's mechanic, which is the only
+    // place that knows about them.
+    for owner in 0..MAX_PLAYERS {
+        for index in 0..sim::class::MAX_STRUCTURES {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.stone.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                StructureMesh { owner, index },
+            ));
+        }
+    }
     commands.insert_resource(look);
+}
+
+/// Put the structure meshes where the Elementalist's mechanic says they are.
+fn place_structures(
+    sim: Res<Sim>,
+    mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
+) {
+    use sim::class::Mechanic;
+    let radius = sim::tuning::structure_radius().to_f32_for_render();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let Some(at) = slots[tag.index] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = Vec3::new(
+            at.x.to_f32_for_render(),
+            at.y.to_f32_for_render() + 0.9,
+            at.z.to_f32_for_render(),
+        );
+        tf.scale = Vec3::new(radius * 2.0, 1.8, radius * 2.0);
+    }
 }
 
 /// Put the effect meshes where the simulation says its effects are.
@@ -554,10 +603,6 @@ fn place_effects(
             EffectKind::BlackSpike if tag.part == 0 => (
                 look.blood.clone(),
                 Some((effect.field_radius().to_f32_for_render(), 0.0, 0.12)),
-            ),
-            EffectKind::Structure if tag.part == 0 => (
-                look.stone.clone(),
-                Some((effect.field_radius().to_f32_for_render(), 0.0, 1.8)),
             ),
             _ => (look.stone.clone(), None),
         };

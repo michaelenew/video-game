@@ -332,10 +332,9 @@ wire format honest: four bytes per player per frame.
 ## Persistent effects
 
 Until the classes were filled in, every attack was an instant: a hitbox that existed for a few
-frames and was gone. Three of the six are built on the opposite idea — a fire pillar that grows
-where it was planted, a drain field that punishes standing still, structures that change the
-shape of the arena. Those have to outlive the move that made them, and that makes them
-simulation state.
+frames and was gone. Two moves are built on the opposite idea — a fire pillar that grows where
+it was planted, and a drain field that punishes standing still. Those have to outlive the move
+that made them, and that makes them simulation state.
 
 `crates/sim/src/effects.rs` holds them in a **fixed array, not a `Vec`**. Effects are
 snapshotted and restored on every rollback, so a heap allocation per re-simulated frame would
@@ -352,6 +351,8 @@ Three rules follow from rollback and are worth stating because they are not obvi
   pillar untouched on the frame they entered it.
 - **An effect never hurts its owner.** A fire pillar you cannot stand beside is a fire pillar
   you cannot use.
+- **Eviction reaches your own effects only.** A full board drops *your* oldest. Reaching across
+  owners would let one fighter delete the other's setup by holding a button.
 
 ### The fire pillar is two volumes, not one
 
@@ -361,13 +362,25 @@ them together would collapse two decisions into one, and the pillar would end up
 useless against a jump or unavoidable on the ground. The base spreads **out** as it ages; the
 column reaches **up**.
 
-### Structures are reconciled in one direction
+### Structures are deliberately *not* effects
 
-The Elementalist's mechanic slots are *intent* — what the button asked for. The effects are
-what actually stands in the arena, takes up space and weathers away. Each frame the slots
-spawn any structure they gained and are then rebuilt from what is still standing. Two lists
-that each edited themselves would eventually disagree about what is in the arena, and the fire
-pillar asks that question every time it is thrown.
+The Elementalist's structures are a cap-of-three resource owned by her mechanic, with no clock.
+They were briefly put in the effects array, which looked like reuse and was not. Two things
+came with it, and both were bugs:
+
+A **lifetime they never had.** The fire pillar is gated on having a structure out, so ten
+seconds after raising one the class's own special stopped working, silently, with no way to
+tell why.
+
+A **second list to disagree with.** Being in the array meant the mechanic's slots and the array
+both claimed to know what was standing, which needed a reconciliation pass every frame to keep
+them honest — about eighty lines existing purely to paper over a decision that should not have
+been made.
+
+The rule that came out of it: **reuse storage only when the lifetimes match.** An effect expires
+on a clock; a structure is spent by raising a fourth. Those are different rules, so they are
+different homes. Structures render from a pool driven straight off the mechanic, which is the
+only thing that owns them.
 
 ### A grab is a state, not a stun
 

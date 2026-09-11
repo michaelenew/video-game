@@ -1,10 +1,15 @@
 //! Things a move leaves behind.
 //!
 //! Until now every attack was an instant: a hitbox that existed for a few
-//! frames and was gone. Three classes are built on the opposite idea — a fire
+//! frames and was gone. Two classes are built on the opposite idea — a fire
 //! pillar that grows where you put it, a drain field that punishes standing
-//! still, structures that change the shape of the arena. Those need to outlive
-//! the move that made them.
+//! still. Those need to outlive the move that made them.
+//!
+//! **The Elementalist's structures are not in here**, and that is deliberate.
+//! They are a cap-of-three resource owned by her mechanic, with no clock. Being
+//! in this array gave them a lifetime and a second list to disagree with, and
+//! the result was that her special silently stopped working ten seconds after
+//! she pressed the button that enables it.
 //!
 //! **A fixed array, not a `Vec`.** Effects are simulation state, so they are
 //! snapshotted and restored on every rollback; a heap allocation per frame of
@@ -25,9 +30,6 @@ pub enum EffectKind {
     FirePillar,
     /// Blood mage. A field that drains and slows anyone standing in it.
     BlackSpike,
-    /// Elementalist. Terrain the class authored, and the thing a fire pillar
-    /// detonates.
-    Structure,
 }
 
 impl EffectKind {
@@ -35,7 +37,6 @@ impl EffectKind {
         match self {
             EffectKind::FirePillar => "fire pillar",
             EffectKind::BlackSpike => "black spike",
-            EffectKind::Structure => "structure",
         }
     }
 
@@ -44,7 +45,6 @@ impl EffectKind {
         match code {
             1 => Some(EffectKind::FirePillar),
             2 => Some(EffectKind::BlackSpike),
-            3 => Some(EffectKind::Structure),
             _ => None,
         }
     }
@@ -108,7 +108,6 @@ impl Effect {
     pub fn field_radius(&self) -> Fx {
         match self.kind {
             EffectKind::BlackSpike => t::spike_radius(),
-            EffectKind::Structure => t::structure_radius(),
             EffectKind::FirePillar => self.pillar_volumes().0.radius,
         }
     }

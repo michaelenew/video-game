@@ -347,7 +347,6 @@ impl World {
             return;
         }
 
-        let mechanics_before = [self.players[0].mechanic, self.players[1].mechanic];
         for (p, input) in self.players.iter_mut().zip(inputs) {
             step_player(p, input);
         }
@@ -430,7 +429,6 @@ impl World {
             }
         }
 
-        sync_structures(&mut self.players, &mut self.effects, &mechanics_before);
         step_effects(&mut self.effects, &mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -1385,9 +1383,6 @@ fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
                     }
                 }
             }
-            // Terrain. It does nothing on its own; it is a thing the
-            // Elementalist's other moves are aimed at.
-            EffectKind::Structure => {}
         }
     }
 }
@@ -1418,7 +1413,6 @@ fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], kind: EffectKind, o
     let life = match kind {
         EffectKind::FirePillar => t::pillar_life(),
         EffectKind::BlackSpike => t::spike_life(),
-        EffectKind::Structure => t::structure_life(),
     };
     let effect = Effect {
         kind,
@@ -1431,87 +1425,19 @@ fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], kind: EffectKind, o
         *free = Some(effect);
         return;
     }
-    // Full. The oldest goes, so spamming replaces rather than being ignored --
-    // a cap that silently swallows an input is worse than one that visibly
-    // recycles.
+    // Full. Your oldest goes -- **yours**, never the other fighter's. Spamming
+    // should cost you your own setup and nothing else; an eviction that reached
+    // across owners would mean one fighter could delete the other's by holding
+    // a button, which is not a decision anybody made.
     let oldest = effects
         .iter()
         .enumerate()
-        .filter_map(|(i, e)| e.map(|e| (i, e.age)))
+        .filter_map(|(i, e)| e.filter(|e| e.owner == owner).map(|e| (i, e.age)))
         .max_by_key(|(_, age)| *age)
         .map(|(i, _)| i);
     if let Some(i) = oldest {
         effects[i] = Some(effect);
     }
-}
-
-/// Reconcile the Elementalist's structure slots with the structures that are
-/// actually standing.
-///
-/// The slots are intent -- what her mechanic button asked for. The effects are
-/// the things that exist, take up space and weather away. This runs the
-/// relationship in one direction only: a slot that gained a position spawns a
-/// structure, and then the slots are rebuilt from whatever is still standing.
-/// Two lists that each edit themselves would eventually disagree about what is
-/// in the arena, and the fire pillar asks that question every time it is thrown.
-fn sync_structures(
-    players: &mut [Player; MAX_PLAYERS],
-    effects: &mut [Option<Effect>; MAX_EFFECTS],
-    before: &[Mechanic; MAX_PLAYERS],
-) {
-    for i in 0..MAX_PLAYERS {
-        let Mechanic::Structures(slots) = players[i].mechanic else {
-            continue;
-        };
-        let was = match before[i] {
-            Mechanic::Structures(was) => was,
-            _ => [None; class::MAX_STRUCTURES],
-        };
-        for at in slots.iter().flatten() {
-            let already = was.iter().flatten().any(|old| same_spot(*old, *at));
-            if !already {
-                make_room_for_structure(effects, i as u8);
-                spawn_effect(effects, EffectKind::Structure, i as u8, *at);
-            }
-        }
-        let mut rebuilt = [None; class::MAX_STRUCTURES];
-        let standing = effects
-            .iter()
-            .flatten()
-            .filter(|e| matches!(e.kind, EffectKind::Structure) && e.owner == i as u8);
-        for (slot, effect) in rebuilt.iter_mut().zip(standing) {
-            *slot = Some(effect.pos);
-        }
-        players[i].mechanic = Mechanic::Structures(rebuilt);
-    }
-}
-
-/// Collapse an owner's oldest structure if they are already at their cap.
-///
-/// The cap is the resource -- a fourth structure costs you your first -- so it
-/// is enforced where structures are actually made, not where they are recorded.
-fn make_room_for_structure(effects: &mut [Option<Effect>; MAX_EFFECTS], owner: u8) {
-    let mine: Vec<usize> = effects
-        .iter()
-        .enumerate()
-        .filter(|(_, e)| {
-            e.is_some_and(|e| matches!(e.kind, EffectKind::Structure) && e.owner == owner)
-        })
-        .map(|(i, _)| i)
-        .collect();
-    if mine.len() < class::MAX_STRUCTURES {
-        return;
-    }
-    let oldest = mine
-        .iter()
-        .max_by_key(|i| effects[**i].map(|e| e.age).unwrap_or(0));
-    if let Some(&i) = oldest {
-        effects[i] = None;
-    }
-}
-
-fn same_spot(a: V3, b: V3) -> bool {
-    a.x.raw() == b.x.raw() && a.z.raw() == b.z.raw()
 }
 
 /// Walking speed after whatever is slowing you.
