@@ -129,53 +129,77 @@ impl CameraRig {
             yaw.sin() * pitch.cos(),
         ];
 
+        // Where the eye wants to be, relative to the focus: back along the look
+        // direction, then lifted.
+        let mut offset = [
+            -dir[0] * self.cfg.distance,
+            -dir[1] * self.cfg.distance + self.cfg.eye_lift,
+            -dir[2] * self.cfg.distance,
+        ];
+
+        // The floor is not in `SOLIDS` -- it is a plane the simulation handles
+        // separately -- so it has to be handled by hand, and *how* matters.
+        //
+        // Look up far enough and the arm wants to swing below the ground. The
+        // wrong answer, which this used to do, is to shorten the arm: that
+        // hauls the camera in toward the fighter's head while its height never
+        // changes, so the rig reads as a pole of fixed length with the camera
+        // sliding down it. The right answer is to let the camera settle onto
+        // the ground and ride along it, keeping its distance. It still closes
+        // on the fighter as you keep looking up, but only once it is actually
+        // on the ground and has nowhere left to go.
+        let lowest = GROUND + FLOOR_CLEARANCE;
+        offset[1] = offset[1].max(lowest - self.focus[1]);
+
+        // Rightward in the horizontal plane, matching the simulation's own
+        // convention for strafing (`sim::state::move_dir`). Folded into the
+        // offset *before* the geometry check, not after: a camera slid sideways
+        // after being cleared has not been cleared. This was wrong from the
+        // start and only stayed hidden because the broken floor clamp kept the
+        // arm too short to reach a platform in the first place.
+        let flat_dir = (dir[0] * dir[0] + dir[2] * dir[2]).sqrt().max(1e-4);
+        offset[0] += -dir[2] / flat_dir * self.cfg.shoulder;
+        offset[2] += dir[0] / flat_dir * self.cfg.shoulder;
+
         // Arena geometry must never get between the camera and the fighter.
         // Pull the arm in rather than swinging it: the angle is the player's,
         // and a camera that takes the mouse away to dodge a wall is worse than
         // one that gets close to the character's back for a moment.
-        let clear = unobstructed_distance(self.focus, dir, self.cfg.distance);
-
-        // The floor is not in `SOLIDS` -- it is a plane the simulation handles
-        // separately -- so the arm has to be stopped from burrowing under it by
-        // hand. Pitching to the limit at full distance would otherwise put the
-        // eye four metres underground and render the arena from below.
-        let lowest = GROUND + FLOOR_CLEARANCE;
-        let clear = if dir[1] > 1e-4 && self.focus[1] - dir[1] * clear < lowest {
-            ((self.focus[1] - lowest) / dir[1]).max(0.0)
-        } else {
-            clear
-        };
+        //
+        // Measured along the *final* offset, after the floor has had its say --
+        // the ground clamp moves the eye off the arm, so checking the arm would
+        // be checking a line the camera is no longer on.
+        let clear = unobstructed_fraction(self.focus, offset);
+        for axis in offset.iter_mut() {
+            *axis *= clear;
+        }
 
         // Aim at a point ahead of the fighter along the look axis, not at the
         // fighter. Flat, so pitch tilts the camera without dragging the aim
         // point into the floor.
-        let flat = (dir[0] * dir[0] + dir[2] * dir[2]).sqrt().max(1e-4);
         let ahead = self.cfg.look_ahead;
-        // Rightward in the horizontal plane, matching the simulation's own
-        // convention for strafing (`sim::state::move_dir`).
-        let right = [-dir[2] / flat, 0.0, dir[0] / flat];
-        let side = self.cfg.shoulder;
         Framing {
             eye: [
-                self.focus[0] - dir[0] * clear + right[0] * side,
-                self.focus[1] - dir[1] * clear + self.cfg.eye_lift,
-                self.focus[2] - dir[2] * clear + right[2] * side,
+                self.focus[0] + offset[0],
+                self.focus[1] + offset[1],
+                self.focus[2] + offset[2],
             ],
             look_at: [
-                self.focus[0] + dir[0] / flat * ahead,
+                self.focus[0] + dir[0] / flat_dir * ahead,
                 self.focus[1],
-                self.focus[2] + dir[2] / flat * ahead,
+                self.focus[2] + dir[2] / flat_dir * ahead,
             ],
         }
     }
 }
 
-/// Longest distance back along the camera arm that stays out of level geometry.
+/// How much of the camera's offset from the focus stays out of level geometry,
+/// as a fraction between `MINIMUM` and one.
 ///
 /// Marches the segment rather than solving it analytically: the arena is a
 /// handful of boxes and this runs once a frame on the render side, where exact
 /// determinism does not matter.
-fn unobstructed_distance(focus: [f32; 3], dir: [f32; 3], want: f32) -> f32 {
+fn unobstructed_fraction(focus: [f32; 3], offset: [f32; 3]) -> f32 {
     const STEPS: usize = 24;
     const PADDING: f32 = 0.45;
     // Deliberately tiny. An arm that refuses to shorten past a comfortable
@@ -184,19 +208,19 @@ fn unobstructed_distance(focus: [f32; 3], dir: [f32; 3], want: f32) -> f32 {
     // The cost is that the character can clip through the near plane when
     // backed against geometry; fading them out is the usual answer and is not
     // worth building yet.
-    const MINIMUM: f32 = 0.2;
+    const MINIMUM: f32 = 0.04;
     for step in 1..=STEPS {
-        let t = want * step as f32 / STEPS as f32;
+        let t = step as f32 / STEPS as f32;
         let p = [
-            focus[0] - dir[0] * t,
-            focus[1] - dir[1] * t,
-            focus[2] - dir[2] * t,
+            focus[0] + offset[0] * t,
+            focus[1] + offset[1] * t,
+            focus[2] + offset[2] * t,
         ];
         if inside_geometry(p, PADDING) {
-            return (t - want / STEPS as f32).max(MINIMUM);
+            return (t - 1.0 / STEPS as f32).max(MINIMUM);
         }
     }
-    want
+    1.0
 }
 
 fn inside_geometry(p: [f32; 3], pad: f32) -> bool {

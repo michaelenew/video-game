@@ -231,6 +231,11 @@ impl Sim {
     }
 }
 
+/// Start pitch override, for capturing the camera at a known angle.
+fn env_f32(key: &str) -> Option<f32> {
+    std::env::var(key).ok()?.parse().ok()
+}
+
 fn env_num(key: &str) -> Option<u32> {
     std::env::var(key).ok()?.parse().ok()
 }
@@ -256,7 +261,7 @@ impl Default for Look {
         Look {
             // Player one spawns at -X looking toward +X, where player two is.
             yaw: 0.0,
-            pitch: 0.12,
+            pitch: env_f32("SHOT_PITCH").unwrap_or(0.12),
             yaw_two: std::f32::consts::PI,
             grabbed: false,
         }
