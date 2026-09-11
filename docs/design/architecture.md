@@ -421,6 +421,17 @@ saves nor restores them. But two peers running different rules would diverge sil
 exactly like a netcode bug. The tuning hash is folded into `World::checksum`, so a mismatched
 Oven is a desync on the first frame — an error message instead of a mystery.
 
+### Class pickers
+
+A click-to-cycle button beside each health bar, showing that player's class. **F8**, and on
+under `--dev`. They sit next to the health bars because that is where you are already looking
+to know who is who, and the button *is* the class name, so it labels itself.
+
+They need a free cursor, which is what the Oven gives you — and they route through the same
+`UiFocus` the Oven does, so clicking one neither throws a poke nor re-grabs the mouse for the
+camera. That is the third thing sharing the pointer now, which is why the ownership question
+below has a single answer rather than one per widget.
+
 ### Who owns the mouse
 
 The game and the editor share one window, one mouse and one keyboard, so something has to say
@@ -523,7 +534,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 150 tests |
+| Test suites | 152 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -535,7 +546,7 @@ Everything below builds and passes today.
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
 | **The Oven** | **F7** — 307 live tuning knobs, searchable, with bake-and-push |
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
-| Dev mode | `./scripts/dev.sh` — wireframes and the Oven, both open |
+| Dev mode | `./scripts/dev.sh` — wireframes, the Oven and the class pickers |
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |

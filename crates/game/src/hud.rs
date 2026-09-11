@@ -27,6 +27,24 @@ pub struct Banner;
 #[derive(Component)]
 pub struct SensitivityText;
 
+/// A click-to-cycle class picker, one per player.
+///
+/// Sits beside that player's health bar because that is where you are already
+/// looking to know who is who. The button *is* the class name, so it labels
+/// itself and there is nothing to read off elsewhere.
+#[derive(Component)]
+pub struct ClassButton(pub usize);
+
+/// Whether the pickers are drawn. **F8**, and on by default under `--dev`.
+#[derive(Resource)]
+pub struct ShowClassButtons(pub bool);
+
+impl Default for ShowClassButtons {
+    fn default() -> Self {
+        ShowClassButtons(crate::dev_mode())
+    }
+}
+
 pub fn setup(mut commands: Commands) {
     commands
         .spawn(Node {
@@ -46,6 +64,7 @@ pub fn setup(mut commands: Commands) {
                 ..default()
             })
             .with_children(|top| {
+                spawn_class_button(top, 0, P1);
                 spawn_health(top, 0, P1);
                 top.spawn((
                     Text::new("0 - 0"),
@@ -57,6 +76,7 @@ pub fn setup(mut commands: Commands) {
                     RoundText,
                 ));
                 spawn_health(top, 1, P2);
+                spawn_class_button(top, 1, P2);
             });
 
             // Middle: the round banner, empty while fighting.
@@ -138,11 +158,37 @@ pub fn setup(mut commands: Commands) {
         });
 }
 
+fn spawn_class_button(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
+    parent.spawn((
+        Button,
+        Node {
+            padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(Val::Px(1.0)),
+            ..default()
+        },
+        BorderColor(colour),
+        BorderRadius::all(Val::Px(3.0)),
+        BackgroundColor(Color::srgba(0.09, 0.11, 0.14, 0.85)),
+        ClassButton(who),
+        children![(
+            Text::new("—"),
+            TextFont {
+                font_size: 14.0,
+                ..default()
+            },
+            TextColor(colour),
+            ClassLabel(who),
+        )],
+    ));
+}
+
 fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
     parent
         .spawn((
             Node {
-                width: Val::Percent(40.0),
+                width: Val::Percent(34.0),
                 height: Val::Px(16.0),
                 ..default()
             },
@@ -166,6 +212,11 @@ fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
 // Each of these touches `&mut Text`, so every one has to be provably disjoint
 // from the others or Bevy refuses the system at run time. The marker components
 // are what makes them disjoint; the `Without` bounds are what proves it.
+// Every one of these touches `&mut Text`, so each must be provably disjoint
+// from the rest or Bevy refuses the system at run time. The marker components
+// make them disjoint; the `Without` bounds prove it. Adding a fifth means
+// adding it to the other four -- which is the cost of the pattern, and the
+// reason the compiler cannot catch a miss here.
 type StateQuery<'w, 's> = Query<
     'w,
     's,
@@ -174,14 +225,42 @@ type StateQuery<'w, 's> = Query<
         Without<RoundText>,
         Without<Banner>,
         Without<SensitivityText>,
+        Without<ClassLabel>,
     ),
 >;
-type RoundQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<SensitivityText>)>;
-type BannerQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<SensitivityText>)>;
-type SensitivityQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<SensitivityText>, Without<RoundText>, Without<Banner>)>;
+type RoundQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<RoundText>,
+        Without<Banner>,
+        Without<SensitivityText>,
+        Without<ClassLabel>,
+    ),
+>;
+type BannerQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<Banner>,
+        Without<RoundText>,
+        Without<SensitivityText>,
+        Without<ClassLabel>,
+    ),
+>;
+type SensitivityQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<SensitivityText>,
+        Without<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+    ),
+>;
 
 pub fn update(
     sim: Res<crate::Sim>,
@@ -278,5 +357,162 @@ fn describe(p: &sim::state::Player) -> String {
         Action::BlockStun { left } => format!("blockstun {left}f"),
         Action::HitStun { left } => format!("hitstun {left}f"),
         Action::Stagger { left } => format!("STAGGER {left}f"),
+    }
+}
+
+/// Advance one player's class, leaving the other alone.
+///
+/// Separated from the click handling so the rule can be tested without a
+/// window, a cursor, or a rendered frame.
+pub fn cycle_class(mut classes: [sim::Class; 2], who: usize) -> [sim::Class; 2] {
+    let all = sim::class::ALL_CLASSES;
+    let next = (classes[who] as usize + 1) % all.len();
+    classes[who] = all[next];
+    classes
+}
+
+type ButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static ClassButton,
+        &'static Children,
+    ),
+    Changed<Interaction>,
+>;
+
+/// Click a picker to cycle that player's class.
+///
+/// Restarts the match, exactly as Tab does, because a class change mid-round
+/// would leave the mechanic holding somebody else's state — a shield in flight
+/// belonging to a class that no longer has one.
+pub fn class_buttons(
+    mut sim: ResMut<crate::Sim>,
+    show: Res<ShowClassButtons>,
+    buttons: ButtonQuery,
+) {
+    if !show.0 {
+        return;
+    }
+    for (interaction, button, _) in buttons.iter() {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+        let classes = cycle_class(
+            [sim.cur.players[0].class, sim.cur.players[1].class],
+            button.0,
+        );
+        let w = sim::World::with_classes(classes);
+        sim.prev = w.clone();
+        sim.cur = w;
+    }
+}
+
+/// Marker for the text inside a picker, so its label can be kept current.
+#[derive(Component)]
+pub struct ClassLabel(pub usize);
+
+type LabelQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static ClassLabel, &'static mut Text),
+    (
+        Without<RoundText>,
+        Without<Banner>,
+        Without<SensitivityText>,
+        Without<StateText>,
+    ),
+>;
+
+/// Show or hide the pickers, and keep their labels showing the current class.
+pub fn update_class_buttons(
+    sim: Res<crate::Sim>,
+    show: Res<ShowClassButtons>,
+    mut buttons: Query<(&mut Node, &mut BackgroundColor, &Interaction), With<ClassButton>>,
+    mut labels: LabelQuery,
+) {
+    for (mut node, mut bg, interaction) in buttons.iter_mut() {
+        node.display = if show.0 { Display::Flex } else { Display::None };
+        // A hovered picker lightens, so it reads as something you can press
+        // rather than as another readout.
+        bg.0 = match interaction {
+            Interaction::Hovered | Interaction::Pressed => Color::srgba(0.20, 0.24, 0.30, 0.95),
+            Interaction::None => Color::srgba(0.09, 0.11, 0.14, 0.85),
+        };
+    }
+    for (label, mut text) in labels.iter_mut() {
+        let name = sim.cur.players[label.0].class.name();
+        if text.0 != name {
+            *text = Text::new(name);
+        }
+    }
+}
+
+/// Whether the pointer is over a class picker.
+///
+/// Folded into the same `UiFocus` the Oven uses. Without it, clicking a picker
+/// would also throw a poke and re-capture the mouse for the camera — the game
+/// and its interface share one pointer, and something has to say which of them
+/// a click belongs to.
+pub fn sample_button_focus(
+    show: Res<ShowClassButtons>,
+    buttons: Query<&Interaction, With<ClassButton>>,
+    mut focus: ResMut<crate::palette::UiFocus>,
+) {
+    if !show.0 {
+        return;
+    }
+    if buttons
+        .iter()
+        .any(|i| matches!(i, Interaction::Hovered | Interaction::Pressed))
+    {
+        focus.pointer = true;
+    }
+}
+
+pub fn toggle_class_buttons(keys: Res<ButtonInput<KeyCode>>, mut show: ResMut<ShowClassButtons>) {
+    if keys.just_pressed(KeyCode::F8) {
+        show.0 = !show.0;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sim::class::{ALL_CLASSES, Class};
+
+    #[test]
+    fn a_picker_moves_only_its_own_player() {
+        // Two pickers sharing one array is the obvious place to get an index
+        // wrong, and the symptom would be changing the wrong fighter's class
+        // mid-session -- confusing rather than obviously broken.
+        let start = [Class::Bulwark, Class::Elementalist];
+        let after = cycle_class(start, 0);
+        assert_ne!(after[0], start[0], "the picker did not advance its player");
+        assert_eq!(after[1], start[1], "it changed the other player too");
+
+        let after = cycle_class(start, 1);
+        assert_eq!(after[0], start[0]);
+        assert_ne!(after[1], start[1]);
+    }
+
+    #[test]
+    fn cycling_reaches_every_class_and_comes_home() {
+        let start = [Class::Bulwark, Class::Bulwark];
+        let mut seen = vec![start[0]];
+        let mut classes = start;
+        for _ in 1..ALL_CLASSES.len() {
+            classes = cycle_class(classes, 0);
+            seen.push(classes[0]);
+        }
+        for class in ALL_CLASSES {
+            assert!(
+                seen.contains(&class),
+                "{class:?} is unreachable by clicking"
+            );
+        }
+        classes = cycle_class(classes, 0);
+        assert_eq!(classes[0], start[0], "the cycle does not wrap");
     }
 }
