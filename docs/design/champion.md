@@ -1,15 +1,25 @@
 ---
 status: decided
 decided: 2026-09-10
-formerly: Shifter
+renamed: 2026-09-11
+formerly: Bellator, Shifter
 supersedes: docs/archive/combat-design/shifter-skills.md
 ---
 
-# Bellator
+# Champion
 
 Formerly **Shifter**, which did double duty with the weapon-shift verb and read as a plain
-word. *Bellator* is Latin for a warrior or combatant, which suits a class descended from the
-old cities' professional duelling champions.
+word; then **Bellator**, Latin for a warrior or combatant, chosen because the class descends
+from the old cities' professional duelling champions.
+
+*Bellator* was accurate and out of place. Every other class on the roster has a plain English
+name — Bulwark, Elementalist, Blood mage — and one Latin term among them reads as belonging to
+a different game. **Champion** says the same thing in the register the rest of the roster is
+written in, and the lore already used the word: these fighters *were* the aristocrats'
+champions.
+
+Bellator is kept in the front matter, and the roster's naming is now open across the board —
+see [README](README.md#4--open).
 
 ## Identity
 

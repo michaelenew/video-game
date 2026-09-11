@@ -40,7 +40,7 @@ pub struct Move {
     /// differently from one that drops you through it, and both are worth
     /// having. Zero means gravity never stops.
     pub air_stall: u16,
-    /// Upward speed given to whoever this hits. The Bellator's uppercut takes
+    /// Upward speed given to whoever this hits. The Champion's uppercut takes
     /// people into the air with it; most moves leave them on the ground.
     pub launch: Fx,
     /// Upward speed the *attacker* gains when the move starts. A leaping move
@@ -109,7 +109,7 @@ const NAMES: [[&str; SLOTS]; 6] = [
     //   Slam: the overhead. Heavily punishable if read, heavily rewarding if not.
     //   Grapple: beats guard outright, loses badly to dodge.
     ["Bash", "Slam", "Grapple"],
-    // Bellator -- range bands and flow. Form multiplies everything.
+    // Champion -- range bands and flow. Form multiplies everything.
     ["Sweep", "Drive", "Uppercut"],
     // Shadow Reaver -- two bodies. Options are a function of the line between them.
     //   Guillotine: blades erupt from the shadow, so it needs one placed.

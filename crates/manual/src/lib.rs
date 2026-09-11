@@ -62,7 +62,7 @@ pub const SECTIONS: &[Section] = &[
             e("cargo run -p game -- --help", "This text."),
             e(
                 "cargo run -p game -- --p1 <class> --p2 <class>",
-                "Pick classes. Matched loosely: bulwark, bellator, reaver, elementalist, blood, dual.",
+                "Pick classes. Matched loosely: bulwark, champion, reaver, elementalist, blood, dual.",
             ),
             e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",

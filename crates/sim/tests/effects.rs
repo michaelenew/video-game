@@ -224,7 +224,7 @@ fn a_fourth_structure_costs_the_first() {
 #[test]
 fn the_mechanic_fires_on_the_press_not_while_the_button_is_down() {
     // Held, it used to re-fire every frame, and every class was wrong in its
-    // own way: the Bellator's form became a function of how many frames you
+    // own way: the Champion's form became a function of how many frames you
     // happened to hold it, the Reaver's shadow toggled itself back off, the
     // Bulwark's shield was pinned mid-throw and never planted, and the
     // Elementalist spent all three structures on one spot in three frames.
@@ -350,7 +350,7 @@ fn a_slowed_fighter_covers_less_ground() {
 }
 
 // ---------------------------------------------------------------------------
-// The Bellator
+// The Champion
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -358,7 +358,7 @@ fn the_uppercut_takes_both_fighters_off_the_ground() {
     // The move is a leap, and it is a leap you bring someone along on. Either
     // half alone is a different move: without the lift it is a launcher you
     // cannot follow up on, and without the launch it is an escape.
-    let mut w = engaged(Class::Bellator);
+    let mut w = engaged(Class::Champion);
     let mut lifted = [false; MAX_PLAYERS];
     run(&mut w, 2, Q, 0);
     for _ in 0..60 {

@@ -322,7 +322,7 @@ are out, and every fighter's hurtbox all the time. The volume comes from a new
 was wrong in three ways at once.
 **Verdict** kept. The three ways are the useful part:
 
-It **rebuilt the box from the move table**, so it ignored the Bellator's weapon form, which
+It **rebuilt the box from the move table**, so it ignored the Champion's weapon form, which
 multiplies reach — it drew a spear as though it were a sword. Now there is one function and
 the hit test calls it too, with a test pinning that they agree at the boundary for every
 class. An overlay that can drift from the rule it illustrates is worse than no overlay.
@@ -520,7 +520,7 @@ Where it stands now, against a 1.8 m fighter:
 | | Short hop | Full hop | Clears a head | Strafe across a jump |
 | --- | --- | --- | --- | --- |
 | Bulwark | 2.4 m (1.4×) | 4.1 m (2.3×) | 8f | 6.4 m |
-| Bellator | 3.7 m (2.1×) | 6.0 m (3.3×) | 6f | 8.2 m |
+| Champion | 3.7 m (2.1×) | 6.0 m (3.3×) | 6f | 8.2 m |
 | Shadow Reaver | 4.9 m (2.7×) | 7.6 m (4.2×) | 5f | 9.4 m |
 | Elementalist | 4.8 m (2.7×) | 7.4 m (4.1×) | 6f | 9.8 m |
 | Blood mage | 3.8 m (2.1×) | 6.1 m (3.4×) | 6f | 8.3 m |
@@ -584,7 +584,7 @@ what the kit documents say they do.
 - **Structures** (Elementalist) are real things standing in the arena with a lifetime, not a
   list of coordinates. A fourth costs the first; the clock costs all of them eventually.
 - **Black spike** (Blood mage) leaves a field that **drains and slows** anyone standing in it.
-- **Uppercut** (Bellator) leaps, and **takes whoever it catches into the air with it**.
+- **Uppercut** (Champion) leaps, and **takes whoever it catches into the air with it**.
 - **Grapple** (Bulwark) actually grabs: the victim is pinned at arm's length and goes where
   the Bulwark goes until it ends.
 
@@ -693,7 +693,7 @@ frames:
 | Class | What you got |
 | --- | --- |
 | Bulwark | Shield pinned mid-throw — re-thrown every frame, so it never travelled and never planted |
-| Bellator | Form cycled thirty times; which one you end on is a function of how long you held |
+| Champion | Form cycled thirty times; which one you end on is a function of how long you held |
 | Shadow Reaver | Shadow placed and unplaced every frame; released on an even count, so no shadow |
 | Elementalist | All three structures spent in three frames, stacked on one spot |
 
@@ -737,7 +737,7 @@ recompile — which is the thing the Oven exists to avoid.
 
 **It found thirty-two**, and one of them was a live bug: `arena.rs` collided against a hardcoded
 body radius while the hit test used the Oven's knob, so tuning the body made fighters a
-different size to walls than to attacks. The rest were ordinary invisibility — the Bellator's
+different size to walls than to attacks. The rest were ordinary invisibility — the Champion's
 nine form multipliers (most of that class), the Bulwark's shield speed, range, damage and
 knockback, the Reaver's leash, all three velocity decays, the Dual mage's entire meter. All now
 live and bakeable.
@@ -849,3 +849,22 @@ and large ones. Asserted across a five-to-fifteen-metre range.
 **Verdict** kept. Three assertions came out of it that did not exist before: the whole fighter
 is in frame at rest (the reported chopped-off feet, stated as an angle against the field of
 view), looking down never shortens the arm, and zooming does not move the aim.
+
+### 2026-09-11 — Bellator is now Champion
+**Changed** The class, its two documents, its Oven families and every reference in code.
+`--p1 champion` matches; `--p1 bellator` no longer does.
+
+**Why** Reported: the other classes have simpler, more ordinary names and Bellator did not fit.
+Correct — and the interesting part is that the old name was not *wrong*. It is Latin for a
+combatant, and the class descends from the old cities' professional duelling champions, so it
+was accurate and well sourced. It was still the only Latin word on a roster of plain English
+ones, which made it read as belonging to a different game. Accuracy is not the same as fitting.
+
+**Verdict** kept. `Champion` says the same thing in the register the rest of the roster is
+written in, and the lore already used the word for exactly these fighters.
+
+Bellator survives in the front matter of [champion.md](champion.md) — which already carried
+`formerly: Shifter`, so this is the second rename — and **the roster's naming is now open
+across the board**. One name being out of place is a reason to look at all six: four of them
+(Bulwark, Elementalist, Blood mage, Dual mage) are descriptions and two (Shadow Reaver,
+Champion) are titles, and nobody has decided which register the game is in.

@@ -429,7 +429,7 @@ only thing that owns them.
 ### The mechanic fires on the press, and the edge lives in the snapshot
 
 Held, the mechanic button used to re-fire every frame, and every class was wrong in its own way:
-the Bellator's form became a function of how many frames you happened to hold it, the Reaver's
+the Champion's form became a function of how many frames you happened to hold it, the Reaver's
 shadow toggled itself back off, the Bulwark's shield was pinned mid-throw and never planted, and
 the Elementalist spent all three structures on one spot in three frames.
 
@@ -457,7 +457,7 @@ class mechanic is sitting.
 The attack volume comes from `sim::state::hitbox`, which the hit test itself calls. That is
 not tidiness — it is the difference between an overlay and a *second implementation of the
 rules that can disagree with the first*. The previous version rebuilt the box from the move
-table and so ignored the Bellator's weapon form, which multiplies reach: it drew a spear as
+table and so ignored the Champion's weapon form, which multiplies reach: it drew a spear as
 though it were a sword. An overlay that can drift is worse than none, because it is
 confidently wrong at the exact moment you are using it to work out why something missed.
 
@@ -619,7 +619,7 @@ numeric type, is a tuning value.** It belongs in the Oven, or it belongs in the 
 table with a sentence saying why it is not. A second test asserts every exemption has a real
 reason, because an exemption nobody had to justify is just a way to silence the check.
 
-It found thirty-two on the first run — the Bellator's nine form multipliers, which are most of
+It found thirty-two on the first run — the Champion's nine form multipliers, which are most of
 that class; the Bulwark's shield speed, range, damage and knockback; the Reaver's leash; all
 three velocity decays; the Dual mage's whole meter. None of them were tunable, and all of them
 are the kind of number you want to move while watching the game move.
@@ -718,7 +718,7 @@ Everything below builds and passes today.
 | Round flow | Knockout, round wins, reset |
 | **Peer to peer** | **`game --port N --peer ADDR`** — verified over real UDP |
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
-| **All six classes** | **`game --p1 bellator --p2 elementalist`**, or Tab to cycle |
+| **All six classes** | **`game --p1 champion --p2 elementalist`**, or Tab to cycle |
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
 | **Animation factory** | **`cargo run -p anim --bin bake`** — F2 toggles baked playback |

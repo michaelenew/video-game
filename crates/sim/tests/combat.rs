@@ -513,7 +513,7 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
 fn the_drawn_hitbox_is_the_one_that_hits() {
     // The overlay draws `state::hitbox`, and the hit test uses it too. This
     // pins that they agree at the boundary, for every class -- including the
-    // Bellator, whose weapon form multiplies reach and which an overlay
+    // Champion, whose weapon form multiplies reach and which an overlay
     // rebuilding the box from the move table on its own would get wrong.
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);

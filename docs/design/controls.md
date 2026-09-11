@@ -218,7 +218,7 @@ The prototype binds the first three of these: left click pokes, shift + left cli
 committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` stand in for the
 clicks on keyboards where that is easier.
 
-That last row does real work. The Bellator's Rush and the Reaver's Shadow dash *are* their
+That last row does real work. The Champion's Rush and the Reaver's Shadow dash *are* their
 dodges rather than extra inputs. For the Reaver this is what makes movement and shadow
 placement the same action, which is the fix that keeps the class from being denied its
 mobility.
@@ -273,7 +273,7 @@ and each is worth stating on its own rather than collapsing into one frame count
 | | Jump | Gravity | Fall cap | Steering |
 | --- | --- | --- | --- | --- |
 | Bulwark | ×0.9 | ×1.2 | ×1.1 | 0.9 |
-| Bellator | ×1.0 | ×1.0 | ×1.0 | 1.2 |
+| Champion | ×1.0 | ×1.0 | ×1.0 | 1.2 |
 | Shadow Reaver | ×1.1 | ×0.9 | ×1.0 | 1.7 |
 | Elementalist | ×1.1 | ×0.9 | ×0.9 | 1.0 |
 | Blood mage | ×1.0 | ×1.0 | ×1.0 | 1.3 |
@@ -387,7 +387,7 @@ put the direction choice in a modifier the player could ignore.
 > The argument against is that a dropped payoff in a 60-second match feels terrible. If it
 > proves bad, swap the finishers onto `shift`+`L`/`R` and move the ordinary abilities out.
 
-## Bellator
+## Champion
 
 **`L` / `M` / `R` are sword / hammer / spear.** Pressing a form you are not currently in
 triggers the switch, animated from whatever the current context is.

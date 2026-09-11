@@ -1,12 +1,12 @@
 ---
 status: proposed
 decided: 2026-09-10
-formerly: Shifter
+formerly: Bellator, Shifter
 sources: docs/archive/combat-design/shifter-skills.md
-depends: ../bellator.md
+depends: ../champion.md
 ---
 
-# Bellator — kit
+# Champion — kit
 
 **Identity.** Range bands and flow. Three weapon forms, and the depth is in changing form
 *inside* an animation so the move ends differently than it started.
@@ -76,7 +76,7 @@ your autos are unarmed — short, weak, fast. The class's only ranged option and
 **Startup** instant · **Recovery** medium · **Range** self
 
 A short parry stance using the shared defensive system. Successful parries stagger the
-attacker and additionally give the Bellator a stacking resistance buff, per
+attacker and additionally give the Champion a stacking resistance buff, per
 [../defense.md](../defense.md).
 
 ## The swap matrix — Drive
