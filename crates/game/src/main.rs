@@ -539,6 +539,7 @@ fn place_structures(
     mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
 ) {
     use sim::class::Mechanic;
+    use sim::fixed::Fx;
     let radius = sim::tuning::structure_radius().to_f32_for_render();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
@@ -553,8 +554,19 @@ fn place_structures(
         // air. The whole column slides up from fully buried, so the visible
         // part grows from the ground and the silhouette is always a slab
         // standing on the floor rather than a block hanging in it.
-        let rise = (raised.age as f32 / sim::tuning::structure_rise().max(1) as f32).min(1.0);
-        let height = 1.8;
+        //
+        // Along a **curve**, not a ramp: it holds near the floor -- the beat
+        // where the telegraph is readable and someone can still move -- then
+        // erupts. Same duration either way; completely different to play
+        // against, which is the whole argument for curves over single numbers.
+        let through = Fx::ratio(
+            raised.age as i32,
+            sim::tuning::structure_rise().max(1) as i32,
+        );
+        let rise = sim::tuning::structure_rise_curve()
+            .at(through)
+            .to_f32_for_render();
+        let height = sim::tuning::structure_height().to_f32_for_render();
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
             raised.at.x.to_f32_for_render(),

@@ -15,7 +15,7 @@
 use crate::DT;
 use crate::arena;
 pub use crate::class::Shield;
-use crate::class::{self, BURN_PER_TICK_AT_MAX, Class, Form, METER_DEEP, METER_MAX, Mechanic};
+use crate::class::{self, Class, Form, Mechanic};
 use crate::effects::{Effect, EffectKind, MAX_EFFECTS};
 use crate::fixed::Fx;
 use crate::input::Input;
@@ -38,15 +38,10 @@ pub const SLOT_COMMITTED: u8 = 1;
 pub const SLOT_SPECIAL: u8 = 2;
 pub use crate::tuning::max_health;
 
-/// Shield flight, Bulwark only.
-const SHIELD_SPEED: Fx = Fx::ratio(19, 1);
-const SHIELD_RANGE: Fx = Fx::from_int(9);
-const SHIELD_DAMAGE: i32 = 85;
-const SHIELD_RADIUS: Fx = Fx::ratio(45, 100);
-const LEAP_SPEED: Fx = Fx::ratio(15, 1);
-
-/// Shadow leash, Reaver only. Past this the shadow snaps back.
-const SHADOW_LEASH: Fx = Fx::from_int(8);
+// The Bulwark's shield and the Reaver's shadow used to keep their numbers here,
+// as `const`s beside the code that read them. They are in the Oven now: a
+// shield's speed and range decide the class's whole spacing game, which makes
+// them exactly as much a feel number as any frame count.
 
 /// What a character is currently doing. Durations are frame counts, matching
 /// the `startup / active / recovery` vocabulary in `ability-spec.md`.
@@ -239,7 +234,7 @@ impl Player {
             Mechanic::Shield(sh) => sh.in_hand(),
             Mechanic::Shadow { at } => at.is_some(),
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
-            Mechanic::Meter { value } => value.abs() >= METER_DEEP,
+            Mechanic::Meter { value } => value.abs() >= t::meter_deep(),
             Mechanic::Forms { .. } | Mechanic::Blood => true,
         }
     }
@@ -247,9 +242,9 @@ impl Player {
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
     pub fn hurt_height(&self) -> Fx {
         if self.crouching {
-            arena::BODY_HEIGHT.mul(t::crouch_height_scale())
+            t::body_height().mul(t::crouch_height_scale())
         } else {
-            arena::BODY_HEIGHT
+            t::body_height()
         }
     }
 }
@@ -407,18 +402,18 @@ impl World {
             {
                 let victim = self.players[target];
                 let d = victim.pos.sub(pos);
-                let hit_range = SHIELD_RADIUS.add(t::body_radius());
-                let vertical = d.y.abs().raw() < arena::BODY_HEIGHT.raw();
+                let hit_range = t::shield_radius().add(t::body_radius());
+                let vertical = d.y.abs().raw() < t::body_height().raw();
                 if vertical && d.flat_len().raw() < hit_range.raw() && !victim.action.invulnerable()
                 {
                     let dir = V3::new(d.x, Fx::ZERO, d.z).normalized();
                     apply_hit(
                         &mut self.players[target],
                         Hit {
-                            damage: SHIELD_DAMAGE,
-                            hitstun: 18,
-                            blockstun: 10,
-                            knockback: Fx::ratio(7, 1),
+                            damage: t::shield_damage(),
+                            hitstun: t::shield_hitstun(),
+                            blockstun: t::shield_blockstun(),
+                            knockback: t::shield_knockback(),
                             launch: Fx::ZERO,
                             grabs: 0,
                             by: owner as u8,
@@ -878,14 +873,14 @@ fn step_player(p: &mut Player, input: Input) {
     let steering = ax != 0 || az != 0;
 
     if matches!(p.action, Action::Dodge { .. }) {
-        p.vel.x = p.vel.x.mul(Fx::ratio(93, 100));
-        p.vel.z = p.vel.z.mul(Fx::ratio(93, 100));
+        p.vel.x = p.vel.x.mul(t::dodge_decay());
+        p.vel.z = p.vel.z.mul(t::dodge_decay());
     } else if p.action.stunned() {
         // Knockback decays rather than stopping dead, in the air as on the
         // ground. Checked before the airborne branch so a hit connecting
         // mid-jump is not immediately steered out of.
-        p.vel.x = p.vel.x.mul(Fx::ratio(86, 100));
-        p.vel.z = p.vel.z.mul(Fx::ratio(86, 100));
+        p.vel.x = p.vel.x.mul(t::stun_decay());
+        p.vel.z = p.vel.z.mul(t::stun_decay());
     } else if !p.grounded {
         // In the air, input *accelerates* rather than assigns. Momentum is
         // conserved when you let go, which is the whole difference between a
@@ -1065,7 +1060,7 @@ fn mechanic_action(p: &mut Player) {
             p.mechanic = Mechanic::Shield(match shield {
                 Shield::Held => Shield::Flying {
                     pos: p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)),
-                    vel: p.facing.scale(SHIELD_SPEED),
+                    vel: p.facing.scale(t::shield_speed()),
                     outbound: true,
                     travelled: Fx::ZERO,
                 },
@@ -1073,7 +1068,7 @@ fn mechanic_action(p: &mut Player) {
                     let to_owner = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)).sub(pos);
                     Shield::Flying {
                         pos,
-                        vel: to_owner.normalized().scale(SHIELD_SPEED),
+                        vel: to_owner.normalized().scale(t::shield_speed()),
                         outbound: false,
                         travelled: Fx::ZERO,
                     }
@@ -1087,9 +1082,9 @@ fn mechanic_action(p: &mut Player) {
                     let to_shield = pos.sub(p.pos);
                     if to_shield.flat_len().raw() > Fx::ONE.raw() {
                         let dir = V3::new(to_shield.x, Fx::ZERO, to_shield.z).normalized();
-                        p.vel.x = dir.x.mul(LEAP_SPEED);
-                        p.vel.z = dir.z.mul(LEAP_SPEED);
-                        p.vel.y = Fx::ratio(6, 1);
+                        p.vel.x = dir.x.mul(t::leap_speed());
+                        p.vel.z = dir.z.mul(t::leap_speed());
+                        p.vel.y = t::leap_rise();
                         p.grounded = false;
                     }
                     Shield::Flying {
@@ -1122,7 +1117,7 @@ fn mechanic_action(p: &mut Player) {
         Mechanic::Shadow { at } => {
             p.mechanic = Mechanic::Shadow {
                 at: match at {
-                    None => Some(p.pos.add(p.facing.scale(Fx::from_int(3)))),
+                    None => Some(p.pos.add(p.facing.scale(t::shadow_place_ahead()))),
                     Some(_) => None,
                 },
             };
@@ -1132,7 +1127,7 @@ fn mechanic_action(p: &mut Player) {
         // is the resource.
         Mechanic::Structures(mut slots) => {
             let raised = class::Structure {
-                at: p.pos.add(p.facing.scale(Fx::ratio(5, 2))),
+                at: p.pos.add(p.facing.scale(t::structure_ahead())),
                 age: 0,
             };
             if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
@@ -1166,7 +1161,7 @@ fn step_mechanic(p: &mut Player) {
             let next = pos.add(step);
             let gone = travelled.add(step.flat_len());
             p.mechanic = Mechanic::Shield(if outbound {
-                if gone.raw() >= SHIELD_RANGE.raw() {
+                if gone.raw() >= t::shield_range().raw() {
                     Shield::Planted { pos: next }
                 } else {
                     Shield::Flying {
@@ -1182,7 +1177,7 @@ fn step_mechanic(p: &mut Player) {
                     Shield::Held
                 } else {
                     // Home in, so the return does not miss a moving owner.
-                    let dir = hand.sub(next).normalized().scale(SHIELD_SPEED);
+                    let dir = hand.sub(next).normalized().scale(t::shield_speed());
                     Shield::Flying {
                         pos: next,
                         vel: dir,
@@ -1195,7 +1190,7 @@ fn step_mechanic(p: &mut Player) {
 
         // Leaving the leash snaps the shadow back.
         Mechanic::Shadow { at: Some(spot) } => {
-            if spot.sub(p.pos).flat_len().raw() > SHADOW_LEASH.raw() {
+            if spot.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
                 p.mechanic = Mechanic::Shadow { at: None };
             }
         }
@@ -1214,10 +1209,10 @@ fn step_mechanic(p: &mut Player) {
         // coming back inside the line, not from a reward -- see dual-mage.md.
         Mechanic::Meter { value } => {
             let depth = value.abs();
-            if depth > METER_DEEP {
-                let over = depth - METER_DEEP;
-                let span = (METER_MAX - METER_DEEP).max(1);
-                let burn = (BURN_PER_TICK_AT_MAX * over) / span;
+            if depth > t::meter_deep() {
+                let over = depth - t::meter_deep();
+                let span = (t::meter_max() - t::meter_deep()).max(1);
+                let burn = (t::meter_burn() * over) / span;
                 p.health = (p.health - burn.max(1)).max(1);
             }
         }
@@ -1242,7 +1237,7 @@ fn steer_meter(p: &mut Player, input: Input, kind: u8) {
         0
     };
     p.mechanic = Mechanic::Meter {
-        value: (value + delta).clamp(-METER_MAX, METER_MAX),
+        value: (value + delta).clamp(-t::meter_max(), t::meter_max()),
     };
 }
 
@@ -1306,8 +1301,8 @@ fn hash_v3(h: &mut Fnv, v: &V3) {
 /// Let a body come to rest without accepting input. Used during the pause
 /// between rounds.
 fn settle(p: &mut Player) {
-    p.vel.x = p.vel.x.mul(Fx::ratio(88, 100));
-    p.vel.z = p.vel.z.mul(Fx::ratio(88, 100));
+    p.vel.x = p.vel.x.mul(t::settle_decay());
+    p.vel.z = p.vel.z.mul(t::settle_decay());
     if !p.grounded {
         p.vel.y = p.vel.y.add(t::gravity().mul(DT));
     }

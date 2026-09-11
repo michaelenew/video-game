@@ -9,6 +9,16 @@ sources: docs/archive/combat-design/elementalist-skills.md, docs/archive/combat-
 **Identity.** Terrain author. You build the battlefield, then combo through what you built.
 Ranged control that creates its own targets.
 
+**Shape of every ability — settled 2026-09-11, from play.** Long, telegraphed startups;
+devastating, large follow-through; and only *moderate* frames after, because the cost was
+already paid on the front end. That last clause is the part that makes the class playable
+rather than merely slow: a long wind-up you also pay for afterwards is a move nobody throws.
+
+The telegraph is not a drawback to be minimised. It is what makes her terrain *fair* — the
+opponent gets to see it coming and decide — and it is what makes landing one feel earned. It is
+also the first thing the curve harness was built for: a structure now holds barely out of the
+floor for the first half of its rise, then erupts, and the duration did not change.
+
 ## Mechanic — structures
 
 Physical objects you spawn. Every ability has a second behaviour when it hits one.

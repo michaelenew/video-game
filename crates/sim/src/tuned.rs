@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 48] = [
+pub const SCALARS: [i32; 80] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -56,6 +56,38 @@ pub const SCALARS: [i32; 48] = [
               18, // effects.slow_duration = 18
               26, // effects.fire_pillar_tick = 26
               14, // effects.structure_rise = 14
+         1245184, // bulwark.shield_speed = 19
+          589824, // bulwark.shield_range = 9
+           29491, // bulwark.shield_radius = 0.45
+              85, // bulwark.shield_damage = 85
+              18, // bulwark.shield_hitstun = 18
+              10, // bulwark.shield_blockstun = 10
+          458752, // bulwark.shield_knockback = 7
+          983040, // bulwark.leap_speed = 15
+          393216, // bulwark.leap_rise = 6
+          524288, // reaver.shadow_leash = 8
+          196608, // reaver.shadow_placed_ahead = 3
+          163840, // effects.structure_placed_ahead = 2.5
+          117964, // effects.structure_height = 1.8
+           60948, // defence.dodge_decay = 0.93
+           56360, // defence.hitstun_decay = 0.86
+           57671, // match.settle_decay = 0.88
+           52428, // bellator.hammer_reach_(x) = 0.8
+           88473, // bellator.hammer_damage_(x) = 1.35
+           85196, // bellator.hammer_recovery_(x) = 1.3
+           65536, // bellator.sword_reach_(x) = 1
+           65536, // bellator.sword_damage_(x) = 1
+           65536, // bellator.sword_recovery_(x) = 1
+          101580, // bellator.spear_reach_(x) = 1.55
+           51118, // bellator.spear_damage_(x) = 0.78
+           62259, // bellator.spear_recovery_(x) = 0.95
+             100, // dual_mage.meter_range = 100
+              65, // dual_mage.meter_deep_threshold = 65
+               3, // dual_mage.burn_at_full_depth = 3
+           58982, // effects.structure_rise,_hold = 0.9
+               0, // effects.structure_rise,_hold_lift = 0
+           62259, // effects.structure_rise,_burst = 0.95
+           65536, // effects.structure_rise,_burst_lift = 1
 ];
 
 #[rustfmt::skip]

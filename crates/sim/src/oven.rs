@@ -162,6 +162,38 @@ scalars! {
     SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
     PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
     StructureRise,    "Effects",  "Structure rise",         Frames,  1,         90;
+    ShieldSpeed,      "Bulwark",  "Shield speed",               Fixed,   fx(1,1),   fx(40,1);
+    ShieldRange,      "Bulwark",  "Shield range",               Fixed,   fx(1,1),   fx(30,1);
+    ShieldRadius,     "Bulwark",  "Shield radius",              Fixed,   fx(1,10),  fx(3,1);
+    ShieldDamage,     "Bulwark",  "Shield damage",              Int,     0,         600;
+    ShieldHitstun,    "Bulwark",  "Shield hitstun",             Frames,  0,         90;
+    ShieldBlockstun,  "Bulwark",  "Shield blockstun",           Frames,  0,         90;
+    ShieldKnockback,  "Bulwark",  "Shield knockback",           Fixed,   0,         fx(30,1);
+    LeapSpeed,        "Bulwark",  "Leap speed",                 Fixed,   fx(1,1),   fx(40,1);
+    LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
+    ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
+    ShadowPlaceAhead, "Reaver",   "Shadow placed ahead",        Fixed,   0,         fx(10,1);
+    StructureAhead,   "Effects",  "Structure placed ahead",     Fixed,   0,         fx(10,1);
+    StructureHeight,  "Effects",  "Structure height",           Fixed,   fx(1,10),  fx(8,1);
+    DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
+    StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
+    SettleDecay,      "Match",    "Settle decay",               Fixed,   0,         fx(1,1);
+    HammerReach,      "Bellator", "Hammer reach (x)",           Fixed,   fx(1,10),  fx(3,1);
+    HammerDamage,     "Bellator", "Hammer damage (x)",          Fixed,   fx(1,10),  fx(3,1);
+    HammerRecovery,   "Bellator", "Hammer recovery (x)",        Fixed,   fx(1,10),  fx(3,1);
+    SwordReach,       "Bellator", "Sword reach (x)",            Fixed,   fx(1,10),  fx(3,1);
+    SwordDamage,      "Bellator", "Sword damage (x)",           Fixed,   fx(1,10),  fx(3,1);
+    SwordRecovery,    "Bellator", "Sword recovery (x)",         Fixed,   fx(1,10),  fx(3,1);
+    SpearReach,       "Bellator", "Spear reach (x)",            Fixed,   fx(1,10),  fx(3,1);
+    SpearDamage,      "Bellator", "Spear damage (x)",           Fixed,   fx(1,10),  fx(3,1);
+    SpearRecovery,    "Bellator", "Spear recovery (x)",         Fixed,   fx(1,10),  fx(3,1);
+    MeterMax,         "Dual mage","Meter range",                Int,     10,        400;
+    MeterDeep,        "Dual mage","Meter deep threshold",       Int,     1,         400;
+    MeterBurn,        "Dual mage","Burn at full depth",         Int,     0,         100;
+    RiseCurveX1,      "Effects",  "Structure rise, hold",       Fixed,   0,         fx(1,1);
+    RiseCurveY1,      "Effects",  "Structure rise, hold lift",  Fixed,   0,         fx(1,1);
+    RiseCurveX2,      "Effects",  "Structure rise, burst",      Fixed,   0,         fx(1,1);
+    RiseCurveY2,      "Effects",  "Structure rise, burst lift", Fixed,   0,         fx(1,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +334,7 @@ impl MoveField {
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 48;
+pub const SCALAR_COUNT: usize = 80;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;

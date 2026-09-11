@@ -336,3 +336,130 @@ pub fn slow_frames() -> u16 {
 pub fn pillar_damage() -> i32 {
     oven::scalar(Scalar::PillarDamage)
 }
+
+// ---------------------------------------------------------------------------
+// Class furniture
+// ---------------------------------------------------------------------------
+//
+// Numbers that used to be `const` in the middle of the code that used them.
+// They are as much "how this class feels" as any frame count, and being out of
+// the Oven's reach meant they could only be changed by a recompile -- and, in
+// the body's case, could silently disagree with the knob meant to control them.
+
+/// How fast the Bulwark's shield travels.
+pub fn shield_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShieldSpeed))
+}
+
+/// How far it goes before planting.
+pub fn shield_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShieldRange))
+}
+
+pub fn shield_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShieldRadius))
+}
+
+pub fn shield_damage() -> i32 {
+    oven::scalar(Scalar::ShieldDamage)
+}
+
+pub fn shield_hitstun() -> u16 {
+    oven::scalar(Scalar::ShieldHitstun) as u16
+}
+
+pub fn shield_blockstun() -> u16 {
+    oven::scalar(Scalar::ShieldBlockstun) as u16
+}
+
+pub fn shield_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShieldKnockback))
+}
+
+/// Horizontal speed of the leap to a shield in flight -- the Bulwark's approach.
+pub fn leap_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapSpeed))
+}
+
+pub fn leap_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapRise))
+}
+
+/// How far the Reaver may stray from a placed shadow before it snaps back.
+pub fn shadow_leash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
+}
+
+pub fn shadow_place_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowPlaceAhead))
+}
+
+pub fn structure_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StructureAhead))
+}
+
+pub fn structure_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StructureHeight))
+}
+
+/// What a dodge keeps of its speed each frame.
+pub fn dodge_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DodgeDecay))
+}
+
+/// What knockback keeps each frame. Decay rather than a dead stop, so being hit
+/// mid-jump is not immediately steered out of.
+pub fn stun_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StunDecay))
+}
+
+/// What a body keeps while the round-over pause runs.
+pub fn settle_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SettleDecay))
+}
+
+/// Reach, damage and recovery multipliers for one of the Bellator's forms.
+/// Three kits from one move table, so these nine numbers are most of the class.
+pub fn form_modifiers(form: crate::class::Form) -> (Fx, Fx, Fx) {
+    use crate::class::Form;
+    let raw = |s| Fx::from_raw(oven::scalar(s));
+    match form {
+        Form::Hammer => (
+            raw(Scalar::HammerReach),
+            raw(Scalar::HammerDamage),
+            raw(Scalar::HammerRecovery),
+        ),
+        Form::Sword => (
+            raw(Scalar::SwordReach),
+            raw(Scalar::SwordDamage),
+            raw(Scalar::SwordRecovery),
+        ),
+        Form::Spear => (
+            raw(Scalar::SpearReach),
+            raw(Scalar::SpearDamage),
+            raw(Scalar::SpearRecovery),
+        ),
+    }
+}
+
+pub fn meter_max() -> i32 {
+    oven::scalar(Scalar::MeterMax)
+}
+
+pub fn meter_deep() -> i32 {
+    oven::scalar(Scalar::MeterDeep)
+}
+
+pub fn meter_burn() -> i32 {
+    oven::scalar(Scalar::MeterBurn)
+}
+
+/// The curve a structure climbs out of the ground on.
+pub fn structure_rise_curve() -> crate::curve::Curve {
+    crate::curve::Curve {
+        x1: Fx::from_raw(oven::scalar(Scalar::RiseCurveX1)),
+        y1: Fx::from_raw(oven::scalar(Scalar::RiseCurveY1)),
+        x2: Fx::from_raw(oven::scalar(Scalar::RiseCurveX2)),
+        y2: Fx::from_raw(oven::scalar(Scalar::RiseCurveY2)),
+    }
+}

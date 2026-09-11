@@ -725,3 +725,49 @@ The risk worth naming is that this is the *second* time structures have carried 
 the first time it was a lifetime that silently killed the class's special. So: it **saturates**,
 nothing reads it but the renderer, and there is a test asserting a structure still works after
 fifty seconds — the counter cannot become a clock again without that test going red.
+
+### 2026-09-11 — a test that keeps feel numbers in the Oven
+**Changed** `crates/sim/tests/knobs.rs`. In the simulation, an `Fx` built from a literal or a
+numeric `const` is a tuning value: it goes in the Oven, or in the test's exemption table with a
+sentence saying why it is not. A second test asserts every exemption has a real reason.
+
+**Why** The harness only helps with numbers it can see. One written into the code cannot be
+tuned in the running game and cannot be baked from it either, so the only way to change it is a
+recompile — which is the thing the Oven exists to avoid.
+
+**It found thirty-two**, and one of them was a live bug: `arena.rs` collided against a hardcoded
+body radius while the hit test used the Oven's knob, so tuning the body made fighters a
+different size to walls than to attacks. The rest were ordinary invisibility — the Bellator's
+nine form multipliers (most of that class), the Bulwark's shield speed, range, damage and
+knockback, the Reaver's leash, all three velocity decays, the Dual mage's entire meter. All now
+live and bakeable.
+
+**Verdict** kept, and the lesson is the same one the structure lifetime taught: the dangerous
+numbers are not the ones in the table you are looking at, they are the ones written where you
+stopped looking.
+
+### 2026-09-11 — the first curve: structures hold, then erupt
+**Changed** The structure rise is driven by a **cubic Bézier** rather than a straight ramp. Same
+duration; it now stays barely out of the floor for the first half and finishes fast.
+
+**Why** Reported after playing: it should be a short delay with visual feedback, then a fast
+eruption. And more than that — this is the **hallmark the Elementalist should have**: long,
+telegraphed startups; devastating follow-through; moderate frames afterwards, because the cost
+was already paid at the front. Recorded in her kit.
+
+**Verdict** kept. Two notes.
+
+**A duration and a curve are different questions**, and the harness had only been able to ask
+the first. The rise was already a knob and already the right length; it still read wrong,
+because a quarter second spent sliding steadily and a quarter second spent waiting then bursting
+are not the same event. That is the argument for curves in one sentence, and it is why the
+original Oven plan said "numbers first, splines later".
+
+**The solver is bisection with a fixed iteration count, deliberately.** Newton converges faster
+but its step count depends on the handles, so the answer would vary with the shape — and a value
+that depends on how hard it was to compute is not one two peers can agree on. Twenty halvings
+puts the bracket below what 16.16 can represent, at the same cost every time.
+
+The curve is four knobs in the Oven for now, not a widget. The data model is the part that had
+to be right; dragging two handles is a palette feature and can come later without changing
+anything underneath.
