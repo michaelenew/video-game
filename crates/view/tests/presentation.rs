@@ -101,14 +101,16 @@ fn alpha_stays_in_range() {
 // Camera
 // ---------------------------------------------------------------------------
 
-/// Flat direction from a fighter to the point at the centre of their screen.
+/// Flat direction the camera is pointed.
 ///
-/// This, and not the eye-to-target vector, is what "where you look" means: the
-/// eye sits off to one shoulder, so the camera's own axis is deliberately not
-/// the aim axis. What has to be true is that the crosshair sits straight ahead
-/// of the fighter.
-fn aim_dir(f: view::camera::Framing, player: [f32; 3]) -> (f32, f32) {
-    let (dx, dz) = (f.look_at[0] - player[0], f.look_at[2] - player[2]);
+/// Measured eye-to-target, which is now exactly the look direction: the screen
+/// looks along the axis the mouse names. The eye still sits off to one
+/// shoulder, so this ray is displaced sideways from the fighter's own -- but
+/// displaced, not turned, and a parallel ray aims at the same angle. The
+/// crosshair is projected from the *fighter's* facing along this same ray (see
+/// `crosshair::aim_point`), which is what keeps it centred when the two agree.
+fn aim_dir(f: view::camera::Framing, _player: [f32; 3]) -> (f32, f32) {
+    let (dx, dz) = (f.look_at[0] - f.eye[0], f.look_at[2] - f.eye[2]);
     let len = (dx * dx + dz * dz).sqrt();
     (dx / len, dz / len)
 }
@@ -116,22 +118,31 @@ fn aim_dir(f: view::camera::Framing, player: [f32; 3]) -> (f32, f32) {
 #[test]
 fn the_camera_sits_behind_the_fighter() {
     let mut rig = CameraRig::new(RigConfig::default());
-    let cfg = RigConfig::default();
     let f = rig.update(0.016, [2.0, 0.0, -1.0], 0.0, 0.0);
     // Looking down +X means the camera is at smaller X than the fighter.
     assert!(f.eye[0] < 2.0, "camera at {} is not behind", f.eye[0]);
     // And it aims past them, not at them, so they are not standing in front of
     // whatever you are trying to look at.
     assert!(
-        (f.look_at[0] - (2.0 + cfg.look_ahead)).abs() < 0.01,
+        f.look_at[0] > 2.0,
         "aim point at {} is not ahead of the fighter",
         f.look_at[0]
     );
-    assert!((f.look_at[2] - -1.0).abs() < 0.01, "aim drifted sideways");
-    assert!(f.eye[1] > 0.0, "camera is underground");
+    // The ray runs straight down +X. It is displaced sideways by the shoulder
+    // offset -- parallel, not turned -- so what must not drift is its
+    // direction, which is what the player is steering.
     assert!(
-        f.eye[1] > f.look_at[1],
-        "camera should look down on the fight, not up at it"
+        (f.look_at[2] - f.eye[2]).abs() < 0.01,
+        "aim drifted sideways"
+    );
+    assert!(f.eye[1] > 0.0, "camera is underground");
+    // Looking level means looking level -- the screen follows the mouse, not a
+    // built-in tilt. What keeps the fighter out of the middle of the frame is
+    // the eye sitting above their head, not the camera aiming downward.
+    assert!(
+        f.eye[1] > RigConfig::default().look_height,
+        "the eye at {} is not above the fighter",
+        f.eye[1]
     );
 }
 
@@ -195,76 +206,149 @@ fn flat_arm(f: view::camera::Framing, focus: [f32; 3]) -> f32 {
     (dx * dx + dz * dz).sqrt()
 }
 
-#[test]
-fn looking_up_walks_the_camera_down_to_the_ground() {
-    // It used to hang at a fixed height and haul itself in toward the
-    // fighter's head instead -- the floor clamp compared the arm against the
-    // ground without counting the eye lift, so it fired about three metres
-    // early and "solved" a collision that was not happening by shortening the
-    // arm. It read as a pole under the camera.
+/// Where the middle of the screen meets the floor, as a distance in front of
+/// the fighter. Negative means behind them.
+///
+/// This is the number the player is actually steering when they aim at the
+/// ground, so it is the number the assertions are written in.
+fn ground_mark(f: view::camera::Framing, at: [f32; 3]) -> Option<f32> {
+    let dir = [
+        f.look_at[0] - f.eye[0],
+        f.look_at[1] - f.eye[1],
+        f.look_at[2] - f.eye[2],
+    ];
+    let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+    let dir = [dir[0] / len, dir[1] / len, dir[2] / len];
+    if dir[1] > -1e-3 {
+        return None; // looking at or above the horizon: it never lands
+    }
+    let travel = f.eye[1] / -dir[1];
+    let x = f.eye[0] + dir[0] * travel;
+    let z = f.eye[2] + dir[2] * travel;
+    // Signed along the way the camera faces, flat.
+    let flat = (dir[0] * dir[0] + dir[2] * dir[2]).sqrt().max(1e-4);
+    Some((x - at[0]) * dir[0] / flat + (z - at[2]) * dir[2] / flat)
+}
+
+fn settled(pitch: f32) -> (view::camera::Framing, [f32; 3]) {
     let mut rig = CameraRig::new(RigConfig::default());
     // Clear of the platforms, which start five metres out and would otherwise
     // trigger the occlusion pull-in and confuse what is being measured.
     let at = [4.5, 0.0, 0.0];
     for _ in 0..200 {
-        rig.update(0.016, at, 0.0, 0.0);
+        rig.update(0.016, at, 0.0, pitch);
     }
+    (rig.update(0.016, at, 0.0, pitch), at)
+}
 
+#[test]
+fn looking_down_walks_the_aim_in_toward_your_own_feet() {
+    // The thing that was impossible. The aim point used to be pinned flat a
+    // fixed distance ahead, so pitching down changed how obliquely you saw the
+    // same spot and nothing else -- you could not put the reticle near yourself
+    // and you could not push it out.
+    let cfg = RigConfig::default();
     let mut last = f32::INFINITY;
-    let mut reached_the_ground = false;
-    for step in 0..=20 {
-        let pitch = step as f32 / 20.0 * RigConfig::default().pitch_limit;
-        let h = rig.update(0.016, at, 0.0, pitch).eye[1];
+    for step in 1..=12 {
+        let pitch = -(step as f32 / 12.0) * cfg.pitch_down;
+        let (f, at) = settled(pitch);
+        let mark = ground_mark(f, at).expect("looking down has to reach the floor");
+        assert!(
+            mark < last + 0.01,
+            "at pitch {pitch:.2} the aim went back out to {mark:.2} from {last:.2}"
+        );
+        last = mark;
+    }
+    assert!(
+        last < 1.5,
+        "looking all the way down still aims {last:.2}m away; you cannot hit your own feet"
+    );
+}
+
+#[test]
+fn a_shallow_look_down_reaches_well_past_the_fighter() {
+    // The other half: the range has to be worth steering. If every downward
+    // angle lands within a couple of metres there is nothing to aim *with*.
+    let cfg = RigConfig::default();
+    let (near, at) = settled(-cfg.pitch_down);
+    let (far, _) = settled(-cfg.pitch_down * 0.12);
+    let near = ground_mark(near, at).expect("steep look misses the floor");
+    let far = ground_mark(far, at).expect("shallow look misses the floor");
+    assert!(
+        far > near + 6.0,
+        "the whole range of downward aim is {near:.1}m to {far:.1}m -- too little to steer"
+    );
+}
+
+#[test]
+fn looking_up_walks_the_camera_down_before_it_climbs_into_the_head() {
+    // The Skyrim shape. The ordinary third-person answer -- drop the arm toward
+    // the ground behind the fighter -- reads well for the first forty degrees
+    // or so, and this checks it still happens.
+    let cfg = RigConfig::default();
+    let mut last = f32::INFINITY;
+    for step in 0..=10 {
+        let pitch = step as f32 / 10.0 * cfg.sky_start;
+        let h = settled(pitch).0.eye[1];
         assert!(h <= last + 0.001, "camera rose at pitch {pitch:.2}");
         last = h;
-        if (h - 0.3).abs() < 0.05 {
-            reached_the_ground = true;
-        }
     }
     assert!(
-        reached_the_ground,
-        "camera never got near the ground; lowest was {last}"
+        last < 0.6,
+        "camera never got near the ground on the way up; lowest was {last:.2}"
     );
 }
 
 #[test]
-fn looking_up_does_not_lunge_the_camera_at_the_fighter() {
-    // The camera may close on the fighter once it is *on* the ground and has
-    // nowhere else to go. It may not do so on the way down.
-    let mut rig = CameraRig::new(RigConfig::default());
-    let at = [4.5, 0.0, 0.0];
-    for _ in 0..200 {
-        rig.update(0.016, at, 0.0, 0.0);
-    }
-    let focus = [at[0], RigConfig::default().look_height, at[2]];
-    let level = flat_arm(rig.update(0.016, at, 0.0, 0.0), focus);
-
-    // A modest look up, well before the camera can reach the floor.
-    let tilted = flat_arm(rig.update(0.016, at, 0.0, 0.4), focus);
-    assert!(
-        tilted > level * 0.85,
-        "a 23-degree look up pulled the camera from {level:.2} to {tilted:.2}"
-    );
-    assert!(
-        rig.update(0.016, at, 0.0, 0.4).eye[1] > 0.5,
-        "camera reached the ground far too early"
-    );
-}
-
-#[test]
-fn the_camera_rides_along_the_ground_rather_than_hovering_over_it() {
+fn looking_further_up_hands_over_to_the_fighters_own_eyes() {
+    // Past the handover the third-person answer has run out: the arm is on the
+    // floor, the body is in the way, and terrain shoves the view. The camera
+    // goes to the fighter's eyes so the sky can simply be panned.
     let cfg = RigConfig::default();
-    let mut rig = CameraRig::new(cfg);
-    let at = [4.5, 0.0, 0.0];
-    for _ in 0..200 {
-        rig.update(0.016, at, 0.0, cfg.pitch_limit);
-    }
-    let f = rig.update(0.016, at, 0.0, cfg.pitch_limit);
+    let (f, at) = settled(cfg.pitch_up);
     assert!(
-        (f.eye[1] - 0.3).abs() < 0.02,
-        "at full pitch the eye sits at {}, not on the ground",
+        f.first_person > 0.9,
+        "at full pitch the rig is only {:.2} of the way into the head",
+        f.first_person
+    );
+    let flat = flat_arm(f, [at[0], cfg.look_height, at[2]]);
+    assert!(
+        flat < 0.5,
+        "the eye is still {flat:.2}m behind the fighter, so the body is in the sky"
+    );
+    assert!(
+        f.eye[1] > cfg.look_height - 0.1,
+        "the eye dropped to {:.2}, below the fighter's own head",
         f.eye[1]
     );
+}
+
+#[test]
+fn the_handover_does_not_start_early() {
+    // A modest look up must still be third person, or the body vanishes while
+    // the player is only glancing upward.
+    let cfg = RigConfig::default();
+    let (f, at) = settled(0.4);
+    assert_eq!(
+        f.first_person, 0.0,
+        "the rig started climbing into the head at a 23-degree look up"
+    );
+    let focus = [at[0], cfg.look_height, at[2]];
+    let level = flat_arm(settled(0.0).0, focus);
+    assert!(
+        flat_arm(f, focus) > level * 0.85,
+        "a 23-degree look up pulled the camera in"
+    );
+}
+
+#[test]
+fn the_camera_never_ends_up_under_the_floor() {
+    let cfg = RigConfig::default();
+    for step in 0..=40 {
+        let pitch = -cfg.pitch_down + step as f32 / 40.0 * (cfg.pitch_down + cfg.pitch_up);
+        let f = settled(pitch).0;
+        assert!(f.eye[1] > 0.0, "eye underground at pitch {pitch:.2}");
+    }
 }
 
 #[test]
@@ -277,9 +361,10 @@ fn pitch_is_clamped() {
         let run = ((f.look_at[0] - f.eye[0]).powi(2) + (f.look_at[2] - f.eye[2]).powi(2)).sqrt();
         let got = rise.atan2(run);
         assert!(
-            got.abs() <= cfg.pitch_limit + 0.01,
-            "pitched to {got} past the {} limit",
-            cfg.pitch_limit
+            got >= -cfg.pitch_down - 0.01 && got <= cfg.pitch_up + 0.01,
+            "pitched to {got} past the {} / {} limits",
+            cfg.pitch_down,
+            cfg.pitch_up
         );
     }
 }

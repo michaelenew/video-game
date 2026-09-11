@@ -771,3 +771,44 @@ puts the bracket below what 16.16 can represent, at the same cost every time.
 The curve is four knobs in the Oven for now, not a widget. The data model is the part that had
 to be right; dragging two handles is a palette feature and can come later without changing
 anything underneath.
+
+### 2026-09-11 — the camera could not aim
+**Reported** Impossible to aim at the ground near your own character; very hard to push the
+reticle further out than where it starts, because the angle goes shallow. And looking up needs
+to reach nearly vertical, because verticality is part of the positioning game.
+
+**Cause, and it was one line's worth of premise.** The aim point was pinned *flat*, at the
+fighter's own height, a fixed distance ahead. Pitch moved the eye and never the aim point, so
+the middle of the screen stayed in the same place whatever the mouse did — the only thing you
+were steering was how obliquely you saw that one spot. Everything else followed from that.
+
+**Fix** Screen centre is now simply the look direction. Then the two ends of the pitch range
+get different rigs, blended:
+
+*Down is close.* Looking at the ground means looking at the ground near you. A seven-metre arm
+puts the ray on the floor before it reaches the fighter, so steep angles aimed **behind your own
+heels**. The arm now shortens and the eye drops toward the fighter's head as pitch goes down;
+at the bottom the reticle is just in front of their feet and they have risen to near the centre
+of frame. That is the reported "mouse down should bring the aim closer", arrived at from the
+geometry rather than bolted on.
+
+*Up runs out of third person.* Walking the arm down behind the fighter reads well for forty
+degrees and then stops: the arm is on the floor, the body is in the way, terrain shoves the
+view. Past a handover angle the camera climbs into the fighter's eyes, the floor and geometry
+clamps fade out, and the body stops being drawn — the Skyrim shape, and it turns out the reason
+it works is that it is two answers rather than one stretched too far.
+
+**Verdict** kept. Measured across the range: a shallow look down reaches better than six metres
+further out than a steep one, and the steep one lands inside a metre and a half of the fighter.
+Both were within centimetres of each other before.
+
+**The reticle had to be rebuilt on the camera's own ray** — turned by however far facing lags
+aim — rather than constructed from a distance ahead of the fighter. An independent construction
+would have to re-derive the pitch, the eye lift and the shoulder offset, and the first one of
+those to change would make the reticle lie. This is the second time that class of bug has come
+up today: two things that must agree, each computing its own answer.
+
+**Camera numbers stay out of the Oven, on purpose.** Tuning values are folded into the checksum
+so mistuned peers desync loudly. That is right for anything deciding what *happens* and wrong
+for anything deciding what you *see*: two people must be able to play each other at different
+fields of view. The rig's numbers sit with the other per-player camera settings instead.
