@@ -16,9 +16,11 @@
 //! in-game with Tab. Names are matched loosely: bulwark, bellator, reaver,
 //! elementalist, blood, dual.
 
+mod bake;
 mod crosshair;
 mod debug;
 mod hud;
+mod palette;
 mod settings;
 
 use bevy::input::mouse::MouseMotion;
@@ -120,6 +122,10 @@ fn main() {
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
+        .init_resource::<palette::Palette>()
+        .add_plugins(bevy_egui::EguiPlugin {
+            enable_multipass_for_primary_context: false,
+        })
         .insert_resource(settings::Settings::load())
         .add_systems(Startup, (setup, hud::setup, crosshair::setup))
         .add_systems(
@@ -135,6 +141,8 @@ fn main() {
                 hud::update,
                 crosshair::update,
                 debug::draw,
+                palette::toggle,
+                palette::draw,
             )
                 .chain(),
         )

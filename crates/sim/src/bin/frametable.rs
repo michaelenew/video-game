@@ -21,17 +21,17 @@ fn main() {
     // worth more than a convenient `{:.1}`.
     println!(
         "walk {}  |  poking {}  |  crouching {}  |  guarding {}  |  committed 0",
-        tenths(t::MOVE_SPEED),
-        tenths(t::MOVE_SPEED.mul(Fx::ratio(t::POKE_MOBILITY as i32, 100))),
-        tenths(t::CROUCH_MOVE_SPEED),
-        tenths(t::GUARD_MOVE_SPEED),
+        tenths(t::move_speed()),
+        tenths(t::move_speed().mul(Fx::ratio(t::poke_mobility() as i32, 100))),
+        tenths(t::crouch_move_speed()),
+        tenths(t::guard_move_speed()),
     );
     println!(
         "reaction {}f  |  parry window {}f  |  dodge {}f ({} invulnerable)\n",
         t::HUMAN_REACTION_FRAMES,
-        t::PARRY_WINDOW,
-        t::DODGE_FRAMES,
-        t::DODGE_IFRAMES
+        t::parry_window(),
+        t::dodge_frames(),
+        t::dodge_iframes()
     );
 
     for class in ALL_CLASSES {

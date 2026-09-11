@@ -32,7 +32,7 @@ const GROUND_Y: Fx = Fx::ZERO;
 pub const SLOT_POKE: u8 = 0;
 pub const SLOT_COMMITTED: u8 = 1;
 pub const SLOT_SPECIAL: u8 = 2;
-pub use crate::tuning::MAX_HEALTH;
+pub use crate::tuning::max_health;
 
 /// Shield flight, Bulwark only.
 const SHIELD_SPEED: Fx = Fx::ratio(19, 1);
@@ -61,7 +61,7 @@ pub enum Action {
         kind: u8,
         left: u16,
     },
-    /// `held` counts up. The first `t::PARRY_WINDOW` frames parry.
+    /// `held` counts up. The first `t::parry_window()` frames parry.
     Guard {
         held: u16,
     },
@@ -102,8 +102,8 @@ impl Action {
     }
 
     /// Invulnerable frames of a dodge. Nothing else grants invulnerability.
-    pub const fn invulnerable(self) -> bool {
-        matches!(self, Action::Dodge { left } if left + t::DODGE_IFRAMES > t::DODGE_FRAMES)
+    pub fn invulnerable(self) -> bool {
+        matches!(self, Action::Dodge { left } if left + t::dodge_iframes() > t::dodge_frames())
     }
 
     /// Blocking costs a vulnerable window, so it is never a safe default.
@@ -223,7 +223,7 @@ impl Player {
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
     pub fn hurt_height(&self) -> Fx {
         if self.crouching {
-            arena::BODY_HEIGHT.mul(t::CROUCH_HEIGHT_SCALE)
+            arena::BODY_HEIGHT.mul(t::crouch_height_scale())
         } else {
             arena::BODY_HEIGHT
         }
@@ -334,7 +334,7 @@ impl World {
                 self.players[attacker].hit_used = true;
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
-                        left: t::PARRY_STAGGER,
+                        left: t::parry_stagger(),
                     };
                 }
             }
@@ -350,7 +350,7 @@ impl World {
             {
                 let victim = self.players[target];
                 let d = victim.pos.sub(pos);
-                let hit_range = SHIELD_RADIUS.add(t::BODY_RADIUS);
+                let hit_range = SHIELD_RADIUS.add(t::body_radius());
                 let vertical = d.y.abs().raw() < arena::BODY_HEIGHT.raw();
                 if vertical && d.flat_len().raw() < hit_range.raw() && !victim.action.invulnerable()
                 {
@@ -389,7 +389,7 @@ impl World {
                 }
                 self.phase = Phase::RoundOver {
                     winner,
-                    left: t::ROUND_OVER_FRAMES,
+                    left: t::round_over_frames(),
                 };
             }
         }
@@ -397,8 +397,16 @@ impl World {
 
     /// Cheap and portable. Used for desync detection: peers exchange checksums
     /// periodically and a mismatch means the simulations diverged.
+    /// Snapshot hash, including the tuning.
+    ///
+    /// The Oven's values are rules rather than state, so rollback never saves or
+    /// restores them -- but two peers running different rules would diverge
+    /// silently and look exactly like a netcode bug. Folding the tuning hash in
+    /// turns that into a desync on the first frame, which is a error message
+    /// rather than a mystery.
     pub fn checksum(&self) -> u64 {
         let mut h = Fnv::new();
+        h.write_u64(crate::oven::hash());
         h.write_u32(self.frame);
         for p in &self.players {
             for v in [p.pos, p.vel, p.facing] {
@@ -521,18 +529,18 @@ fn resolve_hit(attacker: &Player, defender: &Player) -> Option<Hit> {
     };
 
     let delta = defender.pos.sub(box_out.centre);
-    if delta.flat_len().raw() > box_out.radius.add(t::BODY_RADIUS).raw() {
+    if delta.flat_len().raw() > box_out.radius.add(t::body_radius()).raw() {
         return None;
     }
 
     // Was the defender facing the attack? Guard covers an arc, not a bubble.
     let to_attacker = attacker.pos.sub(defender.pos).normalized();
-    let facing_it = defender.facing.dot(to_attacker).raw() >= t::GUARD_ARC_COS.raw();
+    let facing_it = defender.facing.dot(to_attacker).raw() >= t::guard_arc_cos().raw();
     // A grapple goes through guard entirely. That is what stops blocking from
     // being a solved strategy -- see defense.md.
     let guarding = !m.unblockable && defender.action.guarding() && facing_it;
     let parried = !m.unblockable
-        && matches!(defender.action, Action::Guard { held } if held < t::PARRY_WINDOW)
+        && matches!(defender.action, Action::Guard { held } if held < t::parry_window())
         && facing_it;
 
     Some(Hit {
@@ -610,7 +618,7 @@ fn step_player(p: &mut Player, input: Input) {
     } else if p.action.guarding() {
         p.facing = p
             .facing
-            .add(look.sub(p.facing).scale(t::GUARD_TURN_RATE))
+            .add(look.sub(p.facing).scale(t::guard_turn_rate()))
             .normalized();
     }
 
@@ -697,10 +705,10 @@ fn step_player(p: &mut Player, input: Input) {
                 // now only ever a vertical takeoff.
                 let dir = move_dir(input.aim_turns(), ax, az);
                 if p.grounded {
-                    p.vel.x = dir.x.mul(t::DODGE_SPEED);
-                    p.vel.z = dir.z.mul(t::DODGE_SPEED);
+                    p.vel.x = dir.x.mul(t::dodge_speed());
+                    p.vel.z = dir.z.mul(t::dodge_speed());
                     Action::Dodge {
-                        left: t::DODGE_FRAMES,
+                        left: t::dodge_frames(),
                     }
                 } else if !p.air_dodged {
                     // An airdodge, once per airtime. It commits you to a
@@ -708,13 +716,13 @@ fn step_player(p: &mut Player, input: Input) {
                     // say, which is why it can only be spent once: a second one
                     // would turn a jump into flight.
                     p.air_dodged = true;
-                    p.vel.x = dir.x.mul(t::AIR_DODGE_SPEED);
-                    p.vel.z = dir.z.mul(t::AIR_DODGE_SPEED);
+                    p.vel.x = dir.x.mul(t::air_dodge_speed());
+                    p.vel.z = dir.z.mul(t::air_dodge_speed());
                     // Vertical speed is wiped rather than added to, so an
                     // airdodge is a sideways commitment and never a second jump.
                     p.vel.y = Fx::ZERO;
                     Action::Dodge {
-                        left: t::AIR_DODGE_FRAMES,
+                        left: t::air_dodge_frames(),
                     }
                 } else {
                     Action::Free
@@ -739,7 +747,7 @@ fn step_player(p: &mut Player, input: Input) {
         .attack_kind()
         .map(|kind| moves::get(p.class, kind).mobility)
         .filter(|m| *m > 0)
-        .map(|m| t::MOVE_SPEED.mul(Fx::ratio(m as i32, 100)));
+        .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
 
     if matches!(p.action, Action::Dodge { .. }) {
@@ -760,17 +768,17 @@ fn step_player(p: &mut Player, input: Input) {
         }
     } else if p.action.actionable() && steering {
         let speed = if p.crouching {
-            t::CROUCH_MOVE_SPEED
+            t::crouch_move_speed()
         } else {
-            t::MOVE_SPEED
+            t::move_speed()
         };
         let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(speed);
         p.vel.z = dir.z.mul(speed);
     } else if p.action.guarding() && steering {
         let dir = move_dir(input.aim_turns(), ax, az);
-        p.vel.x = dir.x.mul(t::GUARD_MOVE_SPEED);
-        p.vel.z = dir.z.mul(t::GUARD_MOVE_SPEED);
+        p.vel.x = dir.x.mul(t::guard_move_speed());
+        p.vel.z = dir.z.mul(t::guard_move_speed());
     } else if let (Some(speed), true) = (attack_speed, steering) {
         let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(speed);
@@ -779,8 +787,8 @@ fn step_player(p: &mut Player, input: Input) {
         // Rooted, or steering nothing. Bleed the speed off over a few frames
         // rather than snapping to a halt: the snap was the jarring part, not
         // the rooting.
-        p.vel.x = p.vel.x.mul(t::ATTACK_ROOT_DECAY);
-        p.vel.z = p.vel.z.mul(t::ATTACK_ROOT_DECAY);
+        p.vel.x = p.vel.x.mul(t::attack_root_decay());
+        p.vel.z = p.vel.z.mul(t::attack_root_decay());
     } else {
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;
@@ -790,9 +798,9 @@ fn step_player(p: &mut Player, input: Input) {
     // direction while jumping carries your momentum up with you; it does not
     // turn the jump into something else.
     if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
-        p.vel.y = t::JUMP_SPEED.mul(mob.jump);
+        p.vel.y = t::jump_speed().mul(mob.jump);
         p.grounded = false;
-        p.jump_hold = t::JUMP_HOLD_FRAMES;
+        p.jump_hold = t::jump_hold_frames();
     }
 
     if !p.grounded {
@@ -812,12 +820,12 @@ fn step_player(p: &mut Player, input: Input) {
             } else {
                 p.jump_hold = 0;
             }
-            let mut gravity = t::GRAVITY.mul(mob.gravity);
+            let mut gravity = t::gravity().mul(mob.gravity);
             if sustaining {
-                gravity = gravity.mul(t::JUMP_HOLD_GRAVITY);
+                gravity = gravity.mul(t::jump_hold_gravity());
             }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
-            let floor = t::FALL_CAP.mul(mob.fall_cap);
+            let floor = t::fall_cap().mul(mob.fall_cap);
             if p.vel.y.raw() < floor.raw() {
                 p.vel.y = floor;
             }
@@ -863,15 +871,15 @@ fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
     if head_room.raw() <= 0 {
         return;
     }
-    let mut step = t::AIR_ACCEL.mul(wish_speed).mul(DT);
+    let mut step = t::air_accel().mul(wish_speed).mul(DT);
     if step.raw() > head_room.raw() {
         step = head_room;
     }
     p.vel.x = p.vel.x.add(wish.x.mul(step));
     p.vel.z = p.vel.z.add(wish.z.mul(step));
 
-    // A ceiling Source does not have. See `tuning::AIR_SPEED_CAP`.
-    let cap = t::MOVE_SPEED.mul(t::AIR_SPEED_CAP);
+    // A ceiling Source does not have. See `tuning::air_speed_cap()`.
+    let cap = t::move_speed().mul(t::air_speed_cap());
     let speed = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
     if speed.raw() > cap.raw() {
         let scale = cap.div(speed);
@@ -1122,7 +1130,7 @@ fn settle(p: &mut Player) {
     p.vel.x = p.vel.x.mul(Fx::ratio(88, 100));
     p.vel.z = p.vel.z.mul(Fx::ratio(88, 100));
     if !p.grounded {
-        p.vel.y = p.vel.y.add(t::GRAVITY.mul(DT));
+        p.vel.y = p.vel.y.add(t::gravity().mul(DT));
     }
     p.pos = p.pos.add(p.vel.scale(DT));
     let r = arena::resolve(p.pos, p.vel, p.grounded);
@@ -1135,7 +1143,7 @@ fn settle(p: &mut Player) {
 fn separate_bodies(players: &mut [Player; MAX_PLAYERS]) {
     let delta = players[1].pos.sub(players[0].pos);
     let dist = delta.flat_len();
-    let min = t::BODY_RADIUS.add(t::BODY_RADIUS);
+    let min = t::body_radius().add(t::body_radius());
     if dist.raw() == 0 || dist.raw() >= min.raw() {
         return;
     }
@@ -1153,6 +1161,11 @@ impl Fnv {
     fn new() -> Fnv {
         Fnv(0xcbf2_9ce4_8422_2325)
     }
+    fn write_u64(&mut self, v: u64) {
+        self.write_u32(v as u32);
+        self.write_u32((v >> 32) as u32);
+    }
+
     fn write_u32(&mut self, v: u32) {
         for b in v.to_le_bytes() {
             self.0 ^= b as u64;
@@ -1173,6 +1186,6 @@ pub fn move_frames(class: Class, kind: u8) -> (u16, u16, u16) {
 }
 
 /// Parry window length, exposed for debug overlays.
-pub const fn parry_window() -> u16 {
-    t::PARRY_WINDOW
+pub fn parry_window() -> u16 {
+    t::parry_window()
 }

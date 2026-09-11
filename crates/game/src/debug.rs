@@ -145,11 +145,11 @@ fn dim(c: Color) -> Color {
 }
 
 fn body_radius() -> f32 {
-    sim::tuning::BODY_RADIUS.to_f32_for_render()
+    sim::tuning::body_radius().to_f32_for_render()
 }
 
 fn body_height() -> f32 {
-    sim::tuning::BODY_HEIGHT.to_f32_for_render()
+    sim::tuning::body_height().to_f32_for_render()
 }
 
 /// A wireframe cylinder: rings top, middle and bottom, joined by uprights.
