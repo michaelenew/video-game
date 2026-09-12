@@ -294,6 +294,47 @@ fn channel_springs(looseness: &Looseness) -> [Spring; CHANNELS] {
 }
 
 /// Run the solver and produce the table.
+/// Put every key on the same reading of every joint before anything is
+/// interpolated.
+///
+/// Three angles name a rotation twice over -- see `other_reading` -- and which
+/// name a solve produces is arbitrary. Two keys can hold the same shoulder,
+/// exactly, and be a hundred and eighty degrees apart in the numbers; the
+/// frames between them are then a limb travelling the long way round. That is
+/// where the Champion's lunge came apart: the thrust puts the arm straight
+/// forward, which is precisely where the two readings meet, and the recovery
+/// from it swung both arms out sideways for eight frames.
+///
+/// So each key is compared with the one before it and swapped to whichever
+/// reading is nearer, provided the joint's limits allow it -- if they do not,
+/// the rotation would come out clamped into a different pose, and the pose as
+/// written wins.
+fn unwound(keys: &[Key], skeleton: &view::skeleton::Skeleton) -> Vec<Key> {
+    let mut out: Vec<Key> = keys.to_vec();
+    for i in 1..out.len() {
+        for j in view::skeleton::JOINTS {
+            let bone = skeleton.bone(j);
+            let here = out[i].pose.angles(j);
+            let other = view::skeleton::other_reading(bone, j, here);
+            let (s, p, t) = bone.limits.clamp(other[0], other[1], other[2]);
+            if (s - other[0]).abs() > 1e-4
+                || (p - other[1]).abs() > 1e-4
+                || (t - other[2]).abs() > 1e-4
+            {
+                continue;
+            }
+            let before = out[i - 1].pose.angles(j);
+            let far = |a: [f32; 3]| {
+                (a[0] - before[0]).abs() + (a[1] - before[1]).abs() + (a[2] - before[2]).abs()
+            };
+            if far(other) < far(here) {
+                out[i].pose.set_angles(j, other);
+            }
+        }
+    }
+    out
+}
+
 pub fn bake(recipe: &Recipe) -> Baked {
     assert!(!recipe.keys.is_empty(), "{}: no keys", recipe.clip.name());
 
@@ -303,7 +344,9 @@ pub fn bake(recipe: &Recipe) -> Baked {
 
     // Start settled on the first key, so a one-shot does not open with a lurch
     // from an arbitrary rest pose.
-    let first = sample(&recipe.keys, 0.0, length, looping);
+    let keys = unwound(&recipe.keys, reference());
+
+    let first = sample(&keys, 0.0, length, looping);
     for (i, s) in springs.iter_mut().enumerate() {
         s.value = first.channels[i];
         s.velocity = 0.0;
@@ -321,7 +364,7 @@ pub fn bake(recipe: &Recipe) -> Baked {
     for frame in 0..(preroll + length) {
         for sub in 0..SUBSTEPS {
             let t = frame as f32 + sub as f32 / SUBSTEPS as f32;
-            let target = sample(&recipe.keys, t, length, looping);
+            let target = sample(&keys, t, length, looping);
             for (i, s) in springs.iter_mut().enumerate() {
                 s.step(target.channels[i], dt);
             }

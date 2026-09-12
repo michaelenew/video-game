@@ -51,9 +51,8 @@
 use crate::bake::{Key, Looseness, Recipe};
 use crate::ease::Ease;
 use view::clips::Clip;
-use view::math::{self, V3};
-use view::pose::{ANKLE_ON_GROUND as GROUND, Pose, reference};
-use view::skeleton::{Joint, solve};
+use view::math::V3;
+use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
 
 /// The two spots the fighter stands on: left foot leading, right foot back and
 /// bladed. The same footprint the idle holds, so entering a move and leaving it
@@ -107,7 +106,7 @@ fn ready() -> Pose {
         .head(-3.0, 0.0, -24.0)
         .wrists(-8.0, 0.0, 0.0);
     stand(
-        weapon(body, [0.04, 1.08, 0.34], [-0.24, 0.32, 0.92]),
+        weapon(body, [0.0, 1.18, 0.26], [-0.16, 0.90, 0.40]),
         0.0,
         0.02,
     )
@@ -115,25 +114,40 @@ fn ready() -> Pose {
 
 /// Both hands on the weapon.
 ///
-/// `at` is where the grip sits **in the chest's own frame** -- out in front of
-/// the sternum, above or below it -- because that is what a grip is. The hands
-/// are held in front of the chest and they go where the chest goes; authoring
-/// them in character space instead means re-deriving them by hand every time
-/// the torso turns, and the torso turns a hundred and fifty degrees inside the
-/// Sweep alone.
+/// `at` is the middle of the grip **in the character's own space**: the frame
+/// the feet stand in, y measured up from the floor and z forward along the
+/// facing. So `[0.0, 1.18, 0.26]` is a hand's width in front of the sternum
+/// and `[0.02, 1.62, 0.20]` is overhead. Nothing here is measured from the
+/// chest, and deliberately so: a pose is resolved into joint angles the moment
+/// it is written, so pinning the grip to the chest buys nothing at playback
+/// time and costs the author the one thing worth having, which is being able
+/// to read a swing's travel straight off the numbers.
 ///
-/// `dir` is in character space, because that is what a swing is: an arc cut
-/// through the world, which the body turns to follow.
+/// `dir` points along the haft toward the head of the weapon. The **right**
+/// hand is the one nearer the head and the left is on the pommel -- an
+/// ordinary right-handed two-handed grip, and, more usefully, the assignment
+/// that keeps both arms inside their range: wind the weapon out to the right
+/// and it is the right shoulder that follows it, instead of the left hand
+/// having to cross the whole chest to a place no shoulder can adduct to.
 ///
-/// Call it after the torso is posed and before the feet: a hand's target is
-/// measured from a chest the spine has already moved.
+/// ## What fits
+///
+/// A shoulder sits at `[±0.185, 1.47, 0]` and an arm is 55 cm long, so a hand
+/// more than half a metre from its own shoulder comes out straight, and one
+/// past that comes out straight *and wrong*, silently, because the solver has
+/// nowhere else to put it. Two hands 24 cm apart on one haft make that tighter
+/// than it sounds. `report_champion_grip` in the anim tests prints every key's
+/// grip and what fraction of each arm's reach it spends: keep the fighting
+/// poses between about 0.65 and 0.9, and save the ones that read 1.0 for the
+/// frames where a straight arm is the point, which in this file is the thrust
+/// and nothing else.
+///
+/// Call it after the torso is posed and before the feet: the arms are solved
+/// against a chest the spine has already moved.
 fn weapon(pose: Pose, at: V3, dir: V3) -> Pose {
-    let skin = solve(reference(), &pose);
-    let chest = Joint::Chest.index();
-    let hold = math::add(skin.origin[chest], skin.rot[chest].rotate(at));
     let d = unit(dir);
-    pose.reach_l(along(hold, d, GRIP))
-        .reach_r(along(hold, d, -GRIP))
+    pose.reach_r(along(at, d, GRIP))
+        .reach_l(along(at, d, -GRIP))
 }
 
 /// Both feet on the guard's footprint. `lead_toe` tips the front foot -- a
@@ -241,7 +255,7 @@ fn sweep() -> Recipe {
             .head(2.0, 2.0, -38.0)
             .wrists(-6.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.08, 1.08, 0.26], [0.93, -0.26, 0.26]),
+            weapon(body, [0.30, 1.06, 0.10], [0.92, -0.16, 0.36]),
             -6.0,
             0.03,
         )
@@ -259,7 +273,7 @@ fn sweep() -> Recipe {
             .head(4.0, 0.0, 26.0)
             .wrists(-4.0, 0.0, 0.0);
         stand(
-            weapon(body, [-0.02, 1.00, 0.36], [-0.42, -0.24, 0.88]),
+            weapon(body, [0.02, 1.02, 0.42], [-0.52, -0.10, 0.85]),
             0.0,
             0.07,
         )
@@ -278,7 +292,7 @@ fn sweep() -> Recipe {
             .head(2.0, -2.0, 42.0)
             .wrists(-6.0, 0.0, 0.0);
         stand(
-            weapon(body, [-0.13, 1.04, 0.28], [-0.90, -0.16, -0.40]),
+            weapon(body, [-0.28, 1.06, 0.20], [-0.90, -0.10, -0.42]),
             -2.0,
             0.09,
         )
@@ -294,7 +308,7 @@ fn sweep() -> Recipe {
             .head(-1.0, 0.0, 14.0)
             .wrists(-8.0, 0.0, 0.0);
         stand(
-            weapon(body, [-0.05, 1.08, 0.31], [-0.30, 0.20, 0.93]),
+            weapon(body, [-0.08, 1.14, 0.26], [-0.34, 0.60, 0.72]),
             0.0,
             0.05,
         )
@@ -369,7 +383,7 @@ fn drive() -> Recipe {
             .head(-2.0, 0.0, -40.0)
             .wrists(-8.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.13, 1.08, 0.08], [-0.30, 0.10, 0.95]),
+            weapon(body, [0.14, 1.12, -0.04], [-0.10, 0.10, 0.99]),
             -10.0,
             0.03,
         )
@@ -385,7 +399,7 @@ fn drive() -> Recipe {
             .chest(4.0, -2.0, 14.0)
             .head(0.0, 0.0, -34.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.12, 1.10, 0.16], [-0.20, 0.06, 0.98])
+        weapon(body, [0.14, 1.12, 0.04], [-0.06, 0.06, 1.0])
             .plant_l([-0.16, GROUND + 0.10, 0.34])
             .toe_l(-14.0)
             .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
@@ -403,7 +417,7 @@ fn drive() -> Recipe {
             .chest(6.0, 2.0, -14.0)
             .head(-4.0, 0.0, 20.0)
             .wrists(-2.0, 0.0, 0.0);
-        weapon(body, [0.02, 1.16, 0.70], [-0.05, 0.02, 1.0])
+        weapon(body, [0.02, 1.22, 1.00], [-0.02, 0.02, 1.0])
             .plant_l([-0.17, GROUND, 0.62])
             .toe_l(0.0)
             .plant_r([REAR[0], REAR[1] + 0.11, REAR[2]])
@@ -421,7 +435,7 @@ fn drive() -> Recipe {
             .chest(8.0, 2.0, -10.0)
             .head(-6.0, 0.0, 14.0)
             .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.08, 0.62], [-0.08, -0.12, 0.99])
+        weapon(body, [0.0, 1.14, 0.92], [-0.06, -0.10, 0.99])
             .plant_l([-0.17, GROUND, 0.62])
             .toe_l(0.0)
             .plant_r([REAR[0], REAR[1] + 0.13, REAR[2]])
@@ -439,7 +453,7 @@ fn drive() -> Recipe {
             .chest(3.0, -1.0, 8.0)
             .head(-2.0, 0.0, -14.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.10, 1.08, 0.26], [-0.24, 0.18, 0.95])
+        weapon(body, [0.10, 1.14, 0.16], [-0.16, 0.40, 0.90])
             .plant_l([-0.155, GROUND + 0.06, 0.30])
             .toe_l(-10.0)
             .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
@@ -510,7 +524,7 @@ fn uppercut() -> Recipe {
             .head(0.0, 0.0, -36.0)
             .wrists(-6.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.11, 1.00, 0.12], [0.30, -0.86, -0.41]),
+            weapon(body, [0.14, 1.00, 0.02], [0.30, -0.86, -0.41]),
             -4.0,
             0.03,
         )
@@ -528,7 +542,7 @@ fn uppercut() -> Recipe {
             .head(-8.0, 0.0, -38.0)
             .wrists(-6.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.09, 0.88, 0.20], [0.22, -0.90, -0.38]),
+            weapon(body, [0.12, 0.88, 0.06], [0.22, -0.90, -0.38]),
             -2.0,
             0.02,
         )
@@ -545,7 +559,7 @@ fn uppercut() -> Recipe {
             .head(-14.0, 0.0, -10.0)
             .wrists(-4.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.07, 1.06, 0.38], [0.06, -0.20, 0.98]),
+            weapon(body, [0.06, 1.16, 0.28], [0.06, 0.10, 0.99]),
             6.0,
             0.09,
         )
@@ -562,7 +576,7 @@ fn uppercut() -> Recipe {
             .chest(-6.0, 0.0, -8.0)
             .head(-22.0, 0.0, 6.0)
             .wrists(0.0, 0.0, 0.0);
-        weapon(body, [0.04, 1.70, 0.26], [-0.10, 0.94, 0.32])
+        weapon(body, [0.02, 1.62, 0.20], [-0.10, 0.94, 0.32])
             .plant_l([-0.145, GROUND + 0.06, 0.12])
             .toe_l(34.0)
             .plant_r([0.145, GROUND + 0.06, -0.12])
@@ -580,7 +594,7 @@ fn uppercut() -> Recipe {
             .chest(-8.0, 0.0, -6.0)
             .head(-24.0, 0.0, 4.0)
             .wrists(4.0, 0.0, 0.0);
-        weapon(body, [0.02, 1.78, 0.06], [-0.04, 0.98, -0.20])
+        weapon(body, [0.02, 1.72, 0.02], [-0.04, 0.98, -0.20])
             .plant_l([-0.15, 0.46, 0.06])
             .toe_l(24.0)
             .plant_r([0.15, 0.38, -0.16])
@@ -597,7 +611,7 @@ fn uppercut() -> Recipe {
             .chest(0.0, 0.0, 2.0)
             .head(-8.0, 0.0, 0.0)
             .wrists(-2.0, 0.0, 0.0);
-        weapon(body, [0.08, 1.42, 0.24], [-0.16, 0.62, 0.77])
+        weapon(body, [0.06, 1.44, 0.20], [-0.16, 0.62, 0.77])
             .plant_l([-0.15, 0.52, 0.16])
             .toe_l(10.0)
             .plant_r([0.15, 0.44, -0.06])
@@ -614,7 +628,7 @@ fn uppercut() -> Recipe {
             .chest(2.0, 0.0, 8.0)
             .head(-2.0, 0.0, -14.0)
             .wrists(-6.0, 0.0, 0.0);
-        weapon(body, [0.08, 1.14, 0.30], [-0.26, 0.28, 0.92])
+        weapon(body, [0.06, 1.18, 0.24], [-0.22, 0.50, 0.84])
             .plant_l([-0.15, 0.22, 0.12])
             .toe_l(-6.0)
             .plant_r([0.15, 0.18, -0.10])
@@ -631,7 +645,7 @@ fn uppercut() -> Recipe {
             .chest(4.0, 0.0, 11.0)
             .head(-3.0, 0.0, -22.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.04, 1.09, 0.30], [-0.24, 0.32, 0.92])
+        weapon(body, [0.0, 1.17, 0.26], [-0.16, 0.88, 0.44])
             .plant_l([-0.145, GROUND + 0.04, 0.14])
             .toe_l(-8.0)
             .plant_r([0.145, GROUND + 0.02, -0.13])

@@ -475,7 +475,7 @@ impl Skeleton {
                     // A shoulder is the loosest joint on the body and the
                     // animation wants that range: 170 degrees of swing is what
                     // an overhead needs to exist at all.
-                    limits: limits((-80.0, 175.0), (-30.0, 150.0), (-95.0, 95.0)),
+                    limits: limits((-90.0, 175.0), (-60.0, 165.0), (-160.0, 160.0)),
                 },
             );
             set(
@@ -696,6 +696,116 @@ pub fn aim(bone: &Bone, joint: Joint, dir: V3) -> (f32, f32) {
     let swing = (-d[2]).clamp(-1.0, 1.0).asin();
     let spread = d[0].atan2(-d[1]);
     (swing / bone.swing_sign, spread * mirror)
+}
+
+/// The other set of three numbers that means exactly the same rotation.
+///
+/// Swing, spread and twist cover the sphere twice. Swing past the pole and
+/// spread half a turn the other way and the bone ends up pointing where it
+/// started; add half a turn of twist and it is not merely pointing the same
+/// way, it *is* the same rotation, down to the last decimal. Which of the two
+/// readings a solve produces is arbitrary, and on its own frame it makes no
+/// difference at all.
+///
+/// It makes every difference between frames. Interpolation runs on the
+/// numbers, so two keys that look identical and are written on opposite
+/// readings send the limb the long way round -- out to the side and back --
+/// for the whole gap between them. `unwound` in the bake uses this to put a
+/// clip's keys on one reading before anything is interpolated.
+pub fn other_reading(bone: &Bone, joint: Joint, angles: [f32; 3]) -> [f32; 3] {
+    let mirror = if joint.is_left() { -1.0 } else { 1.0 };
+    let pi = std::f32::consts::PI;
+    let wrap = |a: f32| {
+        let t = std::f32::consts::TAU;
+        let w = (a + pi).rem_euclid(t) - pi;
+        if w <= -pi { w + t } else { w }
+    };
+    [
+        wrap(pi - angles[0] * bone.swing_sign) * bone.swing_sign,
+        wrap(angles[1] * mirror + pi) * mirror,
+        wrap(angles[2] * mirror + pi) * mirror,
+    ]
+}
+
+/// The swing and spread the joint will actually hold that point the bone as
+/// close as possible to `dir`.
+///
+/// Two channels covering a sphere is two ways of saying the same thing: the
+/// bone that points up and across the chest is *swung most of the way over and
+/// spread a little*, or *swung back past vertical and spread the other way*,
+/// and both compose to exactly the same direction. `aim` returns whichever one
+/// falls out of the arithmetic, which is fine right up until a limit refuses
+/// it -- and then the arm is clamped to a place it did not need to be clamped
+/// to, because the other reading of the same direction was inside the limits
+/// all along. That is a hand a third of a metre from where it was sent for no
+/// anatomical reason at all.
+///
+/// So: work out both readings, clamp both, and keep the one that ends up
+/// pointing nearer to what was asked for.
+pub fn aim_within(bone: &Bone, joint: Joint, dir: V3, from: (f32, f32)) -> (f32, f32) {
+    let mirror = if joint.is_left() { -1.0 } else { 1.0 };
+    let (swing, spread) = aim(bone, joint, dir);
+
+    // The same direction, read the other way round: swung past vertical and
+    // spread half a turn the other way.
+    let wrap = |a: f32| {
+        let tau = std::f32::consts::TAU;
+        let mut a = (a + std::f32::consts::PI).rem_euclid(tau) - std::f32::consts::PI;
+        if a <= -std::f32::consts::PI {
+            a += tau;
+        }
+        a
+    };
+    let other = (
+        wrap(std::f32::consts::PI - swing * bone.swing_sign) / bone.swing_sign,
+        wrap(spread * mirror + std::f32::consts::PI) * mirror,
+    );
+
+    let want = math::normalize_or(dir, bone.axis);
+    let score = |(sw, sp): (f32, f32)| {
+        let (sw, sp, _) = bone.limits.clamp(sw, sp, 0.0);
+        (math::dot(pointing(bone, joint, sw, sp), want), (sw, sp))
+    };
+    let a = score((swing, spread));
+    let b = score(other);
+
+    // When both readings land the bone equally well, take the one nearest to
+    // where the joint already is.
+    //
+    // This is not tidiness, it is the difference between a lunge and a
+    // windmill. An arm pointing straight forward is exactly where the two
+    // readings meet -- the spread is undefined there, the way longitude is
+    // undefined at the pole -- so a thrust and the pose after it can come out
+    // on opposite branches, identical on the frame they were written and a
+    // hundred and eighty degrees apart in the numbers. Nothing is wrong with
+    // either pose. What is wrong is everything in between: the channels are
+    // what get interpolated, so the arm takes the long way round and swings
+    // out sideways through the whole recovery.
+    let near = |(sw, sp): (f32, f32)| (sw - from.0).abs() + (sp - from.1).abs();
+    if b.0 > a.0 + 1e-3 {
+        b.1
+    } else if a.0 > b.0 + 1e-3 {
+        a.1
+    } else if near(b.1) < near(a.1) {
+        b.1
+    } else {
+        a.1
+    }
+}
+
+/// The forward of `aim`: which direction a bone points, given the swing and
+/// spread it was actually allowed to take.
+///
+/// Needed because `aim` answers a question the joint is free to refuse. Clamp
+/// its answer to the joint's limits and the bone points somewhere else, and
+/// everything downstream -- where the elbow lands, which way the forearm folds
+/// -- has to be worked out against where the bone *went*, not where it was
+/// sent.
+pub fn pointing(bone: &Bone, joint: Joint, swing: f32, spread: f32) -> V3 {
+    let mirror = if joint.is_left() { -1.0 } else { 1.0 };
+    Quat::from_z(spread * mirror)
+        .mul(Quat::from_x(swing * bone.swing_sign))
+        .rotate([0.0, -1.0, 0.0])
 }
 
 /// The named builds. Six numbers per class, and they are meant to be read in

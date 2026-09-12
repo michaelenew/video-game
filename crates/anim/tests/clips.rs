@@ -703,3 +703,209 @@ fn every_clip_the_game_can_play_has_been_authored() {
     let missing: Vec<&str> = anim::clips::missing().iter().map(|c| c.name()).collect();
     assert!(missing.is_empty(), "no recipe for: {missing:?}");
 }
+
+/// How far each arm is extended, as a fraction of its own length.
+///
+/// One at the end means the arm is straight and the solver has given up: the
+/// target was further away than the limb is long. A grip placed a few
+/// centimetres too far out shows here as every key in a clip pinned at 1.00,
+/// which is a character holding a weapon at arm's length whatever pose was
+/// written.
+#[test]
+#[ignore]
+fn report_arm_extension() {
+    let skeleton = reference();
+    let reach = skeleton.arm_reach();
+    for r in recipes() {
+        let mut straight = 0;
+        let mut total = 0;
+        let mut worst = 0.0f32;
+        for k in &r.keys {
+            let skin = view::skeleton::solve(skeleton, &k.pose);
+            for (shoulder, wrist) in [(Joint::ArmL, Joint::HandL), (Joint::ArmR, Joint::HandR)] {
+                let a = skin.origin[shoulder.index()];
+                let b = skin.origin[wrist.index()];
+                let d = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2))
+                    .sqrt()
+                    / reach;
+                total += 1;
+                worst = worst.max(d);
+                if d > 0.985 {
+                    straight += 1;
+                }
+            }
+        }
+        if straight > 0 {
+            println!(
+                "{:<24} {straight:>3} of {total:>3} arms straight, worst {worst:.3}",
+                r.clip.name()
+            );
+        }
+    }
+}
+
+/// Where the Champion's hands actually end up, key by key.
+///
+/// The grip is authored as a point and solved for by IK, so the only way to
+/// know whether a swing travels is to read the wrists back off the solved
+/// skeleton. Prints each key's hand midpoint in character space and how much
+/// of the arm's reach it is using.
+#[test]
+#[ignore]
+fn report_champion_grip() {
+    let skeleton = reference();
+    let reach = skeleton.arm_reach();
+    for r in recipes() {
+        if !r.clip.name().starts_with("champion") {
+            continue;
+        }
+        println!("{}", r.clip.name());
+        for k in &r.keys {
+            let skin = view::skeleton::solve(skeleton, &k.pose);
+            let l = skin.origin[Joint::HandL.index()];
+            let rr = skin.origin[Joint::HandR.index()];
+            let mid = [
+                (l[0] + rr[0]) / 2.0,
+                (l[1] + rr[1]) / 2.0,
+                (l[2] + rr[2]) / 2.0,
+            ];
+            let ext = |sh: Joint, h: [f32; 3]| {
+                let a = skin.origin[sh.index()];
+                ((h[0] - a[0]).powi(2) + (h[1] - a[1]).powi(2) + (h[2] - a[2]).powi(2)).sqrt()
+                    / reach
+            };
+            println!(
+                "  f{:>3}  grip [{:>6.2},{:>5.2},{:>6.2}]  L [{:>6.2},{:>5.2},{:>6.2}] {:.2}  R [{:>6.2},{:>5.2},{:>6.2}] {:.2}",
+                k.frame,
+                mid[0],
+                mid[1],
+                mid[2],
+                l[0],
+                l[1],
+                l[2],
+                ext(Joint::ArmL, l),
+                rr[0],
+                rr[1],
+                rr[2],
+                ext(Joint::ArmR, rr),
+            );
+        }
+    }
+}
+
+/// A hand goes where it is sent.
+///
+/// This is the standard the whole authoring API rests on. `reach_l`/`reach_r`
+/// take a point and are trusted to hit it, so every arm in every clip is only
+/// as good as this: a solver that quietly puts the wrist somewhere else turns
+/// a written pose into a different pose, with nothing anywhere to say so, and
+/// that is exactly what happened to all three Champion clips.
+///
+/// The grid is every place a fighting pose puts a hand -- across the body, out
+/// to the side, behind the hip, overhead -- and the tolerance is two
+/// centimetres, which is a knuckle. Targets the arm genuinely cannot get to
+/// are excluded by construction rather than by loosening the ceiling: nothing
+/// here is further from the shoulder than the arm is long, and nothing is so
+/// close that the elbow would have to fold past what an elbow folds to.
+#[test]
+fn a_hand_goes_where_it_is_sent() {
+    let skeleton = reference();
+    let reach = skeleton.arm_reach();
+    let mut worst: (f32, [f32; 3]) = (0.0, [0.0; 3]);
+    for left in [true, false] {
+        let shoulder_j = if left { Joint::ArmL } else { Joint::ArmR };
+        let shoulder =
+            view::skeleton::solve(skeleton, &view::pose::Pose::rest()).origin[shoulder_j.index()];
+        for xi in -6..=6 {
+            for yi in -6..=6 {
+                for zi in -6..=6 {
+                    let target = [
+                        shoulder[0] + xi as f32 * reach / 6.0,
+                        shoulder[1] + yi as f32 * reach / 6.0,
+                        shoulder[2] + zi as f32 * reach / 6.0,
+                    ];
+                    let d = ((target[0] - shoulder[0]).powi(2)
+                        + (target[1] - shoulder[1]).powi(2)
+                        + (target[2] - shoulder[2]).powi(2))
+                    .sqrt();
+                    // Inside the arm, and outside the fold an elbow cannot
+                    // pass: 150 degrees of flexion leaves the wrist about a
+                    // third of the arm's length from the shoulder.
+                    if d > reach * 0.97 || d < reach * 0.30 {
+                        continue;
+                    }
+                    // And in front of the shoulder, or below it. An arm goes
+                    // overhead by coming up the front; it does not go up
+                    // behind the back, and asking for a wrist there is asking
+                    // for something a shoulder does not do. Everywhere else --
+                    // across the chest, out to the side, behind the hip, over
+                    // the head -- is fair game and is where the clips live.
+                    let behind = target[2] - shoulder[2] < -0.1 * reach;
+                    let high = target[1] - shoulder[1] > -0.1 * reach;
+                    if behind && high {
+                        continue;
+                    }
+                    let mut p = view::pose::Pose::rest();
+                    let miss = view::ik::hand_to(&mut p, skeleton, left, target);
+                    if miss > worst.0 {
+                        worst = (miss, target);
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        worst.0 < 0.02,
+        "a wrist sent to [{:.2},{:.2},{:.2}] landed {:.3} m away",
+        worst.1[0],
+        worst.1[1],
+        worst.1[2],
+        worst.0
+    );
+}
+
+/// The two readings of a joint's three angles really are the same rotation.
+///
+/// `unwound` swaps keys between them freely, so if they ever differed it would
+/// not show up as a bug in the numbers -- it would show up as poses quietly
+/// changing shape somewhere between authoring and the screen.
+#[test]
+fn both_readings_of_a_joint_are_the_same_rotation() {
+    let skeleton = reference();
+    for j in view::skeleton::JOINTS {
+        let bone = skeleton.bone(j);
+        for (a, b, c) in [
+            (0.0f32, 0.0f32, 0.0f32),
+            (0.7, -0.3, 0.2),
+            (-1.1, 0.9, -1.4),
+            (2.4, 1.2, 0.5),
+        ] {
+            let here = [a, b, c];
+            let other = view::skeleton::other_reading(bone, j, here);
+            // Only where the joint would actually accept both, which is the
+            // same condition `unwound` swaps under: a reading the limits clamp
+            // is a different rotation on purpose.
+            let (cs, cp, ct) = bone.limits.clamp(other[0], other[1], other[2]);
+            if (cs - other[0]).abs() > 1e-4
+                || (cp - other[1]).abs() > 1e-4
+                || (ct - other[2]).abs() > 1e-4
+            {
+                continue;
+            }
+            let one = view::skeleton::local_rotation(bone, j, here);
+            let two = view::skeleton::local_rotation(bone, j, other);
+            // Read as directions rather than as quaternions, because q and -q
+            // are the same rotation and the sign is not worth arguing with.
+            for axis in [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]] {
+                let p = one.rotate(axis);
+                let q = two.rotate(axis);
+                let apart =
+                    ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt();
+                assert!(
+                    apart < 1e-4,
+                    "{j:?} reads {here:?} and {other:?} differently, by {apart}"
+                );
+            }
+        }
+    }
+}
