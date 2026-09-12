@@ -251,6 +251,10 @@ pub const SECTIONS: &[Section] = &[
                 "Every generated material as a PNG contact sheet: colour, relief, gloss and glow.",
             ),
             e(
+                "cargo run -p art --bin quarry",
+                "Cut every rock open: three slices at right angles through each stone volume, plus a close-up.",
+            ),
+            e(
                 "cargo run -p net --bin soak",
                 "Headless rollback soak: thousands of frames, checked for divergence.",
             ),

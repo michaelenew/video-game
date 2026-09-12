@@ -69,6 +69,7 @@
 //! | [`materials`] | Every material in the game, as rows of numbers |
 //! | [`palette`] | Who is who, and what will hurt you |
 //! | [`sky`] | The whole lighting rig, from how high the sun is |
+//! | [`stone`] | Rock as a **volume**: how it formed, how it broke, how it weathered |
 //! | [`bake`] | Parameters to textures a renderer already eats |
 //! | [`png`] | A dependency-free encoder, so a material can be *looked at* |
 
@@ -79,4 +80,5 @@ pub mod noise;
 pub mod palette;
 pub mod png;
 pub mod sky;
+pub mod stone;
 pub mod surface;

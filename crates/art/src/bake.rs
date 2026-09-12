@@ -341,3 +341,129 @@ fn to_byte_srgb(linear: f32) -> u8 {
 fn to_byte_linear(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0 + 0.5) as u8
 }
+
+/// How fine the grain is allowed to come out.
+///
+/// Exists because of an artefact that is easy to mistake for a bug in the rock.
+/// Band-limiting the grain to the texture's own resolution is right for one
+/// surface and wrong for a group of them: an arena wall is thirty metres long
+/// and one metre thick, so at equal texture sizes its end face has thirty times
+/// the texel density of its side. The end came out visibly crystalline and the
+/// side came out smooth grey -- the *same rock*, disagreeing with itself along
+/// an edge.
+///
+/// So a caller baking several faces of one object passes the density it wants
+/// them all to share, and the rock looks like one rock.
+#[derive(Clone, Copy, Debug)]
+pub enum Detail {
+    /// Each texture resolves as much as it can. Right for a lone surface.
+    PerTexture,
+    /// Every surface resolves to this many metres per texel, whatever its own
+    /// resolution. Right for the faces of one object.
+    Uniform(f32),
+}
+
+/// Bake a patch of stone as its intersection with a volume.
+///
+/// Separate from [`bake`] rather than another `Surface` variant, because it is
+/// a different kind of thing: `bake` samples a field in an abstract space and
+/// this samples a *solid at a place*. Folding them together would mean the
+/// surface evaluator carried a world position it mostly does not have.
+///
+/// No tiling option, and that is the point. A tiled bake buys seamlessness by
+/// blending the tile against shifted copies of itself, which costs about a
+/// third of the contrast -- measured. Here there is nothing to tile: every
+/// patch of every object reads its own part of the volume, so the pattern never
+/// repeats and nothing has to be blended to hide a join.
+pub fn bake_stone(
+    stone: &crate::stone::Stone,
+    place: &crate::stone::Placement,
+    size: u32,
+    detail: Detail,
+) -> Maps {
+    let n = size.max(2);
+    let count = (n * n) as usize;
+    // How fine the rock is allowed to look here. Usually the texture's own
+    // texel size, but a caller baking several faces of one object has to be
+    // able to force them to agree -- see `Detail::Uniform`.
+    let texel = match detail {
+        Detail::PerTexture => place.texel(n),
+        Detail::Uniform(m) => m,
+    };
+
+    let mut albedo = Texture::new(n);
+    let mut orm = Texture::new(n);
+    let mut normal = Texture::new(n);
+    let mut height = vec![0.0f32; count];
+
+    let threads = std::thread::available_parallelism()
+        .map_or(1, |p| p.get())
+        .min(n as usize);
+    let rows_per = n.div_ceil(threads as u32).max(1) as usize;
+    let row_bytes = (n * 4) as usize;
+
+    std::thread::scope(|scope| {
+        let bands = height
+            .chunks_mut(rows_per * n as usize)
+            .zip(albedo.pixels.chunks_mut(rows_per * row_bytes))
+            .zip(orm.pixels.chunks_mut(rows_per * row_bytes));
+        for (band, ((h, a), o)) in bands.enumerate() {
+            scope.spawn(move || {
+                let y0 = (band * rows_per) as u32;
+                for i in 0..h.len() {
+                    let (x, y) = (i as u32 % n, y0 + i as u32 / n);
+                    let p = place.point(x as f32 / n as f32, y as f32 / n as f32);
+                    let s = stone.at_scale(p, texel);
+
+                    // Depth runs into the rock, height runs out of it.
+                    h[i] = -s.depth;
+                    a[i * 4..i * 4 + 4].copy_from_slice(&[
+                        to_byte_srgb(s.colour[0]),
+                        to_byte_srgb(s.colour[1]),
+                        to_byte_srgb(s.colour[2]),
+                        255,
+                    ]);
+                    // Hardness is the inverse of roughness: a hard mineral takes
+                    // a polish and a soft weathered one does not.
+                    o[i * 4..i * 4 + 4].copy_from_slice(&[
+                        255,
+                        to_byte_linear(1.0 - s.hardness * 0.75),
+                        0,
+                        255,
+                    ]);
+                }
+            });
+        }
+    });
+
+    // Relief is already in metres here -- the stone knows how deep its own
+    // joints are -- so the slope is the height difference over the texel size
+    // with no separate relief parameter to get wrong.
+    for y in 0..n {
+        for x in 0..n {
+            let at = |xx: u32, yy: u32| height[((yy.min(n - 1)) * n + xx.min(n - 1)) as usize];
+            let dx = (at(x + 1, y) - at(x.saturating_sub(1), y)) * 0.5 / texel.max(1e-5);
+            let dy = (at(x, y + 1) - at(x, y.saturating_sub(1))) * 0.5 / texel.max(1e-5);
+            let len = (dx * dx + dy * dy + 1.0).sqrt();
+            normal.put(
+                x,
+                y,
+                [
+                    to_byte_linear(-dx / len * 0.5 + 0.5),
+                    to_byte_linear(-dy / len * 0.5 + 0.5),
+                    to_byte_linear(1.0 / len * 0.5 + 0.5),
+                    255,
+                ],
+            );
+        }
+    }
+
+    Maps {
+        albedo,
+        normal,
+        metallic_roughness: orm,
+        emissive: Texture::new(n),
+        emissive_strength: 1.0,
+        has_alpha: false,
+    }
+}

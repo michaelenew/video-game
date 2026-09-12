@@ -537,13 +537,134 @@ part of the volume. No blending, so no contrast lost. Patterns that wrap corners
 because they were never on the surface to begin with. And it stays a processor
 bake, so there is still no shader. That is the next item rather than this one.
 
+## Stone is a volume
+
+A rock is not a picture on a wall. It is a **solid**, and every face you can see
+is a cut through it. That is not a philosophical point -- it is why surface
+stone looks wrong in ways nobody can name. The pattern repeats, because a tile
+repeats. It does not turn corners, because the two faces of a corner are two
+separate pictures. And it has no *history*: real stone records how it formed and
+what has happened to it since, and those are three-dimensional facts.
+
+So `art::stone` models the volume. Feed it a point and it says what the rock is
+like there. A texture is that volume sampled where an object actually sits --
+the intersection of the object with the stone -- which makes every wall in the
+arena a different piece of rock with no extra parameter, and makes a pattern run
+round a corner because it was never on the surface to begin with.
+
+**Solid texturing** is old ([Peachey and Perlin, both 1985](https://dl.acm.org/doi/10.1145/325165.325246))
+and was always the right answer for rock. What is new here is that the
+parameters are *geological* rather than arithmetic: you ask for a coarse-grained
+igneous rock with two joint sets and heavy weathering, not for four octaves at
+0.55 cycles per metre.
+
+### The three fabrics are three mechanisms, not three presets
+
+Rocks are classified by how they formed, and how they formed is exactly what
+their texture *is*. So each is different arithmetic, and a test asserts they
+have not collapsed into one function with different constants.
+
+**Igneous** -- frozen from a melt. Crystals grow until they run into each other,
+so grains **interlock** with no gaps and meet at angular boundaries. Several
+minerals crystallise at once, which is why granite is speckled rather than
+plain: it is a *population* of grains, each hashing to a mineral.
+
+**Sedimentary** -- settled and buried. Each depositional episode leaves a **bed**
+with its own grain size and composition; gravity makes them parallel and later
+movement buckles them.
+
+**Metamorphic** -- cooked and squeezed. Stress recrystallises platy minerals
+aligned perpendicular to the squeeze, and with enough of it light and dark
+minerals segregate into bands. The grains are *flattened into the foliation*,
+which is the same statement as "the minerals are aligned" -- implemented by
+squashing the cell lookup along the bedding normal, one line rather than a
+separate mechanism.
+
+Then **joints** (rock breaks along planes) and **weathering** (water gets in at
+the joints and works outward, so alteration is strongest where the rock is most
+broken).
+
+### Joints are planes, not cells
+
+The obvious way to break rock into blocks is a cellular basis, and it is wrong.
+Cells give *a* partition -- blocks of random shape in random orientations. Real
+jointing gives **sets**: families of near-parallel planes, two or three at
+angles, and every block in the mass shares those orientations. That shared
+orientation is most of what makes a rock face read as rock rather than as crazy
+paving, and no cellular function produces it at any setting.
+
+### Band-limiting has two halves, and they point opposite ways
+
+This is the part that took the most attempts and it generalises well beyond
+stone.
+
+**A field that fills an area fades toward its mean.** Grain finer than a texel
+cannot be drawn; the only question is whether it becomes noise or becomes the
+colour the rock averages to. Noise is the default and on a wall it is a grey
+fizz that crawls when the camera moves. So as the grain drops below a few texels
+the crystals fade into their own mean -- which is also just *true*: a distant
+granite is not speckled, it is grey.
+
+**A line gets wider and fainter.** Doing the same thing to a joint deletes it,
+because a joint's mean over a texel is almost entirely rock. At arena scale that
+was not subtle: a thirty-metre wall on a 256-pixel texture gives a twelve
+centimetre texel, and a one-centimetre joint is a twelfth of one. Every crack
+disappeared. So a joint is drawn at least a texel wide and darkened in
+proportion to how much of that texel it really occupies, which conserves the
+light it removes at any resolution -- what a correct mipmap of a line does.
+
+Two more things the same principle caught. **Faces of one object must agree**:
+an arena wall is thirty metres long and one metre thick, so at equal texture
+sizes its end cap resolves thirty times finer than its side, and the same rock
+came out crystalline on one face and smooth grey on the other. A caller baking
+several faces passes one density for all of them. And **measuring a rock needs
+the grain filtered out too** -- the first version of the bedding test sampled at
+full resolution and every rock came back isotropic, not because the beds were
+missing but because millimetre speckle contributes far more variation along a
+line than metre-scale layering does. It was measuring the grain and calling it
+the fabric.
+
+### What it cost elsewhere
+
+Real granite reflects about 0.12 of the light falling on it. The arena floor was
+sitting at 0.026 -- darker than asphalt -- because it had been pushed down to
+stop the scene blowing out, which was itself a symptom of lighting tuned against
+placeholders. Against a floor four times darker, a real granite wall reads as
+poured concrete. Both are plausible now and they agree.
+
+That exposed a genuine unit bug underneath. Bevy multiplies
+`AmbientLight.brightness` straight into the shaded result, while a directional
+light's diffuse goes through the Lambertian `1/pi`. Both are documented in lux
+and they are not the same units: handing over an illuminance lands about three
+times too bright. The signature was surfaces blown out while the sky above them
+-- which the atmosphere renders independently -- was exposed correctly.
+
+### Looking at it is still part of the loop
+
+`cargo run --release -p art --bin quarry` cuts every rock open: three slices at
+right angles through the same stone, a fourth parallel to the first, and a
+close-up. The three orthogonal cuts are the check that it is really a solid --
+if they do not agree at a corner it is three pictures. The parallel pair is the
+check for the other failure, a 2D field extruded.
+
+### It is a terrain generator too
+
+Nothing in the model is about walls. It answers "what is the rock like at this
+point" for any point, so the same volume that a wall is cut from is the volume a
+hillside would be carved out of -- the strata a cliff exposes are the same strata
+the arena floor is standing on. That was not designed for; it is what modelling
+the solid instead of the surface gives you.
+
 ## Next, in order
 
-1. **Stone as a volume, not a texture.** The current stone is a 2D field
-   sampled on a surface, and it looks like one. Real stone has a grain
-   structure that depends on how it formed -- igneous, metamorphic,
-   sedimentary -- with mineral populations, veins, weathering and fractures
-   that are three-dimensional facts about the material. Model the volume and
-   bake each surface as its *intersection* with that volume, and the pattern
-   stops repeating and starts wrapping around corners correctly. The same
-   method extends to natural terrain.
+1. **Fine detail on large surfaces.** The volume gives structure that is metres
+   across -- joints, bedding, weathering -- and at eight texels per metre that is
+   all a wall can show. Grain needs either much more resolution or a small
+   tiling detail normal on top, where repetition is invisible because it has no
+   large features. The second is the standard answer and the cheaper one.
+2. **Cut the arena floor from the same volume.** The walls are granite and the
+   floor is a separate tiling material, which is the last place two systems
+   disagree about what the arena is made of.
+3. **Per-move keys for the moves that carry a class's identity.** Derived clips
+   are correctly timed and recognisably attacks; they do not know the Reaver's
+   Guillotine is a downward chop with a shadow behind it.

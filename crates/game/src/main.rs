@@ -481,13 +481,23 @@ fn setup(
     // colour. Skylight being cooler than sunlight is also what makes a lit face
     // and a shadowed face read as *different surfaces* rather than as one
     // surface at two brightnesses.
+    // Skylight, divided by pi on the way in, and that is a unit conversion
+    // rather than a fudge.
+    //
+    // Bevy multiplies `AmbientLight.brightness` straight into the shaded
+    // result, while a directional light's diffuse goes through the Lambertian
+    // `1/pi`. So the two are not in the same units even though both are
+    // documented in lux: handing over an illuminance lands about three times
+    // too bright. Measured against the sky -- which the atmosphere renders
+    // correctly and independently -- the surfaces were blown out while the sky
+    // above them was exposed properly, which is the signature of exactly this.
     commands.insert_resource(AmbientLight {
         color: linear(sky.sky_color),
-        brightness: sky.sky_illuminance,
+        brightness: sky.sky_illuminance / std::f32::consts::PI,
         ..default()
     });
 
-    // Floor, and it runs to the horizon rather than stopping at the arena.
+    // The floor, and it runs to the horizon rather than stopping at the arena.
     //
     // Forty metres was enough when the sky was flat black -- nothing showed
     // past the walls because there was nothing out there to see. With a real
@@ -523,32 +533,33 @@ fn setup(
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 
-    // Arena geometry, straight from the simulation's own collision data. One
-    // source of truth: if you can see it, you collide with it.
+    // The arena is cut out of one piece of rock.
+    //
+    // Not six walls wearing the same texture -- six walls occupying six
+    // different parts of a single stone volume, so each is a different piece of
+    // it and no two are the same. A pattern also runs round a corner properly,
+    // because the two faces meeting there are reading adjacent parts of one
+    // solid rather than being two pictures that happen to touch.
+    //
+    // Granite: coarse enough to read across an arena, and nearly colourless,
+    // which the palette rule requires of anything the world is built from.
+    let rock = art::stone::granite();
     for solid in arena::SOLIDS.iter() {
         let min = fx3(solid.min);
         let max = fx3(solid.max);
         let size = max - min;
-        // One material per solid rather than one shared handle, because how
-        // many times the tile repeats is a property of the wall's size and a
-        // shared handle would stretch a two-metre tile across a thirty-metre
-        // wall. Six solids, so six materials -- cheap, and the alternative is
-        // a floor-to-ceiling smear.
-        let repeat = surfaces::repeat_for(
-            &art::materials::STONE,
-            Vec2::new(size.x.max(size.z), size.y),
-        );
+        let centre = (min + max) * 0.5;
         commands.spawn((
-            Mesh3d(meshes.add(surfaces::tangented(
-                Cuboid::new(size.x, size.y, size.z).mesh().build(),
-            ))),
-            MeshMaterial3d(surfaces::build(
-                &art::materials::STONE,
-                repeat,
+            Mesh3d(meshes.add(surfaces::box_mesh(size))),
+            MeshMaterial3d(surfaces::box_from_stone(
+                &rock,
+                centre,
+                size,
+                art::materials::BAKE_SIZE,
                 &mut images,
                 &mut materials,
             )),
-            Transform::from_translation((min + max) * 0.5),
+            Transform::from_translation(centre),
         ));
     }
 

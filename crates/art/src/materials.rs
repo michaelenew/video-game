@@ -194,14 +194,22 @@ pub const GROUND: Material = Material {
         warp: 0.35,
         grain: 0.26,
         contrast: 1.9,
-        // Dark: this is asphalt, not concrete. Raising the lightness was the
-        // wrong half of the fix when the ramp came out unreachable -- the
-        // frequency and the contrast were what was actually wrong, and a
-        // lighter floor on top of them put the arena a stop over.
+        // Dark gravel, not asphalt, and the difference is the whole story of
+        // this ramp.
+        //
+        // It was pushed down to an average reflectance of 0.026 -- darker than
+        // asphalt, darker than almost anything outdoors -- to stop the arena
+        // blowing out, which was really a symptom of lighting that had been
+        // tuned against placeholder colours. With the lighting physical, that
+        // workaround became the problem: the granite walls sit at 0.117, which
+        // is a real granite, and against a floor four times darker they read as
+        // poured concrete.
+        //
+        // Both are now plausible and they agree with each other.
         ramp: Ramp::three(
-            c(0.17, 0.012, 0.70),
-            c(0.28, 0.018, 0.68),
-            c(0.38, 0.009, 0.65),
+            c(0.30, 0.012, 0.70),
+            c(0.44, 0.018, 0.68),
+            c(0.55, 0.009, 0.65),
         ),
         roughness: (0.99, 0.90),
         metallic: 0.0,

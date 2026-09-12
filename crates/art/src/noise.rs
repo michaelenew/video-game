@@ -167,3 +167,39 @@ pub fn worley(p: [f32; 3], seed: u32) -> (f32, f32) {
     }
     (f1, f2)
 }
+
+/// Which cell a point falls in, as a stable identifier.
+///
+/// Companion to [`worley`], and separate from it because the two answer
+/// different questions: `worley` says *how far* to the nearest feature point
+/// and this says *which one*. A grain needs the second -- two samples inside
+/// one crystal have to agree on which crystal they are in, or the grain comes
+/// out as a gradient instead of a mineral.
+pub fn cell_id(p: [f32; 3], seed: u32) -> u32 {
+    let base = [
+        p[0].floor() as i32,
+        p[1].floor() as i32,
+        p[2].floor() as i32,
+    ];
+    let mut best = f32::MAX;
+    let mut id = 0;
+    for dz in -1..=1 {
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let cell = [base[0] + dx, base[1] + dy, base[2] + dz];
+                let h = hash3(cell[0], cell[1], cell[2], seed);
+                let jx = (h & 0x3ff) as f32 / 1023.0;
+                let jy = ((h >> 10) & 0x3ff) as f32 / 1023.0;
+                let jz = ((h >> 20) & 0x3ff) as f32 / 1023.0;
+                let d = (cell[0] as f32 + jx - p[0]).powi(2)
+                    + (cell[1] as f32 + jy - p[1]).powi(2)
+                    + (cell[2] as f32 + jz - p[2]).powi(2);
+                if d < best {
+                    best = d;
+                    id = h;
+                }
+            }
+        }
+    }
+    id
+}
