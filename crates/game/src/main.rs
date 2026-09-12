@@ -1069,7 +1069,7 @@ fn apply_poses(
     for (owner, skeleton) in skeletons.iter_mut().enumerate() {
         let p = frame.players[owner];
         let class = sim.cur.players[owner].class;
-        let mut input = PoseInput::of(&p, class, frame.round_left);
+        let mut input = PoseInput::of(&p, class, &frame);
         input.bind_pose = sim.bind_pose;
         let mut pose = fades.0[owner].pose(input, time.delta_secs());
         // The hub takes over whichever fighter it is previewing, so an edit is

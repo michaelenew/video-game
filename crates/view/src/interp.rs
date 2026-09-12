@@ -41,6 +41,7 @@ pub struct PlayerView {
     pub air_frames: u16,
     pub since_landed: u16,
     pub parried: u16,
+    pub crouched_for: u16,
     /// What the current stun was when it started, so a flinch can be picked by
     /// severity rather than guessed at halfway through.
     pub stun_total: u16,
@@ -143,6 +144,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         air_frames: c.air_frames,
         since_landed: c.since_landed,
         parried: c.parried,
+        crouched_for: c.crouched_for,
         stun_total: c.stun_total,
         rise: fx(c.vel.y),
         turn_rate,

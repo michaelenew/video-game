@@ -213,8 +213,7 @@ fn played_match(args: &[String]) {
         let prev = w.clone();
         w.advance([Input::aimed(bits, aim), Input::new(Input::RIGHT)]);
         let frame = view::interpolate(&prev, &w, 1.0);
-        let input =
-            view::play::PoseInput::of(&frame.players[0], w.players[0].class, frame.round_left);
+        let input = view::play::PoseInput::of(&frame.players[0], w.players[0].class, &frame);
         poses.push(fade.pose(input, 1.0 / 60.0));
         labels.push(format!("{:?}", w.players[0].action));
     }

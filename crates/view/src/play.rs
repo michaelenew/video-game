@@ -84,6 +84,7 @@ pub struct PoseInput {
     pub air_frames: u16,
     pub since_landed: u16,
     pub parried: u16,
+    pub crouched_for: u16,
     pub stun_total: u16,
     pub rise: f32,
     /// Turns per second, positive to the character's right.
@@ -91,6 +92,10 @@ pub struct PoseInput {
     pub health: i32,
     /// Frames left of the between-rounds pause, if a round has ended.
     pub round_left: Option<u16>,
+    /// Simulation frame. In the snapshot, so cyclic motion driven from it is
+    /// deterministic -- and unlike the saturating counters it never stops
+    /// advancing, which is what an idle that loops for twenty minutes needs.
+    pub sim_frame: u32,
     /// Show the skeleton at rest instead of animating it. The toggle exists so
     /// that "is this the clip or is this the rig?" can be answered in one
     /// keypress while looking at the thing.
@@ -98,7 +103,7 @@ pub struct PoseInput {
 }
 
 impl PoseInput {
-    pub fn of(view: &PlayerView, class: Class, round_left: Option<u16>) -> PoseInput {
+    pub fn of(view: &PlayerView, class: Class, frame: &crate::Frame) -> PoseInput {
         PoseInput {
             class,
             action: view.action,
@@ -110,11 +115,13 @@ impl PoseInput {
             air_frames: view.air_frames,
             since_landed: view.since_landed,
             parried: view.parried,
+            crouched_for: view.crouched_for,
             stun_total: view.stun_total,
             rise: view.rise,
             turn_rate: view.turn_rate,
             health: view.health,
-            round_left,
+            round_left: frame.round_left,
+            sim_frame: frame.sim_frame,
             bind_pose: false,
         }
     }
@@ -330,7 +337,9 @@ pub fn pose_for(input: PoseInput) -> Pose {
             }
         }
         Action::Stagger { left } => from_the_end(Clip::Stagger, left),
-        Action::Held { .. } => Clip::Grabbed.at(input.since_landed as u32),
+        // Held loops for as long as somebody is holding you, so it wants a
+        // clock that keeps going rather than one that ends.
+        Action::Held { .. } => Clip::Grabbed.at(input.sim_frame),
         Action::Dodge { left } => dodge(input, left),
         Action::Free => free(input),
     }
@@ -537,10 +546,12 @@ fn locomotion(input: PoseInput) -> Pose {
     Clip::Idle.at(idle_phase(input)).blend(&moving, into_stride)
 }
 
-/// Idle is the one cyclic clip with no distance to run on, so it uses the
-/// frame counter -- which is in the snapshot, so it rolls back cleanly.
+/// Idle is the one cyclic clip with no ground covered to run on, so it uses the
+/// frame counter -- which is in the snapshot, so it rolls back cleanly, and
+/// which never stops advancing, so an idle held for twenty minutes does not
+/// freeze the way a saturating counter would.
 fn idle_phase(input: PoseInput) -> u32 {
-    input.since_landed as u32
+    input.sim_frame
 }
 
 /// The four directions, weighted by where the body is actually going.

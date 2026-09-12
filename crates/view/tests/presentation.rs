@@ -477,6 +477,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         action,
         grounded: true,
         crouching: false,
+        crouched_for: 0,
         speed: 0.0,
         travel: [0.0, 0.0],
         stride,
@@ -488,6 +489,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         turn_rate: 0.0,
         health: 1000,
         round_left: None,
+        sim_frame: frame,
         bind_pose: false,
     }
 }
@@ -539,11 +541,7 @@ fn replaying_a_frame_reproduces_its_pose() {
 /// snapshots, so every animation clock in the snapshot is exercised.
 fn pose_of(w: &World) -> view::Pose {
     let frame = view::interpolate(w, w, 0.0);
-    pose_for(PoseInput::of(
-        &frame.players[0],
-        w.players[0].class,
-        frame.round_left,
-    ))
+    pose_for(PoseInput::of(&frame.players[0], w.players[0].class, &frame))
 }
 
 #[test]
@@ -646,8 +644,7 @@ fn play_through(frames: u32) -> Vec<view::Pose> {
         let prev = w.clone();
         w.advance([Input::aimed(bits, aim), Input::new(Input::RIGHT)]);
         let frame = view::interpolate(&prev, &w, 1.0);
-        let input =
-            view::play::PoseInput::of(&frame.players[0], w.players[0].class, frame.round_left);
+        let input = view::play::PoseInput::of(&frame.players[0], w.players[0].class, &frame);
         drawn.push(fade.pose(input, 1.0 / 60.0));
     }
     drawn

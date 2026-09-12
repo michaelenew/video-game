@@ -232,6 +232,12 @@ pub struct Player {
     /// Frames left of the parry flourish. A parry costs the defender nothing
     /// and is easy to miss; this is what lets them see that they got it.
     pub parried: u16,
+    /// Frames spent crouching, saturating. Zero while standing.
+    ///
+    /// `crouching` is a bool, and a bool cannot say how long it has been true --
+    /// so without this the drop into a crouch has no clock and the entry
+    /// animation is skipped entirely by anyone who was already standing still.
+    pub crouched_for: u16,
     /// How long the stun currently being served was when it started.
     ///
     /// `Action::HitStun { left }` counts down and never says what it counted
@@ -311,6 +317,7 @@ impl Default for Player {
             air_frames: 0,
             since_landed: 0,
             parried: 0,
+            crouched_for: 0,
             stun_total: 0,
         }
     }
@@ -544,6 +551,7 @@ impl World {
             h.write_u32(p.air_frames as u32);
             h.write_u32(p.since_landed as u32);
             h.write_u32(p.parried as u32);
+            h.write_u32(p.crouched_for as u32);
             h.write_u32(p.stun_total as u32);
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
@@ -1379,6 +1387,11 @@ fn advance_clocks(p: &mut Player) {
         p.air_frames = p.air_frames.saturating_add(1);
     }
     p.parried = p.parried.saturating_sub(1);
+    p.crouched_for = if p.crouching {
+        p.crouched_for.saturating_add(1)
+    } else {
+        0
+    };
 
     // Ground covered this frame as a fraction of one stride. The raw 16.16 bits
     // of a fraction of a turn *are* the phase, so there is no conversion.
