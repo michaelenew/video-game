@@ -37,6 +37,12 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "let knee = |u: Fx| ease.mul(u.mul(u).mul(Fx::from_int(2).sub(u)))",
+        "The cubic that leaves flat and arrives at the gradient of the line it \
+         joins. Solving for those two conditions is what produces the 2; it is \
+         the curve's definition rather than a number with a feel to it.",
+    ),
+    (
         "V3::new(at.x, at.y.add(t::body_height().div(Fx::from_int(2))), at.z)",
         "Halving a body, not choosing a height. The target is the middle of a \
          fighter standing there, and the middle of anything is half of it.",

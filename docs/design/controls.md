@@ -146,8 +146,24 @@ all. And it goes fully away when the eye is simply *close* to it — measured as
 as a zone, so that an arm pulled in by a wall behind the fighter takes the body away exactly the
 same as walking into the head on purpose does.
 
-**The shape is the design; the numbers are knobs.** Every boundary angle, both radii and every
-percentage is in the Oven under **Camera**.
+**Zones hand over rather than swap.** A boundary left alone is continuous in position and not
+in speed — the eye arrives at it moving one way and leaves moving another, which is not seen so
+much as felt, and reads as the camera changing its mind. So each zone's ramp is **eased at both
+ends**: it leaves and arrives at a standstill, and a neighbour that is already holding still has
+nothing to hand over against. The size of that easing is a percentage of the zone's own span, so
+one number means the same thing in a band four degrees wide and one seventy-five degrees wide.
+
+Outside the easing the ramp is untouched, so **the waypoints stay exactly true**; at the maximum
+the ramp is eased all the way through and its middle still lands on the waypoint, because the two
+ends give back what each other took.
+
+**The shape is the design; the numbers are knobs.** Every boundary angle, both radii, every
+percentage and every easing is in the Oven under **Camera**.
+
+**A note on the percentages.** They are written against the framing's own field of view, not the
+player's. Set the two to the same number and the fractions are literally what you see; leave them
+apart and the fighter sits a little nearer the middle than the knob reads — a one-degree
+difference is worth about seven tenths of a percent of screen height.
 
 Two consequences are worth stating because they are design, not implementation:
 

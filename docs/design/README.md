@@ -124,7 +124,7 @@ character progression.
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
 exemplar moves, there is a monster to fight and climb, peer-to-peer rollback play
-works over real UDP, and 320 tests cover determinism, combat relationships,
+works over real UDP, and 321 tests cover determinism, combat relationships,
 aiming, the ride, the camera, kinematics and animation.
 
 ```
