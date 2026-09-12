@@ -69,7 +69,15 @@ impl Default for Settings {
             // 45-degree view from six metres reads as cramped in an arena you
             // are meant to be moving around inside.
             fov: 58.0,
-            distance: 10.9,
+            // `SHOT_DIST` pulls the camera in for a headless capture, the same
+            // way `SHOT_PITCH` fixes the angle: an animation read at arena
+            // distance is a person-shaped smudge, and a screenshot of a smudge
+            // settles no argument about how a swing looks.
+            distance: std::env::var("SHOT_DIST")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .map(|v: f32| v.clamp(MIN_DISTANCE, MAX_DISTANCE))
+                .unwrap_or(10.9),
             other: BTreeMap::new(),
         }
     }
