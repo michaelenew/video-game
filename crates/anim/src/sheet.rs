@@ -39,7 +39,14 @@ const COLS: usize = 12;
 const TRAIL_H: usize = 240;
 
 /// Draw a clip. Returns the canvas and the frame indices each column shows.
-pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose]) -> (Canvas, Vec<usize>) {
+///
+/// `travel` is how far the body moves per frame, in metres, for a clip the game
+/// plays by distance. Pass zero for anything else. When it is non-zero the
+/// overlay panel walks the character across the page instead of stacking every
+/// frame on one spot -- and then a planted foot is a *vertical* pile of dots at
+/// a fixed position while the body slides past it, which is the clearest
+/// possible picture of whether the feet are sliding.
+pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose], travel: f32) -> (Canvas, Vec<usize>) {
     let picks = sample_indices(frames.len(), COLS * 2);
     let rows = picks.len().div_ceil(COLS);
 
@@ -77,14 +84,30 @@ pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose]) -> (Canvas, Vec<usize
 
     // Every frame at once, so the arcs are visible as arcs.
     c.rect(0, trail_top as i32, width as i32, height as i32, PANEL);
-    let trail = Cell::new(0, trail_top, width, TRAIL_H, View::Side);
+    let mut trail = Cell::new(0, trail_top, width, TRAIL_H, View::Side);
+    // Three times round, when the clip travels. One cycle of a walk covers about
+    // a metre, which is less than the character is tall -- three makes the
+    // pattern of footfalls visible, and shows the loop closing twice.
+    let cycles = if travel > 0.0 { 3 } else { 1 };
+    let n = frames.len().max(1);
+    let total = travel * (n * cycles) as f32;
+    trail.cx -= total * 0.5 * trail.scale;
     trail.floor(&mut c);
-    for (i, pose) in frames.iter().enumerate() {
-        let t = i as f32 / (frames.len().max(2) - 1) as f32;
-        draw(&mut c, &trail, skeleton, pose, 0.10 + 0.16 * t);
+
+    for i in 0..n * cycles {
+        let pose = &frames[i % n];
+        trail.shift = travel * i as f32;
+        let t = (i % n) as f32 / (n.max(2) - 1) as f32;
+        // Sparse ghosts when the figure is walking across the page: every frame
+        // drawn on top of a moving body is mud rather than an arc.
+        if travel == 0.0 || i % 3 == 0 {
+            draw(&mut c, &trail, skeleton, pose, 0.10 + 0.16 * t);
+        }
     }
-    for (i, pose) in frames.iter().enumerate() {
-        let t = i as f32 / (frames.len().max(2) - 1) as f32;
+    for i in 0..n * cycles {
+        let pose = &frames[i % n];
+        trail.shift = travel * i as f32;
+        let t = (i % n) as f32 / (n.max(2) - 1) as f32;
         let skin = skeleton::solve(skeleton, pose);
         for (joint, colour) in [
             (Joint::FootL, LEFT),
@@ -93,7 +116,7 @@ pub fn contact_sheet(skeleton: &Skeleton, frames: &[Pose]) -> (Canvas, Vec<usize
             (Joint::HandR, RIGHT),
         ] {
             let p = skin.tip(skeleton, joint);
-            c.dot(trail.project(p), colour, 1.6, 0.35 + 0.65 * t);
+            c.dot(trail.project(p), colour, 1.7, 0.35 + 0.65 * t);
         }
     }
 
@@ -113,6 +136,8 @@ struct Cell {
     view: View,
     x0: usize,
     x1: usize,
+    /// Metres to slide this drawing along, for the overlay panel.
+    shift: f32,
 }
 
 impl Cell {
@@ -127,6 +152,7 @@ impl Cell {
             view,
             x0: x,
             x1: x + w,
+            shift: 0.0,
         }
     }
 
@@ -138,7 +164,7 @@ impl Cell {
             View::Front => -p[0],
         };
         (
-            self.cx + across * self.scale,
+            self.cx + (across + self.shift) * self.scale,
             self.floor_y - p[1] * self.scale,
         )
     }

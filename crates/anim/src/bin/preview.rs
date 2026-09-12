@@ -94,7 +94,13 @@ fn main() {
             };
             feet_report(b, stride, dir);
         }
-        let (canvas, shown) = sheet::contact_sheet(&skeleton, &b.frames);
+        // How far the body moves per frame, for the clips the game plays by
+        // distance. Everything else stays on the spot.
+        let travel = match travel_of(clip) {
+            Some(stride) => stride / b.frames.len().max(1) as f32,
+            None => 0.0,
+        };
+        let (canvas, shown) = sheet::contact_sheet(&skeleton, &b.frames, travel);
         let path = dir.join(format!("{}.png", clip.name()));
         canvas.write(&path).expect("write sheet");
         println!(
@@ -107,6 +113,26 @@ fn main() {
         if shown.len() < b.frames.len() {
             println!("    showing frames {shown:?}");
         }
+    }
+}
+
+/// How much ground one cycle of a clip covers, for the clips the game plays by
+/// distance walked. `None` for everything that happens on the spot.
+fn travel_of(clip: Clip) -> Option<f32> {
+    let name = clip.name();
+    let stride = if name.starts_with("run") {
+        view::play::RUN_STRIDE
+    } else if name.starts_with("walk") {
+        view::play::WALK_STRIDE
+    } else if name == "crouch_walk" {
+        return Some(view::play::CROUCH_STRIDE);
+    } else {
+        return None;
+    };
+    if name.ends_with("left") || name.ends_with("right") {
+        Some(stride * view::play::STRAFE_STRIDE)
+    } else {
+        Some(stride)
     }
 }
 
@@ -219,7 +245,7 @@ fn played_match(args: &[String]) {
     }
 
     let skeleton = view::skeleton::skeleton_for(class);
-    let (canvas, shown) = sheet::contact_sheet(&skeleton, &poses);
+    let (canvas, shown) = sheet::contact_sheet(&skeleton, &poses, 0.0);
     let dir = std::path::Path::new("target/anim-preview");
     std::fs::create_dir_all(dir).expect("create preview directory");
     let path = dir.join("match.png");
