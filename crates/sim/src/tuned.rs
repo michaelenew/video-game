@@ -687,8 +687,8 @@ pub const VIEW: [i32; 17] = [
            78643, // camera.body_gone_within_(m) = 1.2
               57, // camera.framing_field_of_view = 57
              100, // camera.smooth,_floor_zone_(%) = 100
-              30, // camera.smooth,_neutral_zone_(%) = 30
+              50, // camera.smooth,_neutral_zone_(%) = 50
               50, // camera.smooth,_the_turn_(%) = 50
               50, // camera.smooth,_handover_(%) = 50
-              10, // camera.smooth,_first_person_(%) = 10
+              50, // camera.smooth,_first_person_(%) = 50
 ];
