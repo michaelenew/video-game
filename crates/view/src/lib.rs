@@ -9,12 +9,20 @@
 
 pub mod baked;
 pub mod camera;
+pub mod clips;
+pub mod ik;
 pub mod interp;
+pub mod math;
+pub mod play;
 pub mod pose;
+pub mod skeleton;
 
 pub use camera::{CameraRig, Framing, Surroundings};
+pub use clips::Clip;
 pub use interp::{Frame, PlayerView, interpolate};
-pub use pose::{Part, PartTransform, Pose, pose_for};
+pub use play::{PoseInput, pose_for};
+pub use pose::Pose;
+pub use skeleton::{Joint, Skeleton};
 
 /// Simulation rate, mirrored from `sim` for convenience.
 pub const TICK_HZ: f32 = sim::TICK_HZ as f32;

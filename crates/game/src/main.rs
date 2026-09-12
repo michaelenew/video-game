@@ -21,6 +21,7 @@ mod bake;
 mod beast;
 mod crosshair;
 mod debug;
+mod hub;
 mod hud;
 mod palette;
 mod settings;
@@ -30,7 +31,8 @@ use bevy::prelude::*;
 use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
-use view::pose::{PARTS, Part, PoseInput, part_size, pose_for};
+use view::play::{Crossfade, PoseInput};
+use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate};
 
 /// How the match is being driven.
@@ -139,6 +141,9 @@ fn main() {
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
         .init_resource::<palette::Palette>()
+        .init_resource::<hub::Hub>()
+        .init_resource::<Fades>()
+        .init_resource::<ShieldHands>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -178,6 +183,20 @@ fn main() {
             )
                 .chain(),
         )
+        // A second tuple only because Bevy's is full: the hub draws last, over
+        // everything, and after the poses it is previewing have been placed.
+        .add_systems(
+            Update,
+            (
+                hub::toggle,
+                hub::advance,
+                hub::collect_bake,
+                hub::onion_skin,
+                hub::draw,
+            )
+                .chain()
+                .after(palette::draw),
+        )
         .run();
 }
 
@@ -199,10 +218,27 @@ pub struct Sim {
     stop_at: Option<u32>,
     dummy: Dummy,
     driver: Driver,
-    /// Baked animation on or off. A toggle because it is new, and because
-    /// playback cost should be measurable against the procedural path.
-    baked_anim: bool,
+    /// Show the skeleton at rest instead of animating it.
+    ///
+    /// Useful rather than decorative: it is how you tell "this clip is wrong"
+    /// from "this rig is wrong" while looking at the thing, in one keypress.
+    bind_pose: bool,
 }
+
+/// Where each fighter's shield hand ended up this frame, in world space.
+///
+/// The shield is a separate object because its position is independent of the
+/// character -- that is the whole mechanic -- but while it is *in hand* it
+/// should be in a hand, and a hand is now a thing the skeleton has. Written by
+/// the posing pass and read by the one that places shields, which runs after.
+#[derive(Resource, Default)]
+struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
+
+/// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
+/// whatever it was, which is wrong by a few frames of blend weight and
+/// invisible. See `view::play::Crossfade`.
+#[derive(Resource, Default)]
+struct Fades([Crossfade; MAX_PLAYERS]);
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
 /// the second set of keys.
@@ -256,9 +292,9 @@ impl Default for Sim {
             step_once: false,
             dummy: Dummy::Idle,
             driver,
-            // `BAKED_ANIM=0` starts with the procedural poses instead, so the
-            // two can be captured back to back without a keypress.
-            baked_anim: std::env::var("BAKED_ANIM").as_deref() != Ok("0"),
+            // `BIND_POSE=1` starts frozen, so the proportions of a build can be
+            // captured without a keypress.
+            bind_pose: std::env::var("BIND_POSE").as_deref() == Ok("1"),
             stop_at: env_num("SHOT_FRAME"),
         }
     }
@@ -374,7 +410,7 @@ struct Fighter(usize);
 #[derive(Component)]
 struct BodyPart {
     owner: usize,
-    part: Part,
+    joint: Joint,
 }
 
 #[derive(Component)]
@@ -499,13 +535,16 @@ fn setup(
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
-                for part in PARTS {
-                    let s = part_size(part);
+                // Unit cubes, scaled every frame from whichever build the
+                // fighter currently has. Baking the size into the mesh would
+                // mean rebuilding sixteen meshes every time somebody presses
+                // Tab to change class.
+                for joint in JOINTS {
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(s[0], s[1], s[2]))),
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
                         MeshMaterial3d(skin.clone()),
                         Transform::default(),
-                        BodyPart { owner, part },
+                        BodyPart { owner, joint },
                     ));
                 }
             });
@@ -725,17 +764,33 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
 /// A shield in hand rides on the character; a thrown one sits in the world.
 fn place_shields(
     sim: Res<Sim>,
+    hands: Res<ShieldHands>,
     mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in shields.iter_mut() {
+        let held = matches!(
+            sim.cur.players[tag.0].mechanic,
+            sim::Mechanic::Shield(sim::state::Shield::Held)
+        );
         match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
+            // Thrown or planted: it is somewhere in the arena on its own.
             Some(pos) => {
                 *vis = Visibility::Inherited;
+                tf.rotation = Quat::IDENTITY;
                 tf.translation = Vec3::new(
                     pos.x.to_f32_for_render(),
                     pos.y.to_f32_for_render(),
                     pos.z.to_f32_for_render(),
                 );
+            }
+            // In hand, and now that the skeleton has hands it can be in one.
+            // It follows the forearm, the way a strapped shield does, so
+            // raising the guard raises the shield without anybody animating it.
+            None if held => {
+                let (at, rot) = hands.0[tag.0];
+                *vis = Visibility::Inherited;
+                tf.rotation = rot;
+                tf.translation = at + rot * Vec3::new(0.0, -0.12, 0.06);
             }
             None => *vis = Visibility::Hidden,
         }
@@ -779,7 +834,7 @@ fn tick_sim(
         show.0 = !show.0;
     }
     if keys.just_pressed(KeyCode::F2) {
-        sim.baked_anim = !sim.baked_anim;
+        sim.bind_pose = !sim.bind_pose;
     }
     if keys.just_pressed(KeyCode::Tab) {
         // Cycle player one's class. Restarts the match, since a class change
@@ -1082,13 +1137,17 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     SimInput::new(v)
 }
 
-/// Place every character part from the interpolated snapshot.
+/// Place every bone from the interpolated snapshot.
 ///
-/// Pose is a pure function of simulation state -- see `view::pose`. Nothing
+/// Pose is a pure function of simulation state -- see `view::play`. Nothing
 /// here accumulates animation time, which is what lets a rollback rewind the
 /// characters without them sliding.
 fn apply_poses(
     sim: Res<Sim>,
+    time: Res<Time>,
+    mut fades: ResMut<Fades>,
+    mut hands: ResMut<ShieldHands>,
+    hub: Option<Res<crate::hub::Hub>>,
     mut roots: Query<(&Fighter, &mut Transform), Without<BodyPart>>,
     mut parts: Query<(&BodyPart, &mut Transform), Without<Fighter>>,
 ) {
@@ -1101,84 +1160,50 @@ fn apply_poses(
         tf.rotation = Quat::from_rotation_y(yaw);
     }
 
+    // One solve per fighter rather than one per bone: forward kinematics is a
+    // single pass down the skeleton and there are sixteen bones hanging off it.
+    let mut skeletons: [Skeleton; MAX_PLAYERS] = [
+        skeleton_for(sim.cur.players[0].class),
+        skeleton_for(sim.cur.players[1].class),
+    ];
+    let mut skins = Vec::with_capacity(MAX_PLAYERS);
+    for (owner, skeleton) in skeletons.iter_mut().enumerate() {
+        let p = frame.players[owner];
+        let class = sim.cur.players[owner].class;
+        let mut input = PoseInput::of(&p, class, &frame);
+        input.bind_pose = sim.bind_pose;
+        let mut pose = fades.0[owner].pose(input, time.delta_secs());
+        // The hub takes over whichever fighter it is previewing, so an edit is
+        // visible on a real character in the real arena rather than in a
+        // separate viewer that flatters it.
+        if let Some(hub) = hub.as_ref() {
+            if let Some(preview) = hub.preview_for(owner) {
+                pose = preview;
+            }
+        }
+        skins.push(view::skeleton::solve(skeleton, &pose));
+    }
+
+    // The shield hand, in the arena rather than in the character's own space,
+    // so whatever is holding something can be placed against it.
+    for owner in 0..MAX_PLAYERS {
+        let p = frame.players[owner];
+        let yaw = p.facing[0].atan2(p.facing[2]);
+        let turn = Quat::from_rotation_y(yaw);
+        let (at, rot) = skins[owner].box_of(&skeletons[owner], Joint::HandL);
+        hands.0[owner] = (
+            Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
+            turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
+        );
+    }
+
     for (bp, mut tf) in parts.iter_mut() {
-        let p = frame.players[bp.owner];
-        let class = sim.cur.players[bp.owner].class;
-        let (into, total) = phase_frames(&p, class);
-        let pose = pose_for(PoseInput {
-            clip: if sim.baked_anim {
-                clip_for(&p, class)
-            } else {
-                None
-            },
-            action: p.action,
-            frames_into: into,
-            frames_total: total,
-            speed: p.speed,
-            grounded: p.grounded,
-            crouching: p.crouching,
-            sim_frame: frame.sim_frame,
-        });
-        let t = pose.get(bp.part);
-        tf.translation = Vec3::new(t.pos[0], t.pos[1], t.pos[2]);
-        tf.rotation = Quat::from_euler(EulerRot::XYZ, t.rot[0], t.rot[1], t.rot[2]);
-    }
-}
-
-/// Which baked clip an action maps to, and how far into it.
-///
-/// The game side picks, because it is what knows the move tables. `view` stays
-/// ignorant of what an overhead is.
-fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip, u16)> {
-    use sim::state::Action;
-    use view::pose::Clip;
-    let elapsed = |kind: u8, phase: u8, left: u16| -> u16 {
-        let (s, a, r) = sim::moves::frames(class, kind);
-        match phase {
-            0 => s.saturating_sub(left),
-            1 => s + a.saturating_sub(left),
-            _ => s + a + r.saturating_sub(left),
-        }
-    };
-    let attack_clip = |kind: u8| {
-        if sim::moves::get(class, kind).hits_crouching {
-            Clip::Poke
-        } else {
-            Clip::Overhead
-        }
-    };
-    match p.action {
-        Action::Startup { kind, left } => Some((attack_clip(kind), elapsed(kind, 0, left))),
-        Action::Active { kind, left } => Some((attack_clip(kind), elapsed(kind, 1, left))),
-        Action::Recovery { kind, left } => Some((attack_clip(kind), elapsed(kind, 2, left))),
-        Action::Guard { held } => Some((Clip::GuardIn, held)),
-        Action::Dodge { left } => Some((Clip::Roll, 22u16.saturating_sub(left))),
-        Action::HitStun { left }
-        | Action::BlockStun { left }
-        | Action::Stagger { left }
-        | Action::Held { left } => Some((Clip::Recoil, 26u16.saturating_sub(left))),
-        Action::Free => None,
-    }
-}
-
-/// How far into the current phase, and how long that phase runs.
-fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
-    use sim::state::Action;
-    let move_frames = |k: u8| sim::moves::frames(class, k);
-    match p.action {
-        Action::Startup { kind, left } => {
-            let total = move_frames(kind).0;
-            (total.saturating_sub(left), total)
-        }
-        Action::Active { kind, left } => {
-            let total = move_frames(kind).1;
-            (total.saturating_sub(left), total)
-        }
-        Action::Recovery { kind, left } => {
-            let total = move_frames(kind).2;
-            (total.saturating_sub(left), total)
-        }
-        _ => (0, 0),
+        let skeleton = &skeletons[bp.owner];
+        let (centre, rot) = skins[bp.owner].box_of(skeleton, bp.joint);
+        let size = view::pose::part_size(skeleton, bp.joint);
+        tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
+        tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
+        tf.scale = Vec3::new(size[0], size[1], size[2]);
     }
 }
 

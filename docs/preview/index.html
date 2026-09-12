@@ -1,0 +1,931 @@
+<title>Animation Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #eceef1;
+  --panel: #ffffff;
+  --sunken: #e2e5ea;
+  --line: #cdd2da;
+  --ink: #1a1e25;
+  --muted: #626b7a;
+  --faint: #8a93a2;
+  --accent: #b26a12;
+  --accent-soft: #f0dcc0;
+  --startup: #3f6fae;
+  --active: #c04a2c;
+  --recovery: #3d7f5e;
+  --stage-sky: #dfe3e9;
+  --stage-floor: #cfd4dc;
+  --stage-grid: #b8bfca;
+  --limb-l: #c4761f;
+  --limb-r: #2f8891;
+  --trunk: #6f7887;
+  --shadow: rgba(26, 30, 37, .16);
+}
+:root:not([data-theme="light"]) {
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #14171c;
+    --panel: #1b1f26;
+    --sunken: #101317;
+    --line: #2b313b;
+    --ink: #e7eaef;
+    --muted: #949daa;
+    --faint: #6a7381;
+    --accent: #e0a33e;
+    --accent-soft: #3a2f1a;
+    --startup: #6a9ede;
+    --active: #e4694a;
+    --recovery: #62b58c;
+    --stage-sky: #191d23;
+    --stage-floor: #23272f;
+    --stage-grid: #333944;
+    --limb-l: #e0a33e;
+    --limb-r: #4fc0cc;
+    --trunk: #9aa4b3;
+    --shadow: rgba(0, 0, 0, .45);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #14171c;
+  --panel: #1b1f26;
+  --sunken: #101317;
+  --line: #2b313b;
+  --ink: #e7eaef;
+  --muted: #949daa;
+  --faint: #6a7381;
+  --accent: #e0a33e;
+  --accent-soft: #3a2f1a;
+  --startup: #6a9ede;
+  --active: #e4694a;
+  --recovery: #62b58c;
+  --stage-sky: #191d23;
+  --stage-floor: #23272f;
+  --stage-grid: #333944;
+  --limb-l: #e0a33e;
+  --limb-r: #4fc0cc;
+  --trunk: #9aa4b3;
+  --shadow: rgba(0, 0, 0, .45);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 15px/1.5 Archivo, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 600; text-wrap: balance; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-inline: 16px;
+  padding-block: 18px 40px;
+}
+
+/* ---- masthead ---------------------------------------------------------- */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.top h1 {
+  font-size: 30px;
+  letter-spacing: .01em;
+  line-height: 1;
+}
+.top p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  max-width: 62ch;
+}
+.stat {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.stat b { color: var(--ink); font-weight: 500; }
+
+/* ---- three-column frame ------------------------------------------------ */
+.frame {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr) 268px;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+@media (max-width: 1080px) {
+  .frame { grid-template-columns: 220px minmax(0, 1fr); }
+  .notes { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .frame { grid-template-columns: minmax(0, 1fr); }
+  .rail { order: 2; }
+  .stage { order: 1; }
+  .notes { order: 3; }
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.eyebrow {
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ---- clip rail --------------------------------------------------------- */
+.rail { display: flex; flex-direction: column; }
+.search {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+}
+.search::placeholder { color: var(--faint); }
+.list {
+  margin-top: 8px;
+  max-height: 62vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+@media (max-width: 720px) { .list { max-height: 34vh; } }
+.group {
+  padding: 9px 10px 4px;
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.clip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+.clip:hover { background: var(--sunken); }
+.clip[aria-current="true"] {
+  border-left-color: var(--accent);
+  background: var(--sunken);
+  font-weight: 600;
+}
+.clip span {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.loops { color: var(--accent); }
+
+/* ---- stage ------------------------------------------------------------- */
+.stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.screen {
+  position: relative;
+  background: var(--stage-sky);
+  border: 1px solid var(--line);
+  aspect-ratio: 16 / 11;
+  max-width: 100%;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.screen.dragging { cursor: grabbing; }
+.screen canvas { display: block; width: 100%; height: 100%; }
+.badge {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.badge b { color: var(--ink); font-weight: 500; font-size: 14px; }
+.hint {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 11px;
+  color: var(--faint);
+  pointer-events: none;
+}
+
+/* ---- transport --------------------------------------------------------- */
+.bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.btn {
+  padding: 6px 13px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.on { background: var(--accent); border-color: var(--accent); color: #14171c; }
+.scrub { flex: 1 1 260px; min-width: 160px; accent-color: var(--accent); }
+
+/* the frame-data strip: startup, active, recovery, in the game's colours */
+.phases {
+  display: flex;
+  height: 22px;
+  border: 1px solid var(--line);
+  background: var(--sunken);
+  overflow: hidden;
+}
+.phases div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ph-s { background: var(--startup); }
+.ph-a { background: var(--active); }
+.ph-r { background: var(--recovery); }
+.ph-none {
+  background: var(--sunken);
+  color: var(--faint);
+  flex: 1;
+  letter-spacing: .14em;
+}
+.playhead { position: relative; height: 0; }
+.playhead i {
+  position: absolute;
+  top: -22px;
+  width: 2px;
+  height: 22px;
+  background: var(--ink);
+  mix-blend-mode: difference;
+}
+
+/* ---- notes rail -------------------------------------------------------- */
+.notes { display: flex; flex-direction: column; gap: 14px; }
+.block { padding: 12px 14px; }
+.block h2 { font-size: 19px; margin-bottom: 2px; }
+.block p { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
+.rows {
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  font-size: 13px;
+}
+.rows dt { color: var(--faint); }
+.rows dd {
+  margin: 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pick {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 13px;
+}
+.pick:hover { border-color: var(--accent); }
+.pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.key { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.key i {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.foot {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--faint);
+  max-width: 74ch;
+}
+.foot code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Animation Bench</h1>
+    <p>Every baked clip in the game, played on any of the six builds. One set of joint angles, six bodies.</p>
+    <div class="stat">
+      <span><b id="s-clips">0</b> clips</span>
+      <span><b id="s-frames">0</b> frames</span>
+      <span><b>60</b> fps</span>
+    </div>
+  </header>
+
+  <div class="frame">
+    <aside class="rail">
+      <label class="eyebrow" for="q">Clip</label>
+      <input id="q" class="search" type="search" placeholder="filter&hellip;" autocomplete="off">
+      <div class="list" id="list"></div>
+    </aside>
+
+    <section class="stage">
+      <div class="screen" id="screen">
+        <canvas id="c"></canvas>
+        <div class="badge">
+          <b id="b-name">&mdash;</b>
+          <span id="b-frame">f0 / 0</span>
+          <span id="b-class">&mdash;</span>
+        </div>
+        <div class="hint">drag to orbit &middot; scroll to zoom</div>
+      </div>
+
+      <div class="phases" id="phases"></div>
+      <div class="playhead"><i id="head"></i></div>
+
+      <div class="bar">
+        <button class="btn" id="play">Pause</button>
+        <input class="scrub" id="scrub" type="range" min="0" max="0" step="1" value="0" aria-label="Frame">
+        <button class="btn" id="speed">1&times;</button>
+        <button class="btn" id="onion">Onion</button>
+        <button class="btn" id="view">Side</button>
+      </div>
+
+      <div class="key">
+        <span><i style="background:var(--limb-l)"></i>left limbs</span>
+        <span><i style="background:var(--limb-r)"></i>right limbs</span>
+        <span><i style="background:var(--trunk)"></i>trunk</span>
+        <span><i style="background:var(--startup)"></i>startup</span>
+        <span><i style="background:var(--active)"></i>active</span>
+        <span><i style="background:var(--recovery)"></i>recovery</span>
+      </div>
+    </section>
+
+    <aside class="notes">
+      <div class="card block">
+        <span class="eyebrow" id="n-family">&mdash;</span>
+        <h2 id="n-name">&mdash;</h2>
+        <p id="n-what">&mdash;</p>
+        <dl class="rows">
+          <dt>length</dt><dd id="n-len">&mdash;</dd>
+          <dt>loops</dt><dd id="n-loop">&mdash;</dd>
+          <dt>authored in</dt><dd id="n-file">&mdash;</dd>
+        </dl>
+      </div>
+
+      <div class="card block">
+        <span class="eyebrow">Build</span>
+        <div class="picks" id="classes"></div>
+        <dl class="rows">
+          <dt>hip height</dt><dd id="n-hip">&mdash;</dd>
+          <dt>total height</dt><dd id="n-height">&mdash;</dd>
+        </dl>
+      </div>
+
+      <div class="card block">
+        <span class="eyebrow">Joint</span>
+        <div class="picks" id="joints"></div>
+        <dl class="rows">
+          <dt>swing</dt><dd id="j-swing">&mdash;</dd>
+          <dt>spread</dt><dd id="j-spread">&mdash;</dd>
+          <dt>twist</dt><dd id="j-twist">&mdash;</dd>
+          <dt>height</dt><dd id="j-y">&mdash;</dd>
+        </dl>
+      </div>
+    </aside>
+  </div>
+
+  <p class="foot">
+    Poses are stored as angles only &mdash; swing, spread and twist per joint, never positions &mdash; which is what
+    lets one authored clip play on a Bulwark and a Dual mage without being redrawn. Everything here runs the same
+    forward kinematics the game does, off the same table in <code>crates/view/src/baked.rs</code>. Frame numbers,
+    phase boundaries and clip lengths come from the move table, so retuning a move in the Oven moves its animation
+    with it.
+  </p>
+</div>
+
+<script src="anim-data.js"></script>
+<script>
+(function () {
+  var D = window.ANIM;
+  if (!D) { document.querySelector('.foot').textContent = 'anim-data.js did not load.'; return; }
+
+  var RAD = Math.PI / 180;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---- quaternions ------------------------------------------------------
+  function qmul(a, b) {
+    return [
+      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+      a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+      a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+    ];
+  }
+  function qaxis(i, a) {
+    var h = a / 2, s = Math.sin(h), q = [0, 0, 0, Math.cos(h)];
+    q[i] = s;
+    return q;
+  }
+  function qrot(q, v) {
+    var x = q[0], y = q[1], z = q[2], w = q[3];
+    var tx = 2 * (y * v[2] - z * v[1]);
+    var ty = 2 * (z * v[0] - x * v[2]);
+    var tz = 2 * (x * v[1] - y * v[0]);
+    return [
+      v[0] + w * tx + (y * tz - z * ty),
+      v[1] + w * ty + (z * tx - x * tz),
+      v[2] + w * tz + (x * ty - y * tx)
+    ];
+  }
+
+  // ---- forward kinematics, the same composition the game uses -----------
+  // local = spread(Z) . swing(X) . twist(Y), with the mirror and the swing
+  // sign living in the bone so a symmetric pose is a symmetric set of numbers.
+  function solve(cls, row) {
+    var bones = cls.bones, out = [];
+    for (var i = 0; i < D.joints.length; i++) {
+      var b = bones[i], j = D.joints[i], L = b.limits;
+      var sw = clamp(row[3 + i * 3], L[0][0], L[0][1]) * RAD;
+      var sp = clamp(row[4 + i * 3], L[1][0], L[1][1]) * RAD;
+      var tw = clamp(row[5 + i * 3], L[2][0], L[2][1]) * RAD;
+      var m = j.left ? -1 : 1;
+      var local = qmul(qmul(qaxis(2, sp * m), qaxis(0, sw * b.swingSign)), qaxis(1, tw * m));
+      if (j.parent < 0) {
+        var t = [row[0] / 1000, row[1] / 1000, row[2] / 1000];
+        out.push({
+          o: [b.offset[0] + t[0] * cls.scale, b.offset[1] + t[1] * cls.scale, b.offset[2] + t[2] * cls.scale],
+          r: local
+        });
+      } else {
+        var p = out[j.parent];
+        var d = qrot(p.r, b.offset);
+        out.push({ o: [p.o[0] + d[0], p.o[1] + d[1], p.o[2] + d[2]], r: qmul(p.r, local) });
+      }
+    }
+    return out;
+  }
+  function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+  // ---- camera -----------------------------------------------------------
+  var cam = { yaw: 1.57, pitch: 0.1, dist: 2.9, target: 0.92 };
+  var VIEWS = [
+    { name: 'Side', yaw: Math.PI / 2, pitch: 0.08 },
+    { name: 'Front', yaw: Math.PI, pitch: 0.08 },
+    { name: 'Three-quarter', yaw: 2.25, pitch: 0.2 }
+  ];
+  var viewIdx = 0;
+
+  function project(p, w, h) {
+    var cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+    var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    var x = p[0], y = p[1] - cam.target, z = p[2];
+    var ex = cy * x + sy * z;
+    var ez = -sy * x + cy * z;
+    var ey = cp * y - sp * ez;
+    var dz = sp * y + cp * ez + cam.dist;
+    var f = h * 1.05;
+    return [w / 2 + (ex * f) / dz, h / 2 - (ey * f) / dz, dz];
+  }
+
+  // ---- drawing ----------------------------------------------------------
+  var canvas = $('c'), ctx = canvas.getContext('2d');
+  var FACES = [
+    [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
+    [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]
+  ];
+  var NORMALS = [[0, 0, -1], [0, 0, 1], [0, -1, 0], [0, 1, 0], [-1, 0, 0], [1, 0, 0]];
+  var LIGHT = (function () {
+    var v = [-0.45, 0.8, 0.4], n = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / n, v[1] / n, v[2] / n];
+  })();
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function shade(hex, k) {
+    var h = hex.replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    var r = Math.round(clamp(((n >> 16) & 255) * k, 0, 255));
+    var g = Math.round(clamp(((n >> 8) & 255) * k, 0, 255));
+    var b = Math.round(clamp((n & 255) * k, 0, 255));
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  function partColour(name) {
+    if (name.endsWith('.l')) return css('--limb-l');
+    if (name.endsWith('.r')) return css('--limb-r');
+    return css('--trunk');
+  }
+
+  function boxQuads(skin, cls, i, out, alpha) {
+    var b = cls.bones[i], s = skin[i];
+    var c = qrot(s.r, b.boxAt);
+    var centre = [s.o[0] + c[0], s.o[1] + c[1], s.o[2] + c[2]];
+    var pts = [];
+    for (var k = 0; k < 8; k++) {
+      var l = [
+        (k & 4 ? 1 : -1) * b.half[0],
+        (k & 2 ? 1 : -1) * b.half[1],
+        (k & 1 ? 1 : -1) * b.half[2]
+      ];
+      var w = qrot(s.r, l);
+      pts.push([centre[0] + w[0], centre[1] + w[1], centre[2] + w[2]]);
+    }
+    var base = partColour(D.joints[i].name);
+    for (var f = 0; f < 6; f++) {
+      var n = qrot(s.r, NORMALS[f]);
+      var lit = 0.62 + 0.38 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+      var q = FACES[f].map(function (v) { return pts[v]; });
+      var depth = (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4;
+      out.push({
+        pts: q,
+        fill: shade(base, lit),
+        edge: shade(base, 0.55),
+        depth: depth,
+        alpha: alpha
+      });
+    }
+  }
+
+  function drawSkin(skin, cls, w, h, alpha) {
+    var quads = [];
+    for (var i = 0; i < D.joints.length; i++) boxQuads(skin, cls, i, quads, alpha);
+    var drawn = quads.map(function (q) {
+      var p = q.pts.map(function (v) { return project(v, w, h); });
+      var d = (p[0][2] + p[1][2] + p[2][2] + p[3][2]) / 4;
+      return { p: p, fill: q.fill, edge: q.edge, d: d, alpha: q.alpha };
+    });
+    drawn.sort(function (a, b) { return b.d - a.d; });
+    for (var k = 0; k < drawn.length; k++) {
+      var q = drawn[k];
+      if (q.p.some(function (v) { return v[2] <= 0.05; })) continue;
+      ctx.globalAlpha = q.alpha;
+      ctx.beginPath();
+      ctx.moveTo(q.p[0][0], q.p[0][1]);
+      for (var m = 1; m < 4; m++) ctx.lineTo(q.p[m][0], q.p[m][1]);
+      ctx.closePath();
+      ctx.fillStyle = q.fill;
+      ctx.fill();
+      if (q.alpha > 0.5) {
+        ctx.strokeStyle = q.edge;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFloor(w, h) {
+    var floor = css('--stage-floor'), grid = css('--stage-grid');
+    var span = 2.4, step = 0.3;
+    ctx.fillStyle = floor;
+    var corners = [[-span, 0, -span], [span, 0, -span], [span, 0, span], [-span, 0, span]]
+      .map(function (p) { return project(p, w, h); });
+    if (corners.every(function (p) { return p[2] > 0.05; })) {
+      ctx.beginPath();
+      ctx.moveTo(corners[0][0], corners[0][1]);
+      for (var i = 1; i < 4; i++) ctx.lineTo(corners[i][0], corners[i][1]);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = grid;
+    ctx.lineWidth = 1;
+    for (var g = -span; g <= span + 1e-6; g += step) {
+      var lines = [[[g, 0, -span], [g, 0, span]], [[-span, 0, g], [span, 0, g]]];
+      for (var l = 0; l < 2; l++) {
+        var a = project(lines[l][0], w, h), b = project(lines[l][1], w, h);
+        if (a[2] <= 0.05 || b[2] <= 0.05) continue;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawShadow(skin, w, h) {
+    var hips = skin[0].o;
+    var pts = [];
+    for (var a = 0; a < 20; a++) {
+      var t = (a / 20) * Math.PI * 2;
+      var p = project([hips[0] + Math.cos(t) * 0.3, 0.002, hips[2] + Math.sin(t) * 0.24], w, h);
+      if (p[2] <= 0.05) return;
+      pts.push(p);
+    }
+    ctx.fillStyle = css('--shadow');
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ---- state ------------------------------------------------------------
+  var state = { clip: 0, cls: 1, frame: 0, playing: true, speed: 1, onion: false, joint: 0, acc: 0 };
+
+  function clip() { return D.clips[state.clip]; }
+  function cls() { return D.classes[state.cls]; }
+
+  function render() {
+    var box = canvas.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = Math.max(1, Math.round(box.width)), h = Math.max(1, Math.round(box.height));
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = css('--stage-sky');
+    ctx.fillRect(0, 0, w, h);
+    drawFloor(w, h);
+
+    var c = clip(), k = cls(), n = c.frames.length;
+    if (state.onion) {
+      for (var back = 9; back >= 3; back -= 3) {
+        var fi = state.frame - back;
+        if (c.looping) fi = ((fi % n) + n) % n;
+        if (fi < 0) continue;
+        drawSkin(solve(k, c.frames[fi]), k, w, h, 0.16);
+      }
+    }
+    var skin = solve(k, c.frames[state.frame]);
+    drawShadow(skin, w, h);
+    drawSkin(skin, k, w, h, 1);
+    readout(skin);
+  }
+
+  function readout(skin) {
+    var c = clip(), row = c.frames[state.frame], i = state.joint;
+    $('j-swing').textContent = row[3 + i * 3].toFixed(1) + '\u00B0';
+    $('j-spread').textContent = row[4 + i * 3].toFixed(1) + '\u00B0';
+    $('j-twist').textContent = row[5 + i * 3].toFixed(1) + '\u00B0';
+    $('j-y').textContent = skin[i].o[1].toFixed(3) + ' m';
+    $('b-frame').textContent = 'f' + state.frame + ' / ' + (c.frames.length - 1);
+    $('scrub').value = state.frame;
+    var pct = c.frames.length > 1 ? state.frame / (c.frames.length - 1) : 0;
+    $('head').style.left = 'calc(' + (pct * 100).toFixed(3) + '% - 1px)';
+  }
+
+  // ---- chrome -----------------------------------------------------------
+  function buildList() {
+    var list = $('list'), seen = null, html = '';
+    D.clips.forEach(function (c, i) {
+      if (c.family !== seen) {
+        seen = c.family;
+        html += '<div class="group eyebrow" data-family="' + c.family + '">' + c.family + '</div>';
+      }
+      html += '<button class="clip" data-i="' + i + '" data-name="' + c.name + '">' + c.name +
+        '<span>' + c.frames.length + (c.looping ? ' <b class="loops">&#8635;</b>' : '') + '</span></button>';
+    });
+    list.innerHTML = html;
+    list.addEventListener('click', function (e) {
+      var b = e.target.closest('.clip');
+      if (b) pickClip(+b.dataset.i);
+    });
+  }
+
+  function buildClasses() {
+    $('classes').innerHTML = D.classes.map(function (k, i) {
+      return '<button class="pick" data-i="' + i + '" aria-pressed="false">' + k.name + '</button>';
+    }).join('');
+    $('classes').addEventListener('click', function (e) {
+      var b = e.target.closest('.pick');
+      if (!b) return;
+      state.cls = +b.dataset.i;
+      syncClass();
+      render();
+    });
+  }
+
+  function buildJoints() {
+    $('joints').innerHTML = D.joints.map(function (j, i) {
+      return '<button class="pick" data-i="' + i + '" aria-pressed="false">' + j.name + '</button>';
+    }).join('');
+    $('joints').addEventListener('click', function (e) {
+      var b = e.target.closest('.pick');
+      if (!b) return;
+      state.joint = +b.dataset.i;
+      syncJoint();
+      render();
+    });
+  }
+
+  function syncClass() {
+    var k = cls();
+    Array.prototype.forEach.call($('classes').children, function (b) {
+      b.setAttribute('aria-pressed', +b.dataset.i === state.cls ? 'true' : 'false');
+    });
+    $('b-class').textContent = k.name;
+    $('n-hip').textContent = k.hip.toFixed(2) + ' m';
+    $('n-height').textContent = k.height.toFixed(2) + ' m';
+  }
+
+  function syncJoint() {
+    Array.prototype.forEach.call($('joints').children, function (b) {
+      b.setAttribute('aria-pressed', +b.dataset.i === state.joint ? 'true' : 'false');
+    });
+  }
+
+  function phaseStrip() {
+    var c = clip(), n = c.frames.length, el = $('phases');
+    if (!c.phases) {
+      el.innerHTML = '<div class="ph-none">' + (c.looping ? 'cycle' : 'no phases') + '</div>';
+      return;
+    }
+    var lastStartup = c.phases[0], firstActive = c.phases[1], firstRecovery = c.phases[2];
+    var s = Math.max(1, firstActive), a = Math.max(1, firstRecovery - firstActive), r = Math.max(1, n - firstRecovery);
+    void lastStartup;
+    el.innerHTML =
+      '<div class="ph-s" style="flex:' + s + '">startup ' + s + '</div>' +
+      '<div class="ph-a" style="flex:' + a + '">active ' + a + '</div>' +
+      '<div class="ph-r" style="flex:' + r + '">recovery ' + r + '</div>';
+  }
+
+  function pickClip(i) {
+    state.clip = i;
+    state.frame = 0;
+    var c = clip();
+    Array.prototype.forEach.call($('list').querySelectorAll('.clip'), function (b) {
+      b.setAttribute('aria-current', +b.dataset.i === i ? 'true' : 'false');
+    });
+    $('b-name').textContent = c.name;
+    $('n-name').textContent = c.name;
+    $('n-family').textContent = c.family;
+    $('n-what').textContent = c.what;
+    $('n-len').textContent = c.frames.length + ' f \u00B7 ' + (c.frames.length / 60).toFixed(2) + ' s';
+    $('n-loop').textContent = c.looping ? 'yes' : 'no';
+    $('n-file').textContent = c.file + '.rs';
+    $('scrub').max = c.frames.length - 1;
+    phaseStrip();
+    render();
+  }
+
+  // transport
+  $('play').addEventListener('click', function () {
+    state.playing = !state.playing;
+    this.textContent = state.playing ? 'Pause' : 'Play';
+    this.classList.toggle('on', !state.playing);
+  });
+  $('scrub').addEventListener('input', function () {
+    state.frame = +this.value;
+    state.playing = false;
+    $('play').textContent = 'Play';
+    $('play').classList.add('on');
+    render();
+  });
+  var SPEEDS = [1, 0.5, 0.25, 2];
+  var speedAt = 0;
+  $('speed').addEventListener('click', function () {
+    speedAt = (speedAt + 1) % SPEEDS.length;
+    state.speed = SPEEDS[speedAt];
+    this.textContent = state.speed + '\u00D7';
+    this.classList.toggle('on', state.speed !== 1);
+  });
+  $('onion').addEventListener('click', function () {
+    state.onion = !state.onion;
+    this.classList.toggle('on', state.onion);
+    render();
+  });
+  $('view').addEventListener('click', function () {
+    viewIdx = (viewIdx + 1) % VIEWS.length;
+    cam.yaw = VIEWS[viewIdx].yaw;
+    cam.pitch = VIEWS[viewIdx].pitch;
+    this.textContent = VIEWS[viewIdx].name;
+    render();
+  });
+
+  // filter
+  $('q').addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase();
+    var shown = {};
+    Array.prototype.forEach.call($('list').querySelectorAll('.clip'), function (b) {
+      var hit = !q || b.dataset.name.indexOf(q) >= 0;
+      b.hidden = !hit;
+      if (hit) shown[D.clips[+b.dataset.i].family] = true;
+    });
+    Array.prototype.forEach.call($('list').querySelectorAll('.group'), function (g) {
+      g.hidden = !shown[g.dataset.family];
+    });
+  });
+
+  // orbit
+  var screen = $('screen'), drag = null;
+  screen.addEventListener('pointerdown', function (e) {
+    drag = { x: e.clientX, y: e.clientY };
+    screen.classList.add('dragging');
+    screen.setPointerCapture(e.pointerId);
+  });
+  screen.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    cam.yaw -= (e.clientX - drag.x) * 0.008;
+    cam.pitch = clamp(cam.pitch + (e.clientY - drag.y) * 0.006, -0.7, 1.1);
+    drag = { x: e.clientX, y: e.clientY };
+    render();
+  });
+  function endDrag() { drag = null; screen.classList.remove('dragging'); }
+  screen.addEventListener('pointerup', endDrag);
+  screen.addEventListener('pointercancel', endDrag);
+  screen.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    cam.dist = clamp(cam.dist + e.deltaY * 0.003, 1.4, 8);
+    render();
+  }, { passive: false });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.target.tagName === 'INPUT') return;
+    var c = clip();
+    if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+    else if (e.key === 'ArrowRight') { state.frame = (state.frame + 1) % c.frames.length; render(); }
+    else if (e.key === 'ArrowLeft') { state.frame = (state.frame - 1 + c.frames.length) % c.frames.length; render(); }
+    else return;
+  });
+
+  window.addEventListener('resize', render);
+
+  // ---- run --------------------------------------------------------------
+  var last = performance.now();
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function tick(now) {
+    var dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (state.playing) {
+      state.acc += dt * 60 * state.speed;
+      while (state.acc >= 1) {
+        state.acc -= 1;
+        var n = clip().frames.length;
+        state.frame = state.frame + 1 >= n ? 0 : state.frame + 1;
+      }
+      render();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  buildList();
+  buildClasses();
+  buildJoints();
+  syncClass();
+  syncJoint();
+  state.joint = 0;
+  $('s-clips').textContent = D.clips.length;
+  $('s-frames').textContent = D.clips.reduce(function (a, c) { return a + c.frames.length; }, 0);
+  cam.yaw = VIEWS[0].yaw;
+  cam.pitch = VIEWS[0].pitch;
+  pickClip(D.clips.findIndex(function (c) { return c.name === 'champion_committed'; }) >= 0
+    ? D.clips.findIndex(function (c) { return c.name === 'champion_committed'; })
+    : 0);
+  if (reduced) {
+    state.playing = false;
+    $('play').textContent = 'Play';
+    $('play').classList.add('on');
+  }
+  requestAnimationFrame(tick);
+})();
+</script>

@@ -959,3 +959,36 @@ it; whether a person fights the front end enough to break a leg, which the scrip
 does; and whether the creature having a different move set depending on where you stand is the
 feature it looks like or a way to switch its moves off.
 
+### 2026-09-12 — the characters get a skeleton
+**Changed** The six free-floating boxes became sixteen joints hung off each other: two members
+per limb, a spine that bends and a chest that turns on top of it. A pose is now fifty-one
+angles and no positions at all. Stride length moved into `tuning.rs` as four constants
+(`WALK_STRIDE`, `RUN_STRIDE`, `CROUCH_STRIDE`, `STRAFE_STRIDE`), and the simulation gained six
+fields that exist only for the renderer.
+
+**Why** Five clips is the most the old model could carry. Nothing held an elbow to a shoulder,
+so every pose re-derived where the hand went, and a pose authored for one body could not play
+on another — which meant six classes would have meant six sets of everything. Joint angles are
+proportion-free, so one authored clip is now correct on the Bulwark's heavy frame and the Dual
+mage's slight one without being re-authored.
+
+The stride constants are not free choices and it is worth writing down why. A leg is 0.87 m
+long and a hip is 0.86 m off the floor at contact, so a foot can be at most about 0.34 m ahead
+of the hip before the leg runs out. Stride length follows from that, not the other way round:
+1.10 m per cycle walking, 2.70 m running, and a quarter off sideways because a leg swung
+sideways runs out of *hip* long before one swung forward runs out of leg. The first attempt
+used 1.35 m and 2.45 m, picked by eye, and the IK quietly refused to reach on every contact
+frame.
+
+**Verdict** kept, and one bug it exposed is worth the entry on its own. The walk cycle's phase
+was `distance walked / stride length`. A stride is longer at a sprint than at a walk, so the
+moment the speed changed the phase jumped by whole cycles — twenty-nine metres into a match,
+turning from a run into a diagonal moved a knee ninety degrees in a single frame. A phase has
+to be **integrated, not divided**: the simulation now accumulates `speed / stride` each tick.
+The same class of mistake is available anywhere a ratio is used where an integral belongs.
+
+**Open:** whether seven metres per second is the right free movement speed at all. At that
+speed a 1.8 m body is sprinting, and the "walk speed" knob is named for something the game
+does not have — the only walk in it is the guarding one at two. Nothing is wrong with a game
+where neutral is a sprint, but it should be on purpose.
+

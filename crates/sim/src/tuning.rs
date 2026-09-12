@@ -413,6 +413,34 @@ pub fn stun_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StunDecay))
 }
 
+// ---------------------------------------------------------------------------
+// Stride
+// ---------------------------------------------------------------------------
+//
+// How much ground one full cycle of a walk or a run covers. These are the
+// numbers that decide whether the feet skate, and they are shared three ways:
+// the simulation advances the stride phase with them, the renderer plays the
+// clips at that phase, and the clips themselves are authored by placing every
+// planted foot with the same arithmetic. One copy, here, or the feet slide.
+//
+// They are not free choices. A leg is 0.87 m long and a hip is 0.86 m off the
+// floor at contact, so a foot can be at most about 0.34 m ahead of the hip
+// before the leg runs out -- and stride length follows from that.
+
+/// Speed at which the walk cycle is at full weight. The guarding walk speed is
+/// two, and that is the speed a fighter spends a tense exchange at.
+pub const WALK_AT: Fx = Fx::ratio(22, 10);
+/// And where the run is. Seven metres per second is a run by any honest
+/// measure, whatever the movement knob is called.
+pub const RUN_AT: Fx = Fx::ratio(7, 1);
+
+pub const WALK_STRIDE: Fx = Fx::ratio(110, 100);
+pub const RUN_STRIDE: Fx = Fx::ratio(270, 100);
+pub const CROUCH_STRIDE: Fx = Fx::ratio(80, 100);
+/// A sidestep covers less ground per cycle than a stride forward, because a leg
+/// swung sideways runs out of hip long before one swung forward runs out of leg.
+pub const STRAFE_STRIDE: Fx = Fx::ratio(72, 100);
+
 /// What a body keeps while the round-over pause runs.
 pub fn settle_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SettleDecay))

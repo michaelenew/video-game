@@ -219,6 +219,51 @@ pub struct Player {
     /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
     /// so the victim can be kept at arm's length rather than merely stunned.
     pub held_by: u8,
+
+    // -- Animation clocks ---------------------------------------------------
+    //
+    // These four exist for the renderer and change nothing about combat. They
+    // are here rather than there because *animation state belongs in the
+    // snapshot*: rollback re-simulates past frames, and a walk cycle or a
+    // landing that runs off the renderer's own clock slides and pops every
+    // time it happens. See `docs/design/architecture.md`.
+    /// Where the body is in its stride, as a fraction of one two-step cycle in
+    /// 1/65536ths, wrapping.
+    ///
+    /// A walk cycle driven from the frame counter skates: the feet keep the
+    /// same cadence whether the body is crawling or sprinting. This is driven
+    /// by ground covered instead, so a footfall happens every stride's worth of
+    /// metres at any speed.
+    ///
+    /// It is an **accumulator**, not a ratio, and that distinction is the whole
+    /// reason it lives here rather than being worked out in the renderer from a
+    /// distance travelled. A stride is longer at a sprint than at a walk and
+    /// shorter sideways than forwards, so `distance / stride` jumps by whole
+    /// cycles the moment the stride changes -- which reads as both legs
+    /// teleporting. Integrating `speed / stride` cannot do that.
+    pub stride: u16,
+    /// Frames off the ground, saturating. On the ground it holds how long the
+    /// last flight was, which is what tells a hop from a fall.
+    pub air_frames: u16,
+    /// Frames since touching down, saturating. Zero while airborne.
+    pub since_landed: u16,
+    /// Frames left of the parry flourish. A parry costs the defender nothing
+    /// and is easy to miss; this is what lets them see that they got it.
+    pub parried: u16,
+    /// Frames spent crouching, saturating. Zero while standing.
+    ///
+    /// `crouching` is a bool, and a bool cannot say how long it has been true --
+    /// so without this the drop into a crouch has no clock and the entry
+    /// animation is skipped entirely by anyone who was already standing still.
+    pub crouched_for: u16,
+    /// How long the stun currently being served was when it started.
+    ///
+    /// `Action::HitStun { left }` counts down and never says what it counted
+    /// down *from*, so the renderer cannot tell a graze from a Slam. It needs
+    /// to: those get different animations, and picking between them halfway
+    /// through would visibly switch clips mid-flinch.
+    pub stun_total: u16,
+
     /// Which part of the creature this fighter is standing on, or
     /// `monster::NO_PART`.
     ///
@@ -336,6 +381,12 @@ impl Default for Player {
             slow_mul: Fx::ONE,
             mechanic_held: false,
             held_by: NOBODY,
+            stride: 0,
+            air_frames: 0,
+            since_landed: 0,
+            parried: 0,
+            crouched_for: 0,
+            stun_total: 0,
             mount: monster::NO_PART,
             local: V3::ZERO,
             carry_yaw: Fx::ZERO,
@@ -448,6 +499,7 @@ impl World {
                 // Bodies still settle during the pause; nothing else acts.
                 for p in self.players.iter_mut() {
                     settle(p);
+                    advance_clocks(p);
                 }
                 return;
             }
@@ -490,6 +542,7 @@ impl World {
                 p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
             }
             step_player(p, input, &field, beast.as_ref());
+            advance_clocks(p);
         }
 
         // What a move does *as it comes out*, on its first active frame: the
@@ -536,6 +589,8 @@ impl World {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
                     };
+                    self.players[attacker].stun_total = t::parry_stagger();
+                    self.players[defender].parried = PARRY_FLOURISH;
                 }
             }
         }
@@ -667,6 +722,12 @@ impl World {
             h.write_u32(p.air_stall as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
+            h.write_u32(p.stride as u32);
+            h.write_u32(p.air_frames as u32);
+            h.write_u32(p.since_landed as u32);
+            h.write_u32(p.parried as u32);
+            h.write_u32(p.crouched_for as u32);
+            h.write_u32(p.stun_total as u32);
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
             let kind = match p.action {
@@ -852,6 +913,7 @@ fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.blocked {
         // No chip damage. The cost of blocking is knockback plus a window
         // where you cannot act -- see defense.md.
+        defender.stun_total = hit.blockstun;
         defender.action = Action::BlockStun {
             left: hit.blockstun,
         };
@@ -865,11 +927,13 @@ fn apply_hit(defender: &mut Player, hit: Hit) {
             // A grab is not knockback. The victim is pinned to the grabber and
             // goes wherever they go, which is what makes a grab a commitment
             // for *both* of them rather than a shove with a longer stun.
+            defender.stun_total = hit.grabs;
             defender.action = Action::Held { left: hit.grabs };
             defender.held_by = hit.by;
             defender.vel.x = Fx::ZERO;
             defender.vel.z = Fx::ZERO;
         } else {
+            defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
         }
         if hit.launch.raw() > 0 {
@@ -1521,6 +1585,89 @@ fn hash_v3(h: &mut Fnv, v: &V3) {
     h.write_i32(v.z.raw());
 }
 
+/// How long the parry flourish plays for. Frames, and long enough to be seen
+/// without outlasting the stagger it earned.
+pub const PARRY_FLOURISH: u16 = 14;
+
+/// Advance the four clocks the renderer needs and combat does not.
+///
+/// Every one of them is a fact about what just happened -- how far you have
+/// walked, how long you have been in the air -- rather than a decision, which
+/// is why they can live here without complicating anything. Being in the
+/// snapshot is the whole point: a rollback rewinds them with everything else,
+/// so a landing that gets re-simulated lands the same way twice.
+fn advance_clocks(p: &mut Player) {
+    if p.grounded {
+        // `air_frames` deliberately keeps its value on the ground: it is how
+        // long the last flight lasted, which is the only thing that can tell a
+        // hop's landing from a long fall's. Clearing it on touchdown would
+        // throw away the one number the landing animation needs.
+        p.since_landed = p.since_landed.saturating_add(1);
+    } else {
+        if p.since_landed > 0 {
+            p.air_frames = 0;
+        }
+        p.since_landed = 0;
+        p.air_frames = p.air_frames.saturating_add(1);
+    }
+    p.parried = p.parried.saturating_sub(1);
+    p.crouched_for = if p.crouching {
+        p.crouched_for.saturating_add(1)
+    } else {
+        0
+    };
+
+    // Ground covered this frame as a fraction of one stride. The raw 16.16 bits
+    // of a fraction of a turn *are* the phase, so there is no conversion.
+    //
+    // A rider is the exception and is left alone here: their world velocity is
+    // zero while they are aboard, and `ride` has already advanced this from the
+    // step they took across the creature.
+    if p.aboard() {
+        return;
+    }
+    let advance = p.vel.flat_len().mul(DT).div(stride_length(p));
+    p.stride = p.stride.wrapping_add(advance.raw().clamp(0, 65535) as u16);
+}
+
+/// How much ground one full cycle of this body's current gait covers.
+///
+/// Blended by speed, shortened when the movement is sideways, and short again
+/// when crouched. The renderer plays the clips at the phase this produces and
+/// the clips were authored against the same numbers, so the three agree by
+/// construction rather than by anybody remembering to keep them in step.
+fn stride_length(p: &Player) -> Fx {
+    if p.crouching {
+        return t::CROUCH_STRIDE;
+    }
+    let speed = p.vel.flat_len();
+    let gait = speed
+        .sub(t::WALK_AT)
+        .div(t::RUN_AT.sub(t::WALK_AT))
+        .clamp(Fx::ZERO, Fx::ONE);
+    let base = t::WALK_STRIDE.add(t::RUN_STRIDE.sub(t::WALK_STRIDE).mul(gait));
+
+    // How much of the travel is straight ahead. A pure sidestep gets the full
+    // shortening; a forward run gets none.
+    if speed.raw() <= 0 {
+        return base;
+    }
+    let along = p
+        .vel
+        .dot(p.facing)
+        .abs()
+        .div(speed)
+        .clamp(Fx::ZERO, Fx::ONE);
+    let scale = t::STRAFE_STRIDE.add(Fx::ONE.sub(t::STRAFE_STRIDE).mul(along));
+    base.mul(scale).max(SHORTEST_STRIDE)
+}
+
+/// A floor on the stride, so the phase cannot be divided by something near
+/// zero. Not a feel number: a tenth of a metre is far below any stride the
+/// constants above can produce, and it exists only to stop a division blowing
+/// up if they are ever retuned to nonsense.
+const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10);
+
 /// Let a body come to rest without accepting input. Used during the pause
 /// between rounds.
 fn settle(p: &mut Player) {
@@ -1845,6 +1992,17 @@ fn step_rider(p: &mut Player, input: Input, beast: &Monster) {
     let mut next = held;
     next.x = next.x.add(wish.x.mul(speed).mul(DT));
     next.z = next.z.add(wish.z.mul(speed).mul(DT));
+
+    // Aboard, the ground is the animal. The stride phase runs off ground
+    // covered and `vel` is zero the whole time a rider is on -- the position
+    // comes from `local` -- so the walk cycle has to be advanced from the step
+    // just taken across the creature's back, or a rider crossing it glides
+    // there in the idle. Taken from the *intended* step rather than from where
+    // they end up, because being shoved by a swinging tail is not walking.
+    let walked = next.sub(held).flat_len();
+    p.stride = p
+        .stride
+        .wrapping_add(walked.div(stride_length(p)).raw().clamp(0, 65535) as u16);
 
     // A step you can walk up. The creature is terrain, and the tail sits two
     // thirds of a metre below the back: without this the only way between them

@@ -219,13 +219,18 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "F2",
-                "Toggle baked animation against the procedural poses.",
-                "F2 baked anim",
+                "Freeze the skeleton at rest. Tells a bad clip from a bad rig.",
+                "F2 bind pose",
             ),
             s(
                 "F7",
                 "The Oven: every tuned number in the game, live.",
                 "F7 oven",
+            ),
+            s(
+                "F9",
+                "The animation hub: every clip, editable while it runs.",
+                "F9 animation",
             ),
         ],
     },
@@ -270,6 +275,49 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "The animation hub",
+        blurb: "F9. Every clip in the game, editable while it runs. The kinematics are \
+                handled; what you set is poses, when they happen, and the curve between them.",
+        entries: &[
+            e(
+                "clip list",
+                "Grouped by family. A clip nobody has authored says so, and opens anyway.",
+            ),
+            e(
+                "timeline",
+                "Drag a key to move it. Click anywhere else to scrub. The coloured lines on an attack are the last startup, the first active and the first recovery frame.",
+            ),
+            e(
+                "add / delete / mirror key",
+                "Adding takes the pose that was already on screen, so inserting a key never moves anything.",
+            ),
+            e(
+                "copy / paste / paste mirrored",
+                "A walk's second step is the first one mirrored, and so is half of everything else.",
+            ),
+            e(
+                "hold key",
+                "Freeze on the selected key, for posing. Onion draws the keys either side of it.",
+            ),
+            e(
+                "timing out of this key",
+                "The curve between this pose and the next: drag the two handles, or take a preset. Below the floor pulls back before it goes; above the ceiling carries past and returns.",
+            ),
+            e(
+                "reach",
+                "Drag the end of a limb and the joints follow. Level and toe are the two things a foot does on the floor.",
+            ),
+            e(
+                "looseness",
+                "Lag is how many frames behind the keys a part runs; ring is how far it carries past. Weight should read as follow-through, never as delay.",
+            ),
+            e(
+                "save and bake",
+                "Rewrites the recipe file in the shape a person would have written, then re-bakes in a fresh process -- which is also how you find out it compiles.",
+            ),
+        ],
+    },
+    Section {
         title: "Other binaries",
         blurb: "",
         entries: &[
@@ -280,6 +328,14 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "cargo run -p anim --bin bake",
                 "Re-bake the animation clips from their recipes.",
+            ),
+            e(
+                "cargo run -p anim --bin preview -- <clip>",
+                "Draw a clip as a contact sheet PNG, into target/anim-preview. Add --feet for a per-frame table of what each foot is doing, or --all for everything.",
+            ),
+            e(
+                "cargo run -p anim --bin export -- docs/preview/anim.json",
+                "Write the skeletons and every baked frame out as JSON, for the browser bench in docs/preview.",
             ),
             e(
                 "cargo run -p hunt --bin fight",
@@ -334,8 +390,12 @@ pub const SECTIONS: &[Section] = &[
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e(
-                "BAKED_ANIM=0",
-                "Start with procedural poses instead of baked clips.",
+                "SHOT_DIST=<metres>",
+                "Pull the camera in for a capture. The arena default of eleven metres makes a pose unreadable.",
+            ),
+            e(
+                "BIND_POSE=1",
+                "Start with the skeleton frozen at rest, for checking proportions.",
             ),
             e("OVEN=1", "Start with the Oven open."),
             e(

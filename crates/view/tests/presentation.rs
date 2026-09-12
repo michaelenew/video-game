@@ -6,7 +6,8 @@
 use sim::state::Action;
 use sim::{Input, World};
 use view::interp::{TickClock, interpolate};
-use view::pose::{PARTS, Part, PoseInput, pose_for};
+use view::play::{PoseInput, pose_for};
+use view::skeleton::Joint;
 use view::{CameraRig, camera::RigConfig};
 
 // ---------------------------------------------------------------------------
@@ -470,16 +471,28 @@ fn pitch_is_clamped() {
 // Posing -- the property that matters is purity
 // ---------------------------------------------------------------------------
 
-fn input_at(action: Action, into: u16, total: u16, frame: u32) -> PoseInput {
+fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
     PoseInput {
+        class: sim::Class::Bulwark,
         action,
-        frames_into: into,
-        frames_total: total,
-        speed: 0.0,
         grounded: true,
         crouching: false,
+        crouched_for: 0,
+        speed: 0.0,
+        travel: [0.0, 0.0],
+        eased_speed: 0.0,
+        eased_travel: [0.0, 0.0],
+        stride,
+        air_frames: 0,
+        since_landed: frame as u16,
+        parried: 0,
+        stun_total: 0,
+        rise: 0.0,
+        turn_rate: 0.0,
+        health: 1000,
+        round_left: None,
         sim_frame: frame,
-        clip: None,
+        bind_pose: false,
     }
 }
 
@@ -487,10 +500,11 @@ fn input_at(action: Action, into: u16, total: u16, frame: u32) -> PoseInput {
 fn posing_is_a_pure_function_of_state() {
     // The whole rollback-safe animation argument rests on this.
     let cases = [
-        input_at(Action::Free, 0, 0, 41),
-        input_at(Action::Startup { kind: 0, left: 2 }, 2, 4, 41),
-        input_at(Action::Active { kind: 1, left: 1 }, 3, 4, 41),
-        input_at(Action::Guard { held: 3 }, 3, 0, 41),
+        input_at(Action::Free, 0.0, 41),
+        input_at(Action::Startup { kind: 0, left: 2 }, 0.0, 41),
+        input_at(Action::Active { kind: 1, left: 1 }, 0.0, 41),
+        input_at(Action::Guard { held: 3 }, 0.0, 41),
+        input_at(Action::HitStun { left: 4 }, 0.0, 41),
     ];
     for c in cases {
         assert_eq!(pose_for(c), pose_for(c));
@@ -525,57 +539,43 @@ fn replaying_a_frame_reproduces_its_pose() {
     assert_eq!(pose_of(&replay), pose_of(&w));
 }
 
+/// Pose the way the renderer does: from the interpolated view of two identical
+/// snapshots, so every animation clock in the snapshot is exercised.
 fn pose_of(w: &World) -> view::Pose {
-    let p = &w.players[0];
-    pose_for(PoseInput {
-        action: p.action,
-        frames_into: 0,
-        frames_total: 0,
-        speed: 0.0,
-        grounded: p.grounded,
-        crouching: p.crouching,
-        sim_frame: w.frame,
-        clip: None,
-    })
-}
-
-#[test]
-fn attack_phases_are_visually_distinct() {
-    // Reading startup from active from recovery across the arena is a gameplay
-    // requirement, not an art one.
-    let startup = pose_for(input_at(Action::Startup { kind: 0, left: 0 }, 4, 4, 0));
-    let active = pose_for(input_at(Action::Active { kind: 0, left: 2 }, 0, 3, 0));
-    let recovery = pose_for(input_at(Action::Recovery { kind: 0, left: 9 }, 9, 10, 0));
-
-    let sep = |a: &view::Pose, b: &view::Pose| -> f32 {
-        PARTS
-            .iter()
-            .map(|p| {
-                let (x, y) = (a.get(*p), b.get(*p));
-                (0..3)
-                    .map(|k| (x.pos[k] - y.pos[k]).abs() + (x.rot[k] - y.rot[k]).abs())
-                    .sum::<f32>()
-            })
-            .sum()
-    };
-    assert!(
-        sep(&startup, &active) > 1.5,
-        "startup and active look alike"
-    );
-    assert!(
-        sep(&active, &recovery) > 1.5,
-        "active and recovery look alike"
-    );
+    let frame = view::interpolate(w, w, 0.0);
+    pose_for(PoseInput::of(&frame.players[0], w.players[0].class, &frame))
 }
 
 #[test]
 fn walking_moves_the_legs_and_idling_does_not() {
-    let mut moving = input_at(Action::Free, 0, 0, 12);
+    // And it has to be *distance* that moves them, not time: a walk cycle on a
+    // fixed cadence skates the moment the body moves at any other speed.
+    let mut moving = input_at(Action::Free, 0.0, 12);
     moving.speed = 7.0;
-    let idle = input_at(Action::Free, 0, 0, 12);
-    let leg = |p: &view::Pose| p.get(Part::LegL).rot[0].abs();
-    assert!(leg(&pose_for(moving)) > 0.1, "legs did not swing");
-    assert!(leg(&pose_for(idle)) < 0.01, "idle legs are swinging");
+    moving.travel = [0.0, 7.0];
+    moving.eased_speed = 7.0;
+    moving.eased_travel = [0.0, 7.0];
+    let leg = |p: &view::Pose| p.degrees(Joint::ThighL, 0);
+
+    let mut swung: f32 = 0.0;
+    for i in 0..20 {
+        let mut at = moving;
+        at.stride = i as f32 * 0.06;
+        swung = swung.max((leg(&pose_for(at)) - leg(&pose_for(moving))).abs());
+    }
+    assert!(
+        swung > 8.0,
+        "legs did not swing over a stride: {swung} degrees"
+    );
+
+    let idle = input_at(Action::Free, 0.0, 12);
+    let mut idle_swing: f32 = 0.0;
+    for i in 0..20 {
+        let mut at = idle;
+        at.stride = i as f32 * 0.06;
+        idle_swing = idle_swing.max((leg(&pose_for(at)) - leg(&pose_for(idle))).abs());
+    }
+    assert!(idle_swing < 1.0, "a standing character is striding");
 }
 
 #[test]
@@ -615,6 +615,127 @@ fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Playing a whole match through the animation system
+// ---------------------------------------------------------------------------
+
+/// Run a scripted match and hand every frame to the poser the way the renderer
+/// does. Returns the pose drawn on each frame for player one.
+fn play_through(frames: u32) -> Vec<view::Pose> {
+    let mut w = World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
+    let mut fade = view::play::Crossfade::default();
+    let mut drawn = Vec::new();
+    for i in 0..frames {
+        // A script that visits every branch of the selection: walking, running,
+        // turning, jumping, dodging, attacking, guarding, being hit.
+        let phase = i % 120;
+        let bits = match phase {
+            0..=20 => Input::W,
+            21..=32 => Input::W | Input::A,
+            33..=40 => Input::SPACE,
+            41..=48 => Input::SHIFT | Input::D,
+            49..=60 => Input::LEFT,
+            61..=72 => Input::SHIFT | Input::LEFT,
+            73..=86 => Input::RIGHT,
+            87..=96 => Input::CROUCH,
+            97..=104 => Input::S,
+            _ => 0,
+        };
+        let aim = ((i * 700) % 65536) as u16;
+        let prev = w.clone();
+        w.advance([Input::aimed(bits, aim), Input::new(Input::RIGHT)]);
+        let frame = view::interpolate(&prev, &w, 1.0);
+        let input = view::play::PoseInput::of(&frame.players[0], w.players[0].class, &frame);
+        drawn.push(fade.pose(input, 1.0 / 60.0));
+    }
+    drawn
+}
+
+#[test]
+fn nothing_the_animation_system_draws_is_a_jump() {
+    // Clips are switched, not cross-faded, inside `pose_for`; the fade on top is
+    // what stops walking into a wind-up from being a visible cut. This is the
+    // test that says it works, over a match that visits every branch.
+    let drawn = play_through(600);
+    let skeleton = view::pose::reference();
+    let mut worst = 0.0f32;
+    let mut at = (0usize, "");
+    for (i, pair) in drawn.windows(2).enumerate() {
+        let before = view::skeleton::solve(skeleton, &pair[0]);
+        let after = view::skeleton::solve(skeleton, &pair[1]);
+        // Relative to the hips, like the clip standard in `anim`: a body that
+        // is travelling moves every joint on it, and that is the character
+        // going somewhere rather than the pose jumping.
+        let root = {
+            let (p, q) = (before.origin[0], after.origin[0]);
+            [q[0] - p[0], q[1] - p[1], q[2] - p[2]]
+        };
+        for j in view::skeleton::JOINTS {
+            let (p, q) = (before.origin[j.index()], after.origin[j.index()]);
+            let moved = ((q[0] - p[0] - root[0]).powi(2)
+                + (q[1] - p[1] - root[1]).powi(2)
+                + (q[2] - p[2] - root[2]).powi(2))
+            .sqrt();
+            if moved > worst {
+                worst = moved;
+                at = (i, j.name());
+            }
+        }
+    }
+    // Comfortably above what any single clip is allowed and far below a cut:
+    // switching from a sprint into a wind-up without a fade moves a hand about
+    // a metre in one frame, and that is the failure this exists to catch.
+    assert!(
+        worst < 0.45,
+        "{} moved {worst:.3} m relative to the hips between frames {} and {}",
+        at.1,
+        at.0,
+        at.0 + 1
+    );
+}
+
+#[test]
+fn nothing_the_animation_system_draws_is_broken() {
+    let skeleton = view::pose::reference();
+    for (i, pose) in play_through(600).iter().enumerate() {
+        for (c, v) in pose.channels.iter().enumerate() {
+            assert!(v.is_finite(), "frame {i} channel {c} is {v}");
+        }
+        let bad = pose.violations(skeleton);
+        assert!(bad.is_empty(), "frame {i}: {bad:?}");
+    }
+}
+
+#[test]
+fn the_stride_phase_blends_the_short_way_round() {
+    // The phase wraps, so a tick that crosses the wrap is a small step forward
+    // rather than a large one backwards -- and getting that wrong makes the
+    // legs snap backwards once per stride.
+    let mut w = World::new();
+    // Walk for long enough to cross the wrap a few times.
+    let mut last = 0.0f32;
+    let mut worst = 0.0f32;
+    for i in 0..400 {
+        let prev = w.clone();
+        w.advance([Input::new(Input::W), Input::default()]);
+        for step in 0..4 {
+            let alpha = step as f32 / 4.0;
+            let frame = view::interpolate(&prev, &w, alpha);
+            let phase = frame.players[0].stride;
+            assert!((0.0..1.0).contains(&phase), "phase {phase} out of range");
+            if i > 2 {
+                let step = (phase - last).rem_euclid(1.0);
+                worst = worst.max(step);
+            }
+            last = phase;
+        }
+    }
+    // A quarter of a tick at seven metres per second over a 2.7 m stride is
+    // about a hundredth of a cycle. Anything near a whole cycle is a wrap
+    // handled the long way round.
+    assert!(worst < 0.1, "the phase jumped {worst:.3} of a cycle");
 }
 
 // ---------------------------------------------------------------------------
