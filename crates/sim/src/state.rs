@@ -313,6 +313,16 @@ pub struct Player {
     /// It is where the ability *lands*, already solved against the terrain and
     /// the move's reach -- see `crate::aim`.
     pub aim_at: V3,
+    /// The line the move was aimed along when it was locked in, as a unit
+    /// vector -- pitch included, unlike `facing`, which is flattened to the
+    /// horizontal because a body only ever turns to face level.
+    ///
+    /// A real skillshot travels along this rather than along `facing`: the
+    /// Elementalist's auto reads what stands in front of her along it, and a
+    /// structure it catches is kicked along it too, so aiming above the
+    /// horizon throws the structure up rather than merely forward. See
+    /// `docs/design/kits/elementalist.md`.
+    pub aim_dir: V3,
 }
 
 impl Player {
@@ -416,6 +426,7 @@ impl Default for Player {
             bolt_fire: false,
             bolt_blocked: false,
             aim_at: V3::ZERO,
+            aim_dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
         }
     }
 }
@@ -597,11 +608,16 @@ impl World {
             // on the frame the shot comes out -- and reset every time whether
             // or not it applies, so a stale decision from an earlier Bolt can
             // never leak into a move that is not Bolt.
+            //
+            // Along `aim_dir` from the cast origin, not `facing` from the
+            // feet: `facing` is flattened to the horizontal, so a shot aimed
+            // up at a structure would never even see it. This is the real
+            // three-dimensional line the shot travels, matching `crate::aim`.
             self.players[i].bolt_fire = false;
             self.players[i].bolt_blocked = false;
             if p.class == Class::Elementalist && kind == SLOT_POKE {
-                let from = p.pos;
-                let to = p.pos.add(p.facing.scale(t::bolt_aim_range()));
+                let from = aim::origin(p.pos);
+                let to = from.add(p.aim_dir.scale(t::bolt_aim_range()));
                 let stone_hit = stones::first_along_shot(&field, from, to);
                 let pillar_dist = effects::first_fire_pillar_along(&self.effects, from, to);
                 let stone_closer = match (stone_hit, pillar_dist) {
@@ -611,7 +627,7 @@ impl World {
                 };
                 if stone_closer {
                     if let Some((idx, _)) = stone_hit {
-                        stones::kick(&mut self.players, idx, p.facing);
+                        stones::kick(&mut self.players, idx, p.aim_dir);
                         self.players[i].bolt_blocked = true;
                     }
                 } else if pillar_dist.is_some() {
@@ -755,7 +771,7 @@ impl World {
             }
         }
         for p in &self.players {
-            for v in [p.pos, p.vel, p.facing, p.aim_at] {
+            for v in [p.pos, p.vel, p.facing, p.aim_at, p.aim_dir] {
                 h.write_i32(v.x.raw());
                 h.write_i32(v.y.raw());
                 h.write_i32(v.z.raw());
@@ -899,8 +915,19 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     // body moving, and pointing the camera at the floor should not put the
     // blade there. Only the moves that *place* something are aimed, and they
     // are the ones the crosshair is promising a spot to.
+    //
+    // The Elementalist's auto is aimed too, even though it places nothing --
+    // it is a skillshot along the crosshair's own line, not a fixed poke in
+    // front of her. A fire-charged shot draws the same line much further,
+    // which is the only thing `bolt_fire` changes here.
     let centre = if aimed(&m) {
         p.aim_at
+    } else if p.class == Class::Elementalist && kind == SLOT_POKE {
+        if p.bolt_fire {
+            aim::origin(p.pos).add(p.aim_dir.scale(t::bolt_aim_range()))
+        } else {
+            p.aim_at
+        }
     } else {
         p.pos.add(p.facing.scale(m.reach.mul(reach_mul)))
     };
@@ -946,8 +973,27 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         _ => Fx::ONE,
     };
 
-    let delta = defender.pos.sub(box_out.centre);
-    if delta.flat_len().raw() > box_out.radius.add(t::body_radius()).raw() {
+    // Every other move is a sphere sitting at `box_out.centre`. The
+    // Elementalist's auto is a real skillshot instead: it can catch the
+    // defender anywhere along the line it travels, not only at the point the
+    // aim resolver picked to draw the hitbox at -- which is what makes a shot
+    // aimed past someone still able to catch them on the way through, and,
+    // fire-charged, catch them far beyond the reach the plain poke ever had.
+    let hit_at_all = if attacker.class == Class::Elementalist && kind == SLOT_POKE {
+        let origin = aim::origin(attacker.pos);
+        let range = if attacker.bolt_fire {
+            t::bolt_aim_range()
+        } else {
+            m.reach
+        };
+        let far = origin.add(attacker.aim_dir.scale(range));
+        let reach = box_out.radius.add(t::body_radius());
+        crate::math::ray_hits_flat(origin, far, defender.pos, reach).is_some()
+    } else {
+        let delta = defender.pos.sub(box_out.centre);
+        delta.flat_len().raw() <= box_out.radius.add(t::body_radius()).raw()
+    };
+    if !hit_at_all {
         return None;
     }
 
@@ -1298,8 +1344,16 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
     // Space is a vertical takeoff, whatever your feet are doing. Holding a
     // direction while jumping carries your momentum up with you; it does not
     // turn the jump into something else.
+    //
+    // Added to whatever vertical speed you already have rather than replacing
+    // it, for the same reason leaving the creature's back does (see
+    // `step_rider`): a stone mid-eruption is already carrying you upward
+    // (`stones::resolve_body`), and a jump off it should stack with that
+    // rather than reset it to a flat takeoff speed. Ordinary ground has
+    // nothing to stack with -- standing still on it is vertical speed zero --
+    // so this changes nothing there.
     if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
-        p.vel.y = t::jump_speed().mul(mob.jump);
+        p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
     }
@@ -1372,6 +1426,7 @@ fn lock_aim(p: &mut Player, kind: u8, input: Input, field: &Field) {
     let m = moves::get(p.class, kind);
     let grounded = EffectKind::from_code(m.effect).is_some_and(|k| k.grounded());
     p.aim_at = aim::intent(p.pos, input, m.reach, grounded, field);
+    p.aim_dir = input.look_dir();
 }
 
 /// Start an aerial's hang, and its shove, if this one is thrown in the air.
