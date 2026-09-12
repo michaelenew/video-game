@@ -210,21 +210,29 @@ Three rules hold it together:
 the crosshair is felt immediately even when it cannot be named. Only the focus *position* is
 smoothed, so the camera glides over the character's footsteps instead of jittering with them.
 
-**The eye sits off one shoulder; the aim point does not.** At melee range an opponent stands
-directly behind your own fighter from a centred camera, and raising the camera does not fix
-it — a body is wider than a sightline. So the eye slides sideways while the point at the
-centre of the screen stays on the look axis, straight ahead of the fighter. The offset costs
-nothing in aiming precision; it only moves the character out of the way. It is folded in
-*before* the geometry check, not after — a camera slid sideways after being cleared has not
-been cleared. The test asserts
-the *aim point*, not the camera's own axis, because the two are deliberately different.
+**The eye rides a sphere and the mouse walks it around at a steady rate.** Each zone of the
+aim names a sphere — where it is centred on the fighter, how big it is, and how far the view
+is tilted off the line to its centre — and the eye sits at `tilt - pitch` around it. The
+framing comes from the tilt rather than from the position: the sphere is centred on whatever
+is being framed, so the line to that centre is the radius the eye is standing on, and turning
+the view a fixed angle off it puts that centre at a fixed place on the screen from anywhere
+on the sphere. Nothing is solved, so nothing can fail to be solvable — which three earlier
+versions of this rig all did, each ending with the eye parked against a limit where it
+stopped answering the mouse.
 
-**The camera is not in the snapshot.** Aim reaches the simulation as input, so peers agree on
-gameplay without the camera ever being rolled back.
+**The camera's geometry is in the snapshot; the camera itself is not.** Where the eye *is*
+(`sim::camera`) is simulation state, because the crosshair is the aim and the ray that
+decides where an ability lands starts at the eye. What is *drawn* — the follow smoothing, the
+floor clamp, the occlusion pull-in — stays in `view::camera` and is never rolled back. The
+two differ only when the drawn eye is shoved off the geometric one, which is what makes the
+crosshair an exact reference in the open and a close one with your back to a wall.
 
-Field of view and distance are **settings, not constants** — 58 degrees vertical from seven
-metres is a starting point, not an answer. Bevy's default projection is 45 degrees, which is
-a portrait lens pointed at an arena you are meant to be moving around inside.
+Field of view is a **setting**; the framing has its own. 58 degrees vertical is a starting
+point, not an answer — Bevy's default is 45, a portrait lens pointed at an arena you are
+meant to be moving around inside — but the *framing* is measured against a tuned field of
+view rather than the player's, so widening your view shows more of the arena without moving
+your aim. Camera distance is no longer a setting at all: it is the sphere's radius, and the
+radius decides where the eye is, and the eye decides where your abilities land.
 
 ### The floor is not an obstacle to dodge, it is a surface to rest on
 
@@ -286,39 +294,49 @@ Both blends are smoothstepped rather than linear. The blend swaps the whole rig 
 linear handover makes the camera visibly change its mind at exactly the angles where the player
 is holding the mouse still.
 
-### Why the camera is in the Oven but not in the checksum
+### Why the camera is in the checksum
 
-Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera used to
-be outside that rule entirely, and the reason was the checksum: tuning values are folded into
-`World::checksum()` so mistuned peers desync loudly, which is right for anything that decides
-what happens and wrong for anything that decides what you see. Two people playing each other
-must be able to run different fields of view and different camera framing without the match
-falling apart.
+Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera sat
+outside that rule for a while, and then inside it but exempt from `oven::hash`, on the
+reasoning that tuning values are folded into `World::checksum()` so mistuned peers desync
+loudly — right for anything that decides what happens, wrong for anything that decides what
+you see. Two people playing each other ought to be able to frame the fight differently.
 
-**Revised 2026-09-12.** The camera's numbers are in the Oven now, in a `ViewKnob` family of
-their own that `oven::hash` deliberately skips — so they are editable and bakeable like
-everything else, and still personal. A test asserts the exemption rather than trusting it.
+**Revised 2026-09-12, and reversed.** The camera's numbers are hashed like every other number
+that decides what happens.
 
-What made that safe was a change somewhere else: **aiming stopped going through the camera.**
-An ability's target is solved from the fighter's own cast origin (`sim::aim`), so where the eye
-sits changes nothing about where anything lands. Before that, a camera knob would have been a
-gameplay knob wearing a disguise. Field of view and camera distance stay in `settings.conf`,
-because those are per-player comfort rather than shared design.
+What changed is the thing that made the exemption safe. Aiming used to be solved from the
+fighter's own cast origin, so where the eye sat changed nothing about where anything landed.
+But the crosshair is the aim — a grounded ability lands *exactly* where the reticle is — and
+a reticle is the middle of the screen, which is a ray out of the eye. Tracing that ray means
+knowing where the eye is, so the camera's geometry decides where abilities land, so it is a
+gameplay number. Two peers framing the fight differently would place a fire pillar in
+different spots and neither would be wrong, which is the quiet divergence the checksum exists
+to turn into a loud one.
 
-### The crosshair is not painted at screen centre
+The cost is real and worth naming: **camera distance stopped being a personal setting**. It is
+the sphere's radius now, shared and tuned. Field of view survives as a setting only because
+the framing is measured against a tuned field of view of its own, so the player's choice
+changes what is projected and never where the eye is.
 
-It is projected from the point the fighter is pointed at, one aim-length ahead — the same
-distance the camera aims at, so the two coincide exactly when facing matches aim.
+### The crosshair is exactly at screen centre, and that is the aim
 
-That sounds like a long way round for "draw a cross in the middle", and it is the whole
-point. Facing locks when a move starts and lags while guarding, so for a meaningful fraction
-of every match the camera is pointed somewhere the attack will not go. A reticle nailed to
-the centre would be confidently wrong precisely when the player needs it to be right. This
-one drifts off centre instead, and dims while you are committed.
+It is drawn at the exact middle of the screen, and nothing computes its position.
 
-A test checks it against `CameraRig` itself rather than against a restatement of the same
-arithmetic: if the rig's aim point and the crosshair's ever diverge, a still crosshair stops
-meaning anything.
+This section used to describe the opposite — a reticle projected from the point the fighter
+was pointed at, drifting off centre while facing lagged aim — and that was wrong for a reason
+worth keeping written down. **A reticle that moves reads as the aim slipping out of the
+player's hands.** It is the one thing on screen they are deliberately holding still; making it
+the honest indicator of a temporarily-wrong facing traded away the only fixed reference they
+had.
+
+So the middle of the screen is the look direction, by construction: the eye is placed by the
+same two angles the aim is made of, and the camera points straight down them. Everything else
+bends to keep that true. Where a move is aimed is locked when it starts (`Player::aim_at`), so
+a committed attack can travel somewhere the reticle is no longer pointing — that is the
+commitment doing its job, and it is shown by the fighter's own body and animation rather than
+by moving the mark.
+
 
 ## Aim is an input, not a camera read
 

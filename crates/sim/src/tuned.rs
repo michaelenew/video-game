@@ -673,7 +673,7 @@ pub const MONSTER: [i32; 132] = [
 ];
 
 #[rustfmt::skip]
-pub const VIEW: [i32; 11] = [
+pub const VIEW: [i32; 12] = [
           458752, // camera.sphere_radius_(m) = 7
            13107, // camera.sphere,_at_the_head_(m) = 0.2
               85, // camera.look_down_limit = 85
@@ -685,4 +685,5 @@ pub const VIEW: [i32; 11] = [
               50, // camera.feet,_floor_(%) = 50
                5, // camera.head_to_crosshair_(%) = 5
            78643, // camera.body_gone_within_(m) = 1.2
+              58, // camera.framing_field_of_view = 58
 ];

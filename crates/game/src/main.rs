@@ -1286,8 +1286,6 @@ fn mouse_look(
         (KeyCode::NumpadAdd, settings::Knob::Sensitivity, true),
         (KeyCode::F3, settings::Knob::Fov, false),
         (KeyCode::F4, settings::Knob::Fov, true),
-        (KeyCode::F5, settings::Knob::Distance, false),
-        (KeyCode::F6, settings::Knob::Distance, true),
     ] {
         if keys.just_pressed(key) {
             settings.nudge(knob, up);
@@ -1367,7 +1365,6 @@ fn drive_camera(
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
     if settings.is_changed() {
-        rig.0.set_distance(settings.distance);
         rig.0.set_fov(settings.fov_radians());
     }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());

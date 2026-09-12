@@ -132,14 +132,6 @@ pub struct RigConfig {
     pub look_height: f32,
     /// Fraction of the remaining position error closed per tick.
     pub smoothing: f32,
-    /// The player's own distance setting, as a multiple of the tuned sphere.
-    ///
-    /// The rig has a real distance again -- it is the radius of the sphere the
-    /// eye rides -- so "pull the camera back" means what it says. Kept as a
-    /// multiplier rather than as metres so that the Oven still owns the number
-    /// and this stays a preference on top of it: at the setting's own default
-    /// it is one, and the camera is exactly as tuned.
-    pub dolly: f32,
     /// Vertical field of view, in radians.
     ///
     /// The rig needs it because the zones are written in *screen fractions*,
@@ -156,16 +148,11 @@ impl Default for RigConfig {
         RigConfig {
             look_height: 1.25,
             smoothing: 0.35,
-            dolly: 1.0,
             fov: 58.0_f32.to_radians(),
         }
     }
 }
 
-/// The distance setting's own default, so that a player who has never touched
-/// it gets exactly the tuned camera.
-const REFERENCE_DISTANCE: f32 = 10.9;
-
 /// The camera's zones, as tuned.
 ///
 /// Angles in radians, negative below the horizon. Screen positions as fractions
@@ -175,37 +162,14 @@ const REFERENCE_DISTANCE: f32 = 10.9;
 /// you are watching it. The *values* are knobs; the **shape** -- which zones
 /// exist and what each one is trying to achieve -- is the code below and is
 /// deliberately not configurable. A waypoint is a design decision.
-/// One zone's sphere: where it sits, how big it is, and how far the view is
-/// tilted off the line to its centre.
-///
-/// These three are the whole of what a zone decides. The eye's *position* is
-/// not among them -- that comes straight from the mouse -- and neither is the
-/// framing, which follows from the tilt without being asked for.
-#[derive(Clone, Copy, Debug)]
-struct Ball {
-    /// Height up the fighter the sphere is centred on. Zero is the feet.
-    centre: f32,
-    radius: f32,
-    /// How far the view is turned up off the line to the centre, in radians.
-    ///
-    /// **This is what frames the shot, and it is why nothing has to be solved.**
-    /// The eye is on a sphere about the centre, so the line to that centre is
-    /// the radius the eye is standing on, whichever way round the sphere it has
-    /// walked. Turn the view up off that line by a fixed angle and the centre
-    /// sits at a fixed place on the screen -- *always*, at every eye position,
-    /// for free. A tilt is a screen position expressed as an angle.
-    tilt: f32,
-}
-
 /// The camera's zones, as tuned.
 ///
-/// Angles in radians, negative below the horizon. Screen positions as fractions
-/// from the bottom, so the crosshair is at one half by definition.
-///
-/// Read fresh from the Oven every frame, so the sliders move the camera while
-/// you are watching it. The *values* are knobs; the **shape** -- which zones
-/// exist and what each one is trying to achieve -- is the code below and is
-/// deliberately not configurable. A waypoint is a design decision.
+/// A read-only view of the same Oven numbers `sim::camera` places the eye from.
+/// **The shape lives in the simulation now**, because the crosshair is the aim
+/// and the aim starts at the eye — see `sim::camera` for why that reversal
+/// happened and what it cost. What is left here is the handful of numbers only
+/// the renderer needs, plus the boundaries, so that tests and callers can ask
+/// about zones without reaching into the Oven.
 #[derive(Clone, Copy, Debug)]
 pub struct Zones {
     /// Straight down is a quarter turn; the rig stops short of it. Not
@@ -222,9 +186,6 @@ pub struct Zones {
     /// How far out the eye rides below the horizon, in metres.
     pub sphere: f32,
     /// What that shrinks to once the eye is the fighter's own.
-    ///
-    /// Not quite nothing, because a sphere of no radius has no direction to be
-    /// behind and the eye would sit exactly inside the skull.
     pub head_sphere: f32,
     /// Where the feet sit through the neutral zone.
     pub feet_neutral: f32,
@@ -272,72 +233,6 @@ impl Zones {
             (pitch / self.head_lock).min(1.0)
         }
     }
-
-    /// The sphere the eye is riding at this aim angle.
-    ///
-    /// Every zone is a straight interpolation of the same three numbers, and
-    /// each one starts where the last one left off, so the whole range is
-    /// continuous without anything being blended or clamped to make it so.
-    fn ball(&self, pitch: f32, body: f32, fov: f32) -> Ball {
-        // A screen position, as the angle the view has to be turned up by to
-        // put it there. Through a tangent, because the screen is a flat plane a
-        // fixed distance in front of the eye rather than an arc: twice the
-        // angle off centre is more than twice the distance up the glass.
-        let tilt_for = |at: f32| ((1.0 - 2.0 * at) * (fov * 0.5).tan()).atan();
-        let low = tilt_for(self.feet_neutral);
-        let level = tilt_for(0.5 - self.head_gap);
-
-        if pitch <= -self.floor_from {
-            // **The floor zone.** The view tilts down onto the fighter's own
-            // feet, so that at the bottom of the range the crosshair is on them
-            // -- the shot that puts a stone underneath you. The eye keeps
-            // working around the sphere while it does; that is the mouse, and
-            // the mouse never stops moving it.
-            let t =
-                ((-pitch - self.floor_from) / (self.down_limit - self.floor_from)).clamp(0.0, 1.0);
-            Ball {
-                centre: 0.0,
-                radius: self.sphere,
-                tilt: lerp(low, tilt_for(self.feet_floor), t),
-            }
-        } else if pitch <= -self.neutral_to {
-            // **The neutral zone**, where most of a match is spent. Nothing
-            // about the sphere changes here at all -- only where the eye is on
-            // it -- so the fighter sits at exactly the same spot on screen
-            // through the whole band while the camera swings around behind
-            // them.
-            Ball {
-                centre: 0.0,
-                radius: self.sphere,
-                tilt: low,
-            }
-        } else if pitch <= 0.0 {
-            // **The turn.** The sphere slides up the body from the feet to the
-            // head, and the tilt comes with it, until at level the crosshair
-            // rides just above the head -- which is what gives a mid-range
-            // skillshot something to key off when there is no ground under the
-            // aim to read it against.
-            let t = ((pitch + self.neutral_to) / self.neutral_to).clamp(0.0, 1.0);
-            Ball {
-                centre: lerp(0.0, body, t),
-                radius: self.sphere,
-                tilt: lerp(low, level, t),
-            }
-        } else {
-            // **The handover**, and then the fighter's own eye. The sphere
-            // shrinks onto the head and the tilt goes to nothing, which leaves
-            // the camera looking straight down the line the crosshair draws.
-            // Past the handover none of the three moves again, so a skillshot
-            // aimed at the sky follows that line rather than one parallel to
-            // it.
-            let t = (pitch / self.head_lock).min(1.0);
-            Ball {
-                centre: body,
-                radius: lerp(self.sphere, self.head_sphere, t),
-                tilt: lerp(level, 0.0, t),
-            }
-        }
-    }
 }
 
 /// Stateful camera. The only state is the smoothed focus point; aim is passed
@@ -350,18 +245,13 @@ pub struct CameraRig {
 }
 
 impl CameraRig {
-    /// Pull the camera back, or push it in, live.
+    /// Track the player's field of view.
     ///
-    /// Taken as a distance in metres because that is what a player means by it,
-    /// and landed as a multiple of the tuned sphere so that the tuning and the
-    /// preference do not fight over the same number. Further back is a bigger
-    /// sphere: a smaller fighter, and the neutral zone handing over to the
-    /// floor zone a little sooner.
-    pub fn set_distance(&mut self, distance: f32) {
-        self.cfg.dolly = distance.max(0.1) / REFERENCE_DISTANCE;
-    }
-
-    /// Track the player's field of view, which the framing is measured against.
+    /// Projection only. The **framing** is measured against its own tuned field
+    /// of view rather than this one, so that widening your view does not move
+    /// your aim -- see `sim::camera`. A wider setting therefore shows more of
+    /// the arena and puts the fighter at a slightly different place on screen,
+    /// which is what a wider view is.
     pub fn set_fov(&mut self, radians: f32) {
         self.cfg.fov = radians;
     }
@@ -431,36 +321,28 @@ impl CameraRig {
         let pitch = pitch.clamp(-zones.down_limit, zones.up_limit);
         let sky = zones.first_person(pitch);
 
-        // Everything below happens in the fighter's own vertical plane: the one
-        // containing them and the way they are looking. In that plane the
-        // sphere is a circle, and the eye is one angle around it.
+        // **Where the eye goes is not decided here.** It is decided by
+        // `sim::camera`, because the crosshair is the aim and the aim is a ray
+        // out of the eye -- so the eye has to be a number both machines agree
+        // on. Asking for it rather than working it out again is the only way
+        // the drawn eye and the aimed-from eye can be guaranteed to be the same
+        // point, and if they were not the reticle would quietly stop meaning
+        // what it says.
         let feet = self.focus[1] - self.cfg.look_height;
         let along = [yaw.cos(), yaw.sin()];
         let body = crate::fx(sim::tuning::body_height());
-        let ball = zones.ball(pitch, body, self.cfg.fov);
-        let radius = (ball.radius * self.cfg.dolly).max(0.02);
-
-        // **The whole placement, and there is nothing to solve.**
-        //
-        // The camera looks where the mouse looks: the view runs out at `pitch`,
-        // by definition, because that is what the player is pointing at. It
-        // also runs `tilt` above the line to the sphere's centre, because that
-        // is what puts the centre at its mark on the screen. Those two together
-        // say where on the sphere the eye has to be standing, and it is a
-        // subtraction:
-        //
-        // ```text
-        // elevation = tilt - pitch
-        // ```
-        //
-        // One degree of mouse is one degree around the sphere, always, in every
-        // zone -- which is the point. Nothing here can saturate, run out of
-        // room, or stop answering the aim, because nothing here is being asked
-        // to satisfy a condition. The framing is a consequence of the tilt and
-        // arrives for free.
-        let elevation = ball.tilt - pitch;
-        let back = radius * elevation.cos();
-        let up = ball.centre + radius * elevation.sin();
+        let look = sim::Input::looking_at(
+            0,
+            crate::aim_from_radians(yaw),
+            crate::pitch_from_radians(pitch),
+        );
+        let stood = sim::V3::new(fx_of(self.focus[0]), fx_of(feet), fx_of(self.focus[2]));
+        let eye = sim::camera::eye(stood, look);
+        let (back, up) = (
+            -((eye.x.to_f32_for_render() - self.focus[0]) * along[0]
+                + (eye.z.to_f32_for_render() - self.focus[2]) * along[1]),
+            eye.y.to_f32_for_render() - feet,
+        );
 
         let mut offset = [
             -along[0] * back,

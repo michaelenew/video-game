@@ -256,26 +256,31 @@ fn a_family_is_gathered_even_when_its_knobs_are_scattered() {
 }
 
 #[test]
-fn the_camera_is_tunable_without_desyncing_the_other_peer() {
-    // Every other value in the Oven decides what *happens*, so a peer tuned
-    // differently has to desync loudly. A camera decides what you *see*, and
-    // two people must be able to play each other with different framing -- the
-    // same way they already play at different fields of view.
+fn moving_a_camera_knob_is_a_change_to_the_simulation() {
+    // This used to assert the opposite, and the reversal is the point.
     //
-    // Only safe because aiming stopped going through the camera: the aim is
-    // solved from the fighter's own cast origin, so where the eye sits changes
-    // nothing about where an ability lands.
+    // A camera decides what you *see*, so for a while these were kept out of
+    // the checksum and two people could play each other with different framing,
+    // the way they already play at different fields of view. That held exactly
+    // as long as aiming did not go through the camera.
+    //
+    // It does now: the crosshair is the aim, so the ray that decides where an
+    // ability lands starts at the eye, and where the eye sits is these numbers.
+    // Two peers framing the fight differently would place a fire pillar in
+    // different spots and neither would be wrong -- which is the quiet
+    // divergence this checksum exists to turn into a loud one.
     let w = World::new();
     let before = w.checksum();
     let knob = Knob::View(oven::ViewKnob::FeetNeutral);
     let original = knob.raw();
     knob.set_raw(original + 7);
-    assert_eq!(
+    assert_ne!(
         before,
         w.checksum(),
-        "moving a camera knob changed the simulation's checksum, so two players \
-         framing the game differently would read as a desync"
+        "moving a camera knob left the checksum alone, so a peer framing the game \
+         differently would aim differently and neither of them would find out"
     );
     assert!(knob.is_dirty(), "the camera knob did not take");
     knob.set_raw(original);
+    assert_eq!(before, w.checksum(), "putting it back did not put it back");
 }

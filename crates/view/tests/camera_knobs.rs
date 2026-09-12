@@ -70,4 +70,45 @@ fn sliders_dragged_somewhere_unreasonable_do_not_break_the_camera() {
     set_view(V::FloorZoneFrom, floor);
     set_view(V::NeutralZoneTo, neutral);
     set_view(V::HeadLockAt, lock);
+
+    // And the radius is still what decides how big the fighter is drawn, which
+    // is what the player's own distance setting used to do. It cannot be one
+    // any more: the eye is where the aiming ray starts, so a player who pulled
+    // the camera back would be aiming somewhere else.
+    {
+        // What used to be the player's own distance setting. It cannot be one any
+        // more: the eye is where the aiming ray starts, so a player who pulled the
+        // camera back would be aiming somewhere else -- see `sim::camera`. The
+        // radius is a tuned number now, shared like every other number that decides
+        // what happens, and pulling it back is still what makes the fighter smaller.
+        let fov = RigConfig::default().fov;
+        let on_screen = |f: view::camera::Framing, point: [f32; 3]| {
+            let to = |p: [f32; 3]| {
+                let v = [p[0] - f.eye[0], p[1] - f.eye[1], p[2] - f.eye[2]];
+                let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-4);
+                [v[0] / len, v[1] / len, v[2] / len]
+            };
+            let centre = to(f.look_at);
+            let target = to(point);
+            let dot: f32 = (0..3).map(|i| centre[i] * target[i]).sum();
+            let angle = dot.clamp(-1.0, 1.0).acos();
+            let signed = if target[1] < centre[1] { -angle } else { angle };
+            0.5 + signed.tan() / (2.0 * (fov * 0.5).tan())
+        };
+
+        let pitch = view::camera::Zones::tuned().neutral_pitch();
+        let original = view(V::Sphere);
+        let mut sizes = Vec::new();
+        for metres in [4.0f32, 7.0, 11.0] {
+            set_view(V::Sphere, (metres * 65536.0) as i32);
+            let f = settled(pitch);
+            let body = sim::tuning::body_height().to_f32_for_render();
+            sizes.push(on_screen(f, [0.0, body, 8.0]) - on_screen(f, [0.0, 0.0, 8.0]));
+        }
+        set_view(V::Sphere, original);
+        assert!(
+            sizes[0] > sizes[1] && sizes[1] > sizes[2],
+            "the fighter did not shrink as the sphere grew: {sizes:?}"
+        );
+    }
 }

@@ -596,30 +596,6 @@ fn the_camera_never_ends_up_under_the_floor() {
     }
 }
 
-#[test]
-fn pulling_the_camera_back_makes_the_fighter_smaller() {
-    // The distance setting means what it says again: it scales the sphere. The
-    // fighter getting smaller is the consequence rather than the mechanism,
-    // which is the right way round -- a player asking for the camera to be
-    // further back means the camera, not the fighter.
-    let at = [0.0, 0.0, 8.0];
-    let pitch = zones().neutral_pitch();
-    let mut sizes = Vec::new();
-    for distance in [6.0, 10.9, 16.0] {
-        let mut rig = CameraRig::new(RigConfig::default());
-        rig.set_distance(distance);
-        for _ in 0..200 {
-            rig.update(0.016, at, 0.0, pitch);
-        }
-        let f = rig.update(0.016, at, 0.0, pitch);
-        sizes.push(on_screen(f, head_of(at)) - on_screen(f, feet_of(at)));
-    }
-    assert!(
-        sizes[0] > sizes[1] && sizes[1] > sizes[2],
-        "the fighter did not shrink as the camera pulled back: {sizes:?}"
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Posing -- the property that matters is purity
 // ---------------------------------------------------------------------------

@@ -1363,3 +1363,47 @@ decision rather than a tuning one, so it is written down here rather than taken.
 
 **Verdict** open, and deliberately not merged on its own. The camera is exactly the prescription
 and measures out at every waypoint; the aiming correspondence is the open question.
+
+### 2026-09-12 — the crosshair is the aim, so the eye is in the simulation
+
+**Changed** the aiming ray starts at the eye instead of at the fighter's chest, and
+`sim::camera` places the eye, so the camera's geometry is simulation state. Camera knobs are in
+`oven::hash` now. Camera distance stopped being a personal setting.
+
+**Why** the previous entry shipped a camera that framed exactly as prescribed and left the
+reticle sitting four metres from where a grounded ability actually landed. Both rays had the
+right *direction* and different origins, so they never converged — parallel lines do not meet.
+The targeting rule had already been written down and settles it: work out what the player is
+pointing at, then draw the line from the ability's origin to it.
+
+**Measured, aimed at open ground, reach 20 m:**
+
+| Aim | Crosshair | Lands | Apart |
+| --- | --- | --- | --- |
+| −10 | 18.0 m | 14.0 m | 4.0 m — the range sphere, correctly |
+| −20 | 9.14 m | 9.14 m | **0.00 m** |
+| −27 | 6.88 m | 6.88 m | **0.00 m** |
+| −45 | 4.42 m | 4.42 m | **0.00 m** |
+| −85 | 0.00 m | 0.00 m | **0.00 m** |
+
+Exact wherever the crosshair is inside the ability's reach, and clamped to the reach beyond it,
+which is the rule as written.
+
+**What it cost, which is not nothing.** Camera numbers decide where abilities land, so they are
+gameplay numbers: hashed, shared, and a peer tuned differently now desyncs loudly instead of
+quietly placing things somewhere else. The personal distance setting had to go with it — it
+scaled the sphere, the sphere is the eye, and the eye is the aim. Field of view survived only
+because the *framing* is measured against a tuned field of view of its own, so a player's choice
+changes what is projected and never where the eye is.
+
+**Two things moved that were not asked for, and are worth knowing.** Aiming down brings the
+reticle in more slowly than it used to, because the ray starts seven metres behind and above the
+fighter rather than at their chest: the reticle reaches their own feet at about −85 rather than
+−45. And **a stone can no longer be raised directly underneath another** — pointing at where its
+base would be means pointing at the stone, and a stone you point at is a surface you land on
+top of. Aimed at its foot the new one comes up against its near face and still shoulders it
+aside, which is the interaction the stone physics was built for; it is the dead-centre lift that
+is now out of reach.
+
+**Verdict** open. The contract the whole aiming pass exists for is exact again, measured rather
+than argued, and the camera keeps the orbit from the previous entry unchanged.

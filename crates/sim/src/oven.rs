@@ -294,17 +294,18 @@ macro_rules! view_knobs {
     ($($variant:ident, $label:literal, $unit:ident, $lo:expr, $hi:expr;)*) => {
         /// A camera number.
         ///
-        /// Separate from [`Scalar`] for one reason, and it is the important one:
-        /// **these are deliberately not in [`hash`]**. Every other value in the
-        /// Oven decides what *happens*, so two peers tuned differently have to
-        /// desync loudly rather than diverge quietly. A camera decides what you
-        /// *see*, and two people must be able to play each other with different
-        /// framing the same way they already play at different fields of view.
+        /// Separate from [`Scalar`] only as a grouping now. These **are** in
+        /// [`hash`], like everything else that decides what happens.
         ///
-        /// That only became safe when aiming stopped going through the camera.
-        /// The aim is solved from the fighter's own cast origin (`crate::aim`),
-        /// so where the eye sits changes nothing about where an ability lands --
-        /// which is exactly what lets these be a personal setting.
+        /// They were kept out of it for a while, on the reasoning that a camera
+        /// decides what you *see* rather than what happens, so two people ought
+        /// to be able to play each other with different framing. That was true
+        /// exactly as long as aiming did not go through the camera.
+        ///
+        /// It does now: the crosshair is the aim, so the ray that decides where
+        /// an ability lands starts at the eye, and where the eye sits is these
+        /// numbers (`crate::camera`). A camera number is a gameplay number the
+        /// moment the crosshair means something.
         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         pub enum ViewKnob { $($variant,)* }
 
@@ -355,9 +356,10 @@ view_knobs! {
     FeetFloor,      "Feet, floor (%)",          Int,     0,   50;
     HeadGapLevel,   "Head to crosshair (%)",    Int,     0,   30;
     FadeNear,       "Body gone within (m)",     Fixed,   0,       fx(6,1);
+    FramingFov,     "Framing field of view",    Int,     30,  120;
 }
 
-pub const VIEW_COUNT: usize = 11;
+pub const VIEW_COUNT: usize = 12;
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data
@@ -767,9 +769,15 @@ pub fn hash() -> u64 {
     for c in MONSTER_CELLS.iter() {
         h.write_i32(c.load(Ordering::Relaxed));
     }
-    // `VIEW_CELLS` is **not** folded in, on purpose. See `ViewKnob`: those
-    // decide what you see rather than what happens, and two people have to be
-    // able to play each other with different framing.
+    // `VIEW_CELLS` **is** folded in, and used not to be. The camera decides
+    // where the eye is, the eye is where the aiming ray starts, and so the
+    // camera decides where abilities land -- see `crate::aim`. Two peers framing
+    // the fight differently would place a fire pillar in different spots and
+    // neither would be wrong, which is exactly what this hash exists to make
+    // loud rather than quiet.
+    for c in VIEW_CELLS.iter() {
+        h.write_i32(c.load(Ordering::Relaxed));
+    }
     h.finish()
 }
 

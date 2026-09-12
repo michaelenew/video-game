@@ -9,27 +9,23 @@
 //! That is the whole module. Everything else here is the arithmetic for
 //! "first", done in fixed point so two machines agree on it.
 //!
-//! ## Why the ray starts at the fighter and not at the eye
+//! ## Why the ray starts at the eye
 //!
-//! It would be easier to trace from the camera, and every third-person shooter
-//! does. It also means the ability travels a *different* line from the one the
-//! player drew — the two converge on the target but diverge in between, which
-//! is why a shot you lined up past a corner in those games clips the corner.
+//! Because the crosshair is the aim. The player is not pointing a gun held at
+//! their chest; they are pointing at a *place on the screen*, and the middle of
+//! the screen is a ray out of the eye. Trace that ray, take what it meets
+//! first, and that is what they meant. Then draw the line from the ability's
+//! own origin to it, and send the ability along that.
 //!
-//! Starting at the fighter makes the aimed line and the travelled line the same
-//! line, so aiming below the horizon gives the direction to a point on the
-//! ground for free: point at the floor between you and someone, and the ray
-//! from your chest to that point is the ray that hits them on the way.
+//! Tracing from the chest instead -- which this did, and which is the obvious
+//! thing to do -- makes the crosshair a liar wherever the eye is not on the
+//! chest. The two rays are parallel, so they never converge: aimed down at the
+//! ground in the middle of the neutral zone, the reticle sat on a spot about
+//! four metres beyond where the ability actually landed.
 //!
-//! It also keeps the eye out of the simulation, which it has to be. The camera
-//! carries a per-player distance setting and a smoothed follow position;
-//! solving the aim from there would mean two peers at different zoom levels
-//! placing a fire pillar in different spots and neither of them being wrong.
-//!
-//! The camera is then arranged around this rather than the other way about: it
-//! orbits the cast origin, and it is **pointed at whatever this module says the
-//! player is aiming at**, which is what pins the crosshair to the exact centre
-//! of the screen. See `view::camera`.
+//! The cost is that this has to know where the eye is, so the camera's geometry
+//! is simulation state and its numbers are in the desync checksum. See
+//! `crate::camera`, which says what that bought and what it cost.
 //!
 //! ## Why the range is a sphere and not a clamp on the ground
 //!
@@ -49,12 +45,19 @@
 //!
 //! Fighters are deliberately not traced against. An aim that snapped to a body
 //! walking through the line would move the target without the player moving the
-//! mouse, and "aim at the floor under them" already hits someone of their
-//! height, which is the shot that wants to be available.
+//! mouse.
+//!
+//! Instead, **a ray that lands on the floor means the person standing there**.
+//! Anything not placed on the ground targets the middle of a fighter who would
+//! be standing at that spot rather than the spot itself, so putting the reticle
+//! at someone's feet throws the bolt through their chest. On anything that is
+//! not the floor -- a platform, a stone -- the point is taken exactly, because
+//! there the player is pointing at a surface and not through it.
 
 use crate::arena::{self, Solid};
 use crate::class::Structure;
 use crate::fixed::Fx;
+use crate::input::Input;
 use crate::math::V3;
 use crate::stones::Field;
 use crate::tuning as t;
@@ -64,49 +67,94 @@ pub fn origin(pos: V3) -> V3 {
     V3::new(pos.x, pos.y.add(t::cast_height()), pos.z)
 }
 
-/// Where an ability aimed along `dir` from `from` with this much reach lands.
+/// What the crosshair is on, and therefore what the ability is aimed at.
+///
+/// The one entry point. Everything a fighter places or throws comes through
+/// here, so that "where the crosshair is" means one thing across the whole game
+/// rather than one thing per ability.
 ///
 /// `grounded` is a property of the thing being placed rather than of the move
 /// that places it: a pillar of flame comes out of the floor whatever you were
-/// doing when you cast it. It means two things — the target is settled onto
-/// whatever surface is under it, and an aim that leaves the ground entirely
-/// falls back to the reach laid flat ahead rather than to a point in the sky.
-pub fn target(from: V3, dir: V3, reach: Fx, grounded: bool, stones: &Field) -> V3 {
-    match trace(from, dir, reach, stones) {
-        Some(hit) => {
-            let at = from.add(dir.scale(hit));
-            if grounded { settle(at, stones) } else { at }
-        }
-        // Nothing within reach. Out to the edge of the sphere -- flattened
-        // first if it has to come down somewhere, so looking at the sky still
-        // puts the ability the full distance ahead instead of at your feet.
-        None if grounded => {
+/// doing when you cast it. It decides which of the two readings of the same ray
+/// applies -- a place on the ground, or a person standing in it.
+pub fn intent(pos: V3, look: Input, reach: Fx, grounded: bool, stones: &Field) -> V3 {
+    let eye = crate::camera::eye(pos, look);
+    let dir = look.look_dir();
+    let cast = origin(pos);
+
+    // Whichever comes first: the terrain, or the edge of what this ability can
+    // reach. The reach is a sphere about the *cast origin* rather than a length
+    // along the ray, because it is the ability's range and the ability starts at
+    // the fighter. The ray only decides the direction.
+    let stop = reach_hit(eye, dir, cast, reach);
+    let limit = stop.unwrap_or(Fx::MAX);
+    let (distance, on_floor) = match (first_hit(eye, dir, limit, stones), stop) {
+        (Some(hit), _) => hit,
+        (None, Some(edge)) => (edge, false),
+        // The ray leaves the arena without meeting anything at all, which wants
+        // the reach laid flat rather than a point in the sky: an ability with
+        // nowhere to land still has to land somewhere ahead of you.
+        (None, None) => {
             let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
-            settle(from.add(flat.scale(reach)), stones)
+            return settle(cast.add(flat.scale(reach)), stones);
         }
-        None => from.add(dir.scale(reach)),
+    };
+
+    let at = eye.add(dir.scale(distance));
+    if grounded {
+        settle(at, stones)
+    } else if on_floor {
+        // A spot on the floor stands for the person standing in it.
+        V3::new(at.x, at.y.add(t::body_height().div(Fx::from_int(2))), at.z)
+    } else {
+        at
     }
 }
 
 /// Distance to the first terrain along the ray, if anything is within `limit`.
 pub fn trace(from: V3, dir: V3, limit: Fx, stones: &Field) -> Option<Fx> {
-    let mut best: Option<Fx> = None;
-    let mut keep = |hit: Option<Fx>| {
+    first_hit(from, dir, limit, stones).map(|(d, _)| d)
+}
+
+/// The same, and whether what it found was the floor rather than an object.
+///
+/// The difference matters for anything not placed on the ground: the floor
+/// stands for a fighter standing on it, and an object stands for itself.
+fn first_hit(from: V3, dir: V3, limit: Fx, stones: &Field) -> Option<(Fx, bool)> {
+    let mut best: Option<(Fx, bool)> = None;
+    let mut keep = |hit: Option<Fx>, floor: bool| {
         if let Some(d) = hit {
-            if d.raw() >= 0 && d.raw() <= limit.raw() && best.is_none_or(|b| d.raw() < b.raw()) {
-                best = Some(d);
+            if d.raw() >= 0 && d.raw() <= limit.raw() && best.is_none_or(|(b, _)| d.raw() < b.raw())
+            {
+                best = Some((d, floor));
             }
         }
     };
 
-    keep(floor_hit(from, dir));
+    keep(floor_hit(from, dir), true);
     for solid in arena::SOLIDS.iter() {
-        keep(box_hit(from, dir, solid));
+        keep(box_hit(from, dir, solid), false);
     }
     for stone in stones.iter().flatten() {
-        keep(stone_hit(from, dir, stone));
+        keep(stone_hit(from, dir, stone), false);
     }
     best
+}
+
+/// How far along the ray the ability's own range runs out.
+///
+/// A sphere about the cast origin, met from outside it or from within, and it
+/// is the *far* crossing that counts: the near one is the ray on its way in
+/// past the fighter, which is behind anything being aimed at.
+fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
+    let m = from.sub(centre);
+    let b = m.dot(dir);
+    let under = b.mul(b).sub(m.len_sq().sub(radius.mul(radius)));
+    if under.raw() < 0 {
+        return None;
+    }
+    let far = under.sqrt().sub(b);
+    (far.raw() > 0).then_some(far)
 }
 
 /// Drop a point onto whatever it would stand on.

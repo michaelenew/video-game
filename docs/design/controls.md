@@ -132,6 +132,14 @@ Because the eye is placed by the same two angles the aim is made of, **screen ce
 direction** and the reticle sits exactly in the middle of the screen by construction rather than
 by correction. One degree of mouse is one degree around the sphere, in every zone.
 
+**The crosshair is the aim.** The ray that decides where an ability goes starts at the eye and
+runs through the middle of the screen, and it stops at the first of three things: the floor, an
+object that is not the floor, or the edge of that ability's own range. A grounded ability lands
+exactly there. Anything not grounded targets the middle of a fighter *standing* there when the
+ray met the floor, and the point itself when it met anything else. Then the ability is sent along
+the line from where it is cast to that point — so what you pointed at is what you get, and the
+travel is the fighter's business rather than the camera's.
+
 **The fighter's own body gets out of the way, for two separate reasons.** It goes translucent as
 it comes up on the crosshair, because a body the player is aiming past is worse than no body at
 all. And it goes fully away when the eye is simply *close* to it — measured as a distance, not

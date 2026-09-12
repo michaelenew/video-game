@@ -1371,13 +1371,7 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
 fn lock_aim(p: &mut Player, kind: u8, input: Input, field: &Field) {
     let m = moves::get(p.class, kind);
     let grounded = EffectKind::from_code(m.effect).is_some_and(|k| k.grounded());
-    p.aim_at = aim::target(
-        aim::origin(p.pos),
-        input.look_dir(),
-        m.reach,
-        grounded,
-        field,
-    );
+    p.aim_at = aim::intent(p.pos, input, m.reach, grounded, field);
 }
 
 /// Start an aerial's hang, and its shove, if this one is thrown in the air.
@@ -1454,10 +1448,11 @@ fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
 fn mechanic_action(p: &mut Player, input: Input, field: &Field) {
     let look = input.look_dir();
     let from = aim::origin(p.pos);
+    let pos = p.pos;
     // Where the mechanic would put something, if it puts something: the same
     // solved point an ability gets. The mechanic fires on the press with no
     // startup, so there is nothing to lock it against -- it is simply used.
-    let placed = |reach| aim::target(from, look, reach, true, field);
+    let placed = |reach| aim::intent(pos, input, reach, true, field);
     match p.mechanic {
         // Throw commits you: faster, exposed, and unable to block until it is
         // back. Recall damages along the return path; reactivating mid-flight
