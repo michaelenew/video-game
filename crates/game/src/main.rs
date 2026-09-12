@@ -173,7 +173,7 @@ fn main() {
         // everything, and after the poses it is previewing have been placed.
         .add_systems(
             Update,
-            (hub::toggle, hub::advance, hub::draw)
+            (hub::toggle, hub::advance, hub::collect_bake, hub::draw)
                 .chain()
                 .after(palette::draw),
         )

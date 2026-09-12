@@ -63,6 +63,12 @@ pub struct Hub {
     /// Hold the selected key rather than playing, for posing.
     posing: bool,
     message: String,
+    /// A bake running in the background. Re-baking shells out to a fresh
+    /// process -- which is the point, because it proves the file that was just
+    /// written actually compiles -- and that takes seconds. Doing it on the
+    /// frame would stop the game dead in the middle of the thing you were
+    /// watching.
+    baking: Option<std::sync::Arc<std::sync::Mutex<Option<String>>>>,
 }
 
 impl Default for Hub {
@@ -80,6 +86,7 @@ impl Default for Hub {
             on: 1,
             posing: false,
             message: String::new(),
+            baking: None,
         };
         hub.rebake();
         hub
@@ -741,12 +748,18 @@ fn looseness_editor(ui: &mut egui::Ui, hub: &mut Hub) -> bool {
 fn saving(ui: &mut egui::Ui, hub: &mut Hub) {
     ui.horizontal(|ui| {
         let file = hub.clip.file();
+        let busy = hub.baking.is_some();
         if ui
-            .button(format!("save {file}.rs and bake"))
-            .on_hover_text("Rewrites the recipe file and the baked table.")
+            .add_enabled(!busy, egui::Button::new(format!("save {file}.rs and bake")))
+            .on_hover_text(
+                "Rewrites the recipe file, then re-bakes in a fresh process -- \
+                 which is also how you find out the file compiles. A few seconds.",
+            )
             .clicked()
         {
-            hub.message = save(hub);
+            let (message, baking) = save(hub);
+            hub.message = message;
+            hub.baking = baking;
         }
         if ui.button("reload from disk").clicked() {
             hub.recipes = load_recipes();
@@ -768,8 +781,26 @@ fn saving(ui: &mut egui::Ui, hub: &mut Hub) {
     }
 }
 
+/// Collect a finished background bake, if there is one.
+pub fn collect_bake(mut hub: ResMut<Hub>) {
+    let Some(slot) = hub.baking.clone() else {
+        return;
+    };
+    let done = slot.lock().ok().and_then(|mut m| m.take());
+    if let Some(message) = done {
+        hub.message = message;
+        hub.baking = None;
+    }
+}
+
 /// Write the selected clip's file back out, then re-bake the whole table.
-fn save(hub: &Hub) -> String {
+///
+/// The write is immediate; the bake runs in a thread, because it shells out to
+/// a fresh `cargo run` and that takes seconds. Running it inline would freeze
+/// the arena in the middle of the animation you were judging.
+type Pending = std::sync::Arc<std::sync::Mutex<Option<String>>>;
+
+fn save(hub: &Hub) -> (String, Option<Pending>) {
     let file = hub.clip.file();
     let mine: Vec<Recipe> = hub
         .recipes
@@ -783,34 +814,42 @@ fn save(hub: &Hub) -> String {
     let root = crate::bake::repo_root();
     let path = root.join(format!("crates/anim/src/clips/{file}.rs"));
     if let Err(e) = std::fs::write(&path, source) {
-        return format!("could not write {}: {e}", path.display());
+        return (format!("could not write {}: {e}", path.display()), None);
     }
-    let _ = std::process::Command::new("rustfmt")
-        .args(["--edition", "2024"])
-        .arg(&path)
-        .current_dir(&root)
-        .output();
 
-    // The table the game reads is generated from the *files*, so it is baked
-    // from a fresh process rather than from what is in memory here -- which
-    // also proves the file that was just written actually compiles.
-    let baked = std::process::Command::new("cargo")
-        .args(["run", "-q", "-p", "anim", "--bin", "bake"])
-        .current_dir(&root)
-        .output();
-    match baked {
-        Ok(out) if out.status.success() => {
-            format!("saved {file}.rs and re-baked. Rebuild to see it outside the hub.")
+    let slot: Pending = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let done = slot.clone();
+    std::thread::spawn(move || {
+        let _ = std::process::Command::new("rustfmt")
+            .args(["--edition", "2024"])
+            .arg(&path)
+            .current_dir(&root)
+            .output();
+        // Baked from the *files*, not from what is in memory, so a save that
+        // produced source the compiler rejects says so here rather than at the
+        // next build.
+        let out = std::process::Command::new("cargo")
+            .args(["run", "-q", "-p", "anim", "--bin", "bake"])
+            .current_dir(&root)
+            .output();
+        let message = match out {
+            Ok(o) if o.status.success() => {
+                "saved and re-baked. Rebuild to see it outside the hub.".to_string()
+            }
+            Ok(o) => format!(
+                "saved, but the bake failed: {}",
+                String::from_utf8_lossy(&o.stderr)
+                    .lines()
+                    .last()
+                    .unwrap_or("")
+            ),
+            Err(e) => format!("saved, but could not run the bake: {e}"),
+        };
+        if let Ok(mut slot) = done.lock() {
+            *slot = Some(message);
         }
-        Ok(out) => format!(
-            "saved {file}.rs, but the bake failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-                .lines()
-                .last()
-                .unwrap_or("")
-        ),
-        Err(e) => format!("saved {file}.rs, but could not run the bake: {e}"),
-    }
+    });
+    (format!("wrote {file}.rs; baking…"), Some(slot))
 }
 
 // ---------------------------------------------------------------------------
