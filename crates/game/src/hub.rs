@@ -53,6 +53,10 @@ pub struct Hub {
     /// The selected recipe, solved. Re-run on every edit, which costs about a
     /// tenth of a millisecond and is what makes this worth using.
     baked: Vec<Pose>,
+    /// Clips nobody has authored, worked out once. Asking the recipe registry
+    /// every frame would mean re-solving every inverse-kinematics call in every
+    /// locomotion clip sixty times a second to draw a list.
+    empty: Vec<Clip>,
     frame: f32,
     playing: bool,
     /// Playback rate. Quarter speed is where timing problems become visible.
@@ -78,6 +82,7 @@ impl Default for Hub {
             search: String::new(),
             clip: Clip::Idle,
             recipes: load_recipes(),
+            empty: anim::clips::missing(),
             baked: Vec::new(),
             frame: 0.0,
             playing: true,
@@ -252,7 +257,7 @@ fn clip_list(ui: &mut egui::Ui, hub: &mut Hub) -> bool {
     });
 
     let needle = hub.search.to_lowercase();
-    let missing = anim::clips::missing();
+    let missing = hub.empty.clone();
     let mut selected = hub.clip;
 
     egui::ScrollArea::vertical()
@@ -763,6 +768,7 @@ fn saving(ui: &mut egui::Ui, hub: &mut Hub) {
         }
         if ui.button("reload from disk").clicked() {
             hub.recipes = load_recipes();
+            hub.empty = anim::clips::missing();
             hub.rebake();
             hub.message = "reloaded".into();
         }
