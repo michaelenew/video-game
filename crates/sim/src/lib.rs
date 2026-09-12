@@ -8,6 +8,7 @@
 
 pub mod aim;
 pub mod arena;
+pub mod bolt;
 pub mod camera;
 pub mod class;
 pub mod curve;

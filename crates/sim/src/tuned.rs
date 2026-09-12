@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 170] = [
+pub const SCALARS: [i32; 174] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -168,7 +168,6 @@ pub const SCALARS: [i32; 170] = [
           491520, // ridgeback.spawns_this_far_out = 7.5
           589824, // ridgeback.hunters_start_this_far_out = 9
            49152, // riding.step_you_can_walk_up = 0.75
-         1310720, // elementalist.bolt_aim_range = 20
          1572864, // elementalist.bolt_knock_speed = 24
           589824, // elementalist.bolt_knock_travel = 9
            49152, // elementalist.bolt_knock_decel_starts_(x_path) = 0.75
@@ -176,8 +175,13 @@ pub const SCALARS: [i32; 170] = [
                5, // elementalist.bolt_knock_damage_per_m/s = 5
               20, // elementalist.bolt_knock_stagger = 20
            32768, // elementalist.bolt_knock_push_(x) = 0.5
-           98304, // elementalist.fire_bolt_damage_(x) = 1.5
-           81920, // elementalist.fire_bolt_knockback_(x) = 1.25
+         2490368, // elementalist.fire_bolt_speed = 38
+         1572864, // elementalist.fire_bolt_range = 24
+           19661, // elementalist.fire_bolt_radius = 0.3
+              70, // elementalist.fire_bolt_damage = 70
+               9, // elementalist.fire_bolt_stagger = 9
+               5, // elementalist.fire_bolt_blockstun = 5
+          196608, // elementalist.fire_bolt_knockback = 3
 ];
 
 #[rustfmt::skip]
@@ -376,11 +380,11 @@ pub const MOVES: [i32; 324] = [
                2, // move.elementalist.bolt.active = 2
               13, // move.elementalist.bolt.recovery = 13
               45, // move.elementalist.bolt.damage = 45
-          262144, // move.elementalist.bolt.reach = 4
-           45875, // move.elementalist.bolt.radius = 0.7
-              14, // move.elementalist.bolt.hitstun = 14
+          589824, // move.elementalist.bolt.reach = 9
+           22938, // move.elementalist.bolt.radius = 0.35
+               0, // move.elementalist.bolt.hitstun = 0
                6, // move.elementalist.bolt.blockstun = 6
-          131072, // move.elementalist.bolt.knockback = 2
+               0, // move.elementalist.bolt.knockback = 0
               60, // move.elementalist.bolt.mobility_(%) = 60
                6, // move.elementalist.bolt.aerial_hang = 6
                0, // move.elementalist.bolt.unblockable = off

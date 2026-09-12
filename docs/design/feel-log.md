@@ -1453,3 +1453,65 @@ between them now, and the mismatch is documented rather than assumed away.
 **Verdict** open. `the_eye_never_changes_pace_abruptly_at_a_zone_boundary` is the new guard: it
 compares the change in pace at each boundary against an ordinary step of the mouse elsewhere, and
 with the easing removed it fails at level with thirteen times the ordinary change.
+
+### 2026-09-12 — the Elementalist's auto became a line
+
+**Changed** the auto from a flat circle at a fixed distance in front of her to a **beam**: an
+instant ray from her chest along the crosshair, out to the move's own reach. Its `reach` went
+4 m → 9 m and its `radius` 0.7 → 0.35 — longer and thinner, because it is a line now. Hitstun
+14 → 0 and knockback 2 → 0. `bolt_aim_range`, `fire_bolt_damage_(x)` and `fire_bolt_knockback_(x)`
+are gone; seven knobs for a real fire-bolt projectile replace them.
+
+**Why** the complaint was that aiming up did nothing: *"even when I aim upwards, the auto attack
+still just follows along the ground."* It did, and the reason was one function. Every trace the
+move used — against a stone, against a fire pillar, against a body — went through a flat,
+height-free ray test, so the pitch of the aim was thrown away before anything was compared. The
+shot went the same distance along the ground whatever the crosshair said, and the overlay drew
+the same upright cylinder a fixed distance ahead, which is what made it look correct and behave
+wrongly at the same time.
+
+**The fix is a shape, not a special case.** `math::ray_hits_cylinder` is a real
+three-dimensional ray against an upright cylinder with both caps, and a fighter, a stone and each
+slab of a fire pillar are all upright cylinders. The aim resolver already traced stones that way;
+now everything does, and the flat version is deleted rather than left around to be used again by
+mistake. The arena's boxes went the same way into `math::ray_hits_box`, which is also what lets
+the beam ask the Ridgeback which *part* a line reaches first.
+
+**What it meets first is the whole move** — a fighter, a structure, or fire — rather than the old
+two-way "is it aimed through a structure or a pillar" with the fighter check bolted on separately.
+Three outcomes and one comparison is both smaller and the thing a player can actually state.
+
+**The fighter case is the design change worth arguing about.** It does small damage, it takes the
+move they were charging, and it hands their frames straight back: no hitstun, no stagger, no
+shove. That breaks `landing_a_hit_keeps_the_initiative_or_resets_neutral`, which is a real
+property and not one to wave away — so the test now excludes moves that hand out no stun at all
+and a new one, `a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws`, states the price:
+such a move must be minus on hit and must be the smallest hit in its class. What it buys is an
+interrupt, and a move that bought an interrupt *and* damage would beat the moves that pay stun for
+theirs. Blockstun stayed at 6: "no stagger" is about landing it, and guard is still worth holding.
+
+**The fire interaction is a projectile now, not a longer instant hit.** It used to be the same
+hitscan shot with its damage and knockback multiplied and its range quietly swapped for the
+20 m aim range — a poke that could cross the arena instantly, which is not a poke. A pillar
+**lights** a bolt instead: 38 m/s, 0.3 m across, 24 m of range, 70 damage, 9 frames of stagger,
+and it starts *at the pillar*. Starting it at her hand was the tempting simplification and it
+would have made the whole interaction invisible.
+
+**The picture and the rule come from the same place.** `state::hitbox` is a capsule between two
+points rather than a sphere at one — a swing is the case where both ends coincide — so the game,
+the debug overlay and the browser tool all draw the volume that was tested. The shot is drawn as
+the thin cylinder it is, and the body tilts on to the aim through spine, chest, shoulders and
+head, which is what the bolt clip's own author's note had been asking for: the off hand was "the
+only thing in the pose that says which way the bolt went".
+
+**Also fixed on the way.** `nothing_is_dirty_before_anything_is_touched` was racing the one
+mutating Oven test about one run in fifteen under load — a pre-existing flake, reproduced 14 times
+in 200 runs on the commit before this work. The readers take the same lock as the writer now.
+
+**Verdict** open — none of the seven new numbers has been played against, and the beam's 9 m is a
+guess at "short-to-middle". The two properties worth watching are whether the interrupt is strong
+enough to be worth the total lack of pressure, and whether a pillar plus an auto is too easy a
+long-range poke for a class that is supposed to want you at terrain range.
+
+**Still open from "the autos are due a pass, as a set":** the melee classes' autos, and the timing
+pass across all six. This closed the Elementalist's.

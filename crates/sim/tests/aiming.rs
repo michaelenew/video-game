@@ -194,7 +194,7 @@ fn an_aimed_move_hits_where_it_was_aimed() {
     let mut seen = None;
     for _ in 0..10 {
         if let Some(box_out) = sim::state::hitbox(&w.players[0]) {
-            seen = Some(box_out.centre);
+            seen = Some(box_out.centre());
             break;
         }
         run(&mut w, 1, 0, down(45));

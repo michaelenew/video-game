@@ -1144,6 +1144,53 @@ impl Monster {
         }
         best.map(|(i, _)| i)
     }
+
+    /// Which part a *beam* passes through, and how far along it that happens.
+    ///
+    /// The Elementalist's auto is a ray rather than a volume at a point, so it
+    /// asks a different question of the creature: not "which parts does this
+    /// bubble overlap" but "which part does this line reach first". That also
+    /// makes the softest-wins tiebreak in `part_struck` unnecessary here --
+    /// that rule exists because a sphere sits inside several boxes at once and
+    /// the player could not have chosen between them. A line can: the ridge is
+    /// in front of the barrel from above and behind it from the side, and
+    /// whichever the shot reaches first is the one that was aimed at.
+    ///
+    /// The whole test runs in **body space**, where every part is an
+    /// axis-aligned box, which is the reason the parts are authored there.
+    /// `swell` is the shot's own radius, added to the box.
+    pub fn part_struck_along(
+        &self,
+        from: V3,
+        dir: V3,
+        limit: Fx,
+        swell: Fx,
+    ) -> Option<(usize, Fx)> {
+        let s = self.stance();
+        let start = s.to_body(from);
+        let along = s.dir_to_body(dir);
+        let out = V3::new(swell, swell, swell);
+
+        let mut best: Option<(usize, Fx)> = None;
+        for (index, part) in SHAPES.iter().enumerate() {
+            let sh = shape(index);
+            // The articulation is rigid, so undoing it on two points a unit
+            // apart gives back the direction as well as the origin.
+            let o = s.unarticulate(part.rides, start);
+            let d = s.unarticulate(part.rides, start.add(along)).sub(o);
+            let Some(dist) = crate::math::ray_hits_box(o, d, sh.min.sub(out), sh.max.add(out))
+            else {
+                continue;
+            };
+            if dist.raw() > limit.raw() {
+                continue;
+            }
+            if best.is_none_or(|(_, seen)| dist.raw() < seen.raw()) {
+                best = Some((index, dist));
+            }
+        }
+        best
+    }
 }
 
 // ---------------------------------------------------------------------------

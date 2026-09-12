@@ -405,9 +405,10 @@ fn a_bolt_aimed_through_a_structure_kicks_it_instead_of_reaching_past_it() {
         flat_speed(after.vel).raw() > 0,
         "a kicked stone did not pick up any speed"
     );
-    assert!(
-        w.players[0].bolt_blocked,
-        "the shot did not register as blocked by the structure it kicked"
+    assert_eq!(
+        w.players[1].health,
+        sim::state::max_health(),
+        "the beam kicked the stone and poked the fighter beyond it as well"
     );
 }
 

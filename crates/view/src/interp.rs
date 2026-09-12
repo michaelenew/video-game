@@ -52,6 +52,14 @@ pub struct PlayerView {
     /// stored, because a rotation between two frames *is* the turn rate and
     /// putting a second copy in the snapshot would only let it disagree.
     pub turn_rate: f32,
+    /// How far above the horizon the current move was aimed, in radians.
+    ///
+    /// `facing` is flat, because a body turns level. This is the other half of
+    /// the aim, and the renderer needs it for the same reason the simulation
+    /// does: a shot that leaves along the crosshair has to *look* like it left
+    /// along the crosshair, or the character is pointing one way and the
+    /// attack is going another.
+    pub aim_pitch: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -130,6 +138,12 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     let dot = (prev[0] * cur[0] + prev[2] * cur[2]).clamp(-1.0, 1.0);
     let turn_rate = cross.atan2(dot) / std::f32::consts::TAU * crate::TICK_HZ;
 
+    // The aim's vertical half, as an angle. `aim_dir` is a unit vector, so its
+    // height *is* the sine of the pitch. Blended between the two snapshots
+    // like every other continuous quantity, so the arm does not step.
+    let pitch_of = |v: &sim::state::Player| fx(v.aim_dir.y).clamp(-1.0, 1.0).asin();
+    let aim_pitch = lerp(pitch_of(p), pitch_of(c), a);
+
     PlayerView {
         pos,
         facing,
@@ -148,6 +162,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         stun_total: c.stun_total,
         rise: fx(c.vel.y),
         turn_rate,
+        aim_pitch,
     }
 }
 
