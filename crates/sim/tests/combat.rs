@@ -476,6 +476,20 @@ fn releasing_a_direction_still_stops_you_crisply() {
 // The hitbox the overlay draws
 // ---------------------------------------------------------------------------
 
+/// The buttons that throw this class's fastest move with a volume of its own.
+///
+/// Not every poke has one. A move whose radius is zero places something and
+/// lets the thing it placed do the hitting -- the Blood mage's thrown blade is
+/// the whole reason the distinction exists -- so a test about attack volumes
+/// has to be pointed at a move that has one.
+fn swings_with(class: sim::class::Class) -> u16 {
+    if sim::moves::get(class, sim::state::SLOT_POKE).strikes() {
+        L
+    } else {
+        SHIFT | L
+    }
+}
+
 /// A world with player one mid-swing and player two parked at `gap` past the
 /// far end of the attack volume, along the attack direction.
 ///
@@ -487,12 +501,13 @@ fn releasing_a_direction_still_stops_you_crisply() {
 fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     use sim::state::hitbox;
 
+    let button = swings_with(class);
     let mut w = World::with_classes([class, class]);
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
 
     for _ in 0..40 {
-        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         if hitbox(&w.players[0]).is_some() {
             break;
         }
@@ -509,8 +524,31 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
         w.players[1].pos.y,
         hb.to.z,
     );
-    w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
     w
+}
+
+#[test]
+fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
+    // The other half of the rule below. An ability that puts something into the
+    // world and lets it do the hitting must not *also* poke whoever happens to
+    // be standing next to the caster: the blade is out there, and the caster is
+    // here with empty hands.
+    use sim::state::hitbox;
+    let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
+    w.players[1].pos = w.players[0].pos;
+    let before = w.players[1].health;
+    for _ in 0..40 {
+        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        assert!(
+            hitbox(&w.players[0]).is_none(),
+            "the thrown blade drew a hitbox on the caster"
+        );
+    }
+    assert!(
+        w.players[1].health < before,
+        "fixture: the blade never came round to hit anybody"
+    );
 }
 
 #[test]

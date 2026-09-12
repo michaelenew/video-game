@@ -125,11 +125,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
     // Persistent effects, drawn as the volumes the simulation tests against --
     // the fire pillar's two slabs separately, because they are two threats.
     for effect in sim.cur.effects.iter().flatten() {
-        let at = Vec3::new(
-            effect.pos.x.to_f32_for_render(),
-            effect.pos.y.to_f32_for_render(),
-            effect.pos.z.to_f32_for_render(),
-        );
+        let at = v3(effect.pos);
         match effect.kind {
             EffectKind::FirePillar => {
                 let (base, column) = effect.pillar_volumes();
@@ -145,13 +141,34 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
-            EffectKind::BlackSpike => cylinder(
-                &mut gizmos,
-                at,
-                effect.field_radius().to_f32_for_render(),
-                0.12,
-                FIELD,
-            ),
+            EffectKind::BlackSpike => {
+                let volume = effect.spike_volume();
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    volume.radius.to_f32_for_render(),
+                    volume.top.to_f32_for_render().max(0.01),
+                    FIELD,
+                );
+            }
+            // A blade and four arms: spheres, because that is exactly what the
+            // hit test is -- see `World::inside`.
+            EffectKind::Bloodletter => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(v3(effect.blade_at())),
+                    effect.field_radius().to_f32_for_render(),
+                    FIELD,
+                );
+            }
+            EffectKind::Grasp => {
+                for arm in 0..sim::effects::GRASP_ARMS {
+                    gizmos.sphere(
+                        Isometry3d::from_translation(v3(effect.arm_at(arm))),
+                        effect.field_radius().to_f32_for_render(),
+                        FIELD,
+                    );
+                }
+            }
         }
     }
 }
@@ -184,6 +201,7 @@ fn beam(gizmos: &mut Gizmos, from: Vec3, to: Vec3, radius: f32, colour: Color) {
     gizmos.line(from, to, colour);
 }
 
+/// A simulation position, in the renderer's units.
 fn v3(v: sim::V3) -> Vec3 {
     Vec3::new(
         v.x.to_f32_for_render(),

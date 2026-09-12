@@ -1408,6 +1408,125 @@ is now out of reach.
 **Verdict** open. The contract the whole aiming pass exists for is exact again, measured rather
 than argued, and the camera keeps the orbit from the previous entry unchanged.
 
+### 2026-09-12 — the Blood mage's kit is its mechanic now
+
+**Changed** the whole of the class's implemented kit, and the first implementation of the
+mechanic it has been described by since it was written down.
+
+| Key | Was | Is |
+| --- | --- | --- |
+| `LMB` | Rend, a melee poke | **Bloodletter** — a blade out and back, cutting on both passes |
+| `Shift+LMB` | Black spike | **Rend**, moved down and given committed weight |
+| `Q` | Reaper's debt | **Grasp** — four arms out in a cone that converge, rooting on all four |
+| `E` | nothing at all | **Black spike**, at 9 m instead of 2.5 and a 30-frame cast instead of 18 |
+
+And every one of the four now has a **health cost** and a **leech percentage** in the move
+table: 15/40% for the auto up to 120/30% for the spike, against a thousand-point bar.
+
+**Why** the class was described as "everything costs health and the good outcomes give it
+back" and not one line of that existed in the simulation. Its abilities were free, they
+returned nothing, and the one thing on the roster that was supposed to be a resource loop was
+four ordinary attacks with a red colour scheme.
+
+**Three things were broken rather than missing, and they are worth separating out:**
+
+- **The spike drained nobody in a hunt.** Effects were applied to fighters and the creature
+  was not one, so a Blood mage hunting alone put a spike in the ground, drained an empty patch
+  of arena and got nothing. Half a kit doing nothing in one of the game's two modes, invisible
+  because the versus tests passed. Fixed for every effect, so the fire pillar burns the
+  creature too now — it did not before either.
+- **Friendly fire was on for hazards.** The same fix opened it: a drain field was about to
+  become the one thing in the game that could kill a team-mate. Effects now go through the
+  same "is there a creature" condition direct hits already use, rather than a second flag that
+  could get out of step with the first.
+- **The spike had no spike.** It was drawn as a twelve-centimetre stain on the floor, which is
+  a thing you find out about by standing in it. It is a cone standing in a disc now, at
+  `spike_height`, and the field is tested as a slab of that height rather than as an
+  infinitely tall cylinder — so it can be jumped over, and what you see is what catches you.
+
+**Why the spike moved to `E`.** Shift + click means "the committed version of your attack" on
+every class, and the spike is not that — it is a placement. Meanwhile `E` is the class
+mechanic and the Blood mage's mechanic is *health*, which is not a thing you press a key to
+change, so her `E` did nothing for the whole of a match. This cost a fourth column in the move
+table, which five classes leave empty. That is the price and it is worth it: the alternative
+was a slot that means one thing on five classes and another on the sixth.
+
+**Why the auto is a returning blade.** It is the archive's "low CD ability", and it is the
+simplest possible statement of the class: throw something away, get it back if things go
+well. The payment arriving **on the catch** rather than on the cut is what makes an auto
+attack a small commitment instead of a free poke — the blade is in the air for forty-eight
+frames and the health is not yours until it comes home.
+
+**Why the spike's return is continuous.** The archive pays out when the last tether breaks.
+Nobody has built tethers, and a lump sum at the end is an ability you survive a timer to
+collect on rather than one you build a fight around. Thirty per cent per drain tick means a
+Blood mage standing in a fight is being paid the whole time it is up.
+
+**The one number that had to move twice.** The Grasp's root started at 26 frames against the
+arms' own 24 frames of hitstun, which made it invisible — it expired inside the stun that
+delivered it. It is 40 now, and `a_root_outlives_the_hitstun_that_delivers_it` pins the
+relationship so it cannot silently invert again during tuning.
+
+**Verdict** open. The frame data holds every property in `feel.rs`, including a new one that
+says a Blood mage ability thrown perfectly must return more than it cost — which the Grasp
+failed at 35% leech and passes at 55%. None of it has been played. The costs in particular
+are a guess: the class is downstream of TTK, and what fraction of a health bar a cast should
+represent is exactly the question a prototype answers and a document cannot.
+
+### 2026-09-12 — the Blood mage's root has something on the other side of it
+
+**Changed** a Blood mage's damage is multiplied by **1.4 against anything that cannot move**.
+Disabled means rooted, staggered, held, or a creature on its side. One knob,
+`disabled_damage_mul`, under Blood mage.
+
+**Why** the entry above gave the class a root and left it as its own reward. Four arms of a
+Grasp is the most expensive thing in the kit, the root is forty frames, and landing it bought
+you forty frames of somebody standing still — which is worth something, but not ninety health
+and twenty frames of recovery. The archive has the answer and has had it since 2016: *naturally
+deals increased damage on disabled enemies*. Until this week the class had no disable of its
+own, so the trait would have been a bonus against a team-mate's crowd control. It has one now.
+
+**What counts, and the one exclusion that is the whole definition.** Hitstun is **not** a
+disable. It happens on every hit anybody lands, so counting it would make the trait "increased
+damage from the second hit onward" — a flat damage bonus in a costume, needing no read at all.
+What is on the list is what `ability-spec.md` calls a hard stop, and the design only allows
+those behind a hard condition:
+
+| Disabled | Earned by |
+| --- | --- |
+| Rooted | every arm of a Grasp |
+| Staggered | a parry |
+| Held | a grab |
+| Toppled | breaking the creature's poise, which is what the climb is for |
+
+Blockstun is deliberately absent. They blocked, which was the correct decision, and paying the
+attacker for it would make guarding worse than standing still.
+
+**One function, five callers.** A swing, a blade in the air, an arm of a Grasp, a field
+ticking, and all of the same against the creature. They were five separate pieces of damage
+arithmetic and the multiplier goes through one `preying()` in all of them — a class trait that
+applied to three of a class's four abilities would not be a trait, it would be a bug somebody
+finds in a match.
+
+**The two relationships that had to be pinned.** The bonus is bounded between 1.2 and 2: below
+the floor nobody feels it and the Grasp is a root with no payoff, above the ceiling one read
+ends the round. And **the root has to outlast her fastest startup**, or there is nothing she
+can land inside it — forty frames against Bloodletter's seven and Rend's fourteen, so both
+fit.
+
+**The awkward part, and it is in the test rather than the game.** Comparing damage against a
+toppled Ridgeback to damage against a standing one is not a fair comparison by default: a
+toppled creature lies lower and pitched, so the same swing lands on a different part, and the
+hide's vulnerability differs part to part. The fixture freezes the animal, searches for a spot
+where the claw reaches the *same part* whether it is up or down, and stands the fighter there.
+Worth writing down because the first two versions measured geometry and reported it as the
+rule being broken.
+
+**Verdict** open, like everything else in the class this week. 1.4 is a guess inside a bounded
+range; whether the root is long enough to actually use is the play question, and if it is not,
+the root's length is the first knob and the bonus is the second.
+
+
 ### 2026-09-12 — the zones hand over instead of swapping
 
 **Changed** each zone's ramp is eased in and out, over a share of its own span given by a new
