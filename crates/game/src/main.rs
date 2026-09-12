@@ -133,6 +133,7 @@ fn main() {
         .init_resource::<palette::Palette>()
         .init_resource::<hub::Hub>()
         .init_resource::<Fades>()
+        .init_resource::<ShieldHands>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -210,6 +211,15 @@ pub struct Sim {
     /// from "this rig is wrong" while looking at the thing, in one keypress.
     bind_pose: bool,
 }
+
+/// Where each fighter's shield hand ended up this frame, in world space.
+///
+/// The shield is a separate object because its position is independent of the
+/// character -- that is the whole mechanic -- but while it is *in hand* it
+/// should be in a hand, and a hand is now a thing the skeleton has. Written by
+/// the posing pass and read by the one that places shields, which runs after.
+#[derive(Resource, Default)]
+struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
 
 /// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
 /// whatever it was, which is wrong by a few frames of blend weight and
@@ -723,17 +733,33 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
 /// A shield in hand rides on the character; a thrown one sits in the world.
 fn place_shields(
     sim: Res<Sim>,
+    hands: Res<ShieldHands>,
     mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in shields.iter_mut() {
+        let held = matches!(
+            sim.cur.players[tag.0].mechanic,
+            sim::Mechanic::Shield(sim::state::Shield::Held)
+        );
         match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
+            // Thrown or planted: it is somewhere in the arena on its own.
             Some(pos) => {
                 *vis = Visibility::Inherited;
+                tf.rotation = Quat::IDENTITY;
                 tf.translation = Vec3::new(
                     pos.x.to_f32_for_render(),
                     pos.y.to_f32_for_render(),
                     pos.z.to_f32_for_render(),
                 );
+            }
+            // In hand, and now that the skeleton has hands it can be in one.
+            // It follows the forearm, the way a strapped shield does, so
+            // raising the guard raises the shield without anybody animating it.
+            None if held => {
+                let (at, rot) = hands.0[tag.0];
+                *vis = Visibility::Inherited;
+                tf.rotation = rot;
+                tf.translation = at + rot * Vec3::new(0.0, -0.12, 0.06);
             }
             None => *vis = Visibility::Hidden,
         }
@@ -1052,6 +1078,7 @@ fn apply_poses(
     sim: Res<Sim>,
     time: Res<Time>,
     mut fades: ResMut<Fades>,
+    mut hands: ResMut<ShieldHands>,
     hub: Option<Res<crate::hub::Hub>>,
     mut roots: Query<(&Fighter, &mut Transform), Without<BodyPart>>,
     mut parts: Query<(&BodyPart, &mut Transform), Without<Fighter>>,
@@ -1087,6 +1114,19 @@ fn apply_poses(
             }
         }
         skins.push(view::skeleton::solve(skeleton, &pose));
+    }
+
+    // The shield hand, in the arena rather than in the character's own space,
+    // so whatever is holding something can be placed against it.
+    for owner in 0..MAX_PLAYERS {
+        let p = frame.players[owner];
+        let yaw = p.facing[0].atan2(p.facing[2]);
+        let turn = Quat::from_rotation_y(yaw);
+        let (at, rot) = skins[owner].box_of(&skeletons[owner], Joint::HandL);
+        hands.0[owner] = (
+            Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
+            turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
+        );
     }
 
     for (bp, mut tf) in parts.iter_mut() {
