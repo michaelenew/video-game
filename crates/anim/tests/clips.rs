@@ -693,27 +693,13 @@ fn report_clamped_joints() {
 
 #[test]
 fn every_clip_the_game_can_play_has_been_authored() {
-    // A clip with no recipe bakes as a held rest pose. That is deliberate --
-    // one unfinished family should not block the rest -- but it is a character
-    // standing still in the middle of a match, and the only thing stopping it
-    // from staying that way for months is somebody noticing.
+    // A clip with no recipe bakes as a held rest pose. That is deliberate while
+    // a family is being written -- one unfinished file should not block the
+    // rest -- but it is a character standing still in the middle of a match,
+    // and the only thing that would stop it staying that way is this.
     //
-    // The exceptions are listed by name rather than counted, so finishing one
-    // means deleting a line here and finishing the last one means deleting the
-    // list.
-    const OUTSTANDING: &[&str] = &["blood_poke", "blood_committed", "blood_special"];
-
+    // There is nothing outstanding. If that changes, name the clip here with a
+    // reason rather than deleting the assertion.
     let missing: Vec<&str> = anim::clips::missing().iter().map(|c| c.name()).collect();
-    for name in &missing {
-        assert!(
-            OUTSTANDING.contains(name),
-            "{name} has no recipe and is not on the outstanding list"
-        );
-    }
-    for name in OUTSTANDING {
-        assert!(
-            missing.contains(name),
-            "{name} is authored now -- take it off the outstanding list"
-        );
-    }
+    assert!(missing.is_empty(), "no recipe for: {missing:?}");
 }
