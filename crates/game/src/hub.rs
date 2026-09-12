@@ -710,7 +710,7 @@ fn joint_sliders(ui: &mut egui::Ui, pose: &mut Pose, joint: Joint) -> bool {
     ui.horizontal(|ui| {
         ui.add_sized([64.0, 16.0], egui::Label::new(joint.name()));
         let channels = if joint.is_hinge() { 1 } else { 3 };
-        for c in 0..channels {
+        for (c, name) in names.iter().enumerate().take(channels) {
             let (lo, hi) = limits.channel(c);
             let mut v = pose.degrees(joint, c);
             if ui
@@ -718,7 +718,7 @@ fn joint_sliders(ui: &mut egui::Ui, pose: &mut Pose, joint: Joint) -> bool {
                     egui::DragValue::new(&mut v)
                         .speed(0.5)
                         .range(lo.to_degrees()..=hi.to_degrees())
-                        .suffix(format!("° {}", names[c])),
+                        .suffix(format!("° {name}")),
                 )
                 .changed()
             {
@@ -971,6 +971,55 @@ fn ease_editor(ui: &mut egui::Ui, ease: &mut Ease) -> bool {
     changed
 }
 
+/// Draw the keys on either side of the selected one as wireframes.
+///
+/// The oldest trick in animation, and it earns its place here for the same
+/// reason it does on paper: a pose is judged against the poses it sits between,
+/// not on its own. Without it, fixing the frame in front of you is how a move
+/// ends up with four good keys and no arc.
+pub fn onion_skin(hub: Res<Hub>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
+    if !hub.open || !hub.onion || !hub.posing {
+        return;
+    }
+    let owner = hub.on;
+    let class = sim.cur.players[owner].class;
+    let skeleton = view::skeleton::skeleton_for(class);
+
+    let p = sim.cur.players[owner];
+    let origin = Vec3::new(
+        p.pos.x.to_f32_for_render(),
+        p.pos.y.to_f32_for_render(),
+        p.pos.z.to_f32_for_render(),
+    );
+    let yaw = p
+        .facing
+        .x
+        .to_f32_for_render()
+        .atan2(p.facing.z.to_f32_for_render());
+    let turn = Quat::from_rotation_y(yaw);
+
+    let keys = &hub.recipe().keys;
+    for (offset, colour) in [
+        (-1i32, Color::srgba(0.45, 0.75, 1.0, 0.5)),
+        (1, Color::srgba(1.0, 0.65, 0.35, 0.5)),
+    ] {
+        let Some(i) = hub.key.checked_add_signed(offset as isize) else {
+            continue;
+        };
+        let Some(key) = keys.get(i) else { continue };
+        let skin = view::skeleton::solve(&skeleton, &key.pose);
+        for joint in JOINTS {
+            let a = skin.origin[joint.index()];
+            let b = skin.tip(&skeleton, joint);
+            gizmos.line(
+                origin + turn * Vec3::new(a[0], a[1], a[2]),
+                origin + turn * Vec3::new(b[0], b[1], b[2]),
+                colour,
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1020,9 +1069,11 @@ mod tests {
     fn editing_a_key_changes_what_is_drawn() {
         // The whole argument for the hub is that the loop closes in a frame.
         // If an edit does not reach the preview, it does not.
-        let mut hub = Hub::default();
-        hub.open = true;
-        hub.clip = Clip::Idle;
+        let mut hub = Hub {
+            open: true,
+            clip: Clip::Idle,
+            ..Default::default()
+        };
         hub.rebake();
         let before = hub.preview_for(hub.on).expect("previewing");
         let i = hub.key;
@@ -1039,62 +1090,15 @@ mod tests {
     fn holding_a_key_shows_that_key_rather_than_the_solved_frame() {
         // Posing means seeing the pose you are editing, not the spring's
         // opinion of it two frames later.
-        let mut hub = Hub::default();
-        hub.open = true;
-        hub.clip = Clip::Idle;
+        let mut hub = Hub {
+            open: true,
+            clip: Clip::Idle,
+            ..Default::default()
+        };
         hub.rebake();
         hub.posing = true;
         hub.key = 1;
         let shown = hub.preview_for(hub.on).expect("previewing");
         assert_eq!(shown, hub.recipe().keys[1].pose);
-    }
-}
-
-/// Draw the keys on either side of the selected one as wireframes.
-///
-/// The oldest trick in animation, and it earns its place here for the same
-/// reason it does on paper: a pose is judged against the poses it sits between,
-/// not on its own. Without it, fixing the frame in front of you is how a move
-/// ends up with four good keys and no arc.
-pub fn onion_skin(hub: Res<Hub>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
-    if !hub.open || !hub.onion || !hub.posing {
-        return;
-    }
-    let owner = hub.on;
-    let class = sim.cur.players[owner].class;
-    let skeleton = view::skeleton::skeleton_for(class);
-
-    let p = sim.cur.players[owner];
-    let origin = Vec3::new(
-        p.pos.x.to_f32_for_render(),
-        p.pos.y.to_f32_for_render(),
-        p.pos.z.to_f32_for_render(),
-    );
-    let yaw = p
-        .facing
-        .x
-        .to_f32_for_render()
-        .atan2(p.facing.z.to_f32_for_render());
-    let turn = Quat::from_rotation_y(yaw);
-
-    let keys = &hub.recipe().keys;
-    for (offset, colour) in [
-        (-1i32, Color::srgba(0.45, 0.75, 1.0, 0.5)),
-        (1, Color::srgba(1.0, 0.65, 0.35, 0.5)),
-    ] {
-        let Some(i) = hub.key.checked_add_signed(offset as isize) else {
-            continue;
-        };
-        let Some(key) = keys.get(i) else { continue };
-        let skin = view::skeleton::solve(&skeleton, &key.pose);
-        for joint in JOINTS {
-            let a = skin.origin[joint.index()];
-            let b = skin.tip(&skeleton, joint);
-            gizmos.line(
-                origin + turn * Vec3::new(a[0], a[1], a[2]),
-                origin + turn * Vec3::new(b[0], b[1], b[2]),
-                colour,
-            );
-        }
     }
 }

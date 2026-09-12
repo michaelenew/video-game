@@ -181,7 +181,7 @@ pub fn hand_to(pose: &mut Pose, skeleton: &Skeleton, left: bool, target: V3) -> 
     for i in 0..STEPS {
         let angle = i as f32 / STEPS as f32 * std::f32::consts::TAU;
         let candidate = Quat::axis_angle(axis, angle).rotate(wish);
-        let mut trial = pose.clone();
+        let mut trial = *pose;
         let miss = reach(&mut trial, skeleton, upper, target, candidate);
         // Centimetres of error against a preference measured in the same
         // units: half the swivel away from the natural elbow is worth about

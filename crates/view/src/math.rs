@@ -85,6 +85,11 @@ impl Quat {
     }
 
     /// `self` then... no: `self * other` applies `other` first, as matrices do.
+    // Named `mul` rather than given the `Mul` trait on purpose: composition
+    // order is the one thing about this rig that everything has to agree on,
+    // and `a.mul(b)` reads left to right at every call site where `a * b`
+    // invites a reader to guess.
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, other: Quat) -> Quat {
         let [ax, ay, az, aw] = self.0;
         let [bx, by, bz, bw] = other.0;

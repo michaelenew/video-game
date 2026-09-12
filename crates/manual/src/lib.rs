@@ -299,6 +299,10 @@ pub const SECTIONS: &[Section] = &[
                 "Draw a clip as a contact sheet PNG, into target/anim-preview. Add --feet for a per-frame table of what each foot is doing, or --all for everything.",
             ),
             e(
+                "cargo run -p anim --bin export -- docs/preview/anim.json",
+                "Write the skeletons and every baked frame out as JSON, for the browser bench in docs/preview.",
+            ),
+            e(
                 "cargo run -p net --bin soak",
                 "Headless rollback soak: thousands of frames, checked for divergence.",
             ),
@@ -342,6 +346,10 @@ pub const SECTIONS: &[Section] = &[
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
+            e(
+                "SHOT_DIST=<metres>",
+                "Pull the camera in for a capture. The arena default of eleven metres makes a pose unreadable.",
+            ),
             e(
                 "BIND_POSE=1",
                 "Start with the skeleton frozen at rest, for checking proportions.",

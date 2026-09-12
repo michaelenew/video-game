@@ -74,17 +74,15 @@ fn a_regenerated_file_is_valid_rust() {
         .args(["--edition", "2024", "--check"])
         .arg(&path)
         .output();
-    match out {
-        // A non-zero exit from `--check` means "would reformat", which is fine;
-        // a parse error is not, and rustfmt says so on stderr.
-        Ok(o) => {
-            let err = String::from_utf8_lossy(&o.stderr);
-            assert!(
-                !err.contains("error"),
-                "the regenerated file does not parse:\n{err}"
-            );
-        }
-        Err(_) => {} // no rustfmt on this machine; the rest of the test still ran
+    // A non-zero exit from `--check` means "would reformat", which is fine; a
+    // parse error is not, and rustfmt says so on stderr. No rustfmt on this
+    // machine is also fine -- the rest of the test still ran.
+    if let Ok(o) = out {
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(
+            !err.contains("error"),
+            "the regenerated file does not parse:\n{err}"
+        );
     }
 }
 

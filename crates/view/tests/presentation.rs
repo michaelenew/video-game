@@ -627,7 +627,6 @@ fn play_through(frames: u32) -> Vec<view::Pose> {
     let mut w = World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
     let mut fade = view::play::Crossfade::default();
     let mut drawn = Vec::new();
-    let mut prev = w.clone();
     for i in 0..frames {
         // A script that visits every branch of the selection: walking, running,
         // turning, jumping, dodging, attacking, guarding, being hit.

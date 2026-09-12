@@ -14,8 +14,8 @@
 //! and neither needs eight decimals of a radian.
 
 use std::fmt::Write as _;
-use view::clips::{ALL, Clip};
-use view::skeleton::{JOINTS, Joint, skeleton_for};
+use view::clips::ALL;
+use view::skeleton::{JOINTS, skeleton_for};
 
 fn main() {
     let out = std::env::args()
@@ -145,12 +145,7 @@ fn round(v: f32, places: i32) -> String {
 }
 
 fn v3(v: [f32; 3]) -> String {
-    format!(
-        "[{},{},{}]",
-        round(v[0], 4),
-        round(v[1], 4),
-        round(v[2], 4)
-    )
+    format!("[{},{},{}]", round(v[0], 4), round(v[1], 4), round(v[2], 4))
 }
 
 fn pair(v: (f32, f32)) -> String {
@@ -176,6 +171,3 @@ fn quoted(s: &str) -> String {
     out.push('"');
     out
 }
-
-#[allow(dead_code)]
-fn unused(_: Joint, _: Clip) {}

@@ -45,9 +45,9 @@ impl Canvas {
         }
         let a = alpha.clamp(0.0, 1.0);
         let i = (y as usize * self.width + x as usize) * 3;
-        for c in 0..3 {
+        for (c, &want) in colour.iter().enumerate() {
             let old = self.pixels[i + c] as f32;
-            self.pixels[i + c] = (old + (colour[c] as f32 - old) * a).round() as u8;
+            self.pixels[i + c] = (old + (want as f32 - old) * a).round() as u8;
         }
     }
 
