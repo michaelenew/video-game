@@ -284,3 +284,175 @@ fn the_overhead_reads_early() {
         "overhead has barely moved by frame 4: {moved}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Clips derived from frame data
+// ---------------------------------------------------------------------------
+
+mod derived {
+    use anim::bake::bake;
+    use anim::derive::{Shape, Vocabulary, from_frame_data};
+    use view::pose::{Part, PartTransform, Pose};
+
+    fn pose(arm_forward: f32) -> Pose {
+        let mut p = Pose {
+            parts: [PartTransform {
+                pos: [0.0, 1.0, 0.0],
+                rot: [0.0; 3],
+            }; 6],
+        };
+        p.parts[Part::ArmR as usize].pos = [0.4, 1.1, arm_forward];
+        p
+    }
+
+    fn vocab() -> Vocabulary {
+        Vocabulary {
+            neutral: pose(0.0),
+            coil: pose(-0.4),
+            strike: pose(0.8),
+            anticipate: None,
+        }
+    }
+
+    /// How far forward the right arm is on a given frame.
+    fn reach(frames: &[Pose], at: usize) -> f32 {
+        frames[at.min(frames.len() - 1)].get(Part::ArmR).pos[2]
+    }
+
+    #[test]
+    fn a_clip_is_exactly_as_long_as_its_move() {
+        // The failure this replaced: every attack played one of two clips, and
+        // when the lengths did not match the fighter either froze or kept
+        // moving after the move was over. The Bulwark's Grapple runs 53 frames
+        // against a 17-frame poke -- thirty-six frames of standing still.
+        for (s, a, r) in [(4u16, 3u16, 10u16), (20, 3, 30), (14, 4, 24), (6, 3, 12)] {
+            let clip = bake(&from_frame_data("t", s, a, r, Shape::Level, &vocab()));
+            assert_eq!(
+                clip.frames.len(),
+                (s + a + r) as usize,
+                "a {s}/{a}/{r} move baked {} frames",
+                clip.frames.len()
+            );
+        }
+    }
+
+    #[test]
+    fn the_strike_lands_on_the_frames_that_can_hit() {
+        // **The promise the animation makes to the opponent.** `moves.rs` makes
+        // startup length the thing a player reacts to, so an arm that arrives
+        // late is a telegraph that lies -- the hitbox is already out while the
+        // silhouette still says "winding up".
+        //
+        // Checked as a relationship rather than an absolute: the arm has to be
+        // further forward during the active window than it is at any point
+        // before the wind-up ends, for every shape and every plausible frame
+        // count.
+        for shape in [Shape::Level, Shape::Overhead, Shape::Seize] {
+            for (s, a, r) in [(4u16, 3u16, 10u16), (9, 5, 16), (16, 4, 26), (20, 3, 30)] {
+                let clip = bake(&from_frame_data("t", s, a, r, shape, &vocab()));
+
+                let during_active = (s..s + a)
+                    .map(|f| reach(&clip.frames, f as usize))
+                    .fold(f32::MIN, f32::max);
+                let winding_up = (0..s)
+                    .map(|f| reach(&clip.frames, f as usize))
+                    .fold(f32::MIN, f32::max);
+
+                assert!(
+                    during_active > winding_up,
+                    "{shape:?} {s}/{a}/{r}: the arm reaches {during_active:.2} while the \
+                     hitbox is live and {winding_up:.2} before it -- the telegraph is lying"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_move_coils_before_it_strikes() {
+        // Anticipation, and it is a gameplay requirement rather than a flourish:
+        // a silhouette that goes straight from neutral to extended gives the
+        // opponent nothing to read during the frames they are supposed to be
+        // deciding.
+        for (s, a, r) in [(6u16, 3u16, 12u16), (14, 4, 24), (20, 3, 30)] {
+            let clip = bake(&from_frame_data("t", s, a, r, Shape::Level, &vocab()));
+            let deepest = (0..s)
+                .map(|f| reach(&clip.frames, f as usize))
+                .fold(f32::MAX, f32::min);
+            assert!(
+                deepest < -0.05,
+                "a {s}/{a}/{r} move never coils back: its deepest wind-up is {deepest:.2}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_clip_returns_to_rest_by_the_end_of_recovery() {
+        // Recovery is the cost of a move, and a fighter still holding a finished
+        // swing reads as being mid-attack when they are actually the one who can
+        // be punished.
+        for (s, a, r) in [(4u16, 3u16, 10u16), (16, 4, 26), (20, 3, 30)] {
+            let clip = bake(&from_frame_data("t", s, a, r, Shape::Level, &vocab()));
+            let last = reach(&clip.frames, clip.frames.len() - 1);
+            assert!(
+                last.abs() < 0.25,
+                "a {s}/{a}/{r} move ends with the arm still {last:.2} out of rest"
+            );
+        }
+    }
+
+    #[test]
+    fn shape_comes_from_the_moves_own_flags() {
+        // Derived rather than declared, so a move that stops being an overhead
+        // in the Oven stops animating like one at the same moment rather than
+        // the next time somebody remembers.
+        assert_eq!(Shape::of(true, 0), Shape::Level);
+        assert_eq!(Shape::of(false, 0), Shape::Overhead);
+        assert_eq!(Shape::of(true, 40), Shape::Seize);
+        assert_eq!(Shape::of(false, 40), Shape::Seize, "a grab is a grab first");
+    }
+
+    #[test]
+    fn every_move_in_the_game_has_its_own_clip() {
+        // The completeness check. A move added to `sim::moves` without a clip
+        // would silently fall back to another move's animation, which is the
+        // exact class of bug this work removed.
+        let mut seen = std::collections::HashSet::new();
+        for (c, _) in sim::class::ALL_CLASSES.iter().enumerate() {
+            for kind in 0..3usize {
+                let index = view::baked::move_clip(c, kind);
+                assert!(
+                    index < view::baked::MOVE_CLIPS.len(),
+                    "class {c} move {kind} points at clip {index}, which does not exist"
+                );
+                assert!(
+                    seen.insert(index),
+                    "class {c} move {kind} shares clip {index} with another move"
+                );
+            }
+        }
+        assert_eq!(seen.len(), sim::class::ALL_CLASSES.len() * 3);
+    }
+
+    #[test]
+    fn a_clip_matches_the_frame_data_it_was_derived_from() {
+        // The bake is committed to the repository, so it can go stale exactly
+        // the way `tuned.rs` can -- someone retunes a move in the Oven, bakes
+        // the tuning, and forgets the animation. Then the telegraph lies again,
+        // and nothing says so.
+        for (c, class) in sim::class::ALL_CLASSES.iter().enumerate() {
+            for kind in 0..3u8 {
+                let (s, a, r) = sim::moves::frames(*class, kind);
+                let clip = view::baked::MOVE_CLIPS[view::baked::move_clip(c, kind as usize)];
+                assert_eq!(
+                    clip.len(),
+                    (s + a + r) as usize,
+                    "{}'s {} is {s}/{a}/{r} but its clip is {} frames -- re-run \
+                     `cargo run -p anim --bin bake`",
+                    class.name(),
+                    sim::moves::get(*class, kind).name,
+                    clip.len()
+                );
+            }
+        }
+    }
+}

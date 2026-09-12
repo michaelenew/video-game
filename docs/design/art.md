@@ -437,6 +437,42 @@ move, because the spring solver fills in every frame between the keys. So trails
 are drawn where there is a clip and nowhere else -- which makes generating clips
 from frame data a prerequisite rather than a nicety.
 
+## Every move has its own clip now
+
+Each move carries a startup, an active and a recovery count -- three numbers
+that already decide the entire neutral game. They also completely determine the
+*shape* of the animation: wind up for the startup, be extended for the active
+window, return during recovery. So the clip does not need authoring. It needs
+deriving.
+
+Before this, every attack played one of two hand-authored clips -- a 17-frame
+poke or a 42-frame overhead -- indexed by the move's own elapsed frames. When
+the lengths matched, that worked. The Bulwark's **Grapple** runs 53 frames, so
+it played the poke and then **stood frozen for thirty-six of them**. The
+Champion's **Sweep** is 6/3/12 against a clip that strikes on frame 7, so the
+arm arrived a frame after the hitbox.
+
+The second is the one that matters. **A telegraph that does not line up with
+the frame data is a telegraph that lies**, and the design rests on moves being
+readable: [combat-kernel.md](combat-kernel.md) makes startup length the thing an
+opponent reacts to. An animation is the same kind of claim the debug overlay
+makes, addressed to the player instead of the developer -- and the overlay
+exists precisely because one that can drift from the rules is worse than none.
+
+Deriving the keys means **the extended pose lands on the first active frame by
+construction**, for all eighteen moves, and stays there when the frame data is
+retuned in the Oven. A test asserts the arm reaches further during the active
+window than at any point before it, for every shape and every plausible frame
+count; another fails if a committed clip's length stops matching its move.
+
+The shape comes from the move's own flags rather than a declaration, so a move
+that stops being an overhead stops animating like one at the same moment.
+
+What it does not do is make a move look like *itself*. A derived clip knows how
+long a move takes and roughly what shape it is; it does not know the Reaver's
+Guillotine is a downward chop with a shadow behind it. This is a floor, not a
+ceiling.
+
 ## Next, in order
 
 1. **Stone as a volume, not a texture.** The current stone is a 2D field
@@ -447,17 +483,12 @@ from frame data a prerequisite rather than a nicety.
    bake each surface as its *intersection* with that volume, and the pattern
    stops repeating and starts wrapping around corners correctly. The same
    method extends to natural terrain.
-2. **Animation generated from frame data that already exists.** Every move has
-   a startup, an active and a recovery window. Anticipate, extend, settle --
-   with [the spring solver](architecture.md#the-animation-factory) filling in
-   between -- gives every move a passable clip from numbers already in the
-   Oven. Trails depend on this, per above.
-3. **Procedural bodies.** The fighters are six boxes; the natural next step is
+2. **Procedural bodies.** The fighters are six boxes; the natural next step is
    not glTF but a parameter vector -- proportions, plate coverage, palette. Six
    classes become six vectors and coop monsters become more of them. And since
    silhouette would then be a parameter, *silhouette distinctness becomes
    measurable*: render two classes in orthographic black and compare. Whether
    you can tell two fighters apart stops being a judgement call, the same way
    the palette already has.
-4. **A triplanar shader for the environment**, when the floor starts reading as
+3. **A triplanar shader for the environment**, when the floor starts reading as
    wallpaper and not before.

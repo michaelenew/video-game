@@ -659,7 +659,7 @@ mod trails {
         // should be longest. A clip's elapsed count runs across the whole move,
         // so walking that back crosses into the wind-up where the arc is.
         let just_became_active = PoseInput {
-            clip: Some((view::pose::Clip::Overhead, 15)),
+            clip: Some((view::pose::Clip::Move(view::baked::move_clip(0, 1)), 15)),
             frames_into: 1,
             ..swinging(1)
         };
@@ -745,7 +745,7 @@ mod trails {
         assert_eq!(trail::speed(&trail::sweep(idle, 8)), 0.0);
 
         let swung = PoseInput {
-            clip: Some((view::pose::Clip::Poke, 8)),
+            clip: Some((view::pose::Clip::Move(view::baked::move_clip(0, 0)), 8)),
             frames_into: 8,
             ..swinging(8)
         };
@@ -779,7 +779,7 @@ mod trails {
         );
 
         let baked = PoseInput {
-            clip: Some((view::pose::Clip::Overhead, 11)),
+            clip: Some((view::pose::Clip::Move(view::baked::move_clip(0, 1)), 11)),
             frames_into: 11,
             ..swinging(11)
         };

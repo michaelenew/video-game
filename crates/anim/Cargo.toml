@@ -9,4 +9,5 @@ license.workspace = true
 # what it bakes. Nothing here ships in the hot path, which is why it is allowed
 # to be expensive and why it does not need to be deterministic.
 [dependencies]
+sim = { path = "../sim" }
 view = { path = "../view" }

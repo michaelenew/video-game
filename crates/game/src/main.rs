@@ -1189,7 +1189,13 @@ fn apply_poses(
 /// ignorant of what an overhead is.
 pub fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip, u16)> {
     use sim::state::Action;
-    use view::pose::Clip;
+    use view::pose::{Clip, Shared};
+
+    // Frames elapsed since the move began, across all three phases. This is the
+    // number a derived clip is indexed by, because the clip was built to that
+    // move's own startup, active and recovery counts -- so the extended pose
+    // lands on the first active frame without anything here having to arrange
+    // it.
     let elapsed = |kind: u8, phase: u8, left: u16| -> u16 {
         let (s, a, r) = sim::moves::frames(class, kind);
         match phase {
@@ -1198,23 +1204,23 @@ pub fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::
             _ => s + a + r.saturating_sub(left),
         }
     };
-    let attack_clip = |kind: u8| {
-        if sim::moves::get(class, kind).hits_crouching {
-            Clip::Poke
-        } else {
-            Clip::Overhead
-        }
-    };
+
+    // Every move has its own clip now, rather than every move picking one of
+    // two hand-authored ones and hoping its length matched. It did not: the
+    // Bulwark's Grapple runs 53 frames and played a 17-frame poke, so the
+    // fighter stood frozen for thirty-six of them.
+    let own = |kind: u8| Clip::Move(view::baked::move_clip(class as usize, kind as usize));
+
     match p.action {
-        Action::Startup { kind, left } => Some((attack_clip(kind), elapsed(kind, 0, left))),
-        Action::Active { kind, left } => Some((attack_clip(kind), elapsed(kind, 1, left))),
-        Action::Recovery { kind, left } => Some((attack_clip(kind), elapsed(kind, 2, left))),
-        Action::Guard { held } => Some((Clip::GuardIn, held)),
-        Action::Dodge { left } => Some((Clip::Roll, 22u16.saturating_sub(left))),
+        Action::Startup { kind, left } => Some((own(kind), elapsed(kind, 0, left))),
+        Action::Active { kind, left } => Some((own(kind), elapsed(kind, 1, left))),
+        Action::Recovery { kind, left } => Some((own(kind), elapsed(kind, 2, left))),
+        Action::Guard { held } => Some((Clip::Shared(Shared::GuardIn), held)),
+        Action::Dodge { left } => Some((Clip::Shared(Shared::Roll), 22u16.saturating_sub(left))),
         Action::HitStun { left }
         | Action::BlockStun { left }
         | Action::Stagger { left }
-        | Action::Held { left } => Some((Clip::Recoil, 26u16.saturating_sub(left))),
+        | Action::Held { left } => Some((Clip::Shared(Shared::Recoil), 26u16.saturating_sub(left))),
         Action::Free => None,
     }
 }

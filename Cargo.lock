@@ -167,6 +167,7 @@ dependencies = [
 name = "anim"
 version = "0.1.0"
 dependencies = [
+ "sim",
  "view",
 ]
 

@@ -68,8 +68,19 @@ impl Pose {
 /// tables.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Clip {
-    Poke,
-    Overhead,
+    /// One of the shared clips: guarding, rolling, being hit.
+    Shared(Shared),
+    /// A specific move's own clip, timed to that move's own frame data.
+    ///
+    /// Indexed rather than named because the table is generated wholesale from
+    /// `sim::moves` -- see `anim::derive`. The caller does the lookup, because
+    /// it is the side that knows the move tables; `view` stays ignorant of what
+    /// an overhead is.
+    Move(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shared {
     GuardIn,
     Roll,
     Recoil,
@@ -78,11 +89,13 @@ pub enum Clip {
 impl Clip {
     fn frames(self) -> &'static [Pose] {
         match self {
-            Clip::Poke => &crate::baked::POKE,
-            Clip::Overhead => &crate::baked::OVERHEAD,
-            Clip::GuardIn => &crate::baked::GUARD_IN,
-            Clip::Roll => &crate::baked::ROLL,
-            Clip::Recoil => &crate::baked::RECOIL,
+            Clip::Shared(Shared::GuardIn) => &crate::baked::GUARD_IN,
+            Clip::Shared(Shared::Roll) => &crate::baked::ROLL,
+            Clip::Shared(Shared::Recoil) => &crate::baked::RECOIL,
+            Clip::Move(i) => crate::baked::MOVE_CLIPS
+                .get(i)
+                .copied()
+                .unwrap_or(&crate::baked::POKE),
         }
     }
 }

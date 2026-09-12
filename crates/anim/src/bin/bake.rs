@@ -10,7 +10,8 @@
 //! solver. That is the point of the factory: the parts that make motion read
 //! as alive are the parts that are miserable to key by hand.
 
-use anim::bake::{Key, Looseness, Recipe, bake, emit};
+use anim::bake::{Key, Looseness, Recipe, bake, emit, emit_moves};
+use anim::derive::{Shape, Vocabulary};
 use view::pose::{PartTransform, Pose};
 
 /// Shorthand: torso, head, arm L, arm R, leg L, leg R.
@@ -151,6 +152,87 @@ fn recoil() -> Pose {
     ])
 }
 
+/// Reaching out to take hold. No arc, which is the point -- a grab is answered
+/// by not being there rather than by reading its swing.
+fn seize() -> Pose {
+    pose([
+        ([0.0, 0.92, 0.22], [0.0, 0.0, 0.0]),
+        ([0.0, 1.50, 0.26], [0.12, 0.0, 0.0]),
+        ([-0.40, 1.16, 0.58], [-1.25, 0.0, 0.30]),
+        ([0.40, 1.16, 0.58], [-1.25, 0.0, -0.30]),
+        ([-0.20, 0.38, 0.10], [0.18, 0.0, 0.0]),
+        ([0.20, 0.38, -0.08], [-0.14, 0.0, 0.0]),
+    ])
+}
+
+/// The three shapes a derived clip can take, as poses.
+///
+/// The one genuinely authored thing in the derivation: `anim::derive` decides
+/// *when* each pose lands, from the move's own frame data, and this decides
+/// what the poses are.
+fn vocabulary(shape: Shape) -> Vocabulary {
+    match shape {
+        Shape::Level => Vocabulary {
+            neutral: neutral(),
+            coil: windup(),
+            strike: strike(),
+            anticipate: None,
+        },
+        Shape::Overhead => Vocabulary {
+            neutral: neutral(),
+            coil: overhead_raise(),
+            strike: overhead_land(),
+            // The sharp coil down, which is what makes a long startup legible
+            // for its whole length rather than only its back half.
+            anticipate: Some(overhead_coil()),
+        },
+        Shape::Seize => Vocabulary {
+            neutral: neutral(),
+            coil: windup(),
+            strike: seize(),
+            anticipate: None,
+        },
+    }
+}
+
+/// A clip for every move in the game, from its own frame data.
+///
+/// Names are `class_move`, lowercased, because they become `static` items and
+/// a move called "Bash" exists on more than one class.
+fn derived() -> (Vec<anim::bake::Recipe>, Vec<(String, usize, usize)>) {
+    let mut recipes = Vec::new();
+    let mut index = Vec::new();
+    for (c, class) in sim::class::ALL_CLASSES.iter().enumerate() {
+        for kind in 0..3u8 {
+            let m = sim::moves::get(*class, kind);
+            // Sanitised, because the name becomes a Rust `static`. The Blood
+            // mage's "Reaper's Debt" is what found this: an apostrophe
+            // survives happily all the way to a generated file that will not
+            // parse.
+            let ident = |s: &str| -> String {
+                s.to_lowercase()
+                    .chars()
+                    .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                    .collect()
+            };
+            let name: &'static str = Box::leak(
+                format!("move_{}_{}", ident(class.name()), ident(m.name)).into_boxed_str(),
+            );
+            let shape = Shape::of(m.hits_crouching, m.grabs);
+            recipes.push(anim::from_frame_data(
+                name,
+                m.startup,
+                m.active,
+                m.recovery,
+                shape,
+                &vocabulary(shape),
+            ));
+            index.push((name.to_string(), c, kind as usize));
+        }
+    }
+    (recipes, index)
+}
+
 fn main() {
     let recipes = [
         // A quick poke: wind up briefly, snap out, recover. Martial looseness
@@ -275,13 +357,31 @@ fn main() {
     ];
 
     let baked: Vec<_> = recipes.iter().map(bake).collect();
-    let total: usize = baked.iter().map(|b| b.frames.len()).sum();
+
+    // Every move in the game gets a clip timed to its own frame data. See
+    // `anim::derive` for why that is not the same as picking one of two
+    // hand-authored clips and hoping the lengths line up.
+    let (move_recipes, index) = derived();
+    let move_baked: Vec<_> = move_recipes.iter().map(bake).collect();
+    let index_refs: Vec<(&str, usize, usize)> =
+        index.iter().map(|(n, c, k)| (n.as_str(), *c, *k)).collect();
+
+    let total: usize = baked
+        .iter()
+        .chain(move_baked.iter())
+        .map(|b| b.frames.len())
+        .sum();
 
     let path = "crates/view/src/baked.rs";
-    std::fs::write(path, emit(&baked)).expect("write baked table");
+    let text = emit(&baked) + &emit_moves(&move_baked, &index_refs);
+    std::fs::write(path, text).expect("write baked table");
 
     for b in &baked {
-        println!("{:<10} {:>3} frames", b.name, b.frames.len());
+        println!("{:<34} {:>3} frames", b.name, b.frames.len());
+    }
+    println!();
+    for b in &move_baked {
+        println!("{:<34} {:>3} frames", b.name, b.frames.len());
     }
     println!("\n{path}  ({total} frames total)");
 }

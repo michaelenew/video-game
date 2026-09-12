@@ -21,10 +21,12 @@
 
 pub mod bake;
 pub mod chain;
+pub mod derive;
 pub mod spring;
 
 pub use bake::{Baked, bake};
 pub use chain::{Chain, Segment};
+pub use derive::{Shape, Vocabulary, from_frame_data};
 pub use spring::Spring;
 
 /// Simulation rate. Baked tables are sampled at this.

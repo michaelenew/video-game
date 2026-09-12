@@ -211,6 +211,75 @@ fn lerp_pose(a: &Pose, b: &Pose, k: f32) -> Pose {
     out
 }
 
+/// Emit the per-move clips, plus the lookup from a move to its clip.
+///
+/// A separate table from the hand-authored ones because it is generated
+/// wholesale from `sim::moves` and regenerates whenever the frame data moves.
+/// The lookup is emitted rather than computed at runtime so that `view` keeps
+/// knowing nothing about the move tables -- the same reason `clip_for` lives on
+/// the game side.
+pub fn emit_moves(baked: &[Baked], index: &[(&str, usize, usize)]) -> String {
+    let mut out = String::from(
+        "\n// ---------------------------------------------------------------------------\n\
+         // Per-move clips\n\
+         // ---------------------------------------------------------------------------\n\
+         //\n\
+         // One clip per move, derived from that move's own startup, active and\n\
+         // recovery counts -- so the extended pose lands on the first active frame\n\
+         // by construction, for every move, and stays there when the frame data is\n\
+         // retuned. See `anim::derive`.\n\n",
+    );
+
+    for b in baked {
+        out.push_str(&format!(
+            "/// {} frames.\npub static {}: [Pose; {}] = [\n",
+            b.frames.len(),
+            b.name.to_uppercase(),
+            b.frames.len()
+        ));
+        for pose in &b.frames {
+            out.push_str("    Pose { parts: [\n");
+            for p in &pose.parts {
+                out.push_str(&format!(
+                    "        PartTransform {{ pos: [{:.4}, {:.4}, {:.4}], rot: [{:.4}, {:.4}, {:.4}] }},\n",
+                    p.pos[0], p.pos[1], p.pos[2], p.rot[0], p.rot[1], p.rot[2]
+                ));
+            }
+            out.push_str("    ] },\n");
+        }
+        out.push_str("];\n\n");
+    }
+
+    out.push_str(
+        "/// Every move's clip, indexed by `move_clip(class, kind)`.\n\
+         pub static MOVE_CLIPS: &[&[Pose]] = &[\n",
+    );
+    for b in baked {
+        out.push_str(&format!("    &{},\n", b.name.to_uppercase()));
+    }
+    out.push_str("];\n\n");
+
+    out.push_str(
+        "/// Which clip a move plays.\n\
+         ///\n\
+         /// Generated alongside the clips themselves, so a move added to\n\
+         /// `sim::moves` cannot end up without one.\n\
+         pub const fn move_clip(class: usize, kind: usize) -> usize {\n\
+         \x20   match (class, kind) {\n",
+    );
+    for (name, class, kind) in index {
+        out.push_str(&format!(
+            "        ({class}, {kind}) => {}, // {name}\n",
+            baked
+                .iter()
+                .position(|b| b.name == *name)
+                .expect("every indexed move is baked")
+        ));
+    }
+    out.push_str("        _ => 0,\n    }\n}\n");
+    out
+}
+
 /// Emit a baked table as Rust source, for checking in.
 ///
 /// Generated code rather than a data file on purpose: it needs no loader, no
