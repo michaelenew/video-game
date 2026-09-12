@@ -546,6 +546,21 @@ fn key_editor(ui: &mut egui::Ui, hub: &mut Hub) -> bool {
                 }
             }
         });
+        ui.add_space(4.0);
+        ui.label(
+            egui::RichText::new("reach — drag the end of a limb, the joints follow")
+                .small()
+                .color(egui::Color32::from_gray(150)),
+        );
+        for (label, left, foot) in [
+            ("foot L", true, true),
+            ("foot R", false, true),
+            ("hand L", true, false),
+            ("hand R", false, false),
+        ] {
+            changed |= ik_handle(ui, &mut pose, label, left, foot);
+        }
+
         for group in GROUPS {
             ui.add_space(2.0);
             ui.label(
@@ -567,6 +582,68 @@ fn key_editor(ui: &mut egui::Ui, hub: &mut Hub) -> bool {
         hub.posing = true;
         hub.snap_to_key();
     }
+    changed
+}
+
+/// Drag the end of a limb around and let the solver work out the joints.
+///
+/// The reason this is worth a widget of its own: a planted foot given the same
+/// target on consecutive keys does not move, however much the hips do. Posing a
+/// leg by its hip and knee angles means discovering, one key at a time, that the
+/// foot has wandered a centimetre — and a foot that wanders is the single most
+/// legible sign of animation done badly.
+///
+/// The numbers are metres in the character's own space: `z` is forward, `y` is
+/// up, and the floor is zero.
+fn ik_handle(ui: &mut egui::Ui, pose: &mut Pose, label: &str, left: bool, foot: bool) -> bool {
+    let skeleton = view::pose::reference();
+    let end = match (foot, left) {
+        (true, true) => Joint::FootL,
+        (true, false) => Joint::FootR,
+        (false, true) => Joint::HandL,
+        (false, false) => Joint::HandR,
+    };
+    let mut at = view::skeleton::solve(skeleton, pose).origin[end.index()];
+    let before = at;
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.add_sized([64.0, 16.0], egui::Label::new(label));
+        for (i, axis) in ["x", "y", "z"].iter().enumerate() {
+            if ui
+                .add(
+                    egui::DragValue::new(&mut at[i])
+                        .speed(0.005)
+                        .range(-1.4..=2.2)
+                        .prefix(format!("{axis} ")),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+        }
+        if changed {
+            let moved = (0..3).map(|i| (at[i] - before[i]).abs()).sum::<f32>();
+            if moved > 1e-5 {
+                if foot {
+                    view::ik::foot_to(pose, skeleton, left, at);
+                } else {
+                    view::ik::hand_to(pose, skeleton, left, at);
+                }
+            }
+        }
+        if foot && ui.small_button("level").clicked() {
+            *pose = if left { pose.level_l() } else { pose.level_r() };
+            changed = true;
+        }
+        if foot && ui.small_button("toe").clicked() {
+            *pose = if left {
+                pose.toe_floor_l()
+            } else {
+                pose.toe_floor_r()
+            };
+            changed = true;
+        }
+    });
     changed
 }
 
@@ -818,4 +895,83 @@ fn ease_editor(ui: &mut egui::Ui, ease: &mut Ease) -> bool {
         }
     }
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_clip_can_be_opened_in_the_hub() {
+        // Including the ones nobody has authored. An empty clip is work
+        // outstanding, and the hub is where it gets done -- refusing to open it
+        // would mean the only way to start a clip is a text editor.
+        let hub = Hub::default();
+        for clip in ALL {
+            assert!(
+                hub.recipes.iter().any(|r| r.clip == *clip),
+                "{} cannot be opened",
+                clip.name()
+            );
+        }
+        assert_eq!(hub.recipes.len(), ALL.len(), "a clip is in the list twice");
+    }
+
+    #[test]
+    fn a_closed_hub_drives_nobody() {
+        let mut hub = Hub::default();
+        assert!(hub.preview_for(0).is_none());
+        assert!(hub.preview_for(1).is_none());
+        hub.open = true;
+        assert!(hub.preview_for(hub.on).is_some());
+        assert!(hub.preview_for(1 - hub.on).is_none());
+    }
+
+    #[test]
+    fn selecting_a_clip_bakes_it_to_its_own_length() {
+        let mut hub = Hub::default();
+        for clip in [Clip::Idle, Clip::WalkForward, Clip::BulwarkCommitted] {
+            hub.clip = clip;
+            hub.rebake();
+            assert_eq!(
+                hub.baked.len(),
+                clip.length() as usize,
+                "{} baked wrong",
+                clip.name()
+            );
+        }
+    }
+
+    #[test]
+    fn editing_a_key_changes_what_is_drawn() {
+        // The whole argument for the hub is that the loop closes in a frame.
+        // If an edit does not reach the preview, it does not.
+        let mut hub = Hub::default();
+        hub.open = true;
+        hub.clip = Clip::Idle;
+        hub.rebake();
+        let before = hub.preview_for(hub.on).expect("previewing");
+        let i = hub.key;
+        hub.recipe_mut().keys[i].pose = Pose::rest().shoulders(90.0, 20.0, 0.0);
+        hub.rebake();
+        let after = hub.preview_for(hub.on).expect("previewing");
+        assert!(
+            before.separation(&after) > 0.5,
+            "the edit did not reach the preview"
+        );
+    }
+
+    #[test]
+    fn holding_a_key_shows_that_key_rather_than_the_solved_frame() {
+        // Posing means seeing the pose you are editing, not the spring's
+        // opinion of it two frames later.
+        let mut hub = Hub::default();
+        hub.open = true;
+        hub.clip = Clip::Idle;
+        hub.rebake();
+        hub.posing = true;
+        hub.key = 1;
+        let shown = hub.preview_for(hub.on).expect("previewing");
+        assert_eq!(shown, hub.recipe().keys[1].pose);
+    }
 }

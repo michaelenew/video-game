@@ -3,6 +3,7 @@
 //!     cargo run -p anim --bin preview -- walk_forward
 //!     cargo run -p anim --bin preview -- --file dodge
 //!     cargo run -p anim --bin preview -- --all
+//!     cargo run -p anim --bin preview -- --match
 //!
 //! Writes a PNG contact sheet per clip into `target/anim-preview/` and prints
 //! where. Each sheet has three panels: the clip from the side, the clip from
@@ -18,6 +19,10 @@ use view::clips::{ALL, Clip};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--match") {
+        played_match(&args);
+        return;
+    }
     let class = args
         .iter()
         .position(|a| a == "--class")
@@ -158,5 +163,75 @@ pub fn feet_report(baked: &anim::Baked, stride: f32, dir: [f32; 3]) {
             ));
         }
         println!("{i:>5} | {} | {}", cells[0], cells[1]);
+    }
+}
+
+/// Draw a scripted match through the *whole* animation system.
+///
+/// The per-clip sheets show what a recipe bakes to. This shows what a player
+/// actually sees: clip selection, the blends between the directional walks, the
+/// cross-fades in and out of attacks, and every transition between them. It is
+/// the only way to catch a clip that is fine on its own and wrong the moment it
+/// is entered from something else.
+fn played_match(args: &[String]) {
+    use sim::{Input, World};
+
+    let class = args
+        .iter()
+        .position(|a| a == "--class")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|name| {
+            sim::class::ALL_CLASSES.iter().copied().find(|c| {
+                c.name()
+                    .to_lowercase()
+                    .replace(' ', "")
+                    .contains(&name.to_lowercase())
+            })
+        })
+        .unwrap_or(sim::Class::Champion);
+
+    let mut w = World::with_classes([class, sim::Class::Bulwark]);
+    let mut fade = view::play::Crossfade::default();
+    let mut poses = Vec::new();
+    let mut labels = Vec::new();
+
+    for i in 0..240u32 {
+        let phase = i % 120;
+        let bits = match phase {
+            0..=22 => Input::W,
+            23..=34 => Input::W | Input::A,
+            35..=42 => Input::SPACE,
+            43..=50 => Input::SHIFT | Input::D,
+            51..=62 => Input::LEFT,
+            63..=76 => Input::SHIFT | Input::LEFT,
+            77..=88 => Input::RIGHT,
+            89..=98 => Input::CROUCH,
+            99..=106 => Input::S,
+            _ => 0,
+        };
+        let aim = ((i * 420) % 65536) as u16;
+        let prev = w.clone();
+        w.advance([Input::aimed(bits, aim), Input::new(Input::RIGHT)]);
+        let frame = view::interpolate(&prev, &w, 1.0);
+        let input =
+            view::play::PoseInput::of(&frame.players[0], w.players[0].class, frame.round_left);
+        poses.push(fade.pose(input, 1.0 / 60.0));
+        labels.push(format!("{:?}", w.players[0].action));
+    }
+
+    let skeleton = view::skeleton::skeleton_for(class);
+    let (canvas, shown) = sheet::contact_sheet(&skeleton, &poses);
+    let dir = std::path::Path::new("target/anim-preview");
+    std::fs::create_dir_all(dir).expect("create preview directory");
+    let path = dir.join("match.png");
+    canvas.write(&path).expect("write sheet");
+    println!(
+        "{} frames of a scripted match on {} -> {}",
+        poses.len(),
+        class.name(),
+        path.display()
+    );
+    for f in shown {
+        println!("  {f:>4}  {}", labels[f]);
     }
 }
