@@ -51,13 +51,28 @@ use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
 const L: f32 = -0.145;
 const R: f32 = 0.145;
 
+/// A hold that lets go gently: nothing for the first half of the gap, then a
+/// gather rather than a snap.
+///
+/// `IN` is the right shape for a coil and the wrong slope for one this short.
+/// Three frames of `IN` put nine tenths of a wind-up into the last of them,
+/// which arrives at the next key with the arm still travelling -- and then the
+/// contact pose lands on top of that. This keeps the pause an opponent reads
+/// the coil in and spends the rest of the gap moving.
+const GATHER: Ease = Ease::new(0.45, 0.1, 0.75, 0.82);
+
+/// Half an `ANTICIPATE`: the same pull away from the target before going, over
+/// a drop long enough that the full one would spike.
+///
+/// `ANTICIPATE` spends the first half of a gap moving backwards, which means
+/// the second half has to cover a third more ground than the gap is worth. On
+/// the Judgement's descent -- a metre and three quarters of hand travel, the
+/// biggest thing in this file -- that is the difference between twenty-one
+/// metres a second and twenty-eight. This keeps the pull-back and halves it.
+const PULL_AWAY: Ease = Ease::new(0.45, -0.22, 0.3, 1.0);
+
 pub fn clips() -> Vec<Recipe> {
-    // `lance()` and `judgement()` are written and are *not* in this list, for
-    // the same reason the Champion's two are held back: the hand crosses half a
-    // metre in one frame at the thrust and again at the verdict, which is a
-    // teleport rather than a strike. The frames either side of contact need
-    // re-timing; until then they bake as a held rest pose.
-    vec![step_strike()]
+    vec![step_strike(), lance(), judgement()]
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +303,34 @@ fn launch() -> Pose {
         .toe_floor_r()
 }
 
+/// Mid-thrust, and the pose the strike used to skip.
+///
+/// The free hand has three quarters of a metre to travel between the coil and
+/// the launch -- back past the hip, down and across -- and three frames is not
+/// enough air time for it. This is the middle of that arc: the point half out,
+/// the free hand level with the hip on its way through, the lead foot still
+/// hanging. Without it the whole thrust happens in the two frames either side
+/// of the launch, and a hand that covers half a metre in one frame is a
+/// teleport whatever pose it lands in.
+fn extend() -> Pose {
+    stance()
+        .hips(-0.005, -0.145, 0.015)
+        .root(8.0, -2.0, -5.0)
+        .spine(13.0, 0.0, 5.0)
+        .chest(5.0, 0.0, 6.0)
+        .head(-5.0, 0.0, -7.0)
+        .shoulder_l(56.0, 12.0, 0.0)
+        .elbow_l(22.0)
+        .wrist_l(-5.0, 0.0, 0.0)
+        .shoulder_r(76.0, 12.0, 0.0)
+        .elbow_r(56.0)
+        .wrist_r(-9.0, 0.0, 0.0)
+        .plant_l([L - 0.01, GROUND + 0.055, 0.34])
+        .plant_r([R + 0.01, GROUND + 0.015, -0.175])
+        .toe_l(-10.0)
+        .toe_r(7.0)
+}
+
 /// The contact frame. One line: rear foot, hips, shoulder, point -- with the
 /// free hand thrown back down the rear leg so the line runs out of both ends
 /// of the body.
@@ -353,9 +396,6 @@ fn haul_up() -> Pose {
         .toe_r(6.0)
 }
 
-/// Held back: see the note in `clips()`. Kept rather than deleted, because
-/// the shapes are right and it is the timing between two of them that is not.
-#[allow(dead_code)]
 fn lance() -> Recipe {
     let clip = Clip::DualCommitted;
     let (windup, contact, recovery) = phases(clip);
@@ -364,7 +404,12 @@ fn lance() -> Recipe {
     let mut track = Track::new(clip);
     track.key(0, stance(), Ease::OUT);
     track.key(frac(0, windup, 0.35), aim(), Ease::SMOOTH);
-    track.key(frac(0, windup, 0.65), coil(), Ease::IN);
+    track.key(frac(0, windup, 0.45), coil(), GATHER);
+    // The middle of the arc, and then an arrival that settles. `IN` straight
+    // from the coil to the launch put the whole thrust in the last frame of
+    // the startup and left the arm still travelling when the contact pose
+    // arrived, so the two fastest frames in the clip were back to back.
+    track.key(frac(0, windup, 0.75), extend(), Ease::OUT);
     track.key(windup, launch(), Ease::STRIKE);
     // The same pose twice, across the active frames: the hitbox is out and
     // nothing moves. A body still travelling while its hitbox is live reads as
@@ -457,7 +502,7 @@ fn apex() -> Pose {
         .toe_floor_r()
 }
 
-/// Mid-descent, one frame before the contact.
+/// Mid-descent, three frames before the contact.
 ///
 /// The feet are already at their landing spots and flat while the hips are
 /// only half of the way down. Without this the drop interpolates from straight
@@ -552,9 +597,6 @@ fn rise() -> Pose {
         .toe_r(2.0)
 }
 
-/// Held back: see the note in `clips()`. Kept rather than deleted, because
-/// the shapes are right and it is the timing between two of them that is not.
-#[allow(dead_code)]
 fn judgement() -> Recipe {
     let clip = Clip::DualSpecial;
     let (windup, contact, recovery) = phases(clip);
@@ -568,13 +610,16 @@ fn judgement() -> Recipe {
     track.key((windup / 6).clamp(2, 4), open(), Ease::SMOOTH);
     track.key(frac(0, windup, 0.42), gather(), Ease::IN);
     // The same pose twice: the moment held at the top. The pull-away into the
-    // descent is the ease rather than another key, which is what ANTICIPATE is
-    // for. The hold ends five frames out, because the drop is the biggest
-    // motion in the file and five frames is what it needs to arrive on the
-    // contact frame instead of after it.
+    // descent is the ease rather than another key, which is what an anticipate
+    // is for. The hold ends seven frames out, not five: the hands cover a
+    // metre and three quarters between the top of the arc and the verdict,
+    // which is as fast as hands go, and in five frames it is faster than that.
+    // Two of those seven are the descent's own -- the mid-drop pose sits three
+    // frames before contact rather than one, so the last of the fall is spread
+    // across the frames it takes instead of landing in the last of them.
     track.key(frac(0, windup, 0.60), apex(), Ease::HOLD);
-    track.key(windup.saturating_sub(4), apex(), Ease::ANTICIPATE);
-    track.key(windup, descend(), Ease::STRIKE);
+    track.key(windup.saturating_sub(6), apex(), PULL_AWAY);
+    track.key(windup.saturating_sub(2), descend(), Ease::LINEAR);
     track.contact(contact, verdict(), Ease::OUT);
     track.key(recovery, spent(), Ease::SMOOTH);
     track.key(frac(recovery, last, 0.25), sag(), Ease::IN);
@@ -606,11 +651,14 @@ fn judgement() -> Recipe {
                 the class does with both forces at once and because symmetry is \
                 what separates a sentence from a hit. The gathering takes the \
                 first two thirds of the startup and then stops dead at the top \
-                for three frames: the held moment is the move, and it is what \
+                for two frames: the held moment is the move, and it is what \
                 makes the descent read as a decision rather than as momentum. \
-                The drop is carried by the hips and the spine as much as by the \
-                arms, both because a shoulder cannot cover that arc in four \
-                frames without tearing and because a body this thin has to fold \
+                Two rather than three, because the fall underneath it is a \
+                metre and three quarters of hand travel and it cannot be done \
+                in five frames by anything with arms. \
+                The drop is carried by the hips and the spine as much as by \
+                the arms, both because a shoulder cannot cover that arc on its \
+                own without tearing and because a body this thin has to fold \
                 to look like it weighs anything. The recovery is twenty-six \
                 frames and the body spends the first half of them at the bottom \
                 of the drop, because a finisher that pops back up to guard was \

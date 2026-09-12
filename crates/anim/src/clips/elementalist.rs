@@ -54,13 +54,19 @@ use view::clips::Clip;
 use view::pose::Pose;
 use view::skeleton::Joint;
 
+/// Constant speed at the *hands*, which is not constant speed in the angles.
+///
+/// A shoulder near the end of its range moves a hand a long way for a few
+/// degrees and hardly at all for the same few in the middle, so a gap spread
+/// evenly in angle space still spikes half again as fast through its middle as
+/// at either end. This spends the gap's time the other way round. It is only
+/// worth reaching for where a hand has more ground to cover than frames to
+/// cover it in, which in this file is the second half of the Fissure's drop
+/// and nowhere else.
+const THROUGH: Ease = Ease::new(0.10, 0.34, 0.90, 0.66);
+
 pub fn clips() -> Vec<Recipe> {
-    // `fissure()` is written and is *not* in this list. Its contact frame moves
-    // a hand more than half a metre relative to the hips in one frame -- thirty
-    // metres a second, which is a teleport rather than a gesture -- and the two
-    // frames either side of it are not much better. It wants its middle
-    // re-timed; until then it bakes as a held rest pose and the bake says so.
-    vec![bolt(), fire_pillar()]
+    vec![bolt(), fissure(), fire_pillar()]
 }
 
 // ---------------------------------------------------------------------------
@@ -272,9 +278,6 @@ fn lowered() -> Pose {
 /// centimetres, and the deepest frame of the whole clip is on the first
 /// recovery frame rather than on contact -- the weight is still arriving after
 /// the hands have landed, which is what collapsing onto something looks like.
-/// Held back: see the note in `clips()`. Kept rather than deleted, because
-/// the shapes are right and it is the timing between two of them that is not.
-#[allow(dead_code)]
 fn fissure() -> Recipe {
     let clip = Clip::ElementalistCommitted;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
@@ -283,6 +286,12 @@ fn fissure() -> Recipe {
     // half, and then falling for the rest of it.
     let lift = (contact / 4).max(2);
     let top = (contact * 5 / 9).max(lift + 1);
+    // Halfway down, in time as well as in the pose. The fall is the longest
+    // hand travel in the file and the only gap in it that has ever been over
+    // the continuity ceiling; splitting it in two is what lets the top of the
+    // arc keep its anticipation without the middle of the drop turning into a
+    // teleport.
+    let half_way = top + (contact - top) / 2;
     let peeling = recover + (end - recover) * 2 / 5;
     let home = end.saturating_sub(3);
 
@@ -299,7 +308,10 @@ fn fissure() -> Recipe {
                 still climbing at frame eight of a thirteen-frame startup, so \
                 the weight would arrive as delay. It is in the pose instead, in \
                 the hips and in the fact that the lowest frame is after the \
-                hit."
+                hit. The drop is keyed in two halves rather than one: a metre \
+                and a half of hand travel is what hands do at their fastest \
+                even across the whole six frames, and hung on a single gap the \
+                middle two frames of it took a third each."
             .into(),
         keys: vec![
             // Up fast, so the shape is on screen while the opponent still has
@@ -311,6 +323,7 @@ fn fissure() -> Recipe {
             // ANTICIPATE takes it a hair further before it drops, which is the
             // last thing an opponent sees before committing.
             Key::eased(top, gathered(), Ease::ANTICIPATE),
+            Key::eased(half_way, falling(), THROUGH),
             Key::eased(contact, driven(), Ease::STRIKE),
             Key::eased(recover, braced(), Ease::OUT),
             Key::eased(peeling, peeled(), Ease::SMOOTH),
@@ -352,6 +365,30 @@ fn gathered() -> Pose {
             .wrists(-30.0, 0.0, 0.0),
         0.030,
         0.038,
+    )
+}
+
+/// Halfway down, and the pose the slam used to skip.
+///
+/// The hands cover a metre and a half between the top of the arc and the
+/// floor, which is as fast as hands go even with six frames to do it in, and
+/// with the whole of it hung on one gap the middle two frames took a third of
+/// it each. This is the middle of that fall: the arms level with the
+/// shoulders, the fold started in the spine rather than finished, the heels
+/// back down and the knees beginning to take it.
+fn falling() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.16, -0.045)
+            .root(1.0, 0.0, -5.0)
+            .spine(15.0, 0.0, 2.0)
+            .chest(13.0, 0.0, 2.0)
+            .head(-8.0, 0.0, 4.0)
+            .shoulders(126.0, 15.0, -19.0)
+            .elbows(26.0)
+            .wrists(-35.0, 0.0, 0.0),
+        0.006,
+        0.008,
     )
 }
 

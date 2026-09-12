@@ -64,14 +64,27 @@ const REAR: V3 = [0.145, GROUND, -0.15];
 /// Half the distance between the hands on the haft.
 const GRIP: f32 = 0.12;
 
+/// Constant speed *at the hands*, which is not the same thing as constant
+/// speed in the joint angles.
+///
+/// The lunge asks the hands to cross a metre of air twice inside eleven
+/// frames, and a hand's speed is not proportional to a shoulder's: an arm
+/// stretched out along the haft covers a long way for a few degrees near the
+/// end of its range and hardly moves for the same few in the middle. Spread
+/// the *angles* evenly with `LINEAR` and the hand still spikes a third faster
+/// through the middle of the gap than at either end of it; `SMOOTH`, which
+/// deliberately concentrates the change in the middle, makes it a quarter
+/// worse again. This spends the gap's time the other way round -- quickly
+/// where the hand covers little ground, slowly where it covers a lot -- and
+/// what comes out is a hand travelling at one speed from the guard to the
+/// chamber and from the chamber to the point.
+///
+/// Measured, on the Drive: `LINEAR` peaks at 1.04 of the continuity ceiling
+/// and `SMOOTH` at 1.26. This peaks at 0.97.
+const CARRY: Ease = Ease::new(0.05, 0.40, 0.95, 0.60);
+
 pub fn clips() -> Vec<Recipe> {
-    // `sweep()` and `drive()` are written and are *not* in this list: both put
-    // a hand across half a metre in a single frame at their contact, which is
-    // thirty metres a second -- about three times what a swordsman's hand
-    // actually does. They want the frames either side of contact re-timed
-    // rather than the standard relaxed. Until then they bake as a held rest
-    // pose and the bake says so by name.
-    vec![uppercut()]
+    vec![sweep(), drive(), uppercut()]
 }
 
 // ---------------------------------------------------------------------------
@@ -211,9 +224,6 @@ impl Score {
 /// why Sweep and Drive feel like different options from the same spacing. So
 /// the hands stay at hip height, the hips drive the arc rather than following
 /// it, and the fighter finishes facing somewhere other than where they started.
-/// Held back: see the note in `clips()`. Kept rather than deleted, because
-/// the shapes are right and it is the timing between two of them that is not.
-#[allow(dead_code)]
 fn sweep() -> Recipe {
     let clip = Clip::ChampionPoke;
     let (windup, contact, through) = clip.phases().expect("sweep animates a move");
@@ -298,9 +308,15 @@ fn sweep() -> Recipe {
     // absorb, and what comes out the other side is a pop rather than a fast
     // cut. The springs do the rounding.
     score.key(tell(windup), cocked, Ease::LINEAR);
-    score.key(contact, cut, Ease::OUT);
-    score.key(part(through, last, 0.25), follow, Ease::SMOOTH);
-    score.key(part(through, last, 0.6), settle, Ease::SMOOTH);
+    // And linear on out through the follow-through, for the same reason
+    // again. Contact is not the end of the arc -- the blade has another
+    // metre of hand travel to cover before the body has finished unwinding,
+    // and `OUT` on either of these gaps spends sixty per cent of it in the
+    // first frame, which is the teleport rather than the cut. The
+    // deceleration belongs at the far end, coming back to guard.
+    score.key(contact, cut, Ease::LINEAR);
+    score.key(part(through, last, 0.25), follow, Ease::LINEAR);
+    score.key(part(through, last, 0.8), settle, Ease::OUT);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
@@ -314,7 +330,11 @@ fn sweep() -> Recipe {
                 only enough to change one, so the telegraph is a single frame of \
                 winding to the right and the blade is moving from then on. Crisp \
                 rather than martial: a poke that rings is a poke you cannot \
-                throw twice."
+                throw twice. The recovery is spaced by how far the far hand \
+                has to travel rather than by eye: contact to follow-through \
+                and follow-through to settle are a metre each, they get six \
+                frames each at one speed, and only the last two frames -- \
+                coming back to guard -- ease."
             .into(),
         keys: score.0,
     }
@@ -332,9 +352,6 @@ fn sweep() -> Recipe {
 /// commitment looks like from the other side of the arena: a body that has gone
 /// somewhere it cannot easily come back from, and then twenty frames of coming
 /// back from it.
-/// Held back: see the note in `clips()`. Kept rather than deleted, because
-/// the shapes are right and it is the timing between two of them that is not.
-#[allow(dead_code)]
 fn drive() -> Recipe {
     let clip = Clip::ChampionCommitted;
     let (windup, contact, through) = clip.phases().expect("drive animates a move");
@@ -430,12 +447,12 @@ fn drive() -> Recipe {
     };
 
     let mut score = Score::new();
-    score.key(0, ready(), Ease::OUT);
-    score.key(tell(windup), chamber, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.6), load, Ease::SNAP);
+    score.key(0, ready(), CARRY);
+    score.key(part(tell(windup), windup, 0.3), chamber, Ease::SMOOTH);
+    score.key(part(tell(windup), windup, 0.45), load, CARRY);
     score.key(contact, thrust, Ease::STRIKE);
-    score.key(through, spent, Ease::OUT);
-    score.key(part(through, last, 0.4), pull, Ease::SMOOTH);
+    score.key(through, spent, CARRY);
+    score.key(part(through, last, 0.4), pull, CARRY);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
@@ -445,11 +462,13 @@ fn drive() -> Recipe {
                 the hips go a quarter of a metre forward over a lead foot that \
                 steps out to meet them, and the rear foot never leaves the spot \
                 it started on. Two reads in the startup rather than one -- the \
-                point comes on line at frame three, the rear leg starts driving \
-                at seven -- and then it snaps, because eleven frames is long \
-                enough to hold something back. The recovery takes its time on \
-                purpose: twenty frames of pulling yourself back together is the \
-                price of the reach, and it should look like it."
+                point comes on line through frame five, the rear leg starts \
+                driving at six -- and no hold between them, because the hands \
+                have two metres to cross before the point lands and eleven \
+                frames to cross them in, which at a swordsman's speed is all \
+                of them. The recovery takes its time on purpose: twenty \
+                frames of pulling yourself back together is the price of the \
+                reach, and it should look like it."
             .into(),
         keys: score.0,
     }

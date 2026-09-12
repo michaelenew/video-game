@@ -51,14 +51,13 @@ const R: f32 = 0.115;
 
 pub fn clips() -> Vec<Recipe> {
     let right = roll(Clip::DodgeRight);
-    // `forward()` is written and is *not* in this list. The dive it produces
-    // whips the shoulders and the trailing leg faster, relative to the hips,
-    // than a body can move them -- it fails `baked_motion_is_continuous` at
-    // every threshold that the other four clear comfortably, which is the
-    // signature of a clip that needs its middle re-timed rather than a test
-    // that needs relaxing. It bakes as a held rest pose until somebody does
-    // that, and the bake says so by name.
-    vec![back(), mirrored(&right, Clip::DodgeLeft), right, air()]
+    vec![
+        back(),
+        forward(),
+        mirrored(&right, Clip::DodgeLeft),
+        right,
+        air(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -130,9 +129,8 @@ fn mirrored(from: &Recipe, clip: Clip) -> Recipe {
 // Forward: a dive
 // ---------------------------------------------------------------------------
 
-/// Held back: see the note in `clips()`. Kept rather than deleted, because
-/// the shapes are right and it is the timing between two of them that is not.
-#[allow(dead_code)]
+/// A dive: flat and long, balled up through the invulnerable frames, and
+/// broken on the frame the cover runs out.
 fn forward() -> Recipe {
     let clip = Clip::DodgeForward;
     let len = clip.length();
@@ -338,15 +336,28 @@ fn forward() -> Recipe {
                 ground, the chest comes up and the arms end wide and low, \
                 nowhere near a guard. The catching feet are placed from the \
                 ground the body actually covers, which by then is still eight \
-                centimetres a frame."
+                centimetres a frame. Both leg swings -- off the floor and back \
+                onto it -- run at a constant rate rather than arriving early: \
+                three and four frames is not enough room for an ease that \
+                spends half of itself in its first one."
             .into(),
         keys: vec![
             Key::eased(0, set, Ease::LINEAR),
-            Key::eased(f_off, off, Ease::OUT),
+            // Linear out of the take-off and linear out of the catch, which
+            // are the two gaps in this clip where a leg has further to travel
+            // than the frames it has. `OUT` -- the shape a limb arriving and
+            // settling wants -- spends nearly half of a gap in its first
+            // frame, and half of a three-frame leg swing in one frame is a
+            // foot moving at twenty-two metres a second relative to the hips.
+            // The dive is already at full speed on frame zero and the legs are
+            // being dragged rather than thrown, so there is nothing here that
+            // wants to arrive early: constant rate is both what passes and
+            // what it looks like.
+            Key::eased(f_off, off, Ease::LINEAR),
             Key::eased(f_out, dive, Ease::OUT),
             Key::eased(f_ball, ball, Ease::IN),
             Key::eased(brk, gather, Ease::STRIKE),
-            Key::eased(f_catch, catch, Ease::OUT),
+            Key::eased(f_catch, catch, Ease::LINEAR),
             Key::eased(f_step, step, Ease::OUT),
             Key::eased(f_last, settle, Ease::SMOOTH),
         ],
