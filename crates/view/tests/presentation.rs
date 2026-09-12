@@ -737,3 +737,114 @@ fn the_stride_phase_blends_the_short_way_round() {
     // handled the long way round.
     assert!(worst < 0.1, "the phase jumped {worst:.3} of a cycle");
 }
+
+// ---------------------------------------------------------------------------
+// The camera, with a creature in the arena
+//
+// It gets the two rules the rig already has rather than a third: geometry when
+// you are beside it, a surface when you are on it. Both halves are visible
+// enough to be worth pinning -- the first as a camera inside a ribcage, the
+// second as a camera jammed against the rider's back.
+// ---------------------------------------------------------------------------
+
+fn a_creature_at(x: f32, yaw_turns: f32) -> sim::Monster {
+    let mut beast = sim::Monster::new();
+    beast.pos = sim::V3::new(
+        sim::Fx::ratio((x * 100.0) as i32, 100),
+        sim::Fx::ZERO,
+        sim::Fx::ZERO,
+    );
+    beast.yaw = sim::Fx::ratio((yaw_turns * 1000.0) as i32, 1000);
+    beast
+}
+
+#[test]
+fn the_camera_never_ends_up_inside_the_creature() {
+    let beast = a_creature_at(0.0, 0.0);
+    let mut rig = CameraRig::new(RigConfig::default());
+    // Beside it, at arm's length -- the case where the animal is between the
+    // eye and the fighter for most of a turn.
+    let spot = [0.0, 0.0, 3.0];
+    for _ in 0..40 {
+        rig.update_around(
+            0.016,
+            spot,
+            0.0,
+            0.0,
+            view::Surroundings {
+                beast: Some(&beast),
+                aboard: false,
+            },
+        );
+    }
+    for step in 0..48 {
+        let yaw = step as f32 / 48.0 * std::f32::consts::TAU;
+        let framing = rig.update_around(
+            0.016,
+            spot,
+            yaw,
+            0.0,
+            view::Surroundings {
+                beast: Some(&beast),
+                aboard: false,
+            },
+        );
+        let eye = sim::V3::new(
+            sim::Fx::ratio((framing.eye[0] * 1000.0) as i32, 1000),
+            sim::Fx::ratio((framing.eye[1] * 1000.0) as i32, 1000),
+            sim::Fx::ratio((framing.eye[2] * 1000.0) as i32, 1000),
+        );
+        assert!(
+            !beast.contains(eye, sim::Fx::ZERO),
+            "camera inside the creature at yaw {yaw:.2}: {:?}",
+            framing.eye
+        );
+    }
+}
+
+#[test]
+fn riding_does_not_jam_the_camera_against_your_own_back() {
+    // An arm pointing backwards from someone standing on an animal goes
+    // straight into the animal. Treated as geometry it clamps to nothing and
+    // the player is left looking at the back of their own head.
+    let beast = a_creature_at(0.0, 0.0);
+    let back = sim::monster::shape(sim::monster::BARREL)
+        .max
+        .y
+        .to_f32_for_render();
+    let spot = [0.0, back, 0.0];
+    let mut rig = CameraRig::new(RigConfig::default());
+    let mut framing = rig.update_around(
+        0.016,
+        spot,
+        0.0,
+        0.0,
+        view::Surroundings {
+            beast: Some(&beast),
+            aboard: true,
+        },
+    );
+    for _ in 0..60 {
+        framing = rig.update_around(
+            0.016,
+            spot,
+            0.0,
+            0.0,
+            view::Surroundings {
+                beast: Some(&beast),
+                aboard: true,
+            },
+        );
+    }
+    let arm = ((framing.eye[0] - spot[0]).powi(2) + (framing.eye[2] - spot[2]).powi(2)).sqrt();
+    assert!(
+        arm > 2.0,
+        "the arm collapsed to {arm:.2} m while riding -- the creature is being \
+         treated as something to dodge rather than something to stand on"
+    );
+    assert!(
+        framing.eye[1] > back,
+        "the eye is at {:.2} m, below the back it is looking along at {back:.2}",
+        framing.eye[1]
+    );
+}

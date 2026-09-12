@@ -20,7 +20,9 @@ use crate::effects::{Effect, EffectKind, MAX_EFFECTS};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
+use crate::monster::{self, Doing, Monster, Quarry};
 use crate::moves;
+use crate::stones::{self, Field};
 use crate::tuning as t;
 
 pub const MAX_PLAYERS: usize = 2;
@@ -32,6 +34,14 @@ const GROUND_Y: Fx = Fx::ZERO;
 /// what lets one control scheme drive six kits. See `controls.md`.
 /// `held_by` when nobody is holding you.
 pub const NOBODY: u8 = u8::MAX;
+
+/// `Phase::RoundOver::winner` when the creature is the one still standing.
+/// Player indices and `u8::MAX` for a double knockout are already spoken for.
+pub const QUARRY: u8 = 200;
+
+/// Half a turn, so a creature can be faced at the hunters without arithmetic.
+/// An angle unit, not a quantity.
+const HALF_TURN: Fx = Fx::from_raw(1 << 15);
 
 pub const SLOT_POKE: u8 = 0;
 pub const SLOT_COMMITTED: u8 = 1;
@@ -192,9 +202,17 @@ pub struct Player {
     pub mechanic: Mechanic,
     pub rounds_won: u8,
     pub crouching: bool,
-    /// Frames of slow left. A drain field sets it and it counts down, so the
-    /// slow has a tail and does not flicker on the field's boundary.
+    /// Frames of slow left. Whatever slowed you sets it and it counts down, so
+    /// the slow has a tail and does not flicker on the field's boundary.
     pub slowed: u16,
+    /// How much of your speed the slow leaves you, while it lasts.
+    ///
+    /// Carried on the fighter rather than read from the thing that applied it,
+    /// because there is more than one thing now: a drain field is a wall and a
+    /// churning stone is a warning, and they cannot share a number. **The
+    /// strongest wins** rather than compounding -- two slows that multiplied
+    /// would freeze you, and every new source would make the last one worse.
+    pub slow_mul: Fx,
     /// Was the mechanic button down last frame? Part of the snapshot, so the
     /// press edge survives rollback.
     pub mechanic_held: bool,
@@ -245,6 +263,35 @@ pub struct Player {
     /// to: those get different animations, and picking between them halfway
     /// through would visibly switch clips mid-flinch.
     pub stun_total: u16,
+
+    /// Which part of the creature this fighter is standing on, or
+    /// `monster::NO_PART`.
+    ///
+    /// **While this is set, `local` is the authoritative position and `pos` is
+    /// derived from it.** Unmounted it is the other way round. That one rule is
+    /// the whole of why the creature can spin under a rider without sliding
+    /// them off: a world position would have to be corrected for the rotation
+    /// every frame, and a body-space one never has to be corrected at all.
+    pub mount: u8,
+    /// Position in the mounted part's own rest frame -- before the tail's swing
+    /// or the head's reach, so a rider on the tail swings with it.
+    pub local: V3,
+    /// Yaw carried over from the creature's turning, added to the aim that
+    /// arrives as input.
+    ///
+    /// Movement is camera-relative already, so carrying the look angle makes
+    /// movement *surface*-relative for free and turns the camera with the
+    /// animal instead of turning the animal away underneath it. One mechanism,
+    /// both effects. The aim on the wire is never rewritten; this is simulation
+    /// state, recomputed from the snapshot, so rollback reproduces it.
+    pub carry_yaw: Fx,
+    /// World velocity of the patch of creature under this fighter's feet, last
+    /// frame. The buck is the change in this.
+    pub grip_vel: V3,
+    /// Frames left before the grip test starts. Landing gives you a moment to
+    /// plant your feet; without it the first frame aboard looks like an
+    /// infinite acceleration and throws you straight back off.
+    pub grip_settle: u8,
 }
 
 impl Player {
@@ -283,6 +330,26 @@ impl Player {
         }
     }
 
+    /// Take a slow. The strongest one on you is the one that counts, and any
+    /// of them refreshes the clock.
+    pub fn slow(&mut self, frames: u16, mul: Fx) {
+        if self.slowed == 0 || mul.raw() < self.slow_mul.raw() {
+            self.slow_mul = mul;
+        }
+        self.slowed = self.slowed.max(frames);
+    }
+
+    /// Standing on the creature.
+    pub fn aboard(&self) -> bool {
+        self.mount != monster::NO_PART
+    }
+
+    /// Where this fighter is actually looking, once the creature's turning has
+    /// been carried into it.
+    pub fn aim(&self, input: Input) -> Fx {
+        input.aim_turns().add(self.carry_yaw)
+    }
+
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
     pub fn hurt_height(&self) -> Fx {
         if self.crouching {
@@ -311,6 +378,7 @@ impl Default for Player {
             rounds_won: 0,
             crouching: false,
             slowed: 0,
+            slow_mul: Fx::ONE,
             mechanic_held: false,
             held_by: NOBODY,
             stride: 0,
@@ -319,6 +387,11 @@ impl Default for Player {
             parried: 0,
             crouched_for: 0,
             stun_total: 0,
+            mount: monster::NO_PART,
+            local: V3::ZERO,
+            carry_yaw: Fx::ZERO,
+            grip_vel: V3::ZERO,
+            grip_settle: 0,
         }
     }
 }
@@ -331,6 +404,14 @@ pub struct World {
     pub phase: Phase,
     /// Things moves have left behind. Fixed size: see `effects`.
     pub effects: [Option<Effect>; MAX_EFFECTS],
+    /// The quarry, in a hunt. `None` is a versus match.
+    ///
+    /// One slot rather than an array: a second creature is a thing to build
+    /// once there is something to learn from it, and an array of one is a
+    /// promise the code has not earned. When a second arrives, the parts, the
+    /// ride and the control algorithm are what it reuses; this field is what
+    /// changes.
+    pub monster: Option<Monster>,
 }
 
 impl World {
@@ -345,10 +426,23 @@ impl World {
             players: [Player::default(); MAX_PLAYERS],
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
+            monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
         }
+        w.reset_positions();
+        w
+    }
+
+    /// Start a hunt: the same fighters, with a creature in the arena.
+    ///
+    /// Friendly fire is off for the duration, and it is off because the monster
+    /// is there rather than because a flag says so -- one condition, in one
+    /// place, that cannot get out of step with what is on screen.
+    pub fn hunt(classes: [Class; MAX_PLAYERS]) -> World {
+        let mut w = World::with_classes(classes);
+        w.monster = Some(Monster::new());
         w.reset_positions();
         w
     }
@@ -369,6 +463,23 @@ impl World {
                 rounds_won: wins,
                 ..Player::new(class)
             };
+        }
+        if self.monster.is_some() {
+            let mut beast = Monster::new();
+            // Well back, and facing the hunters. A creature that spawns on top
+            // of you has taken the opening read away from both of you.
+            beast.pos = V3::new(t::monster_spawn(), Fx::ZERO, Fx::ZERO);
+            beast.yaw = HALF_TURN;
+            beast.brain.seen = self.players[0].pos;
+            for (i, p) in self.players.iter_mut().enumerate() {
+                p.pos = V3::new(
+                    t::hunter_spawn().neg(),
+                    GROUND_Y,
+                    Fx::from_int(if i == 0 { -2 } else { 2 }),
+                );
+                p.facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+            }
+            self.monster = Some(beast);
         }
     }
 
@@ -397,8 +508,40 @@ impl World {
             return;
         }
 
+        // Stones move before the fighters do, so what a fighter walks into --
+        // or stands on -- is where the stone is this frame rather than where it
+        // was last one.
+        stones::step(&mut self.players);
+        let field = stones::gather(&self.players);
+
+        // The creature decides and moves first, so that riders are carried by
+        // a transform that is already final for this frame. It is handed a
+        // deliberately small window on the fighters -- positions and
+        // velocities, no buttons -- so "it reads your inputs" is not a thing
+        // that can quietly become true. See `monster::Quarry`.
+        let mut spin = Fx::ZERO;
+        if let Some(mut beast) = self.monster {
+            let before = beast.yaw;
+            let seen: [Quarry; MAX_PLAYERS] = std::array::from_fn(|i| Quarry {
+                pos: self.players[i].pos,
+                vel: self.players[i].vel,
+                alive: self.players[i].health > 0,
+                aboard: self.players[i].aboard(),
+            });
+            beast.step(&seen);
+            // Its *heading*, not its wobble: a shake would otherwise spin the
+            // rider's camera as hard as it spins the animal, and you are about
+            // to be thrown off anyway.
+            spin = crate::math::wrap_turns(beast.yaw.sub(before));
+            self.monster = Some(beast);
+        }
+
+        let beast = self.monster;
         for (p, input) in self.players.iter_mut().zip(inputs) {
-            step_player(p, input);
+            if p.aboard() {
+                p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
+            }
+            step_player(p, input, &field, beast.as_ref());
             advance_clocks(p);
         }
 
@@ -429,8 +572,14 @@ impl World {
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
+        // In a hunt the fighters cannot hurt each other: the condition is the
+        // creature's presence rather than a separate flag, so there is nothing
+        // for the two to get out of step about.
         let snapshot = self.players;
         for attacker in 0..MAX_PLAYERS {
+            if self.monster.is_some() {
+                break;
+            }
             let defender = 1 - attacker;
             if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
@@ -482,11 +631,36 @@ impl World {
             }
         }
 
+        if self.monster.is_some() {
+            self.trade_with_the_creature();
+        }
+
         step_effects(&mut self.effects, &mut self.players);
+        stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
 
         // Knockout check last, so the killing blow is fully applied first.
+        if let (Phase::Fighting, Some(beast)) = (self.phase, self.monster) {
+            let standing = self.players.iter().any(|p| p.health > 0);
+            let winner = if !beast.alive() {
+                0
+            } else if !standing {
+                QUARRY
+            } else {
+                return;
+            };
+            if winner != QUARRY {
+                for p in self.players.iter_mut().filter(|p| p.health > 0) {
+                    p.rounds_won += 1;
+                }
+            }
+            self.phase = Phase::RoundOver {
+                winner,
+                left: t::round_over_frames(),
+            };
+            return;
+        }
         if matches!(self.phase, Phase::Fighting) {
             let down = [self.players[0].health <= 0, self.players[1].health <= 0];
             if down[0] || down[1] {
@@ -541,6 +715,7 @@ impl World {
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
+            h.write_i32(p.slow_mul.raw());
             h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
@@ -564,7 +739,39 @@ impl World {
             h.write_u32(kind as u32);
             h.write_u32(p.rounds_won as u32);
             h.write_u32(p.class as u32);
+            h.write_u32(p.mount as u32);
+            hash_v3(&mut h, &p.local);
+            hash_v3(&mut h, &p.grip_vel);
+            h.write_i32(p.carry_yaw.raw());
+            h.write_u32(p.grip_settle as u32);
             hash_mechanic(&mut h, &p.mechanic);
+        }
+        match &self.monster {
+            None => h.write_u32(0),
+            Some(m) => {
+                h.write_u32(1);
+                hash_v3(&mut h, &m.pos);
+                h.write_i32(m.yaw.raw());
+                h.write_i32(m.yaw_rate.raw());
+                h.write_i32(m.speed.raw());
+                h.write_i32(m.health);
+                h.write_i32(m.poise);
+                for limb in &m.part_health {
+                    h.write_i32(*limb);
+                }
+                h.write_u32(m.doing.tag());
+                h.write_u32(m.doing.frames_left() as u32);
+                h.write_u32(m.doing.attacking().unwrap_or(0) as u32);
+                h.write_u32(m.hit_used as u32);
+                hash_v3(&mut h, &m.brain.seen);
+                hash_v3(&mut h, &m.brain.seen_vel);
+                h.write_u32(m.brain.target as u32);
+                h.write_u32(m.brain.glance_left as u32);
+                h.write_u32(m.brain.think_left as u32);
+                h.write_u32(m.brain.last_move as u32);
+                h.write_u32(m.brain.repeat_left as u32);
+                h.write_u32(m.brain.rng);
+            }
         }
         match self.phase {
             Phase::Fighting => h.write_u32(0),
@@ -758,63 +965,15 @@ pub fn move_dir(aim: Fx, ax: i32, az: i32) -> V3 {
 /// A quarter turn in `Fx`, matching `Input::QUARTER_TURN`.
 const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
 
-fn step_player(p: &mut Player, input: Input) {
-    // Facing comes from the mouse. Where you look is where you are pointed, and
-    // where you are pointed is where your attacks go.
-    //
-    // Two exceptions, and both are load-bearing:
-    //
-    // Once a move has started, facing is **locked**. Otherwise the mouse would
-    // drag a live hitbox around during its active frames, and a whiff could be
-    // rescued by turning after the fact -- which would take whiff punishment,
-    // most of the game, out behind the shed. Commitment is spatial here; you
-    // commit to a direction when you commit to the move.
-    //
-    // While guarding, facing turns at a limited rate. Guard covers an arc, not
-    // a bubble (see defense.md), and an arc you can flip instantly is a bubble
-    // with extra steps. The camera still snaps wherever the mouse goes -- it is
-    // the character who cannot reorient that fast.
-    // The mechanic fires on the **press**, not while the button is down. Held,
-    // it used to re-fire every frame: the Champion's form became a function of
-    // how many frames you happened to hold it for, the Reaver's shadow toggled
-    // itself back off, the Bulwark's shield was pinned mid-throw and never
-    // planted, and the Elementalist spent all three structures on one spot in
-    // three frames. A button whose meaning depends on how long you hold it is a
-    // button you cannot use.
-    // The mechanic fires on the **press**, not while the button is down. Held,
-    // it used to re-fire every frame: the Champion's form became a function of
-    // how many frames you happened to hold it, the Reaver's shadow toggled
-    // itself back off, the Bulwark's shield was pinned mid-throw and never
-    // planted, and the Elementalist spent all three structures on one spot in
-    // three frames. A button whose meaning depends on how long you hold it is a
-    // button you cannot use.
-    //
-    // The previous frame's state lives on the fighter rather than in a
-    // renderer-side "just pressed", because rollback re-runs these frames: the
-    // edge has to be recomputed from the snapshot, not remembered outside it.
-    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
-    p.mechanic_held = input.has(Input::MECHANIC);
-
-    let look = V3::from_turns(input.aim_turns());
-    if p.action.actionable() || p.action.stunned() {
-        p.facing = look;
-    } else if p.action.guarding() {
-        p.facing = p
-            .facing
-            .add(look.sub(p.facing).scale(t::guard_turn_rate()))
-            .normalized();
-    }
-
-    let mob = p.class.mobility();
-    step_mechanic(p);
-
-    let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
-    let (ax, az) = input.move_axis();
-    // Crouch is a stance, not an action: it holds while the key is down and
-    // only while you are otherwise free to move.
-    p.crouching = input.has(Input::CROUCH) && p.grounded && p.action.actionable();
-
-    p.action = match p.action {
+/// Advance whatever the fighter is already doing.
+///
+/// `None` means they are free to choose, which is the one branch that differs
+/// between standing on the floor and standing on a creature -- the countdowns
+/// do not. Splitting it here is what stops the ride being a second, drifting
+/// copy of the action machine.
+fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
+    Some(match p.action {
+        Action::Free => return None,
         Action::Dodge { left } if left > 0 => Action::Dodge { left: left - 1 },
         Action::Dodge { .. } => Action::Free,
         Action::Startup { kind, left } if left > 0 => Action::Startup {
@@ -856,7 +1015,78 @@ fn step_player(p: &mut Player, input: Input) {
                 Action::Free
             }
         }
-        Action::Free => {
+    })
+}
+
+fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monster>) {
+    // Standing on the creature is a different tick: no gravity, no arena, and
+    // movement that happens in the animal's frame rather than the world's.
+    if p.aboard() {
+        match beast {
+            Some(beast) => return step_rider(p, input, beast),
+            // The creature is gone. Whatever you were standing on is not there
+            // any more, so neither are you.
+            None => p.mount = monster::NO_PART,
+        }
+    }
+    // Facing comes from the mouse. Where you look is where you are pointed, and
+    // where you are pointed is where your attacks go.
+    //
+    // Two exceptions, and both are load-bearing:
+    //
+    // Once a move has started, facing is **locked**. Otherwise the mouse would
+    // drag a live hitbox around during its active frames, and a whiff could be
+    // rescued by turning after the fact -- which would take whiff punishment,
+    // most of the game, out behind the shed. Commitment is spatial here; you
+    // commit to a direction when you commit to the move.
+    //
+    // While guarding, facing turns at a limited rate. Guard covers an arc, not
+    // a bubble (see defense.md), and an arc you can flip instantly is a bubble
+    // with extra steps. The camera still snaps wherever the mouse goes -- it is
+    // the character who cannot reorient that fast.
+    // The mechanic fires on the **press**, not while the button is down. Held,
+    // it used to re-fire every frame: the Champion's form became a function of
+    // how many frames you happened to hold it for, the Reaver's shadow toggled
+    // itself back off, the Bulwark's shield was pinned mid-throw and never
+    // planted, and the Elementalist spent all three structures on one spot in
+    // three frames. A button whose meaning depends on how long you hold it is a
+    // button you cannot use.
+    // The mechanic fires on the **press**, not while the button is down. Held,
+    // it used to re-fire every frame: the Champion's form became a function of
+    // how many frames you happened to hold it, the Reaver's shadow toggled
+    // itself back off, the Bulwark's shield was pinned mid-throw and never
+    // planted, and the Elementalist spent all three structures on one spot in
+    // three frames. A button whose meaning depends on how long you hold it is a
+    // button you cannot use.
+    //
+    // The previous frame's state lives on the fighter rather than in a
+    // renderer-side "just pressed", because rollback re-runs these frames: the
+    // edge has to be recomputed from the snapshot, not remembered outside it.
+    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    p.mechanic_held = input.has(Input::MECHANIC);
+
+    let look = V3::from_turns(p.aim(input));
+    if p.action.actionable() || p.action.stunned() {
+        p.facing = look;
+    } else if p.action.guarding() {
+        p.facing = p
+            .facing
+            .add(look.sub(p.facing).scale(t::guard_turn_rate()))
+            .normalized();
+    }
+
+    let mob = p.class.mobility();
+    step_mechanic(p);
+
+    let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
+    let (ax, az) = input.move_axis();
+    // Crouch is a stance, not an action: it holds while the key is down and
+    // only while you are otherwise free to move.
+    p.crouching = input.has(Input::CROUCH) && p.grounded && p.action.actionable();
+
+    p.action = match countdown(p, want_guard) {
+        Some(next) => next,
+        None => {
             // Clicks are checked before the dodge, which is what disambiguates
             // shift. Shift with a click is the stronger version of that attack;
             // shift with only a direction is a dodge. See controls.md.
@@ -888,7 +1118,7 @@ fn step_player(p: &mut Player, input: Input) {
                 // direction, which meant that pressing the jump button while
                 // moving -- which is most of the time -- did not jump. Space is
                 // now only ever a vertical takeoff.
-                let dir = move_dir(input.aim_turns(), ax, az);
+                let dir = move_dir(p.aim(input), ax, az);
                 if p.grounded {
                     p.vel.x = dir.x.mul(t::dodge_speed());
                     p.vel.z = dir.z.mul(t::dodge_speed());
@@ -949,7 +1179,7 @@ fn step_player(p: &mut Player, input: Input) {
         // conserved when you let go, which is the whole difference between a
         // jump being a commitment and a jump being a hover.
         if steering {
-            air_accelerate(p, move_dir(input.aim_turns(), ax, az), mob.air_speed);
+            air_accelerate(p, move_dir(p.aim(input), ax, az), mob.air_speed);
         }
     } else if p.action.actionable() && steering {
         let speed = if p.crouching {
@@ -957,15 +1187,15 @@ fn step_player(p: &mut Player, input: Input) {
         } else {
             t::move_speed()
         };
-        let dir = move_dir(input.aim_turns(), ax, az);
+        let dir = move_dir(p.aim(input), ax, az);
         p.vel.x = dir.x.mul(dragged(p, speed));
         p.vel.z = dir.z.mul(dragged(p, speed));
     } else if p.action.guarding() && steering {
-        let dir = move_dir(input.aim_turns(), ax, az);
+        let dir = move_dir(p.aim(input), ax, az);
         p.vel.x = dir.x.mul(dragged(p, t::guard_move_speed()));
         p.vel.z = dir.z.mul(dragged(p, t::guard_move_speed()));
     } else if let (Some(speed), true) = (attack_speed, steering) {
-        let dir = move_dir(input.aim_turns(), ax, az);
+        let dir = move_dir(p.aim(input), ax, az);
         p.vel.x = dir.x.mul(dragged(p, speed));
         p.vel.z = dir.z.mul(dragged(p, speed));
     } else if p.action.attack_kind().is_some() {
@@ -1032,10 +1262,15 @@ fn step_player(p: &mut Player, input: Input) {
 
     p.pos = p.pos.add(p.vel.scale(DT));
 
-    let r = arena::resolve(p.pos, p.vel, p.grounded);
+    let was_grounded = p.grounded;
+    let r = arena::resolve(p.pos, p.vel, was_grounded);
+    let r = stones::resolve_body(field, r.pos, r.vel, r.grounded, was_grounded);
     p.pos = r.pos;
     p.vel = r.vel;
     p.grounded = r.grounded;
+    if let Some(beast) = beast {
+        meet_the_creature(p, beast);
+    }
     if p.grounded {
         p.air_dodged = false;
         p.jump_hold = 0;
@@ -1061,7 +1296,7 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     if kind != SLOT_POKE || (ax == 0 && az == 0) {
         return;
     }
-    let dir = move_dir(input.aim_turns(), ax, az);
+    let dir = move_dir(p.aim(input), ax, az);
     let boost = t::air_attack_boost();
     p.vel.x = p.vel.x.add(dir.x.mul(boost));
     p.vel.z = p.vel.z.add(dir.z.mul(boost));
@@ -1189,10 +1424,7 @@ fn mechanic_action(p: &mut Player) {
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
         // is the resource.
         Mechanic::Structures(mut slots) => {
-            let raised = class::Structure {
-                at: p.pos.add(p.facing.scale(t::structure_ahead())),
-                age: 0,
-            };
+            let raised = class::Structure::raised(p.pos.add(p.facing.scale(t::structure_ahead())));
             if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
                 *free = Some(raised);
             } else {
@@ -1256,16 +1488,6 @@ fn step_mechanic(p: &mut Player) {
             if spot.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
                 p.mechanic = Mechanic::Shadow { at: None };
             }
-        }
-
-        // Structures count up while they finish rising. Saturating, because
-        // this is not a lifetime: once a structure is out of the ground the
-        // number stops mattering and the structure stays.
-        Mechanic::Structures(mut slots) => {
-            for slot in slots.iter_mut().flatten() {
-                slot.age = slot.age.saturating_add(1);
-            }
-            p.mechanic = Mechanic::Structures(slots);
         }
 
         // Past the deep threshold the forces burn you. Relief comes from
@@ -1341,7 +1563,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                 match slot {
                     Some(s) => {
                         hash_v3(h, &s.at);
+                        hash_v3(h, &s.vel);
                         h.write_u32(s.age as u32);
+                        h.write_u32(s.struck as u32);
                     }
                     None => h.write_u32(0),
                 }
@@ -1395,6 +1619,13 @@ fn advance_clocks(p: &mut Player) {
 
     // Ground covered this frame as a fraction of one stride. The raw 16.16 bits
     // of a fraction of a turn *are* the phase, so there is no conversion.
+    //
+    // A rider is the exception and is left alone here: their world velocity is
+    // zero while they are aboard, and `ride` has already advanced this from the
+    // step they took across the creature.
+    if p.aboard() {
+        return;
+    }
     let advance = p.vel.flat_len().mul(DT).div(stride_length(p));
     p.stride = p.stride.wrapping_add(advance.raw().clamp(0, 65535) as u16);
 }
@@ -1519,8 +1750,15 @@ fn step_effects(effects: &mut [Option<Effect>; MAX_EFFECTS], players: &mut [Play
         }
         apply_effect(*effect, players);
     }
+    // The slow's tail, for every source of one -- a drain field here, a stone
+    // churning under your feet in `stones`. It runs down before either of them
+    // gets to refresh it, so standing in one holds the slow at full strength and
+    // walking out of it lets the tail run.
     for p in players.iter_mut() {
         p.slowed = p.slowed.saturating_sub(1);
+        if p.slowed == 0 {
+            p.slow_mul = Fx::ONE;
+        }
     }
 }
 
@@ -1553,7 +1791,7 @@ fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
                     // Drain *and* slow: the field punishes standing in it and
                     // makes leaving it slow, which is what turns a damage
                     // puddle into a positioning tool.
-                    p.slowed = t::slow_frames();
+                    p.slow(t::slow_frames(), t::spike_slow());
                     if effect.ticks_now() {
                         p.health = (p.health - t::spike_drain()).max(0);
                     }
@@ -1625,5 +1863,395 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
     if p.slowed == 0 {
         return speed;
     }
-    speed.mul(t::spike_slow())
+    speed.mul(p.slow_mul)
+}
+
+// ---------------------------------------------------------------------------
+// Riding the creature
+//
+// See `docs/design/monsters.md`. The rule that makes all of this work is one
+// line: while mounted, the fighter's position in the creature's body frame is
+// the authoritative one and the world position is derived from it.
+// ---------------------------------------------------------------------------
+
+/// One tick of a fighter standing on the creature.
+///
+/// The option set up here is deliberately smaller than on the ground: move,
+/// brace, attack, guard, and jump off. **There is no dodge.** A seventeen
+/// metre-per-second dash on a surface two metres wide is a way to fall off by
+/// accident, and taking it away is what makes bracing a real answer rather than
+/// a worse version of one you already had.
+fn step_rider(p: &mut Player, input: Input, beast: &Monster) {
+    let part = p.mount as usize;
+    let held = p.local;
+    let radius = t::body_radius();
+
+    // Where the patch of animal under their feet has got to. `p.pos` is still
+    // last frame's world position of *exactly this point*, which is what makes
+    // the subtraction honest: it measures the surface moving, never the rider
+    // walking.
+    let landing = beast.world_of(part, held);
+    let rate = Fx::from_int(crate::TICK_HZ as i32);
+    let surface = landing.sub(p.pos).scale(rate);
+    let accel = surface.sub(p.grip_vel).scale(rate);
+    p.grip_vel = surface;
+    p.pos = landing;
+    p.grounded = true;
+    p.vel = V3::ZERO;
+
+    let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
+    p.mechanic_held = input.has(Input::MECHANIC);
+    let look = V3::from_turns(p.aim(input));
+    if p.action.actionable() || p.action.stunned() {
+        p.facing = look;
+    } else if p.action.guarding() {
+        p.facing = p
+            .facing
+            .add(look.sub(p.facing).scale(t::guard_turn_rate()))
+            .normalized();
+    }
+    p.crouching = input.has(Input::CROUCH) && p.action.actionable();
+
+    // The buck. Acceleration is read in body space, where the surface normal is
+    // simply `+y`, and the part of it pressing the rider *into* the surface does
+    // not count -- being shoved down onto something is not being thrown off it.
+    let stance = beast.stance();
+    let felt = stance.dir_to_body(accel);
+    // `big_len`, not `len`: these are accelerations in the hundreds, and a
+    // squared 16.16 value saturates just past 181. The first version of this
+    // used `len` and reported 181 for every buck in the game, so nothing ever
+    // threw anybody and nothing said why.
+    let throw = crate::math::big_len(V3::new(felt.x, felt.y.max(Fx::ZERO), felt.z));
+    let grip = if p.crouching {
+        t::grip().mul(t::brace_grip())
+    } else {
+        t::grip()
+    };
+    if p.grip_settle > 0 {
+        p.grip_settle -= 1;
+    } else if throw.raw() > grip.raw() {
+        thrown_off(p, &stance, surface);
+        return;
+    }
+
+    step_mechanic(p);
+    let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
+
+    p.action = match countdown(p, want_guard) {
+        Some(next) => next,
+        None => {
+            if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
+                p.hit_used = false;
+                Action::Startup {
+                    kind: SLOT_SPECIAL,
+                    left: moves::get(p.class, SLOT_SPECIAL).startup,
+                }
+            } else if pressed_mechanic {
+                mechanic_action(p);
+                Action::Free
+            } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
+                let kind = if input.has(Input::SHIFT) {
+                    SLOT_COMMITTED
+                } else {
+                    SLOT_POKE
+                };
+                p.hit_used = false;
+                steer_meter(p, input, kind);
+                Action::Startup {
+                    kind,
+                    left: moves::get(p.class, kind).startup,
+                }
+            } else if want_guard {
+                Action::Guard { held: 0 }
+            } else {
+                Action::Free
+            }
+        }
+    };
+
+    // Jumping is how you leave, and it carries the surface's own velocity with
+    // you -- which is what makes stepping off the back of a charging animal a
+    // real option rather than a mistake.
+    if input.has(Input::SPACE) && p.action.actionable() {
+        let mob = p.class.mobility();
+        p.mount = monster::NO_PART;
+        p.vel = surface.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
+        p.grounded = false;
+        p.air_dodged = false;
+        p.jump_hold = t::jump_hold_frames();
+        return;
+    }
+
+    // Movement, in the creature's frame. The wish direction arrives
+    // camera-relative as it always does; `carry_yaw` has already turned the
+    // camera with the animal, so "forward" still means the same part of its
+    // back that it did before it turned.
+    let (ax, az) = input.move_axis();
+    let speed = rider_speed(p);
+    let wish = stance.dir_to_body(move_dir(p.aim(input), ax, az));
+    let mut next = held;
+    next.x = next.x.add(wish.x.mul(speed).mul(DT));
+    next.z = next.z.add(wish.z.mul(speed).mul(DT));
+
+    // Aboard, the ground is the animal. The stride phase runs off ground
+    // covered and `vel` is zero the whole time a rider is on -- the position
+    // comes from `local` -- so the walk cycle has to be advanced from the step
+    // just taken across the creature's back, or a rider crossing it glides
+    // there in the idle. Taken from the *intended* step rather than from where
+    // they end up, because being shoved by a swinging tail is not walking.
+    let walked = next.sub(held).flat_len();
+    p.stride = p
+        .stride
+        .wrapping_add(walked.div(stride_length(p)).raw().clamp(0, 65535) as u16);
+
+    // A step you can walk up. The creature is terrain, and the tail sits two
+    // thirds of a metre below the back: without this the only way between them
+    // is a jump nobody would think to try.
+    let mut probe = next;
+    probe.y = probe.y.add(t::step_up());
+    if let Some((up, top)) = beast.surface_under(beast.world_of(part, probe), radius) {
+        if up != part {
+            let mut rest = beast.rest_frame(up, beast.world_of(part, probe));
+            rest.y = top;
+            p.mount = up as u8;
+            p.local = rest;
+            p.pos = beast.world_of(up, rest);
+            p.grip_settle = t::mount_settle() as u8;
+            return;
+        }
+    }
+
+    let moved = beast.resolve(beast.world_of(part, next), radius, t::body_height());
+    match beast.surface_under(moved.pos, radius) {
+        Some((on, top)) => {
+            // Staying on the same part keeps the body-space position that was
+            // just computed rather than converting to the world and back. The
+            // round trip is exact to about a millimetre, which is nothing once
+            // and a crawl across the creature's back at sixty frames a second.
+            let mut rest = if on == part && !moved.shoved {
+                next
+            } else {
+                beast.rest_frame(on, moved.pos)
+            };
+            rest.y = top;
+            if on != part {
+                // Stepped from the barrel onto the tail, or the other way.
+                p.grip_settle = t::mount_settle() as u8;
+                p.mount = on as u8;
+            }
+            p.local = rest;
+            p.pos = beast.world_of(on, rest);
+        }
+        None => {
+            // Walked off the edge. You leave with whatever the surface was
+            // doing, which is why stepping off a turning animal throws you
+            // wide.
+            p.mount = monster::NO_PART;
+            p.pos = moved.pos;
+            p.vel = surface;
+            p.grounded = false;
+        }
+    }
+}
+
+/// Walking speed on the creature's back, after whatever the move you are
+/// throwing costs you.
+fn rider_speed(p: &Player) -> Fx {
+    let base = dragged(p, t::move_speed()).mul(t::rider_speed());
+    if p.crouching {
+        return Fx::ZERO;
+    }
+    match p.action {
+        Action::Free => base,
+        Action::Guard { .. } => t::guard_move_speed().mul(t::rider_speed()),
+        _ => match p.action.attack_kind() {
+            Some(kind) => {
+                let m = moves::get(p.class, kind).mobility;
+                base.mul(Fx::ratio(m as i32, 100))
+            }
+            None => Fx::ZERO,
+        },
+    }
+}
+
+/// Land on the creature, or be shoved out of it.
+fn meet_the_creature(p: &mut Player, beast: &Monster) {
+    let radius = t::body_radius();
+    let contact = beast.resolve(p.pos, radius, t::body_height());
+    if contact.shoved {
+        // Walked into the animal. Solid is solid.
+        p.vel.x = Fx::ZERO;
+        p.vel.z = Fx::ZERO;
+    }
+    p.pos = contact.pos;
+    if p.vel.y.raw() > 0 {
+        return;
+    }
+    let Some((part, top)) = beast.surface_under(p.pos, radius) else {
+        return;
+    };
+    mount_on(p, beast, part, top);
+}
+
+/// Take up station on a part. Mounting is landing: there is no button, because
+/// a surface is a surface.
+fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
+    let mut rest = beast.rest_frame(part, p.pos);
+    rest.y = top;
+    p.mount = part as u8;
+    p.local = rest;
+    p.pos = beast.world_of(part, rest);
+    p.vel = V3::ZERO;
+    p.grounded = true;
+    p.air_dodged = false;
+    p.jump_hold = 0;
+    p.air_stall = 0;
+    p.grip_vel = V3::ZERO;
+    p.grip_settle = t::mount_settle() as u8;
+}
+
+/// Lose your footing.
+///
+/// You leave with the velocity the surface had, capped, plus a push along the
+/// creature's own up axis. The cap is what keeps a shake from firing someone
+/// over the arena wall.
+fn thrown_off(p: &mut Player, stance: &monster::Stance, surface: V3) {
+    let flat = V3::new(surface.x, Fx::ZERO, surface.z);
+    let speed = flat.flat_len().min(t::throw_kick());
+    let up = stance.dir_to_world(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    p.mount = monster::NO_PART;
+    p.vel = flat
+        .normalized()
+        .scale(speed)
+        .add(up.scale(t::throw_lift()));
+    p.grounded = false;
+    p.air_dodged = false;
+    p.jump_hold = 0;
+    p.action = Action::HitStun {
+        left: t::throw_stun(),
+    };
+}
+
+/// Come off because something else decided it, rather than because you lost
+/// your grip -- being hit, or the creature dying under you.
+fn fall_off(p: &mut Player, beast: &Monster) {
+    if !p.aboard() {
+        return;
+    }
+    let part = p.mount as usize;
+    p.pos = beast.world_of(part, p.local);
+    p.mount = monster::NO_PART;
+    p.grounded = false;
+}
+
+// ---------------------------------------------------------------------------
+// Trading with the creature
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// Both directions of the exchange, once both sides have moved.
+    fn trade_with_the_creature(&mut self) {
+        let Some(mut beast) = self.monster else {
+            return;
+        };
+
+        // What the creature has out. Every fighter it reaches is hit on the
+        // same frame -- spending the hit on whoever happened to be checked
+        // first would make a coop partner a shield.
+        if let (Doing::Active { kind, .. }, false) = (beast.doing, beast.hit_used) {
+            let m = monster::attack(kind);
+            let anchor = beast
+                .hit_volume()
+                .map(|(a, _, _, _)| beast.stance().to_world(a))
+                .unwrap_or(beast.pos);
+            let mut landed = false;
+            for i in 0..MAX_PLAYERS {
+                let victim = self.players[i];
+                if victim.health <= 0 || victim.action.invulnerable() {
+                    continue;
+                }
+                if !beast.reaches(victim.pos, victim.hurt_height(), t::body_radius()) {
+                    continue;
+                }
+                let away = V3::new(
+                    victim.pos.x.sub(anchor.x),
+                    Fx::ZERO,
+                    victim.pos.z.sub(anchor.z),
+                )
+                .normalized();
+                let facing_it =
+                    victim.facing.dot(away.scale(Fx::ONE.neg())).raw() >= t::guard_arc_cos().raw();
+                let guarding = !m.unblockable && victim.action.guarding() && facing_it;
+                let parried = !m.unblockable
+                    && matches!(victim.action, Action::Guard { held } if held < t::parry_window())
+                    && facing_it;
+                apply_hit(
+                    &mut self.players[i],
+                    Hit {
+                        damage: m.damage,
+                        hitstun: m.hitstun,
+                        blockstun: m.blockstun,
+                        knockback: m.knockback,
+                        launch: m.launch,
+                        grabs: 0,
+                        by: QUARRY,
+                        dir: away,
+                        blocked: guarding,
+                        parried,
+                    },
+                );
+                if parried {
+                    // Parrying something that size staggers it. This is the one
+                    // thing in the fight that interrupts an active frame, and
+                    // it is the reward for the hardest read available.
+                    beast.doing = Doing::Flinch {
+                        left: t::parry_stagger(),
+                    };
+                }
+                if !parried && !guarding {
+                    fall_off(&mut self.players[i], &beast);
+                }
+                landed = true;
+            }
+            if landed {
+                beast.hit_used = true;
+            }
+        }
+
+        // What the fighters have out.
+        for i in 0..MAX_PLAYERS {
+            let attacker = self.players[i];
+            let Some(box_out) = hitbox(&attacker) else {
+                continue;
+            };
+            if box_out.spent || attacker.health <= 0 {
+                continue;
+            }
+            let Some(part) =
+                beast.part_struck(box_out.centre, box_out.radius, attacker.hurt_height())
+            else {
+                continue;
+            };
+            let Some(kind) = attacker.action.attack_kind() else {
+                continue;
+            };
+            let scale = match attacker.mechanic {
+                Mechanic::Forms { form, .. } => form.modifiers().1,
+                _ => Fx::ONE,
+            };
+            let raw = Fx::from_int(moves::get(attacker.class, kind).damage)
+                .mul(scale)
+                .to_int();
+            beast.take_hit(part, raw);
+            self.players[i].hit_used = true;
+        }
+
+        // Nothing to stand on any more.
+        if !beast.alive() {
+            for p in self.players.iter_mut() {
+                fall_off(p, &beast);
+            }
+        }
+        self.monster = Some(beast);
+    }
 }

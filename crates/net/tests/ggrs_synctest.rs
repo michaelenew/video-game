@@ -8,10 +8,10 @@
 
 use ggrs::{PlayerType, SessionBuilder};
 use net::{NetInput, SessionConfig, handle_requests};
-use sim::{Input, World};
+use sim::{Class, Input, World};
 
-#[test]
-fn ggrs_synctest_finds_no_desync() {
+/// Play 1200 frames of random input through SyncTest against a given world.
+fn synctest(mut world: World, label: &str) {
     let mut session = SessionBuilder::<SessionConfig>::new()
         .with_num_players(2)
         .with_check_distance(7)
@@ -22,7 +22,6 @@ fn ggrs_synctest_finds_no_desync() {
         .start_synctest_session()
         .expect("synctest session");
 
-    let mut world = World::new();
     let mut rng = 0x9e37_79b9_7f4a_7c15_u64;
     let mut next = move || {
         rng ^= rng << 13;
@@ -43,9 +42,23 @@ fn ggrs_synctest_finds_no_desync() {
         // A mismatch surfaces here as GgrsError::MismatchedChecksum.
         let requests = session
             .advance_frame()
-            .unwrap_or_else(|e| panic!("desync at frame {frame}: {e}"));
+            .unwrap_or_else(|e| panic!("{label}: desync at frame {frame}: {e}"));
         handle_requests(&mut world, requests);
     }
 
     assert_eq!(world.frame, 1200);
+}
+
+#[test]
+fn ggrs_synctest_finds_no_desync() {
+    synctest(World::new(), "versus");
+}
+
+#[test]
+fn ggrs_synctest_finds_no_desync_with_a_creature_in_the_arena() {
+    // The creature is the most determinism-hostile thing in the simulation:
+    // it carries a generator, it decides, and riders keep a position in a
+    // rotating frame that is rebuilt from the snapshot every tick. If any of
+    // that ever stops being a pure function, this is where it shows up.
+    synctest(World::hunt([Class::Champion, Class::Bulwark]), "hunt");
 }

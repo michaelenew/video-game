@@ -9,6 +9,7 @@
 //!   WASD move · Space jump · Shift+direction dodge (airdodge once per jump)
 //!   J bash · Shift+J slam · K guard · L shield throw/recall · Shift+L grapple
 //!   1-4 dummy mode · F1 debug overlay · P pause · ] step one frame · R reset
+//!   H hunt the Ridgeback, or fight the other player
 //!
 //! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
 //!
@@ -17,6 +18,7 @@
 //! elementalist, blood, dual.
 
 mod bake;
+mod beast;
 mod crosshair;
 mod debug;
 mod hub;
@@ -85,6 +87,14 @@ fn arg(flag: &str) -> Option<String> {
         .cloned()
 }
 
+/// Start in a hunt rather than a versus match.
+///
+/// A flag as well as a key, because the headless screenshot script takes flags
+/// and not keystrokes.
+fn hunting() -> bool {
+    std::env::args().any(|a| a == "--hunt")
+}
+
 fn chosen_classes() -> [sim::Class; 2] {
     [
         arg("--p1")
@@ -141,7 +151,8 @@ fn main() {
         })
         .insert_resource(settings::Settings::load())
         .init_resource::<InsideOwnHead>()
-        .add_systems(Startup, (setup, hud::setup, crosshair::setup))
+        .init_resource::<Scripted>()
+        .add_systems(Startup, (setup, beast::setup, hud::setup, crosshair::setup))
         .add_systems(
             Update,
             (
@@ -157,6 +168,7 @@ fn main() {
                 place_shields,
                 place_effects,
                 place_structures,
+                beast::place,
                 drive_camera,
                 hide_own_body,
                 hud::toggle_class_buttons,
@@ -165,6 +177,7 @@ fn main() {
                 hud::update_class_buttons,
                 crosshair::update,
                 debug::draw,
+                beast::overlay,
                 palette::toggle,
                 palette::draw,
             )
@@ -239,7 +252,11 @@ enum Dummy {
 
 impl Default for Sim {
     fn default() -> Self {
-        let w = World::with_classes(chosen_classes());
+        let w = if hunting() {
+            World::hunt(chosen_classes())
+        } else {
+            World::with_classes(chosen_classes())
+        };
         let driver = match parse_args() {
             Some((port, peer)) => {
                 let local: std::net::SocketAddr =
@@ -291,6 +308,21 @@ impl Sim {
             Driver::Online { handle, .. } => handle.min(1),
             Driver::Local => 0,
         }
+    }
+}
+
+/// The scripted hunter, when `DEMO=1` is driving a hunt.
+///
+/// It is the same bot `cargo run -p hunt --bin fight` measures, so what you
+/// watch here and what the fight report scores are the same play sequence.
+/// Renderer-side state: it produces *inputs*, and inputs are transmitted rather
+/// than recomputed, so nothing about it can reach a peer's simulation.
+#[derive(Resource)]
+struct Scripted(hunt::Hunter);
+
+impl Default for Scripted {
+    fn default() -> Self {
+        Scripted(hunt::Hunter::new(0))
     }
 }
 
@@ -618,7 +650,6 @@ fn place_structures(
     mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
 ) {
     use sim::class::Mechanic;
-    use sim::fixed::Fx;
     let radius = sim::tuning::structure_radius().to_f32_for_render();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
@@ -638,13 +669,13 @@ fn place_structures(
         // where the telegraph is readable and someone can still move -- then
         // erupts. Same duration either way; completely different to play
         // against, which is the whole argument for curves over single numbers.
-        let through = Fx::ratio(
-            raised.age as i32,
-            sim::tuning::structure_rise().max(1) as i32,
-        );
-        let rise = sim::tuning::structure_rise_curve()
-            .at(through)
-            .to_f32_for_render();
+        //
+        // The rise comes from the simulation rather than being worked out again
+        // here, because it is no longer decoration: it is where the top of the
+        // stone is, and the top of the stone is what you can stand on. A
+        // renderer that recomputed it could disagree with the surface the game
+        // is holding you up with.
+        let rise = raised.risen().to_f32_for_render();
         let height = sim::tuning::structure_height().to_f32_for_render();
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
@@ -771,6 +802,10 @@ fn place_shields(
 // ---------------------------------------------------------------------------
 
 /// Read real input, run whole fixed ticks, keep the previous snapshot.
+// A Bevy system's parameter list *is* its dependency declaration: every entry
+// is something the scheduler has to know this system touches. Splitting one to
+// get under a count would split the system, which is the opposite of the point.
+#[allow(clippy::too_many_arguments)]
 fn tick_sim(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -779,6 +814,7 @@ fn tick_sim(
     focus: Res<palette::UiFocus>,
     mut sim: ResMut<Sim>,
     mut show: ResMut<debug::ShowDebug>,
+    mut scripted: ResMut<Scripted>,
 ) {
     // Typing in a text field must not also pause the match or cycle the class.
     // F7 stays live regardless, since it is the way back out.
@@ -804,12 +840,35 @@ fn tick_sim(
         // Cycle player one's class. Restarts the match, since a class change
         // mid-round would leave the mechanic in someone else's state.
         let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
-        let w = World::with_classes([ALL[next], sim.cur.players[1].class]);
+        let classes = [ALL[next], sim.cur.players[1].class];
+        let w = if sim.cur.monster.is_some() {
+            World::hunt(classes)
+        } else {
+            World::with_classes(classes)
+        };
         sim.prev = w.clone();
         sim.cur = w;
     }
     if keys.just_pressed(KeyCode::KeyR) {
-        let w = World::with_classes([sim.cur.players[0].class, sim.cur.players[1].class]);
+        let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
+        let w = if sim.cur.monster.is_some() {
+            World::hunt(classes)
+        } else {
+            World::with_classes(classes)
+        };
+        sim.prev = w.clone();
+        sim.cur = w;
+    }
+    // Swap between hunting something and fighting each other. A restart either
+    // way, because a creature appearing in the middle of a round would land on
+    // somebody.
+    if keys.just_pressed(KeyCode::KeyH) {
+        let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
+        let w = if sim.cur.monster.is_some() {
+            World::with_classes(classes)
+        } else {
+            World::hunt(classes)
+        };
         sim.prev = w.clone();
         sim.cur = w;
     }
@@ -857,11 +916,9 @@ fn tick_sim(
                 // reusing a sample across them smears a four-frame press into
                 // whatever the frame rate happened to be -- which makes two
                 // runs of the same script diverge.
+                let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
                 let pair = [
-                    scripted_or(
-                        demo_mode().then(|| demo_input(&sim.cur, sim.cur.frame)),
-                        held,
-                    ),
+                    scripted_or(scripted, held),
                     dummy_input(sim.dummy, sim.cur.frame, held_two),
                 ];
                 sim.prev = sim.cur.clone();
@@ -871,10 +928,8 @@ fn tick_sim(
         Driver::Online { .. } => {
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
-                let local = scripted_or(
-                    demo_mode().then(|| demo_input(&sim.cur, sim.cur.frame)),
-                    held,
-                );
+                let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
+                let local = scripted_or(scripted, held);
                 step_online(&mut sim, local);
             }
         }
@@ -966,6 +1021,19 @@ fn demo_mode() -> bool {
 /// the integer that arrived, never this function.
 fn aim_toward(v: sim::V3) -> u16 {
     aim_from_radians(v.z.to_f32_for_render().atan2(v.x.to_f32_for_render()))
+}
+
+/// One frame of scripted play.
+///
+/// Against another fighter it is the fixed beat below, which exists to exercise
+/// posing and framing. Against a creature it is the real hunter, because a
+/// fixed beat played at a monster would be a demonstration of nothing.
+fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
+    if w.monster.is_some() {
+        hunter.watch(w);
+        return hunter.act(w);
+    }
+    demo_input(w, w.frame)
 }
 
 fn demo_input(w: &sim::World, frame: u32) -> SimInput {
@@ -1283,9 +1351,16 @@ fn drive_camera(
     // The camera follows whichever fighter this client is driving.
     let me = sim.local_player();
     let yaw = if me == 0 { look.yaw } else { look.yaw_two };
-    let framing = rig
-        .0
-        .update(time.delta_secs(), frame.players[me].pos, yaw, look.pitch);
+    let framing = rig.0.update_around(
+        time.delta_secs(),
+        frame.players[me].pos,
+        yaw,
+        look.pitch,
+        view::Surroundings {
+            beast: sim.cur.monster.as_ref(),
+            aboard: sim.cur.players[me].aboard(),
+        },
+    );
     inside.0 = framing.first_person;
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);

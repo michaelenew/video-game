@@ -200,10 +200,22 @@ impl Form {
 /// person, which matters more than the combo ceiling.
 pub const MAX_STRUCTURES: usize = 3;
 
-/// One raised structure.
+/// One raised structure -- a stone.
+///
+/// State only. What a stone *does* -- fall, shove, lift, erupt, hold a fighter
+/// up -- lives in [`crate::stones`], because it is the only thing in the game
+/// that is both a solid and part of the snapshot.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Structure {
+    /// The base of the column: the footprint it stands on.
+    ///
+    /// A live position rather than the spot it was cast at. Stones move: one
+    /// erupting underneath throws this one off the top, and it lands wherever
+    /// that leaves it.
     pub at: V3,
+    /// How it is moving. Zero for a stone at rest, which is most of them most
+    /// of the time.
+    pub vel: V3,
     /// Frames since it was raised, saturating.
     ///
     /// It drives the rise out of the ground and **nothing else** -- structures
@@ -211,6 +223,12 @@ pub struct Structure {
     /// special quietly stopped working. An age is not a clock: this one stops
     /// counting and the structure stays until a fourth is raised.
     pub age: u16,
+    /// One bit per fighter the eruption has already caught.
+    ///
+    /// A stone erupts once, so it can catch you once -- the same rule as
+    /// `Player::hit_used`, kept per victim because a stone is not aimed at
+    /// anybody in particular.
+    pub struck: u8,
 }
 
 // ---------------------------------------------------------------------------

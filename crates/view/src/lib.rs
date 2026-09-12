@@ -17,7 +17,7 @@ pub mod play;
 pub mod pose;
 pub mod skeleton;
 
-pub use camera::{CameraRig, Framing};
+pub use camera::{CameraRig, Framing, Surroundings};
 pub use clips::Clip;
 pub use interp::{Frame, PlayerView, interpolate};
 pub use play::{PoseInput, pose_for};

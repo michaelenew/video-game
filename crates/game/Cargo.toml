@@ -9,6 +9,7 @@ license.workspace = true
 # The hub re-runs the animation solver on every edit, so a change can be seen
 # on a real fighter immediately. Nothing in a shipped frame calls it.
 anim = { path = "../anim" }
+hunt = { path = "../hunt" }
 manual = { path = "../manual" }
 sim = { path = "../sim" }
 net = { path = "../net" }

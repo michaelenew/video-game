@@ -6,7 +6,7 @@
 //! source of flakes that only show up under load, which is the worst kind.
 
 use sim::class::{ALL_CLASSES, Class};
-use sim::oven::{self, AirField, Knob, MoveField, Scalar, Unit};
+use sim::oven::{self, AirField, Knob, MonsterField, MoveField, Scalar, Unit};
 use sim::{Input, World};
 
 #[test]
@@ -16,11 +16,15 @@ fn the_registry_covers_every_stored_value() {
     // error message than this one.
     assert_eq!(
         oven::all_knobs().len(),
-        oven::SCALAR_COUNT + oven::AIR_COUNT + oven::MOVE_COUNT
+        oven::SCALAR_COUNT + oven::AIR_COUNT + oven::MOVE_COUNT + oven::MONSTER_COUNT
     );
     assert_eq!(Scalar::ALL.len(), oven::SCALAR_COUNT);
     assert_eq!(AirField::ALL.len() * 6, oven::AIR_COUNT);
     assert_eq!(MoveField::ALL.len() * 6 * oven::SLOTS, oven::MOVE_COUNT);
+    assert_eq!(
+        MonsterField::ALL.len() * oven::MONSTER_MOVES,
+        oven::MONSTER_COUNT
+    );
 }
 
 #[test]
