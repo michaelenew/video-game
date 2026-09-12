@@ -579,7 +579,6 @@ fn place_structures(
     mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
 ) {
     use sim::class::Mechanic;
-    use sim::fixed::Fx;
     let radius = sim::tuning::structure_radius().to_f32_for_render();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
@@ -599,13 +598,13 @@ fn place_structures(
         // where the telegraph is readable and someone can still move -- then
         // erupts. Same duration either way; completely different to play
         // against, which is the whole argument for curves over single numbers.
-        let through = Fx::ratio(
-            raised.age as i32,
-            sim::tuning::structure_rise().max(1) as i32,
-        );
-        let rise = sim::tuning::structure_rise_curve()
-            .at(through)
-            .to_f32_for_render();
+        //
+        // The rise comes from the simulation rather than being worked out again
+        // here, because it is no longer decoration: it is where the top of the
+        // stone is, and the top of the stone is what you can stand on. A
+        // renderer that recomputed it could disagree with the surface the game
+        // is holding you up with.
+        let rise = raised.risen().to_f32_for_render();
         let height = sim::tuning::structure_height().to_f32_for_render();
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
