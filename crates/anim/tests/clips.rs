@@ -450,3 +450,22 @@ fn every_clip_the_contract_names_is_a_real_name() {
     // foot through the floor.
     assert!(Pose::rest().lowest_foot(reference()).abs() < 0.02);
 }
+
+#[test]
+fn the_clips_that_mirror_a_simulation_clock_are_the_same_length_as_it() {
+    // Both of these are played by counting a simulation timer, so a clip that
+    // is longer than its timer gets cut off and one that is shorter holds its
+    // last frame. Neither is a crash, which is exactly why it would sit there
+    // for months.
+    assert_eq!(
+        Clip::Parry.length(),
+        sim::state::PARRY_FLOURISH,
+        "the parry flourish and the clip that plays it disagree"
+    );
+    assert!(
+        Clip::Defeat.length() <= sim::tuning::round_over_frames(),
+        "the collapse is {} frames and the round pause is {} -- it would be cut off",
+        Clip::Defeat.length(),
+        sim::tuning::round_over_frames()
+    );
+}
