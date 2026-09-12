@@ -566,3 +566,187 @@ fn re_simulating_a_hunt_from_a_snapshot_lands_in_the_same_place() {
     }
     assert_eq!(replay.checksum(), truth, "re-simulation did not converge");
 }
+
+// ---------------------------------------------------------------------------
+// What a hunter leaves behind
+// ---------------------------------------------------------------------------
+
+/// Hold the creature still and put it right in front of the first hunter, so a
+/// test about a hazard is about the hazard rather than about chasing.
+fn parked() -> World {
+    let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
+    let mut beast = w.monster.expect("a hunt has a creature");
+    beast.pos = V3::new(w.players[0].pos.x.add(Fx::from_int(6)), Fx::ZERO, Fx::ZERO);
+    beast.yaw = Fx::from_raw(1 << 15);
+    beast.doing = Doing::Prowl;
+    beast.brain.think_left = u16::MAX;
+    w.monster = Some(beast);
+    w.players[0].pos = V3::new(w.players[0].pos.x, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
+    w
+}
+
+fn beast_health(w: &World) -> i32 {
+    w.monster.expect("a hunt has a creature").health
+}
+
+#[test]
+fn a_drain_field_hurts_the_creature() {
+    // It did not, for a long time, and the bug was invisible because it only
+    // showed up in a hunt: effects were applied to fighters and nobody else, so
+    // a Blood mage hunting alone put a spike in the ground, drained an empty
+    // patch of arena and got nothing back. Half a kit doing nothing in one of
+    // the game's two modes.
+    let mut w = parked();
+    let full = beast_health(&w);
+    for _ in 0..2 {
+        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    }
+    for _ in 0..200 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(
+        beast_health(&w) < full,
+        "the field never touched the creature"
+    );
+}
+
+#[test]
+fn a_drain_field_feeds_the_hunter_who_laid_it() {
+    // The other half. The Blood mage pays health to cast, so if the return only
+    // worked in versus the class would be unplayable in coop by its own
+    // numbers.
+    let mut w = parked();
+    for _ in 0..2 {
+        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    }
+    // Hurt, after the cast, so there is room on the bar for the return to show.
+    w.players[0].health = sim::tuning::max_health() / 2;
+    let paid = w.players[0].health;
+    let beast = beast_health(&w);
+    for _ in 0..200 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(beast_health(&w) < beast, "fixture: nothing was drained");
+    assert!(
+        w.players[0].health > paid,
+        "the field drained the creature and gave the caster none of it"
+    );
+}
+
+#[test]
+fn a_topple_is_a_disable_and_a_flinch_is_not() {
+    // Drawn on the same line as the fighters' own list. A topple is the long
+    // window the whole climb exists to earn and the one state the creature
+    // cannot act out of; a flinch is the cheap one that happens whenever it is
+    // hit hard enough, and it is excluded for exactly the reason hitstun is.
+    let state = |doing: Doing| {
+        let mut w = parked();
+        let mut beast = w.monster.expect("a hunt has a creature");
+        beast.doing = doing;
+        w.monster = Some(beast);
+        w.monster.expect("a hunt has a creature").disabled()
+    };
+    assert!(!state(Doing::Prowl), "a prowling creature is disabled");
+    assert!(
+        !state(Doing::Flinch { left: 10 }),
+        "a flinch counts, so the bonus fires on every heavy hit"
+    );
+    assert!(
+        state(Doing::Toppled { left: 200 }),
+        "a topple does not count, so the whole climb pays nothing extra"
+    );
+}
+
+#[test]
+fn a_blood_mage_hits_a_toppled_creature_harder() {
+    // The trait has to mean something in a hunt, or it is a versus-only feature
+    // on a class that has just had its versus-only bugs fixed.
+    //
+    // The creature is **frozen** and the fighter **placed**, rather than either
+    // of them being allowed to move: a toppled Ridgeback lies lower and pitched,
+    // so a fixture that walked into it would be measuring where its shoulder
+    // ended up. The spot is searched for, not typed, and the condition is that
+    // the claw lands on the *same part* in both states -- the hide's
+    // vulnerability differs part to part, and comparing two different parts
+    // would say nothing about the rule.
+    let claw = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    let still = |doing: Doing| {
+        let mut w = parked();
+        let mut beast = w.monster.expect("a hunt has a creature");
+        beast.pos = V3::ZERO;
+        beast.doing = doing;
+        w.monster = Some(beast);
+        w
+    };
+    let up = Doing::Prowl;
+    let over = Doing::Toppled { left: 400 };
+
+    let part_at = |w: &World, x: Fx| {
+        w.monster.expect("a hunt has a creature").part_struck(
+            V3::new(x.add(claw.reach), Fx::ZERO, Fx::ZERO),
+            claw.radius,
+            sim::tuning::body_height(),
+        )
+    };
+    let stand_at = (-80..0)
+        .map(|tenth| Fx::ratio(tenth, 10))
+        .find(|x| {
+            let a = part_at(&still(up), *x);
+            a.is_some() && a == part_at(&still(over), *x)
+        })
+        .expect("nowhere reaches the same part whether it is up or down");
+
+    let hit = |doing: Doing| {
+        let mut w = still(doing);
+        w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
+        let before = beast_health(&w);
+        for f in 0..(claw.startup + claw.active + 4) {
+            // Held down, and held still: the creature would otherwise stand up,
+            // walk off, or decide to bite.
+            let mut beast = w.monster.expect("a hunt has a creature");
+            beast.doing = doing;
+            beast.pos = V3::ZERO;
+            beast.speed = Fx::ZERO;
+            w.monster = Some(beast);
+            w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
+            let held = if f < 2 { Input::SHIFT | Input::LEFT } else { 0 };
+            w.advance([Input::new(held), Input::default()]);
+        }
+        before - beast_health(&w)
+    };
+
+    let standing = hit(up);
+    let floored = hit(over);
+    assert!(standing > 0, "fixture: the claw never reached the creature");
+    assert!(
+        floored > standing,
+        "a toppled creature took {floored} where a standing one took {standing}"
+    );
+}
+
+#[test]
+fn a_hazard_never_touches_a_hunting_partner() {
+    // Friendly fire is off in a hunt, and the condition is the creature being
+    // there rather than a flag -- the same rule direct hits already follow. A
+    // drain field was the one thing in the game that could kill a team-mate.
+    let mut w = parked();
+    for _ in 0..2 {
+        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    }
+    // Stand the partner in it, wherever it landed, and hold them there.
+    let mut stood_in_it = 0;
+    for _ in 0..200 {
+        if let Some(field) = w.effects.iter().flatten().next().copied() {
+            w.players[1].pos = V3::new(field.pos.x, w.players[1].pos.y, field.pos.z);
+            stood_in_it += 1;
+        }
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(stood_in_it > 60, "fixture: nobody stood in anything");
+    assert_eq!(
+        w.players[1].health,
+        sim::tuning::max_health(),
+        "a hunter's own hazard hurt their partner"
+    );
+}

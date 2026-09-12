@@ -15,9 +15,10 @@
 use crate::DT;
 use crate::aim;
 use crate::arena;
+use crate::bolt::{self, Beam, Flight, MAX_BOLTS, Struck};
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Mechanic};
-use crate::effects::{self, Effect, EffectKind, MAX_EFFECTS};
+use crate::effects::{Effect, EffectKind, GRASP_ARMS, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
@@ -47,6 +48,9 @@ const HALF_TURN: Fx = Fx::from_raw(1 << 15);
 pub const SLOT_POKE: u8 = 0;
 pub const SLOT_COMMITTED: u8 = 1;
 pub const SLOT_SPECIAL: u8 = 2;
+/// `E`. An ability on some classes and a state change on the rest -- see
+/// [`moves::bound`] and [`mechanic_action`].
+pub const SLOT_MECHANIC: u8 = 3;
 pub use crate::tuning::max_health;
 
 // The Bulwark's shield and the Reaver's shadow used to keep their numbers here,
@@ -214,6 +218,20 @@ pub struct Player {
     /// strongest wins** rather than compounding -- two slows that multiplied
     /// would freeze you, and every new source would make the last one worse.
     pub slow_mul: Fx,
+    /// Frames of root left. Your feet do not carry you, you cannot dodge and
+    /// you cannot jump; you can still turn, guard and swing.
+    ///
+    /// Separate from `slowed` rather than a slow of zero, and deliberately.
+    /// A slow is a tax on movement and the strongest one wins; a root is the
+    /// absence of movement and it also takes the two *buttons* that would
+    /// otherwise be a way out. Overloading one on the other would mean every
+    /// future slow had to be checked against "but is this one actually a
+    /// root", which is the kind of question that gets answered wrong once.
+    ///
+    /// The design allows exactly one hard stop and only behind a hard
+    /// condition (`ability-spec.md`); standing where all four arms of a Grasp
+    /// converge is that condition.
+    pub rooted: u16,
     /// Was the mechanic button down last frame? Part of the snapshot, so the
     /// press edge survives rollback.
     pub mechanic_held: bool,
@@ -316,14 +334,15 @@ pub struct Player {
     /// infinite acceleration and throws you straight back off.
     pub grip_settle: u8,
 
-    /// This shot passed through a fire pillar on its way out, so it hits as a
-    /// fire bolt rather than a plain poke. Decided once, on the frame the
-    /// move comes out, and cleared the same way every other move's first
-    /// active frame is entered -- see `docs/design/kits/elementalist.md`.
-    pub bolt_fire: bool,
-    /// This shot was aimed through a structure, which kicked it and ate the
-    /// hit -- the bolt never reaches a fighter beyond it.
-    pub bolt_blocked: bool,
+    /// How far the Elementalist's beam actually reached this frame, or zero
+    /// when no beam is out.
+    ///
+    /// The shot is a line, and where it *stopped* is as much a part of it as
+    /// where it started -- a beam that met a stone two metres out is two metres
+    /// long, not nine. Kept in the snapshot so the renderer draws the line the
+    /// simulation tested rather than a reconstruction of it that can drift, and
+    /// so a rollback redraws the same one. See [`crate::bolt`].
+    pub beam_reach: Fx,
     /// Where the move currently running was aimed.
     ///
     /// Locked when the move starts, for the same reason facing is: a target you
@@ -392,6 +411,53 @@ impl Player {
         self.slowed = self.slowed.max(frames);
     }
 
+    /// Take a root. The longest one on you wins, the same way a slow works.
+    pub fn root(&mut self, frames: u16) {
+        self.rooted = self.rooted.max(frames);
+    }
+
+    /// Pinned. Not a stun: you can still turn, guard and attack.
+    pub const fn is_rooted(&self) -> bool {
+        self.rooted > 0
+    }
+
+    /// Are this fighter's options gone?
+    ///
+    /// Rooted, staggered, or held. **Hitstun is deliberately not in the list**,
+    /// and that is the whole of the definition: hitstun happens on every hit
+    /// anybody lands, so counting it would turn "increased damage to disabled
+    /// enemies" into "increased damage from the second hit onward", which is a
+    /// flat damage bonus wearing a costume.
+    ///
+    /// What is in the list is what `ability-spec.md` calls a hard stop, and the
+    /// design only allows those behind a hard condition -- a parry for the
+    /// stagger, a grab for the hold, every arm of a Grasp for the root. Each
+    /// one had to be *earned*, which is exactly what a payoff should be waiting
+    /// on. Blockstun is not one: they blocked, which was the correct decision,
+    /// and rewarding the attacker for it would make guarding worse than
+    /// standing still.
+    pub const fn disabled(&self) -> bool {
+        self.rooted > 0 || matches!(self.action, Action::Stagger { .. } | Action::Held { .. })
+    }
+
+    /// Pay for a move out of your own health, and take the return on one.
+    ///
+    /// Both clamp. Self-damage stops at one -- dying to your own button is not
+    /// a decision anybody made, and the Dual mage's meter burn already works
+    /// this way -- and healing stops at full, so a Blood mage cannot bank
+    /// health above the bar by farming a field.
+    pub fn spend_health(&mut self, cost: i32) {
+        if cost > 0 {
+            self.health = (self.health - cost).max(1);
+        }
+    }
+
+    pub fn heal(&mut self, amount: i32) {
+        if amount > 0 && self.health > 0 {
+            self.health = (self.health + amount).min(t::max_health());
+        }
+    }
+
     /// Standing on the creature.
     pub fn aboard(&self) -> bool {
         self.mount != monster::NO_PART
@@ -432,6 +498,7 @@ impl Default for Player {
             crouching: false,
             slowed: 0,
             slow_mul: Fx::ONE,
+            rooted: 0,
             mechanic_held: false,
             held_by: NOBODY,
             space_held: false,
@@ -448,8 +515,7 @@ impl Default for Player {
             carry_yaw: Fx::ZERO,
             grip_vel: V3::ZERO,
             grip_settle: 0,
-            bolt_fire: false,
-            bolt_blocked: false,
+            beam_reach: Fx::ZERO,
             aim_at: V3::ZERO,
             aim_dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
         }
@@ -464,6 +530,9 @@ pub struct World {
     pub phase: Phase,
     /// Things moves have left behind. Fixed size: see `effects`.
     pub effects: [Option<Effect>; MAX_EFFECTS],
+    /// Fire bolts in flight. The only projectile a fighter throws that is not
+    /// part of somebody's mechanic -- see [`crate::bolt`].
+    pub bolts: Flight,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -486,6 +555,7 @@ impl World {
             players: [Player::default(); MAX_PLAYERS],
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
+            bolts: [None; MAX_BOLTS],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -509,6 +579,9 @@ impl World {
 
     /// Put both fighters back on their marks. Keeps round wins and classes.
     fn reset_positions(&mut self) {
+        // Nothing in the air survives a round. A bolt still flying when the
+        // last one ended would land on somebody standing on their mark.
+        self.bolts = [None; MAX_BOLTS];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -628,45 +701,50 @@ impl World {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
             }
-            if let Some(kind) = EffectKind::from_code(m.effect) {
+            if let Some(leaves) = EffectKind::from_code(m.effect) {
                 // Where the move was aimed when it was thrown, already solved
                 // against the terrain and the move's reach. It used to be a
                 // fixed distance straight ahead at floor level, which meant an
                 // area ability could only ever be placed by walking.
-                spawn_effect(&mut self.effects, kind, i as u8, p.aim_at);
-            }
-
-            // The Elementalist's auto reads what it is aimed through, rather
-            // than always poking a fighter at short reach. Decided once, here,
-            // on the frame the shot comes out -- and reset every time whether
-            // or not it applies, so a stale decision from an earlier Bolt can
-            // never leak into a move that is not Bolt.
-            //
-            // Along `aim_dir` from the cast origin, not `facing` from the
-            // feet: `facing` is flattened to the horizontal, so a shot aimed
-            // up at a structure would never even see it. This is the real
-            // three-dimensional line the shot travels, matching `crate::aim`.
-            self.players[i].bolt_fire = false;
-            self.players[i].bolt_blocked = false;
-            if p.class == Class::Elementalist && kind == SLOT_POKE {
-                let from = aim::origin(p.pos);
-                let to = from.add(p.aim_dir.scale(t::bolt_aim_range()));
-                let stone_hit = stones::first_along_shot(&field, from, to);
-                let pillar_dist = effects::first_fire_pillar_along(&self.effects, from, to);
-                let stone_closer = match (stone_hit, pillar_dist) {
-                    (Some((_, sd)), Some(pd)) => sd.raw() <= pd.raw(),
-                    (Some(_), None) => true,
-                    (None, _) => false,
+                //
+                // The two that travel start at the caster's hand instead, and
+                // go *along* the aim rather than to it: a blade thrown at
+                // something four metres away still flies its full distance, and
+                // the crosshair picked the line, not the landing spot.
+                //
+                // The line is from the hand **through** what the crosshair is
+                // on, which is the rule the whole aiming pass is built on --
+                // see `crate::aim`. Not `aim_dir`, which is the ray out of the
+                // *eye*: the two are parallel rather than convergent, so a
+                // blade thrown along the eye's ray at a spot on the floor four
+                // metres away passes about a metre over the head of whoever is
+                // standing on it.
+                let (from, along) = if leaves.travels() {
+                    let hand = aim::origin(p.pos);
+                    let line = p.aim_at.sub(hand);
+                    // Degenerate only if the crosshair resolved onto the hand
+                    // itself, which the reach sphere makes very hard; the raw
+                    // look direction is the honest fallback.
+                    let along = if line.len().raw() > Fx::ratio(1, 10).raw() {
+                        line.normalized()
+                    } else {
+                        p.aim_dir
+                    };
+                    (hand, along)
+                } else {
+                    (p.aim_at, V3::ZERO)
                 };
-                if stone_closer {
-                    if let Some((idx, _)) = stone_hit {
-                        stones::kick(&mut self.players, idx, p.aim_dir);
-                        self.players[i].bolt_blocked = true;
-                    }
-                } else if pillar_dist.is_some() {
-                    self.players[i].bolt_fire = true;
-                }
+                spawn_effect(
+                    &mut self.effects,
+                    Effect::cast(leaves, i as u8, p.class, kind, from, along),
+                );
             }
+        }
+
+        // The Elementalist's auto: a beam, resolved on the spot. See
+        // `crate::bolt` and `docs/design/kits/elementalist.md`.
+        for i in 0..MAX_PLAYERS {
+            self.fire_the_beam(i);
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
@@ -681,7 +759,21 @@ impl World {
             let defender = 1 - attacker;
             if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
+                // What the blow is actually worth, before it lands: a killing
+                // hit on someone with forty health left is worth forty, not its
+                // listed damage, so leeching cannot pay out of an empty bar.
+                let dealt = if hit.blocked || hit.parried {
+                    0
+                } else {
+                    hit.damage.min(snapshot[defender].health)
+                };
                 apply_hit(&mut self.players[defender], hit);
+                let owed = snapshot[attacker]
+                    .action
+                    .attack_kind()
+                    .map(|kind| moves::get(snapshot[attacker].class, kind).leeched(dealt))
+                    .unwrap_or(0);
+                self.players[attacker].heal(owed);
                 self.players[attacker].hit_used = true;
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
@@ -740,7 +832,13 @@ impl World {
             self.trade_with_the_creature();
         }
 
-        step_effects(&mut self.effects, &mut self.players);
+        self.step_effects();
+        bolt::step(
+            &mut self.bolts,
+            &mut self.players,
+            self.monster.is_none(),
+            &mut self.monster,
+        );
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -798,14 +896,30 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(crate::oven::hash());
         h.write_u32(self.frame);
+        for b in &self.bolts {
+            match b {
+                Some(b) => {
+                    h.write_u32(b.owner as u32 + 1);
+                    hash_v3(&mut h, &b.pos);
+                    hash_v3(&mut h, &b.dir);
+                    h.write_i32(b.travelled.raw());
+                }
+                None => h.write_u32(0),
+            }
+        }
         for e in &self.effects {
             match e {
                 Some(e) => {
                     h.write_u32(e.kind as u32 + 1);
                     h.write_u32(e.owner as u32);
+                    h.write_u32(e.class as u32);
+                    h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
+                    h.write_u32(e.struck as u32);
+                    h.write_i32(e.banked);
                     hash_v3(&mut h, &e.pos);
+                    hash_v3(&mut h, &e.dir);
                 }
                 None => h.write_u32(0),
             }
@@ -821,6 +935,7 @@ impl World {
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
             h.write_i32(p.slow_mul.raw());
+            h.write_u32(p.rooted as u32);
             h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
@@ -852,8 +967,7 @@ impl World {
             hash_v3(&mut h, &p.grip_vel);
             h.write_i32(p.carry_yaw.raw());
             h.write_u32(p.grip_settle as u32);
-            h.write_u32(p.bolt_fire as u32);
-            h.write_u32(p.bolt_blocked as u32);
+            h.write_i32(p.beam_reach.raw());
             hash_mechanic(&mut h, &p.mechanic);
         }
         match &self.monster {
@@ -901,23 +1015,29 @@ impl Default for World {
     }
 }
 
+/// One landed attack, whatever threw it.
+///
+/// `pub(crate)` because a fire bolt is an attack that outlives the move that
+/// lit it and applies itself from [`crate::bolt`] -- and it has to arrive
+/// through the same door as everything else, or guard would stop a sword and
+/// not a bolt.
 #[derive(Clone, Copy)]
-struct Hit {
-    damage: i32,
-    hitstun: u16,
-    blockstun: u16,
-    knockback: Fx,
+pub(crate) struct Hit {
+    pub damage: i32,
+    pub hitstun: u16,
+    pub blockstun: u16,
+    pub knockback: Fx,
     /// Upward speed handed to the victim. This is what takes someone off the
     /// ground with an uppercut instead of shoving them along it.
-    launch: Fx,
+    pub launch: Fx,
     /// Frames the victim is held at the attacker's arm's length. Zero is a
     /// normal hit.
-    grabs: u16,
+    pub grabs: u16,
     /// Who threw it, so a grab knows whose arm to hang from.
-    by: u8,
-    dir: V3,
-    blocked: bool,
-    parried: bool,
+    pub by: u8,
+    pub dir: V3,
+    pub blocked: bool,
+    pub parried: bool,
 }
 
 /// The attack volume a fighter currently has out.
@@ -927,17 +1047,23 @@ struct Hit {
 /// illustrates is worse than no overlay: it is confidently wrong at exactly the
 /// moment you are trying to work out why something did not connect.
 ///
-/// It is a **capsule**: a line from `from` to `to`, thickened by `radius`. A
-/// disc at arm's length -- which is what every move in the game used to be, and
-/// what every move outside the Champion's list still is -- is the degenerate
-/// case where the two ends coincide, and it carries `flat` to say that the old
-/// rule applies to it: distance measured in the horizontal plane only, with no
-/// top and no bottom. See `moves::Shape`.
+/// A **capsule between two points**, because most of what the game throws is a
+/// line -- the Elementalist's beam, and every one of the Champion's weapons --
+/// and a bubble is the case where both ends are the same point. Keeping one
+/// shape rather than two is what lets the overlay, the creature's hit test and
+/// the web tool all stay honest about every kind of attack without each growing
+/// a special case.
+///
+/// `flat` says which rule tests it. A disc at arm's length -- what every move
+/// in the game used to be, and what everything outside the Champion's list
+/// still is -- is measured in the horizontal plane only, with no top and no
+/// bottom. See `moves::Shape`.
 #[derive(Clone, Copy, Debug)]
 pub struct Hitbox {
-    /// The hand end of the weapon.
+    /// Where the volume starts: the hand end of a weapon, and the point
+    /// abilities come out of for a beam.
     pub from: V3,
-    /// The head end. Equal to `from` for a disc.
+    /// Where it ends. Equal to `from` for a disc.
     pub to: V3,
     /// The attack's radius. A defender is hit when their body overlaps it, so
     /// the test threshold is this plus `BODY_RADIUS`.
@@ -954,13 +1080,15 @@ pub struct Hitbox {
 
 impl Hitbox {
     /// The middle of the volume. What a single-point overlay wants to draw at,
-    /// and what the browser build reports.
+    /// what the browser build reports, and the same point as `from` for a disc.
     pub fn centre(&self) -> V3 {
-        V3::new(
-            self.from.x.add(self.to.x).mul(Fx::ratio(1, 2)),
-            self.from.y.add(self.to.y).mul(Fx::ratio(1, 2)),
-            self.from.z.add(self.to.z).mul(Fx::ratio(1, 2)),
-        )
+        self.from
+            .add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))
+    }
+
+    /// Is this volume a line rather than a bubble?
+    pub fn is_a_beam(&self) -> bool {
+        self.from != self.to
     }
 }
 
@@ -972,18 +1100,37 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         return None;
     };
     let m = moves::get(p.class, kind);
+    // Two ways to have no volume, and both answer `None` here.
+    //
+    // A move with no radius is a gesture that puts something into the world,
+    // and the thing it put there does all the hitting -- the Blood mage's
+    // thrown blade and her Grasp are both that shape. Answering `None` keeps
+    // the caster's own body from quietly poking people at point blank while
+    // the ability is elsewhere. A move with no *shape* puts nothing anywhere:
+    // the Champion's pole vault is movement.
     if !m.strikes() {
         return None;
+    }
+    // The Elementalist's auto is a line out of her chest along the crosshair,
+    // ending wherever it stopped -- at a stone, a body, a pillar, or its own
+    // range. It used to be a circle a fixed distance in front of her, which is
+    // what made aiming up do nothing at all. See `crate::bolt`.
+    if bolt::throws_a_beam(p, kind) {
+        let beam = beam_of(p, kind);
+        return Some(Hitbox {
+            from: beam.from,
+            to: beam.at(p.beam_reach),
+            radius: beam.radius,
+            flat: false,
+            hits_crouching: m.hits_crouching,
+            unblockable: m.unblockable,
+            spent: p.hit_used,
+        });
     }
     // An aimed move hits where it was aimed. A swing does not: a sword is a
     // body moving, and pointing the camera at the floor should not put the
     // blade there. Only the moves that *place* something are aimed, and they
     // are the ones the crosshair is promising a spot to.
-    //
-    // The Elementalist's auto is aimed too, even though it places nothing --
-    // it is a skillshot along the crosshair's own line, not a fixed poke in
-    // front of her. A fire-charged shot draws the same line much further,
-    // which is the only thing `bolt_fire` changes here.
     let disc = |at: V3| Hitbox {
         from: at,
         to: at,
@@ -995,13 +1142,6 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     };
     if aimed(&m) {
         return Some(disc(p.aim_at));
-    }
-    if p.class == Class::Elementalist && kind == SLOT_POKE {
-        return Some(disc(if p.bolt_fire {
-            aim::origin(p.pos).add(p.aim_dir.scale(t::bolt_aim_range()))
-        } else {
-            p.aim_at
-        }));
     }
     let (from, to) = match m.shape {
         moves::Shape::None => return None,
@@ -1080,19 +1220,50 @@ fn swing_progress(m: &moves::Move, left: u16) -> (Fx, bool) {
     (through, index % 2 == 1)
 }
 
+/// The line the Elementalist's auto is fired along.
+///
+/// Its length and thickness are the move table's own `reach` and `radius`,
+/// rather than knobs of their own: the beam *is* the move, so its range is the
+/// move's range and the frame table tells the truth about it.
+pub fn beam_of(p: &Player, kind: u8) -> Beam {
+    let m = moves::get(p.class, kind);
+    Beam {
+        from: aim::origin(p.pos),
+        dir: p.aim_dir,
+        range: m.reach,
+        radius: m.radius,
+    }
+}
+
 /// Does this move place something, and therefore go where it was aimed?
 fn aimed(m: &moves::Move) -> bool {
     EffectKind::from_code(m.effect).is_some()
+}
+
+/// What a class's damage is multiplied by against a victim who cannot move.
+///
+/// One function, used by every path a fighter can deal damage down: a swing, a
+/// blade in the air, an arm of a Grasp, a field ticking, and all of the same
+/// against the creature. They used to be five separate pieces of arithmetic and
+/// this is the kind of rule that is only worth having if it is true everywhere
+/// -- a class trait that applies to three of a class's four abilities is not a
+/// trait, it is a bug somebody will find in a match.
+fn preying(class: Class, victim_disabled: bool) -> Fx {
+    if victim_disabled && class.preys_on_the_disabled() {
+        t::disabled_damage_mul()
+    } else {
+        Fx::ONE
+    }
 }
 
 fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
-    // Aimed through a structure: the bolt kicked it instead, and never
-    // reaches whatever is standing beyond it. See the aim-through block in
-    // `advance` and `docs/design/kits/elementalist.md`.
-    if attacker.class == Class::Elementalist && kind == SLOT_POKE && attacker.bolt_blocked {
+    // The Elementalist's auto already happened. It is a ray fired the moment
+    // the move comes out, and what it does depends on what it met first --
+    // none of which this loop can express. See `World::fire_the_beam`.
+    if bolt::throws_a_beam(attacker, kind) {
         return None;
     }
     let box_out = hitbox(attacker)?;
@@ -1108,23 +1279,10 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         return None;
     }
 
-    // Every other move is a sphere sitting at the middle of the volume. The
-    // Elementalist's auto is a real skillshot instead: it can catch the
-    // defender anywhere along the line it travels, not only at the point the
-    // aim resolver picked to draw the hitbox at -- which is what makes a shot
-    // aimed past someone still able to catch them on the way through, and,
-    // fire-charged, catch them far beyond the reach the plain poke ever had.
+    let damage_mul = preying(attacker.class, defender.disabled());
+
     let reach = box_out.radius.add(t::body_radius());
-    let hit_at_all = if attacker.class == Class::Elementalist && kind == SLOT_POKE {
-        let origin = aim::origin(attacker.pos);
-        let range = if attacker.bolt_fire {
-            t::bolt_aim_range()
-        } else {
-            m.reach
-        };
-        let far = origin.add(attacker.aim_dir.scale(range));
-        crate::math::ray_hits_flat(origin, far, defender.pos, reach).is_some()
-    } else if box_out.flat {
+    let hit_at_all = if box_out.flat {
         // The original rule, kept for every move that has not been given a
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
@@ -1146,25 +1304,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         return None;
     }
 
-    // Was the defender facing the attack? Guard covers an arc, not a bubble.
-    let to_attacker = attacker.pos.sub(defender.pos).normalized();
-    let facing_it = defender.facing.dot(to_attacker).raw() >= t::guard_arc_cos().raw();
-    // A grapple goes through guard entirely. That is what stops blocking from
-    // being a solved strategy -- see defense.md.
-    let guarding = !m.unblockable && defender.action.guarding() && facing_it;
-    let parried = !m.unblockable
-        && matches!(defender.action, Action::Guard { held } if held < t::parry_window())
-        && facing_it;
-
-    // Aimed through a fire pillar: the same shot, empowered rather than
-    // replaced. A pillar is a hazard to walk into, not a wall, so it does not
-    // stop the bolt the way a structure does -- it charges it instead.
-    let (fire_damage_mul, fire_knockback_mul) =
-        if attacker.class == Class::Elementalist && kind == SLOT_POKE && attacker.bolt_fire {
-            (t::bolt_fire_damage_mul(), t::bolt_fire_knockback_mul())
-        } else {
-            (Fx::ONE, Fx::ONE)
-        };
+    let (guarding, parried) = guard_against(defender, attacker.pos, m.unblockable);
 
     // A fighter already off the ground has nothing to brace against, so the
     // same swing carries them much further -- and a launch aimed *downward*
@@ -1186,10 +1326,10 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     };
 
     Some(Hit {
-        damage: Fx::from_int(m.damage).mul(fire_damage_mul).to_int(),
+        damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
-        knockback: m.knockback.mul(fire_knockback_mul).mul(air_mul),
+        knockback: m.knockback.mul(air_mul),
         launch,
         grabs: m.grabs,
         by,
@@ -1199,7 +1339,29 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     })
 }
 
-fn apply_hit(defender: &mut Player, hit: Hit) {
+/// Is this defender guarding against something arriving from `from`, and did
+/// they raise it late enough to parry?
+///
+/// Guard covers an arc, not a bubble: turning your back on an attack is not
+/// blocking it. A grapple ignores the whole question, which is what stops
+/// blocking from being a solved strategy -- see defense.md.
+///
+/// Shared rather than inlined because there are now three kinds of attack --
+/// a swing, a beam, and a bolt in flight -- and a guard that stopped two of
+/// them would be worse than one that stopped none.
+pub(crate) fn guard_against(defender: &Player, from: V3, unblockable: bool) -> (bool, bool) {
+    if unblockable {
+        return (false, false);
+    }
+    let toward = from.sub(defender.pos).normalized();
+    let facing_it = defender.facing.dot(toward).raw() >= t::guard_arc_cos().raw();
+    let guarding = defender.action.guarding() && facing_it;
+    let parried =
+        facing_it && matches!(defender.action, Action::Guard { held } if held < t::parry_window());
+    (guarding, parried)
+}
+
+pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.parried {
         // The parry itself costs the defender nothing. The attacker eats the
         // stagger, which the caller applies.
@@ -1431,16 +1593,22 @@ fn step_player(
                 && p.class != Class::Champion
                 && p.mechanic_ready(SLOT_SPECIAL)
             {
-                p.hit_used = false;
-                lock_aim(p, SLOT_SPECIAL, input, field);
-                arm_aerial(p, SLOT_SPECIAL, input);
-                Action::Startup {
-                    kind: SLOT_SPECIAL,
-                    left: moves::get(p.class, 2).startup,
-                }
+                begin_move(p, SLOT_SPECIAL, input, field, true)
             } else if pressed_mechanic {
-                mechanic_action(p, input, field);
-                Action::Free
+                // `E` is the class mechanic, and on most classes that is an
+                // instant change of state with no frames to it -- throw the
+                // shield, Rush, place the shadow, raise a structure. Where the
+                // class puts an ability there instead -- the Blood mage, whose
+                // mechanic is health and so has nothing to toggle -- it is
+                // thrown like any other move, with a startup you can be
+                // punished during and a cost you pay on the press.
+                match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    Some(slot) => begin_move(p, slot, input, field, true),
+                    None => {
+                        mechanic_action(p, input, field);
+                        Action::Free
+                    }
+                }
             }
             // The Champion's three mouse buttons are three weapons, and where
             // its feet are decides which of that weapon's moves comes out --
@@ -1449,29 +1617,21 @@ fn step_player(
             // branch, because right click means spear here and guard
             // everywhere else.
             else if let Some(kind) = champion_move(p, input) {
-                p.hit_used = false;
-                lock_aim(p, kind, input, field);
-                arm_aerial(p, kind, input);
                 begin_champion(p, kind);
-                Action::Startup {
-                    kind,
-                    left: moves::get(p.class, kind).startup,
-                }
+                begin_move(p, kind, input, field, true)
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
                     SLOT_COMMITTED
                 } else {
                     SLOT_POKE
                 };
-                p.hit_used = false;
                 steer_meter(p, input, kind);
-                lock_aim(p, kind, input, field);
-                arm_aerial(p, kind, input);
-                Action::Startup {
-                    kind,
-                    left: moves::get(p.class, kind).startup,
-                }
-            } else if input.has(Input::SHIFT) && !input.any_click() && (ax != 0 || az != 0) {
+                begin_move(p, kind, input, field, true)
+            } else if input.has(Input::SHIFT)
+                && !input.any_click()
+                && (ax != 0 || az != 0)
+                && !p.is_rooted()
+            {
                 // Shift plus a direction dodges. It used to be space plus a
                 // direction, which meant that pressing the jump button while
                 // moving -- which is most of the time -- did not jump. Space is
@@ -1551,6 +1711,11 @@ fn step_player(
         if steering {
             air_accelerate(p, move_dir(p.aim(input), ax, az), mob.air_speed);
         }
+    } else if p.is_rooted() && p.grounded {
+        // Pinned. Not stunned: the arms are around your legs, so you can still
+        // turn, guard and swing at whoever put them there.
+        p.vel.x = Fx::ZERO;
+        p.vel.z = Fx::ZERO;
     } else if p.action.actionable() && steering {
         let speed = if p.crouching {
             t::crouch_move_speed()
@@ -1590,7 +1755,11 @@ fn step_player(
     // rather than reset it to a flat takeoff speed. Ordinary ground has
     // nothing to stack with -- standing still on it is vertical speed zero --
     // so this changes nothing there.
-    if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
+    //
+    // A root takes the jump away as well as the walk. That is what separates it
+    // from a very heavy slow, and it is why it is gated behind landing every
+    // arm of a Grasp rather than being handed out for one.
+    if input.has(Input::SPACE) && p.grounded && p.action.actionable() && !p.is_rooted() {
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
@@ -1903,6 +2072,29 @@ fn start_rush(p: &mut Player, input: Input) -> bool {
 ///
 /// The same commitment facing is: once the move is out, the mouse moves the
 /// camera and not the ability. See `Player::aim_at`.
+/// Start a move: commit to where it is aimed, pay what it costs, and enter the
+/// startup frames.
+///
+/// One function for all four buttons, because everything here is a property of
+/// *starting a move* rather than of which key started it. `aerial` is the one
+/// difference: a rider has no airtime to arm.
+fn begin_move(p: &mut Player, kind: u8, input: Input, field: &Field, aerial: bool) -> Action {
+    p.hit_used = false;
+    lock_aim(p, kind, input, field);
+    if aerial {
+        arm_aerial(p, kind, input);
+    }
+    let m = moves::get(p.class, kind);
+    // Health is spent on the press, never on the hit. Missing is the
+    // punishment, which is the whole of the Blood mage's economy -- see
+    // `docs/design/kits/blood-mage.md`.
+    p.spend_health(m.cost);
+    Action::Startup {
+        kind,
+        left: m.startup,
+    }
+}
+
 fn lock_aim(p: &mut Player, kind: u8, input: Input, field: &Field) {
     let m = moves::get(p.class, kind);
     let grounded = EffectKind::from_code(m.effect).is_some_and(|k| k.grounded());
@@ -2414,64 +2606,281 @@ pub fn parry_window() -> u16 {
 /// frame costs you whether you walked in or were knocked in. The alternative --
 /// checking before movement -- would let someone walk through a fire pillar
 /// untouched on the frame they entered it.
-fn step_effects(effects: &mut [Option<Effect>; MAX_EFFECTS], players: &mut [Player; MAX_PLAYERS]) {
-    for slot in effects.iter_mut() {
-        let Some(effect) = slot else { continue };
-        effect.age += 1;
-        if effect.age >= effect.life {
-            *slot = None;
-            continue;
+///
+/// A method on `World` rather than a free function over the fighters, because
+/// an effect can touch the creature too. It could not, for a long time, and the
+/// result was that half the Blood mage's kit did nothing at all in a hunt: the
+/// spike went into the ground, drained an empty patch of arena and expired. A
+/// hazard that only exists in versus is not a hazard.
+impl World {
+    fn step_effects(&mut self) {
+        for i in 0..MAX_EFFECTS {
+            let Some(mut effect) = self.effects[i] else {
+                continue;
+            };
+            let turning = !effect.returning();
+            effect.age += 1;
+            // The frame the blade turns it forgets everyone it cut on the way
+            // out, so the way back can cut them again. "Damage on both passes"
+            // is only worth saying if the same target can eat both.
+            if effect.kind == EffectKind::Bloodletter && turning && effect.returning() {
+                effect.forget_hits();
+            }
+            if effect.age >= effect.life {
+                self.effects[i] = None;
+                self.pay_out(&effect);
+                continue;
+            }
+            self.apply_effect(&mut effect);
+            self.effects[i] = Some(effect);
         }
-        apply_effect(*effect, players);
-    }
-    // The slow's tail, for every source of one -- a drain field here, a stone
-    // churning under your feet in `stones`. It runs down before either of them
-    // gets to refresh it, so standing in one holds the slow at full strength and
-    // walking out of it lets the tail run.
-    for p in players.iter_mut() {
-        p.slowed = p.slowed.saturating_sub(1);
-        if p.slowed == 0 {
-            p.slow_mul = Fx::ONE;
+        // The slow's tail, for every source of one -- a drain field here, a
+        // stone churning under your feet in `stones`. It runs down before either
+        // of them gets to refresh it, so standing in one holds the slow at full
+        // strength and walking out of it lets the tail run. A root has no tail:
+        // it is a fixed number of frames and then it is over.
+        for p in self.players.iter_mut() {
+            p.slowed = p.slowed.saturating_sub(1);
+            if p.slowed == 0 {
+                p.slow_mul = Fx::ONE;
+            }
+            p.rooted = p.rooted.saturating_sub(1);
         }
     }
-}
 
-fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
-    let radius = t::body_radius();
-    let height = t::body_height();
-    for (i, p) in players.iter_mut().enumerate() {
-        // An effect never touches the fighter who made it. A fire pillar you
-        // cannot stand next to is a fire pillar you cannot use.
-        if i as u8 == effect.owner || p.health <= 0 {
-            continue;
+    /// What an expiring effect still owes its caster.
+    ///
+    /// Only the blade owes anything: everything else paid as it went. Catching
+    /// it is the payday, which is what makes the ability a small commitment
+    /// rather than a free poke -- the cut lands at once and the health has to
+    /// survive the flight home.
+    fn pay_out(&mut self, effect: &Effect) {
+        if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
+            return;
         }
+        let owed = effect.leeched(effect.banked);
+        if let Some(caster) = self.players.get_mut(effect.owner as usize) {
+            caster.heal(owed);
+        }
+    }
+
+    /// What one effect does to everything standing in it this frame.
+    ///
+    /// Takes the effect by `&mut` because two of them keep books: which arm has
+    /// caught whom, and how much blood a blade is carrying home.
+    fn apply_effect(&mut self, effect: &mut Effect) {
         match effect.kind {
             EffectKind::FirePillar => {
+                if !effect.ticks_now() {
+                    return;
+                }
                 let (base, column) = effect.pillar_volumes();
-                let caught = base.contains(effect.pos, p.pos, radius, height)
-                    || column.contains(effect.pos, p.pos, radius, height);
-                if caught && effect.ticks_now() {
-                    p.health = (p.health - t::pillar_damage()).max(0);
+                let radius = t::body_radius();
+                let height = t::body_height();
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    if !self.effects_reach(i, effect.owner) {
+                        continue;
+                    }
+                    if base.contains(effect.pos, p.pos, radius, height)
+                        || column.contains(effect.pos, p.pos, radius, height)
+                    {
+                        self.drain(i, effect);
+                    }
+                }
+                self.gore_the_creature(effect, 0, effect.pos, base.radius);
+            }
+
+            // Drain *and* slow. The slow is the part that matters: damage alone
+            // makes a puddle you step out of, and the slow is what makes leaving
+            // cost time -- which is what turns it into something you put
+            // *between* yourself and someone else.
+            EffectKind::BlackSpike => {
+                let volume = effect.spike_volume();
+                let ticking = effect.ticks_now();
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    if !self.effects_reach(i, effect.owner)
+                        || !volume.contains(effect.pos, p.pos, t::body_radius(), p.hurt_height())
+                    {
+                        continue;
+                    }
+                    self.players[i].slow(t::slow_frames(), t::spike_slow());
+                    if ticking {
+                        self.drain(i, effect);
+                    }
+                }
+                if ticking {
+                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
                 }
             }
-            EffectKind::BlackSpike => {
-                let flat = V3::new(
-                    p.pos.x.sub(effect.pos.x),
-                    Fx::ZERO,
-                    p.pos.z.sub(effect.pos.z),
-                )
-                .flat_len();
-                if flat.raw() <= effect.field_radius().add(radius).raw() {
-                    // Drain *and* slow: the field punishes standing in it and
-                    // makes leaving it slow, which is what turns a damage
-                    // puddle into a positioning tool.
-                    p.slow(t::slow_frames(), t::spike_slow());
-                    if effect.ticks_now() {
-                        p.health = (p.health - t::spike_drain()).max(0);
+
+            // The blade. One pass out, one back, and it cuts each victim once
+            // per pass. What it takes is banked rather than paid, and arrives
+            // when the blade does -- see `pay_out`.
+            EffectKind::Bloodletter => {
+                let at = effect.blade_at();
+                let radius = effect.field_radius();
+                let pass = effect.pass();
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(pass, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
                     }
+                    effect.take_hit(pass, i);
+                    effect.banked += self.cut(i, effect, at);
+                }
+                effect.banked += self.gore_the_creature(effect, pass, at, radius);
+            }
+
+            // Four arms, each its own skillshot, and all four of them the price
+            // of the root. Every arm is tested separately and remembers who it
+            // has already caught, because "hit by all four" is a question about
+            // *different* arms and one shared mask could not tell them apart.
+            EffectKind::Grasp => {
+                let radius = effect.field_radius();
+                for arm in 0..GRASP_ARMS {
+                    let at = effect.arm_at(arm);
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(arm, i)
+                            || !self.inside(i, at, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(arm, i);
+                        let dealt = self.cut(i, effect, at);
+                        let owed = effect.leeched(dealt);
+                        self.players[effect.owner as usize].heal(owed);
+                        // Caught by every one of them. The arms close, and for
+                        // a moment you are not going anywhere.
+                        if effect.parts_landed(i, GRASP_ARMS) == GRASP_ARMS {
+                            self.players[i].root(t::grasp_root());
+                        }
+                    }
+                    let dealt = self.gore_the_creature(effect, arm, at, radius);
+                    let owed = effect.leeched(dealt);
+                    self.players[effect.owner as usize].heal(owed);
                 }
             }
         }
+    }
+
+    /// Can this effect touch this fighter at all?
+    ///
+    /// Never its own caster -- a fire pillar you cannot stand next to is a fire
+    /// pillar you cannot use -- never a corpse, and never a partner: in a hunt
+    /// the fighters cannot hurt each other, and the condition is the creature's
+    /// presence rather than a separate flag, exactly as it is for direct hits in
+    /// `advance`. Without this, a Blood mage's field was the one thing in the
+    /// game that could kill a team-mate.
+    fn effects_reach(&self, victim: usize, owner: u8) -> bool {
+        victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
+    }
+
+    /// Is this fighter's body inside a sphere?
+    ///
+    /// Flat distance for the width, like every other hit test in the game, and
+    /// a vertical overlap so that a blade thrown over somebody's head misses.
+    fn inside(&self, victim: usize, at: V3, radius: Fx) -> bool {
+        let p = self.players[victim];
+        let flat = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z)).flat_len();
+        flat.raw() <= radius.add(t::body_radius()).raw()
+            && p.pos.y.add(p.hurt_height()).raw() >= at.y.sub(radius).raw()
+            && p.pos.y.raw() <= at.y.add(radius).raw()
+    }
+
+    /// One tick of a field. Damage, and the caster's share of it straight back.
+    ///
+    /// Paid on the tick rather than banked to the end, which is the whole
+    /// difference between a Blood mage who can stand in a fight trading and one
+    /// who has to survive until a timer runs out to be repaid.
+    fn drain(&mut self, victim: usize, effect: &Effect) {
+        let damage = Fx::from_int(effect.damage())
+            .mul(preying(effect.class, self.players[victim].disabled()))
+            .to_int();
+        let dealt = damage.min(self.players[victim].health);
+        self.players[victim].health = (self.players[victim].health - damage).max(0);
+        let owed = effect.leeched(dealt);
+        self.players[effect.owner as usize].heal(owed);
+    }
+
+    /// A travelling effect connecting with a fighter. Returns what landed.
+    ///
+    /// Goes through the same `apply_hit` a swing does, so it stuns, knocks back
+    /// and can be blocked exactly like one. That is the difference between a
+    /// thrown blade and a puddle of fire: the blade is an attack, and guard is
+    /// an answer to attacks. Knockback runs away from the *thing that hit you*
+    /// rather than from the caster, who may be twenty metres behind it.
+    fn cut(&mut self, victim: usize, effect: &Effect, from: V3) -> i32 {
+        let m = effect.source();
+        let p = self.players[victim];
+        if p.action.invulnerable() || (p.crouching && !m.hits_crouching) {
+            return 0;
+        }
+        let away = V3::new(p.pos.x.sub(from.x), Fx::ZERO, p.pos.z.sub(from.z)).normalized();
+        let facing_it = p.facing.dot(away.scale(Fx::ONE.neg())).raw() >= t::guard_arc_cos().raw();
+        let guarding = !m.unblockable && p.action.guarding() && facing_it;
+        let parried = !m.unblockable
+            && matches!(p.action, Action::Guard { held } if held < t::parry_window())
+            && facing_it;
+        let damage = Fx::from_int(m.damage)
+            .mul(preying(effect.class, p.disabled()))
+            .to_int();
+        let dealt = if guarding || parried {
+            0
+        } else {
+            damage.min(p.health)
+        };
+        apply_hit(
+            &mut self.players[victim],
+            Hit {
+                damage,
+                hitstun: m.hitstun,
+                blockstun: m.blockstun,
+                knockback: m.knockback,
+                launch: m.launch,
+                grabs: 0,
+                by: effect.owner,
+                dir: away,
+                blocked: guarding,
+                parried,
+            },
+        );
+        if parried {
+            self.players[victim].parried = PARRY_FLOURISH;
+        }
+        dealt
+    }
+
+    /// Land an effect on whichever part of the creature is inside it, once per
+    /// part of the effect. Returns what went in after the hide, or nought.
+    fn gore_the_creature(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) -> i32 {
+        if effect.already_hit(part, QUARRY_VICTIM) {
+            return 0;
+        }
+        let Some(mut beast) = self.monster else {
+            return 0;
+        };
+        if !beast.alive() {
+            return 0;
+        }
+        let Some(struck) = beast.part_struck(at, radius, t::body_height()) else {
+            return 0;
+        };
+        let raw = Fx::from_int(effect.damage())
+            .mul(preying(effect.class, beast.disabled()))
+            .to_int();
+        let dealt = beast.take_hit(struck, raw);
+        self.monster = Some(beast);
+        // A field has one part and hits over and over on its tick; a blade or an
+        // arm has a pass to spend and spends it here.
+        if effect.kind.travels() {
+            effect.take_hit(part, QUARRY_VICTIM);
+        }
+        dealt
     }
 }
 
@@ -2497,18 +2906,8 @@ fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
 }
 
 /// Put an effect into the world, replacing the oldest if the board is full.
-fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], kind: EffectKind, owner: u8, pos: V3) {
-    let life = match kind {
-        EffectKind::FirePillar => t::pillar_life(),
-        EffectKind::BlackSpike => t::spike_life(),
-    };
-    let effect = Effect {
-        kind,
-        owner,
-        pos,
-        age: 0,
-        life,
-    };
+fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
+    let owner = effect.owner;
     if let Some(free) = effects.iter_mut().find(|s| s.is_none()) {
         *free = Some(effect);
         return;
@@ -2618,15 +3017,15 @@ fn step_rider(p: &mut Player, input: Input, field: &Field, beast: &Monster, _car
                 && p.class != Class::Champion
                 && p.mechanic_ready(SLOT_SPECIAL)
             {
-                p.hit_used = false;
-                lock_aim(p, SLOT_SPECIAL, input, field);
-                Action::Startup {
-                    kind: SLOT_SPECIAL,
-                    left: moves::get(p.class, SLOT_SPECIAL).startup,
-                }
+                begin_move(p, SLOT_SPECIAL, input, field, false)
             } else if pressed_mechanic {
-                mechanic_action(p, input, field);
-                Action::Free
+                match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    Some(slot) => begin_move(p, slot, input, field, false),
+                    None => {
+                        mechanic_action(p, input, field);
+                        Action::Free
+                    }
+                }
             }
             // Aboard, your feet are on something solid, so the Champion reads
             // the standing row of its grid. A Rush started up here goes
@@ -2634,26 +3033,16 @@ fn step_rider(p: &mut Player, input: Input, field: &Field, beast: &Monster, _car
             // but nothing needs to say so: `grounded` is true aboard, so the
             // standing row is what `champion_move` picks anyway.
             else if let Some(kind) = champion_move(p, input) {
-                p.hit_used = false;
-                lock_aim(p, kind, input, field);
                 begin_champion(p, kind);
-                Action::Startup {
-                    kind,
-                    left: moves::get(p.class, kind).startup,
-                }
+                begin_move(p, kind, input, field, false)
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
                     SLOT_COMMITTED
                 } else {
                     SLOT_POKE
                 };
-                p.hit_used = false;
                 steer_meter(p, input, kind);
-                lock_aim(p, kind, input, field);
-                Action::Startup {
-                    kind,
-                    left: moves::get(p.class, kind).startup,
-                }
+                begin_move(p, kind, input, field, false)
             } else if want_guard {
                 Action::Guard { held: 0 }
             } else {
@@ -2838,6 +3227,95 @@ fn fall_off(p: &mut Player, beast: &Monster) {
 }
 
 // ---------------------------------------------------------------------------
+// The Elementalist's beam
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// Fire the auto, if this fighter has one out.
+    ///
+    /// Run on **every** active frame rather than only the first, for the same
+    /// reason every other move's hitbox is live for its whole active window:
+    /// the volume that is drawn has to be the volume that is tested, and a
+    /// shot should still catch someone who steps into the line during it. The
+    /// move's one hit is what keeps that from being two shots -- whatever the
+    /// beam meets first ends it.
+    ///
+    /// Nothing here travels. The ray, the stone it kicks and the fire it
+    /// lights all happen on the frame the move comes out; the fire bolt is the
+    /// only part with a speed, and it starts at the pillar rather than at her.
+    fn fire_the_beam(&mut self, i: usize) {
+        self.players[i].beam_reach = Fx::ZERO;
+        let shooter = self.players[i];
+        let Action::Active { kind, .. } = shooter.action else {
+            return;
+        };
+        if !bolt::throws_a_beam(&shooter, kind) || shooter.health <= 0 {
+            return;
+        }
+
+        let beam = beam_of(&shooter, kind);
+        let field = stones::gather(&self.players);
+        // In a hunt the two of you are on the same side, so the only thing
+        // worth shooting is the creature. One condition, in one place.
+        let versus = self.monster.is_none();
+        let struck = bolt::trace(beam, i as u8, &self.players, versus, &field, &self.effects);
+        let quarry = self
+            .monster
+            .as_ref()
+            .and_then(|b| b.part_struck_along(beam.from, beam.dir, beam.range, beam.radius))
+            .filter(|(_, d)| struck.is_none_or(|s| d.raw() < s.dist().raw()));
+
+        // How long the line actually is, whether or not it still has a hit to
+        // spend. A spent beam is still a beam, and it is still drawn.
+        let stopped = quarry
+            .map(|(_, d)| d)
+            .or(struck.map(|s| s.dist()))
+            .unwrap_or(beam.range);
+        self.players[i].beam_reach = stopped;
+        if shooter.hit_used {
+            return;
+        }
+
+        if let Some((part, _)) = quarry {
+            if let Some(mut beast) = self.monster {
+                beast.take_hit(part, moves::get(shooter.class, kind).damage);
+                self.monster = Some(beast);
+                self.players[i].hit_used = true;
+            }
+            return;
+        }
+
+        match struck {
+            Some(Struck::Fighter { index, .. }) => {
+                let damage = moves::get(shooter.class, kind).damage;
+                if bolt::poke(&mut self.players[index], shooter.pos, damage) == bolt::Poked::Parried
+                {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[index].parried = PARRY_FLOURISH;
+                }
+                self.players[i].hit_used = true;
+            }
+            // The stone goes where the mouse is pointing, pitch included:
+            // along the ground aimed down it, up into the air aimed above it.
+            Some(Struck::Stone { index, .. }) => {
+                stones::kick(&mut self.players, index, beam.dir);
+                self.players[i].hit_used = true;
+            }
+            // A hazard is not a wall. The beam does not stop at the fire, it
+            // lights it, and what leaves the pillar is the poke.
+            Some(Struck::Fire { dist }) => {
+                bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir);
+                self.players[i].hit_used = true;
+            }
+            None => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Trading with the creature
 // ---------------------------------------------------------------------------
 
@@ -2920,13 +3398,21 @@ impl World {
             if box_out.spent || attacker.health <= 0 {
                 continue;
             }
-            let Some(part) = part_under(&beast, &attacker, &box_out) else {
-                continue;
-            };
             let Some(kind) = attacker.action.attack_kind() else {
                 continue;
             };
-            beast.take_hit(part, moves::get(attacker.class, kind).damage);
+            // The beam already had its answer, on the frame it was fired.
+            if bolt::throws_a_beam(&attacker, kind) {
+                continue;
+            }
+            let Some(part) = part_under(&beast, &attacker, &box_out) else {
+                continue;
+            };
+            let raw = Fx::from_int(moves::get(attacker.class, kind).damage)
+                .mul(preying(attacker.class, beast.disabled()))
+                .to_int();
+            let dealt = beast.take_hit(part, raw);
+            self.players[i].heal(moves::get(attacker.class, kind).leeched(dealt));
             self.players[i].hit_used = true;
         }
 

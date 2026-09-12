@@ -70,27 +70,110 @@ impl V3 {
     }
 }
 
-/// Where a shot from `from` toward `to` passes closest to `centre`, and
-/// whether that approach comes within `radius` of it -- flat, like every
-/// other hit test in the game.
+/// Distance along a ray to an upright cylinder standing on its base, or
+/// `None` if the ray misses it.
 ///
-/// Returns the distance along the segment to that closest point, clamped to
-/// the segment itself, so a caller comparing two different things a shot
-/// might be aimed through can tell which one it reaches first.
-pub fn ray_hits_flat(from: V3, to: V3, centre: V3, radius: Fx) -> Option<Fx> {
-    let seg = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
-    let len_sq = seg.dot(seg);
-    if len_sq.raw() <= 0 {
+/// `dir` is a **unit** vector, so the answer is in metres. Both end caps are
+/// tested as well as the curved side: a cylinder without caps is a tube, and a
+/// shot aimed down the axis of one would pass straight through it.
+///
+/// This is the shape almost everything in the game actually is -- a fighter, a
+/// stone, a slab of a fire pillar -- so one function serves the aim resolver
+/// and the Elementalist's beam alike. It replaced a flat, height-free version,
+/// which is the whole reason a shot aimed above the horizon used to read the
+/// terrain as though it had been fired along the floor.
+///
+/// A ray starting inside the cylinder reports the distance to where it leaves,
+/// which is a hit -- point blank is still contact.
+pub fn ray_hits_cylinder(from: V3, dir: V3, base: V3, radius: Fx, height: Fx) -> Option<Fx> {
+    if height.raw() <= 0 || radius.raw() <= 0 {
         return None;
     }
-    let to_centre = V3::new(centre.x.sub(from.x), Fx::ZERO, centre.z.sub(from.z));
-    let t = to_centre.dot(seg).div(len_sq).clamp(Fx::ZERO, Fx::ONE);
-    let closest = V3::new(from.x.add(seg.x.mul(t)), Fx::ZERO, from.z.add(seg.z.mul(t)));
-    let dist = V3::new(centre.x.sub(closest.x), Fx::ZERO, centre.z.sub(closest.z)).flat_len();
-    if dist.raw() > radius.raw() {
-        return None;
+    let top = base.y.add(height);
+    let ox = from.x.sub(base.x);
+    let oz = from.z.sub(base.z);
+    let mut best: Option<Fx> = None;
+    let mut keep = |d: Fx| {
+        if d.raw() >= 0 && best.is_none_or(|b| d.raw() < b.raw()) {
+            best = Some(d);
+        }
+    };
+
+    // The curved side. `a` is zero looking straight up or down, where there is
+    // no side to hit and the caps are the whole answer.
+    let a = dir.x.mul(dir.x).add(dir.z.mul(dir.z));
+    if a.raw() > 0 {
+        let half_b = ox.mul(dir.x).add(oz.mul(dir.z));
+        let c = ox.mul(ox).add(oz.mul(oz)).sub(radius.mul(radius));
+        let disc = half_b.mul(half_b).sub(a.mul(c));
+        if disc.raw() >= 0 {
+            let root = disc.sqrt();
+            for d in [half_b.neg().sub(root).div(a), half_b.neg().add(root).div(a)] {
+                let y = from.y.add(dir.y.mul(d));
+                if y.raw() >= base.y.raw() && y.raw() <= top.raw() {
+                    keep(d);
+                }
+            }
+        }
     }
-    Some(seg.flat_len().mul(t))
+
+    // The caps.
+    if dir.y.raw() != 0 {
+        for face in [base.y, top] {
+            let d = face.sub(from.y).div(dir.y);
+            if d.raw() < 0 {
+                continue;
+            }
+            let x = ox.add(dir.x.mul(d));
+            let z = oz.add(dir.z.mul(d));
+            if x.mul(x).add(z.mul(z)).raw() <= radius.mul(radius).raw() {
+                keep(d);
+            }
+        }
+    }
+    best
+}
+
+/// Distance along a ray to an axis-aligned box, or `None` if it misses.
+///
+/// Slab method: the ray is inside the box over the intersection of the three
+/// per-axis intervals it is inside each slab for. `dir` is a unit vector, so
+/// the answer is in metres.
+pub fn ray_hits_box(from: V3, dir: V3, min: V3, max: V3) -> Option<Fx> {
+    let mut near = Fx::ZERO;
+    let mut far = Fx::MAX;
+    for axis in 0..3 {
+        let o = component(from, axis);
+        let d = component(dir, axis);
+        let lo = component(min, axis);
+        let hi = component(max, axis);
+        if d.raw() == 0 {
+            // Parallel to this pair of faces: either always between them or
+            // never. Checked by hand because dividing by zero saturates, which
+            // would read as "always".
+            if o.raw() < lo.raw() || o.raw() > hi.raw() {
+                return None;
+            }
+            continue;
+        }
+        let a = lo.sub(o).div(d);
+        let b = hi.sub(o).div(d);
+        let (enter, leave) = if a.raw() <= b.raw() { (a, b) } else { (b, a) };
+        near = near.max(enter);
+        far = far.min(leave);
+        if near.raw() > far.raw() {
+            return None;
+        }
+    }
+    Some(near)
+}
+
+fn component(v: V3, axis: usize) -> Fx {
+    match axis {
+        0 => v.x,
+        1 => v.y,
+        _ => v.z,
+    }
 }
 
 /// The closest distance between two line segments.

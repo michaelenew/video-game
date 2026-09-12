@@ -78,13 +78,20 @@ fn landing_a_hit_keeps_the_initiative_or_resets_neutral() {
     // On hit you should be no worse off than the defender, or hitting someone
     // would be a mistake.
     //
-    // A move that **re-hits** is exempt, and the exemption is real rather than
-    // a convenience. `on_hit` is hitstun minus the frames you are still busy
-    // for, and it assumes the exchange is over once you connect. The
-    // Champion's Rush slash is still swinging when the next cut lands, so the
-    // arithmetic is measuring the wrong thing: what it costs is the whole
-    // active window, and what it pays is every cut inside it.
-    for (class, m) in every_move().filter(|(_, m)| m.rehit == 0) {
+    // Two exemptions, both real rather than convenient.
+    //
+    // A move that hands out **no stun at all** is not buying the initiative and
+    // cannot be measured as though it were. The Elementalist's auto is the one
+    // of those: a beam that takes whatever the opponent was charging and gives
+    // them their frames straight back. What keeps that honest is the first test
+    // below, not this one.
+    //
+    // A move that **re-hits** breaks the arithmetic itself. `on_hit` is hitstun
+    // minus the frames you are still busy for, and it assumes the exchange is
+    // over once you connect. The Champion's Rush slash is still swinging when
+    // the next cut lands, so what it costs is the whole active window and what
+    // it pays is every cut inside it. The second test below is its guard.
+    for (class, m) in every_move().filter(|(_, m)| m.hitstun > 0 && m.rehit == 0) {
         assert!(
             m.on_hit() >= 0,
             "{class} {}: {:+} on hit — connecting leaves you at a disadvantage",
@@ -96,7 +103,7 @@ fn landing_a_hit_keeps_the_initiative_or_resets_neutral() {
 
 #[test]
 fn a_move_that_keeps_hitting_lands_more_than_once_inside_its_own_swing() {
-    // The other half of that exemption. A re-hit interval longer than the
+    // The guard on the second exemption. A re-hit interval longer than the
     // active window would be a normal move with a misleading field on it, and
     // the exemption above would be hiding a move that is simply minus on hit.
     for class in ALL_CLASSES {
@@ -108,6 +115,40 @@ fn a_move_that_keeps_hitting_lands_more_than_once_inside_its_own_swing() {
                 m.name,
                 m.rehit,
                 m.active
+            );
+        }
+    }
+}
+
+#[test]
+fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
+    // The price of the exception above, and the reason it is not a loophole.
+    //
+    // A move that lands without stunning gives the defender their turn back
+    // immediately, so the attacker must not also come out of it ahead -- it has
+    // to be minus on hit, or it would be a button you could simply hold down.
+    // And it has to be the smallest hit in the class: what it buys is an
+    // interrupt, not damage, and a no-stun move that also hit hard would beat
+    // the moves that pay stun for their damage at their own game.
+    for class in ALL_CLASSES {
+        let table = moves::table(class);
+        let softest = table.iter().map(|m| m.damage).min().unwrap();
+        for m in table.iter().filter(|m| m.hitstun == 0) {
+            assert!(
+                m.on_hit() < 0,
+                "{} {}: {:+} on hit with no stun at all -- free pressure",
+                class.name(),
+                m.name,
+                m.on_hit()
+            );
+            assert_eq!(
+                m.damage,
+                softest,
+                "{} {}: hits for {} without stunning, and something in the class hits \
+                 for less. A move that buys an interrupt should not also buy damage.",
+                class.name(),
+                m.name,
+                m.damage
             );
         }
     }
@@ -247,20 +288,33 @@ fn the_dodge_outruns_a_walk() {
 }
 
 #[test]
-fn no_class_is_half_finished() {
-    // Not a design law, just a guard against a class shipping with a gap in it.
+fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
+    // Not a design law, just a guard against a class shipping with a gap in it
+    // -- or with a table somebody appended to by accident.
     //
-    // This used to require every class to have *the same* number of moves, with
-    // a note to relax it when one legitimately grew. The Champion legitimately
-    // grew: its three mouse buttons are three weapons, each of which behaves
-    // differently on foot, in the air and out of a Rush, so it carries ten
-    // where the others carry the original three. What is still worth pinning is
-    // the floor -- poke, committed, special -- and that the growth is
-    // deliberate rather than a table somebody appended to by accident.
+    // The three shared slots -- poke, committed, special -- mean the same thing
+    // on every class, which is what lets one control scheme drive six kits, so
+    // every class has to fill all three. What a class has **past** them is a
+    // decision about that class: the Blood mage's fourth is on `E`, because her
+    // mechanic is health and there is nothing to toggle, and the Champion's ten
+    // are three weapons by three stances plus the vault.
     use sim::Class;
+    use sim::state::{SLOT_COMMITTED, SLOT_POKE, SLOT_SPECIAL};
     for class in ALL_CLASSES {
+        for slot in [SLOT_POKE, SLOT_COMMITTED, SLOT_SPECIAL] {
+            assert!(
+                moves::bound(class, slot as usize),
+                "{} has nothing on {}",
+                class.name(),
+                moves::binding(class, slot as usize)
+            );
+        }
         let n = moves::table(class).len();
-        let expected = if class == Class::Champion { 10 } else { 3 };
+        let expected = match class {
+            Class::Champion => 10,
+            Class::BloodMage => 4,
+            _ => 3,
+        };
         assert_eq!(
             n,
             expected,
@@ -268,6 +322,10 @@ fn no_class_is_half_finished() {
             class.name()
         );
     }
+    assert!(
+        ALL_CLASSES.iter().any(|c| moves::on_e(*c).is_some()),
+        "nothing binds an ability to the mechanic key, so the slot is dead weight"
+    );
 }
 
 #[test]

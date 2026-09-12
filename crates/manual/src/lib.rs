@@ -139,7 +139,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "E",
-                "The class mechanic. Different on every class: throw the shield, Rush, place the shadow, raise a structure.",
+                "The class mechanic. Different on every class: throw the shield, Rush, place the shadow, raise a structure — or, on the Blood mage, cast the Black spike, because her mechanic is health and there is nothing to toggle.",
                 "E mechanic",
             ),
         ],

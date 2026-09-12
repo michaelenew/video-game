@@ -48,6 +48,11 @@ const EXEMPT: &[(&str, &str)] = &[
          fighter standing there, and the middle of anything is half of it.",
     ),
     (
+        ".add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))",
+        "The midpoint of a hit volume. Halving a line, not choosing a length: the middle \
+         of anything is half of it, and any other number would stop it being the middle.",
+    ),
+    (
         "let tan_tilt = Fx::ONE.sub(ball.at.mul(Fx::from_int(2))).mul(tan_half)",
         "Turning a screen fraction into a tangent. The 2 is that a fraction is \
          measured from the bottom of the screen while the angle is measured from \
@@ -129,6 +134,34 @@ const EXEMPT: &[(&str, &str)] = &[
         "Fx::ratio(1, 100))",
         "A division guard on the decel span, not a span itself: it only keeps a retuned decel \
          start of exactly 1 from reaching zero and dividing by it.",
+    ),
+    (
+        "p.mul(Fx::from_int(2))",
+        "Out and back. The blade covers its path twice in one lifetime, so each leg is half of \
+         it and the progress through a leg is twice the progress through the throw. The 2 is \
+         the word `back`; `bloodletter_flight` is the knob that decides how long it takes.",
+    ),
+    (
+        "Fx::ONE.sub(p).mul(Fx::from_int(2))",
+        "The same 2, on the return leg. See above.",
+    ),
+    (
+        "let bulge = Fx::from_int(4).mul(p).mul(Fx::ONE.sub(p))",
+        "What normalises `p(1 - p)` so its peak is exactly one. Without it the widest the \
+         Grasp's arms reach would be a quarter of `grasp_spread`, and the knob would be lying \
+         about what it means. Tuning it would not widen the cone, it would break the knob.",
+    ),
+    (
+        "let along = if line.len().raw() > Fx::ratio(1, 10).raw() {",
+        "A degeneracy guard on the line a thrown ability travels along, not a distance: it only \
+         catches the case where the crosshair resolved onto the caster's own hand, which would \
+         leave nothing to normalise. The ability's reach is the knob.",
+    ),
+    (
+        "if flat.flat_len().raw() < Fx::ratio(1, 100).raw() {",
+        "A degeneracy guard, not a distance: straight up or down there is no horizontal \
+         'sideways' for a cone to open into, and this is how near vertical counts as vertical. \
+         Any small value does; nothing about the game feels different for a different one.",
     ),
 ];
 

@@ -235,3 +235,15 @@ pub fn ground_under(pos: V3) -> Fx {
     }
     best
 }
+
+/// Is this point still in the arena at all?
+///
+/// Flat bounds and a ceiling of nothing: anything below the floor or outside
+/// the walls has left, which is what a projectile needs in order to stop
+/// existing. Bodies never ask -- they are resolved against the walls instead --
+/// so this is deliberately a *bound* rather than a collision.
+pub fn inside(pos: V3) -> bool {
+    pos.y.raw() >= 0
+        && pos.x.abs().raw() <= ARENA_HALF.raw()
+        && pos.z.abs().raw() <= ARENA_HALF.raw()
+}

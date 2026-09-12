@@ -311,13 +311,23 @@ function draw() {
       ctx.fill(); ctx.stroke();
     }
 
-    // live hitbox
+    // live hitbox: a capsule between two points, because one of the six
+    // attacks is a line. A swing has both ends in the same place, which draws
+    // as the circle it always was.
     const hr = e.hit_r(i)/FX;
     if (hr > 0) {
-      ctx.fillStyle = "rgba(255,59,78,.24)";
+      const ax = sx(e.hit_x(i)/FX), ay = sy(e.hit_z(i)/FX) - lift;
+      const bx = sx(e.hit_x2(i)/FX), by = sy(e.hit_z2(i)/FX) - lift;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(255,59,78,.24)"; ctx.lineWidth = hr*UNIT*2;
+      // Nudged so a zero-length segment still draws its round cap.
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx + 0.01, by); ctx.stroke();
       ctx.strokeStyle = "#ff3b4e"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(sx(e.hit_x(i)/FX), sy(e.hit_z(i)/FX) - lift, hr*UNIT, 0, 7);
-      ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ax, ay, hr*UNIT, 0, 7); ctx.stroke();
+      if (ax !== bx || ay !== by) {
+        ctx.beginPath(); ctx.arc(bx, by, hr*UNIT, 0, 7); ctx.stroke();
+      }
+      ctx.lineCap = "butt";
     }
 
     // body

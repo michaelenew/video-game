@@ -265,7 +265,6 @@ scalars! {
     MonsterSpawn,     "Ridgeback","Spawns this far out",        Fixed,   0,         fx(14,1);
     HunterSpawn,      "Ridgeback","Hunters start this far out", Fixed,   0,         fx(14,1);
     StepUp,           "Riding",   "Step you can walk up",       Fixed,   0,         fx(2,1);
-    BoltAimRange,      "Elementalist", "Bolt aim range",                    Fixed,  fx(1,1),  fx(30,1);
     BoltKnockSpeed,    "Elementalist", "Bolt knock speed",                  Fixed,  0,        fx(60,1);
     BoltKnockRange,    "Elementalist", "Bolt knock travel",                 Fixed,  fx(1,10), fx(20,1);
     BoltKnockDecelStart,"Elementalist","Bolt knock decel starts (x path)",  Fixed,  0,        fx(1,1);
@@ -273,8 +272,21 @@ scalars! {
     BoltKnockDamagePerSpeed, "Elementalist", "Bolt knock damage per m/s",   Int,    0,        50;
     BoltKnockStagger,  "Elementalist", "Bolt knock stagger",                Frames, 0,        90;
     BoltKnockPush,     "Elementalist", "Bolt knock push (x)",               Fixed,  0,        fx(3,1);
-    BoltFireDamageMul, "Elementalist", "Fire bolt damage (x)",              Fixed,  fx(1,1),  fx(4,1);
-    BoltFireKnockbackMul, "Elementalist", "Fire bolt knockback (x)",        Fixed,  fx(1,1),  fx(4,1);
+    FireBoltSpeed,     "Elementalist", "Fire bolt speed",                   Fixed,  fx(5,1),  fx(80,1);
+    FireBoltRange,     "Elementalist", "Fire bolt range",                   Fixed,  fx(1,1),  fx(40,1);
+    FireBoltRadius,    "Elementalist", "Fire bolt radius",                  Fixed,  fx(1,20), fx(2,1);
+    FireBoltDamage,    "Elementalist", "Fire bolt damage",                  Int,    0,        600;
+    FireBoltStagger,   "Elementalist", "Fire bolt stagger",                 Frames, 0,        90;
+    FireBoltBlockstun, "Elementalist", "Fire bolt blockstun",               Frames, 0,        90;
+    FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
+    SpikeHeight,       "Blood mage", "Black spike height",                  Fixed,  fx(1,2),  fx(6,1);
+    BloodletterFlight, "Blood mage", "Bloodletter, out and back",           Frames, 10,       180;
+    BloodletterRadius, "Blood mage", "Bloodletter radius",                  Fixed,  fx(1,10), fx(2,1);
+    GraspFlight,       "Blood mage", "Grasp, arms out and in",              Frames, 6,        120;
+    GraspSpread,       "Blood mage", "Grasp, how wide the cone opens",      Fixed,  fx(1,10), fx(6,1);
+    GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
+    GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
+    DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
     RushSpeed,        "Champion", "Rush speed",                 Fixed,   fx(1,1),   fx(40,1);
     RushFrames,       "Champion", "Rush length",                Frames,  1,         60;
     RushRecharge,     "Champion", "Rush recharge",              Frames,  0,         240;
@@ -442,6 +454,10 @@ pub enum MoveField {
     SelfLift,
     Grabs,
     Effect,
+    // Appended again, for the Blood mage's economy. Health out on the press,
+    // health back on the hit -- see `moves::Move::cost` and `leech`.
+    Cost,
+    Leech,
     // Appended again for the Champion's rebuild: how far a swing travels, and
     // how often a move that keeps hitting is allowed to hit again.
     Arc,
@@ -468,6 +484,8 @@ impl MoveField {
         MoveField::SelfLift,
         MoveField::Grabs,
         MoveField::Effect,
+        MoveField::Cost,
+        MoveField::Leech,
         MoveField::Arc,
         MoveField::Rehit,
     ];
@@ -492,6 +510,8 @@ impl MoveField {
             MoveField::SelfLift => "Self lift",
             MoveField::Grabs => "Grab hold",
             MoveField::Effect => "Leaves behind",
+            MoveField::Cost => "Health cost",
+            MoveField::Leech => "Leech (%)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
         }
@@ -511,7 +531,8 @@ impl MoveField {
                 Unit::Flag
             }
             MoveField::Grabs | MoveField::Rehit => Unit::Frames,
-            MoveField::Effect => Unit::Int,
+            MoveField::Effect | MoveField::Cost => Unit::Int,
+            MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
         }
     }
@@ -673,14 +694,14 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 174;
+pub const SCALAR_COUNT: usize = 186;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
-/// single width. The Champion has ten moves and everybody else has three, and a
-/// rectangular table would have meant seven empty rows per class in the
-/// palette and in the baked file.
+/// single width. The Champion has ten moves, the Blood mage four and everybody
+/// else three, and a rectangular table would have meant seven empty rows per
+/// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 20;
+pub const MOVE_FIELDS: usize = 22;
 
 // ---------------------------------------------------------------------------
 // The live store
@@ -849,6 +870,9 @@ impl Knob {
             Knob::Scalar(s) => s.family().to_string(),
             Knob::View(_) => "Camera".to_string(),
             Knob::Air(c, _) => format!("Air · {}", c.name()),
+            // No "unbound slot" heading any more: storage is packed to each
+            // class's own count, so a slot a class does not have is a slot
+            // with no knobs rather than a row of zeroes needing an excuse.
             Knob::Move(c, slot, _) => format!(
                 "{} · {} [{}]",
                 c.name(),

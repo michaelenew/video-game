@@ -6,7 +6,7 @@
 
 use core::cell::UnsafeCell;
 use sim::state::{Action, MAX_PLAYERS, move_frames};
-use sim::{Fx, Input, World};
+use sim::{Input, World};
 
 struct Cell(UnsafeCell<Option<World>>);
 // Single-threaded by construction: wasm32-unknown-unknown without threads.
@@ -96,28 +96,40 @@ pub extern "C" fn p_kind(i: u32) -> u32 {
     }
 }
 
-/// Hitbox centre and radius during active frames, in raw fixed point.
-/// Radius is zero when nothing is active, which is how JS tests for a hitbox.
+/// The live attack volume during active frames, in raw fixed point: a capsule
+/// between two points, of `hit_r`. Radius is zero when nothing is active, which
+/// is how JS tests for a hitbox.
+///
+/// Two ends rather than one centre, because one of the six attacks is a line:
+/// the Elementalist's auto is a beam along the crosshair. A swing is the case
+/// where both ends are the same point.
 #[unsafe(no_mangle)]
 pub extern "C" fn hit_x(i: u32) -> i32 {
-    hitbox(i).map(|(c, _)| c.x.raw()).unwrap_or(0)
+    hitbox(i).map(|b| b.from.x.raw()).unwrap_or(0)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn hit_z(i: u32) -> i32 {
-    hitbox(i).map(|(c, _)| c.z.raw()).unwrap_or(0)
+    hitbox(i).map(|b| b.from.z.raw()).unwrap_or(0)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn hit_x2(i: u32) -> i32 {
+    hitbox(i).map(|b| b.to.x.raw()).unwrap_or(0)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn hit_z2(i: u32) -> i32 {
+    hitbox(i).map(|b| b.to.z.raw()).unwrap_or(0)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn hit_r(i: u32) -> i32 {
-    hitbox(i).map(|(_, r)| r.raw()).unwrap_or(0)
+    hitbox(i).map(|b| b.radius.raw()).unwrap_or(0)
 }
 
-fn hitbox(i: u32) -> Option<(sim::V3, Fx)> {
-    // Straight from the simulation, so the overlay cannot drift from it the way
-    // a rebuilt volume would. The browser overlay draws a circle, so it gets the
-    // middle of the volume -- which for the Champion's swings and thrusts is
-    // the middle of the weapon rather than a point at arm's length.
-    let box_out = sim::state::hitbox(p(i))?;
-    Some((box_out.centre(), box_out.radius))
+/// Straight from the simulation, so the browser tool cannot drift from the
+/// game the way a reconstruction from the move table did -- it drew every
+/// attack a fixed reach ahead of the body, which has not been true of an aimed
+/// move for a while and was never true of a beam or of a weapon that sweeps.
+fn hitbox(i: u32) -> Option<sim::state::Hitbox> {
+    sim::state::hitbox(p(i))
 }
 
 /// Frame data for the debug overlay: startup, active, recovery.

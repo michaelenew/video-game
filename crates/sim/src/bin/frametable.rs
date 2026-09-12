@@ -54,19 +54,40 @@ fn main() {
             tenths(mob.fall_cap),
             tenths(mob.air_speed),
         );
+        if class.preys_on_the_disabled() {
+            println!(
+                "  x{} damage to anything rooted, staggered, held or toppled",
+                tenths(t::disabled_damage_mul())
+            );
+        }
         println!(
-            "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
-            "move", "st", "act", "rec", "damage", "on block", "on hit"
+            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
+            "key", "move", "st", "act", "rec", "damage", "on block", "on hit"
         );
-        for m in moves::table(class) {
+        for (slot, m) in (0..moves::slots(class)).map(|slot| (slot, moves::get(class, slot as u8)))
+        {
             let mut notes = Vec::new();
-            // A move with no hit volume has no frame advantage worth printing:
-            // the columns are all about what connecting is worth, and it never
-            // connects. The Champion's pole vault is the only one.
+            // A move with no volume of its own has no frame advantage worth
+            // printing: those columns are all about what connecting is worth,
+            // and this one never connects. Two kinds -- the ones that put
+            // something in the world and let it do the hitting, and the
+            // Champion's pole vault, which puts nothing anywhere.
             if !m.strikes() {
+                let what = if m.shape.strikes() {
+                    "places something; the thing it placed hits"
+                } else {
+                    "movement, no hitbox"
+                };
                 println!(
-                    "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   movement, no hitbox",
-                    m.name, m.startup, m.active, m.recovery, "--", "--", "--"
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   {what}",
+                    moves::binding(class, slot),
+                    m.name,
+                    m.startup,
+                    m.active,
+                    m.recovery,
+                    "--",
+                    "--",
+                    "--"
                 );
                 continue;
             }
@@ -91,6 +112,15 @@ fn main() {
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
+            // The Blood mage's whole economy, and the only class it applies to.
+            let blood = if m.cost > 0 {
+                format!("costs {} health, returns {}%", m.cost, m.leech)
+            } else {
+                String::new()
+            };
+            if !blood.is_empty() {
+                notes.push(&blood);
+            }
             // On-hit means nothing for a move that is still swinging when it
             // lands again, so it is left blank rather than printed wrong.
             let on_hit = if m.rehit > 0 {
@@ -99,7 +129,8 @@ fn main() {
                 format!("{:+}", m.on_hit())
             };
             println!(
-                "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}   {}",
+                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}   {}",
+                moves::binding(class, slot),
                 m.name,
                 m.startup,
                 m.active,

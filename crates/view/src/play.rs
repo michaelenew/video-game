@@ -43,7 +43,7 @@
 use crate::clips::Clip;
 use crate::interp::PlayerView;
 use crate::pose::Pose;
-use crate::skeleton::Group;
+use crate::skeleton::{Group, Joint};
 use sim::Class;
 use sim::state::Action;
 
@@ -106,6 +106,9 @@ pub struct PoseInput {
     pub rise: f32,
     /// Turns per second, positive to the character's right.
     pub turn_rate: f32,
+    /// Radians above the horizon the current move was aimed along. Only the
+    /// moves that actually leave along the crosshair use it.
+    pub aim_pitch: f32,
     pub health: i32,
     /// Frames left of the between-rounds pause, if a round has ended.
     pub round_left: Option<u16>,
@@ -138,6 +141,7 @@ impl PoseInput {
             stun_total: view.stun_total,
             rise: view.rise,
             turn_rate: view.turn_rate,
+            aim_pitch: view.aim_pitch,
             health: view.health,
             round_left: frame.round_left,
             sim_frame: frame.sim_frame,
@@ -387,7 +391,7 @@ fn attack(input: PoseInput, kind: u8) -> Pose {
         _ => 0,
     };
     let clip = move_clip(input.class, kind);
-    let pose = clip.at(elapsed as u32);
+    let pose = aim_along(clip.at(elapsed as u32), input, kind);
 
     // A move you can walk during should walk. `mobility` is the fraction of
     // walking speed the move leaves you, and a poke thrown on the move with
@@ -402,10 +406,66 @@ fn attack(input: PoseInput, kind: u8) -> Pose {
     pose
 }
 
+/// Tilt a shot's pose on to the line it is actually fired along.
+///
+/// The clips are authored level, because a clip is a shape and not an angle.
+/// One move in the game leaves the body along the crosshair rather than along
+/// the flat facing -- the Elementalist's auto, which is a ray -- and drawing
+/// that one level meant the character threw a horizontal flick while the shot
+/// went up at forty degrees. The bolt's own author's note said as much: the
+/// off hand was "the only thing in the pose that says which way the bolt
+/// went".
+///
+/// Spread over three joints rather than put on one. A body that aims upward
+/// opens at the waist, opens again at the chest, and raises the shoulders; all
+/// of it on the shoulder would be a raised arm on a level torso, which reads as
+/// a shrug. The shares add to a little over one so the hand clears the line the
+/// eye is on.
+fn aim_along(pose: Pose, input: PoseInput, kind: u8) -> Pose {
+    if !aims_along_the_crosshair(input.class, kind) {
+        return pose;
+    }
+    let degrees = input.aim_pitch.to_degrees();
+    if degrees.abs() < 0.5 {
+        return pose;
+    }
+    // Negative bend opens the torso upward, positive swing lifts an arm
+    // forward and up -- the conventions `view/tests/kinematics.rs` pins.
+    let mut out = pose;
+    for (joint, share) in [
+        (Joint::Spine, -0.25),
+        (Joint::Chest, -0.35),
+        (Joint::ArmL, 0.55),
+        (Joint::ArmR, 0.55),
+    ] {
+        let c = 0; // swing for a limb, bend for a torso segment: the same channel
+        out.set_degrees(joint, c, out.degrees(joint, c) + degrees * share);
+    }
+    // The head goes with the aim, and by the whole angle: she is looking at
+    // what she is shooting at, and a head left on the horizon is the one part
+    // of this that would be noticed as wrong.
+    out.set_degrees(Joint::Head, 0, out.degrees(Joint::Head, 0) - degrees * 0.6);
+    out.clamped(crate::pose::reference())
+}
+
+/// Does this move leave the body along the crosshair rather than along the
+/// flat facing?
+///
+/// One move, for now, and it is the one that is a line. A swing is a body
+/// moving, and pointing the camera at the floor should not put a sword there.
+pub fn aims_along_the_crosshair(class: Class, kind: u8) -> bool {
+    class == Class::Elementalist && kind == sim::state::SLOT_POKE
+}
+
 /// Which clip animates one class's move slot.
+///
+/// Clamped to the last slot the class actually binds, so a class whose mechanic
+/// is a state change rather than an ability never asks for a clip that does not
+/// exist -- see `sim::moves::bound`.
 pub fn move_clip(class: Class, slot: u8) -> Clip {
-    // Clamped per class, because they no longer all have three: the Champion
-    // has ten, one per square of its weapon-by-stance grid.
+    // Clamped per class, because they no longer all have three: the Blood mage
+    // has four and the Champion ten, one per square of its weapon-by-stance
+    // grid. A slot a class does not have falls back to its special.
     let slot = slot.min(sim::moves::slots(class) as u8 - 1);
     match (class, slot) {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
@@ -429,7 +489,8 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Elementalist, _) => Clip::ElementalistSpecial,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
-        (Class::BloodMage, _) => Clip::BloodSpecial,
+        (Class::BloodMage, 2) => Clip::BloodSpecial,
+        (Class::BloodMage, _) => Clip::BloodMechanic,
         (Class::DualMage, 0) => Clip::DualPoke,
         (Class::DualMage, 1) => Clip::DualCommitted,
         (Class::DualMage, _) => Clip::DualSpecial,

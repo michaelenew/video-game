@@ -244,13 +244,18 @@ clips! {
     ElementalistSpecial,  "elementalist_special",   Moves, "elementalist", Length::Move(Class::Elementalist, 2), false,
         "Fire pillar: a rising two-handed gesture that pulls a column up out of the floor.";
 
-    // -- The Blood mage: Rend, Black spike, Reaper's debt -------------------
+    // -- The Blood mage: Bloodletter, Rend, Grasp, Black spike --------------
+    //
+    // Four rather than three: `E` is an ability on this class, because its
+    // mechanic is health and there is no state to toggle. See `moves::NAMES`.
     BloodPoke,      "blood_poke",       Moves, "blood", Length::Move(Class::BloodMage, 0), false,
-        "Rend: a raking claw. Close, personal, and it costs the caster.";
+        "Bloodletter: a blade thrown out underarm and caught again on the way back.";
     BloodCommitted, "blood_committed",  Moves, "blood", Length::Move(Class::BloodMage, 1), false,
-        "Black spike: a downward stabbing gesture that plants something in the ground.";
+        "Rend: a raking claw. Close, personal, and it costs the caster.";
     BloodSpecial,   "blood_special",    Moves, "blood", Length::Move(Class::BloodMage, 2), false,
-        "Reaper's debt: a channelled commitment. You cannot turn while it runs, and the pose should say so.";
+        "Grasp: both arms thrown open and snapped shut. Four arms leave wide and arrive together.";
+    BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,
+        "Black spike: a downward stabbing gesture that plants something in the ground.";
 
     // -- The Dual mage: Step strike, Lance, Judgement -----------------------
     DualPoke,      "dual_poke",       Moves, "dual", Length::Move(Class::DualMage, 0), false,

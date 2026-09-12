@@ -11,7 +11,7 @@ use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
 use sim::moves;
 use sim::state::{Action, MAX_PLAYERS};
-use sim::{Input, World};
+use sim::{Fx, Input, World};
 
 const Q: u16 = Input::SPECIAL;
 const E: u16 = Input::MECHANIC;
@@ -19,9 +19,50 @@ const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
 fn run(w: &mut World, frames: u32, a: u16, b: u16) {
+    looking(w, frames, a, 0, b);
+}
+
+/// The same, with player one holding a vertical aim as well as a horizontal
+/// one. A skillshot aimed level goes where level points, which is over the head
+/// of anybody more than a few metres away -- see `aiming_at`.
+fn looking(w: &mut World, frames: u32, a: u16, pitch: i16, b: u16) {
     for _ in 0..frames {
-        w.advance([Input::aimed(a, LOOK_RIGHT), Input::aimed(b, LOOK_LEFT)]);
+        w.advance([
+            Input::looking_at(a, LOOK_RIGHT, pitch),
+            Input::aimed(b, LOOK_LEFT),
+        ]);
     }
+}
+
+/// The pitch a player would be holding to put the crosshair on a fighter
+/// standing at `target`.
+///
+/// **Searched rather than computed, and that is the point.** Where the
+/// crosshair lands is the aim resolver's business: it depends on the ability's
+/// reach, on the camera's zones and on how high the eye sits, and every one of
+/// those is a knob. A hard-coded angle is a fixture that silently stops
+/// pointing at anything the next time one of them moves.
+fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
+    let reach = sim::moves::get(w.players[0].class, slot).reach;
+    let field = sim::stones::gather(&w.players);
+    let middle = sim::V3::new(
+        target.x,
+        sim::tuning::body_height().div(sim::fixed::Fx::from_int(2)),
+        target.z,
+    );
+    (0..=80)
+        .map(|step| -(step * 200) as i16)
+        .min_by_key(|pitch| {
+            let at = sim::aim::intent(
+                w.players[0].pos,
+                Input::looking_at(0, LOOK_RIGHT, *pitch),
+                reach,
+                false,
+                &field,
+            );
+            at.sub(middle).len().raw()
+        })
+        .expect("the scan is not empty")
 }
 
 /// Press a button, let go, and let the move play out. Holding a button down
@@ -130,16 +171,41 @@ fn standing_in_a_fire_pillar_costs_you_and_standing_in_your_own_does_not() {
 }
 
 #[test]
-fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
+fn an_auto_aimed_through_a_fire_pillar_lights_a_fire_bolt() {
     // The auto reads what it is aimed through. A fire pillar is a hazard, not
-    // a wall, so it charges the shot instead of stopping it -- unlike a
-    // structure in the same spot. See docs/design/kits/elementalist.md.
+    // a wall, so it does not stop the beam -- it lights one, and what leaves
+    // the pillar is a real projectile with a speed and a long range. See
+    // docs/design/kits/elementalist.md.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, Q, 20); // plant a pillar ahead, along the same aim as Bolt
-    assert_eq!(
-        effects_of(&w, EffectKind::FirePillar).len(),
-        1,
-        "fixture planted no pillar to aim through"
+    // Clear of the raised platforms, which reach four metres either side of
+    // the middle: a pillar planted on one stands a platform's height up and a
+    // level shot correctly passes underneath it. And the other fighter well
+    // out of the way, so what the beam meets first is the fire.
+    w.players[0].pos = sim::V3::new(Fx::from_int(-10), Fx::ZERO, Fx::from_int(8));
+    w.players[1].pos = sim::V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(8));
+    tap(&mut w, Q, 60); // plant a pillar ahead, and let her recover from it
+    let pillars = effects_of(&w, EffectKind::FirePillar);
+    assert_eq!(pillars.len(), 1, "fixture planted no pillar to aim through");
+    assert!(
+        w.bolts.iter().all(|b| b.is_none()),
+        "fixture started with a bolt already in the air"
+    );
+
+    // The pillar reaches further than the beam does, so she has to close
+    // before she can shoot through her own fire. Walked rather than assumed:
+    // both ranges are tuned, and a fixture that took the gap on faith would
+    // start passing or failing for reasons that have nothing to do with it.
+    let reach = sim::moves::get(Class::Elementalist, 0).reach;
+    let gap = |w: &World| pillars[0].pos.sub(w.players[0].pos).flat_len();
+    for _ in 0..240 {
+        if gap(&w).raw() < reach.raw() {
+            break;
+        }
+        run(&mut w, 1, Input::W, 0);
+    }
+    assert!(
+        gap(&w).raw() < reach.raw(),
+        "fixture never got within the beam's own range of the pillar"
     );
 
     for _ in 0..60 {
@@ -150,15 +216,33 @@ fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
     }
     assert!(
         matches!(w.players[0].action, Action::Active { kind: 0, .. }),
-        "Bolt never became active"
+        "the auto never became active"
     );
+    let lit = w.bolts.iter().flatten().next().copied();
+    let lit = lit.expect("aiming the auto through a fire pillar lit no fire bolt");
+
+    // It comes *from the fire*, not from her hand. Anything else and the
+    // interaction is invisible: the player would see a bolt leave the
+    // Elementalist and have no way to know the pillar had anything to do
+    // with it.
+    let live = effects_of(&w, EffectKind::FirePillar)[0];
+    let edge = live.pillar_volumes().0.radius;
+    let off = lit.pos.sub(live.pos).flat_len();
     assert!(
-        w.players[0].bolt_fire,
-        "a bolt aimed through a fire pillar was not empowered"
+        off.raw() <= edge.add(sim::tuning::fire_bolt_radius()).raw(),
+        "the bolt was lit {} m from the pillar, whose base is {} m across",
+        off.to_f32_for_render(),
+        edge.to_f32_for_render()
     );
+
+    // And it flies. The beam is instant; this is the one part with a speed.
+    let before = lit.pos;
+    run(&mut w, 3, 0, 0);
+    let moved = w.bolts.iter().flatten().next().copied();
+    let moved = moved.expect("the fire bolt vanished before it had gone anywhere");
     assert!(
-        !w.players[0].bolt_blocked,
-        "a fire pillar blocked the shot the way a structure does, which it should not"
+        moved.pos.sub(before).len().raw() > 0,
+        "the fire bolt never left the pillar"
     );
 }
 
@@ -201,10 +285,7 @@ fn one_fighter_cannot_spam_away_the_other_fighters_field() {
         ]);
     }
     for _ in 0..2 {
-        w.advance([
-            Input::aimed(0, LOOK_RIGHT),
-            Input::aimed(Input::SHIFT | Input::LEFT, LOOK_LEFT),
-        ]);
+        w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(E, LOOK_LEFT)]);
     }
     run(&mut w, 60, 0, 0);
     assert_eq!(
@@ -323,15 +404,105 @@ fn a_structure_climbs_out_of_the_ground_and_then_stops_counting() {
 
 // ---------------------------------------------------------------------------
 // The Blood mage
+//
+// The class spends its own health to cast and earns it back by connecting, so
+// most of what is asserted here is a health bar going the right way.
+//
+// Two fixtures, and both of them **ask where the ability went** rather than
+// assuming. Her two placed abilities reach a long way now, and a fixture that
+// hard-codes a distance is a fixture that silently stops testing anything the
+// next time somebody retunes the reach.
 // ---------------------------------------------------------------------------
+
+/// Cast the spike, then stand the other fighter in whatever it left behind.
+fn spiked(w: &mut World) {
+    run(w, 2, E, 0);
+    for _ in 0..120 {
+        run(w, 1, 0, 0);
+        if let Some(field) = effects_of(w, EffectKind::BlackSpike).first() {
+            w.players[1].pos = sim::V3::new(field.pos.x, w.players[1].pos.y, field.pos.z);
+            return;
+        }
+    }
+    panic!("the spike never went into the ground");
+}
+
+/// Stand the other fighter at the far end of a Grasp, where its four arms
+/// converge, and give back the pitch that points at them.
+fn in_the_grasp(w: &mut World) -> i16 {
+    let reach = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).reach;
+    w.players[1].pos = sim::V3::new(
+        w.players[0].pos.x.add(reach),
+        w.players[1].pos.y,
+        w.players[0].pos.z,
+    );
+    aiming_at(w, sim::state::SLOT_SPECIAL, w.players[1].pos)
+}
+
+#[test]
+fn the_black_spike_is_on_the_mechanic_key() {
+    // It used to be shift + click, which is the committed-attack slot on every
+    // class. `E` is where the thing only this class does belongs, and the Blood
+    // mage has nothing else to spend the key on -- her mechanic is health, and
+    // health is not a thing you toggle.
+    let mut w = engaged(Class::BloodMage);
+    tap(&mut w, Input::SHIFT | Input::LEFT, 60);
+    assert!(
+        effects_of(&w, EffectKind::BlackSpike).is_empty(),
+        "shift + click still casts the spike"
+    );
+
+    let mut w = engaged(Class::BloodMage);
+    tap(&mut w, E, 60);
+    assert_eq!(
+        effects_of(&w, EffectKind::BlackSpike).len(),
+        1,
+        "E did not cast the spike"
+    );
+}
+
+#[test]
+fn the_spike_takes_long_enough_to_be_seen_coming() {
+    // The cast is the telegraph. A field you can drop on somebody instantly is
+    // not a placement decision, it is a trap, and the whole point of the
+    // ability is that the other player gets to walk out of the circle.
+    let mut w = engaged(Class::BloodMage);
+    let startup = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC).startup;
+    assert!(
+        startup > sim::tuning::HUMAN_REACTION_FRAMES,
+        "the spike comes out inside reaction time, so nobody can answer it"
+    );
+    run(&mut w, 2, E, 0);
+    run(&mut w, (startup - 1) as u32, 0, 0);
+    assert!(
+        effects_of(&w, EffectKind::BlackSpike).is_empty(),
+        "the spike was already in the ground during the wind-up"
+    );
+}
+
+#[test]
+fn the_spike_reaches_much_further_than_a_swing() {
+    // It is placed with the crosshair, so the range is how far across the arena
+    // you can put a wall. Pinned against the class's own melee rather than
+    // against a number, so retuning either one keeps the relationship honest.
+    let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
+    let rend = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    assert!(
+        spike.reach.raw() > rend.reach.mul(sim::fixed::Fx::from_int(2)).raw(),
+        "the spike lands barely further than a claw does: {} against {}",
+        spike.reach.to_f32_for_render(),
+        rend.reach.to_f32_for_render()
+    );
+}
 
 #[test]
 fn the_black_spike_drains_and_slows_whoever_stands_in_it() {
     // Not a damage puddle: the slow is what makes it a wall. Leaving costs you
     // time, which is the whole reason to put one between yourself and someone.
-    let mut w = engaged(Class::BloodMage);
+    let mut w = as_class(Class::BloodMage);
     let before = w.players[1].health;
-    tap(&mut w, Input::SHIFT | Input::LEFT, 80);
+    spiked(&mut w);
+    run(&mut w, 60, 0, 0);
     assert_eq!(
         effects_of(&w, EffectKind::BlackSpike).len(),
         1,
@@ -345,9 +516,324 @@ fn the_black_spike_drains_and_slows_whoever_stands_in_it() {
 }
 
 #[test]
-fn a_slowed_fighter_covers_less_ground() {
+fn the_spike_feeds_the_caster_while_it_drains() {
+    // The class's whole loop: blood out on the press, blood back while it
+    // works. Continuous rather than a lump sum when the field expires, so a
+    // Blood mage standing in a fight is being paid the whole time it is up.
+    let mut w = as_class(Class::BloodMage);
+    let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
+    assert!(spike.leech > 0, "the spike returns nothing at all");
+
+    spiked(&mut w);
+    // Hurt, so there is room on the bar for the return to show.
+    w.players[0].health = sim::tuning::max_health() / 2;
+    let paid = w.players[0].health;
+    let victim = w.players[1].health;
+    run(&mut w, 60, 0, 0);
+    assert!(
+        w.players[1].health < victim,
+        "fixture: the field never drained anybody"
+    );
+    assert!(
+        w.players[0].health > paid,
+        "the spike drained {} and gave the caster none of it",
+        victim - w.players[1].health
+    );
+}
+
+#[test]
+fn casting_costs_the_blood_mage_health() {
+    // Every one of her abilities is paid for out of the bar, which is the class
+    // -- see `docs/design/kits/blood-mage.md`. Asserted on all four rather than
+    // on one, because "all of them" is the design and a free ability would be
+    // the one everybody pressed.
+    use sim::state::{SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
+    for (slot, button) in [
+        (SLOT_POKE, Input::LEFT),
+        (SLOT_COMMITTED, Input::SHIFT | Input::LEFT),
+        (SLOT_SPECIAL, Q),
+        (SLOT_MECHANIC, E),
+    ] {
+        let m = sim::moves::get(Class::BloodMage, slot);
+        assert!(m.cost > 0, "{} is free to cast", m.name);
+
+        // Cast it at nothing, so the only thing that can move the bar is the
+        // price of pressing the button.
+        let mut w = as_class(Class::BloodMage);
+        let before = w.players[0].health;
+        run(&mut w, 2, button, 0);
+        assert_eq!(
+            w.players[0].health,
+            before - m.cost,
+            "{} did not cost what the table says",
+            m.name
+        );
+    }
+}
+
+#[test]
+fn spending_health_cannot_kill_you() {
+    // Dying to your own button is not a decision anybody made. The same rule
+    // the Dual mage's meter burn already follows.
+    let mut w = as_class(Class::BloodMage);
+    // Nobody within reach of anything, so the bar can only go one way.
+    w.players[1].pos = sim::V3::new(
+        sim::fixed::Fx::from_int(-18),
+        w.players[1].pos.y,
+        w.players[1].pos.z,
+    );
+    w.players[0].health = 1;
+    for _ in 0..20 {
+        tap(&mut w, E, 60);
+        assert!(
+            w.players[0].health > 0,
+            "the Blood mage cast herself to death"
+        );
+    }
+    assert_eq!(w.players[0].health, 1, "self-damage did not clamp at one");
+}
+
+#[test]
+fn the_bloodletter_cuts_on_the_way_out_and_on_the_way_back() {
+    // The auto, and the simplest statement of what the class is: a blade goes
+    // out, comes back, and the blood comes home with it.
+    let mut w = as_class(Class::BloodMage);
+    let reach = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE).reach;
+    // Parked halfway along the throw, so the blade passes through them twice.
+    w.players[1].pos = sim::V3::new(
+        w.players[0]
+            .pos
+            .x
+            .add(reach.div(sim::fixed::Fx::from_int(2))),
+        w.players[1].pos.y,
+        w.players[0].pos.z,
+    );
+
+    let full = w.players[1].health;
+    let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
+    looking(&mut w, 2, Input::LEFT, pitch, 0);
+    let mut cuts = 0;
+    let mut last = full;
+    for _ in 0..120 {
+        run(&mut w, 1, 0, 0);
+        if w.players[1].health < last {
+            cuts += 1;
+            last = w.players[1].health;
+        }
+    }
+    assert_eq!(
+        cuts, 2,
+        "the blade landed {cuts} hits, not one out and one back"
+    );
+}
+
+#[test]
+fn the_bloodletter_pays_out_when_it_is_caught() {
+    // Not on contact. The cut lands at once and the health has to survive the
+    // flight home, which is what makes an auto attack a small commitment
+    // instead of a free poke.
+    let mut w = as_class(Class::BloodMage);
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
+    w.players[1].pos = sim::V3::new(
+        w.players[0]
+            .pos
+            .x
+            .add(m.reach.div(sim::fixed::Fx::from_int(2))),
+        w.players[1].pos.y,
+        w.players[0].pos.z,
+    );
+    // Hurt, so there is room on the bar for the return to be visible.
+    w.players[0].health = sim::tuning::max_health() / 2;
+
+    let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
+    looking(&mut w, 2, Input::LEFT, pitch, 0);
+    let flight = sim::tuning::bloodletter_flight();
+    run(&mut w, (m.startup + m.active) as u32, 0, 0);
+    let mid = w.players[0].health;
+    run(&mut w, flight as u32 / 2, 0, 0);
+    assert!(
+        w.players[1].health < sim::tuning::max_health(),
+        "fixture: the blade never cut anybody"
+    );
+    assert_eq!(
+        w.players[0].health, mid,
+        "the blade paid out before it came home"
+    );
+    run(&mut w, flight as u32, 0, 0);
+    assert!(
+        w.players[0].health > mid,
+        "the blade came home and brought nothing with it"
+    );
+}
+
+#[test]
+fn a_grasp_roots_only_when_every_arm_lands() {
+    // Four arms, and the root is the price of all four. One or two of them is a
+    // glancing blow; standing where the cone closes is a read, and a read is
+    // what the design lets a hard stop be bought with.
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    looking(&mut w, 2, Q, pitch, 0);
+    run(&mut w, 60, 0, 0);
+    assert!(
+        w.players[1].rooted > 0,
+        "caught by every arm and still walking"
+    );
+
+    // Far off to one side: the cone never reaches, so nothing lands.
+    let mut w = as_class(Class::BloodMage);
+    w.players[1].pos = sim::V3::new(
+        w.players[0].pos.x,
+        w.players[1].pos.y,
+        w.players[0].pos.z.add(sim::fixed::Fx::from_int(9)),
+    );
+    let full = w.players[1].health;
+    tap(&mut w, Q, 60);
+    assert_eq!(
+        w.players[1].health, full,
+        "the arms reached across the arena"
+    );
+    assert_eq!(w.players[1].rooted, 0, "rooted by a Grasp that missed");
+}
+
+#[test]
+fn a_rooted_fighter_cannot_walk_dodge_or_jump() {
+    // What separates a root from a very heavy slow: it takes the two buttons
+    // that would otherwise be the way out. It is not a stun -- you can still
+    // turn and swing at whoever put the arms round your legs.
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    looking(&mut w, 2, Q, pitch, 0);
+    // Past the arms and past the hitstun they came with. A root that expired
+    // inside its own hitstun would never be seen at all, which is why
+    // `a_root_outlives_the_hitstun_that_delivers_it` pins the two apart.
+    for _ in 0..200 {
+        run(&mut w, 1, 0, 0);
+        if w.players[1].action.actionable() && w.players[1].rooted > 0 {
+            break;
+        }
+    }
+    assert!(w.players[1].rooted > 0, "fixture rooted nobody");
+    assert!(
+        w.players[1].action.actionable(),
+        "the root stunned instead of pinning: you can still swing while held"
+    );
+
+    let start = w.players[1].pos;
+    run(&mut w, 6, 0, Input::W);
+    assert_eq!(
+        w.players[1].pos.x.raw(),
+        start.x.raw(),
+        "a rooted fighter walked"
+    );
+    run(&mut w, 2, 0, Input::SHIFT | Input::W);
+    assert!(
+        !matches!(w.players[1].action, Action::Dodge { .. }),
+        "a rooted fighter dodged out of it"
+    );
+    run(&mut w, 2, 0, Input::SPACE);
+    assert!(w.players[1].grounded, "a rooted fighter jumped out of it");
+
+    // And it ends.
+    run(&mut w, sim::tuning::grasp_root() as u32 + 2, 0, 0);
+    assert_eq!(w.players[1].rooted, 0, "the root never wore off");
+    run(&mut w, 6, 0, Input::W);
+    assert!(
+        w.players[1].pos.x.raw() != start.x.raw(),
+        "the feet never came back"
+    );
+}
+
+/// What one swing of `slot` takes off a fighter who has been put into `setup`.
+///
+/// The comparison the trait is about: the same move, the same distance, the
+/// same frame, against a victim whose options are gone and against one whose
+/// are not.
+fn one_hit(setup: impl Fn(&mut World)) -> i32 {
     let mut w = engaged(Class::BloodMage);
-    tap(&mut w, Input::SHIFT | Input::LEFT, 80);
+    run(&mut w, 20, 0, 0);
+    setup(&mut w);
+    let before = w.players[1].health;
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    run(&mut w, 2, Input::SHIFT | Input::LEFT, 0);
+    run(&mut w, (m.startup + m.active + 2) as u32, 0, 0);
+    before - w.players[1].health
+}
+
+#[test]
+fn a_blood_mage_hits_harder_when_you_cannot_move() {
+    // The class's damage identity, out of the archive: *naturally deals
+    // increased damage on disabled enemies*. It is what turns the Grasp's root
+    // from a small reward into a setup -- four arms is expensive, and it is
+    // only worth the cost if something is waiting on the other side of it.
+    let free = one_hit(|_| {});
+    let rooted = one_hit(|w| w.players[1].root(120));
+    assert!(free > 0, "fixture: the claw did not connect at all");
+    assert!(
+        rooted > free,
+        "a rooted fighter took {rooted} where a free one took {free}"
+    );
+
+    let expected = sim::fixed::Fx::from_int(free)
+        .mul(sim::tuning::disabled_damage_mul())
+        .to_int();
+    assert!(
+        (rooted - expected).abs() <= 1,
+        "the bonus is {rooted} against {free}, which is not the knob"
+    );
+}
+
+#[test]
+fn hitstun_is_not_a_disable() {
+    // The line the whole definition rests on. Hitstun happens on every hit
+    // anybody lands, so counting it would make the trait "increased damage
+    // from the second hit onward" -- a flat damage bonus in a costume, and one
+    // that would need no read at all.
+    let stunned = one_hit(|w| {
+        w.players[1].action = Action::HitStun { left: 90 };
+    });
+    let free = one_hit(|_| {});
+    assert_eq!(
+        stunned, free,
+        "being in hitstun counted as being disabled, so the bonus is free"
+    );
+}
+
+#[test]
+fn nobody_else_preys_on_the_disabled() {
+    // A second class quietly acquiring it would mean the trait had stopped
+    // being an identity.
+    use sim::class::ALL_CLASSES;
+    for class in ALL_CLASSES {
+        assert_eq!(
+            class.preys_on_the_disabled(),
+            class == Class::BloodMage,
+            "{} hits the disabled harder",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn the_grasp_sets_up_its_own_payoff() {
+    // The two halves together, which is the point of implementing either. Root
+    // them with every arm, then hit them while they are held there.
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    looking(&mut w, 2, Q, pitch, 0);
+    run(&mut w, 60, 0, 0);
+    assert!(w.players[1].rooted > 0, "fixture rooted nobody");
+    assert!(
+        w.players[1].disabled(),
+        "the root does not count as a disable, so the payoff never fires"
+    );
+}
+
+#[test]
+fn a_slowed_fighter_covers_less_ground() {
+    let mut w = as_class(Class::BloodMage);
+    spiked(&mut w);
+    run(&mut w, 20, 0, 0);
     assert!(w.players[1].slowed > 0, "fixture did not slow anyone");
 
     let start = w.players[1].pos;

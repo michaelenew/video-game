@@ -79,6 +79,24 @@ pub struct Move {
     /// on-hit arithmetic below stops meaning anything, because the move is
     /// still in its active frames when the next cut lands.
     pub rehit: u16,
+    /// Health the caster pays the moment the move starts.
+    ///
+    /// Zero on almost everything. It is the Blood mage's whole economy -- see
+    /// `docs/design/kits/blood-mage.md` -- and it is a move field rather than a
+    /// class rule because the *spread* is the design: an auto you can throw all
+    /// day costs a trickle, and the committed casts cost real blood.
+    ///
+    /// **It can never kill you.** Self-damage clamps at one, the same rule the
+    /// Dual mage's meter burn already follows: dying to your own button is not
+    /// a decision anybody made.
+    pub cost: i32,
+    /// Percent of the damage this move deals that comes back as health.
+    ///
+    /// The other half of the same economy: the cost is paid on the press and
+    /// the return is earned on the hit, so missing is the punishment. Applies
+    /// to what the move itself deals and to what anything it leaves behind
+    /// drains -- one number per ability, wherever the damage happens to land.
+    pub leech: u8,
     /// The volume this move puts in the world. See [`Shape`].
     pub shape: Shape,
 }
@@ -168,9 +186,30 @@ impl Move {
         self.mobility == 0
     }
 
-    /// Whether this move can hit anybody. False for the pure-movement ones.
+    /// Whether this move strikes on its own, or only places something -- or
+    /// nothing at all.
+    ///
+    /// Two ways to answer no, and they are different sentences.
+    ///
+    /// A radius of zero is not a tiny hitbox, it is *no* hitbox: the move is a
+    /// gesture that puts something into the world and the thing it put there
+    /// does all of the hitting. The Blood mage's auto and her Grasp are both
+    /// that shape -- the blade and the arms carry the damage, and the caster's
+    /// own body never touches anybody.
+    ///
+    /// [`Shape::None`] is the other: a move that puts nothing in the world
+    /// either, because it is pure movement. The Champion's pole vault is the
+    /// only one.
     pub const fn strikes(&self) -> bool {
-        self.shape.strikes()
+        self.shape.strikes() && self.radius.raw() > 0
+    }
+
+    /// Health returned for `dealt` damage, rounded down.
+    pub const fn leeched(&self, dealt: i32) -> i32 {
+        if self.leech == 0 || dealt <= 0 {
+            return 0;
+        }
+        (dealt * self.leech as i32) / 100
     }
 }
 
@@ -185,11 +224,19 @@ impl Move {
 //
 // `cargo run -p sim --bin frametable` prints the current values.
 
-/// Every class's moves, in slot order.
+/// Every class's moves, in slot order: poke, committed, special, and then
+/// whatever else that class has.
 ///
-/// Five classes carry the original three -- poke, committed, special -- and the
-/// Champion carries ten, because its buttons *are* its weapons: see
-/// [`CHAMPION`] for the shape of that list.
+/// **The list is a different length for each class, and that is the design.**
+/// Three is the shared vocabulary. The Blood mage has a fourth on `E`, because
+/// her mechanic is *health* -- not a thing you press a button to change -- so
+/// the key is free for an ability, and an ability needs a startup, a reach and
+/// a cost like any other. The Champion has ten, because its three mouse buttons
+/// are three weapons and each of them behaves differently on foot, in the air
+/// and mid-Rush: see [`champion`].
+///
+/// Storage is packed to these counts, so a class that does not have a slot does
+/// not have knobs for one either -- see [`slots`] and [`bound`].
 const NAMES: [&[&str]; 6] = [
     // Bulwark -- committed, not slow. Wins by denying space.
     //   Bash: fast poke, slightly minus on block so it is not a free mash.
@@ -197,7 +244,7 @@ const NAMES: [&[&str]; 6] = [
     //   Grapple: beats guard outright, loses badly to dodge.
     &["Bash", "Slam", "Grapple"],
     // Champion -- three weapons on three buttons, and a dash that changes what
-    // all three of them do.
+    // all three of them do. Ten moves: see `champion` for the grid they form.
     &[
         "Sword",
         "Hammer",
@@ -214,17 +261,28 @@ const NAMES: [&[&str]; 6] = [
     //   Guillotine: blades erupt from the shadow, so it needs one placed.
     &["Slash", "Executioner", "Guillotine"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
-    //   Fire pillar: detonates a structure for a wider blast, so it wants one out.
+    //   Bolt: the odd one out. It is a *beam* -- an instant ray along the
+    //   crosshair -- so its `reach` is the line's length and its `radius` is the
+    //   line's thickness, and it is resolved where it is fired rather than by
+    //   the hitbox loop. Its hitstun and knockback are zero on purpose: it takes
+    //   the charge off whoever it catches and gives them their frames straight
+    //   back. See `crate::bolt`.
     &["Bolt", "Fissure", "Fire pillar"],
-    // Blood mage -- sustain through aggression. Everything costs health.
-    //   Reaper's debt: committed and directional, you cannot turn while it channels.
-    &["Rend", "Black spike", "Reaper's debt"],
+    // Blood mage -- sustain through aggression. Everything costs health, and
+    // every one of these has a cost in the table to prove it.
+    //   Bloodletter: the auto. Out to a fixed distance and back, cutting on
+    //     both passes, and the blood it takes comes home with it.
+    //   Rend: the committed poke it was before the auto took its slot.
+    //   Grasp: four arms out in a cone that arc back inward to meet. Caught by
+    //     all four and you are rooted.
+    //   Black spike: on `E`, because the class has no other use for the key.
+    &["Bloodletter", "Rend", "Grasp", "Black spike"],
     // Dual mage -- melee mage riding between two forces.
     //   Judgement: a finisher, only past the deep threshold on its own side.
     &["Step strike", "Lance", "Judgement"],
 ];
 
-/// The slots every class has: poke, committed, special.
+/// The slots every class has: poke, committed, special. Two classes have more.
 pub const SLOTS: usize = 3;
 
 // ---------------------------------------------------------------------------
@@ -297,7 +355,28 @@ pub mod champion {
 pub const fn slots(class: Class) -> usize {
     match class {
         Class::Champion => champion::COUNT,
+        // The fourth is Black spike, on `E`. See `on_e`.
+        Class::BloodMage => SLOTS + 1,
         _ => SLOTS,
+    }
+}
+
+/// Which move the `E` key throws, if the class puts one there.
+///
+/// `E` is the class mechanic, and for five of the six that is an instant change
+/// of state -- throw the shield, Rush, place the shadow, raise a structure --
+/// with no frames of its own and nothing to tune. The Blood mage's mechanic is
+/// *health*, which is not a thing you press a button to change, so her `E` is
+/// free to be an ability instead, and an ability needs a startup, a reach and a
+/// cost like any other.
+///
+/// A function rather than a fixed slot index, because "the fourth slot" stopped
+/// meaning "the `E` key" the moment a class had ten of them: the Champion's
+/// fourth is its aerial sword.
+pub const fn on_e(class: Class) -> Option<u8> {
+    match class {
+        Class::BloodMage => Some(SLOTS as u8),
+        _ => None,
     }
 }
 
@@ -341,18 +420,21 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             0 => "LMB",
             1 => "MMB",
             2 => "RMB",
-            3 => "LMB, airborne",
-            4 => "MMB, airborne",
-            5 => "RMB, airborne",
-            6 => "LMB, rushing",
-            7 => "MMB, rushing",
-            8 => "RMB, rushing",
-            _ => "RMB, rushing, aimed low",
+            3 => "LMB air",
+            4 => "MMB air",
+            5 => "RMB air",
+            6 => "LMB rush",
+            7 => "MMB rush",
+            8 => "RMB rush",
+            _ => "RMB rush, low",
         },
         _ => match slot {
             0 => "LMB",
             1 => "Shift+LMB",
-            _ => "Q",
+            2 => "Q",
+            // Only the Blood mage has a fourth, because only she has no use
+            // for `E` as a mechanic key -- her mechanic is health.
+            _ => "E",
         },
     }
 }
@@ -391,6 +473,19 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
     }
 }
 
+/// Does this class use this slot at all?
+///
+/// Storage is **packed** to each class's own count, so this is now simply
+/// "is the slot in range" -- there is no hole in the table to step over, and a
+/// class that does not have a slot does not have knobs for one either. It
+/// stays as a named predicate because the callers are asking a question about
+/// the design rather than about an array bound: a move with all its numbers set
+/// to zero is plus on block and kills in no hits, and would fail every property
+/// in `feel.rs` for reasons that have nothing to do with the game.
+pub fn bound(class: Class, slot: usize) -> bool {
+    slot < slots(class)
+}
+
 /// Build a move from the live tuning store.
 ///
 /// By value rather than by reference: the numbers can change between frames, so
@@ -420,13 +515,20 @@ pub fn get(class: Class, kind: u8) -> Move {
         self_lift: Fx::from_raw(raw(F::SelfLift)),
         grabs: raw(F::Grabs) as u16,
         effect: raw(F::Effect) as u8,
+        cost: raw(F::Cost),
+        leech: raw(F::Leech) as u8,
         arc: Fx::from_raw(raw(F::Arc)),
         rehit: raw(F::Rehit) as u16,
         shape: shape(class, slot as u8),
     }
 }
 
-/// All of a class's moves, live.
+/// Every move a class actually has, live.
+///
+/// A `Vec` rather than an array because the count is not the same for
+/// everybody: three for most of the roster, four for the Blood mage, ten for
+/// the Champion. The callers are the frame table and the feel tests, neither of
+/// which runs inside a frame, so the allocation buys readability for nothing.
 pub fn table(class: Class) -> Vec<Move> {
     (0..slots(class)).map(|i| get(class, i as u8)).collect()
 }

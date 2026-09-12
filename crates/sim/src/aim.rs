@@ -183,35 +183,9 @@ fn floor_hit(from: V3, dir: V3) -> Option<Fx> {
     Some(from.y.div(dir.y.neg()))
 }
 
-/// Slab method: the ray is inside the box over the intersection of the three
-/// per-axis intervals it is inside each slab for.
+/// One of the arena's blocks.
 fn box_hit(from: V3, dir: V3, solid: &Solid) -> Option<Fx> {
-    let mut near = Fx::ZERO;
-    let mut far = Fx::MAX;
-    for axis in 0..3 {
-        let o = component(from, axis);
-        let d = component(dir, axis);
-        let lo = component(solid.min, axis);
-        let hi = component(solid.max, axis);
-        if d.raw() == 0 {
-            // Parallel to this pair of faces: either always between them or
-            // never. Checked by hand because dividing by zero saturates, which
-            // would read as "always".
-            if o.raw() < lo.raw() || o.raw() > hi.raw() {
-                return None;
-            }
-            continue;
-        }
-        let a = lo.sub(o).div(d);
-        let b = hi.sub(o).div(d);
-        let (enter, leave) = if a.raw() <= b.raw() { (a, b) } else { (b, a) };
-        near = near.max(enter);
-        far = far.min(leave);
-        if near.raw() > far.raw() {
-            return None;
-        }
-    }
-    Some(near)
+    crate::math::ray_hits_box(from, dir, solid.min, solid.max)
 }
 
 /// A stone: an upright cylinder standing on its base, with both end caps.
@@ -220,59 +194,12 @@ fn box_hit(from: V3, dir: V3, solid: &Solid) -> Option<Fx> {
 /// next thing on top of it, and a cylinder without caps is a tube the ray goes
 /// straight down.
 fn stone_hit(from: V3, dir: V3, stone: &Structure) -> Option<Fx> {
-    let (base, top) = (stone.at.y, stone.top());
-    if top.raw() <= base.raw() {
-        return None; // still buried, so there is nothing there to hit
-    }
-    let radius = t::structure_radius();
-    let ox = from.x.sub(stone.at.x);
-    let oz = from.z.sub(stone.at.z);
-    let mut best: Option<Fx> = None;
-    let mut keep = |d: Fx| {
-        if d.raw() >= 0 && best.is_none_or(|b| d.raw() < b.raw()) {
-            best = Some(d);
-        }
-    };
-
-    // The curved side. `a` is zero looking straight up or down, where there is
-    // no side to hit and the caps are the whole answer.
-    let a = dir.x.mul(dir.x).add(dir.z.mul(dir.z));
-    if a.raw() > 0 {
-        let half_b = ox.mul(dir.x).add(oz.mul(dir.z));
-        let c = ox.mul(ox).add(oz.mul(oz)).sub(radius.mul(radius));
-        let disc = half_b.mul(half_b).sub(a.mul(c));
-        if disc.raw() >= 0 {
-            let root = disc.sqrt();
-            for d in [half_b.neg().sub(root).div(a), half_b.neg().add(root).div(a)] {
-                let y = from.y.add(dir.y.mul(d));
-                if y.raw() >= base.raw() && y.raw() <= top.raw() {
-                    keep(d);
-                }
-            }
-        }
-    }
-
-    // The caps.
-    if dir.y.raw() != 0 {
-        for face in [base, top] {
-            let d = face.sub(from.y).div(dir.y);
-            if d.raw() < 0 {
-                continue;
-            }
-            let x = ox.add(dir.x.mul(d));
-            let z = oz.add(dir.z.mul(d));
-            if x.mul(x).add(z.mul(z)).raw() <= radius.mul(radius).raw() {
-                keep(d);
-            }
-        }
-    }
-    best
-}
-
-fn component(v: V3, axis: usize) -> Fx {
-    match axis {
-        0 => v.x,
-        1 => v.y,
-        _ => v.z,
-    }
+    crate::math::ray_hits_cylinder(
+        from,
+        dir,
+        stone.at,
+        t::structure_radius(),
+        // Still buried, so there is nothing there to hit.
+        stone.standing_height(),
+    )
 }
