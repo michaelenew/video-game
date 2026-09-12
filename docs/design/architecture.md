@@ -403,9 +403,11 @@ The Elementalist's structures are a cap-of-three resource owned by her mechanic,
 They were briefly put in the effects array, which looked like reuse and was not. Two things
 came with it, and both were bugs:
 
-A **lifetime they never had.** The fire pillar is gated on having a structure out, so ten
-seconds after raising one the class's own special stopped working, silently, with no way to
-tell why.
+A **lifetime they never had.** The fire pillar used to be gated on having a structure out, so
+ten seconds after raising one the class's own special stopped working, silently, with no way
+to tell why. That gate is gone now — the pillar never needed a structure to exist, let alone
+one still standing — but the structures still have no clock, on the same reasoning: a
+cap-of-three resource is spent by raising a fourth, not by a timer nobody asked for.
 
 A **second list to disagree with.** Being in the array meant the mechanic's slots and the array
 both claimed to know what was standing, which needed a reconciliation pass every frame to keep
