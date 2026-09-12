@@ -1322,3 +1322,44 @@ and at ground a few metres ahead.
 the sphere across the reachable neutral zone, and at least half a radius of travel across the
 floor zone while the feet climb a fifth of the screen. The pinned tuning fails the second with
 "the eye only travelled 0.00 m", which is exactly the report.
+
+### 2026-09-12 — the camera is an orbit with a tilt, and nothing is solved
+
+**Changed** the whole rig. The eye no longer satisfies a condition; it is placed by a
+subtraction. Each zone names a sphere — centre, radius, tilt — and the eye sits at
+`tilt - pitch` around it. Sphere 7 m below the horizon, contracting to 0.2 m at the head above
+it. The camera points down the look axis rather than at the aim point.
+
+**Why** three attempts at solving the eye from the framing all ended the same way: the condition
+becomes unreachable partway down the range, the solve saturates, and the eye parks against a
+limit where it stops answering the mouse. Reported twice as "the camera stops moving", and both
+times the fix I reached for was a number.
+
+**The thing I had backwards.** The sphere is centred on the thing being framed, so the line from
+the eye to that centre *is* the radius the eye is standing on — whichever way round the sphere
+it has walked. Turn the view up off that line by a fixed angle and the centre lands at a fixed
+place on the screen, at every eye position, for free. **The framing is a consequence of the tilt,
+not a condition on the position.** Which leaves the position free to be the mouse, directly, at
+one degree of orbit per degree of mouse, with nothing that can saturate. Every previous version
+of this file describing a solve was solving a problem that did not need to exist.
+
+**What it costs, and it is not small.** The camera no longer points at the ability's landing
+point — it points down the look axis, which is what the prescription asks for. So the crosshair
+and the spot a grounded ability lands on are no longer the same place:
+
+| Aim | Crosshair marks | Ability lands | Apart |
+| --- | --- | --- | --- |
+| −10 | 18.0 m ahead | 7.1 m | 10.9 m |
+| −27 | 6.9 m ahead | 2.5 m | 4.4 m |
+| −45 | 4.4 m ahead | 1.2 m | 3.2 m |
+| −70 | 1.3 m ahead | 0.5 m | 0.8 m |
+
+The two rays are parallel — same direction, different origin — so the miss is the eye's offset
+from the chest, and it only closes where the sphere has contracted onto the head. Closing it
+properly means the aim tracing from the *eye* rather than from the chest, which makes the
+camera's geometry simulation state: it would go into the checksum, peers would have to agree on
+it, and the personal distance setting could not scale it any more. That is an architecture
+decision rather than a tuning one, so it is written down here rather than taken.
+
+**Verdict** open, and deliberately not merged on its own. The camera is exactly the prescription
+and measures out at every waypoint; the aiming correspondence is the open question.

@@ -336,15 +336,16 @@ macro_rules! view_knobs {
 // percentages measured from the bottom of the screen, so the crosshair sits at
 // 50 by definition.
 //
-// The **sphere radius** is the one that decides how the whole thing feels. The
-// eye rides a sphere of that radius centred on the fighter's feet, so it is the
-// distance the camera keeps -- and, because the eye has nowhere else to go, it
-// is also what decides how far down the look-down range the fighter can be held
-// near the bottom of the frame. Smaller keeps them low further down and draws
-// them bigger; larger draws them smaller and hands the job over to the floor
-// zone sooner.
+// The camera is always on the surface of a sphere, looking inward past a tilt,
+// and the mouse walks it around that sphere at a steady rate. What the zones
+// change is the sphere: where it is centred, how big it is, and how far the
+// view is tilted off the line to its centre. The **radius** is the distance the
+// camera keeps and therefore how big the fighter is drawn; the **screen
+// percentages** are the tilts, written as where the point at the sphere's
+// centre should sit on screen, which is the same thing.
 view_knobs! {
-    Sphere,         "Sphere radius (m)",        Fixed,   fx(1,1), fx(30,1);
+    Sphere,         "Sphere radius (m)",        Fixed,   fx(1,2), fx(30,1);
+    HeadSphere,     "Sphere, at the head (m)",  Fixed,   0,       fx(3,1);
     LookDownLimit,  "Look down limit",          Int,     10,  89;
     LookUpLimit,    "Look up limit",            Int,     10,  89;
     FloorZoneFrom,  "Floor zone, from",         Int,     10,  89;
@@ -353,8 +354,7 @@ view_knobs! {
     FeetNeutral,    "Feet, neutral (%)",        Int,     0,   50;
     FeetFloor,      "Feet, floor (%)",          Int,     0,   50;
     HeadGapLevel,   "Head to crosshair (%)",    Int,     0,   30;
-    MinElevation,   "Eye elevation, least",     Int,     0,   89;
-    MaxElevation,   "Eye elevation, most",      Int,     0,   89;
+    FadeNear,       "Body gone within (m)",     Fixed,   0,       fx(6,1);
 }
 
 pub const VIEW_COUNT: usize = 11;

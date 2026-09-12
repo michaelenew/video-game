@@ -83,6 +83,12 @@
 //! purpose. What moves instead is the world, by the parallax angle, and only as
 //! the target's distance changes.
 
+/// How far ahead the point the camera is aimed at is put. Any distance does --
+/// it is a direction being expressed as a point, because that is what a look-at
+/// transform wants -- but far enough out that single-precision rounding on it
+/// cannot wobble the bearing.
+const SIGHT: f32 = 100.0;
+
 /// Arena floor height, and how far above it the eye may come.
 const GROUND: f32 = 0.0;
 const FLOOR_CLEARANCE: f32 = 0.3;
@@ -99,6 +105,20 @@ pub struct Framing {
     /// drawing it -- see `sky_start`. Reported as a fraction rather than a flag
     /// so the model can fade instead of popping.
     pub first_person: f32,
+    /// How much of the fighter's own body to take away, 0 to 1.
+    ///
+    /// Two separate reasons to stop drawing it, and the stronger one wins.
+    ///
+    /// It goes **translucent as it comes up on the crosshair**, because a body
+    /// the player is trying to aim past is worse than no body at all, and the
+    /// reticle is the one thing on screen they are holding still on purpose.
+    ///
+    /// It goes **fully away when the eye gets close**, measured as a plain
+    /// distance to the body rather than as a zone. That matters: the eye can
+    /// end up against the fighter's back with the aim pointed nowhere near the
+    /// sky -- a wall behind them pulls the arm in, and then the whole frame is
+    /// the inside of a shoulder. Distance catches that, and a zone never could.
+    pub hidden: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -155,6 +175,37 @@ const REFERENCE_DISTANCE: f32 = 10.9;
 /// you are watching it. The *values* are knobs; the **shape** -- which zones
 /// exist and what each one is trying to achieve -- is the code below and is
 /// deliberately not configurable. A waypoint is a design decision.
+/// One zone's sphere: where it sits, how big it is, and how far the view is
+/// tilted off the line to its centre.
+///
+/// These three are the whole of what a zone decides. The eye's *position* is
+/// not among them -- that comes straight from the mouse -- and neither is the
+/// framing, which follows from the tilt without being asked for.
+#[derive(Clone, Copy, Debug)]
+struct Ball {
+    /// Height up the fighter the sphere is centred on. Zero is the feet.
+    centre: f32,
+    radius: f32,
+    /// How far the view is turned up off the line to the centre, in radians.
+    ///
+    /// **This is what frames the shot, and it is why nothing has to be solved.**
+    /// The eye is on a sphere about the centre, so the line to that centre is
+    /// the radius the eye is standing on, whichever way round the sphere it has
+    /// walked. Turn the view up off that line by a fixed angle and the centre
+    /// sits at a fixed place on the screen -- *always*, at every eye position,
+    /// for free. A tilt is a screen position expressed as an angle.
+    tilt: f32,
+}
+
+/// The camera's zones, as tuned.
+///
+/// Angles in radians, negative below the horizon. Screen positions as fractions
+/// from the bottom, so the crosshair is at one half by definition.
+///
+/// Read fresh from the Oven every frame, so the sliders move the camera while
+/// you are watching it. The *values* are knobs; the **shape** -- which zones
+/// exist and what each one is trying to achieve -- is the code below and is
+/// deliberately not configurable. A waypoint is a design decision.
 #[derive(Clone, Copy, Debug)]
 pub struct Zones {
     /// Straight down is a quarter turn; the rig stops short of it. Not
@@ -162,48 +213,28 @@ pub struct Zones {
     /// defined and the camera has nothing left to be behind.
     pub down_limit: f32,
     pub up_limit: f32,
-    /// Below this the fighter walks up the screen toward the crosshair.
+    /// Below this the view tilts down toward the fighter's own feet.
     pub floor_from: f32,
-    /// Above this the rig starts turning its attention from feet to head.
+    /// Above this the sphere starts moving from the feet to the head.
     pub neutral_to: f32,
     /// Above this the eye is the fighter's own.
     pub head_lock: f32,
-    /// How far from the fighter's feet the eye rides, in metres.
-    ///
-    /// The camera has one place to be: somewhere on a sphere of this radius
-    /// centred on their feet. Everything else the rig decides is *where* on
-    /// that sphere, which is a single angle. Fixing the radius is what stops
-    /// the camera dollying in and out while the player is only steering.
+    /// How far out the eye rides below the horizon, in metres.
     pub sphere: f32,
+    /// What that shrinks to once the eye is the fighter's own.
+    ///
+    /// Not quite nothing, because a sphere of no radius has no direction to be
+    /// behind and the eye would sit exactly inside the skull.
+    pub head_sphere: f32,
     /// Where the feet sit through the neutral zone.
     pub feet_neutral: f32,
     /// Where the feet have reached at the bottom of the range.
     pub feet_floor: f32,
     /// How far under the crosshair the top of the head rides at level.
     pub head_gap: f32,
-    /// Bounds on how high around the sphere the eye may climb.
-    ///
-    /// These carry most of the feel now, because on a fixed sphere the framing
-    /// runs out of room and leaves the eye resting against one of them for much
-    /// of the look-down range.
-    ///
-    /// The **ceiling** is how far the camera is willing to swing overhead in
-    /// order to keep the fighter down at the bottom of the frame. It is a
-    /// trade, not a safety limit: higher holds them low further down the range
-    /// and gets more top-down about it; lower keeps a normal third-person view
-    /// and hands over to the fighter walking up the screen sooner.
-    ///
-    /// The **floor** is how far back down the rig may come at the bottom of the
-    /// look-down range, and it wants room rather than safety. Past the neutral
-    /// zone the framing asks for two things at once -- the eye keeps working
-    /// around the sphere *and* the view pans the fighter up toward the
-    /// crosshair -- and the second is what brings the eye back down off the top
-    /// of the sphere. Clamped tight the eye stops moving, which reads as the
-    /// camera giving up halfway through a turn the player can feel they are
-    /// still making. Only the last degree or so wants stopping, where "feet
-    /// exactly on the crosshair" would ask for an eye in line with the feet.
-    pub min_elevation: f32,
-    pub max_elevation: f32,
+    /// How close the eye may get before the fighter's own body stops being
+    /// drawn at all, in metres.
+    pub fade_near: f32,
 }
 
 impl Zones {
@@ -211,18 +242,19 @@ impl Zones {
         use sim::oven::{ViewKnob as V, view};
         let deg = |k| (view(k) as f32).to_radians();
         let pct = |k| view(k) as f32 / 100.0;
+        let metres = |k| sim::Fx::from_raw(view(k)).to_f32_for_render();
         Zones {
             down_limit: deg(V::LookDownLimit),
             up_limit: deg(V::LookUpLimit),
             floor_from: deg(V::FloorZoneFrom),
             neutral_to: deg(V::NeutralZoneTo),
             head_lock: deg(V::HeadLockAt),
-            sphere: sim::Fx::from_raw(view(V::Sphere)).to_f32_for_render(),
+            sphere: metres(V::Sphere),
+            head_sphere: metres(V::HeadSphere),
             feet_neutral: pct(V::FeetNeutral),
             feet_floor: pct(V::FeetFloor),
             head_gap: pct(V::HeadGapLevel),
-            min_elevation: deg(V::MinElevation),
-            max_elevation: deg(V::MaxElevation),
+            fade_near: metres(V::FadeNear),
         }
     }
 
@@ -241,90 +273,71 @@ impl Zones {
         }
     }
 
-    /// What the framing asks for at this aim angle.
+    /// The sphere the eye is riding at this aim angle.
     ///
-    /// One point on the fighter, and where on the screen it has to land. That
-    /// is the whole of it: the eye is already pinned to the sphere, so a single
-    /// condition is exactly enough to place it, and asking for a second one
-    /// would only make the pair unsolvable.
-    fn want(&self, pitch: f32, body: f32) -> Want {
+    /// Every zone is a straight interpolation of the same three numbers, and
+    /// each one starts where the last one left off, so the whole range is
+    /// continuous without anything being blended or clamped to make it so.
+    fn ball(&self, pitch: f32, body: f32, fov: f32) -> Ball {
+        // A screen position, as the angle the view has to be turned up by to
+        // put it there. Through a tangent, because the screen is a flat plane a
+        // fixed distance in front of the eye rather than an arc: twice the
+        // angle off centre is more than twice the distance up the glass.
+        let tilt_for = |at: f32| ((1.0 - 2.0 * at) * (fov * 0.5).tan()).atan();
+        let low = tilt_for(self.feet_neutral);
+        let level = tilt_for(0.5 - self.head_gap);
+
         if pitch <= -self.floor_from {
-            // **The floor zone.** Looking further down walks the fighter up the
-            // screen, until at the limit the camera is looking at their feet.
+            // **The floor zone.** The view tilts down onto the fighter's own
+            // feet, so that at the bottom of the range the crosshair is on them
+            // -- the shot that puts a stone underneath you. The eye keeps
+            // working around the sphere while it does; that is the mouse, and
+            // the mouse never stops moving it.
             let t =
                 ((-pitch - self.floor_from) / (self.down_limit - self.floor_from)).clamp(0.0, 1.0);
-            Want {
-                on_body: 0.0,
-                at: lerp(self.feet_neutral, self.feet_floor, t),
-                least_elevation: self.min_elevation,
-                settle: t,
+            Ball {
+                centre: 0.0,
+                radius: self.sphere,
+                tilt: lerp(low, tilt_for(self.feet_floor), t),
             }
         } else if pitch <= -self.neutral_to {
-            // **The neutral zone**, where most of a match is spent. The fighter
-            // sits low and the same size throughout.
-            Want {
-                on_body: 0.0,
-                at: self.feet_neutral,
-                least_elevation: 0.0,
-                settle: 0.0,
+            // **The neutral zone**, where most of a match is spent. Nothing
+            // about the sphere changes here at all -- only where the eye is on
+            // it -- so the fighter sits at exactly the same spot on screen
+            // through the whole band while the camera swings around behind
+            // them.
+            Ball {
+                centre: 0.0,
+                radius: self.sphere,
+                tilt: low,
+            }
+        } else if pitch <= 0.0 {
+            // **The turn.** The sphere slides up the body from the feet to the
+            // head, and the tilt comes with it, until at level the crosshair
+            // rides just above the head -- which is what gives a mid-range
+            // skillshot something to key off when there is no ground under the
+            // aim to read it against.
+            let t = ((pitch + self.neutral_to) / self.neutral_to).clamp(0.0, 1.0);
+            Ball {
+                centre: lerp(0.0, body, t),
+                radius: self.sphere,
+                tilt: lerp(low, level, t),
             }
         } else {
-            // **The turn.** Attention moves from the feet to the head, and by
-            // level the crosshair rides just above the head -- which is what
-            // gives a mid-range skillshot something to key off when there is no
-            // ground under the aim to read it against.
-            let t = ((pitch + self.neutral_to) / self.neutral_to).clamp(0.0, 1.0);
-            Want {
-                on_body: lerp(0.0, body, t),
-                at: lerp(self.feet_neutral, 0.5 - self.head_gap, t),
-                least_elevation: 0.0,
-                settle: 0.0,
+            // **The handover**, and then the fighter's own eye. The sphere
+            // shrinks onto the head and the tilt goes to nothing, which leaves
+            // the camera looking straight down the line the crosshair draws.
+            // Past the handover none of the three moves again, so a skillshot
+            // aimed at the sky follows that line rather than one parallel to
+            // it.
+            let t = (pitch / self.head_lock).min(1.0);
+            Ball {
+                centre: body,
+                radius: lerp(self.sphere, self.head_sphere, t),
+                tilt: lerp(level, 0.0, t),
             }
         }
     }
-}
-
-/// Where on the fighter the rig is placing, and where that has to land.
-#[derive(Clone, Copy, Debug)]
-struct Want {
-    /// Height up the body of the point being placed. Zero is the feet.
-    on_body: f32,
-    /// Where that point sits, as a fraction up the screen.
-    at: f32,
-    /// How far to bring the eye down to `least_elevation` regardless of the
-    /// framing, from nought to one.
-    ///
-    /// **The floor zone's own mechanism, and it needs one.** Everywhere else a
-    /// single condition places the eye and that is enough. Down here the
-    /// framing stops being able to: the crosshair's mark is so close to the
-    /// fighter's feet that no eye on the sphere can hold them far apart, the
-    /// solve saturates, and a saturated solve does not move -- it sits against
-    /// the top of the sphere answering nothing, which reads as the camera
-    /// giving up halfway through a turn the player can feel they are still
-    /// making.
-    ///
-    /// So the zone walks the eye down itself, from wherever the neutral zone
-    /// handed it over to lying along the fighter's own feet at the bottom. It
-    /// starts at nought, so the handover is exactly the framing's answer and
-    /// there is no seam; it ends at one, so the bottom of the range is a fixed
-    /// place rather than whatever the geometry happened to allow.
-    ///
-    /// The pan rides on top of this rather than instead of it. The camera is
-    /// pointed at the mark, and the mark is itself sweeping onto the feet, so
-    /// the *view* comes round to the fighter while the *eye* comes down -- two
-    /// motions, which is what the zone is for.
-    settle: f32,
-    /// The least the eye may sit above the fighter.
-    ///
-    /// Zone by zone, because only one zone needs a floor. Looking almost
-    /// straight down the crosshair is already at the fighter's feet, so "put
-    /// the feet at the crosshair" is satisfied by any camera at all -- and
-    /// asking for it *exactly* demands one in line with them, which on a fixed
-    /// sphere means one swung right down behind them. Everywhere else the
-    /// condition is well behaved and a floor would only stop the rig reaching
-    /// the framing it was asked for: at level the eye has to come round flat to
-    /// keep the head just under the mark.
-    least_elevation: f32,
 }
 
 /// Stateful camera. The only state is the smoothed focus point; aim is passed
@@ -368,22 +381,16 @@ impl CameraRig {
     /// positive Z -- so the direction the player aims and the direction their
     /// attacks travel are the same number.
     ///
-    /// `aim_at` is the point the player is aiming at, from `sim::aim`. The
-    /// camera is pointed at it rather than along the raw look axis, which is
-    /// what keeps the crosshair exactly at screen centre however far the eye
-    /// has been slid off that axis.
+    /// The camera is pointed straight down the look axis -- there is no aim
+    /// point to hand it any more. The eye is placed by the same two angles the
+    /// aim is made of, so screen centre *is* the look direction, and the
+    /// crosshair sits exactly in the middle of the screen by construction
+    /// rather than by correction.
     ///
     /// `dt` is real seconds, so the camera stays frame-rate independent even
     /// though the simulation is fixed-step.
-    pub fn update(
-        &mut self,
-        dt: f32,
-        player: [f32; 3],
-        yaw: f32,
-        pitch: f32,
-        aim_at: [f32; 3],
-    ) -> Framing {
-        self.update_around(dt, player, yaw, pitch, aim_at, Surroundings::default())
+    pub fn update(&mut self, dt: f32, player: [f32; 3], yaw: f32, pitch: f32) -> Framing {
+        self.update_around(dt, player, yaw, pitch, Surroundings::default())
     }
 
     /// The same, with a creature in the arena.
@@ -406,7 +413,6 @@ impl CameraRig {
         player: [f32; 3],
         yaw: f32,
         pitch: f32,
-        aim_at: [f32; 3],
         around: Surroundings<'_>,
     ) -> Framing {
         let beast = around.beast;
@@ -426,31 +432,35 @@ impl CameraRig {
         let sky = zones.first_person(pitch);
 
         // Everything below happens in the fighter's own vertical plane: the one
-        // containing them, the way they are looking, and therefore the aim
-        // point, which is on a ray from their chest along that look. In that
-        // plane the sphere is a circle about their feet, so placing the eye is
-        // choosing one angle around it, and the one thing that has to come out
-        // right is where the fighter lands on screen.
+        // containing them and the way they are looking. In that plane the
+        // sphere is a circle, and the eye is one angle around it.
         let feet = self.focus[1] - self.cfg.look_height;
         let along = [yaw.cos(), yaw.sin()];
-        let aim = [
-            (aim_at[0] - self.focus[0]) * along[0] + (aim_at[2] - self.focus[2]) * along[1],
-            aim_at[1] - feet,
-        ];
         let body = crate::fx(sim::tuning::body_height());
-        let want = zones.want(pitch, body);
-        let radius = (zones.sphere * self.cfg.dolly).max(0.1);
-        let [back, up] = place(&want, aim, radius, self.cfg.fov, &zones);
+        let ball = zones.ball(pitch, body, self.cfg.fov);
+        let radius = (ball.radius * self.cfg.dolly).max(0.02);
 
-        // Past level the eye walks into the fighter, and it arrives at the
-        // point abilities come out of rather than at the top of their head.
-        // Half a metre sounds like nothing and is not: it is the difference
-        // between the crosshair's line and the ability's line being the same
-        // line and being six degrees apart at close range, and being the same
-        // line is the entire reason this zone exists.
-        let cast = crate::fx(sim::tuning::cast_height());
-        let back = lerp(back, 0.0, sky);
-        let up = lerp(up, cast, sky);
+        // **The whole placement, and there is nothing to solve.**
+        //
+        // The camera looks where the mouse looks: the view runs out at `pitch`,
+        // by definition, because that is what the player is pointing at. It
+        // also runs `tilt` above the line to the sphere's centre, because that
+        // is what puts the centre at its mark on the screen. Those two together
+        // say where on the sphere the eye has to be standing, and it is a
+        // subtraction:
+        //
+        // ```text
+        // elevation = tilt - pitch
+        // ```
+        //
+        // One degree of mouse is one degree around the sphere, always, in every
+        // zone -- which is the point. Nothing here can saturate, run out of
+        // room, or stop answering the aim, because nothing here is being asked
+        // to satisfy a condition. The framing is a consequence of the tilt and
+        // arrives for free.
+        let elevation = ball.tilt - pitch;
+        let back = radius * elevation.cos();
+        let up = ball.centre + radius * elevation.sin();
 
         let mut offset = [
             -along[0] * back,
@@ -522,13 +532,45 @@ impl CameraRig {
             self.focus[1] + offset[1],
             self.focus[2] + offset[2],
         ];
+
+        // The fighter's own body, taken away for either of the two reasons it
+        // has to be. Measured on the eye the camera actually ended up at, so
+        // that an arm pulled in by a wall counts the same as one that walked
+        // into the head on purpose.
+        let middle = [self.focus[0], feet + body * 0.5, self.focus[2]];
+        let reach = (0..3)
+            .map(|i| (eye[i] - middle[i]).powi(2))
+            .sum::<f32>()
+            .sqrt();
+        // Gone by the time it is this close, and back in full not long after,
+        // because the distance it is guarding against is a near-plane one: a
+        // body half-faded at ordinary range is a bug, not a softer version of
+        // the same idea.
+        let crowding = 1.0 - ((reach - zones.fade_near) / (zones.fade_near * 0.5)).clamp(0.0, 1.0);
+        // And how far the top of the head has come up toward the reticle. The
+        // head rather than the whole body, because the body only ever reaches
+        // the middle of the screen head first.
+        let to_head = [back, body - up];
+        let under = pitch - to_head[1].atan2(to_head[0].max(1e-4));
+        let gap = 0.5 - (0.5 - under.tan() / (2.0 * (self.cfg.fov * 0.5).tan()));
+        let covering = 1.0 - (gap / (2.0 * zones.head_gap).max(0.01)).clamp(0.0, 1.0);
         // At the target, so screen centre *is* the target and the reticle never
         // has to move. Degenerate only if the two coincide, which cannot happen
         // while the eye is behind the fighter and the target is in front.
+        // Straight down the line the mouse is pointing, which is the whole of
+        // what "the crosshair is the aim" means once the eye is placed by the
+        // same two angles. Screen centre is the look direction; the fighter
+        // lands where the tilt puts them.
+        let ahead = [along[0] * pitch.cos(), pitch.sin(), along[1] * pitch.cos()];
         Framing {
             eye,
-            look_at: aim_at,
+            look_at: [
+                eye[0] + ahead[0] * SIGHT,
+                eye[1] + ahead[1] * SIGHT,
+                eye[2] + ahead[2] * SIGHT,
+            ],
             first_person: sky,
+            hidden: crowding.max(covering),
         }
     }
 }
@@ -540,78 +582,6 @@ fn lerp(from: f32, to: f32, at: f32) -> f32 {
 // ---------------------------------------------------------------------------
 // Solving the framing
 // ---------------------------------------------------------------------------
-
-/// Where on the sphere the eye goes.
-///
-/// **Closed form**, and this time the geometry hands it over almost without
-/// asking. The eye rides a sphere of fixed radius centred on the fighter's
-/// feet, so there is exactly one number to find -- how high around it the eye
-/// has climbed -- and exactly one thing to satisfy: the anchor point on the
-/// fighter has to land at its mark on the screen.
-///
-/// One unknown, one condition. Writing the eye as `R(cos e, sin e)` and asking
-/// for the angle between "eye to anchor" and "eye to aim point" to be the drop
-/// below the crosshair turns into
-///
-/// ```text
-/// A * cos(e) + B * sin(e) = C
-/// ```
-///
-/// after the `R^2` terms cancel, which is the standard shape that collapses to
-/// a single cosine: `sqrt(A^2 + B^2) * cos(e - atan2(B, A)) = C`. So the answer
-/// is an `acos` either side of a lead angle, and no iteration anywhere.
-///
-/// The two roots are the two places on the sphere that see the pair at the same
-/// angle -- one behind the fighter and one in front of them -- and the camera
-/// is the flatter of the two that is genuinely behind.
-///
-/// **When there is no root the condition was impossible, not mistaken.** The
-/// crosshair sits where the aim ray meets the ground, which at ten degrees down
-/// is seven metres ahead of the fighter and at forty-five is barely one. Once
-/// the mark is that close, the fighter and the crosshair are only a few degrees
-/// apart *from anywhere on the sphere* -- at most `atan(mark / radius)` -- and
-/// no camera can hold them half a screen apart. The lead angle is then the
-/// closest the sphere comes to it, so the fighter rides up the screen toward
-/// the crosshair instead of the rig snapping somewhere. That is the same walk
-/// the floor zone asks for, arriving early because the geometry ran out.
-fn place(want: &Want, aim: [f32; 2], radius: f32, fov: f32, zones: &Zones) -> [f32; 2] {
-    let (ax, ay) = (aim[0], aim[1]);
-    let c = want.on_body;
-    // How far under the crosshair the anchor rides, as a tangent -- which is
-    // what a screen fraction actually is under a perspective projection, the
-    // screen being a flat plane a fixed distance in front of the eye rather
-    // than an arc of angle. Zero drop, the anchor sitting on the mark, stays a
-    // perfectly ordinary case rather than a special one.
-    let drop = (1.0 - 2.0 * want.at) * (fov * 0.5).tan();
-
-    let across = radius * ((ay - c) - drop * ax);
-    let along = radius * (ax + drop * (c + ay));
-    let asked = drop * (radius * radius + c * ay) + c * ax;
-
-    let reach = (across * across + along * along).sqrt();
-    let lead = along.atan2(across);
-    let elevation = if reach > 1e-4 && asked.abs() <= reach {
-        let spread = (asked / reach).acos();
-        [lead - spread, lead + spread]
-            .into_iter()
-            .filter(|e| e.cos() > 0.0)
-            .min_by(f32::total_cmp)
-            .unwrap_or(lead)
-    } else {
-        lead
-    };
-
-    // The floor is taken under the ceiling first, so that two independent
-    // sliders dragged past each other read as the ceiling winning rather than
-    // as the game falling over -- and so that the walk down below cannot push
-    // the eye back up through it. `clamp` would panic on the crossing outright.
-    let floor = want.least_elevation.min(zones.max_elevation);
-    let elevation = elevation.max(floor).min(zones.max_elevation);
-    // Then walked down toward that floor by however much the zone asks, which
-    // is nothing at all outside the bottom of the look-down range.
-    let elevation = lerp(elevation, floor, want.settle);
-    [radius * elevation.cos(), radius * elevation.sin()]
-}
 
 /// How much of the camera's offset from the focus stays out of level geometry,
 /// as a fraction between `MINIMUM` and one.
