@@ -171,6 +171,40 @@ A planted foot given the same target on consecutive frames **does not move**,
 however much the hips do. That is what "no foot skate" means mechanically, and
 it is why `plant_*` exists.
 
+A hand given a target inside the working envelope lands within two centimetres
+of it, and `a_hand_goes_where_it_is_sent` holds the solver to that over a grid
+of 1544 targets. It is worth knowing why that test exists, because the failure
+it caught was silent: for a while a wrist sent 30 cm above its own shoulder
+came out 47 cm away, hanging by the ribs, and every pose in three Champion
+clips was quietly a different pose from the one written. Three separate things
+were wrong, all of them the kind of thing this layer is supposed to absorb:
+
+- **The elbow was pinned.** With shoulder and wrist both fixed, the elbow can
+  still travel a whole circle around the line between them. Hanging or
+  punching it sits behind and below; overhead it swings out to the side. A
+  fixed pole named one point on that circle, and asking for a hand above the
+  head with the elbow still pointed backward only builds with the upper arm
+  pointing up behind the shoulder, which no shoulder does. `hand_to` walks the
+  circle and scores each candidate on where the wrist actually lands.
+- **The elbow folded for a direction the shoulder had refused.** Clamping the
+  shoulder and then bending the forearm as if it had not been clamped is what
+  turns a few centimetres out of range into most of a metre. The bend now comes
+  from where the elbow really ended up.
+- **Two angles name a direction twice.** Swing past the pole and spread half a
+  turn the other way is the same direction; add half a turn of twist and it is
+  the same rotation. `aim_within` tries both readings, so a limit that refuses
+  one no longer clamps the limb for nothing.
+
+The last one has a consequence for clips as well as for single poses, and it is
+the one to remember: **an arm pointing straight forward sits exactly where the
+two readings meet**, the way longitude is undefined at the pole. Two keys can
+hold the same shoulder to the last decimal and be 180 degrees apart in the
+numbers, and since the numbers are what get interpolated, the frames between
+them are a limb going the long way round. The bake's `unwound` pass puts every
+key of a clip on one reading before anything is interpolated, so this is
+handled — but if a pose ever looks right in the hub and wrong in motion, this
+is the first thing to suspect.
+
 Two more for combining poses: `mirrored()` (the same pose on the other side) and
 `blend(&other, t)`.
 
@@ -301,6 +335,21 @@ and the overlay is where foot skate shows up, as a planted ankle whose dots
 drift instead of piling on one spot. `--feet` prints the numbers behind that:
 while a foot is down, its world position should not change.
 
+### Showing it to somebody
+
+```text
+cargo run -p anim --bin export -- docs/preview/anim.json
+```
+
+Writes the six class skeletons and every baked frame out as JSON, plus the same
+bytes as a script. `docs/preview/index.html` reads it and plays any clip on any
+build in a browser, with the phase strip, onion skin and a per-joint angle
+readout — the same forward kinematics the game runs, off the same table. Open
+it from a static server in that folder (`python3 -m http.server`), or publish
+the two files anywhere. It is for the conversation that starts "does this walk
+look like walking to you", which is not a conversation to have over a Rust
+toolchain.
+
 ## The standards
 
 `crates/anim/tests/clips.rs` holds every authored clip to these, and skips
@@ -317,6 +366,10 @@ anything nobody has written yet:
 - an attack has visibly changed by the time its startup is a third gone
 - the three phases of an attack look different from each other
 - an idle keeps both feet down
+- **a hand goes where it is sent** — within two centimetres, over a grid across
+  the whole working envelope
+- both readings of a joint's three angles are the same rotation, which is what
+  lets the bake swap between them
 
 `cargo test -p anim --test clips report_discontinuous_clips -- --ignored
 --nocapture` lists everything over the motion ceilings with the multiple it is
