@@ -454,6 +454,71 @@ pub fn meter_burn() -> i32 {
     oven::scalar(Scalar::MeterBurn)
 }
 
+// ---------------------------------------------------------------------------
+// Stones
+// ---------------------------------------------------------------------------
+//
+// A structure stopped being a marker and became a solid, so it needs the
+// numbers a solid needs: what it does to what is in its way, and what it costs
+// to be standing on the spot when one arrives. See `crate::stones`.
+
+/// How far out of the ground a stone has to be before it counts as erupting
+/// rather than churning.
+///
+/// A fraction of the rise rather than a frame count, so it is the *curve* that
+/// decides when the telegraph ends. Reshape the rise and the warning moves with
+/// it; pick a frame instead and the two drift apart the first time anybody
+/// drags a handle.
+pub fn stone_erupt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneErupt))
+}
+
+/// Movement multiplier while a stone is churning under your feet.
+///
+/// Slight on purpose. This is the telegraph made tactile -- you feel the ground
+/// go before you see the stone -- and a telegraph that also stops you moving
+/// would make the eruption unavoidable rather than readable.
+pub fn stone_churn_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneChurnSlow))
+}
+
+/// What the eruption costs whoever stood on it. Small: the stagger is the
+/// point, and the damage is there so that ignoring a telegraph is never free.
+pub fn stone_erupt_damage() -> i32 {
+    oven::scalar(Scalar::StoneEruptDamage)
+}
+
+pub fn stone_erupt_stagger() -> u16 {
+    oven::scalar(Scalar::StoneEruptStagger) as u16
+}
+
+/// How much of a rising surface's speed whatever is riding it keeps.
+///
+/// The eruption's own climb is what throws a stone -- or a fighter -- off the
+/// top of another, so this is the knob that decides whether a stone raised
+/// underneath is a lift or a launch. One, and a rider leaves at exactly the
+/// speed the surface was climbing at.
+pub fn stone_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneLift))
+}
+
+/// Fraction of the closing speed a stone hands to whatever it runs into.
+pub fn stone_knock_handed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneKnockHanded))
+}
+
+/// What both stones keep of their speed after a knock. Below one, so the
+/// exchange costs them both and a stone cannot bowl through a row of them.
+pub fn stone_knock_damp() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneKnockDamp))
+}
+
+/// What a resting stone keeps of its speed each frame. This is what brings a
+/// knocked stone to a stop somewhere short of the far wall.
+pub fn stone_friction() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneFriction))
+}
+
 /// The curve a structure climbs out of the ground on.
 pub fn structure_rise_curve() -> crate::curve::Curve {
     crate::curve::Curve {

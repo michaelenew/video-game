@@ -101,7 +101,7 @@ Nothing here blocks a prototype.
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush |
 | Shadow Reaver | Whether the shadow has collision |
-| Elementalist | Structure cap of three is a readability guess, not a balance one |
+| Elementalist | Structure cap of three is a readability guess, not a balance one. Stones are solid and standable now; the mobility that implies waits on moves that launch them, and on Raise being able to target your own feet |
 | Blood mage | Health cost flat or percentage |
 
 ## 5 · Parked — not slated for initial implementation
@@ -123,8 +123,8 @@ character progression.
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
 exemplar moves, there is a monster to fight and climb, peer-to-peer rollback play
-works over real UDP, and 223 tests cover determinism, combat relationships, the
-ride, the camera and animation.
+works over real UDP, and 242 tests cover determinism, combat relationships,
+the ride, the camera and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.

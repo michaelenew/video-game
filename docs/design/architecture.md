@@ -503,7 +503,7 @@ it is describing.
 
 ## The Oven: tuning while it runs
 
-**F7.** Every tuned number in the game — 631 of them — editable in a palette that floats over
+**F7.** Every tuned number in the game — 639 of them — editable in a palette that floats over
 the arena, with a **bake** button that writes them back to the repository and pushes.
 
 Feel work is a loop: change a number, play it, change it again. The loop is only as fast as
@@ -747,7 +747,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 223 tests |
+| Test suites | 242 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -759,7 +759,7 @@ Everything below builds and passes today.
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
-| **The Oven** | **F7** — 631 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
+| **The Oven** | **F7** — 639 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Dev mode | `./scripts/dev.sh` — wireframes, the Oven and the class pickers |
 | Round flow | Knockout, round wins, reset |
