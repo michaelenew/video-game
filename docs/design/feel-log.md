@@ -1739,3 +1739,49 @@ of the hit test rather than of the aiming, and the rule as written failed Rend a
 against 1.2 m, which is a tuning question and not a miscategorisation. Left alone.
 
 **Verdict** structural, and open on feel. Nobody has thrown the three retargeted moves.
+
+### 2026-09-12 — a swing is aimed too, with a dead zone
+
+**Changed** melee no longer comes out flat. A swing's yaw is still the body's facing; its
+**pitch follows the camera outside a dead zone below the horizon**:
+
+```text
+   above the horizon      follows exactly
+   the first 45° below    stays level -- the standard arc in front of the character
+   further down           follows what is left over
+```
+
+So −45° is the same swing as 0°, −46° is that swing tilted one degree down. New knob,
+`aim.swing_stays_level_to (deg down)`, and a new line of effect, `aim::swing_path`.
+
+**Why** "aim direction for melee matters a lot in the air and on hills" — and it does: a swing
+pinned to the horizontal misses things plainly in front of you the moment either fighter
+leaves the flat. The reason it had been pinned was the opposite error, and the dead zone is
+what answers it: **the camera sits above the shoulder, so looking at somebody standing at your
+own height means looking slightly down at them.** A swing that followed the camera exactly
+would tilt into the floor in the most common situation in the game. Neither "ignore pitch" nor
+"follow pitch" is right; the dead zone is, and it costs one number.
+
+Written as a sum rather than a branch — `max(pitch, 0) + min(pitch + dead, 0)` — so the two
+halves cannot disagree about the boundary. There is no step at the edge: a test sweeps a tenth
+of a degree at a time across it and fails on any jump over 0.4°.
+
+**Guillotine lotus got a fourth line of effect: at the mechanic.** Its kit entry has always
+said "Range: at the shadow", and it was declared a swing with a reach of *zero* — so its
+volume came out on the Reaver's own chest and the move did nothing it was written to do. The
+player aims it when they *place* the shadow; throwing it only cashes that in, and re-aiming it
+at the throw would delete the reason shadow placement is a decision. The volume follows the
+shadow live, because the Reaver can recall it while the blades are out.
+
+That makes four lines of effect, all of them functions in `aim.rs`: two that start with the
+crosshair's raycast, and two pointed by something the player decided earlier.
+
+**The animation follows.** A swing's tilt arrives at the renderer already dead-zoned, as the
+angle the attack actually came out at, so the same pose layer the Elementalist's beam uses now
+serves melee. A grounded cast is deliberately *not* tilted — a pillar comes out of the floor
+and the caster is gesturing at the place, so looking down to plant one must not double her
+over.
+
+**Verdict** open. Nobody has swung at anything on a slope or in the air yet, and 45° is a
+guess — one number for a grapple at arm's length and a spear at 1.55× reach, which may well
+want to differ.

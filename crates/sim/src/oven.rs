@@ -296,6 +296,7 @@ scalars! {
     GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
     GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
     DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
+    SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,10 +455,10 @@ pub enum MoveField {
     // health back on the hit -- see `moves::Move::cost` and `leech`.
     Cost,
     Leech,
-    // And again, for which of the three lines of effect a move uses: 0 swings
-    // where the body is facing, 1 lands on the ground at the crosshair, 2 flies
-    // to what the crosshair is on. `aim::Kind`'s own numbering. See
-    // `moves::Move::aim` and `crate::aim`.
+    // And again, for which line of effect a move uses: 0 swings out along the
+    // body, 1 lands on the ground at the crosshair, 2 flies to what the
+    // crosshair is on, 3 erupts at the class mechanic. `aim::Kind`'s own
+    // numbering. See `moves::Move::aim` and `crate::aim`.
     Aim,
 }
 
@@ -508,7 +509,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Aim => "Line of effect (0/1/2)",
+            MoveField::Aim => "Line of effect (0-3)",
         }
     }
 
@@ -533,10 +534,10 @@ impl MoveField {
     }
 
     pub const fn range(self) -> (i32, i32) {
-        // Three lines of effect, and the numbering is `aim::Kind`'s. A slider
-        // that ran to six hundred would let somebody pick a fourth.
+        // Four lines of effect, and the numbering is `aim::Kind`'s. A slider
+        // that ran to six hundred would let somebody pick a fifth.
         if matches!(self, MoveField::Aim) {
-            return (0, 2);
+            return (0, 3);
         }
         match self.unit() {
             Unit::Frames => (0, 90),
@@ -683,7 +684,7 @@ pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const SLOTS: usize = 4;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 182;
+pub const SCALAR_COUNT: usize = 183;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 21;

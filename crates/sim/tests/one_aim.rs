@@ -138,10 +138,10 @@ fn every_exemption_gives_a_reason() {
 }
 
 #[test]
-fn every_move_says_which_of_the_three_it_is() {
-    // The matrix is meant to be exhaustive: there is no fourth kind, and no
-    // move without an answer. A caller that had to guess is a caller that would
-    // eventually guess differently from the last one.
+fn every_move_says_which_line_of_effect_it_uses() {
+    // The matrix is meant to be exhaustive: no move without an answer, and no
+    // fifth kind. A caller that had to guess is a caller that would eventually
+    // guess differently from the last one.
     use sim::aim::Kind;
     use sim::class::ALL_CLASSES;
 
@@ -181,11 +181,42 @@ fn every_move_says_which_of_the_three_it_is() {
             }
         }
     }
-    assert!(
-        kinds.contains(&Kind::Grounded)
-            && kinds.contains(&Kind::Skillshot)
-            && kinds.contains(&Kind::Swing),
-        "the roster no longer covers all three kinds, so one of them is untested \
-         by everything else in the suite"
-    );
+    for wanted in [
+        Kind::Grounded,
+        Kind::Skillshot,
+        Kind::Swing,
+        Kind::AtTheMechanic,
+    ] {
+        assert!(
+            kinds.contains(&wanted),
+            "no move in the roster is aimed `{}` any more, so that line of effect \
+             is untested by everything else in the suite",
+            wanted.name()
+        );
+    }
+}
+
+#[test]
+fn a_move_aimed_at_the_mechanic_needs_one_to_be_out() {
+    // The one kind that can have nowhere to go. `mechanic_path` falls back to
+    // the caster's own feet, which is a volume on your own body -- fine as a
+    // last resort, useless as a design. The move table's gate is what stops it
+    // happening: you cannot throw the move without the mechanic placed.
+    use sim::aim::Kind;
+    use sim::class::ALL_CLASSES;
+
+    for class in ALL_CLASSES {
+        for slot in 0..sim::moves::SLOTS {
+            let m = sim::moves::get(class, slot as u8);
+            if m.aim() != Kind::AtTheMechanic {
+                continue;
+            }
+            assert!(
+                m.needs_mechanic,
+                "{} {} erupts at the mechanic but can be thrown without one out",
+                class.name(),
+                m.name
+            );
+        }
+    }
 }

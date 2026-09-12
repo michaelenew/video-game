@@ -21,13 +21,16 @@ The player's whole frame of reference is the crosshair, so the model is:
 > structures, and the ability's own max-range sphere. The first thing it reaches
 > is what the player is pointing at, and the ability goes there.
 
-Then there are exactly **two kinds of skillshot**, and one thing that is not one:
+Two kinds of skillshot start with that ray. Two more lines of effect do not —
+they are pointed by something the player decided earlier. **Four in total, and
+every one of them is a function in `aim.rs`:**
 
 | Kind | Call | Rule |
 | --- | --- | --- |
 | Grounded | `aim::grounded_path` | Ground: cast exactly there. Max range: max range on the ground in the mouse's direction. If it travels, it travels from the character to that point. |
 | Skillshot | `aim::skillshot_path` | Ground: that spot raised to the caster's ability-origin height, so it flies level over it. Anything else — wall, body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
-| Swing | neither | Not aimed. Out along `facing` at the move's reach, because a sword is a body moving and pointing the camera at the floor must not put the blade there. |
+| Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera **with a dead zone** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. |
+| At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 
 Which one a move is comes from `Move::aim()`, **declared** in the move table so
 every move has an answer, and printed in the `aimed` column of
@@ -42,8 +45,9 @@ goes past it — by more the further away it is. If you find yourself writing
 `camera::eye(...)`, `look_dir()`, or a ray-vs-shape call outside those two
 files, stop: the thing you want already exists.
 
-If neither kind fits a new ability, **change `aim.rs`** rather than working
+If none of the four fits a new ability, **change `aim.rs`** rather than working
 around it. A change there is true of every ability at once, which is the point.
+The full specification is [`docs/design/aiming.md`](docs/design/aiming.md).
 
 ## Tuning: every magnitude is a knob in the Oven
 

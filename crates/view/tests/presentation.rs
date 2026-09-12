@@ -1139,26 +1139,40 @@ fn a_shot_aimed_up_is_thrown_up() {
 }
 
 #[test]
-fn a_swing_is_not_aimed_at_all() {
-    // The other half of the rule. A sword is a body moving: pointing the
-    // camera at the floor must not put the blade there, or every melee class
-    // would swing at the ground whenever the player looked down.
-    let level = joint_at(
-        PoseInput {
-            aim_pitch: 0.0,
-            ..input_at(Action::Active { kind: 0, left: 1 }, 0.0, 40)
-        },
-        Joint::HandR,
+fn a_swing_is_drawn_at_the_angle_it_comes_out_at() {
+    // Melee is tilted too, because melee happens in the air and on slopes. The
+    // *dead zone* that keeps it level while you look slightly down at somebody
+    // is the simulation's job and is tested there; by the time the pose sees
+    // the angle it is the one the attack actually came out at, so the body
+    // follows it.
+    let swinging = |pitch: f32| PoseInput {
+        aim_pitch: pitch.to_radians(),
+        ..input_at(Action::Active { kind: 0, left: 1 }, 0.0, 40)
+    };
+    let level = joint_at(swinging(0.0), Joint::HandR);
+    let high = joint_at(swinging(40.0), Joint::HandR);
+    assert!(
+        high[1] > level[1] + 0.08,
+        "a swing aimed forty degrees up drew its hand at {:.2} m against {:.2} m level",
+        high[1],
+        level[1]
     );
-    let aimed = joint_at(
-        PoseInput {
-            aim_pitch: 40f32.to_radians(),
-            ..input_at(Action::Active { kind: 0, left: 1 }, 0.0, 40)
-        },
-        Joint::HandR,
-    );
+}
+
+#[test]
+fn a_grounded_cast_is_not_tilted_by_the_aim() {
+    // The other half of the rule. A pillar of flame comes out of the floor
+    // wherever the crosshair put it, and the caster is gesturing at the place
+    // rather than throwing anything along a line -- so looking down to place
+    // one must not double her over.
+    let casting = |pitch: f32| PoseInput {
+        class: sim::Class::Elementalist,
+        aim_pitch: pitch.to_radians(),
+        ..input_at(Action::Active { kind: 2, left: 1 }, 0.0, 40)
+    };
     assert_eq!(
-        level, aimed,
-        "the Bulwark's poke followed the crosshair, so looking down swings at the floor"
+        joint_at(casting(0.0), Joint::HandR),
+        joint_at(casting(-40.0), Joint::HandR),
+        "the fire pillar's cast followed the camera down"
     );
 }

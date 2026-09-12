@@ -1070,17 +1070,25 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         // Where the thing was planted. The burst that comes with it has to be
         // there too, or the ability is two abilities pointing different ways.
         aim::Kind::Grounded => (p.aim_at(), p.aim_at()),
-        // Not aimed: out along the body, live rather than locked, because a
-        // move that can be thrown on the move has to travel with the body. The
-        // Champion's form multiplies reach rather than each form having its own
-        // table, and applying it here, once, is why the overlay cannot disagree
-        // with the hit test about where a spear reaches.
+        // Out along the body at the angle the swing was committed to: live
+        // origin, locked direction, because a move that can be thrown on the
+        // move has to travel with the body. The Champion's form multiplies
+        // reach rather than each form having its own table, and applying it
+        // here, once, is why the overlay cannot disagree with the hit test
+        // about where a spear reaches.
         aim::Kind::Swing => {
             let reach_mul = match p.mechanic {
                 Mechanic::Forms { form, .. } => form.modifiers().0,
                 _ => Fx::ONE,
             };
-            let at = p.pos.add(p.facing.scale(m.reach.mul(reach_mul)));
+            let at = p.pos.add(p.aim_path.dir().scale(m.reach.mul(reach_mul)));
+            (at, at)
+        }
+        // At the mechanic, and *live*: the shadow can be moved while the blades
+        // are out, which is the Reaver's own recall, and the volume has to go
+        // with it.
+        aim::Kind::AtTheMechanic => {
+            let at = p.mechanic.placed().unwrap_or(p.pos);
             (at, at)
         }
     };
@@ -1644,15 +1652,13 @@ fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
     p.aim_path = match m.aim() {
         aim::Kind::Grounded => aim::grounded_path(who, input, m.reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, m.reach, scene),
-        // Not aimed at all. Recorded for completeness -- `hitbox` works a
-        // swing out live from the body rather than reading this, because a
-        // swing thrown on the move has to travel with the body and the
-        // Champion's form multiplies its reach. A swing has nothing to commit
-        // to: facing is already locked, and that is the commitment.
-        aim::Kind::Swing => Path {
-            from: p.pos,
-            to: p.pos.add(p.facing.scale(m.reach)),
-        },
+        // `facing` is already this frame's, so the yaw is the mouse's; what
+        // this adds is the pitch. `hitbox` re-measures the *distance* from the
+        // body every frame, because a swing thrown on the move travels with the
+        // body and the Champion's form multiplies its reach -- but the
+        // direction is locked here with everything else.
+        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, m.reach),
+        aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
     };
 }
 
