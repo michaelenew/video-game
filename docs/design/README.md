@@ -28,7 +28,9 @@ opening frames of block and rewards with a stagger. Special attacks are the guar
 
 **Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Now: *click = attack, shift +
 click = the committed version, shift + direction = dodge, WASD = move, space = jump, `Q` = the
-class special, `E` = the class mechanic, mouse = where.* Was: *click = attack, shift =
+class special, `E` = the class mechanic, mouse = where.* `E` is usually an instant state
+change; on a class whose mechanic has no state it is a fourth ability, which is what the Blood
+mage's `E` became on 2026-09-12. Was: *click = attack, shift =
 ability, WASD = move, space = move more, shift beats WASD.* The last two did not survive
 contact with the sandbox. **Space now always jumps** — a vertical takeoff and nothing else —
 and **shift plus a direction dodges**. Space plus a direction used to dodge, which meant
@@ -54,7 +56,7 @@ poke is a design choice in a closed arena, not a gap.
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position | `L`/`R` melee autos | Strong |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` bolt · `R` Raise | Strong |
-| [Blood mage](kits/blood-mage.md) | Health | `L` auto · `R` Rend | Decent |
+| [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto | Reworked |
 | [Champion](kits/champion.md) | Rush charge, and which form you end in | `L`/`M`/`R` = sword/hammer/spear | Reworked |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |

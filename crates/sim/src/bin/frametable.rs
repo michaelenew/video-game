@@ -55,10 +55,13 @@ fn main() {
             tenths(mob.air_speed),
         );
         println!(
-            "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
-            "move", "st", "act", "rec", "damage", "on block", "on hit"
+            "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
+            "key", "move", "st", "act", "rec", "damage", "on block", "on hit"
         );
-        for m in moves::table(class) {
+        for (slot, m) in (0..moves::SLOTS)
+            .filter(|slot| moves::bound(class, *slot))
+            .map(|slot| (slot, moves::get(class, slot as u8)))
+        {
             let mut notes = Vec::new();
             if m.unblockable {
                 notes.push("unblockable");
@@ -78,8 +81,18 @@ fn main() {
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
+            // The Blood mage's whole economy, and the only class it applies to.
+            let blood = if m.cost > 0 {
+                format!("costs {} health, returns {}%", m.cost, m.leech)
+            } else {
+                String::new()
+            };
+            if !blood.is_empty() {
+                notes.push(&blood);
+            }
             println!(
-                "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}   {}",
+                "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}   {}",
+                moves::binding(slot),
                 m.name,
                 m.startup,
                 m.active,

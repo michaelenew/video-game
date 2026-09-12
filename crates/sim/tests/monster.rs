@@ -566,3 +566,96 @@ fn re_simulating_a_hunt_from_a_snapshot_lands_in_the_same_place() {
     }
     assert_eq!(replay.checksum(), truth, "re-simulation did not converge");
 }
+
+// ---------------------------------------------------------------------------
+// What a hunter leaves behind
+// ---------------------------------------------------------------------------
+
+/// Hold the creature still and put it right in front of the first hunter, so a
+/// test about a hazard is about the hazard rather than about chasing.
+fn parked() -> World {
+    let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
+    let mut beast = w.monster.expect("a hunt has a creature");
+    beast.pos = V3::new(w.players[0].pos.x.add(Fx::from_int(6)), Fx::ZERO, Fx::ZERO);
+    beast.yaw = Fx::from_raw(1 << 15);
+    beast.doing = Doing::Prowl;
+    beast.brain.think_left = u16::MAX;
+    w.monster = Some(beast);
+    w.players[0].pos = V3::new(w.players[0].pos.x, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
+    w
+}
+
+fn beast_health(w: &World) -> i32 {
+    w.monster.expect("a hunt has a creature").health
+}
+
+#[test]
+fn a_drain_field_hurts_the_creature() {
+    // It did not, for a long time, and the bug was invisible because it only
+    // showed up in a hunt: effects were applied to fighters and nobody else, so
+    // a Blood mage hunting alone put a spike in the ground, drained an empty
+    // patch of arena and got nothing back. Half a kit doing nothing in one of
+    // the game's two modes.
+    let mut w = parked();
+    let full = beast_health(&w);
+    for _ in 0..2 {
+        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    }
+    for _ in 0..200 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(
+        beast_health(&w) < full,
+        "the field never touched the creature"
+    );
+}
+
+#[test]
+fn a_drain_field_feeds_the_hunter_who_laid_it() {
+    // The other half. The Blood mage pays health to cast, so if the return only
+    // worked in versus the class would be unplayable in coop by its own
+    // numbers.
+    let mut w = parked();
+    for _ in 0..2 {
+        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    }
+    // Hurt, after the cast, so there is room on the bar for the return to show.
+    w.players[0].health = sim::tuning::max_health() / 2;
+    let paid = w.players[0].health;
+    let beast = beast_health(&w);
+    for _ in 0..200 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(beast_health(&w) < beast, "fixture: nothing was drained");
+    assert!(
+        w.players[0].health > paid,
+        "the field drained the creature and gave the caster none of it"
+    );
+}
+
+#[test]
+fn a_hazard_never_touches_a_hunting_partner() {
+    // Friendly fire is off in a hunt, and the condition is the creature being
+    // there rather than a flag -- the same rule direct hits already follow. A
+    // drain field was the one thing in the game that could kill a team-mate.
+    let mut w = parked();
+    for _ in 0..2 {
+        w.advance([Input::new(Input::MECHANIC), Input::default()]);
+    }
+    // Stand the partner in it, wherever it landed, and hold them there.
+    let mut stood_in_it = 0;
+    for _ in 0..200 {
+        if let Some(field) = w.effects.iter().flatten().next().copied() {
+            w.players[1].pos = V3::new(field.pos.x, w.players[1].pos.y, field.pos.z);
+            stood_in_it += 1;
+        }
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(stood_in_it > 60, "fixture: nobody stood in anything");
+    assert_eq!(
+        w.players[1].health,
+        sim::tuning::max_health(),
+        "a hunter's own hazard hurt their partner"
+    );
+}

@@ -213,16 +213,104 @@ fn the_dodge_outruns_a_walk() {
 }
 
 #[test]
-fn every_class_has_the_same_number_of_exemplar_moves() {
+fn every_class_has_the_three_shared_slots() {
     // Not a design law, just a guard against a half-finished class shipping
-    // unnoticed. Relax it deliberately when a class legitimately grows.
-    let counts: Vec<_> = ALL_CLASSES
-        .iter()
-        .map(|c| (c.name(), moves::table(*c).len()))
-        .collect();
-    let first = counts[0].1;
-    for (name, n) in &counts {
-        assert_eq!(*n, first, "{name} has {n} moves, others have {first}");
+    // unnoticed. The three shared slots -- poke, committed, special -- mean the
+    // same thing on every class, which is what lets one control scheme drive
+    // six kits, so every class has to fill all three.
+    //
+    // The fourth is `E`, and it is **not** shared: it is the class mechanic,
+    // which is an instant state change on most of the roster and an ability
+    // only on the Blood mage. A class having one is a decision about that
+    // class, not a gap in it.
+    use sim::state::{SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
+    for class in ALL_CLASSES {
+        for slot in [SLOT_POKE, SLOT_COMMITTED, SLOT_SPECIAL] {
+            assert!(
+                moves::bound(class, slot as usize),
+                "{} has nothing on {}",
+                class.name(),
+                moves::binding(slot as usize)
+            );
+        }
+    }
+    assert!(
+        ALL_CLASSES
+            .iter()
+            .any(|c| moves::bound(*c, SLOT_MECHANIC as usize)),
+        "nothing binds the mechanic slot, so the fourth column is dead weight"
+    );
+}
+
+/// The most damage one cast of a move can do to one target.
+///
+/// Every ability the Blood mage has is a *several* rather than a one: the blade
+/// cuts on the way out and again on the way back, the Grasp is four arms, and
+/// the spike is a field that ticks for as long as somebody is standing in it.
+/// A cost weighed against a single connection would say all four are a losing
+/// trade, and the class would be unplayable by its own numbers.
+fn best_case(m: &Move) -> i32 {
+    use sim::effects::{EffectKind, GRASP_ARMS};
+    match EffectKind::from_code(m.effect) {
+        Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
+        Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
+        // A field, for as long as it stands. The move's own hit lands too.
+        Some(kind @ (EffectKind::BlackSpike | EffectKind::FirePillar)) => {
+            let ticks = kind.life() / t::effect_tick_frames().max(1);
+            m.damage + kind.damage(m) * ticks as i32
+        }
+        None => m.damage,
+    }
+}
+
+#[test]
+fn a_root_outlives_the_hitstun_that_delivers_it() {
+    // A root is only visible in the frames after you can act again. Deliver it
+    // with a move whose hitstun is longer and it is a no-op that reads, in the
+    // hand, as the ability simply not working.
+    use sim::state::SLOT_SPECIAL;
+    let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
+    assert!(
+        t::grasp_root() > grasp.hitstun,
+        "the Grasp roots for {} frames and stuns for {}, so the root is invisible",
+        t::grasp_root(),
+        grasp.hitstun
+    );
+}
+
+#[test]
+fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
+    // The class is its economy: health out on the press, health back on the
+    // hit. Both halves on every one of her abilities, and on nobody else's --
+    // a second class quietly acquiring a health cost would mean the mechanic
+    // had stopped being an identity and become a tax.
+    for class in ALL_CLASSES {
+        let blood = class == sim::class::Class::BloodMage;
+        for m in moves::table(class) {
+            assert_eq!(
+                m.cost > 0,
+                blood,
+                "{} {}: health cost {} does not match the class mechanic",
+                class.name(),
+                m.name,
+                m.cost
+            );
+            if blood {
+                assert!(
+                    m.leech > 0,
+                    "{}: costs health and gives none of it back, so it is pure downside",
+                    m.name
+                );
+                let best = m.leeched(best_case(&m));
+                assert!(
+                    best > m.cost,
+                    "{}: thrown perfectly it returns {best} and cost {}, so playing well \
+                     still loses you the fight",
+                    m.name,
+                    m.cost
+                );
+            }
+        }
     }
 }
 

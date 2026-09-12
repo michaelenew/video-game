@@ -423,14 +423,21 @@ struct MainCamera;
 #[derive(Component)]
 struct ShieldMesh(usize);
 
-/// One drawable piece of a persistent effect. Two per effect, because a fire
-/// pillar is two volumes and drawing it as one would misrepresent the thing you
-/// are trying to walk around.
+/// One drawable piece of a persistent effect.
+///
+/// Four per effect, which is what the widest of them needs: a Grasp is four
+/// arms and each one is its own skillshot you have to be able to see coming. A
+/// fire pillar uses two (a base and a column, drawn apart because they are two
+/// different threats), a black spike two (the field on the floor and the spike
+/// standing in it), a thrown blade one.
 #[derive(Component)]
 struct EffectMesh {
     slot: usize,
     part: usize,
 }
+
+/// How many pieces one effect can be drawn as.
+const EFFECT_PARTS: usize = 4;
 
 /// One of the Elementalist's structures.
 #[derive(Component)]
@@ -446,6 +453,14 @@ struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
+    /// A unit cylinder, cone and sphere, scaled per frame to whatever the
+    /// simulation says the volume is. Three meshes rather than one because the
+    /// *shape* is the tell: a spike you can see standing in a field is what
+    /// makes the field something you decide to walk around, and a flat disc on
+    /// the floor is something you notice once you are in it.
+    column: Handle<Mesh>,
+    spike: Handle<Mesh>,
+    ball: Handle<Mesh>,
 }
 
 // ---------------------------------------------------------------------------
@@ -572,6 +587,11 @@ fn setup(
     // simulation's effect array is itself fixed. Spawning and despawning meshes
     // as effects come and go would put allocation on the rollback path.
     let unit = meshes.add(Cylinder::new(0.5, 1.0));
+    let spike = meshes.add(Cone {
+        radius: 0.5,
+        height: 1.0,
+    });
+    let ball = meshes.add(Sphere::new(0.5));
     let look = EffectLook {
         // Translucent, not solid -- it is flame, and a wall of solid orange
         // plastic reads as a structure rather than a hazard you could
@@ -594,9 +614,12 @@ fn setup(
             perceptual_roughness: 0.95,
             ..default()
         }),
+        column: unit.clone(),
+        spike,
+        ball,
     };
     for slot in 0..sim::effects::MAX_EFFECTS {
-        for part in 0..2 {
+        for part in 0..EFFECT_PARTS {
             commands.spawn((
                 Mesh3d(unit.clone()),
                 MeshMaterial3d(look.fire.clone()),
@@ -714,10 +737,10 @@ fn place_structures(
 
 /// Put the effect meshes where the simulation says its effects are.
 ///
-/// Shape comes from the same `pillar_volumes` the hit test uses, so what you
-/// see standing in the arena is what will actually catch you. A renderer that
-/// reconstructed the shape itself would drift from the rule, and a fire pillar
-/// that looks bigger than it hits is worse than no fire pillar.
+/// Shape comes from the same volumes the hit test uses, so what you see standing
+/// in the arena is what will actually catch you. A renderer that reconstructed
+/// the shape itself would drift from the rule, and a fire pillar that looks
+/// bigger than it hits is worse than no fire pillar.
 fn place_effects(
     sim: Res<Sim>,
     look: Res<EffectLook>,
@@ -725,53 +748,157 @@ fn place_effects(
         &EffectMesh,
         &mut Transform,
         &mut Visibility,
+        &mut Mesh3d,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
-    use sim::effects::EffectKind;
-    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
-        let Some(effect) = sim.cur.effects[tag.slot] else {
+    for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
+        let piece = sim.cur.effects[tag.slot].and_then(|e| effect_piece(&e, tag.part));
+        let Some(piece) = piece else {
             *vis = Visibility::Hidden;
             continue;
         };
-        let at = Vec3::new(
-            effect.pos.x.to_f32_for_render(),
-            effect.pos.y.to_f32_for_render(),
-            effect.pos.z.to_f32_for_render(),
-        );
-        let (skin, shape) = match effect.kind {
-            EffectKind::FirePillar => {
-                let (base, column) = effect.pillar_volumes();
-                let it = if tag.part == 0 { base } else { column };
-                (
-                    look.fire.clone(),
-                    Some((
-                        it.radius.to_f32_for_render(),
-                        it.bottom.to_f32_for_render(),
-                        it.top.to_f32_for_render(),
-                    )),
-                )
-            }
-            // A field, drawn as the slab it is: you are in it or you are not.
-            EffectKind::BlackSpike if tag.part == 0 => (
-                look.blood.clone(),
-                Some((effect.field_radius().to_f32_for_render(), 0.0, 0.12)),
-            ),
-            _ => (look.stone.clone(), None),
-        };
-        let Some((radius, bottom, top)) = shape else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        let height = (top - bottom).max(0.01);
+        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
         *vis = Visibility::Inherited;
-        if mat.0 != skin {
-            mat.0 = skin;
+        if mesh.0 != want_mesh {
+            mesh.0 = want_mesh;
         }
-        tf.translation = at + Vec3::Y * (bottom + height * 0.5);
-        tf.scale = Vec3::new(radius * 2.0, height, radius * 2.0);
+        if mat.0 != want_skin {
+            mat.0 = want_skin;
+        }
+        tf.translation = piece.at;
+        tf.scale = piece.scale;
     }
 }
+
+/// One drawable piece of one effect: which shape, which material, where, and
+/// how big.
+///
+/// Shapes and skins by name rather than by asset handle, so the geometry is a
+/// pure function of simulation state that a test can check without a renderer.
+/// What it is checking is that the picture agrees with the hit test, and that
+/// is worth being able to assert: a spike drawn wider than it drains is a
+/// promise the game does not keep.
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct Piece {
+    shape: Shape,
+    skin: Skin,
+    at: Vec3,
+    scale: Vec3,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Shape {
+    /// An upright cylinder: a pillar, a stone, the floor of a drain field.
+    Column,
+    /// A cone standing on its base. The black spike, and nothing else yet.
+    Spike,
+    /// A sphere, which is exactly what the hit test for a travelling effect is.
+    Ball,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Skin {
+    Fire,
+    Blood,
+}
+
+impl EffectLook {
+    fn mesh(&self, shape: Shape) -> Handle<Mesh> {
+        match shape {
+            Shape::Column => self.column.clone(),
+            Shape::Spike => self.spike.clone(),
+            Shape::Ball => self.ball.clone(),
+        }
+    }
+
+    fn material(&self, skin: Skin) -> Handle<StandardMaterial> {
+        match skin {
+            Skin::Fire => self.fire.clone(),
+            Skin::Blood => self.blood.clone(),
+        }
+    }
+}
+
+/// An upright shape standing on the ground at `at`, between two heights.
+fn standing(shape: Shape, skin: Skin, at: Vec3, radius: f32, bottom: f32, top: f32) -> Piece {
+    let height = (top - bottom).max(0.01);
+    Piece {
+        shape,
+        skin,
+        at: at + Vec3::Y * (bottom + height * 0.5),
+        scale: Vec3::new(radius * 2.0, height, radius * 2.0),
+    }
+}
+
+/// A ball in the air, which is exactly what the hit test for a travelling
+/// effect is -- see `World::inside`.
+fn floating(at: Vec3, radius: f32) -> Piece {
+    Piece {
+        shape: Shape::Ball,
+        skin: Skin::Blood,
+        at,
+        scale: Vec3::splat(radius * 2.0),
+    }
+}
+
+fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    use sim::effects::{EffectKind, GRASP_ARMS};
+
+    let at = fx3(effect.pos);
+    match effect.kind {
+        EffectKind::FirePillar if part < 2 => {
+            let (base, column) = effect.pillar_volumes();
+            let it = if part == 0 { base } else { column };
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                it.radius.to_f32_for_render(),
+                it.bottom.to_f32_for_render(),
+                it.top.to_f32_for_render(),
+            ))
+        }
+        // The field it drains in, and the spike standing in the middle of it.
+        // Two pieces because they say two different things: the disc is where
+        // the drain reaches, and the spike is the thing you can see from across
+        // the arena and decide to walk around. It was drawn as the disc alone
+        // for a while, which is a hazard you find out about by standing in it.
+        EffectKind::BlackSpike if part < 2 => {
+            let volume = effect.spike_volume();
+            let radius = volume.radius.to_f32_for_render();
+            let height = volume.top.to_f32_for_render();
+            Some(if part == 0 {
+                standing(Shape::Column, Skin::Blood, at, radius, 0.0, 0.12)
+            } else {
+                standing(
+                    Shape::Spike,
+                    Skin::Blood,
+                    at,
+                    radius * SPIKE_WAIST,
+                    0.0,
+                    height,
+                )
+            })
+        }
+        EffectKind::Bloodletter if part == 0 => Some(floating(
+            fx3(effect.blade_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        EffectKind::Grasp if part < GRASP_ARMS => Some(floating(
+            fx3(effect.arm_at(part)),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        _ => None,
+    }
+}
+
+/// How fat the spike is against the field it stands in.
+///
+/// Presentation, not a rule: the field's radius is where the drain reaches, and
+/// a cone that wide would be a tent rather than a spike. The disc underneath is
+/// what tells you where the edge is.
+const SPIKE_WAIST: f32 = 0.35;
 
 /// Where the class mechanic sits in the world, if anywhere. A shield in hand
 /// rides on the character and draws nothing; a thrown one, a placed shadow or a
@@ -1397,6 +1524,7 @@ fn drive_camera(
     }
 }
 
+/// A simulation position, in the renderer's units.
 fn fx3(v: sim::V3) -> Vec3 {
     Vec3::new(
         v.x.to_f32_for_render(),
@@ -1409,6 +1537,103 @@ fn fx3(v: sim::V3) -> Vec3 {
 mod tests {
     use super::*;
     use palette::UiFocus;
+    use sim::effects::{Effect, EffectKind, GRASP_ARMS};
+
+    fn cast(kind: EffectKind, slot: u8) -> Effect {
+        Effect::cast(
+            kind,
+            0,
+            sim::Class::BloodMage,
+            slot,
+            sim::V3::ZERO,
+            sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+        )
+    }
+
+    #[test]
+    fn a_black_spike_is_drawn_with_a_spike_in_it() {
+        // It was a twelve-centimetre stain on the floor for a while, which is a
+        // hazard you find out about by standing in it. The field is the disc;
+        // the spike is what you can see from across the arena.
+        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let field = effect_piece(&effect, 0).expect("the field is drawn");
+        let spike = effect_piece(&effect, 1).expect("the spike is drawn");
+        assert_eq!(field.shape, Shape::Column);
+        assert_eq!(spike.shape, Shape::Spike);
+        assert!(
+            spike.scale.y > field.scale.y * 4.0,
+            "the spike is no taller than the stain it stands in"
+        );
+        assert!(
+            spike.scale.x < field.scale.x,
+            "the spike is as wide as the whole field, which is a tent"
+        );
+    }
+
+    #[test]
+    fn the_drawn_spike_is_exactly_as_tall_as_the_volume_that_drains() {
+        // The rule for every effect in the game: what you see is what catches
+        // you. A field drawn shorter than it tests would be a hazard you think
+        // you jumped over.
+        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let volume = effect.spike_volume();
+        let spike = effect_piece(&effect, 1).expect("the spike is drawn");
+        assert!(
+            (spike.scale.y - volume.top.to_f32_for_render()).abs() < 0.001,
+            "drawn {} tall, drains up to {}",
+            spike.scale.y,
+            volume.top.to_f32_for_render()
+        );
+        let field = effect_piece(&effect, 0).expect("the field is drawn");
+        assert!(
+            (field.scale.x * 0.5 - volume.radius.to_f32_for_render()).abs() < 0.001,
+            "the drawn field is not the width of the drained one"
+        );
+    }
+
+    #[test]
+    fn a_thrown_blade_is_drawn_where_it_actually_is() {
+        // The blade is the whole threat -- the move leaves no hitbox on the
+        // caster -- so a picture of it anywhere but its own position would be
+        // the only thing telling the other player where the danger is, lying.
+        let mut effect = cast(EffectKind::Bloodletter, sim::state::SLOT_POKE);
+        let mut furthest = 0.0f32;
+        for _ in 0..effect.life {
+            effect.age += 1;
+            let drawn = effect_piece(&effect, 0).expect("the blade is drawn");
+            assert_eq!(drawn.at, fx3(effect.blade_at()));
+            furthest = furthest.max(drawn.at.x);
+        }
+        assert!(furthest > 1.0, "the blade never went anywhere");
+        assert!(
+            effect_piece(&effect, 1).is_none(),
+            "a blade is one object, not two"
+        );
+    }
+
+    #[test]
+    fn all_four_arms_of_a_grasp_are_drawn() {
+        // Each one is its own skillshot and each one has to be seen coming --
+        // it is being caught by *all* of them that roots you, and a player who
+        // can only see two cannot tell where the fourth is going to be.
+        let mut effect = cast(EffectKind::Grasp, sim::state::SLOT_SPECIAL);
+        effect.age = effect.life / 2;
+        let drawn: Vec<Piece> = (0..GRASP_ARMS)
+            .map(|arm| effect_piece(&effect, arm).expect("every arm is drawn"))
+            .collect();
+        for (arm, piece) in drawn.iter().enumerate() {
+            assert_eq!(piece.at, fx3(effect.arm_at(arm)));
+        }
+        // Halfway through, the cone is open: no two arms are in the same place.
+        for a in 0..GRASP_ARMS {
+            for b in a + 1..GRASP_ARMS {
+                assert!(
+                    drawn[a].at.distance(drawn[b].at) > 0.1,
+                    "arms {a} and {b} are drawn on top of each other"
+                );
+            }
+        }
+    }
 
     #[test]
     fn opening_the_oven_hands_the_cursor_back() {
