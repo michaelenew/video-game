@@ -81,7 +81,7 @@ fn flat_speed(v: V3) -> Fx {
 /// fighter, and raise one.
 fn raise_under_the_other(w: &mut World) {
     let victim = w.players[1].pos;
-    w.players[0].pos = V3::new(victim.x.sub(t::structure_ahead()), Fx::ZERO, victim.z);
+    w.players[0].pos = V3::new(victim.x.sub(t::raise_reach()), Fx::ZERO, victim.z);
     run(w, 2, E, 0);
 }
 
@@ -402,8 +402,15 @@ fn a_kicked_stone_hurts_a_fighter_it_is_still_moving_fast_enough_to_catch() {
     let mut w = elementalist();
     // Put the structure directly between the two fighters, close enough that
     // it is still near launch speed when it reaches the other one.
-    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
-    w.players[1].pos = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
+    //
+    // Raise is aimed now, so a level look puts the stone at the far end of its
+    // reach rather than a fixed step ahead -- the other fighter stands that
+    // much further out again to keep the travel short.
+    // Clear of the raised platforms in z, which reach four metres either side
+    // of the middle -- the far fighter now stands past where one of them is.
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    let gap = t::raise_reach().add(Fx::ratio(3, 2));
+    w.players[1].pos = V3::new(gap, Fx::ZERO, Fx::from_int(8));
     run(&mut w, 2, E, 0);
     run(&mut w, 30, 0, 0); // let the structure fully rise
 
@@ -558,7 +565,7 @@ fn a_stone_never_touches_the_fighter_who_raised_it() {
     // on to the first.
     w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
     run(&mut w, 2, E, 0);
-    w.players[0].pos = V3::new(t::structure_ahead(), Fx::ZERO, Fx::ZERO);
+    w.players[0].pos = V3::new(t::raise_reach(), Fx::ZERO, Fx::ZERO);
     run(&mut w, 600, 0, 0);
 
     assert_eq!(

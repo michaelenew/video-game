@@ -286,15 +286,24 @@ Both blends are smoothstepped rather than linear. The blend swaps the whole rig 
 linear handover makes the camera visibly change its mind at exactly the angles where the player
 is holding the mouse still.
 
-### Why the camera is not in the Oven
+### Why the camera is in the Oven but not in the checksum
 
-Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera is
-deliberately outside that rule, and the reason is the checksum: tuning values are folded into
+Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera used to
+be outside that rule entirely, and the reason was the checksum: tuning values are folded into
 `World::checksum()` so mistuned peers desync loudly, which is right for anything that decides
 what happens and wrong for anything that decides what you see. Two people playing each other
-must be able to run different fields of view and different camera distances without the match
-falling apart. Those three already live in `settings.conf` per player; the rig's own numbers
-sit beside them in `RigConfig`.
+must be able to run different fields of view and different camera framing without the match
+falling apart.
+
+**Revised 2026-09-12.** The camera's numbers are in the Oven now, in a `ViewKnob` family of
+their own that `oven::hash` deliberately skips — so they are editable and bakeable like
+everything else, and still personal. A test asserts the exemption rather than trusting it.
+
+What made that safe was a change somewhere else: **aiming stopped going through the camera.**
+An ability's target is solved from the fighter's own cast origin (`sim::aim`), so where the eye
+sits changes nothing about where anything lands. Before that, a camera knob would have been a
+gameplay knob wearing a disguise. Field of view and camera distance stay in `settings.conf`,
+because those are per-player comfort rather than shared design.
 
 ### The crosshair is not painted at screen centre
 

@@ -42,8 +42,12 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 > **Standing on them is the class's floor.** Terrain you cannot get on top of is only cover. A
 > stone still climbing carries whoever is on it at the speed its top is climbing, which is
 > already worth about 2.9 m against a 2.2 m full hop — that is the seed of the mobility the
-> class is meant to get, not the finished thing. It waits on moves that launch stones properly,
-> and on Raise gaining a way to target your own feet.
+> class is meant to get, not the finished thing. It waits on moves that launch stones properly.
+>
+> **They come up where you are pointing.** `structure_ahead` became a *reach*: the stone rises
+> at the spot the crosshair is on, out to 4 m. Look down and it comes up at your own feet,
+> which is what the ability description below has always said and what it could not do while
+> the stone went a fixed distance straight ahead. See [../controls.md](../controls.md).
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
   short distances with attacks, but cannot combo through them nearly as well. See
   [../elementalist.md](../elementalist.md).
@@ -130,6 +134,10 @@ decided here.
 Spawn a structure at the cursor. Cast beneath yourself to launch into the air. Cast at an
 existing uncaptured structure to kick it forward through the ground for low damage.
 
+> **Implemented, at the cursor.** "At the cursor" is now literal — the stone comes up on the
+> first thing the crosshair's line meets, out to Raise's reach. "Beneath yourself" is looking
+> down, and the eruption carries you with it.
+
 ### Fissure
 **Startup** medium · **Recovery** medium · **Range** long · **Mechanic** spawns a structure
 at the point of impact
@@ -194,9 +202,14 @@ their cover — the skill is placing them where they serve you more than the opp
   second branch yet.
 - Raise places a stone 2.5 m ahead, so "cast beneath yourself to launch into the air" above
   still has no input. The lift exists; the targeting for it does not.
+- Do structures block your own projectiles? Almost certainly yes, and that self-obstruction
+  is a real cost worth keeping. They block *bodies* now, the Elementalist's included.
 - A stone lifted off centre rides up on the shoulder of the one below rather than sliding off
   it. That is what the arena's own platforms do, and it may want revisiting once moves are
   throwing stones around in earnest.
+- A stone stands a whole body height and abilities come out of the chest, so from the ground
+  you only ever see a stone's *side*. Stacking one on another by aiming needs you above the
+  cap — honest geometry, but it may want an answer.
 - Structure durability and displacement force are the tuning knobs, per
   [../elementalist.md](../elementalist.md). Both need a prototype.
 - Three may be the wrong cap. It is the number that keeps the arena readable in third

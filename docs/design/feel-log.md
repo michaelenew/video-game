@@ -1060,3 +1060,147 @@ timer would do exactly that. Progress is measured against how far it has actuall
 - Melee autos and the timing pass, unchanged from the note above — this closed one third of
   "the autos are due a pass, as a set," not the set.
 
+### 2026-09-12 — abilities go where the crosshair is
+**Changed** Area abilities stopped appearing a fixed distance straight ahead and started
+landing where the player is pointing. Pitch went on the wire to make that possible, the camera
+was rebuilt around it, and the crosshair stopped moving.
+
+**Why** The old rule — spawn at `pos + facing × reach`, flattened to the floor — meant the only
+way to place a fire pillar or a stone anywhere was to walk there. For a class whose whole
+identity is authoring terrain, that is the wrong verb.
+
+**The rule.** Follow the line the player is looking along, out from the point abilities come
+out of, and stop at the first of the terrain or the edge of that ability's reach. One sentence,
+and every case falls out of it: a spot inside your reach is placed exactly; a spot past it goes
+as far along that line as it can; the sky, for something that comes out of the ground, gives
+full reach flat ahead.
+
+**The reach sphere is the interesting half.** Tracing to terrain alone lurches — aim a hair
+over the lip of a platform and the hit jumps from two metres to the far wall, so a fraction of
+a degree swings the ability across the arena. Stopping at the reach bounds that jump to the
+ability's own range, which is the most it could ever have meant. It also gives both halves of
+what a player wants at once: aim at the ground to pick a *direction*, or aim at a spot inside
+your reach to pick a *place*.
+
+**The ray starts at the fighter, not at the eye**, which is the opposite of what a
+third-person shooter does. Two reasons, and the second is the binding one. It makes the aimed
+line and the travelled line the same line, so pointing at the floor short of someone gives the
+ray that passes through them. And the eye cannot be in the simulation at all: camera distance
+is a per-player setting and the follow position is smoothed, so solving the aim from there
+would have two peers at different zoom levels placing a pillar in different spots with neither
+of them wrong.
+
+**Three passes on the camera, and the first two were wrong.**
+
+*Orbit the cast origin.* If the eye sits exactly on the ability's line then the screen's centre
+ray **is** that line, which is exact and needs no machinery. It also puts the camera at chest
+height: the horizon climbs to the top of the frame and you cannot see the arena you are
+fighting in. Zero parallax is not worth a view from a fighter's sternum.
+
+*Leave the camera on the look axis and move the reticle.* Honest — the mark is drawn where the
+ability actually lands, sliding off centre by the parallax. Reported immediately, and correctly:
+*"a jumping crosshair would feel really really bad, like the player has no real control."* The
+reticle is the one thing on screen a player is deliberately holding still.
+
+*Point the camera at the aim point.* What shipped. The crosshair is pinned to the exact centre
+of the screen and the **view** absorbs the parallax instead, as a few degrees of pitch. The eye
+is then free to sit where it frames the fight best.
+
+**Which turned out to be directly behind and well above.** Reported: *"the camera appears to be
+behind and to the right… it feels quite cramped because the character model is almost right on
+the crosshairs no matter where you aim."* Both halves were real and they have different causes.
+The over-the-shoulder slide turns the whole view once the camera points at the target, so `W`
+stops walking up the screen — it is gone. And the fighter was on the reticle because the eye was
+at 1.4 m over their feet: the aim point and the fighter are both on the ground with the fighter
+nearer, so how far apart they sit on screen is a function of eye height. Lifted to 4 m, the
+fighter's head rests about seven degrees below the crosshair.
+
+**The handover moved to the horizon.** It used to start forty degrees up and finish at the pitch
+limit, which left a wide band with the arm dragging along the floor behind the fighter. Now the
+climb starts the moment the aim crosses the horizon and is complete half a radian above it, and
+the body **fades** rather than popping out at a threshold — one continuous motion, the fighter
+rising to the middle of the screen and thinning out as they get there.
+
+**Numbers.** Cast height 1.25 m — chest, not eyes, so the shot does not read as first-person
+fire from a third-person body. Orbit lift 1.4 → 4.0. Neutral pitch 0.26 → 0.10, which lands the
+resting aim about twelve metres out: the mark sits `cast_height / tan(pitch)` ahead, and the
+origin of that ray dropped from a point above the fighter's head to their chest. Raise's reach
+2.5 → 4 m, because 2.5 m stopped meaning "where the stone goes" and started meaning "how far you
+may aim", and 2.5 m is barely enough room to aim in.
+
+**Verdict** open — played through the harness and four headless captures: resting framing,
+aiming down at your own feet, aiming up into the fade, and the reticle pinned through all of
+them. The number most likely to be wrong is `sky_full`: a twenty-degree glance upward currently
+costs you sight of your own fighter, which may be too eager for a game with this much
+verticality.
+
+**What did not change.** Melee swings are still flat, at `pos + facing × reach`. A sword is a
+body moving, and pointing the camera at the floor should not put the blade there. Only the moves
+that *place* something are aimed.
+
+**Still open.** A stone stands a whole body height and abilities come out of the chest, so from
+the ground you are always looking at a stone's *side* and never at its top — stacking by aiming
+needs you to be above the cap. That is honest geometry rather than a bug, and it may still want
+an answer.
+
+### 2026-09-12 — the camera became a prescription
+**Changed** The rig stopped being a set of offsets and became a set of **zones in the vertical
+aim angle**, each one stating where the fighter should appear on screen. Every boundary and
+every percentage is in the Oven under a new **Camera** family. See
+[controls.md](controls.md#the-camera-is-prescribed-zone-by-zone--settled-2026-09-12).
+
+**Why** Reported, and the reason is the valuable part: *"I think this is becoming a problem
+where the intent with the camera is not clear between threads so we keep causing reversions."*
+Three passes in two days had each moved the camera for a good local reason and undone something
+the last one bought. A rig described as "arm length, orbit lift, shoulder offset" cannot be
+argued with, because none of those is a thing anybody wants — they are means. Stated as *where
+the fighter sits in the frame at each angle*, the intent survives the next change, and a
+disagreement is about a number rather than about what the camera is for.
+
+**Closed form, and the geometry hands it over.** Asked for "solved per frame" the first version
+did nested bisection, which was rejected on the spot and rightly: *"solved per frame needs to
+mean closed form solution, to be clear."* It turns out there is one, and it is pretty. Each
+condition is "see these two points a given angle apart", and the set of places from which a
+segment subtends a fixed angle is a **circle through its two ends** — the inscribed angle
+theorem, the same one that says every angle standing on a diameter is a right angle. Two
+conditions, two circles, and the eye is where they cross: subtract them for the radical line,
+intersect that with either circle, take the root that is behind the fighter. Thirty-odd
+operations, exact, and nothing to bake.
+
+It also fixed a real error. The bisection's inner loop was hunting for the distance that makes
+the fighter the right size, and the closed form for that is one line — `R = k·cos ε + body·sin ε`
+— which disagreed with the small-angle estimate the rest of the design had been sketched
+against by nearly two metres at steep angles.
+
+**The camera left the desync checksum, and that is now safe.** Camera numbers were deliberately
+kept out of the Oven when it was built, because everything in it is folded into the checksum and
+two people must be able to play each other at different fields of view. They can go in now, in
+their own family that `hash` skips, and the reason is this week's other change: **aiming stopped
+going through the camera.** The aim is solved from the fighter's own cast origin, so where the
+eye sits changes nothing about where an ability lands. A camera knob is a personal setting in a
+way it could not have been a month ago.
+
+**What the geometry insists on.** Two things came out of the numbers rather than out of the
+spec, and both are worth knowing before tuning.
+
+*The neutral zone is two cameras.* The crosshair's mark on the ground sits `cast height /
+tan(pitch)` ahead — about 7 m at −10 and 1.2 m at −45. Holding the fighter at a fixed 5% of the
+screen while the mark sweeps in that far swings the eye from 51 degrees of elevation at 6.9 m to
+85 degrees at 2.6 m, which is a normal third-person arm at one end and almost directly overhead
+at the other. Nothing is wrong; it is what "keep the fighter still while the crosshair comes in"
+means. The lever is the zone's steep boundary.
+
+*The last few degrees of the look down are degenerate.* At the bottom of the range the crosshair
+is already at the fighter's feet, so "put the feet on the crosshair" is satisfied by any camera
+at all — and asking for it *exactly* demands an eye in line with them, which is an eye on the
+floor. A least-elevation knob is what stops the rig chasing that, and it only applies in that
+zone: at level the eye has to come down almost beside the fighter to keep their head just under
+the mark.
+
+**The distance setting survived with a new job.** The rig has no free distance any more — where
+the eye goes is decided by where the fighter has to land — so `F5`/`F6` scale how much of the
+screen the fighter fills. Pull back, smaller fighter, which is the same wish.
+
+**Verdict** open. The shape is what was asked for and the waypoints are pinned by tests rather
+than by screenshots, which is the point of the exercise. The number most likely to want moving
+is the neutral zone's steep boundary, for the reason above.

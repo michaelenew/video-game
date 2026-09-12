@@ -246,7 +246,7 @@ pub const SECTIONS: &[Section] = &[
             s("F3 and F4", "Field of view, 2 degrees a step.", "F3 F4 fov"),
             s(
                 "F5 and F6",
-                "Camera distance, 0.4 m a step.",
+                "Camera distance -- how big the fighter draws, 0.4 m a step.",
                 "F5 F6 camera distance",
             ),
         ],
@@ -389,6 +389,7 @@ pub const SECTIONS: &[Section] = &[
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
+            e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(
                 "SHOT_DIST=<metres>",
                 "Pull the camera in for a capture. The arena default of eleven metres makes a pose unreadable.",

@@ -155,6 +155,21 @@ pub fn body_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyHeight))
 }
 
+/// How high above the feet an ability comes out of.
+///
+/// **The single point the whole aiming scheme is hung on.** It is where a
+/// skillshot starts, it is what the range sphere is centred on, and it is the
+/// point the camera orbits -- so the line the crosshair draws in space and the
+/// line the ability travels are the same line. Move it and all three move
+/// together, which is the only way they can stay honest.
+///
+/// Chest height on a fighter who is `body_height` tall: hands, not eyes. Eye
+/// height would put the origin where the camera is and read as a first-person
+/// shot fired from a third-person body.
+pub fn cast_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastHeight))
+}
+
 /// Knockback decay per tick while stunned. Below 1.0 or a hit sends you
 /// sliding forever.
 pub fn knockback_decay() -> Fx {
@@ -390,11 +405,22 @@ pub fn shadow_leash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
 }
 
-pub fn shadow_place_ahead() -> Fx {
+/// How far from the Reaver a shadow can be placed.
+///
+/// A reach rather than a distance: the shadow goes where the crosshair is,
+/// stopping at the terrain or at this, whichever comes first.
+pub fn shadow_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowPlaceAhead))
 }
 
-pub fn structure_ahead() -> Fx {
+/// How far from the Elementalist a stone can be raised.
+///
+/// It used to put one a fixed distance straight ahead, which meant the only way
+/// to place a stone anywhere was to walk there. It is a **reach** now: the stone
+/// comes up where the crosshair is, and this is as far as that can be. Raised
+/// from 2.5 m when the meaning changed -- a fixed 2.5 m ahead is a sensible
+/// place to stand a stone, and a 2.5 m leash is barely enough room to aim in.
+pub fn raise_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StructureAhead))
 }
 

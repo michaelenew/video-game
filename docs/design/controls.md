@@ -30,7 +30,8 @@ Six sentences, and everything else follows:
 5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
    class does, each on its own key.
 6. **The mouse means *where*.** You look with it, you are pointed where you look, and
-   your attacks go where you are pointed.
+   your attacks go where you are pointed — **including up and down.** The crosshair is a
+   line in space, and an area ability lands on the first thing that line meets.
 
 ### Why the special and the mechanic left the mouse
 
@@ -101,6 +102,43 @@ of them is settled:
 Aim is the camera direction. The player turns by turning the camera; there is no separate
 turn control and no auto-facing.
 
+**The camera sits directly behind the fighter.** Not a preference: the camera points at the
+aim point, so an eye slid to one shoulder would turn the whole view and `W` would stop walking
+up the screen.
+
+### The camera is prescribed, zone by zone — settled 2026-09-12
+
+Where the eye goes is not a set of offsets any more. It is stated as **where the fighter should
+appear on screen** at each vertical aim angle, and the eye is whatever satisfies that. Angles
+below are degrees, negative below the horizon; screen positions are percentages up from the
+bottom, so the crosshair is at 50 by definition.
+
+| Zone | What it is for | What it asks for |
+| --- | --- | --- |
+| **−90 to −85** | Not allowed | At the pole the fighter's vertical plane stops being defined and the camera has nothing to be behind |
+| **−85 to −45** | The floor zone | The feet walk up the screen from 5% to 50%, so at the bottom the camera is looking at the fighter's own feet — the shot that puts a stone underneath you |
+| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, head at 25%: low in the frame and the same size throughout |
+| **−10 to 0** | The turn | Attention moves from the feet to the head, until at level the crosshair rides just above the head. With no ground under the aim to read it against, the fighter's own head is what a mid-range skillshot keys off |
+| **0 to +10** | The handover | The eye walks into the fighter and the body fades out |
+| **+10 to +85** | First person | The eye *is* the point abilities come out of, so the crosshair's line in space and the ability's line are the same line |
+| **+85 to +90** | Not allowed | As below |
+
+**The shape is the design; the numbers are knobs.** Every boundary angle and every percentage
+is in the Oven under **Camera**, and those are the only camera values in it — see
+[architecture.md](architecture.md) for why they are the one family kept out of the desync
+checksum.
+
+**Solved in closed form, once a frame.** Each condition is "see these two points a given angle
+apart", and the places from which a segment subtends a fixed angle form a *circle* through its
+ends — the inscribed angle theorem. So the eye is where two circles cross, which is a line and
+a quadratic. No search, nothing baked, and exact rather than nearly.
+
+**One thing the geometry insists on, worth knowing before tuning.** The crosshair's mark on the
+ground sits `cast height / tan(pitch)` ahead: about 7 m at −10 and barely 1.2 m at −45. Holding
+the fighter at a fixed spot on screen while the mark sweeps that far in swings the eye from a
+normal third-person arm at −10 to almost directly overhead at −45. If the neutral zone should
+feel like one camera rather than two, the lever is its steep boundary.
+
 Two consequences are worth stating because they are design, not implementation:
 
 - **Facing locks the instant a move starts.** During startup, active and recovery frames
@@ -137,16 +175,52 @@ reads.
 `cargo run -p sim --bin frametable` prints these alongside the frame data, and marks which
 moves root you.
 
-### The crosshair tells you where the attack goes, not where the camera points
+### Abilities land where the crosshair is
 
-Those two are the same most of the time, and deliberately not the same during a committed
-move or a lagging guard. The reticle is placed by projecting the point the fighter is
-actually pointed at, so it sits still in the middle of the screen while facing tracks aim
-and slides off to the side when it does not. It dims while you are committed to something
-and the button will not answer.
+**Settled 2026-09-12.** An area ability used to appear a fixed distance straight ahead, so
+the only way to place one anywhere was to walk there. It now lands where you are pointing.
 
-A reticle that says "here" when the answer is "not there" is worse than no reticle, and the
-moments it would lie are exactly the moments the answer matters.
+The rule is one sentence: **follow the line the player is looking along, out from the point
+abilities come out of, and stop at the first of the terrain or the edge of that ability's
+reach.** Everything follows from it.
+
+- **Aim at a spot inside your reach and it goes there.** Exactly there — this is the whole
+  point, and it is what makes an area ability a placement decision rather than a step-forward
+  decision.
+- **Aim past your reach and it goes as far along that line as it can.** Range means
+  something again.
+- **Aim at the ground to pick a direction.** The ray from your chest to a spot on the floor
+  is the ray that passes through anyone standing between you and it, so aiming at the floor
+  short of someone is how you hit them with a line skillshot.
+- **Aim at the sky with something that comes out of the ground** — a pillar of flame, a stone
+  — and it arrives at full reach flat ahead. It has to come out of *somewhere*.
+
+**Why a reach sphere and not just the terrain.** Trace to the terrain alone and the target
+lurches: aim a hair over the lip of a platform and the hit jumps from two metres away to the
+far wall, so a fraction of a degree of mouse movement swings the ability across the arena.
+Stopping at the reach bounds that jump to the ability's own range, which is the most it could
+ever have meant.
+
+**The target locks when the move starts**, exactly as facing does. A target you could drag
+during the startup would let an area be slid onto someone during the wind-up, and the
+telegraph is most of what the Elementalist is.
+
+**Pitch is on the wire.** It used to be renderer-local on the grounds that it moved the
+camera and nothing else. A crosshair is a line and a line needs two angles, so it is gameplay
+now and crosses the network beside the yaw.
+
+### The crosshair never moves
+
+It sits at the exact centre of the screen, always. The **camera** turns to keep the aim point
+under it.
+
+That ordering is the design. The alternative — leave the camera pointed along the raw look
+axis and slide the reticle to wherever the aim really lands — is equally honest and feels
+terrible: a reticle that wanders reads as the aim slipping out of your hands, and the reticle
+is the one thing on screen a player is deliberately holding still. The parallax goes into the
+view instead, where it is a few degrees of pitch nobody has to fight.
+
+It dims while you are committed to something and the button will not answer.
 
 ### Settings
 

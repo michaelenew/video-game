@@ -140,6 +140,7 @@ scalars! {
     BodyRadius,       "Body",     "Body radius",            Fixed,   fx(1,10),  fx(2,1);
     BodyHeight,       "Body",     "Body height",            Fixed,   fx(1,2),   fx(4,1);
     CrouchHeightScale,"Body",     "Crouch height (x)",      Fixed,   fx(1,10),  fx(1,1);
+    CastHeight,       "Body",     "Cast height",            Fixed,   fx(1,10),  fx(4,1);
     MaxHealth,        "Match",    "Max health",             Int,     100,       5000;
     RoundOverFrames,  "Match",    "Round-over pause",       Frames,  30,        600;
     AirStallDamp,     "Air",      "Aerial hang damping",    Fixed,   0,         fx(1,1);
@@ -172,8 +173,8 @@ scalars! {
     LeapSpeed,        "Bulwark",  "Leap speed",                 Fixed,   fx(1,1),   fx(40,1);
     LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
     ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
-    ShadowPlaceAhead, "Reaver",   "Shadow placed ahead",        Fixed,   0,         fx(10,1);
-    StructureAhead,   "Stones",   "Raised ahead",               Fixed,   0,         fx(10,1);
+    ShadowPlaceAhead, "Reaver",   "Shadow reach",               Fixed,   0,         fx(10,1);
+    StructureAhead,   "Stones",   "Raise reach",                Fixed,   0,         fx(10,1);
     StructureHeight,  "Stones",   "Stone height",               Fixed,   fx(1,10),  fx(8,1);
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
     StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
@@ -284,6 +285,71 @@ scalars! {
     BoltFireDamageMul, "Elementalist", "Fire bolt damage (x)",              Fixed,  fx(1,1),  fx(4,1);
     BoltFireKnockbackMul, "Elementalist", "Fire bolt knockback (x)",        Fixed,  fx(1,1),  fx(4,1);
 }
+
+// ---------------------------------------------------------------------------
+// The view: numbers that decide what you see, not what happens
+// ---------------------------------------------------------------------------
+
+macro_rules! view_knobs {
+    ($($variant:ident, $label:literal, $unit:ident, $lo:expr, $hi:expr;)*) => {
+        /// A camera number.
+        ///
+        /// Separate from [`Scalar`] for one reason, and it is the important one:
+        /// **these are deliberately not in [`hash`]**. Every other value in the
+        /// Oven decides what *happens*, so two peers tuned differently have to
+        /// desync loudly rather than diverge quietly. A camera decides what you
+        /// *see*, and two people must be able to play each other with different
+        /// framing the same way they already play at different fields of view.
+        ///
+        /// That only became safe when aiming stopped going through the camera.
+        /// The aim is solved from the fighter's own cast origin (`crate::aim`),
+        /// so where the eye sits changes nothing about where an ability lands --
+        /// which is exactly what lets these be a personal setting.
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        pub enum ViewKnob { $($variant,)* }
+
+        impl ViewKnob {
+            pub const ALL: &'static [ViewKnob] = &[$(ViewKnob::$variant,)*];
+
+            pub const fn label(self) -> &'static str {
+                match self { $(ViewKnob::$variant => $label,)* }
+            }
+
+            pub const fn unit(self) -> Unit {
+                match self { $(ViewKnob::$variant => Unit::$unit,)* }
+            }
+
+            pub const fn range(self) -> (i32, i32) {
+                match self { $(ViewKnob::$variant => ($lo, $hi),)* }
+            }
+        }
+    };
+}
+
+// The camera is described as a set of **zones** in vertical aim angle, with the
+// waypoints between them stated as where the fighter should appear on screen.
+// The zone boundaries and the numbers inside each zone are here; the *shape* --
+// which waypoints exist and what each one means -- is in `view::camera` and is
+// not a knob, because it is the design rather than a value.
+//
+// Angles are degrees, negative being below the horizon. Screen fractions are
+// percentages measured from the bottom of the screen, so the crosshair sits at
+// 50 by definition.
+view_knobs! {
+    LookDownLimit,  "Look down limit",          Int,     10,  89;
+    LookUpLimit,    "Look up limit",            Int,     10,  89;
+    FloorZoneFrom,  "Floor zone, from",         Int,     10,  89;
+    NeutralZoneTo,  "Neutral zone, to",         Int,     1,   45;
+    HeadLockAt,     "Head lock, at",            Int,     1,   45;
+    FeetNeutral,    "Feet, neutral (%)",        Int,     0,   50;
+    HeadNeutral,    "Head, neutral (%)",        Int,     1,   50;
+    FeetFloor,      "Feet, floor (%)",          Int,     0,   50;
+    HeadGapLevel,   "Head to crosshair (%)",    Int,     0,   30;
+    MinElevation,   "Eye elevation, least",     Int,     0,   89;
+    MaxElevation,   "Eye elevation, most",      Int,     0,   89;
+}
+
+pub const VIEW_COUNT: usize = 11;
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data
@@ -556,7 +622,7 @@ pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 169;
+pub const SCALAR_COUNT: usize = 170;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;
@@ -572,6 +638,16 @@ fn cells<const N: usize>(seed: &'static [i32; N]) -> [AtomicI32; N] {
 static SCALAR_CELLS: LazyLock<[AtomicI32; SCALAR_COUNT]> = LazyLock::new(|| cells(&tuned::SCALARS));
 static AIR_CELLS: LazyLock<[AtomicI32; AIR_COUNT]> = LazyLock::new(|| cells(&tuned::AIR));
 static MOVE_CELLS: LazyLock<[AtomicI32; MOVE_COUNT]> = LazyLock::new(|| cells(&tuned::MOVES));
+static VIEW_CELLS: LazyLock<[AtomicI32; VIEW_COUNT]> = LazyLock::new(|| cells(&tuned::VIEW));
+
+pub fn view(k: ViewKnob) -> i32 {
+    VIEW_CELLS[k as usize].load(Ordering::Relaxed)
+}
+
+pub fn set_view(k: ViewKnob, raw: i32) {
+    VIEW_CELLS[k as usize].store(raw, Ordering::Relaxed);
+}
+
 static MONSTER_CELLS: LazyLock<[AtomicI32; MONSTER_COUNT]> =
     LazyLock::new(|| cells(&tuned::MONSTER));
 
@@ -630,6 +706,9 @@ pub fn reset_to_baked() {
     for (i, cell) in MOVE_CELLS.iter().enumerate() {
         cell.store(tuned::MOVES[i], Ordering::Relaxed);
     }
+    for (i, cell) in VIEW_CELLS.iter().enumerate() {
+        cell.store(tuned::VIEW[i], Ordering::Relaxed);
+    }
     for (i, cell) in MONSTER_CELLS.iter().enumerate() {
         cell.store(tuned::MONSTER[i], Ordering::Relaxed);
     }
@@ -650,6 +729,10 @@ pub fn is_dirty() -> bool {
             .iter()
             .enumerate()
             .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::MOVES[i])
+        || VIEW_CELLS
+            .iter()
+            .enumerate()
+            .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::VIEW[i])
         || MONSTER_CELLS
             .iter()
             .enumerate()
@@ -676,6 +759,9 @@ pub fn hash() -> u64 {
     for c in MONSTER_CELLS.iter() {
         h.write_i32(c.load(Ordering::Relaxed));
     }
+    // `VIEW_CELLS` is **not** folded in, on purpose. See `ViewKnob`: those
+    // decide what you see rather than what happens, and two people have to be
+    // able to play each other with different framing.
     h.finish()
 }
 
@@ -690,6 +776,7 @@ pub enum Knob {
     Air(Class, AirField),
     Move(Class, usize, MoveField),
     Monster(usize, MonsterField),
+    View(ViewKnob),
 }
 
 impl Knob {
@@ -699,6 +786,7 @@ impl Knob {
     pub fn family(self) -> String {
         match self {
             Knob::Scalar(s) => s.family().to_string(),
+            Knob::View(_) => "Camera".to_string(),
             Knob::Air(c, _) => format!("Air · {}", c.name()),
             Knob::Move(c, slot, _) => format!(
                 "{} · {} [{}]",
@@ -715,6 +803,7 @@ impl Knob {
     pub fn label(self) -> &'static str {
         match self {
             Knob::Scalar(s) => s.label(),
+            Knob::View(k) => k.label(),
             Knob::Air(_, f) => f.label(),
             Knob::Move(_, _, f) => f.label(),
             Knob::Monster(_, f) => f.label(),
@@ -729,6 +818,7 @@ impl Knob {
         }
         match self {
             Knob::Scalar(s) => format!("{}.{}", slug(s.family()), slug(s.label())),
+            Knob::View(k) => format!("camera.{}", slug(k.label())),
             Knob::Air(c, f) => format!("air.{}.{}", slug(c.name()), slug(f.label())),
             Knob::Move(c, slot, f) => format!(
                 "move.{}.{}.{}",
@@ -747,6 +837,7 @@ impl Knob {
     pub fn unit(self) -> Unit {
         match self {
             Knob::Scalar(s) => s.unit(),
+            Knob::View(k) => k.unit(),
             Knob::Air(_, _) => Unit::Fixed,
             Knob::Move(_, _, f) => f.unit(),
             Knob::Monster(_, f) => f.unit(),
@@ -756,6 +847,7 @@ impl Knob {
     pub const fn range(self) -> (i32, i32) {
         match self {
             Knob::Scalar(s) => s.range(),
+            Knob::View(k) => k.range(),
             Knob::Air(_, f) => f.range(),
             Knob::Move(_, _, f) => f.range(),
             Knob::Monster(_, f) => f.range(),
@@ -765,6 +857,7 @@ impl Knob {
     pub fn raw(self) -> i32 {
         match self {
             Knob::Scalar(s) => scalar(s),
+            Knob::View(k) => view(k),
             Knob::Air(c, f) => air(c, f),
             Knob::Move(c, slot, f) => move_field(c, slot, f),
             Knob::Monster(slot, f) => monster_field(slot, f),
@@ -774,6 +867,7 @@ impl Knob {
     pub fn set_raw(self, raw: i32) {
         match self {
             Knob::Scalar(s) => set_scalar(s, raw),
+            Knob::View(k) => set_view(k, raw),
             Knob::Air(c, f) => set_air(c, f, raw),
             Knob::Move(c, slot, f) => set_move_field(c, slot, f, raw),
             Knob::Monster(slot, f) => set_monster_field(slot, f, raw),
@@ -784,6 +878,7 @@ impl Knob {
     pub fn baked_raw(self) -> i32 {
         match self {
             Knob::Scalar(s) => tuned::SCALARS[s as usize],
+            Knob::View(k) => tuned::VIEW[k as usize],
             Knob::Air(c, f) => tuned::AIR[air_index(c, f)],
             Knob::Move(c, slot, f) => tuned::MOVES[move_index(c, slot, f)],
             Knob::Monster(slot, f) => tuned::MONSTER[monster_index(slot, f)],
@@ -837,6 +932,9 @@ pub fn all_knobs() -> Vec<Knob> {
         for field in MonsterField::ALL {
             out.push(Knob::Monster(slot, *field));
         }
+    }
+    for k in ViewKnob::ALL {
+        out.push(Knob::View(*k));
     }
     out
 }
@@ -892,6 +990,12 @@ pub fn emit() -> String {
         "MONSTER",
         MONSTER_COUNT,
         SCALAR_COUNT + AIR_COUNT + MOVE_COUNT,
+    );
+    write_block(
+        &mut out,
+        "VIEW",
+        VIEW_COUNT,
+        SCALAR_COUNT + AIR_COUNT + MOVE_COUNT + MONSTER_COUNT,
     );
     // Exactly one trailing newline: `cargo fmt` strips a blank line at the end
     // of a file, which would leave the generated file permanently one byte

@@ -104,70 +104,153 @@ fn alpha_stays_in_range() {
 
 /// Flat direction the camera is pointed.
 ///
-/// Measured eye-to-target, which is now exactly the look direction: the screen
-/// looks along the axis the mouse names. The eye still sits off to one
-/// shoulder, so this ray is displaced sideways from the fighter's own -- but
-/// displaced, not turned, and a parallel ray aims at the same angle. The
-/// crosshair is projected from the *fighter's* facing along this same ray (see
-/// `crosshair::aim_point`), which is what keeps it centred when the two agree.
+/// Measured eye-to-target. The camera points *at* the aim point rather than
+/// along the look axis, and the eye is lifted above the fighter -- but lifted
+/// straight up, on their own centre line, so the bearing is untouched and only
+/// the pitch differs.
 fn aim_dir(f: view::camera::Framing, _player: [f32; 3]) -> (f32, f32) {
     let (dx, dz) = (f.look_at[0] - f.eye[0], f.look_at[2] - f.eye[2]);
     let len = (dx * dx + dz * dz).sqrt();
     (dx / len, dz / len)
 }
 
+/// The tuned zones, which is what the camera is a solution to.
+fn zones() -> view::camera::Zones {
+    view::camera::Zones::tuned()
+}
+
+fn fov() -> f32 {
+    view::camera::RigConfig::default().fov
+}
+
+/// Where the simulation says a fighter standing here and looking this way is
+/// aiming. The game hands the rig exactly this, so the fixture has to as well.
+fn aim_at(player: [f32; 3], yaw: f32, pitch: f32) -> [f32; 3] {
+    let z = zones();
+    let pitch = pitch.clamp(-z.down_limit, z.up_limit);
+    let look = sim::Input::looking_at(
+        0,
+        view::aim_from_radians(yaw),
+        view::pitch_from_radians(pitch),
+    );
+    let from = sim::aim::origin(sim::V3::new(
+        sim::Fx::from_raw((player[0] * 65536.0) as i32),
+        sim::Fx::from_raw((player[1] * 65536.0) as i32),
+        sim::Fx::from_raw((player[2] * 65536.0) as i32),
+    ));
+    let stones = [None; sim::stones::MAX_STONES];
+    let far = sim::Fx::from_int(60);
+    let dir = look.look_dir();
+    let reach = sim::aim::trace(from, dir, far, &stones).unwrap_or(far);
+    let at = from.add(dir.scale(reach));
+    [
+        at.x.to_f32_for_render(),
+        at.y.to_f32_for_render(),
+        at.z.to_f32_for_render(),
+    ]
+}
+
+fn settled(pitch: f32) -> (view::camera::Framing, [f32; 3]) {
+    let mut rig = CameraRig::new(RigConfig::default());
+    // Past the platforms in z, which reach four metres either side of the
+    // middle, so the occlusion pull-in is not what these are measuring.
+    let at = [0.0, 0.0, 8.0];
+    let target = aim_at(at, 0.0, pitch);
+    for _ in 0..200 {
+        rig.update(0.016, at, 0.0, pitch, target);
+    }
+    (rig.update(0.016, at, 0.0, pitch, target), at)
+}
+
+/// Where a world point lands, as a fraction up the screen from the bottom. The
+/// crosshair is at one half by definition, because the camera points at it.
+fn on_screen(f: view::camera::Framing, point: [f32; 3]) -> f32 {
+    let to = |p: [f32; 3]| {
+        let v = [p[0] - f.eye[0], p[1] - f.eye[1], p[2] - f.eye[2]];
+        let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-4);
+        [v[0] / len, v[1] / len, v[2] / len]
+    };
+    let centre = to(f.look_at);
+    let target = to(point);
+    let dot: f32 = (0..3).map(|i| centre[i] * target[i]).sum();
+    let angle = dot.clamp(-1.0, 1.0).acos();
+    let signed = if target[1] < centre[1] { -angle } else { angle };
+    0.5 + signed / fov()
+}
+
+fn feet_of(at: [f32; 3]) -> [f32; 3] {
+    [at[0], 0.0, at[2]]
+}
+
+fn head_of(at: [f32; 3]) -> [f32; 3] {
+    [at[0], sim::tuning::body_height().to_f32_for_render(), at[2]]
+}
+
+fn ramp(from: f32, to: f32, at: f32) -> f32 {
+    from + (to - from) * at
+}
+
 #[test]
 fn the_camera_sits_behind_the_fighter() {
     let mut rig = CameraRig::new(RigConfig::default());
-    let f = rig.update(0.016, [2.0, 0.0, -1.0], 0.0, 0.0);
+    let at = [2.0, 0.0, -1.0];
+    let target = aim_at(at, 0.0, 0.0);
+    let f = rig.update(0.016, at, 0.0, 0.0, target);
     // Looking down +X means the camera is at smaller X than the fighter.
     assert!(f.eye[0] < 2.0, "camera at {} is not behind", f.eye[0]);
-    // And it aims past them, not at them, so they are not standing in front of
-    // whatever you are trying to look at.
+    // And it is pointed *at the aim point* -- the whole contract, and what pins
+    // the crosshair to the middle of the screen.
     assert!(
-        f.look_at[0] > 2.0,
-        "aim point at {} is not ahead of the fighter",
-        f.look_at[0]
-    );
-    // The ray runs straight down +X. It is displaced sideways by the shoulder
-    // offset -- parallel, not turned -- so what must not drift is its
-    // direction, which is what the player is steering.
-    assert!(
-        (f.look_at[2] - f.eye[2]).abs() < 0.01,
-        "aim drifted sideways"
+        (0..3).all(|i| (f.look_at[i] - target[i]).abs() < 0.001),
+        "the camera is looking at {:?}, not at the aim point {target:?}",
+        f.look_at
     );
     assert!(f.eye[1] > 0.0, "camera is underground");
-    // Looking level means looking level -- the screen follows the mouse, not a
-    // built-in tilt. What keeps the fighter out of the middle of the frame is
-    // the eye sitting above their head, not the camera aiming downward.
-    assert!(
-        f.eye[1] > RigConfig::default().look_height,
-        "the eye at {} is not above the fighter",
-        f.eye[1]
-    );
 }
 
 #[test]
 fn the_camera_and_the_simulation_agree_on_forward() {
     // The invariant that makes camera-relative movement work at all. If the
-    // renderer's yaw convention and `move_dir`'s disagree, W walks sideways
-    // and nothing about the code looks wrong. Both are checked against each
-    // other here rather than each against itself.
+    // renderer's yaw convention and `move_dir`'s disagree, W walks sideways and
+    // nothing about the code looks wrong.
+    //
+    // **Exactly**, and that is why the eye sits on the fighter's own centre
+    // line. The camera is pointed at the target rather than along the look
+    // axis, so an eye slid sideways would turn the whole view and W would stop
+    // walking up the screen.
     for eighth in 0..8u32 {
         let aim = (eighth * (u16::MAX as u32 + 1) / 8) as u16;
         let radians = aim as f32 / 65536.0 * std::f32::consts::TAU;
+        let at = [0.0, 0.0, 8.0];
 
         let mut rig = CameraRig::new(RigConfig::default());
-        let (cx, cz) = aim_dir(
-            rig.update(0.016, [0.0, 0.0, 0.0], radians, 0.0),
-            [0.0, 0.0, 0.0],
-        );
+        let f = rig.update(0.016, at, radians, 0.0, aim_at(at, radians, 0.0));
+        let (cx, cz) = aim_dir(f, at);
 
         let sim_fwd = sim::state::move_dir(Input::aimed(0, aim).aim_turns(), 0, 1);
         let (sx, sz) = (sim_fwd.x.to_f32_for_render(), sim_fwd.z.to_f32_for_render());
         assert!(
             (cx - sx).abs() < 0.02 && (cz - sz).abs() < 0.02,
             "at {aim}: camera looks ({cx:.3}, {cz:.3}), W walks ({sx:.3}, {sz:.3})"
+        );
+    }
+}
+
+#[test]
+fn the_eye_stays_on_the_fighters_own_centre_line() {
+    // Reported: the camera sat behind and to the right, and it was wrong.
+    // Directly behind is not a preference, it is what keeps the bearing exact
+    // once the camera is pointed at the aim point.
+    let at = [0.0, 0.0, 8.0];
+    for eighth in 0..8u32 {
+        let yaw = eighth as f32 / 8.0 * std::f32::consts::TAU;
+        let mut rig = CameraRig::new(RigConfig::default());
+        let f = rig.update(0.016, at, yaw, 0.0, aim_at(at, yaw, 0.0));
+        let (dx, dz) = (f.eye[0] - at[0], f.eye[2] - at[2]);
+        let sideways = (dx * yaw.sin() - dz * yaw.cos()).abs();
+        assert!(
+            sideways < 0.01,
+            "at yaw {yaw:.2} the eye is {sideways:.2} m off the fighter's centre line"
         );
     }
 }
@@ -188,283 +271,247 @@ fn strafe_is_perpendicular_to_forward() {
 #[test]
 fn the_mouse_is_never_smoothed() {
     // A smoothed mouse feels broken in a way players cannot name. The camera
-    // must be looking exactly where asked on the very frame it is asked.
-    let mut rig = CameraRig::new(RigConfig::default());
+    // must be where it is asked on the very frame it is asked.
+    let at = [0.0, 0.0, 8.0];
+    let yaw = std::f32::consts::FRAC_PI_2;
+    let mut snapped = CameraRig::new(RigConfig::default());
     for _ in 0..60 {
-        rig.update(0.016, [0.0, 0.0, 0.0], 0.0, 0.0);
+        snapped.update(0.016, at, 0.0, 0.0, aim_at(at, 0.0, 0.0));
     }
-    let turned = rig.update(0.016, [0.0, 0.0, 0.0], std::f32::consts::FRAC_PI_2, 0.0);
-    let (dx, dz) = aim_dir(turned, [0.0, 0.0, 0.0]);
+    let turned = snapped.update(0.016, at, yaw, 0.0, aim_at(at, yaw, 0.0));
+
+    let mut held = CameraRig::new(RigConfig::default());
+    for _ in 0..60 {
+        held.update(0.016, at, yaw, 0.0, aim_at(at, yaw, 0.0));
+    }
+    let rested = held.update(0.016, at, yaw, 0.0, aim_at(at, yaw, 0.0));
+
+    let (ax, az) = aim_dir(turned, at);
+    let (bx, bz) = aim_dir(rested, at);
     assert!(
-        dx.abs() < 0.02 && (dz - 1.0).abs() < 0.02,
-        "camera lagged the mouse: ({dx:.3}, {dz:.3})"
+        (ax - bx).abs() < 0.01 && (az - bz).abs() < 0.01,
+        "camera lagged the mouse: ({ax:.3}, {az:.3}) against ({bx:.3}, {bz:.3})"
     );
 }
 
-/// Flat distance from the focus point to the eye.
-fn flat_arm(f: view::camera::Framing, focus: [f32; 3]) -> f32 {
-    let (dx, dz) = (f.eye[0] - focus[0], f.eye[2] - focus[2]);
-    (dx * dx + dz * dz).sqrt()
-}
-
-/// Where the middle of the screen meets the floor, as a distance in front of
-/// the fighter. Negative means behind them.
-///
-/// This is the number the player is actually steering when they aim at the
-/// ground, so it is the number the assertions are written in.
-fn ground_mark(f: view::camera::Framing, at: [f32; 3]) -> Option<f32> {
-    let dir = [
-        f.look_at[0] - f.eye[0],
-        f.look_at[1] - f.eye[1],
-        f.look_at[2] - f.eye[2],
-    ];
-    let len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
-    let dir = [dir[0] / len, dir[1] / len, dir[2] / len];
-    if dir[1] > -1e-3 {
-        return None; // looking at or above the horizon: it never lands
-    }
-    let travel = f.eye[1] / -dir[1];
-    let x = f.eye[0] + dir[0] * travel;
-    let z = f.eye[2] + dir[2] * travel;
-    // Signed along the way the camera faces, flat.
-    let flat = (dir[0] * dir[0] + dir[2] * dir[2]).sqrt().max(1e-4);
-    Some((x - at[0]) * dir[0] / flat + (z - at[2]) * dir[2] / flat)
-}
-
-fn settled(pitch: f32) -> (view::camera::Framing, [f32; 3]) {
-    let mut rig = CameraRig::new(RigConfig::default());
-    // Past the platforms in z, which reach four metres either side of the
-    // middle. The arm is eleven metres now, so a fixture in the middle of the
-    // arena sweeps the camera straight through one and the occlusion pull-in
-    // would be what these tests were measuring.
-    let at = [0.0, 0.0, 8.0];
-    for _ in 0..200 {
-        rig.update(0.016, at, 0.0, pitch);
-    }
-    (rig.update(0.016, at, 0.0, pitch), at)
-}
+// ---------------------------------------------------------------------------
+// The zones
+//
+// The camera is prescribed as waypoints in the vertical aim angle, each one
+// saying where the fighter should appear. These are those waypoints, checked
+// against what the rig actually draws. The numbers come from the Oven, so what
+// is pinned here is the *shape* -- which is the design -- and never a value.
+// ---------------------------------------------------------------------------
 
 #[test]
-fn looking_down_walks_the_aim_in_toward_your_own_feet() {
-    // The thing that was impossible. The aim point used to be pinned flat a
-    // fixed distance ahead, so pitching down changed how obliquely you saw the
-    // same spot and nothing else -- you could not put the reticle near yourself
-    // and you could not push it out.
-    let cfg = RigConfig::default();
-    let mut last = f32::INFINITY;
-    for step in 1..=12 {
-        let pitch = -(step as f32 / 12.0) * cfg.pitch_down;
+fn the_neutral_zone_holds_the_fighter_low_and_the_same_size() {
+    // Where most of a match is spent. The feet sit near the bottom of the frame
+    // and the fighter keeps one size across the whole band, so nothing about
+    // the framing moves while the player is only steering.
+    let z = zones();
+    // Stopping short of the steep boundary, where the eye runs into its own
+    // elevation ceiling -- see `the_steep_end_of_the_neutral_zone_runs_out_of_sky`.
+    for step in 0..=8 {
+        let pitch = -ramp(z.neutral_to, z.floor_from * 0.9, step as f32 / 8.0);
         let (f, at) = settled(pitch);
-        let mark = ground_mark(f, at).expect("looking down has to reach the floor");
+        let feet = on_screen(f, feet_of(at));
+        let head = on_screen(f, head_of(at));
+        // Tight, because the placement is solved in closed form rather than
+        // walked toward: two circles crossing, not a search that stops when it
+        // is close enough.
         assert!(
-            mark < last + 0.01,
-            "at pitch {pitch:.2} the aim went back out to {mark:.2} from {last:.2}"
+            (feet - z.feet_neutral).abs() < 0.005,
+            "at {:.0} degrees the feet are at {:.1}% instead of {:.1}%",
+            pitch.to_degrees(),
+            feet * 100.0,
+            z.feet_neutral * 100.0
         );
-        last = mark;
-    }
-    assert!(
-        last < 1.5,
-        "looking all the way down still aims {last:.2}m away; you cannot hit your own feet"
-    );
-}
-
-#[test]
-fn a_shallow_look_down_reaches_well_past_the_fighter() {
-    // The other half: the range has to be worth steering. If every downward
-    // angle lands within a couple of metres there is nothing to aim *with*.
-    let cfg = RigConfig::default();
-    let (near, at) = settled(-cfg.pitch_down);
-    let (far, _) = settled(-cfg.pitch_down * 0.12);
-    let near = ground_mark(near, at).expect("steep look misses the floor");
-    let far = ground_mark(far, at).expect("shallow look misses the floor");
-    assert!(
-        far > near + 6.0,
-        "the whole range of downward aim is {near:.1}m to {far:.1}m -- too little to steer"
-    );
-}
-
-#[test]
-fn zooming_out_does_not_move_where_you_are_aiming() {
-    // The property the whole rig is built on. The camera orbits a point above
-    // the fighter, so the mark on the ground is `orbit height / tan(pitch)` --
-    // the arm length cancels. That makes distance a pure comfort setting: a
-    // player who pulls the camera back to see more of the fight has not also
-    // changed where their attacks are going.
-    let mut cfg = RigConfig::default();
-    let at = [0.0, 0.0, 8.0];
-    let mut marks = Vec::new();
-    for distance in [5.0, 8.0, 11.0, 15.0] {
-        cfg.distance = distance;
-        let mut rig = CameraRig::new(cfg);
-        for _ in 0..200 {
-            rig.update(0.016, at, 0.0, -cfg.neutral_pitch);
-        }
-        let f = rig.update(0.016, at, 0.0, -cfg.neutral_pitch);
-        marks.push(ground_mark(f, at).expect("neutral pitch has to reach the floor"));
-    }
-    let spread = marks.iter().fold(f32::MIN, |a, b| a.max(*b))
-        - marks.iter().fold(f32::MAX, |a, b| a.min(*b));
-    assert!(
-        spread < 0.05,
-        "aim moved {spread:.2}m across the zoom range: {marks:?}"
-    );
-}
-
-#[test]
-fn looking_down_never_hauls_the_camera_in() {
-    // Reported: it should not zoom toward the character as you pan down. The
-    // aim comes in because the orbit centre drops, not because the view does.
-    let cfg = RigConfig::default();
-    let at = [0.0, 0.0, 8.0];
-    let level = flat_arm(
-        settled(-cfg.neutral_pitch).0,
-        [at[0], cfg.look_height, at[2]],
-    );
-    for step in 1..=10 {
-        let pitch = -(step as f32 / 10.0) * cfg.pitch_down;
-        let (f, at) = settled(pitch);
-        let flat = flat_arm(f, [at[0], cfg.look_height, at[2]]);
-        // Pitching down shortens the *flat* arm by cosine alone -- the camera
-        // rises over the fighter. What must not happen is the arm itself
-        // getting shorter.
-        let arm = (flat * flat + (f.eye[1] - cfg.look_height).powi(2)).sqrt();
         assert!(
-            arm > cfg.distance * 0.9,
-            "at pitch {pitch:.2} the arm is {arm:.2}, down from {:.2}",
-            cfg.distance
+            (head - z.head_neutral).abs() < 0.005,
+            "at {:.0} degrees the head is at {:.1}% instead of {:.1}%",
+            pitch.to_degrees(),
+            head * 100.0,
+            z.head_neutral * 100.0
         );
     }
-    assert!(level > 9.0, "fixture arm was already short: {level:.2}");
 }
 
 #[test]
-fn the_whole_fighter_is_in_frame_at_rest() {
-    // Reported: the feet were chopped off. The fighter has to sit below the
-    // middle of the screen -- that is what the orbit centre being above their
-    // head buys -- but inside the bottom of it.
-    let cfg = RigConfig::default();
-    let (f, at) = settled(-cfg.neutral_pitch);
-    let eye = [f.eye[0], f.eye[1], f.eye[2]];
-    let forward = {
-        let d = [
-            f.look_at[0] - eye[0],
-            f.look_at[1] - eye[1],
-            f.look_at[2] - eye[2],
-        ];
-        let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-        [d[0] / len, d[1] / len, d[2] / len]
-    };
-    // Angle below screen centre of the fighter's feet and head.
-    let angle_of = |point: [f32; 3]| {
-        let to = [point[0] - eye[0], point[1] - eye[1], point[2] - eye[2]];
-        let len = (to[0] * to[0] + to[1] * to[1] + to[2] * to[2]).sqrt();
-        let dot = (to[0] * forward[0] + to[1] * forward[1] + to[2] * forward[2]) / len;
-        dot.clamp(-1.0, 1.0).acos()
-    };
-    let feet = angle_of([at[0], 0.0, at[2]]);
-    let head = angle_of([at[0], 1.8, at[2]]);
-    // Half of a 58-degree vertical field of view, with a little margin for the
-    // HUD along the bottom.
-    let half_frame = 58f32.to_radians() / 2.0 * 0.85;
+fn the_steep_end_of_the_neutral_zone_runs_out_of_sky() {
+    // Worth pinning because it is geometry rather than a bug, and because it is
+    // the first thing to look at if the neutral zone ever feels wrong.
+    //
+    // The crosshair's mark on the ground is `cast height / tan(pitch)`: seven
+    // metres ahead at the shallow end of the zone and barely one at the steep
+    // end. Holding the fighter at a fixed spot on screen while the mark sweeps
+    // in that far swings the eye from a normal third-person arm to almost
+    // directly overhead -- and then it hits the ceiling on how high it may get,
+    // and the fighter starts drifting up the screen early.
+    //
+    // Every lever is a knob: narrow the zone, raise the ceiling, or raise the
+    // cast height so the mark reaches further for the same angle.
+    let z = zones();
+    let (f, at) = settled(-z.floor_from);
+    let feet = on_screen(f, feet_of(at));
     assert!(
-        feet < half_frame,
-        "the fighter's feet are {:.0} degrees off centre, past the {:.0} the frame holds",
-        feet.to_degrees(),
-        half_frame.to_degrees()
+        feet > z.feet_neutral,
+        "the steep end is not clamping at all, so this test has stopped meaning anything"
     );
     assert!(
-        head > 0.02,
-        "the fighter's head is on the crosshair; the orbit centre is not above them"
+        feet < z.feet_neutral + 0.05,
+        "the steep end of the neutral zone has drifted to {:.1}%, well off the {:.1}% asked for",
+        feet * 100.0,
+        z.feet_neutral * 100.0
     );
 }
 
 #[test]
-fn looking_up_walks_the_camera_down_before_it_climbs_into_the_head() {
-    // The Skyrim shape. The ordinary third-person answer -- drop the arm toward
-    // the ground behind the fighter -- reads well for the first forty degrees
-    // or so, and this checks it still happens.
-    let cfg = RigConfig::default();
-    let mut last = f32::INFINITY;
-    for step in 0..=10 {
-        let pitch = step as f32 / 10.0 * cfg.sky_start;
-        let h = settled(pitch).0.eye[1];
-        assert!(h <= last + 0.001, "camera rose at pitch {pitch:.2}");
-        last = h;
+fn the_floor_zone_walks_the_fighter_up_the_screen() {
+    // Below the neutral zone the fighter climbs toward the crosshair, so that
+    // at the bottom of the range the camera is looking at their own feet --
+    // which is the shot that puts a stone underneath you.
+    let z = zones();
+    let mut last = f32::MIN;
+    for step in 0..=8 {
+        let pitch = -ramp(z.floor_from, z.down_limit, step as f32 / 8.0);
+        let (f, at) = settled(pitch);
+        let feet = on_screen(f, feet_of(at));
+        assert!(
+            feet > last - 0.01,
+            "the fighter went back down the screen at {:.0} degrees",
+            pitch.to_degrees()
+        );
+        last = feet;
     }
     assert!(
-        last < 0.6,
-        "camera never got near the ground on the way up; lowest was {last:.2}"
+        last > z.feet_neutral + (z.feet_floor - z.feet_neutral) * 0.5,
+        "at the bottom of the range the feet only reached {:.1}%, from {:.1}% toward {:.1}%",
+        last * 100.0,
+        z.feet_neutral * 100.0,
+        z.feet_floor * 100.0
     );
 }
 
 #[test]
-fn looking_further_up_hands_over_to_the_fighters_own_eyes() {
-    // Past the handover the third-person answer has run out: the arm is on the
-    // floor, the body is in the way, and terrain shoves the view. The camera
-    // goes to the fighter's eyes so the sky can simply be panned.
-    let cfg = RigConfig::default();
-    let (f, at) = settled(cfg.pitch_up);
+fn the_crosshair_rides_just_above_the_head_at_level() {
+    // Aimed level there is no ground under the crosshair to read it against, so
+    // the fighter's own head becomes the reference: keeping it just below the
+    // mark is what makes a mid-range skillshot look like it is going where it
+    // is going.
+    let z = zones();
+    let (f, at) = settled(0.0);
+    let head = on_screen(f, head_of(at));
     assert!(
-        f.first_person > 0.9,
-        "at full pitch the rig is only {:.2} of the way into the head",
-        f.first_person
-    );
-    let flat = flat_arm(f, [at[0], cfg.look_height, at[2]]);
-    assert!(
-        flat < 0.5,
-        "the eye is still {flat:.2}m behind the fighter, so the body is in the sky"
-    );
-    assert!(
-        f.eye[1] > cfg.look_height - 0.1,
-        "the eye dropped to {:.2}, below the fighter's own head",
-        f.eye[1]
+        (head - (0.5 - z.head_gap)).abs() < 0.03,
+        "at level the head is at {:.1}%, not the {:.1}% just under the crosshair",
+        head * 100.0,
+        (0.5 - z.head_gap) * 100.0
     );
 }
 
 #[test]
-fn the_handover_does_not_start_early() {
-    // A modest look up must still be third person, or the body vanishes while
-    // the player is only glancing upward.
-    let cfg = RigConfig::default();
-    let (f, at) = settled(0.4);
+fn aiming_up_hands_over_to_the_fighters_own_eyes() {
+    // Above the horizon the camera walks into the fighter and is theirs by the
+    // handover angle, so a skillshot aimed at the sky follows the line the
+    // crosshair draws rather than one parallel to it.
+    let z = zones();
     assert_eq!(
-        f.first_person, 0.0,
-        "the rig started climbing into the head at a 23-degree look up"
+        settled(0.0).0.first_person,
+        0.0,
+        "the handover had already started at the horizon"
     );
-    let focus = [at[0], cfg.look_height, at[2]];
-    let level = flat_arm(settled(0.0).0, focus);
+    let mut last = 0.0;
+    for step in 1..=8 {
+        let now = settled(step as f32 / 8.0 * z.head_lock).0.first_person;
+        assert!(
+            now >= last - 0.001,
+            "the handover went backwards at step {step}"
+        );
+        last = now;
+    }
+    assert_eq!(last, 1.0, "the eye never arrived at the fighter");
+    assert_eq!(
+        settled(z.up_limit).0.first_person,
+        1.0,
+        "the eye left the fighter again further up"
+    );
+}
+
+#[test]
+fn the_handed_over_eye_is_on_the_line_the_ability_travels() {
+    // The reason that zone exists. Past the handover the eye is at the point
+    // abilities come out of, so the crosshair's line in space and the ability's
+    // line are the same line rather than half a metre apart.
+    let z = zones();
+    let (f, at) = settled(z.head_lock * 1.5);
+    let cast = sim::tuning::cast_height().to_f32_for_render();
+    let off = ((f.eye[0] - at[0]).powi(2)
+        + (f.eye[1] - at[1] - cast).powi(2)
+        + (f.eye[2] - at[2]).powi(2))
+    .sqrt();
     assert!(
-        flat_arm(f, focus) > level * 0.85,
-        "a 23-degree look up pulled the camera in"
+        off < 0.05,
+        "the eye is {off:.2} m from the cast origin, so the shot and the mark diverge"
     );
+}
+
+#[test]
+fn the_look_stops_short_of_straight_up_and_straight_down() {
+    // At the pole the fighter's own vertical plane stops being defined and the
+    // camera has nothing left to be behind.
+    let z = zones();
+    let quarter = std::f32::consts::FRAC_PI_2;
+    assert!(
+        z.down_limit < quarter && z.up_limit < quarter,
+        "the limits reach the pole: {:.2} / {:.2}",
+        z.down_limit,
+        z.up_limit
+    );
+    for pitch in [-10.0f32, 10.0] {
+        let mut rig = CameraRig::new(RigConfig::default());
+        let at = [0.0, 0.0, 8.0];
+        let f = rig.update(0.016, at, 0.0, pitch, aim_at(at, 0.0, pitch));
+        assert!(f.eye[1] > 0.0, "a wild mouse put the eye underground");
+        assert!(
+            f.eye.iter().all(|v| v.is_finite()),
+            "a wild mouse produced {:?}",
+            f.eye
+        );
+    }
 }
 
 #[test]
 fn the_camera_never_ends_up_under_the_floor() {
-    let cfg = RigConfig::default();
+    let z = zones();
     for step in 0..=40 {
-        let pitch = -cfg.pitch_down + step as f32 / 40.0 * (cfg.pitch_down + cfg.pitch_up);
+        let pitch = -z.down_limit + step as f32 / 40.0 * (z.down_limit + z.up_limit);
         let f = settled(pitch).0;
         assert!(f.eye[1] > 0.0, "eye underground at pitch {pitch:.2}");
     }
 }
 
 #[test]
-fn pitch_is_clamped() {
-    let mut rig = CameraRig::new(RigConfig::default());
-    let cfg = RigConfig::default();
-    for pitch in [-10.0, 10.0] {
-        let f = rig.update(0.016, [0.0, 0.0, 0.0], 0.0, pitch);
-        let rise = f.look_at[1] - f.eye[1];
-        let run = ((f.look_at[0] - f.eye[0]).powi(2) + (f.look_at[2] - f.eye[2]).powi(2)).sqrt();
-        let got = rise.atan2(run);
-        assert!(
-            got >= -cfg.pitch_down - 0.01 && got <= cfg.pitch_up + 0.01,
-            "pitched to {got} past the {} / {} limits",
-            cfg.pitch_down,
-            cfg.pitch_up
-        );
+fn pulling_the_camera_back_makes_the_fighter_smaller() {
+    // What is left of the distance setting. The rig has no free distance -- the
+    // framing decides where the eye goes -- so the setting scales how much of
+    // the screen the fighter fills, which is the same wish.
+    let at = [0.0, 0.0, 8.0];
+    let pitch = zones().neutral_pitch();
+    let target = aim_at(at, 0.0, pitch);
+    let mut sizes = Vec::new();
+    for distance in [6.0, 10.9, 16.0] {
+        let mut rig = CameraRig::new(RigConfig::default());
+        rig.set_distance(distance);
+        for _ in 0..200 {
+            rig.update(0.016, at, 0.0, pitch, target);
+        }
+        let f = rig.update(0.016, at, 0.0, pitch, target);
+        sizes.push(on_screen(f, head_of(at)) - on_screen(f, feet_of(at)));
     }
+    assert!(
+        sizes[0] > sizes[1] && sizes[1] > sizes[2],
+        "the fighter did not shrink as the camera pulled back: {sizes:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -590,12 +637,12 @@ fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
     // Let the smoothed focus settle, then sweep the whole circle: the player
     // can look anywhere, so every angle has to be safe, not just the easy ones.
     for _ in 0..200 {
-        rig.update(0.016, spot, 0.0, 0.0);
+        rig.update(0.016, spot, 0.0, 0.0, aim_at(spot, 0.0, 0.0));
     }
     for step in 0..64 {
         let yaw = step as f32 / 64.0 * std::f32::consts::TAU;
         for pitch in [-0.8, 0.0, 0.8] {
-            let framing = rig.update(0.016, spot, yaw, pitch);
+            let framing = rig.update(0.016, spot, yaw, pitch, aim_at(spot, yaw, pitch));
             let inside = sim::arena::SOLIDS.iter().any(|s| {
                 (0..3).all(|i| {
                     let lo = [s.min.x, s.min.y, s.min.z][i].to_f32_for_render();
@@ -771,6 +818,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
             spot,
             0.0,
             0.0,
+            aim_at(spot, 0.0, 0.0),
             view::Surroundings {
                 beast: Some(&beast),
                 aboard: false,
@@ -784,6 +832,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
             spot,
             yaw,
             0.0,
+            aim_at(spot, yaw, 0.0),
             view::Surroundings {
                 beast: Some(&beast),
                 aboard: false,
@@ -819,6 +868,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
         spot,
         0.0,
         0.0,
+        aim_at(spot, 0.0, 0.0),
         view::Surroundings {
             beast: Some(&beast),
             aboard: true,
@@ -830,6 +880,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
             spot,
             0.0,
             0.0,
+            aim_at(spot, 0.0, 0.0),
             view::Surroundings {
                 beast: Some(&beast),
                 aboard: true,

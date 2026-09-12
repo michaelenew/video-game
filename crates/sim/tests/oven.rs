@@ -16,8 +16,13 @@ fn the_registry_covers_every_stored_value() {
     // error message than this one.
     assert_eq!(
         oven::all_knobs().len(),
-        oven::SCALAR_COUNT + oven::AIR_COUNT + oven::MOVE_COUNT + oven::MONSTER_COUNT
+        oven::SCALAR_COUNT
+            + oven::AIR_COUNT
+            + oven::MOVE_COUNT
+            + oven::MONSTER_COUNT
+            + oven::VIEW_COUNT
     );
+    assert_eq!(oven::ViewKnob::ALL.len(), oven::VIEW_COUNT);
     assert_eq!(Scalar::ALL.len(), oven::SCALAR_COUNT);
     assert_eq!(AirField::ALL.len() * 6, oven::AIR_COUNT);
     assert_eq!(MoveField::ALL.len() * 6 * oven::SLOTS, oven::MOVE_COUNT);
@@ -248,4 +253,29 @@ fn a_family_is_gathered_even_when_its_knobs_are_scattered() {
         .collect::<Vec<_>>();
     assert_eq!(found.len(), 1, "the Air family was split across headers");
     assert_eq!(found[0].1.len(), air.len(), "the Air family lost a knob");
+}
+
+#[test]
+fn the_camera_is_tunable_without_desyncing_the_other_peer() {
+    // Every other value in the Oven decides what *happens*, so a peer tuned
+    // differently has to desync loudly. A camera decides what you *see*, and
+    // two people must be able to play each other with different framing -- the
+    // same way they already play at different fields of view.
+    //
+    // Only safe because aiming stopped going through the camera: the aim is
+    // solved from the fighter's own cast origin, so where the eye sits changes
+    // nothing about where an ability lands.
+    let w = World::new();
+    let before = w.checksum();
+    let knob = Knob::View(oven::ViewKnob::FeetNeutral);
+    let original = knob.raw();
+    knob.set_raw(original + 7);
+    assert_eq!(
+        before,
+        w.checksum(),
+        "moving a camera knob changed the simulation's checksum, so two players \
+         framing the game differently would read as a desync"
+    );
+    assert!(knob.is_dirty(), "the camera knob did not take");
+    knob.set_raw(original);
 }
