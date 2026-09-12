@@ -67,6 +67,12 @@ pub struct Hub {
     /// Hold the selected key rather than playing, for posing.
     posing: bool,
     message: String,
+    /// A pose set aside, for copying one key onto another. Two keys of a
+    /// symmetric move are the same pose twice, and a walk's second step is the
+    /// first one mirrored -- retyping either is a waste of an afternoon.
+    clipboard: Option<Pose>,
+    /// Draw the keys either side of the selected one as wireframes.
+    onion: bool,
     /// A bake running in the background. Re-baking shells out to a fresh
     /// process -- which is the point, because it proves the file that was just
     /// written actually compiles -- and that takes seconds. Doing it on the
@@ -91,6 +97,8 @@ impl Default for Hub {
             on: 1,
             posing: false,
             message: String::new(),
+            clipboard: None,
+            onion: true,
             baking: None,
         };
         hub.rebake();
@@ -323,6 +331,8 @@ fn transport(ui: &mut egui::Ui, hub: &mut Hub) {
         }
         ui.checkbox(&mut hub.posing, "hold key")
             .on_hover_text("Freeze on the selected key, for posing.");
+        ui.checkbox(&mut hub.onion, "onion")
+            .on_hover_text("Draw the keys either side of this one as wireframes.");
     });
     ui.horizontal(|ui| {
         ui.label("on player");
@@ -479,6 +489,25 @@ fn timeline(ui: &mut egui::Ui, hub: &mut Hub) -> bool {
             let mirrored = hub.recipe().keys[i].pose.mirrored();
             hub.recipe_mut().keys[i].pose = mirrored;
             changed = true;
+        }
+        if ui.button("copy").clicked() {
+            hub.clipboard = hub.selected_key().map(|k| k.pose);
+        }
+        let has = hub.clipboard.is_some();
+        if ui.add_enabled(has, egui::Button::new("paste")).clicked() {
+            if let (Some(pose), i) = (hub.clipboard, hub.key) {
+                hub.recipe_mut().keys[i].pose = pose;
+                changed = true;
+            }
+        }
+        if ui
+            .add_enabled(has, egui::Button::new("paste mirrored"))
+            .clicked()
+        {
+            if let (Some(pose), i) = (hub.clipboard, hub.key) {
+                hub.recipe_mut().keys[i].pose = pose.mirrored();
+                changed = true;
+            }
         }
         if ui.button("copy to end").clicked() {
             // A looping clip almost always wants its last key to be its first.
@@ -1018,5 +1047,54 @@ mod tests {
         hub.key = 1;
         let shown = hub.preview_for(hub.on).expect("previewing");
         assert_eq!(shown, hub.recipe().keys[1].pose);
+    }
+}
+
+/// Draw the keys on either side of the selected one as wireframes.
+///
+/// The oldest trick in animation, and it earns its place here for the same
+/// reason it does on paper: a pose is judged against the poses it sits between,
+/// not on its own. Without it, fixing the frame in front of you is how a move
+/// ends up with four good keys and no arc.
+pub fn onion_skin(hub: Res<Hub>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
+    if !hub.open || !hub.onion || !hub.posing {
+        return;
+    }
+    let owner = hub.on;
+    let class = sim.cur.players[owner].class;
+    let skeleton = view::skeleton::skeleton_for(class);
+
+    let p = sim.cur.players[owner];
+    let origin = Vec3::new(
+        p.pos.x.to_f32_for_render(),
+        p.pos.y.to_f32_for_render(),
+        p.pos.z.to_f32_for_render(),
+    );
+    let yaw = p
+        .facing
+        .x
+        .to_f32_for_render()
+        .atan2(p.facing.z.to_f32_for_render());
+    let turn = Quat::from_rotation_y(yaw);
+
+    let keys = &hub.recipe().keys;
+    for (offset, colour) in [
+        (-1i32, Color::srgba(0.45, 0.75, 1.0, 0.5)),
+        (1, Color::srgba(1.0, 0.65, 0.35, 0.5)),
+    ] {
+        let Some(i) = hub.key.checked_add_signed(offset as isize) else {
+            continue;
+        };
+        let Some(key) = keys.get(i) else { continue };
+        let skin = view::skeleton::solve(&skeleton, &key.pose);
+        for joint in JOINTS {
+            let a = skin.origin[joint.index()];
+            let b = skin.tip(&skeleton, joint);
+            gizmos.line(
+                origin + turn * Vec3::new(a[0], a[1], a[2]),
+                origin + turn * Vec3::new(b[0], b[1], b[2]),
+                colour,
+            );
+        }
     }
 }
