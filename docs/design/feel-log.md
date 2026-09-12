@@ -1267,3 +1267,58 @@ handover into the fighter's head, which is a designed sprint.
 reticle, then mid-screen with the crosshair on the chest, which is what aiming a metre from your
 own feet has to look like. The number most likely to want moving is the sphere radius, and the
 table above says what it buys.
+
+### 2026-09-12 — the eye has to keep moving, and the floor zone needs its own reason to
+
+**Changed** sphere 6 m → 4 m; eye elevation bounds 60/60 → 40/89; and the floor zone now walks
+the eye down toward its floor itself, easing from the framing's own answer at −45 to lying along
+the fighter's feet at −85.
+
+**Why** reported: past −45 the camera only panned. It was meant to keep working around the
+sphere *as well*, the pan being what the floor zone adds on top. Two separate things were
+stopping it, and only one of them was a number.
+
+**The one that was my mistake.** Setting the elevation floor equal to the ceiling pinned the eye
+outright. The previous entry argued that was elegant — the floor zone's waypoint is met for free,
+because the camera points at a mark that is itself sweeping onto the feet — and the waypoint
+*is* met. It is not the whole zone. A camera that stops moving while the player can feel they
+are still turning reads as the rig giving up, and no amount of the framing coming out right
+makes up for it.
+
+**The one that was geometry, and is the useful finding.** From a sphere of radius `R` the widest
+any eye sees the fighter and the crosshair's mark is `atan(mark / R)`, and the mark comes in from
+about 7 m ahead at −10 to 1.2 m at −45. Ask for a wider gap than that and the solve **saturates**:
+it parks the eye against the top of the sphere, where it answers nothing. Saturation is the
+failure mode to watch for, and it is invisible to a framing test — a parked eye that happens to
+be in the right place still frames correctly. It is why `the_neutral_zone_works_the_eye_around_
+the_sphere` exists alongside the framing test, and why the floor zone needed a mechanism rather
+than a number: below −35 at any playable radius, the framing has nothing left to say.
+
+**So the floor zone walks the eye down itself.** It eases from the framing's own answer at the
+handover — so there is no seam by construction — to the elevation floor at the bottom of the
+range. The pan rides on top: the camera is pointed at the mark, the mark is sweeping onto the
+feet, so the view comes round to the fighter while the eye comes down. Two motions, which is
+what the zone was always described as.
+
+| Aim | Feet | Eye elevation |
+| --- | --- | --- |
+| −10 | 5% | 41° |
+| −20 | 5% | 58° |
+| −27 | 5% | 73° |
+| −45 | 22% | 89° |
+| −55 | 32% | 77° |
+| −65 | 39% | 65° |
+| −85 | 48% | 40° |
+
+**Why four metres and not less.** The neutral zone is reachable down to about −28 at 4 m, −45 at
+2.5 m, and the whole prescription lands exactly at 2.1 m. But the radius is also how big the
+fighter is drawn: at 2.5 m a 1.8 m body fills three-quarters of the frame and the crosshair sits
+buried in their chest, which is a worse version of the complaint that started all this. Four
+metres puts the feet at 5% and the head at 28% at the aim the rig rests at — which is the 5%-to-
+25% framing originally asked for — and holds it over the band actually used for aiming at people
+and at ground a few metres ahead.
+
+**Verdict** open. The two tests that matter are the eye ones: at least 25 degrees of sweep around
+the sphere across the reachable neutral zone, and at least half a radius of travel across the
+floor zone while the feet climb a fifth of the screen. The pinned tuning fails the second with
+"the eye only travelled 0.00 m", which is exactly the report.

@@ -193,15 +193,15 @@ pub struct Zones {
     /// and gets more top-down about it; lower keeps a normal third-person view
     /// and hands over to the fighter walking up the screen sooner.
     ///
-    /// The **floor** stops the rig diving in the last couple of degrees of
-    /// look-down. Down there the crosshair is already within a hand's breadth
-    /// of the fighter's feet, so "put the feet on the crosshair" is very nearly
-    /// true from anywhere on the sphere -- and chasing the last one percent of
-    /// it asks for an eye in line with the feet, which on a fixed sphere means
-    /// one swung right down behind them. Set equal to the ceiling, as it is,
-    /// the whole look-down range becomes a single unmoving camera and only the
-    /// *view* pans -- which is all the floor zone ever asked for, since the
-    /// camera is pointed at a mark that is itself sweeping onto the feet.
+    /// The **floor** is how far back down the rig may come at the bottom of the
+    /// look-down range, and it wants room rather than safety. Past the neutral
+    /// zone the framing asks for two things at once -- the eye keeps working
+    /// around the sphere *and* the view pans the fighter up toward the
+    /// crosshair -- and the second is what brings the eye back down off the top
+    /// of the sphere. Clamped tight the eye stops moving, which reads as the
+    /// camera giving up halfway through a turn the player can feel they are
+    /// still making. Only the last degree or so wants stopping, where "feet
+    /// exactly on the crosshair" would ask for an eye in line with the feet.
     pub min_elevation: f32,
     pub max_elevation: f32,
 }
@@ -257,6 +257,7 @@ impl Zones {
                 on_body: 0.0,
                 at: lerp(self.feet_neutral, self.feet_floor, t),
                 least_elevation: self.min_elevation,
+                settle: t,
             }
         } else if pitch <= -self.neutral_to {
             // **The neutral zone**, where most of a match is spent. The fighter
@@ -265,6 +266,7 @@ impl Zones {
                 on_body: 0.0,
                 at: self.feet_neutral,
                 least_elevation: 0.0,
+                settle: 0.0,
             }
         } else {
             // **The turn.** Attention moves from the feet to the head, and by
@@ -276,6 +278,7 @@ impl Zones {
                 on_body: lerp(0.0, body, t),
                 at: lerp(self.feet_neutral, 0.5 - self.head_gap, t),
                 least_elevation: 0.0,
+                settle: 0.0,
             }
         }
     }
@@ -288,6 +291,29 @@ struct Want {
     on_body: f32,
     /// Where that point sits, as a fraction up the screen.
     at: f32,
+    /// How far to bring the eye down to `least_elevation` regardless of the
+    /// framing, from nought to one.
+    ///
+    /// **The floor zone's own mechanism, and it needs one.** Everywhere else a
+    /// single condition places the eye and that is enough. Down here the
+    /// framing stops being able to: the crosshair's mark is so close to the
+    /// fighter's feet that no eye on the sphere can hold them far apart, the
+    /// solve saturates, and a saturated solve does not move -- it sits against
+    /// the top of the sphere answering nothing, which reads as the camera
+    /// giving up halfway through a turn the player can feel they are still
+    /// making.
+    ///
+    /// So the zone walks the eye down itself, from wherever the neutral zone
+    /// handed it over to lying along the fighter's own feet at the bottom. It
+    /// starts at nought, so the handover is exactly the framing's answer and
+    /// there is no seam; it ends at one, so the bottom of the range is a fixed
+    /// place rather than whatever the geometry happened to allow.
+    ///
+    /// The pan rides on top of this rather than instead of it. The camera is
+    /// pointed at the mark, and the mark is itself sweeping onto the feet, so
+    /// the *view* comes round to the fighter while the *eye* comes down -- two
+    /// motions, which is what the zone is for.
+    settle: f32,
     /// The least the eye may sit above the fighter.
     ///
     /// Zone by zone, because only one zone needs a floor. Looking almost
@@ -575,11 +601,15 @@ fn place(want: &Want, aim: [f32; 2], radius: f32, fov: f32, zones: &Zones) -> [f
         lead
     };
 
-    // Held between the bounds one at a time rather than with `clamp`, which
-    // panics when they cross. They are two independent sliders that now sit on
-    // the same number, so crossing them is one click away and must read as the
-    // ceiling winning rather than as the game falling over.
-    let elevation = elevation.max(want.least_elevation).min(zones.max_elevation);
+    // The floor is taken under the ceiling first, so that two independent
+    // sliders dragged past each other read as the ceiling winning rather than
+    // as the game falling over -- and so that the walk down below cannot push
+    // the eye back up through it. `clamp` would panic on the crossing outright.
+    let floor = want.least_elevation.min(zones.max_elevation);
+    let elevation = elevation.max(floor).min(zones.max_elevation);
+    // Then walked down toward that floor by however much the zone asks, which
+    // is nothing at all outside the bottom of the look-down range.
+    let elevation = lerp(elevation, floor, want.settle);
     [radius * elevation.cos(), radius * elevation.sin()]
 }
 

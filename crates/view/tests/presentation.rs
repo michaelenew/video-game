@@ -198,6 +198,13 @@ fn most_the_sphere_can_open(pitch: f32) -> f32 {
     (mark / z.sphere).atan().tan() / (2.0 * (fov() * 0.5).tan())
 }
 
+/// How high around the sphere the eye has climbed, in radians.
+fn elevation_at(pitch: f32) -> f32 {
+    let (f, at) = settled(pitch);
+    let back = ((f.eye[0] - at[0]).powi(2) + (f.eye[2] - at[2]).powi(2)).sqrt();
+    (f.eye[1] - at[1]).atan2(back)
+}
+
 fn feet_of(at: [f32; 3]) -> [f32; 3] {
     [at[0], 0.0, at[2]]
 }
@@ -357,12 +364,19 @@ fn the_neutral_zone_holds_the_fighter_low() {
     // feet near the bottom of the frame, so the fighter is not sitting on the
     // reticle.
     //
-    // Checked over the part of the zone where the sphere can still deliver it.
-    // Further down it cannot, and that is geometry rather than a bug -- see
-    // `holding_the_fighter_low_runs_out_as_the_crosshair_comes_in`.
+    // Over the part of the zone the sphere can reach, and the test works out
+    // which part that is rather than being told, so retuning the radius moves
+    // the band instead of breaking the test. Past it the framing is not merely
+    // missed, it is *impossible* -- see the test below -- and what the rig does
+    // there is the floor zone's business.
     let z = zones();
-    for step in 0..=4 {
-        let pitch = -ramp(z.neutral_to, z.neutral_to * 1.5, step as f32 / 4.0);
+    let mut held = 0;
+    let steps = 20;
+    for step in 0..=steps {
+        let pitch = -ramp(z.neutral_to, z.floor_from, step as f32 / steps as f32);
+        if most_the_sphere_can_open(pitch) <= 0.5 - z.feet_neutral {
+            break;
+        }
         let (f, at) = settled(pitch);
         let feet = on_screen(f, feet_of(at));
         // Tight, because the placement is solved in closed form rather than
@@ -375,54 +389,113 @@ fn the_neutral_zone_holds_the_fighter_low() {
             feet * 100.0,
             z.feet_neutral * 100.0
         );
+        held += 1;
+    }
+    assert!(
+        held * 2 > steps,
+        "the framing was only reachable over {held} of {steps} steps of the neutral zone"
+    );
+}
+
+#[test]
+fn the_sphere_is_small_enough_to_reach_the_framing_it_is_asked_for() {
+    // Why the radius is the size it is, stated as the geometry rather than as a
+    // number, so that retuning it is an informed decision.
+    //
+    // The crosshair sits where the aim ray meets the ground, `mark` metres
+    // ahead of the fighter, and from a sphere of radius `R` the widest *any*
+    // eye sees the fighter and that mark is `atan(mark / R)`. Ask for a wider
+    // gap than that and no camera can give it: the solve saturates, the eye
+    // parks against the top of the sphere, and it stops answering the aim
+    // altogether. Saturation is the failure to watch for, and it is invisible
+    // to a framing test -- a parked eye that happens to be in the right place
+    // still frames correctly.
+    //
+    // The mark comes in as the player looks down, so this is really a bound on
+    // the radius, and it is checked at the aim the rig rests at.
+    let z = zones();
+    let asked = 0.5 - z.feet_neutral;
+    let available = most_the_sphere_can_open(z.neutral_pitch());
+    assert!(
+        available > asked,
+        "at the aim it rests at, a {:.2} m sphere can open {:.0}% of the screen and the \
+         framing asks for {:.0}%, so the eye will park against its ceiling",
+        z.sphere,
+        available * 100.0,
+        asked * 100.0
+    );
+}
+
+#[test]
+fn the_neutral_zone_works_the_eye_around_the_sphere() {
+    // The fighter holding still on screen is not the eye holding still. The
+    // crosshair's mark sweeps in from about seven metres ahead to barely one
+    // across this zone, and keeping the fighter at the same spot while it does
+    // means climbing steadily around the sphere after it.
+    //
+    // Worth its own test because the framing test above is just as happy when
+    // the eye is jammed against a limit and the framing is being met by luck at
+    // one end of the zone.
+    let z = zones();
+    let shallow = elevation_at(-z.neutral_to);
+    let steep = elevation_at(z.neutral_pitch());
+    assert!(
+        steep - shallow > 25.0_f32.to_radians(),
+        "the eye only worked {:.0} degrees around the sphere across the neutral zone",
+        (steep - shallow).to_degrees()
+    );
+    // Climbing the whole way, rather than lurching at one end.
+    let mut last = shallow;
+    for step in 1..=10 {
+        let pitch = -ramp(z.neutral_to, -z.neutral_pitch(), step as f32 / 10.0);
+        let now = elevation_at(pitch);
+        assert!(
+            now > last - 0.01,
+            "the eye dropped back down at {:.0} degrees",
+            pitch.to_degrees()
+        );
+        last = now;
     }
 }
 
 #[test]
-fn holding_the_fighter_low_runs_out_as_the_crosshair_comes_in() {
-    // The geometry that decides how much of the look-down range the neutral
-    // zone can actually cover, pinned so that it reads as a fact rather than as
-    // a disappointment.
-    //
-    // The crosshair sits where the aim ray meets the ground, so it walks in
-    // from about seven metres ahead of the fighter at ten degrees down to
-    // barely one at forty-five. Once it is that close the fighter and the
-    // crosshair are only a few degrees apart *from anywhere on the sphere* --
-    // at most `atan(mark / radius)` -- and no camera can hold them half a
-    // screen apart. The rig then does the best the sphere allows, which is what
-    // this checks: not the number it was asked for, but the number the geometry
-    // leaves available.
-    //
-    // Every lever is a knob. A smaller sphere opens the angle and holds the
-    // fighter low further down, at the cost of drawing them bigger; a higher
-    // eye ceiling buys a little more of it by swinging overhead.
+fn past_the_neutral_zone_the_eye_moves_and_the_view_pans() {
+    // The floor zone does two things at once, and it takes both. The eye keeps
+    // working around the sphere, *and* the view pans the fighter up toward the
+    // crosshair. An earlier pass pinned the eye and left the pan to do all of
+    // it, which reads as the camera stopping halfway through a turn the player
+    // can feel they are still making.
     let z = zones();
-    for degrees in [-25.0f32, -35.0, -45.0] {
-        let pitch = degrees.to_radians();
+    let eye_at = |pitch: f32| {
         let (f, at) = settled(pitch);
-        let feet = on_screen(f, feet_of(at));
-        let best = most_the_sphere_can_open(pitch);
-        assert!(
-            feet > z.feet_neutral,
-            "at {degrees:.0} degrees the sphere is not running out at all, so this test has stopped meaning anything"
-        );
-        assert!(
-            0.5 - feet <= best + 0.02,
-            "at {degrees:.0} degrees the feet are {:.1}% below the crosshair, past the {:.1}% the sphere can open",
-            (0.5 - feet) * 100.0,
-            best * 100.0
-        );
-        // And it is getting most of the way to that ceiling, rather than
-        // giving up early and leaving the fighter mid-screen. Only most: the
-        // sphere's best is measured from an eye swung past vertical, and the
-        // eye ceiling stops well short of that on purpose.
-        assert!(
-            0.5 - feet > best * 0.6,
-            "at {degrees:.0} degrees the feet are only {:.1}% below the crosshair, well short of the {:.1}% available",
-            (0.5 - feet) * 100.0,
-            best * 100.0
-        );
+        (
+            [f.eye[0] - at[0], f.eye[1] - at[1], f.eye[2] - at[2]],
+            on_screen(f, feet_of(at)),
+        )
+    };
+    let steps = 40;
+    let mut travelled = 0.0;
+    let (mut was, started_at) = eye_at(-z.floor_from);
+    for step in 1..=steps {
+        let pitch = -ramp(z.floor_from, z.down_limit, step as f32 / steps as f32);
+        let (eye, _) = eye_at(pitch);
+        travelled +=
+            ((eye[0] - was[0]).powi(2) + (eye[1] - was[1]).powi(2) + (eye[2] - was[2]).powi(2))
+                .sqrt();
+        was = eye;
     }
+    let ended_at = eye_at(-z.down_limit).1;
+    assert!(
+        travelled > z.sphere * 0.5,
+        "the eye only travelled {travelled:.2} m around a {:.2} m sphere across the floor zone",
+        z.sphere
+    );
+    assert!(
+        ended_at - started_at > 0.2,
+        "the view barely panned: the feet went from {:.0}% to {:.0}%",
+        started_at * 100.0,
+        ended_at * 100.0
+    );
 }
 
 #[test]
@@ -468,11 +541,12 @@ fn the_floor_zone_walks_the_fighter_up_the_screen() {
     // at the bottom of the range the camera is looking at their own feet --
     // which is the shot that puts a stone underneath you.
     //
-    // On a fixed sphere the eye does not have to move for this. The camera is
-    // pointed at the crosshair's mark, and the mark is itself sweeping onto the
-    // fighter's feet as the player looks down, so the *view* pans onto them
-    // while the eye stays exactly where it was. That is the whole floor zone,
-    // and it costs the rig nothing.
+    // Two things do this at once, and it takes both. The eye keeps working
+    // around the sphere, and the view pans -- the camera is pointed at the
+    // crosshair's mark, which is itself sweeping onto the fighter's feet. The
+    // neutral zone below has only the first of those; this zone adds the
+    // second, which is what brings the eye back down off the top of the sphere
+    // as the fighter comes to the middle of the frame.
     let z = zones();
     let mut last = f32::MIN;
     for step in 0..=8 {
@@ -991,11 +1065,22 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
             },
         );
     }
-    let arm = ((framing.eye[0] - spot[0]).powi(2) + (framing.eye[2] - spot[2]).powi(2)).sqrt();
+    // Against the same shot with nothing underfoot, rather than against a bare
+    // number: what matters is that the creature did not shorten the arm, and
+    // how long the arm is in the first place is the sphere's business.
+    let mut alone = CameraRig::new(RigConfig::default());
+    let mut loose = alone.update(0.016, spot, 0.0, 0.0, aim_at(spot, 0.0, 0.0));
+    for _ in 0..60 {
+        loose = alone.update(0.016, spot, 0.0, 0.0, aim_at(spot, 0.0, 0.0));
+    }
+    let reach = |f: view::camera::Framing| {
+        ((f.eye[0] - spot[0]).powi(2) + (f.eye[2] - spot[2]).powi(2)).sqrt()
+    };
+    let (arm, free) = (reach(framing), reach(loose));
     assert!(
-        arm > 2.0,
-        "the arm collapsed to {arm:.2} m while riding -- the creature is being \
-         treated as something to dodge rather than something to stand on"
+        arm > free * 0.9,
+        "the arm collapsed from {free:.2} m to {arm:.2} m while riding -- the creature \
+         is being treated as something to dodge rather than something to stand on"
     );
     assert!(
         framing.eye[1] > back,

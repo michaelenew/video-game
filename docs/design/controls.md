@@ -117,7 +117,7 @@ bottom, so the crosshair is at 50 by definition.
 | --- | --- | --- |
 | **−90 to −85** | Not allowed | At the pole the fighter's vertical plane stops being defined and the camera has nothing to be behind |
 | **−85 to −45** | The floor zone | The feet walk up the screen from 5% to 50%, so at the bottom the camera is looking at the fighter's own feet — the shot that puts a stone underneath you |
-| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, low in the frame, with the eye a fixed six metres out |
+| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, low in the frame, the eye working around the sphere to hold them there |
 | **−10 to 0** | The turn | Attention moves from the feet to the head, until at level the crosshair rides just above the head. With no ground under the aim to read it against, the fighter's own head is what a mid-range skillshot keys off |
 | **0 to +10** | The handover | The eye walks into the fighter and the body fades out |
 | **+10 to +85** | First person | The eye *is* the point abilities come out of, so the crosshair's line in space and the ability's line are the same line |
@@ -140,17 +140,27 @@ screen. Writing the eye as `R(cos e, sin e)` turns that into `A·cos(e) + B·sin
 collapses to a single cosine and an `acos`. No search, nothing baked, and exact rather than
 nearly.
 
-**One thing the geometry insists on, worth knowing before tuning.** The crosshair's mark on the
-ground sits `cast height / tan(pitch)` ahead: about 7 m at −10 and barely 1.2 m at −45. The
-camera is trying to open a gap between the fighter and that mark, and the aim is closing it.
-From a sphere of radius `R` the widest any eye can see the pair is `atan(mark / R)`, so past a
-certain angle **no camera can hold the fighter low** — at six metres the 5% waypoint holds to
-about −15 and then the fighter rides up the screen whatever the rig does. That walk-up is the
-floor zone arriving early, and it is smooth, but the zone table above describes intent rather
-than what a six-metre sphere can deliver. Three levers, in the order worth trying: a smaller
-sphere opens the angle (and draws the fighter bigger), a higher eye ceiling buys a little more
-by swinging overhead, and moving the neutral zone's steep boundary up to about −20 makes the
-table honest without changing a pixel.
+**The eye moves in both zones; the floor zone adds the pan.** Through the neutral zone the
+fighter holds still on screen and the *eye* does the work, climbing around the sphere from about
+41 degrees of elevation at −10 to overhead — because the crosshair's mark is sweeping in toward
+the fighter, and holding the two apart on screen takes more and more leverage. Past −45 the eye
+keeps working around the sphere **and** the view pans: the eye comes back down off the top,
+ending lying along the fighter's own feet at −85, while the camera — pointed at a mark that is
+itself sweeping onto those feet — brings them up to the middle of the frame.
+
+**Saturation is the thing to watch for when tuning.** From a sphere of radius `R` the widest
+*any* eye can see the fighter and the mark is `atan(mark / R)`, and the mark walks in from about
+7 m ahead at −10 to 1.2 m at −45. Ask for a wider gap than that and no camera can give it: the
+solve parks the eye against the top of the sphere, where it stops answering the aim altogether.
+That is much worse than a framing that is slightly off, and it does not show up as a framing
+error — a parked eye that happens to be in the right place still frames correctly.
+
+So `Sphere radius (m)` trades two things against each other. Smaller keeps the framing reachable
+further down the range; larger draws the fighter smaller. At 4 m the feet hold at 5% down to
+about −28 and the fighter is roughly the quarter-screen size the zone table asks for. At 2.5 m
+the whole neutral zone is reachable but a 1.8 m body fills three-quarters of the frame. Past
+where the framing runs out, the floor zone's own walk takes over, so the camera keeps moving
+either way.
 
 Two consequences are worth stating because they are design, not implementation:
 
