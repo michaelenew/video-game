@@ -162,6 +162,20 @@ fn elevation_at(pitch: f32) -> f32 {
     (f.eye[1] - at[1]).atan2(back)
 }
 
+/// Where a waypoint written as a screen fraction actually lands on screen.
+///
+/// The two are the same number only when the player's field of view matches the
+/// one the framing is written against. They are deliberately allowed to differ:
+/// the framing has its own tuned field of view so that widening your view cannot
+/// move your aim, which means a wider view shows more of the arena and puts the
+/// fighter a little nearer the middle than the knob's percentage reads. This is
+/// that conversion, so the waypoint tests stay exact through a change to either.
+fn as_drawn(waypoint: f32) -> f32 {
+    let framing = (sim::oven::view(sim::oven::ViewKnob::FramingFov) as f32).to_radians();
+    let tilt = ((1.0 - 2.0 * waypoint) * (framing * 0.5).tan()).atan();
+    0.5 - tilt.tan() / (2.0 * (fov() * 0.5).tan())
+}
+
 fn feet_of(at: [f32; 3]) -> [f32; 3] {
     [at[0], 0.0, at[2]]
 }
@@ -338,12 +352,13 @@ fn the_neutral_zone_holds_the_fighter_low() {
         let (f, at) = settled(pitch);
         let feet = on_screen(f, feet_of(at));
         // Tight, because this is arithmetic rather than an approximation.
+        let want = as_drawn(z.feet_neutral);
         assert!(
-            (feet - z.feet_neutral).abs() < 0.005,
+            (feet - want).abs() < 0.005,
             "at {:.0} degrees the feet are at {:.1}% instead of {:.1}%",
             pitch.to_degrees(),
             feet * 100.0,
-            z.feet_neutral * 100.0
+            want * 100.0
         );
     }
 }
@@ -1003,4 +1018,67 @@ fn the_body_is_simply_drawn_while_the_fighter_is_out_in_the_open() {
         "the fighter was {:.0}% faded away while standing in the open",
         f.hidden * 100.0
     );
+}
+
+#[test]
+fn the_eye_never_changes_pace_abruptly_at_a_zone_boundary() {
+    // The camera being continuous is not the same as the camera being smooth.
+    // Every version of this rig has held the eye's *position* together across a
+    // boundary; what gave them away was the eye's *speed*, which arrived at a
+    // boundary moving one way and left moving another. That is not seen so much
+    // as felt -- the camera reads as changing its mind -- and it is what the
+    // per-zone easing is for.
+    //
+    // Measured as the change in speed from one step to the next, against the
+    // change within a zone at the same sampling. A boundary is not allowed to be
+    // meaningfully worse than the ordinary motion either side of it.
+    let z = zones();
+    let steps = 1800;
+    let sweep = z.down_limit + z.up_limit;
+    let eye_at = |pitch: f32| {
+        let (f, at) = settled(pitch);
+        [f.eye[0] - at[0], f.eye[1] - at[1], f.eye[2] - at[2]]
+    };
+    let apart = |a: [f32; 3], b: [f32; 3]| {
+        ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+    };
+
+    let mut speeds = Vec::with_capacity(steps);
+    let mut was = eye_at(-z.down_limit);
+    for step in 1..=steps {
+        let pitch = -z.down_limit + step as f32 / steps as f32 * sweep;
+        let now = eye_at(pitch);
+        speeds.push((pitch, apart(now, was)));
+        was = now;
+    }
+
+    // What an ordinary step of the mouse does to the pace, away from any
+    // boundary, with the top few discarded so that one noisy sample from the
+    // simulation's fixed point does not set the bar.
+    let mut ordinary: Vec<f32> = speeds
+        .windows(2)
+        .filter(|w| {
+            [-z.floor_from, -z.neutral_to, 0.0, z.head_lock]
+                .iter()
+                .all(|b| (w[1].0 - b).abs() > 0.05)
+        })
+        .map(|w| (w[1].1 - w[0].1).abs())
+        .collect();
+    ordinary.sort_by(f32::total_cmp);
+    let usual = ordinary[ordinary.len() * 99 / 100];
+
+    for boundary in [-z.floor_from, -z.neutral_to, 0.0, z.head_lock] {
+        let worst = speeds
+            .windows(2)
+            .filter(|w| (w[1].0 - boundary).abs() <= 0.05)
+            .map(|w| (w[1].1 - w[0].1).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            worst <= usual * 3.0,
+            "crossing {:.0} degrees changed the eye's pace by {worst:.5} m in one step, \
+             against {usual:.5} for an ordinary step -- the zones are being swapped rather \
+             than handed over",
+            boundary.to_degrees()
+        );
+    }
 }

@@ -344,6 +344,19 @@ macro_rules! view_knobs {
 // camera keeps and therefore how big the fighter is drawn; the **screen
 // percentages** are the tilts, written as where the point at the sphere's
 // centre should sit on screen, which is the same thing.
+//
+// The **smoothing** percentages are what stops a zone boundary reading as the
+// camera changing its mind. Each is a share of its own zone's angular span: how
+// much of that zone's ramp, at each end, is spent easing in and out. The eye
+// leaves and arrives at a standstill, so a neighbouring zone that is already
+// holding still has nothing to hand over against. Outside that window the ramp is
+// untouched, so the waypoints stay exactly as written; at the maximum the ramp is
+// eased the whole way through and its middle still lands on the waypoint, because
+// the two ends give back what each other took.
+//
+// Two of the five have nothing to ease yet. The neutral zone and first person
+// both hold their sphere still and let the mouse do all the moving, so there is
+// no ramp in them to shape -- their numbers are there for when there is.
 view_knobs! {
     Sphere,         "Sphere radius (m)",        Fixed,   fx(1,2), fx(30,1);
     HeadSphere,     "Sphere, at the head (m)",  Fixed,   0,       fx(3,1);
@@ -357,9 +370,14 @@ view_knobs! {
     HeadGapLevel,   "Head to crosshair (%)",    Int,     0,   30;
     FadeNear,       "Body gone within (m)",     Fixed,   0,       fx(6,1);
     FramingFov,     "Framing field of view",    Int,     30,  120;
+    SmoothFloor,    "Smooth, floor zone (%)",   Int,     0,   100;
+    SmoothNeutral,  "Smooth, neutral zone (%)", Int,     0,   100;
+    SmoothTurn,     "Smooth, the turn (%)",     Int,     0,   100;
+    SmoothHandover, "Smooth, handover (%)",     Int,     0,   100;
+    SmoothEyes,     "Smooth, first person (%)", Int,     0,   100;
 }
 
-pub const VIEW_COUNT: usize = 12;
+pub const VIEW_COUNT: usize = 17;
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data
