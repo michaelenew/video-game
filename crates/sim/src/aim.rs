@@ -139,6 +139,29 @@ pub struct Scene<'a> {
     pub quarry: Option<&'a Monster>,
 }
 
+/// The line a **swing** is thrown along: from the hand, out at the move's
+/// reach, in the direction the player is looking.
+///
+/// No raycast, because a swing is not aimed *at* anything -- it is a body
+/// moving, and it stops where the weapon stops rather than where the crosshair
+/// lands. What it takes from the crosshair is the **plane**: the yaw is the
+/// facing, which is already locked, and the pitch is the rest of the same
+/// look. That matters for exactly one class so far, and it is most of what the
+/// class is -- the Champion's hammer comes down in the plane you are aiming
+/// along, and its aerials are thrown at the floor or at the sky on purpose.
+///
+/// It is here rather than beside the move for the same reason everything else
+/// in this file is: the look direction is one of the two ingredients of the
+/// mistake this module exists to prevent, so the places that turn it into a
+/// line are all in one file where they can be compared.
+pub fn swing_path(pos: V3, input: Input, reach: Fx) -> Path {
+    let from = origin(pos);
+    Path {
+        from,
+        to: from.add(input.look_dir().scale(reach)),
+    }
+}
+
 /// Where a fighter standing at `pos` casts from: the height abilities leave at.
 pub fn origin(pos: V3) -> V3 {
     V3::new(pos.x, pos.y.add(t::cast_height()), pos.z)

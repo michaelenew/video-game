@@ -39,7 +39,7 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "Space" => vec!["Space"],
         "Escape" => vec!["Esc"],
         "Tab" => vec!["Tab"],
-        "KeyE" => vec!["E or middle click"],
+        "KeyE" => vec!["E"],
         "KeyH" => vec!["H"],
         "KeyJ" => vec!["J"],
         "KeyK" => vec!["K"],
@@ -47,6 +47,9 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "KeyP" => vec!["P"],
         "KeyQ" => vec!["Q"],
         "KeyR" => vec!["R"],
+        // The stand-in for middle click, the way J and K stand in for the other
+        // two. It exists for the Champion's third weapon.
+        "KeyU" => vec!["U or middle click", "Middle click (or U)"],
         "BracketRight" => vec!["]"],
         "Minus" | "NumpadSubtract" => vec!["-"],
         "Equal" | "NumpadAdd" => vec!["="],

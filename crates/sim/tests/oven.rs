@@ -43,7 +43,13 @@ fn the_registry_covers_every_stored_value() {
     assert_eq!(oven::ViewKnob::ALL.len(), oven::VIEW_COUNT);
     assert_eq!(Scalar::ALL.len(), oven::SCALAR_COUNT);
     assert_eq!(AirField::ALL.len() * 6, oven::AIR_COUNT);
-    assert_eq!(MoveField::ALL.len() * 6 * oven::SLOTS, oven::MOVE_COUNT);
+    // Move storage is packed to each class's own slot count now -- the
+    // Champion has ten and everyone else three -- so the width is a sum rather
+    // than a product.
+    assert_eq!(
+        MoveField::ALL.len() * sim::moves::TOTAL_SLOTS,
+        oven::MOVE_COUNT
+    );
     assert_eq!(
         MonsterField::ALL.len() * oven::MONSTER_MOVES,
         oven::MONSTER_COUNT

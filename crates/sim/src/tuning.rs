@@ -472,28 +472,123 @@ pub fn settle_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SettleDecay))
 }
 
-/// Reach, damage and recovery multipliers for one of the Champion's forms.
-/// Three kits from one move table, so these nine numbers are most of the class.
-pub fn form_modifiers(form: crate::class::Form) -> (Fx, Fx, Fx) {
-    use crate::class::Form;
-    let raw = |s| Fx::from_raw(oven::scalar(s));
-    match form {
-        Form::Hammer => (
-            raw(Scalar::HammerReach),
-            raw(Scalar::HammerDamage),
-            raw(Scalar::HammerRecovery),
-        ),
-        Form::Sword => (
-            raw(Scalar::SwordReach),
-            raw(Scalar::SwordDamage),
-            raw(Scalar::SwordRecovery),
-        ),
-        Form::Spear => (
-            raw(Scalar::SpearReach),
-            raw(Scalar::SpearDamage),
-            raw(Scalar::SpearRecovery),
-        ),
-    }
+// ---------------------------------------------------------------------------
+// The Champion
+// ---------------------------------------------------------------------------
+//
+// The class used to be three multipliers -- reach, damage and recovery, one set
+// per weapon -- laid over one three-move table. Those nine numbers are gone.
+// Each weapon now has its own moves with their own frame data on its own mouse
+// button, which is both what the multipliers were trying to buy and something
+// a multiplier cannot buy: a hammer that is *shaped* differently from a spear
+// rather than a spear with bigger numbers. What is left here is Rush, which is
+// the part of the class that is genuinely one mechanic rather than a move.
+
+/// How fast the dash travels. Above the dodge, which is the point: Rush is the
+/// Champion's answer to every gap in the arena, and a dash you could walk
+/// alongside would not be one.
+pub fn rush_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RushSpeed))
+}
+
+/// How long the dash lasts. Speed times this is the distance it covers, which
+/// is the number that actually matters for spacing.
+pub fn rush_frames() -> u16 {
+    oven::scalar(Scalar::RushFrames) as u16
+}
+
+/// Frames after a dash ends before the charge is back.
+///
+/// One charge is the design (see `docs/design/champion.md`): Rush is the only
+/// way out of a committed tail, so spending it has to be a decision. The
+/// recharge is what makes it one.
+pub fn rush_recharge() -> u16 {
+    oven::scalar(Scalar::RushRecharge) as u16
+}
+
+/// How far below the horizon you have to be pointing for a spear thrown out of
+/// a Rush to plant in the floor and vault instead of stabbing.
+///
+/// In turns, positive, measured downward. The two moves share a button and are
+/// told apart by where you are looking, which is the only separator that does
+/// not cost another key -- and it is also the honest one: a pole vault *is* a
+/// spear aimed at the ground.
+pub fn vault_pitch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VaultPitch))
+}
+
+/// How much of the dash's speed the vault carries into the air.
+///
+/// Under one: planting the spear is what turns speed into height, and a vault
+/// that kept all of its run would be a jump with extra steps.
+pub fn vault_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VaultCarry))
+}
+
+/// Extra upward speed from pressing jump while an uppercut has hold of
+/// somebody. The "we are settling this in the air" button.
+pub fn uppercut_leap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UppercutLeap))
+}
+
+/// Knockback multiplier against a target who is already off the ground.
+///
+/// Someone airborne has nothing to brace against, which is the whole reason
+/// the air game is worth playing: the same swing that shoves a standing
+/// fighter a metre sends a falling one across the arena.
+pub fn air_hit_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirHitKnockback))
+}
+
+/// Damage per metre per second of impact when a spiked fighter hits the floor.
+///
+/// Bounded by terminal velocity rather than by this number: whatever the spike
+/// sets, the fall cap is what the ground sees, so the worst case is knowable.
+pub fn slam_damage() -> i32 {
+    oven::scalar(Scalar::SlamDamage)
+}
+
+/// How long a spiked fighter is on the floor after landing.
+pub fn slam_stagger() -> u16 {
+    oven::scalar(Scalar::SlamStagger) as u16
+}
+
+/// The shove the aerial spear's fan gives the Champion when it connects.
+///
+/// On hit rather than on throw. It is the difference between a repositioning
+/// tool and a movement option: you get the boost for *catching* somebody, so
+/// the fan is thrown at people rather than at the air.
+pub fn spear_fan_boost() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpearFanBoost))
+}
+
+/// Where a cut across the body is thrown from, as a fraction of the height
+/// everything else is cast at.
+///
+/// **A sweep is a low cut.** The hands stay near the hip and the weapon crosses
+/// the whole front, which is how the Champion's sweep has always been animated
+/// -- see `crates/anim/src/clips/champion.rs`. It is a knob rather than a
+/// constant because it decides what the sword can reach, and "what the sword
+/// can reach" turned out to be the difference between a Ridgeback hunt with a
+/// climb in it and one without: a cut thrown from the chest and dead level
+/// passes over the ridge you climbed up there to break.
+pub fn sweep_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepHeight))
+}
+
+/// And how far below level that cut travels, in turns.
+pub fn sweep_dip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepDip))
+}
+
+/// How far out the point of a thrust already is when the hitbox appears, as a
+/// fraction of the move's reach.
+///
+/// Under one, because a thrust that sprang to full extension on its first
+/// active frame would have no visible travel at all -- and the last of the
+/// extension is what a defender is reading when they decide to step back.
+pub fn thrust_extend() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrustExtend))
 }
 
 pub fn meter_max() -> i32 {

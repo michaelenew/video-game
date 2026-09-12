@@ -200,13 +200,33 @@ clips! {
     BulwarkSpecial,  "bulwark_special",   Moves, "bulwark", Length::Move(Class::Bulwark, 2), false,
         "Grapple: beats guard outright, loses to dodge. A committed forward reach that ends holding someone.";
 
-    // -- The Champion: Sweep, Drive, Uppercut ------------------------------
-    ChampionPoke,     "champion_poke",      Moves, "champion", Length::Move(Class::Champion, 0), false,
-        "Sweep: a low horizontal cut. Reads as reaching sideways, not forward.";
-    ChampionCommitted,"champion_committed", Moves, "champion", Length::Move(Class::Champion, 1), false,
-        "Drive: a lunging thrust behind the weapon, the whole body behind the point.";
-    ChampionSpecial,  "champion_special",   Moves, "champion", Length::Move(Class::Champion, 2), false,
+    // -- The Champion: three weapons on three buttons -----------------------
+    //
+    // Ten clips, laid out the way the move list is: a row per stance -- on
+    // foot, in the air, mid-Rush -- and a column per weapon. Read down a column
+    // and it is one weapon in three situations; read across a row and it is
+    // three weapons in one. Both readings have to hold in the silhouette, which
+    // is what these ten are for.
+    ChampionSword,    "champion_sword",     Moves, "champion", Length::Move(Class::Champion, 0), false,
+        "Sword: a low horizontal cut. Reads as reaching sideways, not forward.";
+    ChampionHammer,   "champion_hammer",    Moves, "champion", Length::Move(Class::Champion, 1), false,
+        "Hammer: overhead to the floor. All of the weight above the head, then all of it on the ground.";
+    ChampionSpear,    "champion_spear",     Moves, "champion", Length::Move(Class::Champion, 2), false,
+        "Spear: a lunging thrust behind the weapon, the whole body behind the point.";
+    ChampionAirSword, "champion_air_sword", Moves, "champion", Length::Move(Class::Champion, 3), false,
+        "Air sword: the same cut rolled into the vertical -- down across the body, not across the front of it.";
+    ChampionAirHammer,"champion_air_hammer",Moves, "champion", Length::Move(Class::Champion, 4), false,
+        "Air hammer: a long wind-up overhead and a smash straight down. The startup is the move; it has to read from across the arena.";
+    ChampionAirSpear, "champion_air_spear", Moves, "champion", Length::Move(Class::Champion, 5), false,
+        "Air spear: a wide fan swept around the aim, left to right, one-handed and light.";
+    ChampionRushSlash,"champion_rush_slash",Moves, "champion", Length::Move(Class::Champion, 6), false,
+        "Rush slash: cutting as you run past. Repeating figure-of-eight, the body never stopping.";
+    ChampionUppercut, "champion_uppercut",  Moves, "champion", Length::Move(Class::Champion, 7), false,
         "Uppercut: leaps, and takes whoever it catches into the air. Rising, and it leaves the ground.";
+    ChampionRushStab, "champion_rush_stab", Moves, "champion", Length::Move(Class::Champion, 8), false,
+        "Rush stab: the dash stopped dead and put into the point. Braced, both feet planted, everything forward.";
+    ChampionVault,    "champion_vault",     Moves, "champion", Length::Move(Class::Champion, 9), false,
+        "Pole vault: the spear planted in the floor and the body swung up over it. No strike in it at all.";
 
     // -- The Shadow Reaver: Slash, Executioner, Guillotine ------------------
     ReaverPoke,      "reaver_poke",       Moves, "reaver", Length::Move(Class::ShadowReaver, 0), false,

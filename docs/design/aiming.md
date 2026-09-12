@@ -91,6 +91,27 @@ must not put the blade there — a swing comes out along `facing`, at the move's
 own reach. It is named here so that "which of the three is this move" has an
 answer for every move rather than being a thing each caller decides.
 
+**A swing still commits to a plane, and the crosshair is where the plane comes
+from.** Added 2026-09-12 with the Champion's rebuild. The yaw of a swing is the
+facing, which is locked when the move starts; the *pitch* is the rest of the
+same look, and `aim::swing_path` is the one place that turns the two into a
+line. No raycast: a swing stops where the weapon stops rather than where the
+crosshair lands, so there is nothing for it to hit-test against.
+
+The distinction is worth keeping straight, because the two halves of the
+sentence pull opposite ways:
+
+- **Where the volume sits** is the body's business. A disc at arm's length is
+  placed along the flattened `facing` and always has been — aiming at the floor
+  does not move it, which is the rule above.
+- **Which plane a shaped weapon sweeps through** is the crosshair's. The
+  Champion's hammer comes down in the plane you are looking along, its aerials
+  are thrown at the floor or the sky on purpose, and a spear levelled at
+  somebody below you is most of why pitch is on the wire at all.
+
+A class whose swings are discs never reads the pitch, so this changes nothing
+for five of the six.
+
 ## What the path runs into
 
 Separate from the aiming ray, and separate on purpose. The camera's ray says
@@ -116,6 +137,19 @@ crosshair's and parallel rays never converge. The reticle sits on one spot and
 the ability goes to another, by metres, and the error grows with distance —
 which is exactly the bug report that produced this document.
 
+> **`aim::swing_path` is that ray, and is not that mistake**, which is worth
+> being precise about because the two are one line apart. The mistake is using
+> it to answer *where does this go* — a target, at a distance, which the
+> crosshair is also pointing at and disagrees about. A swing asks nothing of
+> the kind: it stops at arm's length, the crosshair is not promising anything
+> out there, and what it takes from the look is the **angle it sweeps at**
+> rather than a point it is trying to reach. Two lines a metre long that start
+> at the same shoulder cannot be metres apart at the end of them.
+>
+> The test for whether a new use is the mistake: *is it pointing at something
+> the player can see the reticle on?* If yes, it is a skillshot and belongs in
+> the raycast. If it stops on the body's own scale, it is a swing.
+
 **A hitbox at a fixed distance in front of the character.** The version before
 that. Aiming up did nothing at all.
 
@@ -133,4 +167,6 @@ gets the same one.
 - **The melee swing** could in principle become a very short non-grounded
   skillshot, which would make the matrix two entries rather than three. Nobody
   has argued for it, and "pointing the camera down must not swing at the floor"
-  is the reason not to.
+  is the reason not to. The Champion's rebuild made the case weaker rather than
+  stronger: its weapons are *shapes* that sweep through a plane, and a
+  skillshot's answer is a point.

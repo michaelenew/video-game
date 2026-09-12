@@ -179,15 +179,6 @@ scalars! {
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
     StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
     SettleDecay,      "Match",    "Settle decay",               Fixed,   0,         fx(1,1);
-    HammerReach,      "Champion", "Hammer reach (x)",           Fixed,   fx(1,10),  fx(3,1);
-    HammerDamage,     "Champion", "Hammer damage (x)",          Fixed,   fx(1,10),  fx(3,1);
-    HammerRecovery,   "Champion", "Hammer recovery (x)",        Fixed,   fx(1,10),  fx(3,1);
-    SwordReach,       "Champion", "Sword reach (x)",            Fixed,   fx(1,10),  fx(3,1);
-    SwordDamage,      "Champion", "Sword damage (x)",           Fixed,   fx(1,10),  fx(3,1);
-    SwordRecovery,    "Champion", "Sword recovery (x)",         Fixed,   fx(1,10),  fx(3,1);
-    SpearReach,       "Champion", "Spear reach (x)",            Fixed,   fx(1,10),  fx(3,1);
-    SpearDamage,      "Champion", "Spear damage (x)",           Fixed,   fx(1,10),  fx(3,1);
-    SpearRecovery,    "Champion", "Spear recovery (x)",         Fixed,   fx(1,10),  fx(3,1);
     MeterMax,         "Dual mage","Meter range",                Int,     10,        400;
     MeterDeep,        "Dual mage","Meter deep threshold",       Int,     1,         400;
     MeterBurn,        "Dual mage","Burn at full depth",         Int,     0,         100;
@@ -296,6 +287,19 @@ scalars! {
     GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
     GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
     DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
+    RushSpeed,        "Champion", "Rush speed",                 Fixed,   fx(1,1),   fx(40,1);
+    RushFrames,       "Champion", "Rush length",                Frames,  1,         60;
+    RushRecharge,     "Champion", "Rush recharge",              Frames,  0,         240;
+    VaultPitch,       "Champion", "Vault plants below (turns)", Fixed,   0,         fx(1,4);
+    VaultCarry,       "Champion", "Vault keeps of the dash (x)",Fixed,   0,         fx(1,1);
+    UppercutLeap,     "Champion", "Uppercut leap",              Fixed,   0,         fx(25,1);
+    AirHitKnockback,  "Champion", "Knockback on an airborne target (x)", Fixed, fx(1,1), fx(4,1);
+    SlamDamage,       "Champion", "Slam damage per m/s",        Int,     0,         40;
+    SlamStagger,      "Champion", "Slam stagger",               Frames,  0,         90;
+    SpearFanBoost,    "Champion", "Air spear boost on hit",     Fixed,   0,         fx(20,1);
+    SweepHeight,      "Champion", "Sweep thrown from (x chest)",Fixed,   fx(1,10),  fx(3,2);
+    SweepDip,         "Champion", "Sweep travels below level",  Fixed,   0,         fx(1,8);
+    ThrustExtend,     "Champion", "Thrust out on the first active frame (x)", Fixed, 0, fx(1,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -460,6 +464,10 @@ pub enum MoveField {
     // flies at the crosshair, or swings where the body is facing. See
     // `moves::Move::aim` and `crate::aim`.
     Skillshot,
+    // And again for the Champion's rebuild: how far a swing travels, and how
+    // often a move that keeps hitting is allowed to hit again.
+    Arc,
+    Rehit,
 }
 
 impl MoveField {
@@ -485,6 +493,8 @@ impl MoveField {
         MoveField::Cost,
         MoveField::Leech,
         MoveField::Skillshot,
+        MoveField::Arc,
+        MoveField::Rehit,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -510,6 +520,8 @@ impl MoveField {
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
             MoveField::Skillshot => "Flies at the crosshair",
+            MoveField::Arc => "Swing arc (turns)",
+            MoveField::Rehit => "Hits again every",
         }
     }
 
@@ -527,7 +539,7 @@ impl MoveField {
             | MoveField::HitsCrouching
             | MoveField::NeedsMechanic
             | MoveField::Skillshot => Unit::Flag,
-            MoveField::Grabs => Unit::Frames,
+            MoveField::Grabs | MoveField::Rehit => Unit::Frames,
             MoveField::Effect | MoveField::Cost => Unit::Int,
             MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
@@ -535,12 +547,24 @@ impl MoveField {
     }
 
     pub const fn range(self) -> (i32, i32) {
-        match self.unit() {
-            Unit::Frames => (0, 90),
-            Unit::Int => (0, 600),
-            Unit::Percent => (0, 100),
-            Unit::Flag => (0, 1),
-            Unit::Fixed => (0, fx(12, 1)),
+        match self {
+            // Signed, because a spike is a launch pointed the other way: the
+            // Champion's aerial hammer drives an airborne target into the
+            // floor with the same number that an uppercut lifts them with.
+            MoveField::Launch => (fx(-30, 1), fx(30, 1)),
+            // Signed for the same reason in the other axis: the sign is which
+            // way the weapon travels. See `moves::Move::arc`.
+            MoveField::Arc => (fx(-1, 2), fx(1, 2)),
+            // A takeoff speed, in the same units the jump is: the pole vault
+            // is meant to beat a jump, and a jump is already 17.7.
+            MoveField::SelfLift => (0, fx(30, 1)),
+            _ => match self.unit() {
+                Unit::Frames => (0, 90),
+                Unit::Int => (0, 600),
+                Unit::Percent => (0, 100),
+                Unit::Flag => (0, 1),
+                Unit::Fixed => (0, fx(12, 1)),
+            },
         }
     }
 }
@@ -678,12 +702,15 @@ pub const MONSTER_MOVES: usize = 6;
 pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
-pub const SLOTS: usize = 4;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 182;
+pub const SCALAR_COUNT: usize = 186;
 pub const AIR_COUNT: usize = CLASSES * 4;
-pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 21;
+/// Move storage is packed to each class's own slot count rather than to a
+/// single width. The Champion has ten moves, the Blood mage four and everybody
+/// else three, and a rectangular table would have meant seven empty rows per
+/// class in the palette and in the baked file.
+pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
+pub const MOVE_FIELDS: usize = 23;
 
 // ---------------------------------------------------------------------------
 // The live store
@@ -730,7 +757,7 @@ pub fn set_air(class: Class, field: AirField, raw: i32) {
 }
 
 fn move_index(class: Class, slot: usize, field: MoveField) -> usize {
-    (class as usize * SLOTS + slot) * MOVE_FIELDS + field as usize
+    (crate::moves::base_slot(class) + slot) * MOVE_FIELDS + field as usize
 }
 
 pub fn move_field(class: Class, slot: usize, field: MoveField) -> i32 {
@@ -852,17 +879,14 @@ impl Knob {
             Knob::Scalar(s) => s.family().to_string(),
             Knob::View(_) => "Camera".to_string(),
             Knob::Air(c, _) => format!("Air · {}", c.name()),
-            // An unbound slot still has storage -- the stride is the same for
-            // every class -- so it still has knobs, and they need a heading
-            // that says why nothing in the game reads them.
-            Knob::Move(c, slot, _) if !crate::moves::bound(c, slot) => {
-                format!("{} · no {} ability", c.name(), crate::moves::binding(slot))
-            }
+            // No "unbound slot" heading any more: storage is packed to each
+            // class's own count, so a slot a class does not have is a slot
+            // with no knobs rather than a row of zeroes needing an excuse.
             Knob::Move(c, slot, _) => format!(
                 "{} · {} [{}]",
                 c.name(),
                 crate::moves::get(c, slot as u8).name,
-                crate::moves::binding(slot)
+                crate::moves::binding(c, slot)
             ),
             Knob::Monster(slot, _) => {
                 format!("Ridgeback · {}", crate::monster::MOVE_NAMES[slot])
@@ -893,11 +917,7 @@ impl Knob {
             Knob::Move(c, slot, f) => format!(
                 "move.{}.{}.{}",
                 slug(c.name()),
-                if crate::moves::bound(c, slot) {
-                    slug(crate::moves::get(c, slot as u8).name)
-                } else {
-                    format!("unbound_{}", crate::moves::binding(slot).to_lowercase())
-                },
+                slug(crate::moves::get(c, slot as u8).name),
                 slug(f.label())
             ),
             Knob::Monster(slot, f) => format!(
@@ -994,7 +1014,7 @@ pub fn all_knobs() -> Vec<Knob> {
         }
     }
     for class in ALL_CLASSES {
-        for slot in 0..SLOTS {
+        for slot in 0..crate::moves::slots(class) {
             for field in MoveField::ALL {
                 out.push(Knob::Move(class, slot, *field));
             }

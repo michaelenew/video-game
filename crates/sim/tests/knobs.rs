@@ -79,6 +79,13 @@ const EXEMPT: &[(&str, &str)] = &[
          Numerically motivated, not felt.",
     ),
     (
+        "const SAMPLES: i32 = 5",
+        "How finely a weapon's line is sampled when asking the creature which part it \
+         touched. A discretisation of a continuous test, not a quantity: the spacing it \
+         produces is smaller than the thinnest weapon in the game, and raising it would \
+         make the approximation slightly better rather than make anything feel different.",
+    ),
+    (
         "const GROUND_Y: Fx = Fx::ZERO",
         "The floor is the origin. Moving it would move the world, not change how it feels.",
     ),

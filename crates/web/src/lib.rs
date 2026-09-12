@@ -127,7 +127,7 @@ pub extern "C" fn hit_r(i: u32) -> i32 {
 /// Straight from the simulation, so the browser tool cannot drift from the
 /// game the way a reconstruction from the move table did -- it drew every
 /// attack a fixed reach ahead of the body, which has not been true of an aimed
-/// move for a while and was never true of a beam.
+/// move for a while and was never true of a beam or of a weapon that sweeps.
 fn hitbox(i: u32) -> Option<sim::state::Hitbox> {
     sim::state::hitbox(p(i))
 }
