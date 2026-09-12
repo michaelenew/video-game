@@ -687,3 +687,33 @@ fn nothing_the_animation_system_draws_is_broken() {
         assert!(bad.is_empty(), "frame {i}: {bad:?}");
     }
 }
+
+#[test]
+fn the_stride_phase_blends_the_short_way_round() {
+    // The phase wraps, so a tick that crosses the wrap is a small step forward
+    // rather than a large one backwards -- and getting that wrong makes the
+    // legs snap backwards once per stride.
+    let mut w = World::new();
+    // Walk for long enough to cross the wrap a few times.
+    let mut last = 0.0f32;
+    let mut worst = 0.0f32;
+    for i in 0..400 {
+        let prev = w.clone();
+        w.advance([Input::new(Input::W), Input::default()]);
+        for step in 0..4 {
+            let alpha = step as f32 / 4.0;
+            let frame = view::interpolate(&prev, &w, alpha);
+            let phase = frame.players[0].stride;
+            assert!((0.0..1.0).contains(&phase), "phase {phase} out of range");
+            if i > 2 {
+                let step = (phase - last).rem_euclid(1.0);
+                worst = worst.max(step);
+            }
+            last = phase;
+        }
+    }
+    // A quarter of a tick at seven metres per second over a 2.7 m stride is
+    // about a hundredth of a cycle. Anything near a whole cycle is a wrap
+    // handled the long way round.
+    assert!(worst < 0.1, "the phase jumped {worst:.3} of a cycle");
+}

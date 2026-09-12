@@ -140,7 +140,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         crouching: c.crouching,
         speed,
         travel,
-        stride: c.stride as f32 / 65536.0,
+        stride: stride_between(p.stride, c.stride, a),
         air_frames: c.air_frames,
         since_landed: c.since_landed,
         parried: c.parried,
@@ -153,6 +153,19 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
+}
+
+/// Blend the stride phase across a tick, the short way round.
+///
+/// It has to be blended like any other continuous quantity, or the legs step at
+/// 60 Hz while the body moves at the display's rate and the feet visibly
+/// stutter against the ground. And it has to be blended *the short way*: the
+/// phase wraps, so a step from 0.99 to 0.01 of a cycle is a fiftieth of a
+/// stride forward, not almost a whole one backwards.
+fn stride_between(prev: u16, cur: u16, a: f32) -> f32 {
+    let delta = cur.wrapping_sub(prev) as i16 as f32;
+    let phase = prev as f32 + delta * a;
+    phase.rem_euclid(65536.0) / 65536.0
 }
 
 fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
