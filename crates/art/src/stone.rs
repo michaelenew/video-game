@@ -861,14 +861,75 @@ pub fn slate() -> Stone {
     }
 }
 
+/// **Marble.** Limestone recrystallised until nothing of the original grain is
+/// left: a sugary mass of interlocking calcite, pale and almost uniform.
+///
+/// Its whole character is the veining, and the veining is *not* banding. It is
+/// impurities -- clay, iron, carbon -- that were smeared into wandering seams
+/// while the rock flowed. Which is exactly the shape the joint system already
+/// makes: narrow, rough, widely spaced surfaces that wander through the mass.
+/// So marble's veins are joints with the width turned down and the roughness
+/// turned up, and no new mechanism was needed to get them.
+///
+/// Pale, and that is a deliberate exception to the rule that the world stays
+/// dark. Marble is a *made* thing in a landscape -- a ruin only reads as a ruin
+/// if it is obviously not the hillside it is standing on -- and it earns its
+/// lightness by having almost no chroma, which is the half of the palette rule
+/// that actually matters.
+pub fn marble() -> Stone {
+    Stone {
+        fabric: Fabric::Metamorphic,
+        minerals: [
+            m(0.86, 0.004, 0.20, 0.72, 0.60),
+            m(0.78, 0.008, 0.14, 0.20, 0.55),
+            m(0.68, 0.010, 0.60, 0.07, 0.50),
+            m(0.46, 0.012, 0.10, 0.01, 0.45),
+        ],
+        mineral_count: 4,
+        grain: 0.004,
+        phenocryst: 0.0,
+        phenocryst_grain: 0.0,
+        bedding: Bedding {
+            normal: [0.35, 1.0, 0.20],
+            spacing: 0.55,
+            fold: 0.30,
+            fold_scale: 1.6,
+            // Low, because marble is not banded. What little there is gives the
+            // pale mass a drift rather than a stripe.
+            contrast: 0.18,
+        },
+        joints: [
+            // The veins. Narrow, very rough, and far apart.
+            JointSet {
+                normal: [1.0, 0.30, 0.15],
+                spacing: 0.75,
+                roughness: 0.34,
+                width: 0.011,
+            },
+            JointSet {
+                normal: [0.2, -0.4, 1.0],
+                spacing: 1.10,
+                roughness: 0.40,
+                width: 0.008,
+            },
+            NO_JOINTS,
+        ],
+        joint_count: 2,
+        weathering: 0.14,
+        weathered: Lch::new(0.62, 0.020, 0.12),
+        seed: 0x3A8B,
+    }
+}
+
 /// Every rock in the library, for tests and the preview sheet.
-pub fn library() -> [(&'static str, Stone); 5] {
+pub fn library() -> [(&'static str, Stone); 6] {
     [
         ("granite", granite()),
         ("sandstone", sandstone()),
         ("gneiss", gneiss()),
         ("basalt", basalt()),
         ("slate", slate()),
+        ("marble", marble()),
     ]
 }
 

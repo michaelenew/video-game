@@ -655,16 +655,115 @@ hillside would be carved out of -- the strata a cliff exposes are the same strat
 the arena floor is standing on. That was not designed for; it is what modelling
 the solid instead of the surface gives you.
 
+## The arena is one rock, and there is a landscape behind a button
+
+**Everything you stand on or walk into is a face cut into a single stone
+volume.** Not a floor plus some walls that share a texture: the floor slab, the
+walls and the platforms all sample one volume *where they actually are*, so the
+grain runs continuously from the floor up the wall it meets, a joint that
+reaches a corner comes out the other side, and no two surfaces are the same
+piece of rock.
+
+That is how a rock-cut temple is built and it is why they read as they do.
+Kailasa at Ellora was carved downward out of one basalt outcrop rather than
+assembled, so no two of its surfaces disagree about what the hill was made of.
+Nothing in the renderer has to arrange this; the continuity is a consequence of
+every face asking the same volume where it is.
+
+The ground beyond the arena now sits *below* it, so the arena reads as a plinth
+cut out of bedrock. It also had to: the floor slab's top and the ground plane
+were both at zero, which is two coplanar surfaces fighting over every pixel. The
+fix and the look wanted the same thing, which is usually a sign the look was
+right.
+
+### A landscape, on a toggle
+
+A button at the top of the screen swaps the arena for hills, ruins and scattered
+boulders — all cut from the same stone volume, which is the claim `stone` was
+written to support finally being cashed.
+
+`art::terrain` says only *where the ground is and which way it faces*. It makes
+no colour and no texture; the rock comes from sampling the stone volume at the
+surface. Slope decides what can rest where — loose rock has already rolled off a
+steep face, and soil does not stay on one either, which is why steep ground
+shows bare stone. Scattering is a jittered grid rather than independent random
+points, because independent points clump and leave holes; that is what random
+actually looks like and it reads as a mistake.
+
+It is a **look** toggle and nothing else. Collision geometry is a constant in
+`sim::arena` and neither scene touches it, so a fighter on a hillside is really
+standing on the arena floor with the walls hidden. The button says so, because a
+world you can walk through is the kind of thing someone reports as a bug.
+
+### The hills are where the hybrid argument gets cashed
+
+At four metres between vertices, the stone volume's own structure — joints a
+metre or two apart — is entirely below the sampling rate. Asking the volume for
+colour at each vertex correctly returns the rock's *mean*, and the hills came
+out as smooth dunes with every joint averaged away.
+
+The volume is still right for the large scale: it says which hillside is pale
+and which is stained, across hundreds of metres, uniquely. What it cannot do at
+that vertex spacing is grain. So a small tiling texture goes underneath and the
+vertex colours multiply it — repetition invisible, because a tile with no large
+features has no period to see. This is the split that was predicted when the
+bake-on-the-processor decision was made, arriving exactly where it was expected.
+
+Two bugs on the way, both worth keeping:
+
+**A vertex colour is a tint, not an albedo.** Bevy multiplies the base colour
+texture by the vertex colour, so handing it the rock's actual reflectance
+multiplies two albedos together — a 0.09 texture times a 0.10 tint is 0.009, and
+the hills came out about ten times too dark.
+
+**A mesh carrying its own world-space coordinates still needs repeat
+addressing.** The material builder decided whether to sample with repeat from
+how many times it was *told* the tile repeats, and a mesh that encodes the
+repeat in its own coordinates says "once". The sampler clamped and the whole
+landscape got a single stretched texel — which looks exactly like the texture
+having failed to load.
+
+### Marble, and what a ruin needs
+
+Marble is limestone recrystallised until nothing of the original grain is left.
+Its whole character is the veining, and veining is *not* banding — it is
+impurities smeared into wandering seams while the rock flowed. Which is the
+shape the joint system already makes, so marble's veins are joints with the
+width turned down and the roughness turned up. No new mechanism.
+
+It is pale, which is a deliberate exception to the world staying dark: a ruin
+only reads as a ruin if it is obviously not the hillside it is standing on. It
+earns that by having almost no chroma, which is the half of the palette rule
+that actually matters.
+
+**A group per site, not a column per site.** A single shaft on a hill is a
+monolith. What says *ruin* is a row at different stages of falling down — one
+nearly intact, one snapped halfway, one down to a footing, and the drums that
+came off them lying where they rolled. The intact one is what tells you what the
+stumps used to be; without it the stumps are cylinders.
+
+And boulders are spheres pushed around until they stop being spheres. An
+icosphere is a ball and scaling it unevenly gives an egg; what makes a rock a
+rock is facets and hollows at several scales, which is the same noise the stone
+volume is built from applied to the radius instead of the colour.
+
+### One measurement that corrected me
+
+The terrain test first asserted that ridged noise makes a landscape
+*bottom*-heavy, on the reasoning that ridges are narrow high ground over broad
+valleys. Measured, it goes the other way: folding concentrates gradient noise
+near its zero set, so a ridged landscape is broad high ground cut by narrow
+hollows. The look was right and the explanation was not. What actually
+distinguishes ridged from rolling is **curvature** — how sharply the surface
+bends — by about seventy per cent, and that is what the test checks now.
+
 ## Next, in order
 
-1. **Fine detail on large surfaces.** The volume gives structure that is metres
-   across -- joints, bedding, weathering -- and at eight texels per metre that is
-   all a wall can show. Grain needs either much more resolution or a small
-   tiling detail normal on top, where repetition is invisible because it has no
-   large features. The second is the standard answer and the cheaper one.
-2. **Cut the arena floor from the same volume.** The walls are granite and the
-   floor is a separate tiling material, which is the last place two systems
-   disagree about what the arena is made of.
+1. **Fine detail on the arena's own surfaces.** The hills got a tiling detail
+   layer under their volume colour; the walls have not, and at eight texels per
+   metre a wall shows structure and no grain.
+2. **Collision for the landscape**, if the terrain ever stops being a showcase.
+   Today it is scenery over the arena's own geometry and the button says so.
 3. **Per-move keys for the moves that carry a class's identity.** Derived clips
    are correctly timed and recognisably attacks; they do not know the Reaver's
    Guillotine is a downward chop with a shadow behind it.

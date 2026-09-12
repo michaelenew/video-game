@@ -145,6 +145,30 @@ pub fn build(
     })
 }
 
+/// A material for a mesh that carries its own world-space texture coordinates.
+///
+/// Separate from [`build`] because of a trap: `build` decides whether to sample
+/// with repeat addressing from how many times it was *told* the tile repeats,
+/// and a mesh that encodes the repeat in its own coordinates says "once". The
+/// sampler then clamps, and the whole surface gets a single stretched texel --
+/// which looks exactly like the texture having failed to load.
+pub fn build_repeating(
+    m: &Material,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+) -> Handle<StandardMaterial> {
+    let maps: Maps = art::bake::bake(&m.surface, m.plan(BAKE_SIZE));
+    materials.add(StandardMaterial {
+        base_color_texture: Some(images.add(image(&maps.albedo, true, true))),
+        normal_map_texture: Some(images.add(image(&maps.normal, false, true))),
+        metallic_roughness_texture: Some(images.add(image(&maps.metallic_roughness, false, true))),
+        base_color: Color::WHITE,
+        perceptual_roughness: 1.0,
+        metallic: 1.0,
+        ..default()
+    })
+}
+
 /// How many times a material's tile repeats across a surface of this size.
 pub fn repeat_for(m: &Material, size: Vec2) -> Vec2 {
     (size / m.surface_extent()).max(Vec2::ONE)
@@ -372,6 +396,63 @@ pub fn box_from_stone(
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
         metallic: 1.0,
+        ..default()
+    })
+}
+
+/// One flat patch of a stone volume, as a material.
+///
+/// For small props that are seen up close but are too numerous to each deserve
+/// their own cut -- column drums, in practice. It is the same bake as a wall
+/// face, taken once somewhere in the volume and shared.
+#[allow(clippy::too_many_arguments)]
+pub fn from_stone_patch(
+    stone: &art::stone::Stone,
+    origin: [f32; 3],
+    width: f32,
+    height: f32,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<StandardMaterial>,
+    roughness: f32,
+) -> Handle<StandardMaterial> {
+    use art::bake::{Detail, bake_stone};
+    use art::stone::Placement;
+
+    let size = art::materials::BAKE_SIZE;
+    let maps = bake_stone(
+        stone,
+        &Placement {
+            origin,
+            across: [width, 0.0, 0.0],
+            down: [0.0, -height, 0.0],
+        },
+        size,
+        Detail::PerTexture,
+    );
+
+    let upload = |tex: &art::bake::Texture, srgb: bool| {
+        Image::new(
+            Extent3d {
+                width: tex.width,
+                height: tex.height,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            tex.pixels.clone(),
+            if srgb {
+                TextureFormat::Rgba8UnormSrgb
+            } else {
+                TextureFormat::Rgba8Unorm
+            },
+            RenderAssetUsages::RENDER_WORLD,
+        )
+    };
+
+    materials.add(StandardMaterial {
+        base_color_texture: Some(images.add(upload(&maps.albedo, true))),
+        normal_map_texture: Some(images.add(upload(&maps.normal, false))),
+        base_color: Color::WHITE,
+        perceptual_roughness: roughness,
         ..default()
     })
 }

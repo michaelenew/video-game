@@ -70,6 +70,7 @@
 //! | [`palette`] | Who is who, and what will hurt you |
 //! | [`sky`] | The whole lighting rig, from how high the sun is |
 //! | [`stone`] | Rock as a **volume**: how it formed, how it broke, how it weathered |
+//! | [`terrain`] | Where the ground is and which way it faces. Made of [`stone`] |
 //! | [`bake`] | Parameters to textures a renderer already eats |
 //! | [`png`] | A dependency-free encoder, so a material can be *looked at* |
 
@@ -82,3 +83,4 @@ pub mod png;
 pub mod sky;
 pub mod stone;
 pub mod surface;
+pub mod terrain;

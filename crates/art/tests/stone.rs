@@ -212,10 +212,12 @@ fn every_rock_in_the_library_is_a_plausible_rock() {
             }
         }
         let albedo = total / n as f32;
-        // Coal is about 0.04 and chalk about 0.4. Anything outside that is not
-        // a rock, it is a mistake in a ramp.
+        // Coal is about 0.04 and white marble about 0.5, which is the top of
+        // the range anything made of rock reaches -- fresh snow is 0.8 and
+        // nothing else gets near it. Outside this band is not a rock, it is a
+        // mistake in a ramp.
         assert!(
-            (0.005..0.45).contains(&albedo),
+            (0.005..0.55).contains(&albedo),
             "{name} reflects {albedo:.3} of the light falling on it"
         );
     }

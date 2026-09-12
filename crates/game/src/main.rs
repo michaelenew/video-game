@@ -23,6 +23,7 @@ mod flash;
 mod hud;
 mod palette;
 mod ribbon;
+mod scenery;
 mod settings;
 mod surfaces;
 
@@ -134,6 +135,7 @@ fn main() {
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
+        .insert_resource(scenery::Scene::from_env())
         .init_resource::<palette::Palette>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
@@ -154,31 +156,44 @@ fn main() {
         )
         .add_systems(
             Update,
+            // Grouped into three because Bevy's tuples stop at twenty and this
+            // reached twenty-one. The groups are the order things actually
+            // happen in -- read input, run the tick and place what it produced,
+            // then draw everything that is only a view of it -- so the split
+            // says something rather than falling wherever the limit landed.
             (
-                // Who owns the mouse and keyboard this frame, before anything
-                // reads them.
-                palette::sample_focus,
-                hud::sample_button_focus,
-                // Mouse look runs next: aim is an input to the tick, not a
-                // decoration applied after it.
-                mouse_look,
-                tick_sim,
-                apply_poses,
-                place_shields,
-                place_effects,
-                place_structures,
-                flash::run,
-                ribbon::update,
-                drive_camera,
-                hide_own_body,
-                hud::toggle_class_buttons,
-                hud::class_buttons,
-                hud::update,
-                hud::update_class_buttons,
-                crosshair::update,
-                debug::draw,
-                palette::toggle,
-                palette::draw,
+                (
+                    // Who owns the mouse and keyboard this frame, before
+                    // anything reads them.
+                    palette::sample_focus,
+                    hud::sample_button_focus,
+                    // Mouse look runs next: aim is an input to the tick, not a
+                    // decoration applied after it.
+                    mouse_look,
+                    tick_sim,
+                ),
+                (
+                    apply_poses,
+                    place_shields,
+                    place_effects,
+                    place_structures,
+                    flash::run,
+                    ribbon::update,
+                    scenery::apply,
+                ),
+                (
+                    drive_camera,
+                    hide_own_body,
+                    hud::toggle_class_buttons,
+                    hud::class_buttons,
+                    hud::scene_button,
+                    hud::update,
+                    hud::update_class_buttons,
+                    crosshair::update,
+                    debug::draw,
+                    palette::toggle,
+                    palette::draw,
+                ),
             )
                 .chain(),
         )
@@ -377,6 +392,10 @@ struct EffectMesh {
     part: usize,
 }
 
+/// Scenery that belongs to the arena, hidden when the terrain is showing.
+#[derive(Component)]
+pub struct ArenaScenery;
+
 /// One of the Elementalist's structures.
 #[derive(Component)]
 struct StructureMesh {
@@ -497,53 +516,43 @@ fn setup(
         ..default()
     });
 
-    // The floor, and it runs to the horizon rather than stopping at the arena.
+    // The arena is **one rock**, and everything you stand on or walk into is a
+    // face cut into it.
     //
-    // Forty metres was enough when the sky was flat black -- nothing showed
-    // past the walls because there was nothing out there to see. With a real
-    // sky there is a horizon, and a floor that stops short of it leaves a hard
-    // black band between the two: the arena reads as floating in a void, which
-    // is worse than the void was.
+    // Not a floor plus some walls that happen to share a texture. A single
+    // stone volume, with the floor slab and every wall and platform sampling
+    // it *where they actually are* -- so the grain runs continuously from the
+    // floor up the wall it meets, a joint that reaches a corner comes out the
+    // other side, and no two surfaces in the arena are the same piece of rock.
     //
-    // Six kilometres, which sounds absurd for a thirty-metre arena and is the
-    // cheapest possible fix. A plane's far edge never actually reaches the
-    // horizon -- it only gets closer to it -- so the question is whether the
-    // remaining sliver is under a pixel. At nine hundred metres it was a
-    // visible dark line. This is one triangle pair either way.
-    //
-    // The play area is unchanged. This is scenery, and the collision geometry
-    // in `sim::arena` neither knows nor cares -- which is the point of the
-    // renderer owning nothing.
-    const GROUND_REACH: f32 = 6_000.0;
+    // This is how a rock-cut temple is built and it is why they read as they
+    // do: Kailasa at Ellora was carved downward out of one basalt outcrop
+    // rather than assembled, so no two of its surfaces disagree about what the
+    // hill was made of. Nothing else in the scene has to know; the continuity
+    // is a consequence of every face asking the same volume where it is.
+    let rock = art::stone::granite();
+
+    // The floor slab. A box rather than a plane, so its cut edges are rock
+    // too -- an arena floor with a paper-thin edge reads as a stage rather
+    // than as a pit cut into bedrock.
+    const FLOOR_REACH: f32 = 15.0;
+    const FLOOR_DEPTH: f32 = 2.4;
+    let floor_size = Vec3::new(FLOOR_REACH * 2.0, FLOOR_DEPTH, FLOOR_REACH * 2.0);
+    let floor_centre = Vec3::new(0.0, -FLOOR_DEPTH * 0.5, 0.0);
     commands.spawn((
-        Mesh3d(
-            meshes.add(surfaces::tangented(
-                Plane3d::default()
-                    .mesh()
-                    .size(GROUND_REACH, GROUND_REACH)
-                    .build(),
-            )),
-        ),
-        MeshMaterial3d(surfaces::build(
-            &art::materials::GROUND,
-            surfaces::repeat_for(&art::materials::GROUND, Vec2::splat(GROUND_REACH)),
+        Mesh3d(meshes.add(surfaces::box_mesh(floor_size))),
+        MeshMaterial3d(surfaces::box_from_stone(
+            &rock,
+            floor_centre,
+            floor_size,
+            art::materials::BAKE_SIZE,
             &mut images,
             &mut materials,
         )),
-        Transform::from_xyz(0.0, 0.0, 0.0),
+        Transform::from_translation(floor_centre),
+        ArenaScenery,
     ));
 
-    // The arena is cut out of one piece of rock.
-    //
-    // Not six walls wearing the same texture -- six walls occupying six
-    // different parts of a single stone volume, so each is a different piece of
-    // it and no two are the same. A pattern also runs round a corner properly,
-    // because the two faces meeting there are reading adjacent parts of one
-    // solid rather than being two pictures that happen to touch.
-    //
-    // Granite: coarse enough to read across an arena, and nearly colourless,
-    // which the palette rule requires of anything the world is built from.
-    let rock = art::stone::granite();
     for solid in arena::SOLIDS.iter() {
         let min = fx3(solid.min);
         let max = fx3(solid.max);
@@ -560,8 +569,50 @@ fn setup(
                 &mut materials,
             )),
             Transform::from_translation(centre),
+            ArenaScenery,
         ));
     }
+
+    // The ground beyond the arena sits *below* it, so the arena reads as a
+    // plinth cut out of the bedrock rather than as a slab resting on a field.
+    //
+    // It also has to: the floor slab's top and the ground plane were both at
+    // zero, which is two coplanar surfaces fighting over every pixel. The fix
+    // and the look wanted the same thing, which is usually a sign the look was
+    // right.
+    const GROUND_DROP: f32 = 0.7;
+
+    // The ground beyond the arena, running to the horizon.
+    //
+    // Still a tiling material rather than a cut of the volume, and that is a
+    // scale decision rather than an oversight: six kilometres of unique rock is
+    // not a texture, it is a streaming problem. It is tuned to the same tone as
+    // the granite so the arena reads as a piece of the landscape rather than as
+    // an object dropped onto it.
+    //
+    // Six kilometres because a plane's far edge never actually reaches the
+    // horizon -- it only gets closer -- so the question is whether the
+    // remaining sliver is under a pixel. At nine hundred metres it was a
+    // visible dark line.
+    const GROUND_REACH: f32 = 6_000.0;
+    commands.spawn((
+        Mesh3d(
+            meshes.add(surfaces::tangented(
+                Plane3d::default()
+                    .mesh()
+                    .size(GROUND_REACH, GROUND_REACH)
+                    .build(),
+            )),
+        ),
+        MeshMaterial3d(surfaces::build(
+            &art::materials::GROUND,
+            surfaces::repeat_for(&art::materials::GROUND, Vec2::splat(GROUND_REACH)),
+            &mut images,
+            &mut materials,
+        )),
+        Transform::from_xyz(0.0, -GROUND_DROP, 0.0),
+        ArenaScenery,
+    ));
 
     let unit_cube = meshes.add(surfaces::tangented(
         Cuboid::new(1.0, 1.0, 1.0).mesh().build(),
@@ -659,6 +710,11 @@ fn setup(
             ));
         }
     }
+    // The terrain is built now and hidden, rather than on the first click. It
+    // is about a second of baking, and a scene switch that stalls is one nobody
+    // uses twice.
+    scenery::build(&mut commands, &mut meshes, &mut images, &mut materials);
+
     commands.insert_resource(skins);
 }
 

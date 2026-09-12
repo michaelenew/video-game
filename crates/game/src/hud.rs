@@ -76,6 +76,7 @@ pub fn setup(mut commands: Commands) {
                 ..default()
             })
             .with_children(|top| {
+                spawn_scene_button(top);
                 spawn_class_button(top, 0, player(0));
                 spawn_health(top, 0, player(0));
                 top.spawn((
@@ -168,6 +169,78 @@ pub fn setup(mut commands: Commands) {
                 ));
             });
         });
+}
+
+/// Which scene the arena is standing in. Always visible, next to the round
+/// counter, because it is a thing you reach for while looking at the arena
+/// rather than a developer switch -- the class pickers are behind F8 because
+/// they change the *fight*, and this only changes what is around it.
+#[derive(Component)]
+pub struct SceneButton;
+
+#[derive(Component)]
+pub struct SceneLabel;
+
+fn spawn_scene_button(parent: &mut ChildSpawnerCommands) {
+    parent.spawn((
+        Button,
+        Node {
+            padding: UiRect::axes(Val::Px(10.0), Val::Px(4.0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(Val::Px(1.0)),
+            ..default()
+        },
+        BorderColor(DIM),
+        BorderRadius::all(Val::Px(3.0)),
+        BackgroundColor(Color::srgba(0.09, 0.11, 0.14, 0.85)),
+        SceneButton,
+        children![(
+            Text::new("Arena"),
+            TextFont {
+                font_size: 14.0,
+                ..default()
+            },
+            TextColor(INK),
+            SceneLabel,
+        )],
+    ));
+}
+
+/// Click to swap what the arena is standing in.
+///
+/// It changes only what is drawn. The simulation's collision geometry is a
+/// constant and neither scene touches it, so a fighter on a hillside is really
+/// standing on the arena floor with the walls hidden -- which the label says,
+/// because a world you can walk through is the kind of thing someone reports as
+/// a bug.
+pub fn scene_button(
+    mut scene: ResMut<crate::scenery::Scene>,
+    buttons: Query<&Interaction, (Changed<Interaction>, With<SceneButton>)>,
+    mut labels: Query<&mut Text, With<SceneLabel>>,
+    mut focus: ResMut<crate::palette::UiFocus>,
+    hovered: Query<&Interaction, With<SceneButton>>,
+) {
+    if hovered
+        .iter()
+        .any(|i| matches!(i, Interaction::Hovered | Interaction::Pressed))
+    {
+        focus.pointer = true;
+    }
+    for interaction in buttons.iter() {
+        if *interaction == Interaction::Pressed {
+            *scene = scene.next();
+        }
+    }
+    if scene.is_changed() {
+        for mut text in labels.iter_mut() {
+            let showing = scene.label();
+            **text = match *scene {
+                crate::scenery::Scene::Arena => showing.to_string(),
+                crate::scenery::Scene::Terrain => format!("{showing} (scenery only)"),
+            };
+        }
+    }
 }
 
 fn spawn_class_button(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {

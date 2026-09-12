@@ -289,6 +289,10 @@ pub const SECTIONS: &[Section] = &[
         blurb: "Mostly for headless capture and for scripting comparisons.",
         entries: &[
             e(
+                "SCENE=terrain",
+                "Start in the landscape rather than the arena. The button at the top of the screen does the same.",
+            ),
+            e(
                 "DEMO=1",
                 "Drive player one from a script instead of the keyboard.",
             ),
