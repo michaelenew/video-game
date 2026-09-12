@@ -84,84 +84,154 @@ pub fn limits() -> (Fx, Fx) {
     (turns(view(V::LookDownLimit)), turns(view(V::LookUpLimit)))
 }
 
-/// The sphere the eye rides at this aim angle, pitch in turns.
-///
-/// Every zone is a straight interpolation of the same three numbers, and each
-/// starts where the last left off, so the whole range is continuous without
-/// anything being blended to make it so.
-pub fn ball(pitch: Fx) -> Ball {
+/// The five zones, bottom to top, and the boundary above each.
+const FLOOR: usize = 0;
+const NEUTRAL: usize = 1;
+const TURN: usize = 2;
+const HANDOVER: usize = 3;
+const EYES: usize = 4;
+
+/// Where each zone starts and ends, in turns.
+fn edges() -> [(Fx, Fx); 5] {
     let (down, up) = limits();
-    let pitch = pitch.clamp(down.neg(), up);
-    let floor_from = turns(view(V::FloorZoneFrom));
-    let neutral_to = turns(view(V::NeutralZoneTo));
+    let floor_from = turns(view(V::FloorZoneFrom)).neg();
+    let neutral_to = turns(view(V::NeutralZoneTo)).neg();
     let head_lock = turns(view(V::HeadLockAt));
+    [
+        (down.neg(), floor_from),
+        (floor_from, neutral_to),
+        (neutral_to, Fx::ZERO),
+        (Fx::ZERO, head_lock),
+        (head_lock, up),
+    ]
+}
+
+/// How much of each zone's own span is given over to easing, at each end.
+///
+/// A share of the zone's own ramp, which is what makes one number mean the same
+/// thing in a band four degrees wide and one seventy-five degrees wide. Half is
+/// the most it can be: at half, the two ends meet and the ramp is eased the
+/// whole way through, which is as smooth as a zone gets.
+fn eases() -> [Fx; 5] {
+    let share = [
+        pct(V::SmoothFloor),
+        pct(V::SmoothNeutral),
+        pct(V::SmoothTurn),
+        pct(V::SmoothHandover),
+        pct(V::SmoothEyes),
+    ];
+    share.map(|s| s.clamp(Fx::ZERO, Fx::ratio(1, 2)))
+}
+
+/// A ramp that leaves and arrives at a standstill, without giving up its middle.
+///
+/// **The whole of the smoothing, and it is a remap of the ramp rather than
+/// anything added on top.** A zone boundary with nothing done about it is
+/// continuous in position and not in speed: the eye arrives moving one way and
+/// leaves moving another. That is not seen so much as felt, and it reads as the
+/// camera changing its mind.
+///
+/// A neighbouring zone at a shared boundary is holding still -- its own ramp has
+/// either not started or already finished -- so all that is needed is for this
+/// one to start and finish at rest too. The first and last `ease` of the ramp
+/// are the cubic through `(0,0)` and `(1,1)` that leaves flat and arrives at the
+/// straight line's own slope, so the two meet without a corner. Everything
+/// between them is untouched, which is what keeps the waypoints exactly true
+/// wherever the window does not reach.
+fn eased(t: Fx, ease: Fx) -> Fx {
+    if ease.raw() <= 0 {
+        return t;
+    }
+    // `u * u * (2 - u)`: flat at nought, and at one it is climbing at exactly
+    // the gradient of the line it is joining.
+    let knee = |u: Fx| ease.mul(u.mul(u).mul(Fx::from_int(2).sub(u)));
+    if t.raw() < ease.raw() {
+        knee(t.div(ease))
+    } else if t.raw() > Fx::ONE.sub(ease).raw() {
+        Fx::ONE.sub(knee(Fx::ONE.sub(t).div(ease)))
+    } else {
+        t
+    }
+}
+
+/// The sphere zone `z` asks for at this aim angle.
+///
+/// Every zone answers at *any* angle, not only inside its own band: past its
+/// edges its ramp simply runs out, which leaves it holding the waypoint it was
+/// heading for. That is what makes the handover below a plain weighted average
+/// rather than a special case -- outside the window the two zones already agree,
+/// so blending them changes nothing.
+fn ball_of(z: usize, pitch: Fx) -> Ball {
+    let (lo, hi) = edges()[z];
+    let span = hi.sub(lo);
+    let t = if span.raw() > 0 {
+        pitch.sub(lo).div(span).clamp(Fx::ZERO, Fx::ONE)
+    } else {
+        Fx::ONE
+    };
+    let t = eased(t, eases()[z]);
     let body = t::body_height();
     let sphere = metres(V::Sphere);
     let low = pct(V::FeetNeutral);
     let level = Fx::ratio(1, 2).sub(pct(V::HeadGapLevel));
+    let centred = Fx::ratio(1, 2);
 
-    if pitch.raw() <= floor_from.neg().raw() {
+    match z {
         // **The floor zone.** The view tilts down onto the fighter's own feet,
         // so that at the bottom of the range the crosshair is on them -- the
         // shot that puts a stone underneath you.
-        let span = down.sub(floor_from);
-        let t = if span.raw() > 0 {
-            pitch
-                .neg()
-                .sub(floor_from)
-                .div(span)
-                .clamp(Fx::ZERO, Fx::ONE)
-        } else {
-            Fx::ZERO
-        };
-        Ball {
+        FLOOR => Ball {
             centre: Fx::ZERO,
             radius: sphere,
-            at: lerp(low, pct(V::FeetFloor), t),
-        }
-    } else if pitch.raw() <= neutral_to.neg().raw() {
+            at: lerp(pct(V::FeetFloor), low, t),
+        },
         // **The neutral zone**, where most of a match is spent. Nothing about
         // the sphere changes here at all -- only where the eye is on it -- so
         // the fighter sits at exactly the same spot on screen through the whole
         // band while the camera swings around behind them.
-        Ball {
+        NEUTRAL => Ball {
             centre: Fx::ZERO,
             radius: sphere,
             at: low,
-        }
-    } else if pitch.raw() <= 0 {
+        },
         // **The turn.** The sphere slides up the body to the head and the tilt
-        // comes with it, until at level the crosshair rides just above the
-        // head -- which is what gives a mid-range skillshot something to key
-        // off when there is no ground under the aim to read it against.
-        let t = if neutral_to.raw() > 0 {
-            pitch
-                .add(neutral_to)
-                .div(neutral_to)
-                .clamp(Fx::ZERO, Fx::ONE)
-        } else {
-            Fx::ONE
-        };
-        Ball {
+        // comes with it, until at level the crosshair rides just above the head
+        // -- which is what gives a mid-range skillshot something to key off when
+        // there is no ground under the aim to read it against.
+        TURN => Ball {
             centre: lerp(Fx::ZERO, body, t),
             radius: sphere,
             at: lerp(low, level, t),
-        }
-    } else {
-        // **The handover**, and then the fighter's own eye. The sphere shrinks
-        // onto the head and the tilt goes to nothing, which leaves the camera
-        // looking straight down the line the crosshair draws.
-        let t = if head_lock.raw() > 0 {
-            pitch.div(head_lock).clamp(Fx::ZERO, Fx::ONE)
-        } else {
-            Fx::ONE
-        };
-        Ball {
+        },
+        // **The handover.** The sphere shrinks onto the head and the tilt goes
+        // to nothing, which leaves the camera looking straight down the line the
+        // crosshair draws.
+        HANDOVER => Ball {
             centre: body,
             radius: lerp(sphere, metres(V::HeadSphere), t),
-            at: lerp(level, Fx::ratio(1, 2), t),
-        }
+            at: lerp(level, centred, t),
+        },
+        // **The fighter's own eye**, and nothing moves again.
+        _ => Ball {
+            centre: body,
+            radius: metres(V::HeadSphere),
+            at: centred,
+        },
     }
+}
+
+/// The sphere the eye rides at this aim angle, pitch in turns.
+///
+/// Whichever zone the angle is in, with that zone's ramp eased at both ends so
+/// that it hands over to its neighbours without a corner -- see `eased`.
+pub fn ball(pitch: Fx) -> Ball {
+    let (down, up) = limits();
+    let pitch = pitch.clamp(down.neg(), up);
+    let z = edges()
+        .iter()
+        .position(|(_, hi)| pitch.raw() <= hi.raw())
+        .unwrap_or(EYES);
+    ball_of(z, pitch)
 }
 
 /// Where the eye is, for a fighter standing at `pos` looking this way.

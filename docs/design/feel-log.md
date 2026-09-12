@@ -1407,3 +1407,49 @@ is now out of reach.
 
 **Verdict** open. The contract the whole aiming pass exists for is exact again, measured rather
 than argued, and the camera keeps the orbit from the previous entry unchanged.
+
+### 2026-09-12 — the zones hand over instead of swapping
+
+**Changed** each zone's ramp is eased in and out, over a share of its own span given by a new
+per-zone percentage. Floor 100, the turn 50, the handover 50; the neutral zone and first person
+hold still and have nothing to ease.
+
+**Why** reported: the transitions felt unpolished — the camera suddenly starts behaving
+differently. That is exactly right, and the measurement says why. Every version of this rig has
+held the eye's **position** together across a boundary. What none of them held together was its
+**speed**:
+
+| Boundary | Before | After |
+| --- | --- | --- |
+| −45 | 0.086 → 0.162 m/deg | 0.135 → 0.162, no step |
+| −10 | 0.160 → 0.275 | eases across 0.16 → 0.27 |
+| 0 | 0.270 → 0.921 | eases across |
+| +10 | 0.900 → **0.000** | eases to a stop |
+
+The +10 one is the worst and the most telling: the eye is sweeping at nearly a metre per degree
+and then stops dead, because the handover's contraction hits the end of its ramp. Nothing jumps,
+and it still feels like something did.
+
+**Why easing the ramp rather than averaging two zones.** The first attempt was the literal
+reading — blend the two zones' cameras across a window straddling the boundary — and it does not
+work, for a reason worth writing down. **Outside its own band a zone is frozen at the waypoint it
+was heading for**, which is exactly its neighbour's value, so the two zones being blended are
+identical on one side of every boundary and the average changes nothing there. Worse, blending a
+ramping zone against its own frozen endpoint is *algebraically the same thing* as remapping that
+zone's ramp — so the window was already an easing, just one centred on the wrong place: it
+reached full weight at the boundary instead of zero, which left the kink exactly where it started.
+
+Put the easing inside the ramp and every boundary is covered by whichever side is actually
+moving. The curve is the cubic `u²(2 − u)`: flat where it starts, and arriving at exactly the
+gradient of the straight line it rejoins, so the two meet without a corner.
+
+**Found on the way, and fixed:** `the_neutral_zone_holds_the_fighter_low` was already failing on
+main. The framing field of view was baked to 57 while the renderer draws at 58, so the feet land
+at 16.7% of the screen where the knob asks for 16. That is the design working — the framing has
+its own field of view precisely so that a player widening theirs cannot move their aim — but the
+test was comparing a framing-space waypoint against a render-space measurement. It converts
+between them now, and the mismatch is documented rather than assumed away.
+
+**Verdict** open. `the_eye_never_changes_pace_abruptly_at_a_zone_boundary` is the new guard: it
+compares the change in pace at each boundary against an ordinary step of the mouse elsewhere, and
+with the easing removed it fails at level with thirteen times the ordinary change.
