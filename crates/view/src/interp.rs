@@ -141,7 +141,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     // The aim's vertical half, as an angle. `aim_dir` is a unit vector, so its
     // height *is* the sine of the pitch. Blended between the two snapshots
     // like every other continuous quantity, so the arm does not step.
-    let pitch_of = |v: &sim::state::Player| fx(v.aim_dir.y).clamp(-1.0, 1.0).asin();
+    let pitch_of = |v: &sim::state::Player| fx(v.aim_dir().y).clamp(-1.0, 1.0).asin();
     let aim_pitch = lerp(pitch_of(p), pitch_of(c), a);
 
     PlayerView {

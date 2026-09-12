@@ -433,45 +433,7 @@ fn launch_decel(stone: &mut Structure) {
     }
 }
 
-/// The nearest stone a shot meets, and how far along the shot it sits -- so
-/// the caller can tell it apart from whatever else the same shot might be
-/// aimed through.
-///
-/// A real ray against the stone's own cylinder, caps included, so a shot
-/// aimed over the top of a stone passes over it and one aimed up at a stone
-/// standing on another finds it. `swell` is the shot's own radius, added to
-/// the stone's. A stone still buried has no standing height and so nothing to
-/// hit.
-pub fn first_along_shot(
-    field: &Field,
-    from: V3,
-    dir: V3,
-    limit: Fx,
-    swell: Fx,
-) -> Option<(usize, Fx)> {
-    let mut best: Option<(usize, Fx)> = None;
-    for (i, slot) in field.iter().enumerate() {
-        let Some(stone) = slot else { continue };
-        let Some(dist) = crate::math::ray_hits_cylinder(
-            from,
-            dir,
-            stone.at,
-            t::structure_radius().add(swell),
-            stone.standing_height(),
-        ) else {
-            continue;
-        };
-        if dist.raw() > limit.raw() {
-            continue;
-        }
-        if best.is_none_or(|(_, d)| dist.raw() < d.raw()) {
-            best = Some((i, dist));
-        }
-    }
-    best
-}
-
-/// Kick the stone at `index` (as returned by `first_along_shot`) forward
+/// Kick the stone at `index` (as `aim::Contact::Stone` reports it) forward
 /// along `dir` at the shot's launch speed.
 ///
 /// `dir` is the shot's real, three-dimensional aim -- pitch included, not

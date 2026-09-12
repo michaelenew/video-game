@@ -74,11 +74,16 @@ Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 
-A **beam**, not a bolt. A short wind-up, and then an instant line out of her chest
-along exactly the line the crosshair is on, out to a short-to-middle distance.
-Nothing travels, so there is nothing to lead and nothing to dodge once it is
-thrown — what there is instead is a shot that goes wherever you are pointing,
-including up.
+A **beam**, not a bolt. A short wind-up, and then an instant line from her hand
+to *whatever the crosshair is on*, out to a short-to-middle distance. Nothing
+travels, so there is nothing to lead and nothing to dodge once it is thrown —
+what there is instead is a shot that goes exactly where you are pointing.
+
+It is the game's one **skillshot** in the sense [../aiming.md](../aiming.md)
+means it, and that document is where the rule lives. The short version: the shot
+ends on the point the camera's ray through the crosshair reaches first, and
+when that point is the floor it is raised to the height the shot leaves her at,
+so a shot aimed at the ground flies level over the spot rather than into it.
 
 > **Implemented** (`L`). What the line reaches **first** is the whole move,
 > checked every active frame and spending the move's one hit on whatever it
@@ -107,12 +112,14 @@ including up.
 >   that came out of her hand instead would make the whole interaction
 >   invisible.
 >
-> **The range is the move's own.** The beam's length and thickness are the move
-> table's `reach` and `radius` rather than knobs of their own, because the beam
-> *is* the move: a second copy of its range would only be a number the frame
-> table could disagree with. The fire bolt is what carries the shot past that
-> range, which is the trade a pillar buys — put fire between you and them and
-> the poke stops being a point-blank tool.
+> **The range is the move's own.** The move table's `reach` is the max-range
+> sphere the aiming ray stops at and its `radius` is the line's thickness,
+> rather than knobs of their own: the beam *is* the move, and a second copy of
+> its range would only be a number the frame table could disagree with. The
+> shot is often shorter than the sphere, because it ends on whatever the
+> crosshair found. The fire bolt is what carries it *past* that range, which is
+> the trade a pillar buys — put fire between you and them and the poke stops
+> being a point-blank tool.
 >
 > **Height decides this one.** It is the first fighter-on-fighter hit in the
 > game where it does: a crouch ducks a shot aimed over the head, a shot aimed

@@ -458,8 +458,14 @@ pub enum MoveField {
     // health back on the hit -- see `moves::Move::cost` and `leech`.
     Cost,
     Leech,
-    // Appended again for the Champion's rebuild: how far a swing travels, and
-    // how often a move that keeps hitting is allowed to hit again.
+    // And again, for which of the three kinds of aiming a move uses. Derived
+    // where it can be -- a move that plants something on the floor is grounded
+    // whatever else it does -- so this is only the one bit that cannot be:
+    // flies at the crosshair, or swings where the body is facing. See
+    // `moves::Move::aim` and `crate::aim`.
+    Skillshot,
+    // And again for the Champion's rebuild: how far a swing travels, and how
+    // often a move that keeps hitting is allowed to hit again.
     Arc,
     Rehit,
 }
@@ -486,6 +492,7 @@ impl MoveField {
         MoveField::Effect,
         MoveField::Cost,
         MoveField::Leech,
+        MoveField::Skillshot,
         MoveField::Arc,
         MoveField::Rehit,
     ];
@@ -512,6 +519,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
+            MoveField::Skillshot => "Flies at the crosshair",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
         }
@@ -527,9 +535,10 @@ impl MoveField {
             | MoveField::AirStall => Unit::Frames,
             MoveField::Damage => Unit::Int,
             MoveField::Mobility => Unit::Percent,
-            MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
-                Unit::Flag
-            }
+            MoveField::Unblockable
+            | MoveField::HitsCrouching
+            | MoveField::NeedsMechanic
+            | MoveField::Skillshot => Unit::Flag,
             MoveField::Grabs | MoveField::Rehit => Unit::Frames,
             MoveField::Effect | MoveField::Cost => Unit::Int,
             MoveField::Leech => Unit::Percent,
@@ -701,7 +710,7 @@ pub const AIR_COUNT: usize = CLASSES * 4;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 22;
+pub const MOVE_FIELDS: usize = 23;
 
 // ---------------------------------------------------------------------------
 // The live store

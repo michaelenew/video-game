@@ -37,6 +37,24 @@ fn tap(w: &mut World, button: u16, then: u32) {
 /// this settles the pitch against it -- a couple of rounds is plenty, the rig
 /// being smooth.
 fn tap_at(w: &mut World, button: u16, mark: V3, then: u32) {
+    let (yaw, tilt) = look_at(w, mark);
+    for _ in 0..2 {
+        w.advance([
+            Input::looking_at(button, yaw, tilt),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    run(w, then, 0, 0);
+}
+
+/// The yaw and pitch that put the crosshair on a point in the world.
+///
+/// The crosshair is the aim, and the crosshair's ray starts at the *eye* --
+/// well behind and above the fighter -- so "look at this spot" is not the angle
+/// from the fighter to it. Where the eye sits depends on the pitch, so this
+/// settles the two against each other; a couple of rounds is plenty, the rig
+/// being smooth.
+fn look_at(w: &World, mark: V3) -> (u16, i16) {
     let stood = w.players[0].pos;
     let turns = |v: f32| (v * 65536.0 / std::f32::consts::TAU) as i32;
     let yaw = turns(
@@ -52,13 +70,7 @@ fn tap_at(w: &mut World, button: u16, mark: V3, then: u32) {
         let rise = mark.y.sub(eye.y).to_f32_for_render();
         tilt = turns(rise.atan2(flat)) as i16;
     }
-    for _ in 0..2 {
-        w.advance([
-            Input::looking_at(button, yaw, tilt),
-            Input::aimed(0, LOOK_LEFT),
-        ]);
-    }
-    run(w, then, 0, 0);
+    (yaw, tilt)
 }
 
 fn elementalist() -> World {
@@ -371,10 +383,25 @@ fn a_stone_erupting_underneath_carries_a_fighter_up_with_it() {
 // The auto, aimed through a structure
 // ---------------------------------------------------------------------------
 
-/// Hold left click until Bolt becomes active, or fail the test trying.
+/// Put the crosshair on the middle of the stone and shoot it, holding the look
+/// steady until the auto comes out.
+///
+/// Aimed rather than thrown level, because the auto is a skillshot: it goes to
+/// the point the crosshair is on, and a level look from a camera above the
+/// shoulder is pointing over the top of a stone rather than at it.
 fn cast_bolt(w: &mut World) {
+    let stone = stone(w, 0);
+    let middle = V3::new(
+        stone.at.x,
+        stone.at.y.add(t::structure_height().div(Fx::from_int(2))),
+        stone.at.z,
+    );
+    let (yaw, tilt) = look_at(w, middle);
     for _ in 0..30 {
-        run(w, 1, Input::LEFT, 0);
+        w.advance([
+            Input::looking_at(Input::LEFT, yaw, tilt),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         if matches!(w.players[0].action, Action::Active { kind: 0, .. }) {
             return;
         }

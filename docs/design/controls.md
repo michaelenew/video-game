@@ -229,20 +229,31 @@ moves root you.
 **Settled 2026-09-12.** An area ability used to appear a fixed distance straight ahead, so
 the only way to place one anywhere was to walk there. It now lands where you are pointing.
 
-The rule is one sentence: **follow the line the player is looking along, out from the point
-abilities come out of, and stop at the first of the terrain or the edge of that ability's
-reach.** Everything follows from it.
+**The full model is [aiming.md](aiming.md)**, which is the specification and the only place
+the rule is written down — everything here is the short version.
 
-- **Aim at a spot inside your reach and it goes there.** Exactly there — this is the whole
-  point, and it is what makes an area ability a placement decision rather than a step-forward
-  decision.
+One raycast, **from the camera through the crosshair**, ignoring anything behind the
+character model. It meets terrain, other players, monsters, structures, and the ability's own
+max-range sphere, and the first thing it reaches is what you are pointing at. Then:
+
+- **Aim at a spot inside your reach and a grounded ability goes there.** Exactly there — this
+  is the whole point, and it is what makes an area ability a placement decision rather than a
+  step-forward decision.
+- **Aim at the ground with something that flies** and it goes to that spot, at the height it
+  left your hand: level over the place you are pointing rather than into the dirt.
+- **Aim at a wall, a person, or the creature with something that flies** and it goes exactly
+  there.
 - **Aim past your reach and it goes as far along that line as it can.** Range means
   something again.
-- **Aim at the ground to pick a direction.** The ray from your chest to a spot on the floor
-  is the ray that passes through anyone standing between you and it, so aiming at the floor
-  short of someone is how you hit them with a line skillshot.
 - **Aim at the sky with something that comes out of the ground** — a pillar of flame, a stone
   — and it arrives at full reach flat ahead. It has to come out of *somewhere*.
+
+**Corrected 2026-09-12, twice.** The rule above used to read "follow the line the player is
+looking along, out from the point abilities come out of". That is a ray from the *chest*
+along the *look angle*, which is parallel to the crosshair's ray and never converges with it:
+the reticle sits on one spot and the ability goes to another, by more the further away it is.
+It survived because grounded abilities were separately settled onto the floor, which hid it —
+until an ability that flies was built on the same sentence.
 
 **Why a reach sphere and not just the terrain.** Trace to the terrain alone and the target
 lurches: aim a hair over the lip of a platform and the hit jumps from two metres away to the

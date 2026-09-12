@@ -532,20 +532,21 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     let threshold = (hb.radius.to_f32_for_render()
         + sim::tuning::body_radius().to_f32_for_render())
         * gap_factor;
-    // Along the blade, away from the hand. A disc has no blade, so it keeps
-    // the old +X -- which is the direction player one is facing.
-    let axis = hb.to.sub(hb.from);
-    let out = if axis.flat_len().raw() > 0 {
-        sim::V3::new(axis.x, Fx::ZERO, axis.z).normalized()
-    } else {
-        sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
-    };
     let step = Fx::ratio((threshold * 1000.0) as i32, 1000);
-    w.players[1].pos = sim::V3::new(
-        hb.to.x.add(out.x.mul(step)),
-        w.players[1].pos.y,
-        hb.to.z.add(out.z.mul(step)),
-    );
+    // Out along the volume's own direction. For a bubble that is the body's
+    // facing; for anything with a length of its own it is that line, which may
+    // be pointing anywhere at all -- the Elementalist's beam ends wherever the
+    // crosshair was, and the Champion's weapons sweep through an arc.
+    let along = if hb.is_a_beam() {
+        hb.to.sub(hb.from).normalized()
+    } else {
+        w.players[0].facing
+    };
+    let spot = hb.to.add(along.scale(step));
+    // Placed by the middle of the body rather than by the feet, so "just past
+    // the end of the volume" means the same thing at any height.
+    let half = sim::tuning::body_height().div(Fx::from_int(2));
+    w.players[1].pos = sim::V3::new(spot.x, spot.y.sub(half).max(Fx::ZERO), spot.z);
     w.advance(held);
     w
 }

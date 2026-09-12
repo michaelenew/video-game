@@ -1,11 +1,11 @@
 //! The Elementalist's auto: a line out of her hand, and the fire it can light.
 //!
-//! Every other attack in the game is a bubble that exists for a few frames at
-//! a place the move table picked. Hers is not. It is a **beam**: a short
-//! wind-up, and then, on the frame the move comes out, an instantaneous ray
-//! from her chest along the line the crosshair is on, out to a short-to-middle
-//! distance. Nothing travels; there is no projectile to lead and nothing to
-//! dodge once it has been thrown. What it meets *first* is the whole move:
+//! Every other attack in the game is a bubble that exists for a few frames at a
+//! place the move table picked. Hers is not. It is the game's one **skillshot**
+//! in the sense [`crate::aim`] means it: a short wind-up, and then an instant
+//! line from her hand to *whatever the crosshair is on*. Nothing travels; there
+//! is nothing to lead and nothing to dodge once it is thrown. What it meets
+//! first is the whole move:
 //!
 //! - **a fighter** — small damage, and it takes whatever they were winding up.
 //!   No stagger at all: they get their frames straight back, minus the move
@@ -19,30 +19,23 @@
 //!   to middling damage and a little stagger. That is the poke, and it is the
 //!   only part of the auto that has a speed.
 //!
-//! ## Why this is a ray and not a circle
+//! ## Where the line comes from
 //!
-//! It used to be neither. The auto put a flat circle at a fixed distance in
-//! front of her and asked what was standing in it, which meant aiming up did
-//! nothing whatsoever: the shot went the same distance along the ground it
-//! always had, and the crosshair was decoration. Everything here is a real
-//! three-dimensional ray for that reason, against the same upright cylinders
-//! the aim resolver already traces -- see [`crate::math::ray_hits_cylinder`].
-//!
-//! ## What the beam does *not* stop on
-//!
-//! The arena. Walls and platforms are not traced against, so a shot aimed down
-//! at the floor passes through it and finds nothing, which is a whiff rather
-//! than a shot that stops short. Stones are the one piece of terrain the shot
-//! reads, because they are the thing the move is *for*.
+//! [`crate::aim::skillshot_path`], and **only** from there. This module does no
+//! aiming and no intersection arithmetic of its own: it asks for the path, asks
+//! what is on it, and decides what that means. Both of the bugs this replaced
+//! were the opposite -- a flat circle a fixed distance ahead, and then a ray
+//! from the chest along the look direction, which is parallel to the
+//! crosshair's ray and never converges with it.
 
 use crate::DT;
+use crate::aim::{self, Contact, Path, Scene, Targets};
 use crate::class::Class;
-use crate::effects::{self, Effect, MAX_EFFECTS};
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::monster::Monster;
 use crate::state::{Action, Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
-use crate::stones::{self, Field};
+use crate::stones;
 use crate::tuning as t;
 
 /// How many fire bolts can be in the air at once.
@@ -57,117 +50,29 @@ pub const MAX_BOLTS: usize = MAX_PLAYERS * 2;
 /// re-simulation would be the most expensive thing in the tick.
 pub type Flight = [Option<FireBolt>; MAX_BOLTS];
 
-// ---------------------------------------------------------------------------
-// The beam
-// ---------------------------------------------------------------------------
-
-/// The line a shot is fired along: where it starts, where it points, how far it
-/// runs and how thick it is.
+/// Is this the Elementalist's auto?
 ///
-/// A cylinder, in other words, and the renderer draws exactly this -- so what
-/// you see is the volume that was tested rather than a separate reconstruction
-/// of it that can drift.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Beam {
-    pub from: V3,
-    /// Unit vector, pitch included. This is the whole fix: `facing` is
-    /// flattened to the horizontal because a body only turns level, and a shot
-    /// sent along it can never leave the ground however the player aims.
-    pub dir: V3,
-    pub range: Fx,
-    pub radius: Fx,
+/// Two conditions rather than one, and the second is not redundant. Being a
+/// skillshot is what decides how the move is *aimed* and is a property of the
+/// move table, so another class could be given one tomorrow. What the shot
+/// *does* when it lands -- poke, kick a stone, light a pillar -- is this class's
+/// alone. A second skillshot wants its own answer here, not this one by
+/// default.
+pub fn throws_a_beam(p: &Player, kind: u8) -> bool {
+    crate::moves::get(p.class, kind).aim() == aim::Kind::Skillshot && p.class == Class::Elementalist
 }
 
-impl Beam {
-    /// A point some distance along the line.
-    pub fn at(&self, dist: Fx) -> V3 {
-        self.from.add(self.dir.scale(dist))
-    }
-
-    /// The far end, where the shot runs out of range.
-    pub fn end(&self) -> V3 {
-        self.at(self.range)
-    }
-}
-
-/// The first thing a beam meets, and how far along it sits.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Struck {
-    Fighter { index: usize, dist: Fx },
-    Stone { index: usize, dist: Fx },
-    Fire { dist: Fx },
-}
-
-impl Struck {
-    pub fn dist(self) -> Fx {
-        match self {
-            Struck::Fighter { dist, .. } | Struck::Stone { dist, .. } | Struck::Fire { dist } => {
-                dist
-            }
-        }
-    }
-}
-
-/// What the shot meets first, or `None` if it reaches its whole range without
-/// finding anything.
+/// What the beam can run into: bodies, stones, and fire.
 ///
-/// `hit_fighters` is false in a hunt, where the two of you are on the same
-/// side and the creature is handled by its own exchange.
-pub fn trace(
-    beam: Beam,
-    shooter: u8,
-    players: &[Player; MAX_PLAYERS],
-    hit_fighters: bool,
-    stones: &Field,
-    effects: &[Option<Effect>; MAX_EFFECTS],
-) -> Option<Struck> {
-    let mut best: Option<Struck> = None;
-    let mut keep = |found: Struck| {
-        if best.is_none_or(|b| found.dist().raw() < b.dist().raw()) {
-            best = Some(found);
-        }
-    };
-
-    if hit_fighters {
-        for (index, p) in players.iter().enumerate() {
-            if index as u8 == shooter || p.health <= 0 || p.action.invulnerable() {
-                continue;
-            }
-            let Some(dist) = body_along(beam, p) else {
-                continue;
-            };
-            keep(Struck::Fighter { index, dist });
-        }
-    }
-    if let Some((index, dist)) =
-        stones::first_along_shot(stones, beam.from, beam.dir, beam.range, beam.radius)
-    {
-        keep(Struck::Stone { index, dist });
-    }
-    if let Some(dist) =
-        effects::first_fire_pillar_along(effects, beam.from, beam.dir, beam.range, beam.radius)
-    {
-        keep(Struck::Fire { dist });
-    }
-    best
-}
-
-/// Where a beam meets a fighter's body, if it does.
-///
-/// The body is the upright cylinder every other test in the game already uses,
-/// swollen by the shot's own radius so that "do these two volumes touch" is one
-/// ray against one cylinder. Crouching lowers it, which is what lets a crouch
-/// duck a shot aimed over the head -- the first time height has decided a
-/// fighter-on-fighter hit, and the point of the move being a line.
-pub fn body_along(beam: Beam, victim: &Player) -> Option<Fx> {
-    let dist = crate::math::ray_hits_cylinder(
-        beam.from,
-        beam.dir,
-        victim.pos,
-        t::body_radius().add(beam.radius),
-        victim.hurt_height(),
-    )?;
-    (dist.raw() <= beam.range.raw()).then_some(dist)
+/// Fire is on the list here and *not* on the aiming ray's, which is the whole
+/// of the pillar interaction: you can see through flame, so it never steals the
+/// crosshair, but a shot passing through it comes out the far side changed.
+pub fn targets(versus: bool) -> Targets {
+    Targets::none()
+        .fighters(versus)
+        .stones()
+        .fire()
+        .quarry(!versus)
 }
 
 /// What the beam does to a fighter it catches.
@@ -177,9 +82,6 @@ pub fn body_along(beam: Beam, victim: &Player) -> Option<Fx> {
 /// wind-up they were partway through. A poke that stunned would be an opener,
 /// and this is not meant to be one -- it is meant to be the thing that makes
 /// committing to a long telegraph in front of an Elementalist a decision.
-///
-/// Returns whether it connected at all, so the caller can spend the move's one
-/// hit on it.
 pub fn poke(defender: &mut Player, from: V3, damage: i32) -> Poked {
     let (guarding, parried) = guard_against(defender, from, false);
     if parried {
@@ -221,25 +123,18 @@ pub enum Poked {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct FireBolt {
     pub pos: V3,
-    /// Unit vector. Straight, and unaffected by gravity -- it is a bolt, and a
-    /// bolt that dropped would stop going where the crosshair was pointing,
-    /// which is the whole complaint this rework answers.
+    /// Unit vector, taken from the beam that lit it -- so the bolt carries the
+    /// crosshair's own line onward rather than working out a direction of its
+    /// own. Straight, and unaffected by gravity.
     pub dir: V3,
     pub owner: u8,
     /// How far it has come, so the range is a distance rather than a clock.
     pub travelled: Fx,
 }
 
-impl FireBolt {
-    /// How far it moves in one frame.
-    fn step_length(&self) -> Fx {
-        t::fire_bolt_speed().mul(DT)
-    }
-}
-
 /// Light a bolt at `at`, flying along `dir`.
 ///
-/// The oldest in the air gives way when they are all busy, the same rule the
+/// The one furthest along gives way when they are all busy, the same rule the
 /// effects array uses: a cap has to decide what happens when it is reached, and
 /// silently dropping the new one would make the move stop working exactly when
 /// it was being used most.
@@ -267,58 +162,49 @@ pub fn light(flight: &mut Flight, owner: u8, at: V3, dir: V3) {
 ///
 /// Tested along the segment it covered this frame rather than at the point it
 /// arrived at, so a bolt cannot step over a body between two frames however
-/// fast it is retuned to go.
+/// fast it is retuned to go. The segment is a [`Path`] and the test is
+/// [`aim::first_along`], the same pair the beam itself uses.
 pub fn step(
     flight: &mut Flight,
     players: &mut [Player; MAX_PLAYERS],
-    hit_fighters: bool,
+    effects: &crate::effects::Effects,
+    versus: bool,
     quarry: &mut Option<Monster>,
 ) {
     let stones = stones::gather(players);
     for slot in flight.iter_mut() {
         let Some(mut shot) = *slot else { continue };
-        let step = shot.step_length();
-        let beam = Beam {
+        let step = t::fire_bolt_speed().mul(DT);
+        let leg = Path {
             from: shot.pos,
-            dir: shot.dir,
-            range: step,
-            radius: t::fire_bolt_radius(),
+            to: shot.pos.add(shot.dir.scale(step)),
+        };
+        // A structure stops it, the same way a structure stops everything
+        // else; a pillar does not, or a bolt could not leave the one that lit
+        // it. Its own fire is off the list for that reason.
+        let met = {
+            let seen = *players;
+            let scene = Scene {
+                stones: &stones,
+                players: &seen,
+                effects,
+                quarry: quarry.as_ref(),
+            };
+            aim::first_along(
+                leg,
+                t::fire_bolt_radius(),
+                shot.owner,
+                &scene,
+                Targets::none().fighters(versus).stones().quarry(!versus),
+            )
         };
 
-        // The creature, in a hunt. Checked first because it is the only thing
-        // in the arena bigger than the step the bolt takes in a frame.
-        if let Some(beast) = quarry.as_mut() {
-            if let Some((part, _)) = beast.part_struck_along(beam.from, beam.dir, step, beam.radius)
-            {
-                beast.take_hit(part, t::fire_bolt_damage());
-                *slot = None;
-                continue;
-            }
-        }
-
-        // A structure stops it, the same way a structure stops everything
-        // else. Checked before the fighters so a body sheltering behind one is
-        // actually sheltered.
-        let blocked = stones::first_along_shot(&stones, beam.from, beam.dir, step, beam.radius);
-        let caught = hit_fighters
-            .then(|| {
-                players
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, p)| {
-                        *i as u8 != shot.owner && p.health > 0 && !p.action.invulnerable()
-                    })
-                    .filter_map(|(i, p)| body_along(beam, p).map(|d| (i, d)))
-                    .min_by_key(|(_, d)| d.raw())
-            })
-            .flatten();
-
-        match (caught, blocked) {
-            (Some((i, hit_at)), stone) if stone.is_none_or(|(_, d)| hit_at.raw() <= d.raw()) => {
-                let victim = players[i];
+        match met {
+            Some(Contact::Fighter { index, .. }) => {
+                let victim = players[index];
                 let (guarding, parried) = guard_against(&victim, shot.pos, false);
                 apply_hit(
-                    &mut players[i],
+                    &mut players[index],
                     Hit {
                         damage: t::fire_bolt_damage(),
                         hitstun: t::fire_bolt_stagger(),
@@ -338,14 +224,21 @@ pub fn step(
                 *slot = None;
                 continue;
             }
-            (_, Some(_)) => {
+            Some(Contact::Quarry { part, .. }) => {
+                if let Some(beast) = quarry.as_mut() {
+                    beast.take_hit(part, t::fire_bolt_damage());
+                }
                 *slot = None;
                 continue;
             }
-            _ => {}
+            Some(Contact::Stone { .. }) => {
+                *slot = None;
+                continue;
+            }
+            Some(Contact::Fire { .. }) | None => {}
         }
 
-        shot.pos = beam.end();
+        shot.pos = leg.to;
         shot.travelled = shot.travelled.add(step);
         // Spent, or gone off the end of the world. A bolt aimed at the sky has
         // to expire on something, and its range is the honest answer.
@@ -353,9 +246,4 @@ pub fn step(
             && crate::arena::inside(shot.pos))
         .then_some(shot);
     }
-}
-
-/// Is this fighter the one class that throws a beam rather than a bubble?
-pub fn throws_a_beam(p: &Player, kind: u8) -> bool {
-    p.class == Class::Elementalist && kind == crate::state::SLOT_POKE
 }

@@ -35,6 +35,11 @@ use crate::tuning as t;
 
 pub const MAX_EFFECTS: usize = 8;
 
+/// Every effect standing in the world. Named so that the one bundle
+/// `crate::aim` traces against can be written down without repeating the
+/// array's shape at every call site.
+pub type Effects = [Option<Effect>; MAX_EFFECTS];
+
 /// Everything an effect can hit: both fighters, and the creature.
 ///
 /// The creature gets a slot of its own rather than being squeezed in beside the
@@ -434,50 +439,4 @@ impl Pillar {
 
 fn lerp(from: Fx, to: Fx, at: Fx) -> Fx {
     from.add(to.sub(from).mul(at))
-}
-
-/// The nearest fire pillar a shot meets, and how far along the shot it sits.
-///
-/// A real ray against the pillar's own two volumes -- the wide base and the
-/// column above it -- rather than a flat circle on the floor. That is what
-/// lets a shot aimed over the base still catch the column, and a shot aimed
-/// above both pass over the whole thing. `swell` is the shot's own radius,
-/// added to the pillar's so the test is "do these two volumes touch" rather
-/// than "does an infinitely thin line touch this one".
-///
-/// See `docs/design/kits/elementalist.md`.
-pub fn first_fire_pillar_along(
-    effects: &[Option<Effect>; MAX_EFFECTS],
-    from: V3,
-    dir: V3,
-    limit: Fx,
-    swell: Fx,
-) -> Option<Fx> {
-    let mut best: Option<Fx> = None;
-    for slot in effects.iter() {
-        let Some(e) = slot else { continue };
-        if e.kind != EffectKind::FirePillar {
-            continue;
-        }
-        let (base, column) = e.pillar_volumes();
-        for slab in [base, column] {
-            let foot = V3::new(e.pos.x, e.pos.y.add(slab.bottom), e.pos.z);
-            let Some(dist) = crate::math::ray_hits_cylinder(
-                from,
-                dir,
-                foot,
-                slab.radius.add(swell),
-                slab.top.sub(slab.bottom),
-            ) else {
-                continue;
-            };
-            if dist.raw() > limit.raw() {
-                continue;
-            }
-            if best.is_none_or(|d| dist.raw() < d.raw()) {
-                best = Some(dist);
-            }
-        }
-    }
-    best
 }
