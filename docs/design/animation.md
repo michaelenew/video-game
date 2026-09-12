@@ -158,8 +158,14 @@ cycle that skates and one that does not.
 | --- | --- |
 | `plant_l/r([x, y, z])` | put the **ankle** at a point in character space and solve the leg for it. Ground contact is `y = ANKLE_ON_GROUND`. |
 | `reach_l/r([x, y, z])` | the same for the wrist. |
-| `toe_l/r(degrees)` | level the foot with the floor, then tip it. A heel strike is `-12`, flat is `0`, pushing off the ball of the foot is `35`. |
-| `toe_floor_l/r()` | roll the foot onto its toe, whatever height the ankle is at. What the end of a stride wants. |
+| `toe_l/r(degrees)` | level the foot with the floor, then tip it. A heel strike is `-12`, flat is `0`. Tipping the toe *down* is capped at where the sole meets the floor, because that is all a foot can do without lifting its heel — which is the next line. |
+| `toe_floor_l/r()` | roll the foot onto its toe, whatever height the ankle is at. What the end of a stride wants, and the only way a heel comes off the ground without the toe going through it. Solved against the box's actual corners, because a foot pitched forty degrees puts its front-bottom corner several centimetres below where its centreline says. |
+
+`plant_*` and `reach_*` **clamp to the joint limits**. The closed form will
+happily return a hundred degrees of hip adduction for a foot placed behind and
+across the other leg; the limb reaches as far as the joint allows and stops,
+which is what a body does. An out-of-reach target is not an error, it is a
+strain.
 
 A planted foot given the same target on consecutive frames **does not move**,
 however much the hips do. That is what "no foot skate" means mechanically, and
@@ -217,6 +223,10 @@ Each part of the body gets a **lag** (how many frames it runs behind the keys)
 and a **ring** (how far it carries past on arrival; `1.0` never overshoots).
 Distal joints get proportionally more of both automatically, which is where
 follow-through comes from without anybody keying it.
+
+Legs taper far less than arms. A trailing hand is follow-through and the whole
+reason the taper exists; a trailing *foot* is a foot in the floor, because the
+ground is at a fixed height and does not wait for it.
 
 This is not API taste. The first version of this file expressed weight as a
 *low frequency*, which does not mean heavy — it means late. The Bulwark's slam
@@ -298,14 +308,48 @@ anything nobody has written yet:
 
 - keys in order and inside the clip
 - no authored key outside a joint's range
-- nothing jumps more than 32 degrees between frames
 - looping clips close on themselves
 - grounded clips keep their feet out of the floor, and mostly on it
 - **a planted foot does not slide** — measured across the flat phase of each
   stride, with the body's own travel added in
+- **no joint moves faster than a body can move it**, measured *relative to the
+  hips* (see below)
 - an attack has visibly changed by the time its startup is a third gone
 - the three phases of an attack look different from each other
 - an idle keeps both feet down
+
+`cargo test -p anim --test clips report_discontinuous_clips -- --ignored
+--nocapture` lists everything over the motion ceilings with the multiple it is
+over by, which is how a batch of new clips gets triaged in one go rather than
+one assertion at a time. `report_floor_clearance` does the same for the floor.
+
+### The motion ceiling, and why it is measured relative to the hips
+
+A body that is travelling moves every joint on it. A dive roll or a jump
+takeoff moves them all very fast, and that is the character going somewhere
+rather than the pose jumping — so the test subtracts the hips' own movement and
+looks at what is left.
+
+The ceilings depend on where the joint sits, because a hand is at the end of a
+two-metre lever and a hip is not:
+
+| | metres per frame | |
+| --- | --- | --- |
+| root, spine, chest | 0.15 | nine metres a second; a jump's extension is the fastest thing in the game and still under it |
+| head | 0.30 | half a metre up from the hips, and a hard tuck throws it |
+| shoulder, hip | 0.24 | rides the chest, plus the third of a metre of spine under it |
+| elbow, knee | 0.30 | |
+| hand, foot | 0.36 | twenty-one metres a second, about what a sprinter's foot does at the top of its swing |
+
+The opening frame of a one-shot is exempt: a dodge leaves at seventeen metres a
+second, a takeoff at eighteen, and the game never shows that frame raw because
+`Crossfade` eases into every one of them. Every frame of a **loop** is checked,
+because a loop is seen exactly as baked.
+
+An earlier version compared raw angle change instead. It forbade a forearm
+rolling through a sword cut — a large number in the twist channel and no motion
+at all on screen — and permitted a torso teleport, which is the failure that
+actually matters.
 
 ## The hub
 
@@ -324,6 +368,21 @@ No loader, no asset path, no runtime parsing, and a diff shows exactly what
 changed when an animation is retuned. `crates/view/src/baked.rs` is one line per
 frame for the same reason: a pose spread over twenty lines turns a two-frame
 change into forty lines of noise.
+
+## What is authored, and what is not
+
+Forty-four of fifty-six clips at the time of writing. `cargo run -p anim --bin
+bake` lists the rest by name every time it runs, so this section cannot go
+quietly stale: an unauthored clip bakes as a held rest pose and says so.
+
+A handful of the missing ones are **written but held back** — they are in their
+file with an `#[allow(dead_code)]` and a comment, left out of the `clips()`
+list. Each of those puts a hand or a shoulder past its motion ceiling at the
+contact frame, which is a timing problem rather than a posing one: the poses are
+right and two of them are too far apart for the frames between them. The fix is
+an intermediate key or one moved key, not a softer pose and not a relaxed
+ceiling. Relaxing a standard to admit a teleport is how a standard stops meaning
+anything.
 
 ## Not yet
 
