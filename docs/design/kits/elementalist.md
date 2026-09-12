@@ -31,9 +31,31 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 > quarter second, because they are earth. Structures stand in the arena and **have no clock** — the cap is the
 > only cost, exactly as written above. They briefly had a lifetime, which meant the fire
 > pillar (gated on having one out) silently stopped working ten seconds after you raised one.
+>
+> **They are solid, and they move.** A stone stops whoever walks into it, holds up whoever
+> stands on it, and is pushed by whatever arrives where it already is — up if the new stone
+> comes up underneath, sideways if it comes up beside. One raised under another pops it about
+> a metre clear; one raised under its *edge* flips it away instead of balancing it there. A
+> stone thrown into another hands over the speed it was carrying and both come out slower, so
+> a stone cannot be relayed the length of the arena through a row of them.
+>
+> **Standing on them is the class's floor.** Terrain you cannot get on top of is only cover. A
+> stone still climbing carries whoever is on it at the speed its top is climbing, which is
+> already worth about 2.9 m against a 2.2 m full hop — that is the seed of the mobility the
+> class is meant to get, not the finished thing. It waits on moves that launch stones properly,
+> and on Raise gaining a way to target your own feet.
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
   short distances with attacks, but cannot combo through them nearly as well. See
   [../elementalist.md](../elementalist.md).
+- **The rise is a telegraph with teeth.** The first half is the ground **churning** underfoot —
+  a slight slow on anyone standing over it, felt before it is seen, and cleared by getting off
+  the floor. The second half is the **eruption**: a little damage and a stagger, once per
+  fighter, because a stone erupts once. Never the Elementalist herself — she raises them under
+  her own feet on purpose.
+
+> **Implemented.** The two phases come off the rise *curve* rather than a frame count, so
+> reshaping the rise moves the telegraph with it. A warning that can drift out of step with
+> the thing it is warning about is worse than no warning.
 
 The two overlapping kit versions in the archive are reconciled here; where they disagreed
 this kit takes the `elementalist-skills.md` version, which is the later document.
@@ -110,7 +132,12 @@ their cover — the skill is placing them where they serve you more than the opp
 ## Open questions
 
 - Do structures block your own projectiles? Almost certainly yes, and that self-obstruction
-  is a real cost worth keeping.
+  is a real cost worth keeping. They block *bodies* now, the Elementalist's included.
+- Raise places a stone 2.5 m ahead, so "cast beneath yourself to launch into the air" above
+  still has no input. The lift exists; the targeting for it does not.
+- A stone lifted off centre rides up on the shoulder of the one below rather than sliding off
+  it. That is what the arena's own platforms do, and it may want revisiting once moves are
+  throwing stones around in earnest.
 - Structure durability and displacement force are the tuning knobs, per
   [../elementalist.md](../elementalist.md). Both need a prototype.
 - Three may be the wrong cap. It is the number that keeps the arena readable in third

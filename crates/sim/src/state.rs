@@ -21,6 +21,7 @@ use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
 use crate::moves;
+use crate::stones::{self, Field};
 use crate::tuning as t;
 
 pub const MAX_PLAYERS: usize = 2;
@@ -192,9 +193,17 @@ pub struct Player {
     pub mechanic: Mechanic,
     pub rounds_won: u8,
     pub crouching: bool,
-    /// Frames of slow left. A drain field sets it and it counts down, so the
-    /// slow has a tail and does not flicker on the field's boundary.
+    /// Frames of slow left. Whatever slowed you sets it and it counts down, so
+    /// the slow has a tail and does not flicker on the field's boundary.
     pub slowed: u16,
+    /// How much of your speed the slow leaves you, while it lasts.
+    ///
+    /// Carried on the fighter rather than read from the thing that applied it,
+    /// because there is more than one thing now: a drain field is a wall and a
+    /// churning stone is a warning, and they cannot share a number. **The
+    /// strongest wins** rather than compounding -- two slows that multiplied
+    /// would freeze you, and every new source would make the last one worse.
+    pub slow_mul: Fx,
     /// Was the mechanic button down last frame? Part of the snapshot, so the
     /// press edge survives rollback.
     pub mechanic_held: bool,
@@ -239,6 +248,15 @@ impl Player {
         }
     }
 
+    /// Take a slow. The strongest one on you is the one that counts, and any
+    /// of them refreshes the clock.
+    pub fn slow(&mut self, frames: u16, mul: Fx) {
+        if self.slowed == 0 || mul.raw() < self.slow_mul.raw() {
+            self.slow_mul = mul;
+        }
+        self.slowed = self.slowed.max(frames);
+    }
+
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
     pub fn hurt_height(&self) -> Fx {
         if self.crouching {
@@ -267,6 +285,7 @@ impl Default for Player {
             rounds_won: 0,
             crouching: false,
             slowed: 0,
+            slow_mul: Fx::ONE,
             mechanic_held: false,
             held_by: NOBODY,
         }
@@ -346,8 +365,14 @@ impl World {
             return;
         }
 
+        // Stones move before the fighters do, so what a fighter walks into --
+        // or stands on -- is where the stone is this frame rather than where it
+        // was last one.
+        stones::step(&mut self.players);
+        let field = stones::gather(&self.players);
+
         for (p, input) in self.players.iter_mut().zip(inputs) {
-            step_player(p, input);
+            step_player(p, input, &field);
         }
 
         // What a move does *as it comes out*, on its first active frame: the
@@ -429,6 +454,7 @@ impl World {
         }
 
         step_effects(&mut self.effects, &mut self.players);
+        stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
 
@@ -487,6 +513,7 @@ impl World {
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
+            h.write_i32(p.slow_mul.raw());
             h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
@@ -695,7 +722,7 @@ pub fn move_dir(aim: Fx, ax: i32, az: i32) -> V3 {
 /// A quarter turn in `Fx`, matching `Input::QUARTER_TURN`.
 const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
 
-fn step_player(p: &mut Player, input: Input) {
+fn step_player(p: &mut Player, input: Input, field: &Field) {
     // Facing comes from the mouse. Where you look is where you are pointed, and
     // where you are pointed is where your attacks go.
     //
@@ -969,7 +996,9 @@ fn step_player(p: &mut Player, input: Input) {
 
     p.pos = p.pos.add(p.vel.scale(DT));
 
-    let r = arena::resolve(p.pos, p.vel, p.grounded);
+    let was_grounded = p.grounded;
+    let r = arena::resolve(p.pos, p.vel, was_grounded);
+    let r = stones::resolve_body(field, r.pos, r.vel, r.grounded, was_grounded);
     p.pos = r.pos;
     p.vel = r.vel;
     p.grounded = r.grounded;
@@ -1126,10 +1155,7 @@ fn mechanic_action(p: &mut Player) {
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
         // is the resource.
         Mechanic::Structures(mut slots) => {
-            let raised = class::Structure {
-                at: p.pos.add(p.facing.scale(t::structure_ahead())),
-                age: 0,
-            };
+            let raised = class::Structure::raised(p.pos.add(p.facing.scale(t::structure_ahead())));
             if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
                 *free = Some(raised);
             } else {
@@ -1193,16 +1219,6 @@ fn step_mechanic(p: &mut Player) {
             if spot.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
                 p.mechanic = Mechanic::Shadow { at: None };
             }
-        }
-
-        // Structures count up while they finish rising. Saturating, because
-        // this is not a lifetime: once a structure is out of the ground the
-        // number stops mattering and the structure stays.
-        Mechanic::Structures(mut slots) => {
-            for slot in slots.iter_mut().flatten() {
-                slot.age = slot.age.saturating_add(1);
-            }
-            p.mechanic = Mechanic::Structures(slots);
         }
 
         // Past the deep threshold the forces burn you. Relief comes from
@@ -1278,7 +1294,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                 match slot {
                     Some(s) => {
                         hash_v3(h, &s.at);
+                        hash_v3(h, &s.vel);
                         h.write_u32(s.age as u32);
+                        h.write_u32(s.struck as u32);
                     }
                     None => h.write_u32(0),
                 }
@@ -1380,8 +1398,15 @@ fn step_effects(effects: &mut [Option<Effect>; MAX_EFFECTS], players: &mut [Play
         }
         apply_effect(*effect, players);
     }
+    // The slow's tail, for every source of one -- a drain field here, a stone
+    // churning under your feet in `stones`. It runs down before either of them
+    // gets to refresh it, so standing in one holds the slow at full strength and
+    // walking out of it lets the tail run.
     for p in players.iter_mut() {
         p.slowed = p.slowed.saturating_sub(1);
+        if p.slowed == 0 {
+            p.slow_mul = Fx::ONE;
+        }
     }
 }
 
@@ -1414,7 +1439,7 @@ fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
                     // Drain *and* slow: the field punishes standing in it and
                     // makes leaving it slow, which is what turns a damage
                     // puddle into a positioning tool.
-                    p.slowed = t::slow_frames();
+                    p.slow(t::slow_frames(), t::spike_slow());
                     if effect.ticks_now() {
                         p.health = (p.health - t::spike_drain()).max(0);
                     }
@@ -1486,5 +1511,5 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
     if p.slowed == 0 {
         return speed;
     }
-    speed.mul(t::spike_slow())
+    speed.mul(p.slow_mul)
 }

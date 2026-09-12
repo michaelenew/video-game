@@ -158,10 +158,10 @@ scalars! {
     SpikeLife,        "Effects",  "Black spike lifetime",   Frames,  10,        600;
     SpikeSlow,        "Effects",  "Black spike slow (x)",   Fixed,   0,         fx(1,1);
     SpikeDrain,       "Effects",  "Black spike drain",      Int,     0,         200;
-    StructureRadius,  "Effects",  "Structure radius",       Fixed,   fx(1,10),  fx(4,1);
+    StructureRadius,  "Stones",   "Stone radius",           Fixed,   fx(1,10),  fx(4,1);
     SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
     PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
-    StructureRise,    "Effects",  "Structure rise",         Frames,  1,         90;
+    StructureRise,    "Stones",   "Rise",                   Frames,  1,         90;
     ShieldSpeed,      "Bulwark",  "Shield speed",               Fixed,   fx(1,1),   fx(40,1);
     ShieldRange,      "Bulwark",  "Shield range",               Fixed,   fx(1,1),   fx(30,1);
     ShieldRadius,     "Bulwark",  "Shield radius",              Fixed,   fx(1,10),  fx(3,1);
@@ -173,8 +173,8 @@ scalars! {
     LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
     ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
     ShadowPlaceAhead, "Reaver",   "Shadow placed ahead",        Fixed,   0,         fx(10,1);
-    StructureAhead,   "Effects",  "Structure placed ahead",     Fixed,   0,         fx(10,1);
-    StructureHeight,  "Effects",  "Structure height",           Fixed,   fx(1,10),  fx(8,1);
+    StructureAhead,   "Stones",   "Raised ahead",               Fixed,   0,         fx(10,1);
+    StructureHeight,  "Stones",   "Stone height",               Fixed,   fx(1,10),  fx(8,1);
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
     StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
     SettleDecay,      "Match",    "Settle decay",               Fixed,   0,         fx(1,1);
@@ -190,10 +190,18 @@ scalars! {
     MeterMax,         "Dual mage","Meter range",                Int,     10,        400;
     MeterDeep,        "Dual mage","Meter deep threshold",       Int,     1,         400;
     MeterBurn,        "Dual mage","Burn at full depth",         Int,     0,         100;
-    RiseCurveX1,      "Effects",  "Structure rise, hold",       Fixed,   0,         fx(1,1);
-    RiseCurveY1,      "Effects",  "Structure rise, hold lift",  Fixed,   0,         fx(1,1);
-    RiseCurveX2,      "Effects",  "Structure rise, burst",      Fixed,   0,         fx(1,1);
-    RiseCurveY2,      "Effects",  "Structure rise, burst lift", Fixed,   0,         fx(1,1);
+    RiseCurveX1,      "Stones",   "Rise, hold",                 Fixed,   0,         fx(1,1);
+    RiseCurveY1,      "Stones",   "Rise, hold lift",            Fixed,   0,         fx(1,1);
+    RiseCurveX2,      "Stones",   "Rise, burst",                Fixed,   0,         fx(1,1);
+    RiseCurveY2,      "Stones",   "Rise, burst lift",           Fixed,   0,         fx(1,1);
+    StoneErupt,       "Stones",   "Eruption begins at",         Fixed,   0,         fx(1,1);
+    StoneChurnSlow,   "Stones",   "Churn slow (x)",             Fixed,   0,         fx(1,1);
+    StoneEruptDamage, "Stones",   "Eruption damage",            Int,     0,         300;
+    StoneEruptStagger,"Stones",   "Eruption stagger",           Frames,  0,         90;
+    StoneLift,        "Stones",   "Lift kept (x)",              Fixed,   0,         fx(2,1);
+    StoneKnockHanded, "Stones",   "Knock handed on (x)",        Fixed,   0,         fx(1,1);
+    StoneKnockDamp,   "Stones",   "Knock damping (x)",          Fixed,   0,         fx(1,1);
+    StoneFriction,    "Stones",   "Ground friction (x)",        Fixed,   0,         fx(1,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -334,7 +342,7 @@ impl MoveField {
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 80;
+pub const SCALAR_COUNT: usize = 88;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;

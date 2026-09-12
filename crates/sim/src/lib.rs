@@ -16,6 +16,7 @@ pub mod math;
 pub mod moves;
 pub mod oven;
 pub mod state;
+pub mod stones;
 pub mod tuned;
 pub mod tuning;
 

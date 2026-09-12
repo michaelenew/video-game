@@ -868,3 +868,54 @@ Bellator survives in the front matter of [champion.md](champion.md) — which al
 across the board**. One name being out of place is a reason to look at all six: four of them
 (Bulwark, Elementalist, Blood mage, Dual mage) are descriptions and two (Shadow Reaver,
 Champion) are titles, and nobody has decided which register the game is in.
+
+### 2026-09-12 — structures became stones
+**Changed** A structure stopped being a marker and became a **solid**. It carries a velocity,
+falls, shares the arena with the other stones and with both fighters, and costs something to
+stand on top of while it comes up. New module: `crates/sim/src/stones.rs`.
+
+**Why** Three things asked for at once, and they turn out to be one thing: stones that push
+each other, stones a fighter can stand on, and a stone that warns you before it hits you. The
+first two are the same rule — *whatever is in the way gets moved, along whichever axis is the
+shorter way out* — which is the least-penetration rule the arena already used for walls. A
+stone is a wall the Elementalist made, so it should behave like one, and `arena::resolve` grew
+a body size rather than acquiring a second copy of itself with different numbers in it. The
+last time a body size was written twice, attacks and walls disagreed about how wide a fighter
+was, and that is the bug the knob test exists to catch.
+
+**The eruption's own climb is what throws things.** The rise curve holds a stone barely out of
+the floor for half its rise and then bursts: over the last three frames the top climbs at about
+25 m/s, which is faster than anything else on the field moves. A stone or a fighter standing on
+that top keeps a fraction of it (`Lift kept`, 0.4) when the burst ends, so a stone raised
+underneath another pops it about a metre clear and a fighter standing over one is carried to
+about 2.9 m against a 2.2 m full hop. Nothing was invented to make that happen — it is the
+number the curve was already producing, handed on instead of discarded.
+
+**Off centre throws it sideways, and that is the only source of horizontal speed today.** A
+boulder coming up under the *edge* of another flips it clear rather than balancing it, in
+proportion to how far off centre it sits. Without that, "a stone knocked into another" would be
+a rule with nothing in the kit able to trigger it — the moves that launch stones properly are
+not built. With it, an off-centre raise throws one stone into the next and the knock is
+reachable in play.
+
+**Two slows now exist, so a slow had to become a strength rather than a flag.** `Player::slowed`
+was a frame count, and the multiplier lived on the drain field that set it. The churn under a
+rising stone is a *warning* — slight, 0.8 — and a drain field is a *wall* — 0.45. The strongest
+slow on you wins rather than the two compounding: two multiplied slows freeze you, and every
+new source would quietly make the last one worse.
+
+**Numbers.** Eruption begins at 0.15 of the rise, which lands on frame 7 of 14 — half telegraph,
+half burst, matching how the curve was described when it was added. Damage 40 and a 20-frame
+stagger: the stagger is the punishment, the damage is there so ignoring a telegraph is never
+free. It catches each fighter once, marked per victim on the stone, because a stone erupts once.
+
+**Verdict** open — played only through the test harness and a headless capture, which shows the
+lift and the throw doing what they should. The numbers most likely to be wrong are `Lift kept`
+and the eruption damage, and both are in the Oven under a new **Stones** family with the
+structure knobs that were scattered through *Effects*.
+
+**Still open.** Raise places a stone 2.5 m *ahead*, so "cast beneath yourself to launch into the
+air" from the kit still has no input — the lift works, the targeting for it does not exist.
+A stone lifted off centre rides up on the shoulder of the one below rather than sliding off it,
+which is the same thing the arena's platforms do and may want revisiting when stones are being
+thrown around in earnest.
