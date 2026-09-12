@@ -1,6 +1,7 @@
 ---
 status: proposed
 proposed: 2026-09-11
+built: 2026-09-12
 ---
 
 # Monsters — the Ridgeback
@@ -292,7 +293,84 @@ damage the player had no way to avoid. It is measured rather than argued about.
 observations, in the style of the rest of the feel harness: relationships, not
 values.
 
-## 6 · Deliberately not yet
+## 6 · Where it landed
+
+Numbers from `cargo run -p hunt --bin fight`, one representative hunt of the
+six the tests run, against a Champion. **The scripted hunter is a mediocre
+player** -- a fixed fifteen-frame reaction delay, one plan, no adaptation -- so
+these are the numbers for someone who has just learned the fight, not for
+someone who is good at it.
+
+```text
+  killed at frame 3272  --  54.5 s
+
+  reactable share          100%   answerable on sight, not from memory
+  reactable moves           4/5   of the move set, not of what it threw
+  moves per minute         33.0   the rhythm
+  openings per minute      34.1   how often you get a turn
+  mean opening              48f   long enough to punish?
+  shortest opening          27f   the worst case
+  idle share                14%   doing nothing at all
+  favourite move share      40%   one-note?
+  longest repeat              4   same move in a row
+
+  rides                      28   times anyone got on
+  mean ride                  80f   long enough to reach the ridge?
+  thrown off                 18   ended by a buck, not a jump
+  ridge hits                 51   damage on the weak point
+  topples                     3   poise broken
+
+  unanswerable hits           0   too fast to read, from outside its range
+```
+
+Across the seeds the tests use, the hunter wins about half. That is roughly
+where a first monster wants to sit: a bot this crude losing every time would
+mean nobody could learn against it, and winning every time would mean it is not
+a monster.
+
+### What the measuring found
+
+The report earned its keep before it ever produced a number worth reading. Four
+things it caught:
+
+**A fixed-point overflow that made the buck do nothing.** Accelerations run into
+the hundreds of metres per second squared and a *squared* 16.16 value saturates
+just past 181, so `V3::len` returned 181 for every buck in the game. Silently --
+saturation is not an error. Nothing ever threw anybody and nothing said why; the
+first sign was a ride share of 47% and `thrown off: 0`. `math::big_len` squares
+in `i64` instead.
+
+**A move set with one move in it.** The tail sweep was 70% of everything the
+creature did. Its `aim_span` was 1.1 over a cosine that only ranges from -1 to
+1, so it scored almost everywhere on the circle -- and the hunter's flanking
+strategy put it exactly where the sweep wanted. Narrowing the arc took coverage
+from four moves to six.
+
+**A climb that dead-ended.** The tail sits two thirds of a metre below the back
+and the barrel is solid, so a rider who got on at the tail could never reach the
+ridge. It showed up as a single ride lasting eighteen minutes. `step_up` makes
+the creature terrain rather than a set of ledges.
+
+**A twenty-minute hunt against a fighter nobody was driving.** The idle second
+player was a target the creature would happily charge across the arena at
+forever. Absent hunters are out of the hunt now, which is also what makes the
+solo numbers mean anything.
+
+### Still open
+
+- **The legs never break.** The mechanic works -- `turn_hurt` is real and a
+  broken foreleg is visibly darker -- but the scripted hunter fights from the
+  flank, where its attacks land on the barrel rather than on a leg. Whether a
+  person fights the front end enough to break one is a question for a person.
+- **Ride share runs high**, between a fifth and two thirds depending on the
+  seed. Whether that reads as "the climb is the fight" or as "the ground game is
+  optional" is the first thing to ask someone who has played it.
+- **Move coverage varies by seed.** Four to six of the six, because which moves
+  score depends on where the hunter chooses to stand. A creature whose move set
+  is a function of your strategy is arguably right; a move you can turn off by
+  standing somewhere is arguably not.
+
+## 7 · Deliberately not yet
 
 - **A second monster.** The machinery is built to be shared, but a second one
   is what proves it, and it should be built when there is something to learn

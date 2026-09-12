@@ -13,6 +13,7 @@ crates/sim    Deterministic simulation. Zero dependencies, no floating point.
 crates/net    Rollback session (GGRS) + the headless soak binary.
 crates/view   Presentation logic: interpolation, camera framing, posing. No engine.
 crates/game   Bevy app. Rendering only -- it owns no gameplay state.
+crates/hunt   A scripted player, and the report that measures the fight it plays.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
@@ -502,7 +503,7 @@ it is describing.
 
 ## The Oven: tuning while it runs
 
-**F7.** Every tuned number in the game — 307 of them — editable in a palette that floats over
+**F7.** Every tuned number in the game — 631 of them — editable in a palette that floats over
 the arena, with a **bake** button that writes them back to the repository and pushes.
 
 Feel work is a loop: change a number, play it, change it again. The loop is only as fast as
@@ -659,6 +660,52 @@ later is a new `Unit` and a new editor widget rather than a rewrite. Animation a
 other half the Oven is eventually meant to hold; today that lives in `crates/anim` and is baked
 offline.
 
+## The creature is a second frame of reference
+
+`sim::monster` adds one thing the simulation did not have: a **moving,
+rotating coordinate frame** that a fighter can stand in. Four decisions follow
+from rollback, and none of them are about monsters.
+
+**Parts are axis-aligned in the creature's own space, not the world's.** That
+is what makes colliding a player with a nine-metre animal the same routine as
+colliding them with the arena: transform the player into body space, resolve
+against boxes by least penetration, transform back. One collision rule, two
+frames of reference, and `arena.rs`'s own arithmetic reused rather than
+paralleled.
+
+**The pose is a pure function and therefore not in the snapshot.** Five scalars
+-- an extra yaw, a pitch, a bob, a tail swing, a head reach -- computed from
+`(action, frames into it)` every tick. This is the same rule the fighters' poses
+already follow, but here it is load-bearing rather than tidy: the pose is what
+riders are standing on, so if it drifted, riders would drift.
+
+**A rider's authoritative position is in body space; their world position is
+derived.** Unmounted it is the other way round. Keeping a world position and
+correcting it for the rotation each frame would work, and it would also
+accumulate the round trip's error into a slow crawl across the creature's back
+-- which the first version did, at about a millimetre a frame.
+
+**The control algorithm is handed a `Quarry`, not a `World`.** Positions,
+velocities, alive, aboard. No buttons, no action state, no frame counters. That
+is not an optimisation; it is the reason "the monster reads your inputs" cannot
+quietly become true later. Its randomness is a `u32` in the snapshot advanced
+only from inside the tick, so a rollback re-rolls the same choices, and GGRS
+SyncTest runs 1200 frames with the creature in the arena.
+
+### One overflow worth remembering
+
+`V3::len` squares its components, and a squared 16.16 value saturates just past
+181. That is ample for a position in a twenty-eight metre arena and useless for
+an **acceleration**: the buck runs into the hundreds of metres per second
+squared, so `len` returned 181 for every one of them, and no move in the game
+ever threw a rider. Saturation is not an error, so nothing said so. `math::big_len`
+squares in `i64` instead.
+
+The general lesson is about the choice `Fx` makes: saturating rather than
+wrapping "degrades into a stuck character instead of a teleport, which is far
+easier to notice". True for positions. For a value that is *compared against a
+threshold*, saturating degrades into a comparison that is quietly always false.
+
 ## Arena geometry
 
 `sim::arena` is a fixed array of axis-aligned boxes resolved along the axis of
@@ -700,7 +747,7 @@ Everything below builds and passes today.
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 163 tests |
+| Test suites | 223 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -712,7 +759,7 @@ Everything below builds and passes today.
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
-| **The Oven** | **F7** — 396 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
+| **The Oven** | **F7** — 631 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Dev mode | `./scripts/dev.sh` — wireframes, the Oven and the class pickers |
 | Round flow | Knockout, round wins, reset |
@@ -720,6 +767,9 @@ Everything below builds and passes today.
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
 | **All six classes** | **`game --p1 champion --p2 elementalist`**, or Tab to cycle |
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
+| **The Ridgeback** | **`game --hunt`, or `H`** — ten parts, six moves, per-part armour, poise and a topple |
+| Riding | Mount by landing, move relative to the surface, brace, and get bucked off by acceleration |
+| Fight report | `cargo run -p hunt --bin fight` — a scripted hunter, and the dozen numbers that say whether the fight is any good |
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
 | **Animation factory** | **`cargo run -p anim --bin bake`** — F2 toggles baked playback |
 | Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BAKED_ANIM=0` for procedural poses |

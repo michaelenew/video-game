@@ -78,6 +78,7 @@ few enough to balance and to read in third person.
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
+| [monsters.md](monsters.md) | The Ridgeback: the ride, the control algorithm, measuring the fight | Proposed, built |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
@@ -119,10 +120,11 @@ character progression.
 
 ## 6 · Implementation
 
-Rust, six crates, simulation as a pure function. See
+Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 152 tests cover
-determinism, combat relationships, camera and animation.
+exemplar moves, there is a monster to fight and climb, peer-to-peer rollback play
+works over real UDP, and 223 tests cover determinism, combat relationships, the
+ride, the camera and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
@@ -130,6 +132,7 @@ crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
 crates/anim   Offline animation factory. Never runs in the game.
+crates/hunt   A scripted hunter, and the report that judges the fight it plays.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
@@ -193,7 +196,10 @@ decision, and belongs in a test.
 
 ## 8 · Next
 
-1. **Play it against a person.** Everything else is downstream of that.
+1. **Play it against a person.** Everything else is downstream of that — and the
+   Ridgeback needs it twice over: whether the climb reads as the fight or as a way
+   to skip it is not a thing the harness can answer. See
+   [monsters.md](monsters.md) §6.
 2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
    whether the 4-frame parry window is findable by a human.
 3. Fill out the kits beyond three moves per class.

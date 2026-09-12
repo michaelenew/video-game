@@ -1017,6 +1017,64 @@ impl Monster {
         }
     }
 
+    /// Is a point inside the creature's solid parts, padded outward?
+    ///
+    /// For the camera. The rig's rule is that level geometry never gets between
+    /// the eye and the fighter and that the arm pulls *in* rather than swinging
+    /// away; a nine metre animal is level geometry for as long as it is
+    /// standing between the two.
+    pub fn contains(&self, world: V3, pad: Fx) -> bool {
+        let s = self.stance();
+        let body = s.to_body(world);
+        SHAPES.iter().enumerate().any(|(index, part)| {
+            if !part.solid {
+                return false;
+            }
+            let sh = shape(index);
+            let p = s.unarticulate(part.rides, body);
+            p.x.raw() > sh.min.x.sub(pad).raw()
+                && p.x.raw() < sh.max.x.add(pad).raw()
+                && p.y.raw() > sh.min.y.sub(pad).raw()
+                && p.y.raw() < sh.max.y.add(pad).raw()
+                && p.z.raw() > sh.min.z.sub(pad).raw()
+                && p.z.raw() < sh.max.z.add(pad).raw()
+        })
+    }
+
+    /// World height of the highest solid part beneath a point, or zero.
+    ///
+    /// The companion to `arena::ground_under`, and used for the same thing: the
+    /// camera treats a surface as something to rest on rather than something to
+    /// dodge, and the creature's back is a surface.
+    pub fn top_under(&self, world: V3) -> Fx {
+        let s = self.stance();
+        let body = s.to_body(world);
+        let mut best = Fx::ZERO;
+        for (index, part) in SHAPES.iter().enumerate() {
+            if !part.solid {
+                continue;
+            }
+            let sh = shape(index);
+            let p = s.unarticulate(part.rides, body);
+            let over = p.x.raw() > sh.min.x.raw()
+                && p.x.raw() < sh.max.x.raw()
+                && p.z.raw() > sh.min.z.raw()
+                && p.z.raw() < sh.max.z.raw();
+            if !over {
+                continue;
+            }
+            // Back into the world: the body's own `y` is not a height once it
+            // is pitched.
+            let top = s
+                .to_world(s.articulate(part.rides, V3::new(p.x, sh.max.y, p.z)))
+                .y;
+            if top.raw() > best.raw() {
+                best = top;
+            }
+        }
+        best
+    }
+
     /// The attack volume out this frame, in body space: an anchor, a radius and
     /// a height span, with the articulation already applied.
     ///

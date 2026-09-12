@@ -12,7 +12,7 @@ pub mod camera;
 pub mod interp;
 pub mod pose;
 
-pub use camera::{CameraRig, Framing};
+pub use camera::{CameraRig, Framing, Surroundings};
 pub use interp::{Frame, PlayerView, interpolate};
 pub use pose::{Part, PartTransform, Pose, pose_for};
 

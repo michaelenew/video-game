@@ -868,3 +868,42 @@ Bellator survives in the front matter of [champion.md](champion.md) — which al
 across the board**. One name being out of place is a reason to look at all six: four of them
 (Bulwark, Elementalist, Blood mage, Dual mage) are descriptions and two (Shadow Reaver,
 Champion) are titles, and nobody has decided which register the game is in.
+
+### 2026-09-12 — the Ridgeback, and measuring a monster fight
+**Changed** A creature in the arena, the machinery for standing on one, and 251 new knobs.
+`H` in game, `--hunt` on the command line. See [monsters.md](monsters.md).
+
+**Why** The frame has always said "coop against monsters" and there were none. The specific
+thing worth finding out is whether a fight against something you can *climb* works at all: the
+appeal is obvious and the failure modes are not.
+
+**Verdict** kept, and the interesting part is not the creature.
+
+**A fight report is worth more than a tuning session.** `cargo run -p hunt --bin fight` plays a
+scripted hunter and prints the dozen numbers a good fight needs -- how much of what the creature
+throws can be answered on sight, how long the openings are, how varied its moves are, how long
+anyone stays on its back, and how many hits landed that could not have been read. Every real
+problem in the first week came out of that output rather than out of playing it, including one
+that playing it could not have found: a fixed-point overflow that made *every buck in the game*
+do nothing, silently, because a squared 16.16 value saturates just past 181 and accelerations
+run into the hundreds. The symptom was a single number reading wrong — `thrown off: 0`.
+
+**The one measure that matters is "unanswerable hits".** A monster can score well on every other
+line and still feel cheap, and when it does it will be because of damage the player had no way
+to avoid. Defined as: an attack too fast to answer on sight *and* reaching further than its own
+volume extends, which is what happens when the animal walks into you during a startup shorter
+than human reaction. It is zero, and it is zero because the measure was written before the
+tuning rather than after.
+
+**Grip is one comparison and it replaced a whole category of authoring.** A rider comes off when
+the surface under their feet accelerates harder than they can hold on through. Nothing tags a
+move "this one throws people": the tail sweep throws whoever is on the tail and does nothing to
+someone on the shoulder, the middle of the spine is calm because it is near the axis the shake
+turns about, and none of that was written down anywhere. The tuning that followed was about
+where `grip` sits relative to the shake at the work spot, and that single number moved the fight
+from "the back is a safe room" to "the back is a wager" and back twice.
+
+**Open, and only play can answer them:** whether the ride reads as the fight or as a way to skip
+it; whether a person fights the front end enough to break a leg, which the scripted hunter never
+does; and whether the creature having a different move set depending on where you stand is the
+feature it looks like or a way to switch its moves off.

@@ -40,6 +40,7 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "Escape" => vec!["Esc"],
         "Tab" => vec!["Tab"],
         "KeyE" => vec!["E or middle click"],
+        "KeyH" => vec!["H"],
         "KeyJ" => vec!["J"],
         "KeyK" => vec!["K"],
         "KeyL" => vec!["L"],
