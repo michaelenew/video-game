@@ -64,6 +64,9 @@ impl Structure {
             vel: V3::ZERO,
             age: 0,
             struck: 0,
+            launched: false,
+            launch_from: V3::ZERO,
+            knock_struck: 0,
         }
     }
 
@@ -201,16 +204,79 @@ pub fn step(players: &mut [Player; MAX_PLAYERS]) {
         );
         stone.at = r.pos;
         stone.vel = r.vel;
-        // A stone that is not falling is resting on something, and a resting
-        // stone rubs to a halt. Without this a knocked stone slides until it
-        // finds a wall, which makes the knock a delivery rather than a shove.
-        if stone.vel.y.raw() == 0 {
+        if stone.launched {
+            // A kicked stone dies off on its own schedule, not the ambient
+            // friction every other stone rubs to a halt with -- see
+            // `launch_decel`.
+            launch_decel(stone);
+        } else if stone.vel.y.raw() == 0 {
+            // A stone that is not falling is resting on something, and a
+            // resting stone rubs to a halt. Without this a knocked stone
+            // slides until it finds a wall, which makes the knock a delivery
+            // rather than a shove.
             stone.vel.x = stone.vel.x.mul(t::stone_friction());
             stone.vel.z = stone.vel.z.mul(t::stone_friction());
         }
     }
 
+    // Whoever a fast stone swept past this frame, caught against positions
+    // from *before* anyone moves. `resolve_body` keeps a body from ever
+    // penetrating a solid, which is right for a wall and wrong for a check
+    // that reads "did this connect" -- it would otherwise push a standing
+    // fighter out to exactly the boundary every single frame, so a kicked
+    // stone could close the whole arena on someone and never once measure as
+    // closer than `reach`.
+    knock_touch(&mut field, players);
+
     scatter(players, &field);
+}
+
+/// A launched stone catching a fighter on its way past. See `step`'s comment
+/// on why this runs here rather than alongside the churn/eruption checks in
+/// `touch`.
+fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
+    let reach = t::body_radius().add(t::structure_radius());
+    for (index, slot) in field.iter_mut().enumerate() {
+        let Some(stone) = slot else { continue };
+        if !stone.launched {
+            continue;
+        }
+        let owner = owner_of(index);
+        for (i, p) in players.iter_mut().enumerate() {
+            if i as u8 == owner
+                || p.health <= 0
+                || p.action.invulnerable()
+                || stone.knock_struck & (1 << i) != 0
+            {
+                continue;
+            }
+            let apart = V3::new(p.pos.x.sub(stone.at.x), Fx::ZERO, p.pos.z.sub(stone.at.z));
+            if apart.flat_len().raw() >= reach.raw() {
+                continue;
+            }
+
+            // Speed *relative to the target* -- the same quantity `knock`
+            // hands between two stones -- so a stone barely still moving does
+            // not read as a hit just because it once was fast.
+            let dir = apart.normalized();
+            let closing = stone.vel.sub(p.vel).dot(dir);
+            if closing.raw() <= t::bolt_knock_min_speed().raw() {
+                continue;
+            }
+            stone.knock_struck |= 1 << i;
+            let dmg = closing
+                .mul(Fx::from_int(t::bolt_knock_damage_per_speed()))
+                .to_int()
+                .max(0);
+            p.health = (p.health - dmg).max(0);
+            p.action = Action::Stagger {
+                left: t::bolt_knock_stagger(),
+            };
+            let push = dir.scale(closing.mul(t::bolt_knock_push()));
+            p.vel.x = push.x;
+            p.vel.z = push.z;
+        }
+    }
 }
 
 /// Two stones sharing space. The shorter way out wins.
@@ -299,6 +365,99 @@ fn knock(a: &mut Structure, b: &mut Structure, away: V3, overlap: Fx) {
         stone.vel.x = stone.vel.x.mul(t::stone_knock_damp());
         stone.vel.z = stone.vel.z.mul(t::stone_knock_damp());
     }
+}
+
+// ---------------------------------------------------------------------------
+// The Elementalist's auto, aimed through a stone
+// ---------------------------------------------------------------------------
+//
+// See `docs/design/kits/elementalist.md`. Bolt reads what it is aimed
+// through: a structure in the way is not a fighter to poke, it is terrain to
+// kick -- fast at first, dying off over the back quarter of its travel, and
+// hurting whoever it is still moving fast enough to catch.
+
+/// Ease a kicked stone's speed down over the back of its travel, and let it
+/// go once that travel is spent.
+///
+/// A stone friction alone would not do: friction only fires once a stone is
+/// resting, and a kicked stone is briefly airless-fast and grounded at once.
+/// This is the shot's own schedule, keyed to *distance travelled* rather than
+/// frames, so retuning the range moves the whole shape with it the same way
+/// the structure rise curve does for the telegraph.
+fn launch_decel(stone: &mut Structure) {
+    let travelled = V3::new(
+        stone.at.x.sub(stone.launch_from.x),
+        Fx::ZERO,
+        stone.at.z.sub(stone.launch_from.z),
+    )
+    .flat_len();
+    let range = t::bolt_knock_range().max(Fx::ratio(1, 10));
+    let progress = travelled.div(range);
+    if progress.raw() >= Fx::ONE.raw() {
+        // Spent. An ordinary stone from here on, subject to ordinary friction.
+        stone.launched = false;
+        return;
+    }
+
+    let start = t::bolt_knock_decel_start();
+    if progress.raw() <= start.raw() {
+        return; // full speed until the last stretch
+    }
+    let span = Fx::ONE.sub(start).max(Fx::ratio(1, 100));
+    let eased = crate::math::smoothstep(progress.sub(start).div(span));
+    let retain = Fx::ONE.sub(eased);
+
+    // A ceiling, not a floor: collisions with other stones already cost this
+    // one speed, and the decel should never hand any of that back.
+    let allowed = t::bolt_knock_speed().mul(retain);
+    let speed = V3::new(stone.vel.x, Fx::ZERO, stone.vel.z).flat_len();
+    if speed.raw() > allowed.raw() && speed.raw() > 0 {
+        let scale = allowed.div(speed);
+        stone.vel.x = stone.vel.x.mul(scale);
+        stone.vel.z = stone.vel.z.mul(scale);
+    }
+}
+
+/// The nearest stone along a shot from `from` toward `to`, and how far along
+/// the shot it sits -- so the caller can tell it apart from whatever else the
+/// same shot might be aimed through.
+///
+/// Flat only, like every other hit test in the game: a stone barely out of
+/// the ground does not count, since there is nothing there yet to aim through.
+pub fn first_along_shot(field: &Field, from: V3, to: V3) -> Option<(usize, Fx)> {
+    let mut best: Option<(usize, Fx)> = None;
+    for (i, slot) in field.iter().enumerate() {
+        let Some(stone) = slot else { continue };
+        if stone.standing_height().raw() <= 0 {
+            continue;
+        }
+        let Some(dist) = crate::math::ray_hits_flat(from, to, stone.at, t::structure_radius())
+        else {
+            continue;
+        };
+        if best.map_or(true, |(_, d)| dist.raw() < d.raw()) {
+            best = Some((i, dist));
+        }
+    }
+    best
+}
+
+/// Kick the stone at `index` (as returned by `first_along_shot`) forward
+/// along `dir` at the shot's launch speed.
+///
+/// Resets its own strike record rather than touching `struck`: a stone that
+/// already erupted once is still fair game to hurt someone when it is kicked,
+/// because the kick is a different event.
+pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.launched = true;
+        stone.launch_from = stone.at;
+        stone.knock_struck = 0;
+        stone.vel.x = dir.x.mul(t::bolt_knock_speed());
+        stone.vel.z = dir.z.mul(t::bolt_knock_speed());
+    }
+    scatter(players, &field);
 }
 
 // ---------------------------------------------------------------------------

@@ -152,3 +152,30 @@ impl Pillar {
 fn lerp(from: Fx, to: Fx, at: Fx) -> Fx {
     from.add(to.sub(from).mul(at))
 }
+
+/// The nearest fire pillar a shot from `from` toward `to` is aimed through,
+/// and how far along the shot it sits.
+///
+/// Tested against the base -- the wider of a pillar's two volumes, and the
+/// one that decides whether you can walk into it at all. See
+/// `docs/design/kits/elementalist.md`.
+pub fn first_fire_pillar_along(
+    effects: &[Option<Effect>; MAX_EFFECTS],
+    from: V3,
+    to: V3,
+) -> Option<Fx> {
+    let mut best: Option<Fx> = None;
+    for slot in effects.iter() {
+        let Some(e) = slot else { continue };
+        if e.kind != EffectKind::FirePillar {
+            continue;
+        }
+        let Some(dist) = crate::math::ray_hits_flat(from, to, e.pos, e.field_radius()) else {
+            continue;
+        };
+        if best.map_or(true, |d| dist.raw() < d.raw()) {
+            best = Some(dist);
+        }
+    }
+    best
+}

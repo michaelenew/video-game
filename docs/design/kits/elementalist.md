@@ -70,7 +70,57 @@ Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 
-Ranged bolt, low damage, no structure interaction. A poke, not a win condition.
+Ranged bolt, low damage. A poke, not a win condition — except that it reads
+what it is aimed through, which is the terrain-author identity showing up in
+the one input every class throws constantly.
+
+> **Implemented** (`L`). What the shot is aimed through decides what it does,
+> checked once, on the frame it fires:
+>
+> - **Aimed through a structure first** — the structure blocks the shot the
+>   way it blocks anything else, and the shot becomes the structure's problem
+>   instead of the target's. It **kicks the structure forward**, fast, along
+>   her facing. The kick dies off over the back quarter of its travel rather
+>   than skidding to a stop on friction alone, so a stone caught early in its
+>   flight hits like a boulder and one caught late barely nudges anyone. What
+>   it deals to whoever it is still moving fast enough to catch — damage and a
+>   stagger — is a function of its speed **relative to the target**, the same
+>   quantity two colliding stones already hand each other. The bolt itself
+>   never reaches past the structure: aimed through one, it does not also poke
+>   whoever is standing beyond it.
+> - **Aimed through a fire pillar first** — a pillar is a hazard, not a wall,
+>   so it does not stop the shot the way a structure does. It **charges** it
+>   instead: the same bolt, empowered, still capable of reaching and hitting a
+>   fighter beyond the pillar.
+> - **Aimed through neither** — the plain poke, unchanged.
+>
+> Structure and pillar are compared by whichever the line reaches first, so a
+> structure sitting in front of a pillar screens it, and a pillar with nothing
+> in front of it still empowers a shot that goes on to land. The aim itself
+> reaches far further than the poke's own short hit-range against a fighter —
+> it has to, to find terrain that may be well past where the poke could ever
+> land — which is what makes this the class's first real point-blank-versus-
+> range distinction: what she is aimed through can matter long before what she
+> is aimed *at* is even in reach.
+>
+> This is the pass recorded as open in [../feel-log.md](../feel-log.md) under
+> "the autos are due a pass" — the Elementalist's autos interacting with
+> structures and persistent effects, and the hitscan-circle-at-reach test
+> starting to give way to something shaped like an actual shot. The melee
+> classes' equivalent pass, and the timing pass across all six, are still
+> outstanding.
+
+**Open, deliberately not built now.** `L` and `R` could both become autos with
+longer, independent animation frames — enough that a single click reads as
+committed on its own, but landing both in quick succession (left then right,
+or the reverse) chains into a stronger combo that a single button mashed
+twice cannot reach. The two windows would not overlap, so it is a skill
+input — a real read-and-execute — rather than a way to double the DPS of
+spamming one button. Right now `R` is Raise, the mechanic input, so this
+would also mean finding Raise a new home; it is a kit-wide control question,
+not an Elementalist one, and belongs with the rest of [the open control
+questions](../controls.md#open-since-the-dodge-moved) rather than being
+decided here.
 
 ## Abilities
 
@@ -131,8 +181,17 @@ their cover — the skill is placing them where they serve you more than the opp
 
 ## Open questions
 
-- Do structures block your own projectiles? Almost certainly yes, and that self-obstruction
-  is a real cost worth keeping. They block *bodies* now, the Elementalist's included.
+- **Settled for the auto, open for everything else.** Yes — the bolt is blocked by a
+  structure in its way, and that self-obstruction is a real cost worth keeping. Fissure,
+  Quake and Ice blast are unbuilt skillshots and have not been given the same answer;
+  Ice blast in particular *wants* to reach structures rather than be stopped by the
+  nearest one, so "blocks" cannot simply mean the same thing for every ability that
+  travels.
+- Should the aim-through check on the auto also read *black spike*, or anything else a
+  future element adds to `effects.rs`? Right now it only recognises fire pillars,
+  because fire is the only element that currently ships with the class. The dispatch is
+  written so a second kind is one more branch, not a rewrite — nothing has needed the
+  second branch yet.
 - Raise places a stone 2.5 m ahead, so "cast beneath yourself to launch into the air" above
   still has no input. The lift exists; the targeting for it does not.
 - A stone lifted off centre rides up on the shoulder of the one below rather than sliding off

@@ -683,6 +683,13 @@ Whether the hit test stays one circle, becomes a swept capsule from the fighter 
 point, or ranged autos become real projectiles is a decision for that pass. All three fix the
 table above; they differ in what else they make possible.
 
+> **Update, 2026-09-12: the Elementalist's third of this is done**, see the entry below —
+> "aimed through terrain" rather than "push structures around", which turned out to be the
+> more general shape and covers the effects interaction too. The hole-in-front-of-the-poke
+> table above is untouched: this pass changed what the shot does when something is in the
+> way, not the hit-test geometry against a fighter. The melee reshaping and the timing pass
+> are both still open.
+
 ### 2026-09-11 — the mechanic button fired every frame you held it
 **Reported** The Elementalist raises a structure once per frame while `E` is held; it should be
 one per press.
@@ -991,4 +998,65 @@ The same class of mistake is available anywhere a ratio is used where an integra
 speed a 1.8 m body is sprinting, and the "walk speed" knob is named for something the game
 does not have — the only walk in it is the guarding one at two. Nothing is wrong with a game
 where neutral is a sprint, but it should be on purpose.
+
+### 2026-09-12 — the Elementalist's auto reads what it is aimed through
+**Changed** Bolt (`L`) checks, once, on the frame it fires, what lies between the caster and
+her own short hit-range against a fighter — along a line much longer than that range, since
+the whole point is finding terrain the poke could never reach on its own. Aimed through a
+structure, the structure blocks it and gets kicked forward instead, fast at first and dying off
+over the back quarter of its travel; the bolt never reaches past it. Aimed through a fire
+pillar, the pillar does not block anything — it charges the same shot, which goes on to hit as
+normal, harder. Aimed through neither, the plain poke, unchanged. New module-level functions in
+`stones.rs` and `effects.rs` (`first_along_shot`, `first_fire_pillar_along`, `kick`), one shared
+geometry helper (`math::ray_hits_flat`), and two new transient flags on `Player`
+(`bolt_fire`, `bolt_blocked`) that `resolve_hit` reads and resets every time the move comes out,
+so a decision from one shot can never leak into the next.
+
+**Why** Recorded above as open: "the Elementalist's autos should push her structures around,
+and more generally interact with persistent effects." Pushing structures around and reading
+effects turned out to be the same mechanism once phrased as "what is this shot aimed through" —
+a single ray query answers both, ordered by whichever the line reaches first. Structures
+physically stop things in this game already; pillars are a hazard you choose to walk into, not
+a wall; making the bolt respect that distinction for free was the reason to build the query as a
+priority-ordered aim-through check rather than two independent special cases.
+
+**Verdict** open — implemented and covered by tests, not yet played. Three things worth
+recording regardless of how it lands:
+
+**A fast solid defeats the ordinary "don't let bodies overlap" rule, and the fix had to move
+upstream of it.** The obvious place for "did the kicked stone touch a fighter" was beside the
+existing churn/eruption checks in `stones::touch`, which runs *after* both fighters have moved
+for the frame. It never fired: `resolve_body` — the rule that keeps a fighter from ever
+penetrating a stone — had already pushed the stationary fighter back out to exactly `reach`
+every single frame, since a fast-approaching solid and a body-sized keep-out zone produce
+exactly that shove. The proximity check was reading a distance that the collision rule had
+already restored to the boundary before it ever got a turn. The fix is a second pass inside
+`stones::step`, which runs *before* anyone moves, comparing the stone's freshly-computed
+position against where the fighter stood at the *start* of the tick — catching the sweep before
+the push-out rule gets a chance to keep the two apart. The general lesson: a check phrased as
+"is A closer to B than X" is not safe from a rule elsewhere in the same tick whose entire job is
+making that never true.
+
+**Damage is speed relative to the target, reusing the number `knock` already computes between
+two stones**, rather than the stone's raw speed. A closing-speed formula is the one that already
+generalises to "the target is also moving" without a special case for it, and it is also why the
+new deceleration is a *ceiling* on the stone's own speed rather than a directly-assigned value:
+collisions with other stones on the way should be allowed to cost it further, never hand
+speed back.
+
+**The deceleration is keyed to distance travelled, not frames, mirroring the structure rise
+curve's own reasoning.** A stone parked against a wall partway through its travel should not
+keep coasting at full speed just because the clock is still running, and a straight frame-based
+timer would do exactly that. Progress is measured against how far it has actually gone.
+
+**Open questions**, none of them blocking a prototype:
+
+- Whether `bolt_aim_range` — set well beyond the poke's own hit-range on the theory that a
+  ranged shot's aim should reach further than its point-blank kill zone — is anywhere close to
+  the right number. It is the first knob in this pass nobody has played against yet.
+- Whether the kicked stone should still deal its ordinary "stone lands on you" cover-collision
+  cost on top of the knock damage, or whether the two should be mutually exclusive. Right now
+  both can happen in the same encounter and nothing has tried to break that.
+- Melee autos and the timing pass, unchanged from the note above — this closed one third of
+  "the autos are due a pass, as a set," not the set.
 
