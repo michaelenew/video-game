@@ -649,3 +649,44 @@ fn report_discontinuous_clips() {
         authored().len()
     );
 }
+
+/// Authored keys whose joints are sitting *on* a limit.
+///
+/// A clamped joint means the pose asked for something it did not get -- almost
+/// always an inverse-kinematics target further away than the limb is long. The
+/// pose still bakes and still looks like something, but it is not the pose that
+/// was written, and moving the target a few centimetres closer usually gets it
+/// back. Worth knowing about; not worth failing over, because a strained reach
+/// with a straight limb is a real thing a body does.
+#[test]
+#[ignore]
+fn report_clamped_joints() {
+    let skeleton = reference();
+    let mut counts: Vec<(String, usize, usize)> = Vec::new();
+    for r in recipes() {
+        let mut clamped = 0;
+        let mut total = 0;
+        for k in &r.keys {
+            for j in JOINTS {
+                for c in 0..3 {
+                    let v = k.pose.angles(j)[c];
+                    let (lo, hi) = skeleton.bone(j).limits.channel(c);
+                    total += 1;
+                    if (v - lo).abs() < 1e-4 || (v - hi).abs() < 1e-4 {
+                        clamped += 1;
+                    }
+                }
+            }
+        }
+        if clamped > 0 {
+            counts.push((r.clip.name().to_string(), clamped, total));
+        }
+    }
+    counts.sort_by_key(|(_, c, _)| std::cmp::Reverse(*c));
+    for (name, clamped, total) in counts {
+        println!(
+            "{name:<24} {clamped:>3} of {total:>4} channels on a limit  ({:.0}%)",
+            clamped as f32 / total as f32 * 100.0
+        );
+    }
+}
