@@ -252,14 +252,13 @@ impl Crossfade {
         input.travel = self.smooth_travel(input.travel, dt);
         let k = (dt * 60.0 * 0.2).clamp(0.0, 1.0);
         self.speed += (input.speed - self.speed) * k;
-        // The shape is decided by the real speed, so stopping still cuts to a
+        // The shape is decided by the real speed, so stopping still starts a
         // fade at the moment it happens; only the gait blend is eased.
-        let (_, shape) = pose_and_shape(input);
-        let blended = PoseInput {
+        let shape = shape_of(input);
+        let target = pose_for(PoseInput {
             speed: self.speed,
             ..input
-        };
-        let target = pose_for(blended);
+        });
         if shape != self.shape {
             // Fade from the picture that was actually on screen, not from the
             // old clip's idea of this frame: the point is that nothing jumps,
