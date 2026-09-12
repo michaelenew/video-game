@@ -388,40 +388,6 @@ impl Look {
     fn aim_two(&self) -> u16 {
         aim_from_radians(self.yaw_two)
     }
-
-    /// The look direction as the simulation sees it: quantised, so the camera
-    /// and the ability trace the same line to the bit.
-    fn as_input(&self) -> SimInput {
-        SimInput::looking_at(0, self.aim(), self.tilt())
-    }
-}
-
-/// How far out the aim looks for something to land on.
-///
-/// A drawing distance, not a game rule: nothing in the arena is further away
-/// than this. The *ability's* reach is a separate clamp the simulation applies
-/// when a move is thrown, which is the whole point of the split -- the reticle
-/// says where you are pointing, and the ability goes there if it can reach and
-/// as far along that line as it can if it cannot.
-const AIM_RANGE: i32 = 60;
-
-/// The point the player is aiming at: what sits at the centre of the screen.
-///
-/// The simulation's own trace rather than a second copy of it. `sim::aim` is
-/// what decides where a fire pillar lands, so a camera that pointed anywhere
-/// else would be a camera the crosshair lied about.
-fn aim_point(world: &World, me: usize, look: SimInput) -> [f32; 3] {
-    let from = sim::aim::origin(world.players[me].pos);
-    let dir = look.look_dir();
-    let far = sim::Fx::from_int(AIM_RANGE);
-    let stones = sim::stones::gather(&world.players);
-    let reach = sim::aim::trace(from, dir, far, &stones).unwrap_or(far);
-    let at = from.add(dir.scale(reach));
-    [
-        at.x.to_f32_for_render(),
-        at.y.to_f32_for_render(),
-        at.z.to_f32_for_render(),
-    ]
 }
 
 #[derive(Resource)]
@@ -674,9 +640,9 @@ fn fade_own_body(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let me = sim.local_player();
-    // Gone a little before the climb finishes, so the last of the body is not
-    // clipping through the near plane while it is still faintly drawn.
-    let alpha = (1.0 - inside.0 * 1.4).clamp(0.0, 1.0);
+    // The rig has already worked out how much of the body to take away and
+    // why -- coming up on the crosshair, or the eye simply being close to it.
+    let alpha = (1.0 - inside.0).clamp(0.0, 1.0);
     for (part, material) in parts.iter() {
         if part.owner != me {
             continue;
@@ -1320,8 +1286,6 @@ fn mouse_look(
         (KeyCode::NumpadAdd, settings::Knob::Sensitivity, true),
         (KeyCode::F3, settings::Knob::Fov, false),
         (KeyCode::F4, settings::Knob::Fov, true),
-        (KeyCode::F5, settings::Knob::Distance, false),
-        (KeyCode::F6, settings::Knob::Distance, true),
     ] {
         if keys.just_pressed(key) {
             settings.nudge(knob, up);
@@ -1401,7 +1365,6 @@ fn drive_camera(
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
     if settings.is_changed() {
-        rig.0.set_distance(settings.distance);
         rig.0.set_fov(settings.fov_radians());
     }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
@@ -1413,13 +1376,12 @@ fn drive_camera(
         frame.players[me].pos,
         yaw,
         look.pitch,
-        aim_point(&sim.cur, me, look.as_input()),
         view::Surroundings {
             beast: sim.cur.monster.as_ref(),
             aboard: sim.cur.players[me].aboard(),
         },
     );
-    inside.0 = framing.first_person;
+    inside.0 = framing.hidden;
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);

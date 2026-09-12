@@ -108,59 +108,46 @@ up the screen.
 
 ### The camera is prescribed, zone by zone — settled 2026-09-12
 
-Where the eye goes is not a set of offsets any more. It is stated as **where the fighter should
-appear on screen** at each vertical aim angle, and the eye is whatever satisfies that. Angles
-below are degrees, negative below the horizon; screen positions are percentages up from the
-bottom, so the crosshair is at 50 by definition.
+**The camera is always on the surface of a sphere, looking inward past a tilt, and the mouse
+walks it around that sphere at its own rate.** What the zones change is the sphere: where it is
+centred, how big it is, and how far the view is tilted off the line to its centre. Nothing is
+solved and nothing can saturate — the eye's place on the sphere is a subtraction.
 
-| Zone | What it is for | What it asks for |
-| --- | --- | --- |
-| **−90 to −85** | Not allowed | At the pole the fighter's vertical plane stops being defined and the camera has nothing to be behind |
-| **−85 to −45** | The floor zone | The feet walk up the screen from 5% to 50%, so at the bottom the camera is looking at the fighter's own feet — the shot that puts a stone underneath you |
-| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, low in the frame, the eye working around the sphere to hold them there |
-| **−10 to 0** | The turn | Attention moves from the feet to the head, until at level the crosshair rides just above the head. With no ground under the aim to read it against, the fighter's own head is what a mid-range skillshot keys off |
-| **0 to +10** | The handover | The eye walks into the fighter and the body fades out |
-| **+10 to +85** | First person | The eye *is* the point abilities come out of, so the crosshair's line in space and the ability's line are the same line |
-| **+85 to +90** | Not allowed | As below |
+The trick that makes it work is that **the sphere is centred on whatever is being framed**. The
+line from the eye to that centre is the radius the eye is standing on, whichever way round it
+has walked, so turning the view up off that line by a fixed angle puts the centre at a fixed
+place on the screen — always, for free. A tilt *is* a screen position, written as an angle.
 
-**The shape is the design; the numbers are knobs.** Every boundary angle and every percentage
-is in the Oven under **Camera**, and those are the only camera values in it — see
-[architecture.md](architecture.md) for why they are the one family kept out of the desync
-checksum.
+| Zone | Sphere centre | Radius | Tilt |
+| --- | --- | --- | --- |
+| **−90 to −85** | Not allowed — at the pole the fighter's vertical plane stops being defined | | |
+| **−85 to −45** | The feet | Large | From the feet on the crosshair at the bottom, up to 5% |
+| **−45 to −10** | The feet | Large | Fixed: the feet 5% up the screen |
+| **−10 to 0** | Slides from the feet to the **head** | Large | To the head riding 5% under the crosshair |
+| **0 to +10** | The head | Contracts to nearly nothing | To nothing: looking straight down the sight line |
+| **+10 to +85** | The head | Small, fixed | None — the eye is the fighter's own |
+| **+85 to +90** | Not allowed, as below | | |
 
-**The eye rides a fixed sphere.** Below the horizon there is one place the camera can be:
-somewhere on a sphere of the tuned radius, centred on the fighter's feet. Aiming around moves
-it *along* that sphere and never off it, so the camera never dollies in and out while the
-player is only steering. The radius is the headline knob, and the player's own distance
-setting scales it.
+Because the eye is placed by the same two angles the aim is made of, **screen centre is the look
+direction** and the reticle sits exactly in the middle of the screen by construction rather than
+by correction. One degree of mouse is one degree around the sphere, in every zone.
 
-**Solved in closed form, once a frame.** One unknown — how far around the sphere the eye has
-climbed — and one condition, that the anchor point on the fighter lands at its mark on the
-screen. Writing the eye as `R(cos e, sin e)` turns that into `A·cos(e) + B·sin(e) = C`, which
-collapses to a single cosine and an `acos`. No search, nothing baked, and exact rather than
-nearly.
+**The crosshair is the aim.** The ray that decides where an ability goes starts at the eye and
+runs through the middle of the screen, and it stops at the first of three things: the floor, an
+object that is not the floor, or the edge of that ability's own range. A grounded ability lands
+exactly there. Anything not grounded targets the middle of a fighter *standing* there when the
+ray met the floor, and the point itself when it met anything else. Then the ability is sent along
+the line from where it is cast to that point — so what you pointed at is what you get, and the
+travel is the fighter's business rather than the camera's.
 
-**The eye moves in both zones; the floor zone adds the pan.** Through the neutral zone the
-fighter holds still on screen and the *eye* does the work, climbing around the sphere from about
-41 degrees of elevation at −10 to overhead — because the crosshair's mark is sweeping in toward
-the fighter, and holding the two apart on screen takes more and more leverage. Past −45 the eye
-keeps working around the sphere **and** the view pans: the eye comes back down off the top,
-ending lying along the fighter's own feet at −85, while the camera — pointed at a mark that is
-itself sweeping onto those feet — brings them up to the middle of the frame.
+**The fighter's own body gets out of the way, for two separate reasons.** It goes translucent as
+it comes up on the crosshair, because a body the player is aiming past is worse than no body at
+all. And it goes fully away when the eye is simply *close* to it — measured as a distance, not
+as a zone, so that an arm pulled in by a wall behind the fighter takes the body away exactly the
+same as walking into the head on purpose does.
 
-**Saturation is the thing to watch for when tuning.** From a sphere of radius `R` the widest
-*any* eye can see the fighter and the mark is `atan(mark / R)`, and the mark walks in from about
-7 m ahead at −10 to 1.2 m at −45. Ask for a wider gap than that and no camera can give it: the
-solve parks the eye against the top of the sphere, where it stops answering the aim altogether.
-That is much worse than a framing that is slightly off, and it does not show up as a framing
-error — a parked eye that happens to be in the right place still frames correctly.
-
-So `Sphere radius (m)` trades two things against each other. Smaller keeps the framing reachable
-further down the range; larger draws the fighter smaller. At 4 m the feet hold at 5% down to
-about −28 and the fighter is roughly the quarter-screen size the zone table asks for. At 2.5 m
-the whole neutral zone is reachable but a 1.8 m body fills three-quarters of the frame. Past
-where the framing runs out, the floor zone's own walk takes over, so the camera keeps moving
-either way.
+**The shape is the design; the numbers are knobs.** Every boundary angle, both radii and every
+percentage is in the Oven under **Camera**.
 
 Two consequences are worth stating because they are design, not implementation:
 

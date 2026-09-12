@@ -28,6 +28,39 @@ fn tap(w: &mut World, button: u16, then: u32) {
     run(w, then, 0, 0);
 }
 
+/// The same, aimed at a point in the world rather than straight ahead.
+///
+/// Needed because the crosshair is the aim now: the ray starts at the eye,
+/// which is well behind and above the fighter, so "level" no longer means
+/// "along the ground" and a stone already standing there is something the ray
+/// goes *over* rather than into. Where the eye ends up depends on the pitch, so
+/// this settles the pitch against it -- a couple of rounds is plenty, the rig
+/// being smooth.
+fn tap_at(w: &mut World, button: u16, mark: V3, then: u32) {
+    let stood = w.players[0].pos;
+    let turns = |v: f32| (v * 65536.0 / std::f32::consts::TAU) as i32;
+    let yaw = turns(
+        mark.z
+            .sub(stood.z)
+            .to_f32_for_render()
+            .atan2(mark.x.sub(stood.x).to_f32_for_render()),
+    ) as u16;
+    let mut tilt = 0i16;
+    for _ in 0..6 {
+        let eye = sim::camera::eye(stood, Input::looking_at(0, yaw, tilt));
+        let flat = mark.sub(eye).flat_len().to_f32_for_render();
+        let rise = mark.y.sub(eye.y).to_f32_for_render();
+        tilt = turns(rise.atan2(flat)) as i16;
+    }
+    for _ in 0..2 {
+        w.advance([
+            Input::looking_at(button, yaw, tilt),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    run(w, then, 0, 0);
+}
+
 fn elementalist() -> World {
     World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark])
 }
@@ -103,7 +136,16 @@ fn a_stone_raised_underneath_another_throws_it_into_the_air() {
         "the first stone did not settle on the floor"
     );
 
-    tap(&mut w, E, 0); // a second, at the same spot, under it
+    // A second, aimed at the foot of the first: the ray stops on its near
+    // face, which settles onto the floor just short of its middle. That is as
+    // close underneath as a player can put one now that the crosshair is the
+    // aim -- pointing at where its base *would* be means pointing at the stone
+    // itself, and a stone you point at is a surface you land on top of.
+    let foot = {
+        let first = stone(&w, 0).at;
+        V3::new(first.x, Fx::ratio(1, 10), first.z)
+    };
+    tap_at(&mut w, E, foot, 0);
     let mut highest = Fx::ZERO;
     for _ in 0..90 {
         run(&mut w, 1, 0, 0);
@@ -127,9 +169,11 @@ fn a_stone_raised_off_centre_throws_the_other_one_clear() {
     tap(&mut w, E, 30);
     let from = stone(&w, 0).at;
 
-    // Step aside, so the next one comes up under the shoulder of the first.
+    // Step aside, so the next one comes up under the shoulder of the first --
+    // aimed at its foot from where we now stand, which is what a player does.
     run(&mut w, 6, Input::D, 0);
-    tap(&mut w, E, 120);
+    let foot = V3::new(from.x, Fx::ratio(1, 10), from.z);
+    tap_at(&mut w, E, foot, 120);
 
     let thrown = stone(&w, 0).at.sub(from).flat_len();
     assert!(

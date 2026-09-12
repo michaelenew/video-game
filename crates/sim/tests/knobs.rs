@@ -37,6 +37,17 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "V3::new(at.x, at.y.add(t::body_height().div(Fx::from_int(2))), at.z)",
+        "Halving a body, not choosing a height. The target is the middle of a \
+         fighter standing there, and the middle of anything is half of it.",
+    ),
+    (
+        "let tan_tilt = Fx::ONE.sub(ball.at.mul(Fx::from_int(2))).mul(tan_half)",
+        "Turning a screen fraction into a tangent. The 2 is that a fraction is \
+         measured from the bottom of the screen while the angle is measured from \
+         its middle, which is half of it -- geometry, not a number to tune.",
+    ),
+    (
         "const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10)",
         "A division guard, not a stride. Far below any value the stride constants \
          can produce; it exists so the phase cannot be divided by nearly zero.",

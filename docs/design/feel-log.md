@@ -1322,3 +1322,88 @@ and at ground a few metres ahead.
 the sphere across the reachable neutral zone, and at least half a radius of travel across the
 floor zone while the feet climb a fifth of the screen. The pinned tuning fails the second with
 "the eye only travelled 0.00 m", which is exactly the report.
+
+### 2026-09-12 — the camera is an orbit with a tilt, and nothing is solved
+
+**Changed** the whole rig. The eye no longer satisfies a condition; it is placed by a
+subtraction. Each zone names a sphere — centre, radius, tilt — and the eye sits at
+`tilt - pitch` around it. Sphere 7 m below the horizon, contracting to 0.2 m at the head above
+it. The camera points down the look axis rather than at the aim point.
+
+**Why** three attempts at solving the eye from the framing all ended the same way: the condition
+becomes unreachable partway down the range, the solve saturates, and the eye parks against a
+limit where it stops answering the mouse. Reported twice as "the camera stops moving", and both
+times the fix I reached for was a number.
+
+**The thing I had backwards.** The sphere is centred on the thing being framed, so the line from
+the eye to that centre *is* the radius the eye is standing on — whichever way round the sphere
+it has walked. Turn the view up off that line by a fixed angle and the centre lands at a fixed
+place on the screen, at every eye position, for free. **The framing is a consequence of the tilt,
+not a condition on the position.** Which leaves the position free to be the mouse, directly, at
+one degree of orbit per degree of mouse, with nothing that can saturate. Every previous version
+of this file describing a solve was solving a problem that did not need to exist.
+
+**What it costs, and it is not small.** The camera no longer points at the ability's landing
+point — it points down the look axis, which is what the prescription asks for. So the crosshair
+and the spot a grounded ability lands on are no longer the same place:
+
+| Aim | Crosshair marks | Ability lands | Apart |
+| --- | --- | --- | --- |
+| −10 | 18.0 m ahead | 7.1 m | 10.9 m |
+| −27 | 6.9 m ahead | 2.5 m | 4.4 m |
+| −45 | 4.4 m ahead | 1.2 m | 3.2 m |
+| −70 | 1.3 m ahead | 0.5 m | 0.8 m |
+
+The two rays are parallel — same direction, different origin — so the miss is the eye's offset
+from the chest, and it only closes where the sphere has contracted onto the head. Closing it
+properly means the aim tracing from the *eye* rather than from the chest, which makes the
+camera's geometry simulation state: it would go into the checksum, peers would have to agree on
+it, and the personal distance setting could not scale it any more. That is an architecture
+decision rather than a tuning one, so it is written down here rather than taken.
+
+**Verdict** open, and deliberately not merged on its own. The camera is exactly the prescription
+and measures out at every waypoint; the aiming correspondence is the open question.
+
+### 2026-09-12 — the crosshair is the aim, so the eye is in the simulation
+
+**Changed** the aiming ray starts at the eye instead of at the fighter's chest, and
+`sim::camera` places the eye, so the camera's geometry is simulation state. Camera knobs are in
+`oven::hash` now. Camera distance stopped being a personal setting.
+
+**Why** the previous entry shipped a camera that framed exactly as prescribed and left the
+reticle sitting four metres from where a grounded ability actually landed. Both rays had the
+right *direction* and different origins, so they never converged — parallel lines do not meet.
+The targeting rule had already been written down and settles it: work out what the player is
+pointing at, then draw the line from the ability's origin to it.
+
+**Measured, aimed at open ground, reach 20 m:**
+
+| Aim | Crosshair | Lands | Apart |
+| --- | --- | --- | --- |
+| −10 | 18.0 m | 14.0 m | 4.0 m — the range sphere, correctly |
+| −20 | 9.14 m | 9.14 m | **0.00 m** |
+| −27 | 6.88 m | 6.88 m | **0.00 m** |
+| −45 | 4.42 m | 4.42 m | **0.00 m** |
+| −85 | 0.00 m | 0.00 m | **0.00 m** |
+
+Exact wherever the crosshair is inside the ability's reach, and clamped to the reach beyond it,
+which is the rule as written.
+
+**What it cost, which is not nothing.** Camera numbers decide where abilities land, so they are
+gameplay numbers: hashed, shared, and a peer tuned differently now desyncs loudly instead of
+quietly placing things somewhere else. The personal distance setting had to go with it — it
+scaled the sphere, the sphere is the eye, and the eye is the aim. Field of view survived only
+because the *framing* is measured against a tuned field of view of its own, so a player's choice
+changes what is projected and never where the eye is.
+
+**Two things moved that were not asked for, and are worth knowing.** Aiming down brings the
+reticle in more slowly than it used to, because the ray starts seven metres behind and above the
+fighter rather than at their chest: the reticle reaches their own feet at about −85 rather than
+−45. And **a stone can no longer be raised directly underneath another** — pointing at where its
+base would be means pointing at the stone, and a stone you point at is a surface you land on
+top of. Aimed at its foot the new one comes up against its near face and still shoulders it
+aside, which is the interaction the stone physics was built for; it is the dead-centre lift that
+is now out of reach.
+
+**Verdict** open. The contract the whole aiming pass exists for is exact again, measured rather
+than argued, and the camera keeps the orbit from the previous entry unchanged.
