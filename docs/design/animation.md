@@ -369,20 +369,26 @@ changed when an animation is retuned. `crates/view/src/baked.rs` is one line per
 frame for the same reason: a pose spread over twenty lines turns a two-frame
 change into forty lines of noise.
 
-## What is authored, and what is not
+## What is authored
 
-Forty-four of fifty-six clips at the time of writing. `cargo run -p anim --bin
-bake` lists the rest by name every time it runs, so this section cannot go
-quietly stale: an unauthored clip bakes as a held rest pose and says so.
+All fifty-six. `cargo run -p anim --bin bake` lists any clip without a recipe
+every time it runs, and a test fails if there is one, so this cannot go quietly
+stale: an unauthored clip bakes as a held rest pose, which is a character
+standing still in the middle of a match.
 
-A handful of the missing ones are **written but held back** — they are in their
-file with an `#[allow(dead_code)]` and a comment, left out of the `clips()`
-list. Each of those puts a hand or a shoulder past its motion ceiling at the
-contact frame, which is a timing problem rather than a posing one: the poses are
-right and two of them are too far apart for the frames between them. The fix is
-an intermediate key or one moved key, not a softer pose and not a relaxed
-ceiling. Relaxing a standard to admit a teleport is how a standard stops meaning
-anything.
+Two diagnostics are worth knowing about when a clip is not behaving:
+
+- `report_discontinuous_clips` lists everything over the motion ceilings with
+  the multiple it is over by. A clip that trips it has a **timing** problem, not
+  a posing one — two good poses too far apart for the frames between them. The
+  fix is an intermediate key, or one key moved to give the contact frame its
+  approach, or a different ease. It is not a softer pose and it is not a relaxed
+  ceiling.
+- `report_clamped_joints` lists poses asking for more than a joint has, which is
+  almost always an inverse-kinematics target further away than the limb is long.
+  A few per cent is ordinary — a strained reach with a straight limb is a real
+  thing a body does. Six or seven per cent means a grip or a foot target wants
+  moving a few centimetres closer.
 
 ## Not yet
 
