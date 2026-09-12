@@ -786,3 +786,124 @@ mod trails {
         assert!(trail::speed(&trail::sweep(baked, 8)) > 0.05);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Bodies
+// ---------------------------------------------------------------------------
+
+mod builds {
+    use view::build::{self, Build, Silhouette, distinctness};
+
+    const NAMES: [&str; 6] = [
+        "Bulwark",
+        "Champion",
+        "Reaver",
+        "Elementalist",
+        "Blood mage",
+        "Dual mage",
+    ];
+
+    /// The point of making bodies parametric. Below this two fighters are the
+    /// same body with a tweak; the roster currently sits at 0.392.
+    const SEPARATION: f32 = 0.30;
+
+    #[test]
+    fn no_two_classes_share_a_silhouette() {
+        // **Colour is spoken for.** The palette reserves hue for saying which
+        // *player* a fighter is, which leaves shape to say which *class* -- so
+        // if two classes have the same shape, that question has no answer at
+        // all in a four-player fight where both are playing the same class in
+        // different colours.
+        //
+        // A judgement call before this was a number: written by hand from the
+        // kits, the Champion and the Elementalist sat at 0.228, distinguishable
+        // if you were looking for it and not much more.
+        let sils: Vec<Silhouette> = build::CLASS_BUILDS.iter().map(Silhouette::of).collect();
+        for i in 0..sils.len() {
+            for j in i + 1..sils.len() {
+                let d = distinctness(&sils[i], &sils[j]);
+                assert!(
+                    d >= SEPARATION,
+                    "{} and {} are only {d:.3} apart in silhouette. \
+                     `cargo run --release -p view --example shapehunt` searches for a set \
+                     that separates; `--example builds` prints where the roster stands.",
+                    NAMES[i],
+                    NAMES[j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_build_is_a_body_somebody_could_have() {
+        // The guard against a search that has wandered. An optimiser
+        // maximising separation alone will happily produce a fighter three
+        // metres tall with pencil arms, which separates beautifully and is not
+        // a person -- the same lesson the palette search taught when it put the
+        // green at pale mint.
+        for (i, b) in build::CLASS_BUILDS.iter().enumerate() {
+            assert!(
+                build::is_sane(b),
+                "{} has a part that is not a real box",
+                NAMES[i]
+            );
+            let h = b.height();
+            assert!(
+                (1.5..2.4).contains(&h),
+                "{} stands {h:.2} m tall, which is not a fighter",
+                NAMES[i]
+            );
+        }
+    }
+
+    #[test]
+    fn the_roster_still_covers_a_range_of_sizes() {
+        // Separation alone can be bought by making everyone a different shape
+        // at the same size. Size is the most legible difference there is, so
+        // the roster should use it.
+        let areas: Vec<usize> = build::CLASS_BUILDS
+            .iter()
+            .map(|b| build::area(&Silhouette::of(b)))
+            .collect();
+        let smallest = *areas.iter().min().unwrap() as f32;
+        let largest = *areas.iter().max().unwrap() as f32;
+        assert!(
+            largest / smallest > 1.6,
+            "the biggest fighter is only {:.2} times the smallest",
+            largest / smallest
+        );
+    }
+
+    #[test]
+    fn the_even_build_reproduces_the_body_the_prototype_was_tuned_against() {
+        // The camera, the poses and the hurtbox radius were all judged against
+        // one body. `EVEN` has to still be that body, or every one of those
+        // judgements silently moved.
+        use view::pose::Part;
+        assert_eq!(Build::EVEN.part_size(Part::Torso), [0.62, 0.80, 0.36]);
+        assert_eq!(Build::EVEN.part_size(Part::Head), [0.34, 0.34, 0.34]);
+        assert_eq!(Build::EVEN.part_size(Part::ArmR), [0.18, 0.62, 0.18]);
+        assert_eq!(Build::EVEN.part_size(Part::LegL), [0.22, 0.76, 0.22]);
+    }
+
+    #[test]
+    fn a_silhouette_is_measured_in_a_shared_frame() {
+        // Not in each build's own bounding box. Normalising out size would
+        // declare a giant and a child identical, and size is the difference a
+        // player reads first.
+        let big = Build {
+            scale: 1.3,
+            ..Build::EVEN
+        };
+        let small = Build {
+            scale: 0.75,
+            ..Build::EVEN
+        };
+        let d = distinctness(&Silhouette::of(&big), &Silhouette::of(&small));
+        assert!(
+            d > 0.3,
+            "two builds differing only in size measured {d:.3} apart, so the silhouette \
+             is being normalised when it should not be"
+        );
+    }
+}

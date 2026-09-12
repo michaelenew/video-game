@@ -8,6 +8,7 @@
 //! because determinism demands it; nothing here feeds back into the simulation.
 
 pub mod baked;
+pub mod build;
 pub mod camera;
 pub mod interp;
 pub mod pose;

@@ -34,7 +34,7 @@ use bevy::render::camera::Exposure;
 pub use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
-use view::pose::{PARTS, Part, PoseInput, part_size, pose_for};
+use view::pose::{PARTS, Part, PoseInput, pose_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate};
 
 /// How the match is being driven.
@@ -552,6 +552,10 @@ fn setup(
         ));
     }
 
+    let unit_cube = meshes.add(surfaces::tangented(
+        Cuboid::new(1.0, 1.0, 1.0).mesh().build(),
+    ));
+
     // Fighters: a root per player, six primitive parts parented to it.
     //
     // Four materials rather than one flat colour, assigned by what the part
@@ -560,11 +564,22 @@ fn setup(
     // materials already exist. Identity rides on the cloth and the armour, not
     // on the skin, so the arena never ends up with two blue things in it.
     for owner in 0..MAX_PLAYERS {
+        // Unit cubes, sized by the pose system rather than by the mesh.
+        //
+        // Proportions come from the class -- colour is already spoken for as
+        // the channel that says *which player*, so silhouette is what has to
+        // say *which class*, and six identical bodies say nothing. But a class
+        // can change mid-session (Tab cycles it, F8 picks it), so baking the
+        // size into the mesh would mean rebuilding six meshes on every switch.
+        // Scaling a unit cube instead makes a class change a transform change.
+        //
+        // It costs nothing in texturing either: Bevy's cuboid faces each use
+        // the whole texture regardless of their size, so a stretched cube maps
+        // exactly the way a correctly-sized one already did.
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
                 for part in PARTS {
-                    let s = part_size(part);
                     let dressed = match part {
                         view::pose::Part::Head => skins.skin[owner].clone(),
                         view::pose::Part::Torso => skins.armour[owner].clone(),
@@ -574,9 +589,7 @@ fn setup(
                         _ => skins.leather.clone(),
                     };
                     root.spawn((
-                        Mesh3d(meshes.add(surfaces::tangented(
-                            Cuboid::new(s[0], s[1], s[2]).mesh().build(),
-                        ))),
+                        Mesh3d(unit_cube.clone()),
                         MeshMaterial3d(dressed),
                         Transform::default(),
                         BodyPart { owner, part },
@@ -1162,6 +1175,7 @@ fn apply_poses(
     for (bp, mut tf) in parts.iter_mut() {
         let p = frame.players[bp.owner];
         let class = sim.cur.players[bp.owner].class;
+        let build = view::build::for_class(class as usize);
         let (into, total) = phase_frames(&p, class);
         let pose = pose_for(PoseInput {
             clip: if sim.baked_anim {
@@ -1178,8 +1192,24 @@ fn apply_poses(
             sim_frame: frame.sim_frame,
         });
         let t = pose.get(bp.part);
-        tf.translation = Vec3::new(t.pos[0], t.pos[1], t.pos[2]);
+        // The poses are authored in metres against the even body, so they are
+        // applied as a **deviation from rest** rather than as absolute
+        // positions. Scaling the absolute position instead pulls arms off
+        // shoulders and leaves legs hanging in the air, which looks like a
+        // rigging fault rather than the arithmetic mistake it is.
+        //
+        // The joint goes where this body says it goes; the animation still
+        // moves it the distance it was authored to move.
+        let rest = build.rest_position(bp.part);
+        let even = view::build::Build::EVEN.rest_position(bp.part);
+        tf.translation = Vec3::new(
+            rest[0] + (t.pos[0] - even[0]) * build.scale,
+            rest[1] + (t.pos[1] - even[1]) * build.scale,
+            rest[2] + (t.pos[2] - even[2]) * build.scale,
+        );
         tf.rotation = Quat::from_euler(EulerRot::XYZ, t.rot[0], t.rot[1], t.rot[2]);
+        let s = build.part_size(bp.part);
+        tf.scale = Vec3::new(s[0], s[1], s[2]);
     }
 }
 

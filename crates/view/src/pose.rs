@@ -472,10 +472,5 @@ fn ease_in_out(t: f32) -> f32 {
 
 /// Fixed part dimensions, in metres. The renderer builds boxes from these once.
 pub fn part_size(part: Part) -> [f32; 3] {
-    match part {
-        Part::Torso => [0.62, 0.80, 0.36],
-        Part::Head => [0.34, 0.34, 0.34],
-        Part::ArmL | Part::ArmR => [0.18, 0.62, 0.18],
-        Part::LegL | Part::LegR => [0.22, 0.76, 0.22],
-    }
+    crate::build::Build::EVEN.part_size(part)
 }

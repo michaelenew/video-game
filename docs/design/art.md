@@ -473,6 +473,70 @@ long a move takes and roughly what shape it is; it does not know the Reaver's
 Guillotine is a downward chop with a shadow behind it. This is a floor, not a
 ceiling.
 
+## Bodies are a parameter vector, and silhouette is now a test
+
+Six boxes with fixed sizes made every class the same person in a different
+colour. That is a readability problem before it is an aesthetic one: **colour is
+already spoken for** as the channel that says *which player*, which leaves
+silhouette as the channel that says *which class* -- and six identical
+silhouettes answer that question with nothing. In a four-player fight with two
+people on the same class, it is the only channel there is.
+
+So a body is eight numbers, and six classes are six vectors. The real argument
+for that on a team with no artist is not that it is cheap, though it is. It is
+that **silhouette becomes measurable**: render two builds flat black in
+orthographic projection, compare the covered cells, and "can you tell these two
+apart at a glance" stops being a judgement somebody re-forms every time a
+proportion moves.
+
+Written by hand from the kits -- the Bulwark holds a line, the Reaver is a
+duellist who is not there when you swing -- the worst pair sat at **0.228**,
+which is distinguishable if you are looking for it and not much more. A
+hill-climb over the roster, maximising the *worst* pair inside bounds that keep
+each class recognisably itself, took that to **0.392**. Bounds rather than a
+free search, for the reason the palette search taught: an unconstrained
+optimiser has no taste, and will happily produce a three-metre fighter with
+pencil arms.
+
+Two things that went wrong, both worth having written down:
+
+**Poses are applied as a deviation from rest, not as absolute positions.** The
+poses are authored in metres against the even body; scaling those positions onto
+a different one pulls arms off shoulders and leaves legs hanging. With a rest
+position computed per build, the joint goes where the body says and the
+animation still moves it the distance it was authored to move.
+
+**Parts are unit cubes scaled by the pose system**, not meshes built at size. A
+class can change mid-session, and baking size into the mesh would mean rebuilding
+six meshes on every switch. It costs nothing in texturing, because Bevy's cuboid
+faces each use the whole texture regardless of size.
+
+## The triplanar shader is not the answer, and the measurement says why
+
+This was scheduled as "when the floor starts reading as wallpaper and not
+before". It does not read as wallpaper -- but the reason is not the one that
+would justify leaving it alone.
+
+The tile is four metres and the camera sits eleven metres back, so a repeat
+would be plainly visible **if there were anything left to repeat**. Tileable
+baking buys its seamlessness by blending the tile against three shifted copies
+of itself, and measured, that keeps only **65-67% of the contrast**. The floor
+does not show its period because the period has already been flattened out of
+it. The cost of tiling has been paid in full; it was just paid in flatness
+rather than in repetition.
+
+Which means the fix is not triplanar projection. Triplanar removes the repeat
+and makes patterns wrap corners, and it costs a custom material, a custom
+pipeline and a WGSL file that drifts from the Rust beside it -- and it does
+nothing about the contrast, because it is still a world-space projection of a
+surface pattern.
+
+**Baking each surface as its intersection with a three-dimensional volume does
+all of it.** No repeat, because every point of every object reads a different
+part of the volume. No blending, so no contrast lost. Patterns that wrap corners
+because they were never on the surface to begin with. And it stays a processor
+bake, so there is still no shader. That is the next item rather than this one.
+
 ## Next, in order
 
 1. **Stone as a volume, not a texture.** The current stone is a 2D field
@@ -483,12 +547,3 @@ ceiling.
    bake each surface as its *intersection* with that volume, and the pattern
    stops repeating and starts wrapping around corners correctly. The same
    method extends to natural terrain.
-2. **Procedural bodies.** The fighters are six boxes; the natural next step is
-   not glTF but a parameter vector -- proportions, plate coverage, palette. Six
-   classes become six vectors and coop monsters become more of them. And since
-   silhouette would then be a parameter, *silhouette distinctness becomes
-   measurable*: render two classes in orthographic black and compare. Whether
-   you can tell two fighters apart stops being a judgement call, the same way
-   the palette already has.
-3. **A triplanar shader for the environment**, when the floor starts reading as
-   wallpaper and not before.
