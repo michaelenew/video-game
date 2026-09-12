@@ -9,7 +9,7 @@
 
 use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
-use sim::state::{Action, MAX_PLAYERS, SLOT_SPECIAL};
+use sim::state::{Action, MAX_PLAYERS};
 use sim::{Input, World};
 
 const Q: u16 = Input::SPECIAL;
@@ -51,6 +51,11 @@ fn effects_of(w: &World, kind: EffectKind) -> Vec<sim::effects::Effect> {
         .collect()
 }
 
+/// Does player one have a structure standing anywhere on the field?
+fn has_structure(w: &World) -> bool {
+    matches!(w.players[0].mechanic, Mechanic::Structures(slots) if slots.iter().any(|s| s.is_some()))
+}
+
 // ---------------------------------------------------------------------------
 // The Elementalist
 // ---------------------------------------------------------------------------
@@ -61,7 +66,6 @@ fn the_fire_pillar_stands_after_the_move_is_over() {
     // stops mattering. If the pillar died with the recovery frames it would
     // just be a slow poke.
     let mut w = engaged(Class::Elementalist);
-    tap(&mut w, E, 4); // raise a structure -- the special needs one out
     tap(&mut w, Q, 60);
     assert!(
         w.players[0].action.actionable(),
@@ -81,7 +85,6 @@ fn the_fire_pillar_spreads_at_the_base_and_climbs_at_the_top() {
     // jumping over. If both grew the same way the pillar would be one decision
     // instead of two.
     let mut w = engaged(Class::Elementalist);
-    tap(&mut w, E, 4);
     tap(&mut w, Q, 30);
     let young = effects_of(&w, EffectKind::FirePillar)[0].pillar_volumes();
     run(&mut w, 120, 0, 0);
@@ -110,7 +113,6 @@ fn standing_in_a_fire_pillar_costs_you_and_standing_in_your_own_does_not() {
     // be in. The caster can stand in her own, or she could never fight beside
     // the thing she just made.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, E, 4); // a structure, which the pillar needs
     tap(&mut w, Q, 20); // the pillar lands well ahead of her
     let caster_before = w.players[0].health;
     let victim_before = w.players[1].health;
@@ -132,17 +134,12 @@ fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
     // a wall, so it charges the shot instead of stopping it -- unlike a
     // structure in the same spot. See docs/design/kits/elementalist.md.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, E, 4); // a structure, which the pillar needs
     tap(&mut w, Q, 20); // plant a pillar ahead, along the same aim as Bolt
     assert_eq!(
         effects_of(&w, EffectKind::FirePillar).len(),
         1,
         "fixture planted no pillar to aim through"
     );
-    // Clear the structure the pillar needed: it still sits closer along the
-    // same aim than the pillar it fed, and this test is isolating the
-    // pillar's own effect on the shot rather than the structure's.
-    w.players[0].mechanic = Mechanic::Structures([None; sim::class::MAX_STRUCTURES]);
 
     for _ in 0..60 {
         run(&mut w, 1, Input::LEFT, 0);
@@ -165,43 +162,29 @@ fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
 }
 
 #[test]
-fn a_structure_has_no_clock_and_keeps_the_special_alive() {
+fn a_structure_has_no_clock() {
     // This is the regression. Structures used to live in the effects array,
-    // which gave them a lifetime; the fire pillar is gated on having one out,
-    // so ten seconds after raising a structure the Elementalist's own special
-    // silently stopped working. A structure is a cap-of-three resource, and the
-    // only thing that spends it is raising a fourth.
+    // which gave them a lifetime: ten seconds after raising one it silently
+    // vanished. A structure is a cap-of-three resource, and the only thing
+    // that spends it is raising a fourth.
     let mut w = as_class(Class::Elementalist);
     tap(&mut w, E, 4);
-    assert!(
-        w.players[0].mechanic_ready(SLOT_SPECIAL),
-        "fixture never raised a structure"
-    );
+    assert!(has_structure(&w), "fixture never raised a structure");
     run(&mut w, 3_000, 0, 0); // fifty seconds of doing nothing
-    assert!(
-        w.players[0].mechanic_ready(SLOT_SPECIAL),
-        "the structure went away on its own, and took the special with it"
-    );
-    tap(&mut w, Q, 60);
-    assert_eq!(
-        effects_of(&w, EffectKind::FirePillar).len(),
-        1,
-        "the special did not come out long after the structure was raised"
-    );
+    assert!(has_structure(&w), "the structure went away on its own");
 }
 
 #[test]
-fn casting_until_the_board_is_full_never_costs_a_structure() {
+fn casting_the_pillar_never_costs_a_structure() {
     // The other half of the same bug: effects evicted the oldest of *anything*
-    // when the board filled, and a structure was the oldest thing on it.
+    // when the board filled, and a structure was the oldest thing on it. Fire
+    // pillar does not even need one out any more, but it still must not eat
+    // one that happens to be there.
     let mut w = as_class(Class::Elementalist);
     tap(&mut w, E, 4);
     for _ in 0..20 {
         tap(&mut w, Q, 12);
-        assert!(
-            w.players[0].mechanic_ready(SLOT_SPECIAL),
-            "casting the pillar ate the structure it needs"
-        );
+        assert!(has_structure(&w), "casting the pillar ate the structure");
     }
 }
 
@@ -334,10 +317,7 @@ fn a_structure_climbs_out_of_the_ground_and_then_stops_counting() {
         "the structure never finished rising"
     );
     run(&mut w, 3_000, 0, 0);
-    assert!(
-        w.players[0].mechanic_ready(SLOT_SPECIAL),
-        "the age turned back into a lifetime"
-    );
+    assert!(has_structure(&w), "the age turned back into a lifetime");
 }
 
 // ---------------------------------------------------------------------------

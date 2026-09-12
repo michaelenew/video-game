@@ -204,6 +204,21 @@ pub fn step(players: &mut [Player; MAX_PLAYERS]) {
         );
         stone.at = r.pos;
         stone.vel = r.vel;
+        if r.wall {
+            // Hitting a wall is a collision, not a glance: the resolver above
+            // only zeroes the component that was driving the stone into the
+            // wall, which on its own leaves a diagonally-kicked stone free to
+            // keep sliding along the wall at whatever speed it had sideways --
+            // `launch_decel` has no idea a wall was ever there and would
+            // otherwise keep paying out from the kick's own distance budget
+            // regardless. Cutting the remaining speed the same way two
+            // stones knocking into each other do, and ending the launch,
+            // hands the rest of it to ordinary friction below -- a real stop
+            // rather than a slow creep along the wall.
+            stone.vel.x = stone.vel.x.mul(t::stone_knock_damp());
+            stone.vel.z = stone.vel.z.mul(t::stone_knock_damp());
+            stone.launched = false;
+        }
         if stone.launched {
             // A kicked stone dies off on its own schedule, not the ambient
             // friction every other stone rubs to a halt with -- see
@@ -445,6 +460,12 @@ pub fn first_along_shot(field: &Field, from: V3, to: V3) -> Option<(usize, Fx)> 
 /// Kick the stone at `index` (as returned by `first_along_shot`) forward
 /// along `dir` at the shot's launch speed.
 ///
+/// `dir` is the shot's real, three-dimensional aim -- pitch included, not
+/// flattened -- so a structure struck while aiming above the horizon takes
+/// some of that speed upward instead of only forward. Aimed level or below,
+/// there is nothing to add: a kick cannot drive a stone through the floor, so
+/// only the case that means something changes anything.
+///
 /// Resets its own strike record rather than touching `struck`: a stone that
 /// already erupted once is still fair game to hurt someone when it is kicked,
 /// because the kick is a different event.
@@ -456,6 +477,9 @@ pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
         stone.knock_struck = 0;
         stone.vel.x = dir.x.mul(t::bolt_knock_speed());
         stone.vel.z = dir.z.mul(t::bolt_knock_speed());
+        if dir.y.raw() > 0 {
+            stone.vel.y = dir.y.mul(t::bolt_knock_speed());
+        }
     }
     scatter(players, &field);
 }
@@ -539,7 +563,15 @@ pub fn resolve_body(
         grounded = true;
     }
 
-    arena::Resolved { pos, vel, grounded }
+    // A fighter sliding off the side of a stone is not a wall contact in the
+    // sense `stones::step` cares about -- that flag is for a *stone* meeting
+    // the arena, not a body meeting a stone.
+    arena::Resolved {
+        pos,
+        vel,
+        grounded,
+        wall: false,
+    }
 }
 
 /// Is there a stone directly beneath the feet?

@@ -68,7 +68,8 @@ fn ahead(w: &World, at: V3) -> f32 {
     at.x.sub(w.players[0].pos.x).to_f32_for_render()
 }
 
-/// Raise a stone, which the special needs, without moving.
+/// Raise a stone without moving, for the tests that want one on the field as
+/// terrain -- Fire pillar itself no longer needs one out to be cast.
 fn with_a_stone(w: &mut World) {
     tap(w, E, 0, 4);
 }

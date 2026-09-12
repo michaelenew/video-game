@@ -72,6 +72,16 @@ pub struct Resolved {
     pub pos: V3,
     pub vel: V3,
     pub grounded: bool,
+    /// A solid stopped this body along a horizontal axis this call -- a wall,
+    /// or the side of a platform, as opposed to landing on or under one.
+    ///
+    /// Only the axis driving into the solid is zeroed below, by design (see
+    /// `resolve_sized`): a fighter walking diagonally into a wall keeps
+    /// sliding along it, which is the feel every wall in the game has always
+    /// had. A stone caller wants to know a hard contact happened at all, so it
+    /// can decide what happens to the speed that is *not* zeroed -- see
+    /// `stones::step`.
+    pub wall: bool,
 }
 
 /// Push a fighter out of the arena geometry.
@@ -98,6 +108,7 @@ pub fn resolve_sized(
     height: Fx,
 ) -> Resolved {
     let mut grounded = false;
+    let mut wall = false;
 
     // Ground plane first.
     if pos.y.raw() <= 0 {
@@ -155,9 +166,11 @@ pub fn resolve_sized(
         } else if ax.raw() <= az.raw() {
             pos.x = pos.x.add(px);
             vel.x = Fx::ZERO;
+            wall = true;
         } else {
             pos.z = pos.z.add(pz);
             vel.z = Fx::ZERO;
+            wall = true;
         }
     }
 
@@ -167,7 +180,12 @@ pub fn resolve_sized(
         grounded = true;
     }
 
-    Resolved { pos, vel, grounded }
+    Resolved {
+        pos,
+        vel,
+        grounded,
+        wall,
+    }
 }
 
 /// Signed push needed to leave the span by the nearer edge.

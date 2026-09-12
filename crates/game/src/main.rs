@@ -573,10 +573,14 @@ fn setup(
     // as effects come and go would put allocation on the rollback path.
     let unit = meshes.add(Cylinder::new(0.5, 1.0));
     let look = EffectLook {
+        // Translucent, not solid -- it is flame, and a wall of solid orange
+        // plastic reads as a structure rather than a hazard you could
+        // arguably see an opponent through.
         fire: materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.45, 0.12),
+            base_color: Color::srgba(1.0, 0.45, 0.12, 0.55),
             emissive: LinearRgba::rgb(2.4, 0.8, 0.15),
             perceptual_roughness: 0.9,
+            alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         blood: materials.add(StandardMaterial {

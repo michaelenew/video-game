@@ -154,17 +154,24 @@ delay for moderate damage. The telegraph is the point — it is an area denial t
 punishes movement, not a damage spell.
 
 ### Fire pillar
-**Startup** medium · **Recovery** medium · **Range** medium · **Mechanic** on a structure,
-detonates it for a much wider blast
+**Startup** medium · **Recovery** medium · **Range** medium
 
-A focused pillar of flame with a small staggering core and a moderate surrounding area.
-The bread-and-butter structure detonation.
+A focused pillar of flame with a small staggering core and a moderate surrounding area,
+planted wherever the crosshair is. It does not need a structure out, and does not touch one
+if there happens to be one there.
 
 > **Implemented** (`Q`). The pillar is two volumes rather than one: it starts narrow and
 > short, then the **base spreads out** while the **column reaches up** and widens only
 > slightly. The base is what catches someone walking past it; the column is what stops them
 > jumping over. It burns everyone but the Elementalist, on a tick rather than every frame, and
 > it stands long after her recovery frames are over.
+>
+> **Does not require a structure.** It briefly did — gated on having one out, the same way
+> Ice blast and Flame spitter below are written to need one — which was wrong for this move
+> specifically: nothing about a pillar of flame planted at the cursor has anything to do with
+> a structure being there, and it does not detonate or otherwise touch one that happens to be.
+> Earth plus Fire is the loadout, not a dependency chain where Fire only works after Earth has
+> gone first.
 
 ### Flame spitter
 **Startup** fast · **Recovery** medium · **Range** medium, channelled · **Mechanic** on a
