@@ -38,6 +38,10 @@ to work* can be, and they are, in `crates/sim/tests/feel.rs`:
 - Dodge invulnerability must be shorter than the dodge, or it is never punished.
 - A committed move must be committed — recovery long enough that whiffing it
   actually costs something.
+- Knockback must swell faster than hitstun, or a combo that works once works for
+  the rest of the round.
+- No repeating source of damage may stun for longer than its own tick interval,
+  or standing in a field is a loop with no exit.
 
 Those tests pin *relationships*, not values. Numbers should move freely; if one
 of these fails, either it is a bug or a design decision changed and the document
@@ -868,3 +872,59 @@ Bellator survives in the front matter of [champion.md](champion.md) — which al
 across the board**. One name being out of place is a reason to look at all six: four of them
 (Bulwark, Elementalist, Blood mage, Dual mage) are descriptions and two (Shadow Reaver,
 Champion) are titles, and nobody has decided which register the game is in.
+
+### 2026-09-12 — stun, and the combo arc
+**Changed** Every point of damage now stuns, interrupts and shoves, through one funnel
+(`state::strike`). Four frames of contact freeze on a poke rising to eight on the heaviest
+move; hitstun and knockback multiplied by a swell that grows with the damage the victim has
+already taken; directional influence on the last frozen frame; per-class weight dividing
+knockback. Field effects go through the same path, so a fire pillar now interrupts instead of
+only draining. New knobs under **Stun** and **Effects**; weight under each class's air family.
+
+**Why** The kernel says "Smash, not Tekken", and the hit reaction is where that lives. Hitstun
+existed as a per-move frame count and knockback as a per-move speed, but nothing connected
+them to the state of the fight, so every exchange in a round played identically and combos
+were not a thing the game had. The swell is Smash's percent, upside down for a bar that counts
+down. See [stun.md](stun.md).
+
+**Verdict** open — nobody has played it. What the simulation says is that at full health no
+class links a poke into a second poke, around half health four of six do, and by the last
+fifth it is down to one. That shape is the design; whether it reads as the fight heating up or
+as the rules changing halfway through is the question.
+
+### 2026-09-12 — knockback decay 0.86 → 0.93
+**Changed** `defence.hitstun_decay`, the per-frame multiplier on knockback while stunned.
+
+**Why** Found while tuning the swell: at 0.86 the knockback was over in about fifteen frames
+whatever its speed, so a poke moved a fighter twenty centimetres at full health and two metres
+at death's door — less than a chasing opponent covers walking. Knockback was, in effect,
+cosmetic, and the swell had nothing to bite on. At 0.93 the same numbers give roughly a metre
+at full health and five and a half near death, and the combo window closes on its own because
+distance finally outruns the window to follow it.
+
+**Verdict** open. This is the number most likely to be wrong, and it moves more than knockback:
+blocked pushback rides the same decay, so blocking now cedes noticeably more ground. That is
+the direction [defense.md](defense.md) wanted, but it was not measured against anyone's hands.
+
+### 2026-09-12 — two bugs the stun work turned up
+**Changed** `Class::mobility` now reads the Oven instead of a hardcoded table, and "a move
+comes out" is tested as a state transition rather than as "active, with a full count of frames
+left".
+
+**Why** Neither was about stun; both were only visible once something else moved.
+
+The per-class air knobs — jump, gravity, fall cap, steering, six classes, twenty-four
+sliders — were in the Oven, in the baked file, and in the palette, and **the simulation never
+read any of them**. It read a `const` table in `class.rs` that happened to hold the same
+values. This is exactly the failure `tests/knobs.rs` was written after, and it slipped past
+that test because the literals were behind a helper function rather than inline. The values
+are unchanged; the sliders now do something.
+
+The second only appeared when contact freeze stopped the frames advancing: the first active
+frame of a move was inferred from its frame counter, so with the counter held still, one press
+of the Elementalist's mechanic raised seven structures. Inferring "first" from a count is fine
+right up until something legitimately stops counting.
+
+**Verdict** kept, both. The second is the more interesting one — the proxy was correct for
+every frame of every match until the day it was not, and the fix is to compare against the
+previous tick's action, which cannot drift.

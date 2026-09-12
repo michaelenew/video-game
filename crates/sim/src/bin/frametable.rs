@@ -27,11 +27,28 @@ fn main() {
         tenths(t::guard_move_speed()),
     );
     println!(
-        "reaction {}f  |  parry window {}f  |  dodge {}f ({} invulnerable)\n",
+        "reaction {}f  |  parry window {}f  |  dodge {}f ({} invulnerable)",
         t::HUMAN_REACTION_FRAMES,
         t::parry_window(),
         t::dodge_frames(),
         t::dodge_iframes()
+    );
+    // The stun family, because the hitstun and knockback columns below are what
+    // a move does to someone *untouched* and are multiplied by this the rest of
+    // the round. A frame table that did not say so would read as a lie by the
+    // end of a match.
+    let damages: Vec<i32> = ALL_CLASSES
+        .iter()
+        .flat_map(|c| moves::table(*c).map(|m| m.damage))
+        .collect();
+    let freeze = |d: i32| sim::state::hitlag_frames(d);
+    println!(
+        "stun: freeze {}-{}f by damage  |  at death knockback x{} and hitstun x{}  |  influence {}\n",
+        freeze(*damages.iter().min().unwrap()),
+        freeze(*damages.iter().max().unwrap()),
+        tenths(Fx::ONE.add(t::swell_knockback())),
+        tenths(Fx::ONE.add(t::swell_hitstun())),
+        hundredths(t::di_strength()),
     );
 
     for class in ALL_CLASSES {
@@ -48,11 +65,12 @@ fn main() {
             tenths(full_apex.div(t::body_height())),
         );
         println!(
-            "  air: jump x{}  gravity x{}  fall cap x{}  steering {}",
+            "  air: jump x{}  gravity x{}  fall cap x{}  steering {}  weight x{}",
             tenths(mob.jump),
             tenths(mob.gravity),
             tenths(mob.fall_cap),
             tenths(mob.air_speed),
+            tenths(mob.weight),
         );
         println!(
             "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
@@ -95,8 +113,18 @@ fn main() {
 
     println!(
         "On block is the safety number: negative means punishable, and every move\n\
-         should be. Record what you change in docs/design/feel-log.md."
+         should be. Hitstun and knockback are what the move does to someone at full\n\
+         health; both swell as a fighter takes damage, which is what opens a combo\n\
+         window in the middle of a round and closes it again by the end. See\n\
+         docs/design/stun.md. Record what you change in docs/design/feel-log.md."
     );
+}
+
+/// Two decimal places. The stun family has numbers small enough that one place
+/// rounds them to nothing, and "influence 0.3" would be a different knob.
+fn hundredths(v: Fx) -> String {
+    let h = (v.raw() as i64 * 100 + (1 << 15)) >> 16;
+    format!("{}.{:02}", h / 100, (h % 100).abs())
 }
 
 /// One decimal place, without touching floating point.

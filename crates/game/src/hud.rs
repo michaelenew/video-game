@@ -286,9 +286,14 @@ pub fn update(
 
     for (tag, mut text) in states.iter_mut() {
         let p = &sim.cur.players[tag.0];
+        // The launch multiplier sits where Smash puts its percent: beside the
+        // fighter, because it is the number that decides whether the next hit
+        // is a shove or a kill, and neither player can read the system without
+        // being able to see it.
         *text = Text::new(format!(
-            "{}\n{}\n{}",
+            "{}   launch x{:.1}\n{}\n{}",
             p.class.name(),
+            sim::state::launch_scale(p).to_f32_for_render(),
             describe(p),
             mechanic(p)
         ));
@@ -325,7 +330,19 @@ fn mechanic(p: &sim::state::Player) -> String {
 
 /// The action, and how many frames of it remain. `4/3/10` alongside it is the
 /// move's startup, active and recovery, so a number can be judged in context.
+///
+/// A contact freeze is labelled rather than left to be inferred. Frozen frames
+/// look exactly like a dropped frame or a hung game from the outside, and the
+/// label is the difference between "the hit landed" and "something broke".
 fn describe(p: &sim::state::Player) -> String {
+    let state = describe_action(p);
+    if p.hitlag > 0 {
+        return format!("FREEZE {}f  ({state})", p.hitlag);
+    }
+    state
+}
+
+fn describe_action(p: &sim::state::Player) -> String {
     let phase_of = |kind: u8, name: &str, left: u16| {
         let m = sim::moves::get(p.class, kind);
         format!(

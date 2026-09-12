@@ -201,6 +201,13 @@ pub struct Player {
     /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
     /// so the victim can be kept at arm's length rather than merely stunned.
     pub held_by: u8,
+    /// Frames of contact freeze left. Nothing about this fighter advances while
+    /// it runs -- not their move, not their stun, not gravity.
+    ///
+    /// Both sides of a blow get the same number, so it is not frame advantage
+    /// for anyone; it is the punctuation that makes a hit land, and the window
+    /// the victim spends choosing which way they go. See `docs/design/stun.md`.
+    pub hitlag: u16,
 }
 
 impl Player {
@@ -269,6 +276,7 @@ impl Default for Player {
             slowed: 0,
             mechanic_held: false,
             held_by: NOBODY,
+            hitlag: 0,
         }
     }
 }
@@ -346,21 +354,30 @@ impl World {
             return;
         }
 
+        let before = self.players;
         for (p, input) in self.players.iter_mut().zip(inputs) {
             step_player(p, input);
         }
 
-        // What a move does *as it comes out*, on its first active frame: the
-        // leap of a leaping move, and whatever it leaves standing in the world.
-        for i in 0..MAX_PLAYERS {
+        // What a move does *as it comes out*: the leap of a leaping move, and
+        // whatever it leaves standing in the world.
+        //
+        // "As it comes out" means the tick the action crosses from startup into
+        // active, and it is tested by comparing against the action this tick
+        // started with. That comparison is exact. The obvious shorthand --
+        // "active, with a full count of active frames left" -- is only a proxy
+        // for *first*, and it holds right up until something stops the frames
+        // advancing. Contact freeze does exactly that, and the proxy quietly
+        // became "every frozen frame": one press raised seven structures.
+        for (i, was) in before.iter().enumerate() {
             let p = self.players[i];
-            let Action::Active { kind, left } = p.action else {
+            let Action::Active { kind, .. } = p.action else {
                 continue;
             };
-            let m = moves::get(p.class, kind);
-            if left != m.active {
+            if matches!(was.action, Action::Active { .. }) {
                 continue;
             }
+            let m = moves::get(p.class, kind);
             if m.self_lift.raw() > 0 {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
@@ -380,11 +397,16 @@ impl World {
         let snapshot = self.players;
         for attacker in 0..MAX_PLAYERS {
             let defender = 1 - attacker;
-            if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
+            if let Some(blow) =
+                resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
-                apply_hit(&mut self.players[defender], hit);
+                let freeze = strike(&mut self.players[defender], blow);
+                // Both sides of a contact freeze for the same count. Reading
+                // the number back from the blow rather than recomputing it is
+                // what guarantees they always agree.
+                self.players[attacker].hitlag = freeze;
                 self.players[attacker].hit_used = true;
-                if hit.parried {
+                if blow.parried {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
                     };
@@ -407,9 +429,12 @@ impl World {
                 if vertical && d.flat_len().raw() < hit_range.raw() && !victim.action.invulnerable()
                 {
                     let dir = V3::new(d.x, Fx::ZERO, d.z).normalized();
-                    apply_hit(
+                    // The victim freezes; the thrower does not. Contact freeze
+                    // is the two ends of a blow meeting, and the shield left
+                    // the hand some time ago.
+                    strike(
                         &mut self.players[target],
-                        Hit {
+                        Blow {
                             damage: t::shield_damage(),
                             hitstun: t::shield_hitstun(),
                             blockstun: t::shield_blockstun(),
@@ -489,6 +514,7 @@ impl World {
             h.write_u32(p.slowed as u32);
             h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.held_by as u32);
+            h.write_u32(p.hitlag as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
             h.write_u32(p.hit_used as u32);
@@ -524,9 +550,20 @@ impl Default for World {
     }
 }
 
+/// One landed blow, and everything it does to whoever took it.
+///
+/// **Every point of damage in the game is one of these.** A move connecting, a
+/// thrown shield catching someone on the way past, a tick of a fire pillar
+/// somebody is standing in: they differ in where the numbers come from and in
+/// nothing else. One funnel is what makes "damage stuns" a rule of the game
+/// rather than something most damage happens to do -- see
+/// `docs/design/stun.md`.
 #[derive(Clone, Copy)]
-struct Hit {
+struct Blow {
     damage: i32,
+    /// Stun and knockback **as dealt to someone untouched**. Both are swelled
+    /// by the damage the victim has already taken, which is the mechanic --
+    /// see `knockback_swell`.
     hitstun: u16,
     blockstun: u16,
     knockback: Fx,
@@ -586,12 +623,16 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     })
 }
 
-fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
+fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Blow> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
     let box_out = hitbox(attacker)?;
-    if box_out.spent || defender.action.invulnerable() {
+    // Read from the snapshot, so a defender already frozen this frame by the
+    // other fighter is skipped whichever order the two are resolved in. The
+    // swing is not spent by it either: the hitbox may still be live when the
+    // freeze ends, and it should be able to connect then.
+    if box_out.spent || defender.action.invulnerable() || defender.hitlag > 0 {
         return None;
     }
     let m = moves::get(attacker.class, kind);
@@ -623,7 +664,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         && matches!(defender.action, Action::Guard { held } if held < t::parry_window())
         && facing_it;
 
-    Some(Hit {
+    Some(Blow {
         damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
@@ -637,42 +678,204 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     })
 }
 
-fn apply_hit(defender: &mut Player, hit: Hit) {
-    if hit.parried {
-        // The parry itself costs the defender nothing. The attacker eats the
-        // stagger, which the caller applies.
-        return;
+/// Land a blow. **The only way anything in this game loses health.**
+///
+/// Returns the frames of contact freeze it caused, so the caller can freeze the
+/// attacker for the same number.
+///
+/// Three things happen to whoever takes one, and the order matters:
+///
+/// 1. **Damage**, first, so the swell below reads the victim's health as it is
+///    *after* the blow. A hit therefore scales partly by its own weight, which
+///    is what makes the last hit of a round the one that sends a body across
+///    the arena.
+/// 2. **Stun**, which interrupts. Whatever they were doing ends: the move they
+///    were in, the hang an aerial was holding them in, the jump they were still
+///    sustaining. Taking the turn away is the mechanic -- it is why a second hit
+///    can be guaranteed rather than raced for.
+/// 3. **Knockback**, swelled by the damage they have already taken and divided
+///    by what they weigh.
+fn strike(defender: &mut Player, blow: Blow) -> u16 {
+    // A fighter already frozen by a blow cannot be struck again until the
+    // freeze ends. Without the rule, a field that ticks faster than its own
+    // freeze holds someone in place forever; with it, nobody gains anything,
+    // because being frozen is exactly being unable to act.
+    if defender.hitlag > 0 {
+        return 0;
     }
-    if hit.blocked {
+    let freeze = hitlag_frames(blow.damage);
+    defender.hitlag = freeze;
+
+    if blow.parried {
+        // The parry itself costs the defender nothing but the freeze. The
+        // attacker eats the stagger, which the caller applies.
+        return freeze;
+    }
+    if blow.blocked {
         // No chip damage. The cost of blocking is knockback plus a window
         // where you cannot act -- see defense.md.
+        //
+        // Blocked pushback does **not** swell. The swell is a function of
+        // damage taken and a blocked blow deals none, so a player who has been
+        // blocking all round is shoved exactly as far by the last hit as by the
+        // first. Weight still divides it, which is where defense.md's "the
+        // Bulwark resists pushback" comes from -- the class trait falls out of
+        // the class being heavy rather than being written down twice.
         defender.action = Action::BlockStun {
-            left: hit.blockstun,
+            left: blow.blockstun,
         };
-        defender.vel.x = hit.dir.x.mul(hit.knockback);
-        defender.vel.z = hit.dir.z.mul(hit.knockback);
-    } else {
-        defender.health = (defender.health - hit.damage).max(0);
-        defender.vel.x = hit.dir.x.mul(hit.knockback);
-        defender.vel.z = hit.dir.z.mul(hit.knockback);
-        if hit.grabs > 0 {
-            // A grab is not knockback. The victim is pinned to the grabber and
-            // goes wherever they go, which is what makes a grab a commitment
-            // for *both* of them rather than a shove with a longer stun.
-            defender.action = Action::Held { left: hit.grabs };
-            defender.held_by = hit.by;
-            defender.vel.x = Fx::ZERO;
-            defender.vel.z = Fx::ZERO;
-        } else {
-            defender.action = Action::HitStun { left: hit.hitstun };
-        }
-        if hit.launch.raw() > 0 {
-            // Taken off the ground. Launch *sets* vertical speed rather than
-            // adding to it, so being hit on the way down does not cancel out.
-            defender.vel.y = hit.launch;
-            defender.grounded = false;
-        }
+        let shove = blow.knockback.div(defender.class.weight());
+        defender.vel.x = blow.dir.x.mul(shove);
+        defender.vel.z = blow.dir.z.mul(shove);
+        return freeze;
     }
+
+    defender.health = (defender.health - blow.damage).max(0);
+
+    if blow.grabs > 0 {
+        // A grab is not knockback. The victim is pinned to the grabber and
+        // goes wherever they go, which is what makes a grab a commitment for
+        // *both* of them rather than a shove with a longer stun.
+        defender.action = Action::Held { left: blow.grabs };
+        defender.held_by = blow.by;
+        defender.vel.x = Fx::ZERO;
+        defender.vel.z = Fx::ZERO;
+        return freeze;
+    }
+
+    // One multiplier for the whole launch vector, sideways and upward alike, so
+    // a move keeps the angle it was authored with and only the distance grows.
+    let swell = knockback_swell(defender, blow.damage);
+    let carry = swell.div(defender.class.weight());
+    let shove = blow.knockback.mul(carry);
+    defender.vel.x = blow.dir.x.mul(shove);
+    defender.vel.z = blow.dir.z.mul(shove);
+    if blow.launch.raw() > 0 {
+        // Taken off the ground. Launch *sets* vertical speed rather than
+        // adding to it, so being hit on the way down does not cancel out.
+        defender.vel.y = blow.launch.mul(carry);
+        defender.grounded = false;
+    }
+
+    defender.action = Action::HitStun {
+        left: hitstun_frames(defender, blow.hitstun),
+    };
+    // The rest of the interrupt. An aerial's hang and a jump's sustain are
+    // things the victim was in the middle of spending, and a hit ends them the
+    // same way it ends a move. The crouch goes too, so that anything reading
+    // this fighter before their next tick -- a field resolving later in the
+    // same frame, the renderer -- sees someone who has been hit rather than
+    // someone still ducking.
+    defender.air_stall = 0;
+    defender.jump_hold = 0;
+    defender.crouching = false;
+    freeze
+}
+
+/// The fraction of a fighter's health that is already gone: zero untouched,
+/// one at death.
+///
+/// This is Smash's percent, upside down. A bar that counts down and a bar that
+/// counts up say the same thing about how far the next hit will send you, and
+/// the only difference is which end the number starts at.
+fn hurt(p: &Player) -> Fx {
+    let max = t::max_health().max(1);
+    let gone = (max - p.health).clamp(0, max);
+    Fx::ratio(gone, max)
+}
+
+/// How much further a blow sends this victim than it would send an untouched
+/// one.
+///
+/// Two terms, and Smash has both. The first grows with the damage the victim
+/// has taken; the second grows with the damage of the blow that just landed, so
+/// a heavy move scales harder with a hurt opponent than a poke does. Without
+/// the second term every move would swell by the same factor and a jab would
+/// turn into a launcher purely by being thrown late in a round.
+fn knockback_swell(victim: &Player, damage: i32) -> Fx {
+    let max = t::max_health().max(1);
+    let share = Fx::ratio(damage.clamp(0, max), max);
+    let growth = t::swell_knockback().add(t::swell_blow().mul(share));
+    Fx::ONE.add(hurt(victim).mul(growth))
+}
+
+/// How much further this fighter travels than an untouched one would.
+///
+/// The readable half of the swell, for the HUD -- what stands in for the number
+/// over a Smash character's head. It leaves out the blow-weight term, because
+/// that belongs to whichever move is about to land and this is a property of
+/// the person standing there.
+pub fn launch_scale(p: &Player) -> Fx {
+    Fx::ONE.add(hurt(p).mul(t::swell_knockback()))
+}
+
+/// Stun, swelled by damage taken.
+///
+/// Grows with the same fraction knockback does but **far more slowly**, and the
+/// gap between the two growth rates is the entire combo design. Early in a
+/// round the stun is short and a hit resets neutral. As damage accumulates the
+/// stun grows and moves start to link. Push on and the knockback, growing
+/// faster, puts the victim out of reach before their attacker recovers -- so
+/// the combo window opens in the middle of a round and has closed by the end.
+///
+/// The move table's number is what the move does to someone untouched, which
+/// keeps the frame table honest: `on_hit` stays a property of the move.
+fn hitstun_frames(victim: &Player, base: u16) -> u16 {
+    let swell = Fx::ONE.add(hurt(victim).mul(t::swell_hitstun()));
+    let frames = Fx::from_int(base as i32).mul(swell).to_int();
+    frames.clamp(base as i32, u16::MAX as i32) as u16
+}
+
+/// Frames both fighters freeze the moment a blow lands.
+///
+/// Scaled by damage, so a poke taps and a committed move thuds. This is the
+/// cheapest weight a hit can be given: it costs neither side tempo, because
+/// both get the same frames back.
+pub fn hitlag_frames(damage: i32) -> u16 {
+    let extra = t::hitlag_per_damage()
+        .mul(Fx::from_int(damage.max(0)))
+        .to_int();
+    t::hitlag_base().saturating_add(extra.clamp(0, u16::MAX as i32) as u16)
+}
+
+/// Directional influence: the victim bends where they are going, never how far.
+///
+/// Read on the **last** frozen frame, so the whole contact freeze is the window
+/// to decide in. That is what makes hitlag part of the skill system rather than
+/// only part of the presentation.
+///
+/// The rule is one projection. Take the direction the victim is holding and
+/// subtract the part of it that points along the launch; what is left is the
+/// part lying *across* it. Add that to the launch and renormalise. Hold the way
+/// you are already being sent and the leftover is zero, so nothing happens;
+/// hold square to it and you get the full bend. It is the same trick the air
+/// acceleration uses, and it rewards the same thing: an input aimed at the
+/// component of your motion nobody has spent yet.
+///
+/// The speed is restored exactly afterwards, so DI can never be a way to take
+/// less knockback -- only a way to choose where it puts you. That asymmetry is
+/// what keeps it a positioning read rather than an escape.
+fn steer_knockback(p: &mut Player, input: Input) {
+    // Hits you take, not hits you block: blocked pushback is a fixed cost in
+    // ground, and letting it be aimed would make blocking a movement option.
+    if !matches!(p.action, Action::HitStun { .. }) {
+        return;
+    }
+    let (ax, az) = input.move_axis();
+    if ax == 0 && az == 0 {
+        return;
+    }
+    let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
+    let speed = flat.flat_len();
+    if speed.raw() == 0 {
+        return;
+    }
+    let along = flat.normalized();
+    let stick = move_dir(input.aim_turns(), ax, az);
+    let across = stick.sub(along.scale(stick.dot(along)));
+    let bent = along.add(across.scale(t::di_strength())).normalized();
+    p.vel.x = bent.x.mul(speed);
+    p.vel.z = bent.z.mul(speed);
 }
 
 /// Turn a stick reading into a world direction, given where the player looks.
@@ -696,6 +899,21 @@ pub fn move_dir(aim: Fx, ax: i32, az: i32) -> V3 {
 const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
 
 fn step_player(p: &mut Player, input: Input) {
+    // Contact freeze, before anything else. Nothing about this fighter
+    // advances while it runs -- not the move they are in, not the stun they are
+    // in, not gravity -- so a blow reads as a collision rather than as a number
+    // going down. Both sides get the same frames, so neither gains tempo by it.
+    //
+    // The one thing that does happen is the victim choosing their direction, on
+    // the last frozen frame. The freeze *is* the window: see `steer_knockback`.
+    if p.hitlag > 0 {
+        p.hitlag -= 1;
+        if p.hitlag == 0 {
+            steer_knockback(p, input);
+        }
+        return;
+    }
+
     // Facing comes from the mouse. Where you look is where you are pointed, and
     // where you are pointed is where your attacks go.
     //
@@ -1301,6 +1519,14 @@ fn hash_v3(h: &mut Fnv, v: &V3) {
 /// Let a body come to rest without accepting input. Used during the pause
 /// between rounds.
 fn settle(p: &mut Player) {
+    // The knockout keeps its freeze. The killing blow is the one hit in a round
+    // both players are certain to be watching, and it lands with the biggest
+    // swell there is -- cutting the freeze short at exactly that moment would
+    // throw away the most legible thing the system does.
+    if p.hitlag > 0 {
+        p.hitlag -= 1;
+        return;
+    }
     p.vel.x = p.vel.x.mul(t::settle_decay());
     p.vel.z = p.vel.z.mul(t::settle_decay());
     if !p.grounded {
@@ -1385,6 +1611,42 @@ fn step_effects(effects: &mut [Option<Effect>; MAX_EFFECTS], players: &mut [Play
     }
 }
 
+/// One tick of a field, expressed as a blow.
+///
+/// A field hurts like anything else does, which is the point: a fire pillar
+/// that only drained health would be a number going down in the corner of the
+/// screen, where one that stuns and shoves is a piece of ground you have been
+/// denied. The shove points **away from the effect**, so standing in one costs
+/// you the spot you are standing on as well as the health.
+///
+/// Never blocked. You cannot face a floor, and guard is a facing arc.
+fn field_blow(effect: Effect, victim: &Player, damage: i32, hitstun: u16, knockback: Fx) -> Blow {
+    let out = V3::new(
+        victim.pos.x.sub(effect.pos.x),
+        Fx::ZERO,
+        victim.pos.z.sub(effect.pos.z),
+    );
+    // Standing dead centre leaves no "away" to point at. Shove along the
+    // victim's own facing instead of nowhere, so they still leave the spot.
+    let dir = if out.flat_len().raw() == 0 {
+        victim.facing
+    } else {
+        out.normalized()
+    };
+    Blow {
+        damage,
+        hitstun,
+        blockstun: 0,
+        knockback,
+        launch: Fx::ZERO,
+        grabs: 0,
+        by: effect.owner,
+        dir,
+        blocked: false,
+        parried: false,
+    }
+}
+
 fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
     let radius = t::body_radius();
     let height = t::body_height();
@@ -1400,7 +1662,16 @@ fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
                 let caught = base.contains(effect.pos, p.pos, radius, height)
                     || column.contains(effect.pos, p.pos, radius, height);
                 if caught && effect.ticks_now() {
-                    p.health = (p.health - t::pillar_damage()).max(0);
+                    strike(
+                        p,
+                        field_blow(
+                            effect,
+                            p,
+                            t::pillar_damage(),
+                            t::pillar_hitstun(),
+                            t::pillar_knockback(),
+                        ),
+                    );
                 }
             }
             EffectKind::BlackSpike => {
@@ -1416,7 +1687,16 @@ fn apply_effect(effect: Effect, players: &mut [Player; MAX_PLAYERS]) {
                     // puddle into a positioning tool.
                     p.slowed = t::slow_frames();
                     if effect.ticks_now() {
-                        p.health = (p.health - t::spike_drain()).max(0);
+                        strike(
+                            p,
+                            field_blow(
+                                effect,
+                                p,
+                                t::spike_drain(),
+                                t::spike_hitstun(),
+                                t::spike_knockback(),
+                            ),
+                        );
                     }
                 }
             }

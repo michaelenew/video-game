@@ -11,6 +11,7 @@
 //! Record what you tried in the feel log, including the things you reverted.
 
 use sim::class::ALL_CLASSES;
+use sim::fixed::Fx;
 use sim::moves::{self, Move};
 use sim::state::{SLOT_COMMITTED, SLOT_POKE};
 use sim::tuning as t;
@@ -349,4 +350,130 @@ fn an_aerial_hang_is_shorter_than_the_move_that_carries_it() {
             m.whiff_cost()
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Stun
+// ---------------------------------------------------------------------------
+//
+// The rules that have to hold for damage-stuns-and-shoves to produce a fight
+// with an arc rather than a stunlock or a shoving match. See
+// `docs/design/stun.md`.
+
+#[allow(clippy::assertions_on_constants)]
+#[test]
+fn knockback_swells_faster_than_hitstun_does() {
+    // **The combo design, in one comparison.** Both grow with the damage a
+    // fighter has taken. Knockback has to grow faster, or the window to follow
+    // someone up grows faster than the distance they cover and combos get
+    // easier for the rest of the round instead of harder -- which is a fight
+    // that ends in a stunlock rather than in a kill.
+    assert!(
+        t::swell_knockback().raw() > t::swell_hitstun().raw(),
+        "hitstun swells at least as fast as knockback ({} against {}); \
+         a combo that works once works forever",
+        t::swell_hitstun().to_f32_for_render(),
+        t::swell_knockback().to_f32_for_render(),
+    );
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[test]
+fn a_hit_never_lands_softer_for_being_late() {
+    // Both swells are added to one, so the move table's numbers are a floor:
+    // what a move does to someone untouched. A negative growth would make a
+    // move weaken as the round went on, which no reading of the frame table
+    // would ever suggest.
+    assert!(t::swell_knockback().raw() >= 0);
+    assert!(t::swell_hitstun().raw() >= 0);
+    assert!(t::swell_blow().raw() >= 0);
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[test]
+fn no_source_of_damage_can_stun_for_longer_than_it_takes_to_repeat() {
+    // A field ticks on a cadence. Stun it for longer than the cadence and the
+    // next tick lands on someone who never got to move, which is a loop with no
+    // exit -- and the fighter who laid it did not have to be there for any of
+    // it. The freeze counts, because it is time the victim also cannot act in.
+    let interval = t::effect_tick_frames();
+    for (name, stun) in [
+        ("fire pillar", (t::pillar_hitstun(), t::pillar_damage())),
+        ("black spike", (t::spike_hitstun(), t::spike_drain())),
+    ] {
+        let (frames, damage) = stun;
+        let held = frames + sim::state::hitlag_frames(damage);
+        assert!(
+            held < interval,
+            "a {name} holds you for {held} frames and ticks every {interval}; \
+             standing in one is a loop with no exit"
+        );
+    }
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[test]
+fn influence_can_steer_a_launch_but_never_reverse_one() {
+    // DI bends the launch by at most `atan(strength)`. At one the bend is 45
+    // degrees, which is already enough to pick a quadrant; past that a victim
+    // is choosing their own direction and knockback has stopped being something
+    // the attacker decides.
+    assert!(
+        t::di_strength().raw() < Fx::ONE.raw(),
+        "influence bends a launch by 45 degrees or more, which is not influence"
+    );
+    assert!(
+        t::di_strength().raw() > 0,
+        "there is no influence at all, so the freeze is presentation and nothing else"
+    );
+}
+
+#[test]
+fn the_freeze_is_punctuation_and_not_a_pause() {
+    // Hitlag has to be long enough to read as contact and short enough that the
+    // fight does not become a slideshow. The upper bound is the one that bites:
+    // the heaviest move in the game is the worst case, and a freeze approaching
+    // its own startup would mean two hits a second.
+    let heaviest = every_move().map(|(_, m)| m.damage).max().unwrap();
+    let freeze = sim::state::hitlag_frames(heaviest);
+    assert!(freeze >= 2, "a hit does not freeze long enough to be felt");
+    assert!(
+        freeze < t::HUMAN_REACTION_FRAMES,
+        "the heaviest move freezes the game for {freeze} frames, which is a pause"
+    );
+}
+
+#[test]
+fn classes_do_not_all_weigh_the_same() {
+    // Weight decides how far a fighter travels when hit, which decides whether
+    // they can be comboed at all. One shared value would throw away the
+    // clearest way a roster can differ.
+    let weights: Vec<f32> = ALL_CLASSES
+        .iter()
+        .map(|c| c.weight().to_f32_for_render())
+        .collect();
+    let (lo, hi) = weights
+        .iter()
+        .fold((f32::MAX, 0.0f32), |(l, h), x| (l.min(*x), h.max(*x)));
+    assert!(lo > 0.0, "a class weighs nothing: {weights:?}");
+    assert!(hi / lo > 1.2, "every class weighs the same: {weights:?}");
+}
+
+#[test]
+fn the_heavy_is_the_heaviest_and_the_glass_cannon_is_the_lightest() {
+    // Not arithmetic: this is the roster saying the same thing twice. A Bulwark
+    // that flew further than a Dual mage would read as a bug to anyone who had
+    // looked at either class for a minute.
+    let heaviest = ALL_CLASSES.iter().max_by_key(|c| c.weight().raw()).unwrap();
+    let lightest = ALL_CLASSES.iter().min_by_key(|c| c.weight().raw()).unwrap();
+    assert_eq!(
+        *heaviest,
+        sim::Class::Bulwark,
+        "the wall is not the heaviest"
+    );
+    assert_eq!(
+        *lightest,
+        sim::Class::DualMage,
+        "the floatiest class is not the lightest"
+    );
 }

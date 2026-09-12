@@ -26,6 +26,15 @@ positional, covering a facing arc rather than a bubble. Blocking costs **space a
 vulnerable window** — knockback plus stunlock, no chip damage, no guard meter. Parry is the
 opening frames of block and rewards with a stagger. Special attacks are the guard breakers.
 
+**Every point of damage stuns.** A hit freezes both fighters for a few frames, interrupts
+whatever the victim was doing, and shoves them. Stun and knockback both **swell with the
+damage the victim has already taken** — Smash's percent, for a bar that counts down — and
+knockback swells faster, so combos open up in the middle of a round and close again by the
+end. The victim bends their own launch with the direction they hold, never shortens it.
+Fields stun too, so terrain takes ground away rather than only health. See
+[stun.md](stun.md). This is not [stagger](defense.md), which is rare, long, and the prize
+for a read.
+
 **Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Now: *click = attack, shift +
 click = the committed version, shift + direction = dodge, WASD = move, space = jump, `Q` = the
 class special, `E` = the class mechanic, mouse = where.* Was: *click = attack, shift =
@@ -73,6 +82,7 @@ few enough to balance and to read in third person.
 | [controls.md](controls.md) | Input grammar, per-class schemes | Proposed |
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
+| [stun.md](stun.md) | What happens to whoever got hit, and why combos have a window | Decided |
 | [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
 | [champion.md](champion.md) | Forms and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
@@ -94,6 +104,7 @@ Nothing here blocks a prototype.
 | **Move + heavy attack** | ⚠️ **Known gap.** Shift+direction dodges and shift+click is the heavy, so holding a direction while throwing a heavy has no input — the dodge eats it. Deferred deliberately: movement settles first, then the attack grammar is built around it |
 | **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
 | **Aerials** | ⚠️ **Newly open, and the intended direction.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. Nothing is implemented; airborne currently gives the grounded move |
+| **Tumble and teching** | ⚠️ **Newly open.** [Stun](stun.md) shoves people now; past some knockback a victim should hit the ground rather than land on their feet, with a timed input to recover. Wants the arena and the aerial game settled first |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
 | **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
 | Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers |
@@ -121,8 +132,8 @@ character progression.
 
 Rust, six crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 152 tests cover
-determinism, combat relationships, camera and animation.
+exemplar moves, peer-to-peer rollback play works over real UDP, and 198 tests cover
+determinism, combat relationships, stun, camera and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
@@ -185,8 +196,9 @@ session that found them.
   comment saying where it came from.
 - **`crates/sim/tests/feel.rs`** — pins the *relationships* that must hold no matter
   how the numbers move: every attack is punishable on block, every class can beat a
-  turtle, a parry pays for itself, the dodge outruns a walk. These found six real
-  design gaps on the day they were written.
+  turtle, a parry pays for itself, the dodge outruns a walk, knockback swells faster
+  than hitstun so combos have an end. These found six real design gaps on the day they
+  were written.
 
 A number is a guess until someone plays against it. A relationship is a design
 decision, and belongs in a test.

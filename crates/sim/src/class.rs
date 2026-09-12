@@ -26,7 +26,7 @@ pub const ALL_CLASSES: [Class; 6] = [
     Class::DualMage,
 ];
 
-/// How a class moves through the air.
+/// How a class moves through the air, and how far it goes when it is hit.
 ///
 /// Classes differ in the air before they differ anywhere else, the way they do
 /// in a platform fighter. Weight is the most legible difference a character can
@@ -48,42 +48,58 @@ pub struct Mobility {
     /// Small next to the walk speed on purpose -- it turns you, it does not
     /// carry you.
     pub air_speed: Fx,
-}
-
-const fn mobility(
-    jump: (i32, i32),
-    gravity: (i32, i32),
-    fall: (i32, i32),
-    air: (i32, i32),
-) -> Mobility {
-    Mobility {
-        jump: Fx::ratio(jump.0, jump.1),
-        gravity: Fx::ratio(gravity.0, gravity.1),
-        fall_cap: Fx::ratio(fall.0, fall.1),
-        air_speed: Fx::ratio(air.0, air.1),
-    }
+    /// What a fighter divides incoming knockback by. Above one is a heavy.
+    ///
+    /// Knockback only. Hitstun is left alone deliberately: it is authored per
+    /// move here rather than derived from knockback the way Smash derives it,
+    /// and a class-dependent hitstun would mean the frame table's "on hit"
+    /// column stopped being a property of the move. The cost of that choice is
+    /// the interesting part -- a heavy takes the same stun and travels less far
+    /// out of it, so heavies are combo food. That is the right answer arrived
+    /// at honestly, and it is the same answer a platform fighter gives.
+    pub weight: Fx,
 }
 
 impl Class {
-    /// Air stats. The numbers are guesses; the *spread* is the design.
-    pub const fn mobility(self) -> Mobility {
-        match self {
-            // Heavy. Low jump, falls hard, barely steers. Committing to the air
-            // should be a real decision for the class whose whole identity is
-            // holding ground.
-            Class::Bulwark => mobility((88, 100), (118, 100), (115, 100), (9, 10)),
-            // Middleweight baseline. Everything else is read against this.
-            Class::Champion => mobility((1, 1), (1, 1), (1, 1), (12, 10)),
-            // The most mobile thing in the air, which is what a class built on
-            // repositioning should be.
-            Class::ShadowReaver => mobility((110, 100), (92, 100), (95, 100), (17, 10)),
-            // Floats, but steers poorly: a caster in the air is committed to
-            // where the jump was going to take them.
-            Class::Elementalist => mobility((105, 100), (85, 100), (88, 100), (10, 10)),
-            Class::BloodMage => mobility((1, 1), (98, 100), (1, 1), (13, 10)),
-            // The floatiest. Long hang time is the trade for being fragile.
-            Class::DualMage => mobility((112, 100), (80, 100), (85, 100), (14, 10)),
+    /// Air stats and weight, live from the Oven.
+    ///
+    /// These used to be `const` ratios written here. They are exactly as much
+    /// a feel number as any frame count -- a class's weight decides whether it
+    /// can be comboed at all -- so they are knobs like everything else, and the
+    /// prose that used to justify each value now sits beside the classes it
+    /// describes rather than beside the digits.
+    ///
+    /// The numbers are guesses; the *spread* is the design.
+    ///
+    /// - **Bulwark** is the heavy: low jump, falls hard, barely steers, and
+    ///   does not travel when struck. Committing to the air should be a real
+    ///   decision for the class whose identity is holding ground.
+    /// - **Champion** is the middleweight baseline. Everything is read against
+    ///   it.
+    /// - **Shadow Reaver** is the most mobile thing in the air, which is what a
+    ///   class built on repositioning should be.
+    /// - **Elementalist** floats but steers poorly: a caster in the air is
+    ///   committed to wherever the jump was taking them.
+    /// - **Blood mage** is slightly heavy, which matters more than it looks --
+    ///   it spends its own health, and spending health is what makes you
+    ///   launchable. The weight is the counterweight to its own mechanic.
+    /// - **Dual mage** is the floatiest and the lightest. Long hang time and a
+    ///   long ride off every hit are the trade for the kit.
+    pub fn mobility(self) -> Mobility {
+        use crate::oven::{self, AirField as A};
+        let raw = |f: A| Fx::from_raw(oven::air(self, f));
+        Mobility {
+            jump: raw(A::Jump),
+            gravity: raw(A::Gravity),
+            fall_cap: raw(A::FallCap),
+            air_speed: raw(A::AirSpeed),
+            weight: raw(A::Weight),
         }
+    }
+
+    /// What incoming knockback is divided by. Above one is a heavy.
+    pub fn weight(self) -> Fx {
+        self.mobility().weight
     }
 
     pub const fn name(self) -> &'static str {

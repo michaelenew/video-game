@@ -449,6 +449,28 @@ not hitstun with a longer timer: hitstun is something you recover from where you
 grab is something that takes you somewhere. That is what makes it worth beating guard with,
 and what makes whiffing it a commitment for both fighters.
 
+### Every point of damage goes through one funnel
+
+`state::strike` is the only thing in the game that reduces health, and it also applies the
+freeze, the stun and the knockback. A sword, a thrown shield and a tick of a fire pillar
+differ in where their numbers come from and in nothing else.
+
+One funnel is what makes "damage stuns" a rule rather than something most damage happens to
+do. Before it, the fields dealt damage on their own and interrupted nobody, which made an
+Elementalist's pillar a number in the corner of the screen rather than ground she had taken.
+See [stun.md](stun.md).
+
+### Contact freeze is snapshot state
+
+`Player::hitlag` stops a fighter's frames advancing, so it is in `World` and in the checksum
+like everything else that decides a match. The renderer needs no part of it: poses and
+positions are simulation state, so a frozen fighter is a frozen picture for free.
+
+The one thing that does happen during the freeze is the victim's directional influence,
+read on the last frozen frame. Recomputing it from the input rather than remembering a
+choice is what makes it survive a rollback — the same reason the mechanic's press edge lives
+on the fighter.
+
 ## The debug overlay draws what the rules use
 
 **F1.** Hitboxes while they are out, hurtboxes always, guard arcs, facing, and wherever the
@@ -698,9 +720,10 @@ Everything below builds and passes today.
 | `Fx` fixed point, vectors, trig | Working, tested |
 | `Input` bitfield | Matches [controls.md](controls.md) |
 | `World`, tick, hitboxes, guard, parry, hitstun | Bulwark stand-in: Bash 4/3/10, Slam 14/4/24 |
+| Stun: freeze, interrupt, knockback, swell, influence | Every damage source, [stun.md](stun.md) |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 163 tests |
+| Test suites | 198 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |

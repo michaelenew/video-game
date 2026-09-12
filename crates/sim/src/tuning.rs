@@ -155,12 +155,6 @@ pub fn body_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyHeight))
 }
 
-/// Knockback decay per tick while stunned. Below 1.0 or a hit sends you
-/// sliding forever.
-pub fn knockback_decay() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::KnockbackDecay))
-}
-
 // ---------------------------------------------------------------------------
 // Match
 // ---------------------------------------------------------------------------
@@ -462,4 +456,105 @@ pub fn structure_rise_curve() -> crate::curve::Curve {
         x2: Fx::from_raw(oven::scalar(Scalar::RiseCurveX2)),
         y2: Fx::from_raw(oven::scalar(Scalar::RiseCurveY2)),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Stun
+// ---------------------------------------------------------------------------
+//
+// Every point of damage in the game stuns, shoves, and interrupts. The rules
+// live in `state::strike`; these are the numbers they read. See
+// `docs/design/stun.md`.
+
+/// How much further you fly at death's door than at full health.
+///
+/// Smash's percent, in a game whose bar counts down instead of up. Knockback is
+/// multiplied by one plus this, scaled by the fraction of your health already
+/// gone, so a move's `knockback` in the move table means **what it does to
+/// someone untouched** and everything above that is the damage you have already
+/// taken talking.
+///
+/// This is the number that gives a match an arc. Early exchanges shove; the same
+/// move at the end of a round launches. It is also what makes the last hit of a
+/// round legible -- the body goes a long way, and both players can see it.
+pub fn swell_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellKnockback))
+}
+
+/// Extra swell proportional to the blow's share of a health bar.
+///
+/// Smash multiplies its percent term by the damage of the move that landed,
+/// which is what stops a jab from ever killing while a smash attack does. The
+/// same trick here, and for the same reason: without it every move would swell
+/// by the same factor and a poke would become a launcher purely by being thrown
+/// late in the round. Reading the move's own damage means it needs no per-move
+/// authoring -- the table already says how hard each move hits.
+pub fn swell_blow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellBlow))
+}
+
+/// How much longer hitstun runs at death's door than at full health.
+///
+/// **Deliberately far smaller than the knockback swell, and that gap is the
+/// whole design.** Both grow with damage taken, but knockback grows faster, so
+/// the distance a victim covers outruns the window their attacker has to follow
+/// them. Combos are therefore a property of the early round: the same two moves
+/// that link at full health leave a gap at the end of one. Pinned by
+/// `combos_are_an_opening-round_thing` in the feel tests.
+pub fn swell_hitstun() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SwellHitstun))
+}
+
+/// Frames both fighters freeze on contact, before anything else happens.
+///
+/// Hitlag: the crunch. It is not a balance number -- the frames are given back
+/// to both sides, so nobody gains or loses tempo by it -- it is the punctuation
+/// that makes a hit read as a hit rather than as a number changing. It also
+/// buys the victim the window in which they choose their direction; see
+/// `di_strength`.
+pub fn hitlag_base() -> u16 {
+    oven::scalar(Scalar::HitlagBase) as u16
+}
+
+/// Extra freeze per point of damage, so a heavy blow lands heavier.
+pub fn hitlag_per_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HitlagPerDamage))
+}
+
+/// How far a victim may bend their own knockback, as a tangent.
+///
+/// Directional influence. 0.35 is a little under twenty degrees, which is close
+/// to what Smash allows, and the reason for a number in that region is that it
+/// has to be small enough that it cannot become an escape and large enough that
+/// aiming it changes where you land. **It never changes how far you go**, only
+/// which way -- see `state::steer_knockback`.
+pub fn di_strength() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DiStrength))
+}
+
+/// Stun and shove from one tick of a fire pillar.
+///
+/// Short on purpose. A field ticks on a cadence, so a stun as long as the
+/// cadence is a loop with no exit -- pinned by
+/// `no_source_of_damage_can_stun_for_longer_than_it_takes_to_repeat`.
+pub fn pillar_hitstun() -> u16 {
+    oven::scalar(Scalar::PillarHitstun) as u16
+}
+
+pub fn pillar_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PillarKnockback))
+}
+
+/// Stun and shove from one tick of a drain field.
+///
+/// The shove is small next to the pillar's. The pillar is a thing you are
+/// thrown off; the drain field is a wall you are slowed leaving, and a field
+/// that flung people clear of itself would be doing the Blood mage's job
+/// backwards.
+pub fn spike_hitstun() -> u16 {
+    oven::scalar(Scalar::SpikeHitstun) as u16
+}
+
+pub fn spike_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeKnockback))
 }

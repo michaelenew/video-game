@@ -17,7 +17,8 @@ revisions written against the old system and are kept as source material, not as
 - **Camera** — 3D, third person. Ability spectacle is an explicit design goal: abilities
   should be visually rewarding to use, and the camera exists to show them off.
 - **Mechanical test** — Smash, not Tekken. Spatial and temporal commitment, whiff
-  punishment, reads, and space control. Not input strings or execution chains.
+  punishment, reads, and space control. Not input strings or execution chains. The hit
+  reaction is where that choice actually lives — see [stun.md](stun.md).
 - **Art thesis** — the closed arena means far less art, writing, and content than an
   open world. Design choices that add depth without adding assets are preferred, and
   this is a real tiebreaker, not a nicety.
@@ -75,6 +76,13 @@ needs re-expression before it can be used.
 ## Open kernel questions
 
 These block class work and should be settled next.
+
+### Stun — decided, see [stun.md](stun.md)
+
+Every point of damage freezes both fighters briefly, interrupts whatever the victim was
+doing, and shoves them; stun and knockback swell with the damage already taken, and
+knockback swells faster, so combos have a window in the middle of a round rather than
+running forever. Distinct from stagger, which stays the reward for a read.
 
 ### Block and parry — proposed, see [defense.md](defense.md)
 

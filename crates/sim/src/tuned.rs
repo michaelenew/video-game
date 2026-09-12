@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 80] = [
+pub const SCALARS: [i32; 89] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -30,7 +30,6 @@ pub const SCALARS: [i32; 80] = [
          1114112, // defence.dodge_speed = 17
               16, // defence.airdodge_length = 16
           851968, // defence.airdodge_speed = 13
-           56360, // defence.knockback_decay = 0.86
            32768, // body.body_radius = 0.5
           117964, // body.body_height = 1.8
            36044, // body.crouch_height_(x) = 0.55
@@ -70,7 +69,7 @@ pub const SCALARS: [i32; 80] = [
           163840, // effects.structure_placed_ahead = 2.5
           117964, // effects.structure_height = 1.8
            60948, // defence.dodge_decay = 0.93
-           56360, // defence.hitstun_decay = 0.86
+           60948, // defence.hitstun_decay = 0.93
            57671, // match.settle_decay = 0.88
            52428, // champion.hammer_reach_(x) = 0.8
            88473, // champion.hammer_damage_(x) = 1.35
@@ -88,34 +87,50 @@ pub const SCALARS: [i32; 80] = [
                0, // effects.structure_rise,_hold_lift = 0
            62259, // effects.structure_rise,_burst = 0.95
            65536, // effects.structure_rise,_burst_lift = 1
+          294912, // stun.knockback_swell_at_death = 4.5
+          327680, // stun.swell_per_blow_weight = 5
+           91750, // stun.hitstun_swell_at_death = 1.4
+               3, // stun.hitlag_floor = 3
+            1638, // stun.hitlag_per_point_of_damage = 0.025
+           22937, // stun.directional_influence = 0.35
+               7, // effects.fire_pillar_stun = 7
+          393216, // effects.fire_pillar_shove = 6
+               6, // effects.black_spike_stun = 6
+          131072, // effects.black_spike_shove = 2
 ];
 
 #[rustfmt::skip]
-pub const AIR: [i32; 24] = [
+pub const AIR: [i32; 30] = [
            57671, // air.bulwark.jump_(x) = 0.88
            77332, // air.bulwark.gravity_(x) = 1.18
            75366, // air.bulwark.fall_cap_(x) = 1.15
            58982, // air.bulwark.steering = 0.9
+           88473, // air.bulwark.weight_(x) = 1.35
            65536, // air.champion.jump_(x) = 1
            65536, // air.champion.gravity_(x) = 1
            65536, // air.champion.fall_cap_(x) = 1
            78643, // air.champion.steering = 1.2
+           65536, // air.champion.weight_(x) = 1
            72089, // air.shadow_reaver.jump_(x) = 1.1
            60293, // air.shadow_reaver.gravity_(x) = 0.92
            62259, // air.shadow_reaver.fall_cap_(x) = 0.95
           111411, // air.shadow_reaver.steering = 1.7
+           60293, // air.shadow_reaver.weight_(x) = 0.92
            68812, // air.elementalist.jump_(x) = 1.05
            55705, // air.elementalist.gravity_(x) = 0.85
            57671, // air.elementalist.fall_cap_(x) = 0.88
            65536, // air.elementalist.steering = 1
+           55705, // air.elementalist.weight_(x) = 0.85
            65536, // air.blood_mage.jump_(x) = 1
            64225, // air.blood_mage.gravity_(x) = 0.98
            65536, // air.blood_mage.fall_cap_(x) = 1
            85196, // air.blood_mage.steering = 1.3
+           68812, // air.blood_mage.weight_(x) = 1.05
            73400, // air.dual_mage.jump_(x) = 1.12
            52428, // air.dual_mage.gravity_(x) = 0.8
            55705, // air.dual_mage.fall_cap_(x) = 0.85
            91750, // air.dual_mage.steering = 1.4
+           51118, // air.dual_mage.weight_(x) = 0.78
 ];
 
 #[rustfmt::skip]

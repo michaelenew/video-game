@@ -136,7 +136,6 @@ scalars! {
     DodgeSpeed,       "Defence",  "Dodge speed",            Fixed,   fx(1,1),   fx(40,1);
     AirDodgeFrames,   "Defence",  "Airdodge length",        Frames,  1,         60;
     AirDodgeSpeed,    "Defence",  "Airdodge speed",         Fixed,   fx(1,1),   fx(40,1);
-    KnockbackDecay,   "Defence",  "Knockback decay",        Fixed,   0,         fx(1,1);
     BodyRadius,       "Body",     "Body radius",            Fixed,   fx(1,10),  fx(2,1);
     BodyHeight,       "Body",     "Body height",            Fixed,   fx(1,2),   fx(4,1);
     CrouchHeightScale,"Body",     "Crouch height (x)",      Fixed,   fx(1,10),  fx(1,1);
@@ -194,18 +193,37 @@ scalars! {
     RiseCurveY1,      "Effects",  "Structure rise, hold lift",  Fixed,   0,         fx(1,1);
     RiseCurveX2,      "Effects",  "Structure rise, burst",      Fixed,   0,         fx(1,1);
     RiseCurveY2,      "Effects",  "Structure rise, burst lift", Fixed,   0,         fx(1,1);
+    SwellKnockback,   "Stun",     "Knockback swell at death",   Fixed,   0,         fx(8,1);
+    SwellBlow,        "Stun",     "Swell per blow weight",      Fixed,   0,         fx(20,1);
+    SwellHitstun,     "Stun",     "Hitstun swell at death",     Fixed,   0,         fx(3,1);
+    HitlagBase,       "Stun",     "Hitlag floor",               Frames,  0,         20;
+    HitlagPerDamage,  "Stun",     "Hitlag per point of damage", Fixed,   0,         fx(1,4);
+    DiStrength,       "Stun",     "Directional influence",      Fixed,   0,         fx(1,1);
+    PillarHitstun,    "Effects",  "Fire pillar stun",           Frames,  0,         30;
+    PillarKnockback,  "Effects",  "Fire pillar shove",          Fixed,   0,         fx(20,1);
+    SpikeHitstun,     "Effects",  "Black spike stun",           Frames,  0,         30;
+    SpikeKnockback,   "Effects",  "Black spike shove",          Fixed,   0,         fx(20,1);
 }
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data
 // ---------------------------------------------------------------------------
 
+/// Per-class flight: how a class moves through the air, and how far it goes
+/// when something hits it.
+///
+/// Weight sits here rather than in a family of its own because its only job is
+/// flight. A heavy fighter is one that does not travel when struck, which is
+/// the same quantity the jump and gravity multipliers are describing from the
+/// other direction. Appended last, so the indices the baked file was written
+/// with keep their meaning.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AirField {
     Jump,
     Gravity,
     FallCap,
     AirSpeed,
+    Weight,
 }
 
 impl AirField {
@@ -214,6 +232,7 @@ impl AirField {
         AirField::Gravity,
         AirField::FallCap,
         AirField::AirSpeed,
+        AirField::Weight,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -222,6 +241,7 @@ impl AirField {
             AirField::Gravity => "Gravity (x)",
             AirField::FallCap => "Fall cap (x)",
             AirField::AirSpeed => "Steering",
+            AirField::Weight => "Weight (x)",
         }
     }
 
@@ -334,8 +354,9 @@ impl MoveField {
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 80;
-pub const AIR_COUNT: usize = CLASSES * 4;
+pub const SCALAR_COUNT: usize = 89;
+pub const AIR_FIELDS: usize = 5;
+pub const AIR_COUNT: usize = CLASSES * AIR_FIELDS;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;
 
@@ -360,7 +381,7 @@ pub fn set_scalar(s: Scalar, raw: i32) {
 }
 
 fn air_index(class: Class, field: AirField) -> usize {
-    class as usize * 4 + field as usize
+    class as usize * AIR_FIELDS + field as usize
 }
 
 pub fn air(class: Class, field: AirField) -> i32 {
