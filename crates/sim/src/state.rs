@@ -16,7 +16,7 @@ use crate::DT;
 use crate::arena;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Mechanic};
-use crate::effects::{Effect, EffectKind, MAX_EFFECTS};
+use crate::effects::{self, Effect, EffectKind, MAX_EFFECTS};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
@@ -292,6 +292,15 @@ pub struct Player {
     /// plant your feet; without it the first frame aboard looks like an
     /// infinite acceleration and throws you straight back off.
     pub grip_settle: u8,
+
+    /// This shot passed through a fire pillar on its way out, so it hits as a
+    /// fire bolt rather than a plain poke. Decided once, on the frame the
+    /// move comes out, and cleared the same way every other move's first
+    /// active frame is entered -- see `docs/design/kits/elementalist.md`.
+    pub bolt_fire: bool,
+    /// This shot was aimed through a structure, which kicked it and ate the
+    /// hit -- the bolt never reaches a fighter beyond it.
+    pub bolt_blocked: bool,
 }
 
 impl Player {
@@ -392,6 +401,8 @@ impl Default for Player {
             carry_yaw: Fx::ZERO,
             grip_vel: V3::ZERO,
             grip_settle: 0,
+            bolt_fire: false,
+            bolt_blocked: false,
         }
     }
 }
@@ -569,6 +580,33 @@ impl World {
                     V3::new(spot.x, Fx::ZERO, spot.z),
                 );
             }
+
+            // The Elementalist's auto reads what it is aimed through, rather
+            // than always poking a fighter at short reach. Decided once, here,
+            // on the frame the shot comes out -- and reset every time whether
+            // or not it applies, so a stale decision from an earlier Bolt can
+            // never leak into a move that is not Bolt.
+            self.players[i].bolt_fire = false;
+            self.players[i].bolt_blocked = false;
+            if p.class == Class::Elementalist && kind == SLOT_POKE {
+                let from = p.pos;
+                let to = p.pos.add(p.facing.scale(t::bolt_aim_range()));
+                let stone_hit = stones::first_along_shot(&field, from, to);
+                let pillar_dist = effects::first_fire_pillar_along(&self.effects, from, to);
+                let stone_closer = match (stone_hit, pillar_dist) {
+                    (Some((_, sd)), Some(pd)) => sd.raw() <= pd.raw(),
+                    (Some(_), None) => true,
+                    (None, _) => false,
+                };
+                if stone_closer {
+                    if let Some((idx, _)) = stone_hit {
+                        stones::kick(&mut self.players, idx, p.facing);
+                        self.players[i].bolt_blocked = true;
+                    }
+                } else if pillar_dist.is_some() {
+                    self.players[i].bolt_fire = true;
+                }
+            }
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
@@ -744,6 +782,8 @@ impl World {
             hash_v3(&mut h, &p.grip_vel);
             h.write_i32(p.carry_yaw.raw());
             h.write_u32(p.grip_settle as u32);
+            h.write_u32(p.bolt_fire as u32);
+            h.write_u32(p.bolt_blocked as u32);
             hash_mechanic(&mut h, &p.mechanic);
         }
         match &self.monster {
@@ -857,6 +897,12 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
+    // Aimed through a structure: the bolt kicked it instead, and never
+    // reaches whatever is standing beyond it. See the aim-through block in
+    // `advance` and `docs/design/kits/elementalist.md`.
+    if attacker.class == Class::Elementalist && kind == SLOT_POKE && attacker.bolt_blocked {
+        return None;
+    }
     let box_out = hitbox(attacker)?;
     if box_out.spent || defender.action.invulnerable() {
         return None;
@@ -890,11 +936,24 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         && matches!(defender.action, Action::Guard { held } if held < t::parry_window())
         && facing_it;
 
+    // Aimed through a fire pillar: the same shot, empowered rather than
+    // replaced. A pillar is a hazard to walk into, not a wall, so it does not
+    // stop the bolt the way a structure does -- it charges it instead.
+    let (fire_damage_mul, fire_knockback_mul) =
+        if attacker.class == Class::Elementalist && kind == SLOT_POKE && attacker.bolt_fire {
+            (t::bolt_fire_damage_mul(), t::bolt_fire_knockback_mul())
+        } else {
+            (Fx::ONE, Fx::ONE)
+        };
+
     Some(Hit {
-        damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
+        damage: Fx::from_int(m.damage)
+            .mul(damage_mul)
+            .mul(fire_damage_mul)
+            .to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
-        knockback: m.knockback,
+        knockback: m.knockback.mul(fire_knockback_mul),
         launch: m.launch,
         grabs: m.grabs,
         by,
@@ -1566,6 +1625,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                         hash_v3(h, &s.vel);
                         h.write_u32(s.age as u32);
                         h.write_u32(s.struck as u32);
+                        h.write_u32(s.launched as u32);
+                        hash_v3(h, &s.launch_from);
+                        h.write_u32(s.knock_struck as u32);
                     }
                     None => h.write_u32(0),
                 }

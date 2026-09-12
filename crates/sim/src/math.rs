@@ -70,6 +70,29 @@ impl V3 {
     }
 }
 
+/// Where a shot from `from` toward `to` passes closest to `centre`, and
+/// whether that approach comes within `radius` of it -- flat, like every
+/// other hit test in the game.
+///
+/// Returns the distance along the segment to that closest point, clamped to
+/// the segment itself, so a caller comparing two different things a shot
+/// might be aimed through can tell which one it reaches first.
+pub fn ray_hits_flat(from: V3, to: V3, centre: V3, radius: Fx) -> Option<Fx> {
+    let seg = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
+    let len_sq = seg.dot(seg);
+    if len_sq.raw() <= 0 {
+        return None;
+    }
+    let to_centre = V3::new(centre.x.sub(from.x), Fx::ZERO, centre.z.sub(from.z));
+    let t = to_centre.dot(seg).div(len_sq).clamp(Fx::ZERO, Fx::ONE);
+    let closest = V3::new(from.x.add(seg.x.mul(t)), Fx::ZERO, from.z.add(seg.z.mul(t)));
+    let dist = V3::new(centre.x.sub(closest.x), Fx::ZERO, centre.z.sub(closest.z)).flat_len();
+    if dist.raw() > radius.raw() {
+        return None;
+    }
+    Some(seg.flat_len().mul(t))
+}
+
 /// Linear blend. `at` outside 0..1 extrapolates, which is occasionally what you
 /// want and never a surprise.
 pub const fn lerp(from: Fx, to: Fx, at: Fx) -> Fx {

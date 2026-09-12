@@ -67,6 +67,9 @@ fn standing_at(x: i32, z: i32) -> Structure {
         // coming up.
         age: t::structure_rise() + 1,
         struck: 0,
+        launched: false,
+        launch_from: V3::ZERO,
+        knock_struck: 0,
     }
 }
 
@@ -317,6 +320,108 @@ fn a_stone_erupting_underneath_carries_a_fighter_up_with_it() {
         highest.raw() > t::structure_height().raw(),
         "the fighter was lifted to {} m, which is no further than the stone itself came up",
         highest.to_f32_for_render()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The auto, aimed through a structure
+// ---------------------------------------------------------------------------
+
+/// Hold left click until Bolt becomes active, or fail the test trying.
+fn cast_bolt(w: &mut World) {
+    for _ in 0..30 {
+        run(w, 1, Input::LEFT, 0);
+        if matches!(w.players[0].action, Action::Active { kind: 0, .. }) {
+            return;
+        }
+    }
+    panic!("Bolt never became active");
+}
+
+#[test]
+fn a_bolt_aimed_through_a_structure_kicks_it_instead_of_reaching_past_it() {
+    // The auto reads what it is aimed through. See
+    // docs/design/kits/elementalist.md.
+    let mut w = elementalist();
+    tap(&mut w, E, 30); // raise a structure ahead, and let it fully rise
+    assert_eq!(
+        stone(&w, 0).vel,
+        V3::ZERO,
+        "fixture's stone was already moving"
+    );
+
+    cast_bolt(&mut w);
+
+    let after = stone(&w, 0);
+    assert!(
+        after.launched,
+        "aiming Bolt through a structure did not kick it"
+    );
+    assert!(
+        flat_speed(after.vel).raw() > 0,
+        "a kicked stone did not pick up any speed"
+    );
+    assert!(
+        w.players[0].bolt_blocked,
+        "the shot did not register as blocked by the structure it kicked"
+    );
+}
+
+#[test]
+fn a_kicked_stone_dies_off_over_the_back_of_its_travel() {
+    // "Dies off in speed in the last quarter of its path" from the design
+    // note this implements: full speed for most of the travel, decaying
+    // toward the end rather than a flat friction the whole way.
+    let mut w = elementalist();
+    tap(&mut w, E, 30);
+    cast_bolt(&mut w);
+    let launch_speed = flat_speed(stone(&w, 0).vel);
+    assert!(launch_speed.raw() > 0, "fixture never kicked the stone");
+
+    // Early in the travel: still close to launch speed.
+    run(&mut w, 4, 0, 0);
+    let early = flat_speed(stone(&w, 0).vel);
+    assert!(
+        early.raw() > launch_speed.raw() / 2,
+        "the stone lost most of its speed almost immediately: {} of {}",
+        early.to_f32_for_render(),
+        launch_speed.to_f32_for_render()
+    );
+
+    // Let it run out its whole travel; by then it must have died off.
+    run(&mut w, 90, 0, 0);
+    let late = flat_speed(stone(&w, 0).vel);
+    assert!(
+        late.raw() < early.raw(),
+        "a kicked stone was still at full speed at the end of its travel"
+    );
+}
+
+#[test]
+fn a_kicked_stone_hurts_a_fighter_it_is_still_moving_fast_enough_to_catch() {
+    let mut w = elementalist();
+    // Put the structure directly between the two fighters, close enough that
+    // it is still near launch speed when it reaches the other one.
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
+    run(&mut w, 2, E, 0);
+    run(&mut w, 30, 0, 0); // let the structure fully rise
+
+    let before = w.players[1].health;
+    cast_bolt(&mut w);
+    let mut staggered = false;
+    for _ in 0..40 {
+        run(&mut w, 1, 0, 0);
+        staggered |= matches!(w.players[1].action, Action::Stagger { .. });
+    }
+
+    assert!(
+        w.players[1].health < before,
+        "a kicked stone passed straight through the fighter beyond it"
+    );
+    assert!(
+        staggered,
+        "getting run over by a kicked stone did not stagger anyone"
     );
 }
 

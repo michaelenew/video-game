@@ -96,6 +96,16 @@ const EXEMPT: &[(&str, &str)] = &[
         "Half of an overlap, given to each of the two bodies. Arithmetic, not a knob: any other \
          value would move the pair's centre of mass.",
     ),
+    (
+        "Fx::ratio(1, 10))",
+        "A division guard on the knock travel distance, not a distance itself: it only keeps a \
+         retuned range from reaching zero and dividing by it. `bolt_knock_range` is the knob.",
+    ),
+    (
+        "Fx::ratio(1, 100))",
+        "A division guard on the decel span, not a span itself: it only keeps a retuned decel \
+         start of exactly 1 from reaching zero and dividing by it.",
+    ),
 ];
 
 fn sim_sources() -> Vec<(String, String)> {

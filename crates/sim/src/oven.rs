@@ -273,6 +273,16 @@ scalars! {
     MonsterSpawn,     "Ridgeback","Spawns this far out",        Fixed,   0,         fx(14,1);
     HunterSpawn,      "Ridgeback","Hunters start this far out", Fixed,   0,         fx(14,1);
     StepUp,           "Riding",   "Step you can walk up",       Fixed,   0,         fx(2,1);
+    BoltAimRange,      "Elementalist", "Bolt aim range",                    Fixed,  fx(1,1),  fx(30,1);
+    BoltKnockSpeed,    "Elementalist", "Bolt knock speed",                  Fixed,  0,        fx(60,1);
+    BoltKnockRange,    "Elementalist", "Bolt knock travel",                 Fixed,  fx(1,10), fx(20,1);
+    BoltKnockDecelStart,"Elementalist","Bolt knock decel starts (x path)",  Fixed,  0,        fx(1,1);
+    BoltKnockMinSpeed, "Elementalist", "Bolt knock min speed to hurt",      Fixed,  0,        fx(30,1);
+    BoltKnockDamagePerSpeed, "Elementalist", "Bolt knock damage per m/s",   Int,    0,        50;
+    BoltKnockStagger,  "Elementalist", "Bolt knock stagger",                Frames, 0,        90;
+    BoltKnockPush,     "Elementalist", "Bolt knock push (x)",               Fixed,  0,        fx(3,1);
+    BoltFireDamageMul, "Elementalist", "Fire bolt damage (x)",              Fixed,  fx(1,1),  fx(4,1);
+    BoltFireKnockbackMul, "Elementalist", "Fire bolt knockback (x)",        Fixed,  fx(1,1),  fx(4,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -546,7 +556,7 @@ pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 159;
+pub const SCALAR_COUNT: usize = 169;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;

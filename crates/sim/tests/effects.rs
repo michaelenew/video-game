@@ -127,6 +127,44 @@ fn standing_in_a_fire_pillar_costs_you_and_standing_in_your_own_does_not() {
 }
 
 #[test]
+fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
+    // The auto reads what it is aimed through. A fire pillar is a hazard, not
+    // a wall, so it charges the shot instead of stopping it -- unlike a
+    // structure in the same spot. See docs/design/kits/elementalist.md.
+    let mut w = as_class(Class::Elementalist);
+    tap(&mut w, E, 4); // a structure, which the pillar needs
+    tap(&mut w, Q, 20); // plant a pillar ahead, along the same aim as Bolt
+    assert_eq!(
+        effects_of(&w, EffectKind::FirePillar).len(),
+        1,
+        "fixture planted no pillar to aim through"
+    );
+    // Clear the structure the pillar needed: it still sits closer along the
+    // same aim than the pillar it fed, and this test is isolating the
+    // pillar's own effect on the shot rather than the structure's.
+    w.players[0].mechanic = Mechanic::Structures([None; sim::class::MAX_STRUCTURES]);
+
+    for _ in 0..60 {
+        run(&mut w, 1, Input::LEFT, 0);
+        if matches!(w.players[0].action, Action::Active { kind: 0, .. }) {
+            break;
+        }
+    }
+    assert!(
+        matches!(w.players[0].action, Action::Active { kind: 0, .. }),
+        "Bolt never became active"
+    );
+    assert!(
+        w.players[0].bolt_fire,
+        "a bolt aimed through a fire pillar was not empowered"
+    );
+    assert!(
+        !w.players[0].bolt_blocked,
+        "a fire pillar blocked the shot the way a structure does, which it should not"
+    );
+}
+
+#[test]
 fn a_structure_has_no_clock_and_keeps_the_special_alive() {
     // This is the regression. Structures used to live in the effects array,
     // which gave them a lifetime; the fire pillar is gated on having one out,

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 159] = [
+pub const SCALARS: [i32; 169] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -167,6 +167,16 @@ pub const SCALARS: [i32; 159] = [
           491520, // ridgeback.spawns_this_far_out = 7.5
           589824, // ridgeback.hunters_start_this_far_out = 9
            49152, // riding.step_you_can_walk_up = 0.75
+         1310720, // elementalist.bolt_aim_range = 20
+         1572864, // elementalist.bolt_knock_speed = 24
+          589824, // elementalist.bolt_knock_travel = 9
+           49152, // elementalist.bolt_knock_decel_starts_(x_path) = 0.75
+          196608, // elementalist.bolt_knock_min_speed_to_hurt = 3
+               5, // elementalist.bolt_knock_damage_per_m/s = 5
+              20, // elementalist.bolt_knock_stagger = 20
+           32768, // elementalist.bolt_knock_push_(x) = 0.5
+           98304, // elementalist.fire_bolt_damage_(x) = 1.5
+           81920, // elementalist.fire_bolt_knockback_(x) = 1.25
 ];
 
 #[rustfmt::skip]

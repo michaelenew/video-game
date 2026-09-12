@@ -229,6 +229,22 @@ pub struct Structure {
     /// `Player::hit_used`, kept per victim because a stone is not aimed at
     /// anybody in particular.
     pub struck: u8,
+    /// Mid-flight from the Elementalist's own auto, aimed through it rather
+    /// than at a fighter. See `docs/design/kits/elementalist.md`.
+    ///
+    /// A separate flag rather than inferring it from velocity: a stone
+    /// knocked into another by an eruption is also moving fast, and that
+    /// knock must not be mistaken for a kick that hurts people.
+    pub launched: bool,
+    /// Where the current launch began, so `crate::stones` can tell how far
+    /// through its travel the stone is and ease its speed off near the end.
+    pub launch_from: V3,
+    /// Which fighters *this* launch has already hit.
+    ///
+    /// Kept apart from `struck`: a stone erupts once ever, but it can be
+    /// kicked again and again, and each kick is a fresh event that ought to
+    /// be able to hurt someone the last one already caught.
+    pub knock_struck: u8,
 }
 
 // ---------------------------------------------------------------------------

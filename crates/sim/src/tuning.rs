@@ -558,6 +558,72 @@ pub fn structure_rise_curve() -> crate::curve::Curve {
 }
 
 // ---------------------------------------------------------------------------
+// The Elementalist's auto, aimed through terrain
+// ---------------------------------------------------------------------------
+//
+// Bolt reads what it is aimed through rather than always poking a fighter at
+// short reach. See `docs/design/kits/elementalist.md` and `crate::stones`.
+
+/// How far she can aim through terrain looking for a structure or a fire
+/// pillar. Much longer than the poke's own `reach`, which only decides
+/// whether *that* shot can land on a fighter -- this is about what stands
+/// between her and that point in the first place.
+pub fn bolt_aim_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltAimRange))
+}
+
+/// How fast a kicked stone leaves. The ceiling `stones::launch_decel` eases
+/// down from over the back of its travel.
+pub fn bolt_knock_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockSpeed))
+}
+
+/// How far a kicked stone travels before it is considered spent. Measured
+/// from where the kick began, not a lifetime -- a stone parked by a wall
+/// partway through still counts the same distance it would have covered.
+pub fn bolt_knock_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockRange))
+}
+
+/// Where in that travel the stone starts dying off, as a fraction of the
+/// whole. Below it the stone keeps the shot's full speed; above it, speed
+/// eases toward zero by the time the travel runs out.
+pub fn bolt_knock_decel_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockDecelStart))
+}
+
+/// Below this closing speed a kicked stone is too slow to call a hit. It
+/// still shoves like any other stone; it just does not hurt anyone.
+pub fn bolt_knock_min_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockMinSpeed))
+}
+
+/// Damage per whole metre-per-second of closing speed, so a stone kicked at
+/// someone close to the point-blank ceiling hits far harder than one that has
+/// mostly died off by the time it reaches them.
+pub fn bolt_knock_damage_per_speed() -> i32 {
+    oven::scalar(Scalar::BoltKnockDamagePerSpeed)
+}
+
+pub fn bolt_knock_stagger() -> u16 {
+    oven::scalar(Scalar::BoltKnockStagger) as u16
+}
+
+/// How much of the closing speed a caught fighter is pushed with.
+pub fn bolt_knock_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockPush))
+}
+
+/// Damage multiplier for a shot aimed through a fire pillar first.
+pub fn bolt_fire_damage_mul() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltFireDamageMul))
+}
+
+pub fn bolt_fire_knockback_mul() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltFireKnockbackMul))
+}
+
+// ---------------------------------------------------------------------------
 // The Ridgeback
 //
 // See `docs/design/monsters.md`. Three groups, and they are edited separately
