@@ -40,6 +40,17 @@ impl EffectKind {
         }
     }
 
+    /// Does this come out of the ground?
+    ///
+    /// A property of the thing rather than of the move that made it: a pillar
+    /// of flame comes out of the floor whatever you were doing when you cast
+    /// it. It decides where an aimed cast lands -- see `crate::aim::target`.
+    pub const fn grounded(self) -> bool {
+        match self {
+            EffectKind::FirePillar | EffectKind::BlackSpike => true,
+        }
+    }
+
     /// Which move index spawns this, for the move tables.
     pub const fn from_code(code: u8) -> Option<EffectKind> {
         match code {

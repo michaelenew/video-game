@@ -48,3 +48,17 @@ pub fn aim_from_radians(yaw: f32) -> u16 {
 pub fn radians_from_aim(aim: u16) -> f32 {
     aim as f32 / 65536.0 * std::f32::consts::TAU
 }
+
+/// The same conversion for pitch, which is signed rather than wrapped.
+///
+/// Pitch does not wrap -- it is clamped well short of vertical either way, and
+/// an angle that wrapped past straight up would be a camera nobody could use --
+/// so it is a signed count of the same 1/65536 turn.
+pub fn pitch_from_radians(pitch: f32) -> i16 {
+    let turns = pitch / std::f32::consts::TAU;
+    (turns * 65536.0).round().clamp(-32768.0, 32767.0) as i16
+}
+
+pub fn radians_from_pitch(pitch: i16) -> f32 {
+    pitch as f32 / 65536.0 * std::f32::consts::TAU
+}

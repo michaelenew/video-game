@@ -1060,3 +1060,85 @@ timer would do exactly that. Progress is measured against how far it has actuall
 - Melee autos and the timing pass, unchanged from the note above — this closed one third of
   "the autos are due a pass, as a set," not the set.
 
+### 2026-09-12 — abilities go where the crosshair is
+**Changed** Area abilities stopped appearing a fixed distance straight ahead and started
+landing where the player is pointing. Pitch went on the wire to make that possible, the camera
+was rebuilt around it, and the crosshair stopped moving.
+
+**Why** The old rule — spawn at `pos + facing × reach`, flattened to the floor — meant the only
+way to place a fire pillar or a stone anywhere was to walk there. For a class whose whole
+identity is authoring terrain, that is the wrong verb.
+
+**The rule.** Follow the line the player is looking along, out from the point abilities come
+out of, and stop at the first of the terrain or the edge of that ability's reach. One sentence,
+and every case falls out of it: a spot inside your reach is placed exactly; a spot past it goes
+as far along that line as it can; the sky, for something that comes out of the ground, gives
+full reach flat ahead.
+
+**The reach sphere is the interesting half.** Tracing to terrain alone lurches — aim a hair
+over the lip of a platform and the hit jumps from two metres to the far wall, so a fraction of
+a degree swings the ability across the arena. Stopping at the reach bounds that jump to the
+ability's own range, which is the most it could ever have meant. It also gives both halves of
+what a player wants at once: aim at the ground to pick a *direction*, or aim at a spot inside
+your reach to pick a *place*.
+
+**The ray starts at the fighter, not at the eye**, which is the opposite of what a
+third-person shooter does. Two reasons, and the second is the binding one. It makes the aimed
+line and the travelled line the same line, so pointing at the floor short of someone gives the
+ray that passes through them. And the eye cannot be in the simulation at all: camera distance
+is a per-player setting and the follow position is smoothed, so solving the aim from there
+would have two peers at different zoom levels placing a pillar in different spots with neither
+of them wrong.
+
+**Three passes on the camera, and the first two were wrong.**
+
+*Orbit the cast origin.* If the eye sits exactly on the ability's line then the screen's centre
+ray **is** that line, which is exact and needs no machinery. It also puts the camera at chest
+height: the horizon climbs to the top of the frame and you cannot see the arena you are
+fighting in. Zero parallax is not worth a view from a fighter's sternum.
+
+*Leave the camera on the look axis and move the reticle.* Honest — the mark is drawn where the
+ability actually lands, sliding off centre by the parallax. Reported immediately, and correctly:
+*"a jumping crosshair would feel really really bad, like the player has no real control."* The
+reticle is the one thing on screen a player is deliberately holding still.
+
+*Point the camera at the aim point.* What shipped. The crosshair is pinned to the exact centre
+of the screen and the **view** absorbs the parallax instead, as a few degrees of pitch. The eye
+is then free to sit where it frames the fight best.
+
+**Which turned out to be directly behind and well above.** Reported: *"the camera appears to be
+behind and to the right… it feels quite cramped because the character model is almost right on
+the crosshairs no matter where you aim."* Both halves were real and they have different causes.
+The over-the-shoulder slide turns the whole view once the camera points at the target, so `W`
+stops walking up the screen — it is gone. And the fighter was on the reticle because the eye was
+at 1.4 m over their feet: the aim point and the fighter are both on the ground with the fighter
+nearer, so how far apart they sit on screen is a function of eye height. Lifted to 4 m, the
+fighter's head rests about seven degrees below the crosshair.
+
+**The handover moved to the horizon.** It used to start forty degrees up and finish at the pitch
+limit, which left a wide band with the arm dragging along the floor behind the fighter. Now the
+climb starts the moment the aim crosses the horizon and is complete half a radian above it, and
+the body **fades** rather than popping out at a threshold — one continuous motion, the fighter
+rising to the middle of the screen and thinning out as they get there.
+
+**Numbers.** Cast height 1.25 m — chest, not eyes, so the shot does not read as first-person
+fire from a third-person body. Orbit lift 1.4 → 4.0. Neutral pitch 0.26 → 0.10, which lands the
+resting aim about twelve metres out: the mark sits `cast_height / tan(pitch)` ahead, and the
+origin of that ray dropped from a point above the fighter's head to their chest. Raise's reach
+2.5 → 4 m, because 2.5 m stopped meaning "where the stone goes" and started meaning "how far you
+may aim", and 2.5 m is barely enough room to aim in.
+
+**Verdict** open — played through the harness and four headless captures: resting framing,
+aiming down at your own feet, aiming up into the fade, and the reticle pinned through all of
+them. The number most likely to be wrong is `sky_full`: a twenty-degree glance upward currently
+costs you sight of your own fighter, which may be too eager for a game with this much
+verticality.
+
+**What did not change.** Melee swings are still flat, at `pos + facing × reach`. A sword is a
+body moving, and pointing the camera at the floor should not put the blade there. Only the moves
+that *place* something are aimed.
+
+**Still open.** A stone stands a whole body height and abilities come out of the chest, so from
+the ground you are always looking at a stone's *side* and never at its top — stacking by aiming
+needs you to be above the cap. That is honest geometry rather than a bug, and it may still want
+an answer.

@@ -14,7 +14,8 @@
 //! by the same path as the buttons, gets predicted and rolled back by the same
 //! machinery, and the camera itself stays out of the snapshot entirely.
 
-use crate::fixed::Fx;
+use crate::fixed::{Fx, cos_turns, sin_turns};
+use crate::math::V3;
 
 /// One tick of input from one player.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug, Hash)]
@@ -29,9 +30,21 @@ pub struct Input {
     /// the fractional part of a turn already, so `aim_turns` is a widening
     /// cast rather than a conversion with rounding to disagree about.
     ///
-    /// Pitch is deliberately absent: it moves the camera but nothing in the
-    /// simulation, so it stays renderer-local and off the wire.
     pub aim: u16,
+    /// How far above or below the horizon the player is looking, in the same
+    /// 1/65536 of a turn, signed.
+    ///
+    /// It used to be renderer-local, on the grounds that it moved the camera
+    /// and nothing else. That stopped being true the moment abilities started
+    /// landing **where the crosshair is**: the crosshair is a line in space, a
+    /// line needs two angles, and where an ability lands is as much gameplay as
+    /// where you walk. So it rides along with the yaw, by the same path, and
+    /// rollback predicts and corrects it with the same machinery.
+    ///
+    /// Signed rather than wrapped, because pitch does not wrap -- it is clamped
+    /// to a little under a quarter turn either way, and a pitch that wrapped
+    /// past vertical would be a camera nobody could use.
+    pub pitch: i16,
 }
 
 impl Input {
@@ -54,13 +67,27 @@ impl Input {
     /// shadow, raise a structure. Not an attack, so it is not a click.
     pub const MECHANIC: u16 = 1 << 10;
 
-    /// Buttons only, looking down the positive X axis.
+    /// Buttons only, looking down the positive X axis, level.
     pub const fn new(bits: u16) -> Input {
-        Input { bits, aim: 0 }
+        Input {
+            bits,
+            aim: 0,
+            pitch: 0,
+        }
     }
 
+    /// Buttons and a yaw, level. Most tests want exactly this.
     pub const fn aimed(bits: u16, aim: u16) -> Input {
-        Input { bits, aim }
+        Input {
+            bits,
+            aim,
+            pitch: 0,
+        }
+    }
+
+    /// Buttons and a full look direction.
+    pub const fn looking_at(bits: u16, aim: u16, pitch: i16) -> Input {
+        Input { bits, aim, pitch }
     }
 
     /// A quarter turn, as the aim unit. Handy for tests and for turning a
@@ -74,6 +101,26 @@ impl Input {
         Fx::from_raw(self.aim as i32)
     }
 
+    /// Pitch as a fraction of a turn. Negative is below the horizon.
+    pub const fn pitch_turns(self) -> Fx {
+        Fx::from_raw(self.pitch as i32)
+    }
+
+    /// The line the player is looking along, as a unit vector.
+    ///
+    /// **This is the aiming primitive.** Everything a player places or throws
+    /// is placed or thrown along it, so there is one direction in the game
+    /// rather than one per ability -- see `crate::aim`.
+    pub fn look_dir(self) -> V3 {
+        let pitch = self.pitch_turns();
+        let flat = cos_turns(pitch);
+        V3::new(
+            cos_turns(self.aim_turns()).mul(flat),
+            sin_turns(pitch),
+            sin_turns(self.aim_turns()).mul(flat),
+        )
+    }
+
     pub const fn has(self, bit: u16) -> bool {
         self.bits & bit != 0
     }
@@ -81,14 +128,15 @@ impl Input {
     pub const fn with(self, bit: u16) -> Input {
         Input {
             bits: self.bits | bit,
-            aim: self.aim,
+            ..self
         }
     }
 
-    pub const fn looking(self, aim: u16) -> Input {
+    pub const fn looking(self, aim: u16, pitch: i16) -> Input {
         Input {
             bits: self.bits,
             aim,
+            pitch,
         }
     }
 

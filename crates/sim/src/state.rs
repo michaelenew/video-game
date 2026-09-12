@@ -13,6 +13,7 @@
 //! need to be findable. See `docs/design/feel-log.md`.
 
 use crate::DT;
+use crate::aim;
 use crate::arena;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Mechanic};
@@ -301,6 +302,17 @@ pub struct Player {
     /// This shot was aimed through a structure, which kicked it and ate the
     /// hit -- the bolt never reaches a fighter beyond it.
     pub bolt_blocked: bool,
+    /// Where the move currently running was aimed.
+    ///
+    /// Locked when the move starts, for the same reason facing is: a target you
+    /// could drag during startup would let a whiff be rescued after the fact,
+    /// and an area you could slide onto someone during the wind-up would make
+    /// the telegraph worth nothing. You commit to a place when you commit to
+    /// the move.
+    ///
+    /// It is where the ability *lands*, already solved against the terrain and
+    /// the move's reach -- see `crate::aim`.
+    pub aim_at: V3,
 }
 
 impl Player {
@@ -403,6 +415,7 @@ impl Default for Player {
             grip_settle: 0,
             bolt_fire: false,
             bolt_blocked: false,
+            aim_at: V3::ZERO,
         }
     }
 }
@@ -572,13 +585,11 @@ impl World {
                 self.players[i].grounded = false;
             }
             if let Some(kind) = EffectKind::from_code(m.effect) {
-                let spot = p.pos.add(p.facing.scale(m.reach));
-                spawn_effect(
-                    &mut self.effects,
-                    kind,
-                    i as u8,
-                    V3::new(spot.x, Fx::ZERO, spot.z),
-                );
+                // Where the move was aimed when it was thrown, already solved
+                // against the terrain and the move's reach. It used to be a
+                // fixed distance straight ahead at floor level, which meant an
+                // area ability could only ever be placed by walking.
+                spawn_effect(&mut self.effects, kind, i as u8, p.aim_at);
             }
 
             // The Elementalist's auto reads what it is aimed through, rather
@@ -744,7 +755,7 @@ impl World {
             }
         }
         for p in &self.players {
-            for v in [p.pos, p.vel, p.facing] {
+            for v in [p.pos, p.vel, p.facing, p.aim_at] {
                 h.write_i32(v.x.raw());
                 h.write_i32(v.y.raw());
                 h.write_i32(v.z.raw());
@@ -884,13 +895,27 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         Mechanic::Forms { form, .. } => form.modifiers().0,
         _ => Fx::ONE,
     };
+    // An aimed move hits where it was aimed. A swing does not: a sword is a
+    // body moving, and pointing the camera at the floor should not put the
+    // blade there. Only the moves that *place* something are aimed, and they
+    // are the ones the crosshair is promising a spot to.
+    let centre = if aimed(&m) {
+        p.aim_at
+    } else {
+        p.pos.add(p.facing.scale(m.reach.mul(reach_mul)))
+    };
     Some(Hitbox {
-        centre: p.pos.add(p.facing.scale(m.reach.mul(reach_mul))),
+        centre,
         radius: m.radius,
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
     })
+}
+
+/// Does this move place something, and therefore go where it was aimed?
+fn aimed(m: &moves::Move) -> bool {
+    EffectKind::from_code(m.effect).is_some()
 }
 
 fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
@@ -1082,7 +1107,7 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
     // movement that happens in the animal's frame rather than the world's.
     if p.aboard() {
         match beast {
-            Some(beast) => return step_rider(p, input, beast),
+            Some(beast) => return step_rider(p, input, field, beast),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
             None => p.mount = monster::NO_PART,
@@ -1151,13 +1176,14 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
             // shift with only a direction is a dodge. See controls.md.
             if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
                 p.hit_used = false;
+                lock_aim(p, SLOT_SPECIAL, input, field);
                 arm_aerial(p, SLOT_SPECIAL, input);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, 2).startup,
                 }
             } else if pressed_mechanic {
-                mechanic_action(p);
+                mechanic_action(p, input, field);
                 Action::Free
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
@@ -1167,6 +1193,7 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
                 };
                 p.hit_used = false;
                 steer_meter(p, input, kind);
+                lock_aim(p, kind, input, field);
                 arm_aerial(p, kind, input);
                 Action::Startup {
                     kind,
@@ -1337,6 +1364,22 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
     }
 }
 
+/// Work out where this move lands, and hold it there for the move's duration.
+///
+/// The same commitment facing is: once the move is out, the mouse moves the
+/// camera and not the ability. See `Player::aim_at`.
+fn lock_aim(p: &mut Player, kind: u8, input: Input, field: &Field) {
+    let m = moves::get(p.class, kind);
+    let grounded = EffectKind::from_code(m.effect).is_some_and(|k| k.grounded());
+    p.aim_at = aim::target(
+        aim::origin(p.pos),
+        input.look_dir(),
+        m.reach,
+        grounded,
+        field,
+    );
+}
+
 /// Start an aerial's hang, and its shove, if this one is thrown in the air.
 ///
 /// The shove is the basic attack's alone. A poke is the move you throw
@@ -1408,21 +1451,31 @@ fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
 /// One button means something different on every class, which is where the
 /// identity lives -- see `controls.md`. Everything else about the control
 /// scheme is shared.
-fn mechanic_action(p: &mut Player) {
+fn mechanic_action(p: &mut Player, input: Input, field: &Field) {
+    let look = input.look_dir();
+    let from = aim::origin(p.pos);
+    // Where the mechanic would put something, if it puts something: the same
+    // solved point an ability gets. The mechanic fires on the press with no
+    // startup, so there is nothing to lock it against -- it is simply used.
+    let placed = |reach| aim::target(from, look, reach, true, field);
     match p.mechanic {
         // Throw commits you: faster, exposed, and unable to block until it is
         // back. Recall damages along the return path; reactivating mid-flight
         // leaps you to it, which is the Bulwark's approach tool.
         Mechanic::Shield(shield) => {
             p.mechanic = Mechanic::Shield(match shield {
+                // Thrown along the line the player is looking, not flat ahead.
+                // It is the one ability in the game that travels, so it is the
+                // one place "the crosshair is a line in space" has to mean the
+                // flight path and not just the landing spot.
                 Shield::Held => Shield::Flying {
-                    pos: p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)),
-                    vel: p.facing.scale(t::shield_speed()),
+                    pos: from,
+                    vel: look.scale(t::shield_speed()),
                     outbound: true,
                     travelled: Fx::ZERO,
                 },
                 Shield::Planted { pos } => {
-                    let to_owner = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO)).sub(pos);
+                    let to_owner = from.sub(pos);
                     Shield::Flying {
                         pos,
                         vel: to_owner.normalized().scale(t::shield_speed()),
@@ -1474,7 +1527,7 @@ fn mechanic_action(p: &mut Player) {
         Mechanic::Shadow { at } => {
             p.mechanic = Mechanic::Shadow {
                 at: match at {
-                    None => Some(p.pos.add(p.facing.scale(t::shadow_place_ahead()))),
+                    None => Some(placed(t::shadow_reach())),
                     Some(_) => None,
                 },
             };
@@ -1483,7 +1536,7 @@ fn mechanic_action(p: &mut Player) {
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
         // is the resource.
         Mechanic::Structures(mut slots) => {
-            let raised = class::Structure::raised(p.pos.add(p.facing.scale(t::structure_ahead())));
+            let raised = class::Structure::raised(placed(t::raise_reach()));
             if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
                 *free = Some(raised);
             } else {
@@ -1516,7 +1569,13 @@ fn step_mechanic(p: &mut Player) {
             let gone = travelled.add(step.flat_len());
             p.mechanic = Mechanic::Shield(if outbound {
                 if gone.raw() >= t::shield_range().raw() {
-                    Shield::Planted { pos: next }
+                    // Thrown downhill it would otherwise plant inside the
+                    // floor, which is a shield you cannot see and cannot walk
+                    // to. Lifted to the surface rather than dropped onto it, so
+                    // a level throw is untouched.
+                    Shield::Planted {
+                        pos: V3::new(next.x, next.y.max(arena::ground_under(next)), next.z),
+                    }
                 } else {
                     Shield::Flying {
                         pos: next,
@@ -1526,7 +1585,7 @@ fn step_mechanic(p: &mut Player) {
                     }
                 }
             } else {
-                let hand = p.pos.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+                let hand = aim::origin(p.pos);
                 if next.sub(hand).flat_len().raw() < Fx::ONE.raw() {
                     Shield::Held
                 } else {
@@ -1943,7 +2002,7 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
 /// metre-per-second dash on a surface two metres wide is a way to fall off by
 /// accident, and taking it away is what makes bracing a real answer rather than
 /// a worse version of one you already had.
-fn step_rider(p: &mut Player, input: Input, beast: &Monster) {
+fn step_rider(p: &mut Player, input: Input, field: &Field, beast: &Monster) {
     let part = p.mount as usize;
     let held = p.local;
     let radius = t::body_radius();
@@ -2004,12 +2063,13 @@ fn step_rider(p: &mut Player, input: Input, beast: &Monster) {
         None => {
             if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
                 p.hit_used = false;
+                lock_aim(p, SLOT_SPECIAL, input, field);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, SLOT_SPECIAL).startup,
                 }
             } else if pressed_mechanic {
-                mechanic_action(p);
+                mechanic_action(p, input, field);
                 Action::Free
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
@@ -2019,6 +2079,7 @@ fn step_rider(p: &mut Player, input: Input, beast: &Monster) {
                 };
                 p.hit_used = false;
                 steer_meter(p, input, kind);
+                lock_aim(p, kind, input, field);
                 Action::Startup {
                     kind,
                     left: moves::get(p.class, kind).startup,

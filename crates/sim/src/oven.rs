@@ -140,6 +140,7 @@ scalars! {
     BodyRadius,       "Body",     "Body radius",            Fixed,   fx(1,10),  fx(2,1);
     BodyHeight,       "Body",     "Body height",            Fixed,   fx(1,2),   fx(4,1);
     CrouchHeightScale,"Body",     "Crouch height (x)",      Fixed,   fx(1,10),  fx(1,1);
+    CastHeight,       "Body",     "Cast height",            Fixed,   fx(1,10),  fx(4,1);
     MaxHealth,        "Match",    "Max health",             Int,     100,       5000;
     RoundOverFrames,  "Match",    "Round-over pause",       Frames,  30,        600;
     AirStallDamp,     "Air",      "Aerial hang damping",    Fixed,   0,         fx(1,1);
@@ -172,8 +173,8 @@ scalars! {
     LeapSpeed,        "Bulwark",  "Leap speed",                 Fixed,   fx(1,1),   fx(40,1);
     LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
     ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
-    ShadowPlaceAhead, "Reaver",   "Shadow placed ahead",        Fixed,   0,         fx(10,1);
-    StructureAhead,   "Stones",   "Raised ahead",               Fixed,   0,         fx(10,1);
+    ShadowPlaceAhead, "Reaver",   "Shadow reach",               Fixed,   0,         fx(10,1);
+    StructureAhead,   "Stones",   "Raise reach",                Fixed,   0,         fx(10,1);
     StructureHeight,  "Stones",   "Stone height",               Fixed,   fx(1,10),  fx(8,1);
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
     StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
@@ -556,7 +557,7 @@ pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const SLOTS: usize = 3;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 169;
+pub const SCALAR_COUNT: usize = 170;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 18;

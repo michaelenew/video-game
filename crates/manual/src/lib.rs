@@ -389,6 +389,7 @@ pub const SECTIONS: &[Section] = &[
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
+            e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(
                 "SHOT_DIST=<metres>",
                 "Pull the camera in for a capture. The arena default of eleven metres makes a pose unreadable.",

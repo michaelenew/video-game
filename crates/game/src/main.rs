@@ -33,7 +33,7 @@ use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
 use view::play::{Crossfade, PoseInput};
 use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
-use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate};
+use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate, pitch_from_radians};
 
 /// How the match is being driven.
 ///
@@ -170,7 +170,7 @@ fn main() {
                 place_structures,
                 beast::place,
                 drive_camera,
-                hide_own_body,
+                fade_own_body,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
                 hud::update,
@@ -345,12 +345,13 @@ fn env_num(key: &str) -> Option<u32> {
     std::env::var(key).ok()?.parse().ok()
 }
 
-/// Where each local player is looking. Renderer-side state: the yaw is
-/// quantised and handed to the simulation as input, but the float itself never
-/// crosses the wire and never enters a snapshot.
+/// Where each local player is looking. Renderer-side state: both angles are
+/// quantised and handed to the simulation as input, but the floats themselves
+/// never cross the wire and never enter a snapshot.
 ///
-/// Pitch is here and nowhere else. It moves the camera and changes nothing
-/// about the fight, so it has no business in the simulation.
+/// Pitch goes with the yaw now. It used to live only here, on the grounds that
+/// it moved the camera and changed nothing about the fight -- which stopped
+/// being true when abilities started landing where the crosshair is.
 #[derive(Resource)]
 struct Look {
     yaw: f32,
@@ -365,7 +366,7 @@ impl Default for Look {
     fn default() -> Self {
         Look {
             // Player one spawns at -X looking toward +X, where player two is.
-            yaw: 0.0,
+            yaw: env_f32("SHOT_YAW").unwrap_or(0.0),
             // Resting a little below the horizon, not level -- see
             // `RigConfig::neutral_pitch`.
             pitch: env_f32("SHOT_PITCH")
@@ -381,9 +382,47 @@ impl Look {
         aim_from_radians(self.yaw)
     }
 
+    fn tilt(&self) -> i16 {
+        pitch_from_radians(self.pitch)
+    }
+
     fn aim_two(&self) -> u16 {
         aim_from_radians(self.yaw_two)
     }
+
+    /// The look direction as the simulation sees it: quantised, so the camera
+    /// and the ability trace the same line to the bit.
+    fn as_input(&self) -> SimInput {
+        SimInput::looking_at(0, self.aim(), self.tilt())
+    }
+}
+
+/// How far out the aim looks for something to land on.
+///
+/// A drawing distance, not a game rule: nothing in the arena is further away
+/// than this. The *ability's* reach is a separate clamp the simulation applies
+/// when a move is thrown, which is the whole point of the split -- the reticle
+/// says where you are pointing, and the ability goes there if it can reach and
+/// as far along that line as it can if it cannot.
+const AIM_RANGE: i32 = 60;
+
+/// The point the player is aiming at: what sits at the centre of the screen.
+///
+/// The simulation's own trace rather than a second copy of it. `sim::aim` is
+/// what decides where a fire pillar lands, so a camera that pointed anywhere
+/// else would be a camera the crosshair lied about.
+fn aim_point(world: &World, me: usize, look: SimInput) -> [f32; 3] {
+    let from = sim::aim::origin(world.players[me].pos);
+    let dir = look.look_dir();
+    let far = sim::Fx::from_int(AIM_RANGE);
+    let stones = sim::stones::gather(&world.players);
+    let reach = sim::aim::trace(from, dir, far, &stones).unwrap_or(far);
+    let at = from.add(dir.scale(reach));
+    [
+        at.x.to_f32_for_render(),
+        at.y.to_f32_for_render(),
+        at.z.to_f32_for_render(),
+    ]
 }
 
 #[derive(Resource)]
@@ -619,27 +658,44 @@ fn setup(
 /// Stop drawing the local fighter once the camera is inside them.
 ///
 /// Past the handover the eye is at the fighter's own eyes, so their head fills
-/// the screen and there is nothing to see but the inside of a box. Hidden
-/// rather than faded: these are untextured primitives, and a half-transparent
-/// one reads as a rendering fault rather than as your own body.
+/// the screen and there is nothing to see but the inside of a box.
+///
+/// **Faded, not hidden.** The rig comes in quickly once the aim crosses the
+/// horizon, and a body that popped out at some threshold on the way would read
+/// as a rendering fault. Fading it with the climb makes the handover one
+/// continuous motion: the fighter rises toward the middle of the screen and
+/// thins out as they get there.
 ///
 /// Only ever the fighter this client is driving. The other one is what you are
 /// trying to look at.
-fn hide_own_body(
+fn fade_own_body(
     sim: Res<Sim>,
     inside: Res<InsideOwnHead>,
-    mut parts: Query<(&BodyPart, &mut Visibility)>,
+    parts: Query<(&BodyPart, &MeshMaterial3d<StandardMaterial>)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let me = sim.local_player();
-    let gone = inside.0 > 0.5;
-    for (part, mut vis) in parts.iter_mut() {
+    // Gone a little before the climb finishes, so the last of the body is not
+    // clipping through the near plane while it is still faintly drawn.
+    let alpha = (1.0 - inside.0 * 1.4).clamp(0.0, 1.0);
+    for (part, material) in parts.iter() {
         if part.owner != me {
             continue;
         }
-        *vis = if gone {
-            Visibility::Hidden
+        let Some(skin) = materials.get_mut(&material.0) else {
+            continue;
+        };
+        if (skin.base_color.alpha() - alpha).abs() < 0.001 {
+            continue;
+        }
+        skin.base_color.set_alpha(alpha);
+        // Blending only while it is actually translucent. An always-blended
+        // fighter sorts against the other one and against the arena for no
+        // reason the rest of the time.
+        skin.alpha_mode = if alpha >= 1.0 {
+            AlphaMode::Opaque
         } else {
-            Visibility::Inherited
+            AlphaMode::Blend
         };
     }
 }
@@ -891,13 +947,14 @@ fn tick_sim(
     } else {
         read_input(&keys, &mouse)
     }
-    .looking(look.aim());
+    .looking(look.aim(), look.tilt());
     let held_two = if focus.keyboard {
         SimInput::default()
     } else {
         read_player_two(&keys)
     }
-    .looking(look.aim_two());
+    // Player two has no mouse, so they aim level.
+    .looking(look.aim_two(), 0);
 
     match &mut sim.driver {
         Driver::Local => {
@@ -1356,6 +1413,7 @@ fn drive_camera(
         frame.players[me].pos,
         yaw,
         look.pitch,
+        aim_point(&sim.cur, me, look.as_input()),
         view::Surroundings {
             beast: sim.cur.monster.as_ref(),
             aboard: sim.cur.players[me].aboard(),

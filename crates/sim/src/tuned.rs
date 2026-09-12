@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 169] = [
+pub const SCALARS: [i32; 170] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -34,6 +34,7 @@ pub const SCALARS: [i32; 169] = [
            32768, // body.body_radius = 0.5
           117964, // body.body_height = 1.8
            36044, // body.crouch_height_(x) = 0.55
+           81920, // body.cast_height = 1.25
             1000, // match.max_health = 1000
              150, // match.round-over_pause = 150
            40632, // air.aerial_hang_damping = 0.62
@@ -66,8 +67,8 @@ pub const SCALARS: [i32; 169] = [
           983040, // bulwark.leap_speed = 15
           393216, // bulwark.leap_rise = 6
           524288, // reaver.shadow_leash = 8
-          196608, // reaver.shadow_placed_ahead = 3
-          163840, // stones.raised_ahead = 2.5
+          196608, // reaver.shadow_reach = 3
+          262144, // stones.raise_reach = 4
           117964, // stones.stone_height = 1.8
            60948, // defence.dodge_decay = 0.93
            56360, // defence.hitstun_decay = 0.86
