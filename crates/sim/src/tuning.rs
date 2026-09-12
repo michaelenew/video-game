@@ -587,16 +587,13 @@ pub fn structure_rise_curve() -> crate::curve::Curve {
 // The Elementalist's auto, aimed through terrain
 // ---------------------------------------------------------------------------
 //
-// Bolt reads what it is aimed through rather than always poking a fighter at
-// short reach. See `docs/design/kits/elementalist.md` and `crate::stones`.
-
-/// How far she can aim through terrain looking for a structure or a fire
-/// pillar. Much longer than the poke's own `reach`, which only decides
-/// whether *that* shot can land on a fighter -- this is about what stands
-/// between her and that point in the first place.
-pub fn bolt_aim_range() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::BoltAimRange))
-}
+// Bolt is a beam: a ray along the crosshair, and whatever it meets first is
+// the move. See `docs/design/kits/elementalist.md` and `crate::bolt`.
+//
+// **The beam's own length and thickness are not here.** They are the move
+// table's `reach` and `radius`, because the beam *is* the move -- a second
+// copy of its range would only be a number the frame table could disagree
+// with. What is here is everything the beam's three outcomes need.
 
 /// How fast a kicked stone leaves. The ceiling `stones::launch_decel` eases
 /// down from over the back of its travel.
@@ -640,13 +637,45 @@ pub fn bolt_knock_push() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BoltKnockPush))
 }
 
-/// Damage multiplier for a shot aimed through a fire pillar first.
-pub fn bolt_fire_damage_mul() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::BoltFireDamageMul))
+// The fire bolt: what leaves a pillar the beam was aimed through. The one
+// thing she throws that has a speed, and the only part of the auto that can
+// be dodged after it is thrown.
+
+/// How fast it flies. Fast enough that it is a poke rather than a lob -- it
+/// crosses the arena in about a second and is not meaningfully led.
+pub fn fire_bolt_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltSpeed))
 }
 
-pub fn bolt_fire_knockback_mul() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::BoltFireKnockbackMul))
+/// How far it gets before it is spent. A distance rather than a lifetime, so
+/// retuning the speed does not silently retune the range with it.
+pub fn fire_bolt_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltRange))
+}
+
+/// How thick it is. Small: a bolt you can walk out of the way of.
+pub fn fire_bolt_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltRadius))
+}
+
+/// Low to middling -- more than the beam's own poke, far less than anything
+/// she commits frames to.
+pub fn fire_bolt_damage() -> i32 {
+    oven::scalar(Scalar::FireBoltDamage)
+}
+
+/// A little stagger, unlike the beam, which has none. The bolt is the part of
+/// the auto that had to be earned by putting a pillar down first.
+pub fn fire_bolt_stagger() -> u16 {
+    oven::scalar(Scalar::FireBoltStagger) as u16
+}
+
+pub fn fire_bolt_blockstun() -> u16 {
+    oven::scalar(Scalar::FireBoltBlockstun) as u16
+}
+
+pub fn fire_bolt_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltKnockback))
 }
 
 // ---------------------------------------------------------------------------

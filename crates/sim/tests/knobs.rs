@@ -48,6 +48,11 @@ const EXEMPT: &[(&str, &str)] = &[
          fighter standing there, and the middle of anything is half of it.",
     ),
     (
+        ".add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))",
+        "The midpoint of a hit volume. Halving a line, not choosing a length: the middle \
+         of anything is half of it, and any other number would stop it being the middle.",
+    ),
+    (
         "let tan_tilt = Fx::ONE.sub(ball.at.mul(Fx::from_int(2))).mul(tan_half)",
         "Turning a screen fraction into a tangent. The 2 is that a fraction is \
          measured from the bottom of the screen while the angle is measured from \

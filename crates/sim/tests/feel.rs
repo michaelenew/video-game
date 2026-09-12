@@ -70,13 +70,53 @@ fn committed_moves_are_more_punishable_than_pokes() {
 fn landing_a_hit_keeps_the_initiative_or_resets_neutral() {
     // On hit you should be no worse off than the defender, or hitting someone
     // would be a mistake.
-    for (class, m) in every_move() {
+    //
+    // Except for a move that hands out no stun at all, which is not buying the
+    // initiative and cannot be measured as though it were. The Elementalist's
+    // auto is the one of those: a beam that takes whatever the opponent was
+    // charging and gives them their frames straight back. What keeps that
+    // honest is the test below, not this one.
+    for (class, m) in every_move().filter(|(_, m)| m.hitstun > 0) {
         assert!(
             m.on_hit() >= 0,
             "{class} {}: {:+} on hit — connecting leaves you at a disadvantage",
             m.name,
             m.on_hit()
         );
+    }
+}
+
+#[test]
+fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
+    // The price of the exception above, and the reason it is not a loophole.
+    //
+    // A move that lands without stunning gives the defender their turn back
+    // immediately, so the attacker must not also come out of it ahead -- it has
+    // to be minus on hit, or it would be a button you could simply hold down.
+    // And it has to be the smallest hit in the class: what it buys is an
+    // interrupt, not damage, and a no-stun move that also hit hard would beat
+    // the moves that pay stun for their damage at their own game.
+    for class in ALL_CLASSES {
+        let table = moves::table(class);
+        let softest = table.iter().map(|m| m.damage).min().unwrap();
+        for m in table.iter().filter(|m| m.hitstun == 0) {
+            assert!(
+                m.on_hit() < 0,
+                "{} {}: {:+} on hit with no stun at all -- free pressure",
+                class.name(),
+                m.name,
+                m.on_hit()
+            );
+            assert_eq!(
+                m.damage,
+                softest,
+                "{} {}: hits for {} without stunning, and something in the class hits \
+                 for less. A move that buys an interrupt should not also buy damage.",
+                class.name(),
+                m.name,
+                m.damage
+            );
+        }
     }
 }
 

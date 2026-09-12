@@ -15,9 +15,10 @@
 use crate::DT;
 use crate::aim;
 use crate::arena;
+use crate::bolt::{self, Beam, Flight, MAX_BOLTS, Struck};
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Mechanic};
-use crate::effects::{self, Effect, EffectKind, GRASP_ARMS, MAX_EFFECTS, QUARRY_VICTIM};
+use crate::effects::{Effect, EffectKind, GRASP_ARMS, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
@@ -311,14 +312,15 @@ pub struct Player {
     /// infinite acceleration and throws you straight back off.
     pub grip_settle: u8,
 
-    /// This shot passed through a fire pillar on its way out, so it hits as a
-    /// fire bolt rather than a plain poke. Decided once, on the frame the
-    /// move comes out, and cleared the same way every other move's first
-    /// active frame is entered -- see `docs/design/kits/elementalist.md`.
-    pub bolt_fire: bool,
-    /// This shot was aimed through a structure, which kicked it and ate the
-    /// hit -- the bolt never reaches a fighter beyond it.
-    pub bolt_blocked: bool,
+    /// How far the Elementalist's beam actually reached this frame, or zero
+    /// when no beam is out.
+    ///
+    /// The shot is a line, and where it *stopped* is as much a part of it as
+    /// where it started -- a beam that met a stone two metres out is two metres
+    /// long, not nine. Kept in the snapshot so the renderer draws the line the
+    /// simulation tested rather than a reconstruction of it that can drift, and
+    /// so a rollback redraws the same one. See [`crate::bolt`].
+    pub beam_reach: Fx,
     /// Where the move currently running was aimed.
     ///
     /// Locked when the move starts, for the same reason facing is: a target you
@@ -488,8 +490,7 @@ impl Default for Player {
             carry_yaw: Fx::ZERO,
             grip_vel: V3::ZERO,
             grip_settle: 0,
-            bolt_fire: false,
-            bolt_blocked: false,
+            beam_reach: Fx::ZERO,
             aim_at: V3::ZERO,
             aim_dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
         }
@@ -504,6 +505,9 @@ pub struct World {
     pub phase: Phase,
     /// Things moves have left behind. Fixed size: see `effects`.
     pub effects: [Option<Effect>; MAX_EFFECTS],
+    /// Fire bolts in flight. The only projectile a fighter throws that is not
+    /// part of somebody's mechanic -- see [`crate::bolt`].
+    pub bolts: Flight,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -526,6 +530,7 @@ impl World {
             players: [Player::default(); MAX_PLAYERS],
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
+            bolts: [None; MAX_BOLTS],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -549,6 +554,9 @@ impl World {
 
     /// Put both fighters back on their marks. Keeps round wins and classes.
     fn reset_positions(&mut self) {
+        // Nothing in the air survives a round. A bolt still flying when the
+        // last one ended would land on somebody standing on their mark.
+        self.bolts = [None; MAX_BOLTS];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -698,38 +706,12 @@ impl World {
                     Effect::cast(leaves, i as u8, p.class, kind, from, along),
                 );
             }
+        }
 
-            // The Elementalist's auto reads what it is aimed through, rather
-            // than always poking a fighter at short reach. Decided once, here,
-            // on the frame the shot comes out -- and reset every time whether
-            // or not it applies, so a stale decision from an earlier Bolt can
-            // never leak into a move that is not Bolt.
-            //
-            // Along `aim_dir` from the cast origin, not `facing` from the
-            // feet: `facing` is flattened to the horizontal, so a shot aimed
-            // up at a structure would never even see it. This is the real
-            // three-dimensional line the shot travels, matching `crate::aim`.
-            self.players[i].bolt_fire = false;
-            self.players[i].bolt_blocked = false;
-            if p.class == Class::Elementalist && kind == SLOT_POKE {
-                let from = aim::origin(p.pos);
-                let to = from.add(p.aim_dir.scale(t::bolt_aim_range()));
-                let stone_hit = stones::first_along_shot(&field, from, to);
-                let pillar_dist = effects::first_fire_pillar_along(&self.effects, from, to);
-                let stone_closer = match (stone_hit, pillar_dist) {
-                    (Some((_, sd)), Some(pd)) => sd.raw() <= pd.raw(),
-                    (Some(_), None) => true,
-                    (None, _) => false,
-                };
-                if stone_closer {
-                    if let Some((idx, _)) = stone_hit {
-                        stones::kick(&mut self.players, idx, p.aim_dir);
-                        self.players[i].bolt_blocked = true;
-                    }
-                } else if pillar_dist.is_some() {
-                    self.players[i].bolt_fire = true;
-                }
-            }
+        // The Elementalist's auto: a beam, resolved on the spot. See
+        // `crate::bolt` and `docs/design/kits/elementalist.md`.
+        for i in 0..MAX_PLAYERS {
+            self.fire_the_beam(i);
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
@@ -811,6 +793,12 @@ impl World {
         }
 
         self.step_effects();
+        bolt::step(
+            &mut self.bolts,
+            &mut self.players,
+            self.monster.is_none(),
+            &mut self.monster,
+        );
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -868,6 +856,17 @@ impl World {
         let mut h = Fnv::new();
         h.write_u64(crate::oven::hash());
         h.write_u32(self.frame);
+        for b in &self.bolts {
+            match b {
+                Some(b) => {
+                    h.write_u32(b.owner as u32 + 1);
+                    hash_v3(&mut h, &b.pos);
+                    hash_v3(&mut h, &b.dir);
+                    h.write_i32(b.travelled.raw());
+                }
+                None => h.write_u32(0),
+            }
+        }
         for e in &self.effects {
             match e {
                 Some(e) => {
@@ -925,8 +924,7 @@ impl World {
             hash_v3(&mut h, &p.grip_vel);
             h.write_i32(p.carry_yaw.raw());
             h.write_u32(p.grip_settle as u32);
-            h.write_u32(p.bolt_fire as u32);
-            h.write_u32(p.bolt_blocked as u32);
+            h.write_i32(p.beam_reach.raw());
             hash_mechanic(&mut h, &p.mechanic);
         }
         match &self.monster {
@@ -974,23 +972,29 @@ impl Default for World {
     }
 }
 
+/// One landed attack, whatever threw it.
+///
+/// `pub(crate)` because a fire bolt is an attack that outlives the move that
+/// lit it and applies itself from [`crate::bolt`] -- and it has to arrive
+/// through the same door as everything else, or guard would stop a sword and
+/// not a bolt.
 #[derive(Clone, Copy)]
-struct Hit {
-    damage: i32,
-    hitstun: u16,
-    blockstun: u16,
-    knockback: Fx,
+pub(crate) struct Hit {
+    pub damage: i32,
+    pub hitstun: u16,
+    pub blockstun: u16,
+    pub knockback: Fx,
     /// Upward speed handed to the victim. This is what takes someone off the
     /// ground with an uppercut instead of shoving them along it.
-    launch: Fx,
+    pub launch: Fx,
     /// Frames the victim is held at the attacker's arm's length. Zero is a
     /// normal hit.
-    grabs: u16,
+    pub grabs: u16,
     /// Who threw it, so a grab knows whose arm to hang from.
-    by: u8,
-    dir: V3,
-    blocked: bool,
-    parried: bool,
+    pub by: u8,
+    pub dir: V3,
+    pub blocked: bool,
+    pub parried: bool,
 }
 
 /// The attack volume a fighter currently has out.
@@ -999,10 +1003,19 @@ struct Hit {
 /// its own reconstruction of it. An overlay that can drift from the rule it
 /// illustrates is worse than no overlay: it is confidently wrong at exactly the
 /// moment you are trying to work out why something did not connect.
+///
+/// A **capsule between two points**, because one of the six attacks in the game
+/// is a line and the other seventeen are bubbles, and a bubble is the case where
+/// both ends are the same point. Keeping one shape rather than two is what lets
+/// the overlay, the creature's hit test and the web tool all stay honest about
+/// the Elementalist's beam without each growing a special case.
 #[derive(Clone, Copy, Debug)]
 pub struct Hitbox {
-    /// Flat centre, at the attacker's own height.
-    pub centre: V3,
+    /// Where the volume starts. The attacker's own height for a swing; the
+    /// point abilities come out of for a beam.
+    pub from: V3,
+    /// Where it ends. Equal to `from` for anything that is not a beam.
+    pub to: V3,
     /// The attack's radius. A defender is hit when their body circle overlaps
     /// this one, so the test threshold is this plus `BODY_RADIUS`.
     pub radius: Fx,
@@ -1012,6 +1025,19 @@ pub struct Hitbox {
     /// The move has already connected this swing and cannot connect again.
     /// Still drawn, because it is still visibly out.
     pub spent: bool,
+}
+
+impl Hitbox {
+    /// The middle of the volume. The same point as `from` for a swing.
+    pub fn centre(&self) -> V3 {
+        self.from
+            .add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))
+    }
+
+    /// Is this volume a line rather than a bubble?
+    pub fn is_a_beam(&self) -> bool {
+        self.from != self.to
+    }
 }
 
 /// The attack volume out this frame, if any. `None` outside active frames.
@@ -1035,33 +1061,53 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         Mechanic::Forms { form, .. } => form.modifiers().0,
         _ => Fx::ONE,
     };
+    // The Elementalist's auto is a line out of her chest along the crosshair,
+    // ending wherever it stopped -- at a stone, a body, a pillar, or its own
+    // range. It used to be a circle a fixed distance in front of her, which is
+    // what made aiming up do nothing at all. See `crate::bolt`.
+    if bolt::throws_a_beam(p, kind) {
+        let beam = beam_of(p, kind);
+        return Some(Hitbox {
+            from: beam.from,
+            to: beam.at(p.beam_reach),
+            radius: beam.radius,
+            hits_crouching: m.hits_crouching,
+            unblockable: m.unblockable,
+            spent: p.hit_used,
+        });
+    }
     // An aimed move hits where it was aimed. A swing does not: a sword is a
     // body moving, and pointing the camera at the floor should not put the
     // blade there. Only the moves that *place* something are aimed, and they
     // are the ones the crosshair is promising a spot to.
-    //
-    // The Elementalist's auto is aimed too, even though it places nothing --
-    // it is a skillshot along the crosshair's own line, not a fixed poke in
-    // front of her. A fire-charged shot draws the same line much further,
-    // which is the only thing `bolt_fire` changes here.
     let centre = if aimed(&m) {
         p.aim_at
-    } else if p.class == Class::Elementalist && kind == SLOT_POKE {
-        if p.bolt_fire {
-            aim::origin(p.pos).add(p.aim_dir.scale(t::bolt_aim_range()))
-        } else {
-            p.aim_at
-        }
     } else {
         p.pos.add(p.facing.scale(m.reach.mul(reach_mul)))
     };
     Some(Hitbox {
-        centre,
+        from: centre,
+        to: centre,
         radius: m.radius,
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
     })
+}
+
+/// The line the Elementalist's auto is fired along.
+///
+/// Its length and thickness are the move table's own `reach` and `radius`,
+/// rather than knobs of their own: the beam *is* the move, so its range is the
+/// move's range and the frame table tells the truth about it.
+pub fn beam_of(p: &Player, kind: u8) -> Beam {
+    let m = moves::get(p.class, kind);
+    Beam {
+        from: aim::origin(p.pos),
+        dir: p.aim_dir,
+        range: m.reach,
+        radius: m.radius,
+    }
 }
 
 /// Does this move place something, and therefore go where it was aimed?
@@ -1089,10 +1135,10 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
-    // Aimed through a structure: the bolt kicked it instead, and never
-    // reaches whatever is standing beyond it. See the aim-through block in
-    // `advance` and `docs/design/kits/elementalist.md`.
-    if attacker.class == Class::Elementalist && kind == SLOT_POKE && attacker.bolt_blocked {
+    // The Elementalist's auto already happened. It is a ray fired the moment
+    // the move comes out, and what it does depends on what it met first --
+    // none of which this loop can express. See `World::fire_the_beam`.
+    if bolt::throws_a_beam(attacker, kind) {
         return None;
     }
     let box_out = hitbox(attacker)?;
@@ -1114,58 +1160,18 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     }
     .mul(preying(attacker.class, defender.disabled()));
 
-    // Every other move is a sphere sitting at `box_out.centre`. The
-    // Elementalist's auto is a real skillshot instead: it can catch the
-    // defender anywhere along the line it travels, not only at the point the
-    // aim resolver picked to draw the hitbox at -- which is what makes a shot
-    // aimed past someone still able to catch them on the way through, and,
-    // fire-charged, catch them far beyond the reach the plain poke ever had.
-    let hit_at_all = if attacker.class == Class::Elementalist && kind == SLOT_POKE {
-        let origin = aim::origin(attacker.pos);
-        let range = if attacker.bolt_fire {
-            t::bolt_aim_range()
-        } else {
-            m.reach
-        };
-        let far = origin.add(attacker.aim_dir.scale(range));
-        let reach = box_out.radius.add(t::body_radius());
-        crate::math::ray_hits_flat(origin, far, defender.pos, reach).is_some()
-    } else {
-        let delta = defender.pos.sub(box_out.centre);
-        delta.flat_len().raw() <= box_out.radius.add(t::body_radius()).raw()
-    };
-    if !hit_at_all {
+    let delta = defender.pos.sub(box_out.centre());
+    if delta.flat_len().raw() > box_out.radius.add(t::body_radius()).raw() {
         return None;
     }
 
-    // Was the defender facing the attack? Guard covers an arc, not a bubble.
-    let to_attacker = attacker.pos.sub(defender.pos).normalized();
-    let facing_it = defender.facing.dot(to_attacker).raw() >= t::guard_arc_cos().raw();
-    // A grapple goes through guard entirely. That is what stops blocking from
-    // being a solved strategy -- see defense.md.
-    let guarding = !m.unblockable && defender.action.guarding() && facing_it;
-    let parried = !m.unblockable
-        && matches!(defender.action, Action::Guard { held } if held < t::parry_window())
-        && facing_it;
-
-    // Aimed through a fire pillar: the same shot, empowered rather than
-    // replaced. A pillar is a hazard to walk into, not a wall, so it does not
-    // stop the bolt the way a structure does -- it charges it instead.
-    let (fire_damage_mul, fire_knockback_mul) =
-        if attacker.class == Class::Elementalist && kind == SLOT_POKE && attacker.bolt_fire {
-            (t::bolt_fire_damage_mul(), t::bolt_fire_knockback_mul())
-        } else {
-            (Fx::ONE, Fx::ONE)
-        };
+    let (guarding, parried) = guard_against(defender, attacker.pos, m.unblockable);
 
     Some(Hit {
-        damage: Fx::from_int(m.damage)
-            .mul(damage_mul)
-            .mul(fire_damage_mul)
-            .to_int(),
+        damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
-        knockback: m.knockback.mul(fire_knockback_mul),
+        knockback: m.knockback,
         launch: m.launch,
         grabs: m.grabs,
         by,
@@ -1175,7 +1181,29 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     })
 }
 
-fn apply_hit(defender: &mut Player, hit: Hit) {
+/// Is this defender guarding against something arriving from `from`, and did
+/// they raise it late enough to parry?
+///
+/// Guard covers an arc, not a bubble: turning your back on an attack is not
+/// blocking it. A grapple ignores the whole question, which is what stops
+/// blocking from being a solved strategy -- see defense.md.
+///
+/// Shared rather than inlined because there are now three kinds of attack --
+/// a swing, a beam, and a bolt in flight -- and a guard that stopped two of
+/// them would be worse than one that stopped none.
+pub(crate) fn guard_against(defender: &Player, from: V3, unblockable: bool) -> (bool, bool) {
+    if unblockable {
+        return (false, false);
+    }
+    let toward = from.sub(defender.pos).normalized();
+    let facing_it = defender.facing.dot(toward).raw() >= t::guard_arc_cos().raw();
+    let guarding = defender.action.guarding() && facing_it;
+    let parried =
+        facing_it && matches!(defender.action, Action::Guard { held } if held < t::parry_window());
+    (guarding, parried)
+}
+
+pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.parried {
         // The parry itself costs the defender nothing. The attacker eats the
         // stagger, which the caller applies.
@@ -2696,6 +2724,95 @@ fn fall_off(p: &mut Player, beast: &Monster) {
 }
 
 // ---------------------------------------------------------------------------
+// The Elementalist's beam
+// ---------------------------------------------------------------------------
+
+impl World {
+    /// Fire the auto, if this fighter has one out.
+    ///
+    /// Run on **every** active frame rather than only the first, for the same
+    /// reason every other move's hitbox is live for its whole active window:
+    /// the volume that is drawn has to be the volume that is tested, and a
+    /// shot should still catch someone who steps into the line during it. The
+    /// move's one hit is what keeps that from being two shots -- whatever the
+    /// beam meets first ends it.
+    ///
+    /// Nothing here travels. The ray, the stone it kicks and the fire it
+    /// lights all happen on the frame the move comes out; the fire bolt is the
+    /// only part with a speed, and it starts at the pillar rather than at her.
+    fn fire_the_beam(&mut self, i: usize) {
+        self.players[i].beam_reach = Fx::ZERO;
+        let shooter = self.players[i];
+        let Action::Active { kind, .. } = shooter.action else {
+            return;
+        };
+        if !bolt::throws_a_beam(&shooter, kind) || shooter.health <= 0 {
+            return;
+        }
+
+        let beam = beam_of(&shooter, kind);
+        let field = stones::gather(&self.players);
+        // In a hunt the two of you are on the same side, so the only thing
+        // worth shooting is the creature. One condition, in one place.
+        let versus = self.monster.is_none();
+        let struck = bolt::trace(beam, i as u8, &self.players, versus, &field, &self.effects);
+        let quarry = self
+            .monster
+            .as_ref()
+            .and_then(|b| b.part_struck_along(beam.from, beam.dir, beam.range, beam.radius))
+            .filter(|(_, d)| struck.is_none_or(|s| d.raw() < s.dist().raw()));
+
+        // How long the line actually is, whether or not it still has a hit to
+        // spend. A spent beam is still a beam, and it is still drawn.
+        let stopped = quarry
+            .map(|(_, d)| d)
+            .or(struck.map(|s| s.dist()))
+            .unwrap_or(beam.range);
+        self.players[i].beam_reach = stopped;
+        if shooter.hit_used {
+            return;
+        }
+
+        if let Some((part, _)) = quarry {
+            if let Some(mut beast) = self.monster {
+                beast.take_hit(part, moves::get(shooter.class, kind).damage);
+                self.monster = Some(beast);
+                self.players[i].hit_used = true;
+            }
+            return;
+        }
+
+        match struck {
+            Some(Struck::Fighter { index, .. }) => {
+                let damage = moves::get(shooter.class, kind).damage;
+                if bolt::poke(&mut self.players[index], shooter.pos, damage) == bolt::Poked::Parried
+                {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[index].parried = PARRY_FLOURISH;
+                }
+                self.players[i].hit_used = true;
+            }
+            // The stone goes where the mouse is pointing, pitch included:
+            // along the ground aimed down it, up into the air aimed above it.
+            Some(Struck::Stone { index, .. }) => {
+                stones::kick(&mut self.players, index, beam.dir);
+                self.players[i].hit_used = true;
+            }
+            // A hazard is not a wall. The beam does not stop at the fire, it
+            // lights it, and what leaves the pillar is the poke.
+            Some(Struck::Fire { dist }) => {
+                bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir);
+                self.players[i].hit_used = true;
+            }
+            None => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Trading with the creature
 // ---------------------------------------------------------------------------
 
@@ -2778,12 +2895,16 @@ impl World {
             if box_out.spent || attacker.health <= 0 {
                 continue;
             }
-            let Some(part) =
-                beast.part_struck(box_out.centre, box_out.radius, attacker.hurt_height())
-            else {
+            let Some(kind) = attacker.action.attack_kind() else {
                 continue;
             };
-            let Some(kind) = attacker.action.attack_kind() else {
+            // The beam already had its answer, on the frame it was fired.
+            if bolt::throws_a_beam(&attacker, kind) {
+                continue;
+            }
+            let Some(part) =
+                beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height())
+            else {
                 continue;
             };
             let scale = match attacker.mechanic {

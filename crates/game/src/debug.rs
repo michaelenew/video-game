@@ -67,23 +67,25 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         // rebuilt here. Only during active frames: if you can see it, it is out.
         if let Some(hb) = sim::state::hitbox(&sim.cur.players[i]) {
             let colour = hitbox_colour(hb.hits_crouching, hb.spent);
-            let at = Vec3::new(
-                hb.centre.x.to_f32_for_render(),
-                pos.y,
-                hb.centre.z.to_f32_for_render(),
-            );
-            // A cylinder, not a sphere. The test compares *flat* distance and
-            // says nothing about height -- you cannot duck under an attack or
-            // jump over it, only out-range it, and whether an overhead beats a
-            // crouch is a property of the move rather than of its geometry. A
-            // sphere would imply a vertical extent the rules do not have.
-            cylinder(
-                &mut gizmos,
-                at,
-                hb.radius.to_f32_for_render(),
-                body_height(),
-                colour,
-            );
+            let radius = hb.radius.to_f32_for_render();
+            if hb.is_a_beam() {
+                // A line, drawn as the line it is: from where the shot leaves
+                // her to wherever it stopped, at whatever angle it was fired.
+                // Drawing this as an upright cylinder sitting at a point --
+                // which is what it used to be -- said the shot went a fixed
+                // distance along the ground no matter where you aimed, which
+                // was both what it looked like and what it did.
+                beam(&mut gizmos, v3(hb.from), v3(hb.to), radius, colour);
+            } else {
+                // A cylinder, not a sphere. The test compares *flat* distance
+                // and says nothing about height -- you cannot duck under a
+                // swing or jump over it, only out-range it, and whether an
+                // overhead beats a crouch is a property of the move rather
+                // than of its geometry. A sphere would imply a vertical extent
+                // the rules do not have.
+                let at = Vec3::new(v3(hb.centre()).x, pos.y, v3(hb.centre()).z);
+                cylinder(&mut gizmos, at, radius, body_height(), colour);
+            }
         }
 
         // Guard arc: 120 degrees, and brighter during the parry window.
@@ -111,10 +113,19 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         }
     }
 
+    // Fire bolts in flight. Small on purpose: the thing you have to read about
+    // one is where it is and which way it is going, not how big it is.
+    for shot in sim.cur.bolts.iter().flatten() {
+        let at = v3(shot.pos);
+        let radius = sim::tuning::fire_bolt_radius().to_f32_for_render();
+        gizmos.sphere(Isometry3d::from_translation(at), radius, PILLAR);
+        gizmos.line(at, at + v3(shot.dir) * (radius * 4.0), PILLAR);
+    }
+
     // Persistent effects, drawn as the volumes the simulation tests against --
     // the fire pillar's two slabs separately, because they are two threats.
     for effect in sim.cur.effects.iter().flatten() {
-        let at = fx3(effect.pos);
+        let at = v3(effect.pos);
         match effect.kind {
             EffectKind::FirePillar => {
                 let (base, column) = effect.pillar_volumes();
@@ -144,7 +155,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             // hit test is -- see `World::inside`.
             EffectKind::Bloodletter => {
                 gizmos.sphere(
-                    Isometry3d::from_translation(fx3(effect.blade_at())),
+                    Isometry3d::from_translation(v3(effect.blade_at())),
                     effect.field_radius().to_f32_for_render(),
                     FIELD,
                 );
@@ -152,7 +163,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             EffectKind::Grasp => {
                 for arm in 0..sim::effects::GRASP_ARMS {
                     gizmos.sphere(
-                        Isometry3d::from_translation(fx3(effect.arm_at(arm))),
+                        Isometry3d::from_translation(v3(effect.arm_at(arm))),
                         effect.field_radius().to_f32_for_render(),
                         FIELD,
                     );
@@ -162,8 +173,36 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
     }
 }
 
+/// A wireframe cylinder lying along a line, for an attack that is a line.
+///
+/// Rings at both ends and a few down the length, plus four rails joining them.
+/// The rails are what make the direction readable at a glance, which is the
+/// whole question you are asking of a beam.
+fn beam(gizmos: &mut Gizmos, from: Vec3, to: Vec3, radius: f32, colour: Color) {
+    let along = to - from;
+    let length = along.length();
+    if length < 1e-3 {
+        return;
+    }
+    let dir = along / length;
+    let turn = Quat::from_rotation_arc(Vec3::Z, dir);
+    let (up, side) = (turn * Vec3::Y, turn * Vec3::X);
+
+    const RINGS: usize = 6;
+    for r in 0..=RINGS {
+        let at = from + along * (r as f32 / RINGS as f32);
+        gizmos.circle(Isometry3d::new(at, turn), radius, colour);
+    }
+    for spoke in [up, -up, side, -side] {
+        gizmos.line(from + spoke * radius, to + spoke * radius, colour);
+    }
+    // The axis itself, so a beam whose radius is small still reads as a line
+    // rather than as a row of rings.
+    gizmos.line(from, to, colour);
+}
+
 /// A simulation position, in the renderer's units.
-fn fx3(v: sim::V3) -> Vec3 {
+fn v3(v: sim::V3) -> Vec3 {
     Vec3::new(
         v.x.to_f32_for_render(),
         v.y.to_f32_for_render(),

@@ -166,8 +166,11 @@ fn main() {
                 tick_sim,
                 apply_poses,
                 place_shields,
-                place_effects,
-                place_structures,
+                // Grouped because Bevy's chained tuple holds twenty systems
+                // and this is the twenty-first. They are independent of each
+                // other anyway: each puts one pool of meshes where the
+                // simulation says its things are.
+                (place_effects, place_structures, place_beams, place_bolts),
                 beast::place,
                 drive_camera,
                 fade_own_body,
@@ -446,6 +449,20 @@ struct StructureMesh {
     index: usize,
 }
 
+/// The Elementalist's auto, drawn as the thing it is: a thin cylinder from her
+/// chest along the line she is aiming, ending where the shot stopped.
+///
+/// One per fighter, because only one shot can be out at a time. It exists at
+/// all because the move used to be invisible -- the pose put a hand out and
+/// nothing left it, so what the shot did and which way it went could only be
+/// read from the debug overlay.
+#[derive(Component)]
+struct BeamMesh(usize);
+
+/// One fire bolt in flight.
+#[derive(Component)]
+struct BoltMesh(usize);
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -453,6 +470,10 @@ struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
+    /// The beam and the bolt it lights. Brighter than the pillar and barely
+    /// opaque: it is light rather than matter, and it is on screen for two
+    /// frames, so it has to read instantly or not at all.
+    beam: Handle<StandardMaterial>,
     /// A unit cylinder, cone and sphere, scaled per frame to whatever the
     /// simulation says the volume is. Three meshes rather than one because the
     /// *shape* is the tell: a spike you can see standing in a field is what
@@ -614,6 +635,13 @@ fn setup(
             perceptual_roughness: 0.95,
             ..default()
         }),
+        beam: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.86, 0.45, 0.75),
+            emissive: LinearRgba::rgb(6.0, 3.4, 0.9),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        }),
         column: unit.clone(),
         spike,
         ball,
@@ -643,6 +671,29 @@ fn setup(
                 StructureMesh { owner, index },
             ));
         }
+    }
+
+    // One beam per fighter and one mesh per fire bolt in flight. Both pools
+    // are fixed for the same reason every other one is: spawning meshes as
+    // shots come and go would put allocation on the rollback path.
+    for owner in 0..MAX_PLAYERS {
+        commands.spawn((
+            Mesh3d(unit.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            BeamMesh(owner),
+        ));
+    }
+    let pellet = meshes.add(Sphere::new(0.5));
+    for slot in 0..sim::bolt::MAX_BOLTS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            BoltMesh(slot),
+        ));
     }
     commands.insert_resource(look);
 }
@@ -732,6 +783,57 @@ fn place_structures(
             raised.at.z.to_f32_for_render(),
         );
         tf.scale = Vec3::new(radius * 2.0, height, radius * 2.0);
+    }
+}
+
+/// Draw the Elementalist's beam along the line the simulation tested.
+///
+/// Straight from `state::hitbox`, which is also what the hit test and the
+/// debug overlay read, so the three cannot disagree about where the shot went.
+/// The move is two frames long, which is the point: you see a line, at the
+/// angle you aimed it, ending on whatever stopped it.
+fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let shot = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.is_a_beam());
+        let Some(hb) = shot else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let (from, to) = (fx3(hb.from), fx3(hb.to));
+        let along = to - from;
+        let length = along.length();
+        if length < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        // The unit cylinder stands along Y, so it is turned on to the shot's
+        // own direction -- which is how the drawing gets its pitch for free.
+        *vis = Visibility::Inherited;
+        tf.translation = from + along * 0.5;
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
+        // Thinner than the volume it stands for. A beam drawn at its full hit
+        // radius reads as a pillar of light and hides the fighter behind it;
+        // the volume is the overlay's job to show, and this one's job is to
+        // say *where the shot went*.
+        let width = hb.radius.to_f32_for_render();
+        tf.scale = Vec3::new(width, length, width);
+    }
+}
+
+/// Put the fire bolts where they are, pointing the way they are going.
+fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut Visibility)>) {
+    let radius = sim::tuning::fire_bolt_radius().to_f32_for_render();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(shot) = sim.cur.bolts[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(shot.pos);
+        // Stretched along its flight, so a bolt reads as travelling rather
+        // than as a bead hanging in the air.
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
+        tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
     }
 }
 

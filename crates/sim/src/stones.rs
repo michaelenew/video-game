@@ -433,24 +433,38 @@ fn launch_decel(stone: &mut Structure) {
     }
 }
 
-/// The nearest stone along a shot from `from` toward `to`, and how far along
-/// the shot it sits -- so the caller can tell it apart from whatever else the
-/// same shot might be aimed through.
+/// The nearest stone a shot meets, and how far along the shot it sits -- so
+/// the caller can tell it apart from whatever else the same shot might be
+/// aimed through.
 ///
-/// Flat only, like every other hit test in the game: a stone barely out of
-/// the ground does not count, since there is nothing there yet to aim through.
-pub fn first_along_shot(field: &Field, from: V3, to: V3) -> Option<(usize, Fx)> {
+/// A real ray against the stone's own cylinder, caps included, so a shot
+/// aimed over the top of a stone passes over it and one aimed up at a stone
+/// standing on another finds it. `swell` is the shot's own radius, added to
+/// the stone's. A stone still buried has no standing height and so nothing to
+/// hit.
+pub fn first_along_shot(
+    field: &Field,
+    from: V3,
+    dir: V3,
+    limit: Fx,
+    swell: Fx,
+) -> Option<(usize, Fx)> {
     let mut best: Option<(usize, Fx)> = None;
     for (i, slot) in field.iter().enumerate() {
         let Some(stone) = slot else { continue };
-        if stone.standing_height().raw() <= 0 {
-            continue;
-        }
-        let Some(dist) = crate::math::ray_hits_flat(from, to, stone.at, t::structure_radius())
-        else {
+        let Some(dist) = crate::math::ray_hits_cylinder(
+            from,
+            dir,
+            stone.at,
+            t::structure_radius().add(swell),
+            stone.standing_height(),
+        ) else {
             continue;
         };
-        if best.map_or(true, |(_, d)| dist.raw() < d.raw()) {
+        if dist.raw() > limit.raw() {
+            continue;
+        }
+        if best.is_none_or(|(_, d)| dist.raw() < d.raw()) {
             best = Some((i, dist));
         }
     }

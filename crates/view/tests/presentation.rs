@@ -633,6 +633,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         stun_total: 0,
         rise: 0.0,
         turn_rate: 0.0,
+        aim_pitch: 0.0,
         health: 1000,
         round_left: None,
         sim_frame: frame,
@@ -1081,4 +1082,83 @@ fn the_eye_never_changes_pace_abruptly_at_a_zone_boundary() {
             boundary.to_degrees()
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Aiming a shot that is a line
+// ---------------------------------------------------------------------------
+
+/// The Elementalist mid-shot, aimed `pitch` degrees above the horizon.
+fn shooting(pitch: f32) -> PoseInput {
+    PoseInput {
+        class: sim::Class::Elementalist,
+        action: Action::Active { kind: 0, left: 1 },
+        aim_pitch: pitch.to_radians(),
+        ..input_at(Action::Active { kind: 0, left: 1 }, 0.0, 40)
+    }
+}
+
+/// Where a joint ends up once the whole pose has been solved.
+fn joint_at(input: PoseInput, joint: Joint) -> [f32; 3] {
+    let skeleton = view::skeleton::skeleton_for(input.class);
+    view::skeleton::solve(&skeleton, &pose_for(input)).origin[joint.index()]
+}
+
+#[test]
+fn a_shot_aimed_up_is_thrown_up() {
+    // The animation has to agree with the shot. The Elementalist's auto is a
+    // ray along the crosshair, so a shot forty degrees above the horizon that
+    // is animated as a level flick has the character pointing one way while
+    // the attack goes another -- which is precisely the complaint the whole
+    // rework answers, and it is not fixed until the body shows it.
+    let level = joint_at(shooting(0.0), Joint::HandR);
+    let high = joint_at(shooting(40.0), Joint::HandR);
+    let low = joint_at(shooting(-40.0), Joint::HandR);
+
+    assert!(
+        high[1] > level[1] + 0.08,
+        "aiming up moved the throwing hand from {:.2} m to {:.2} m -- not enough to read",
+        level[1],
+        high[1]
+    );
+    assert!(
+        low[1] < level[1] - 0.08,
+        "aiming down moved the throwing hand from {:.2} m to {:.2} m",
+        level[1],
+        low[1]
+    );
+
+    // And the head goes with it, or she is shooting at something she is not
+    // looking at.
+    let head_level = joint_at(shooting(0.0), Joint::Head);
+    let head_high = joint_at(shooting(40.0), Joint::Head);
+    assert!(
+        head_high[1] >= head_level[1] - 0.01,
+        "the head dropped while the aim went up"
+    );
+}
+
+#[test]
+fn a_swing_is_not_aimed_at_all() {
+    // The other half of the rule. A sword is a body moving: pointing the
+    // camera at the floor must not put the blade there, or every melee class
+    // would swing at the ground whenever the player looked down.
+    let level = joint_at(
+        PoseInput {
+            aim_pitch: 0.0,
+            ..input_at(Action::Active { kind: 0, left: 1 }, 0.0, 40)
+        },
+        Joint::HandR,
+    );
+    let aimed = joint_at(
+        PoseInput {
+            aim_pitch: 40f32.to_radians(),
+            ..input_at(Action::Active { kind: 0, left: 1 }, 0.0, 40)
+        },
+        Joint::HandR,
+    );
+    assert_eq!(
+        level, aimed,
+        "the Bulwark's poke followed the crosshair, so looking down swings at the floor"
+    );
 }

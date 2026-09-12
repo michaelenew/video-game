@@ -162,7 +162,12 @@ const NAMES: [[&str; SLOTS]; 6] = [
     //   Guillotine: blades erupt from the shadow, so it needs one placed.
     ["Slash", "Executioner", "Guillotine", ""],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
-    //   Fire pillar: detonates a structure for a wider blast, so it wants one out.
+    //   Bolt: the odd one out. It is a *beam* -- an instant ray along the
+    //   crosshair -- so its `reach` is the line's length and its `radius` is the
+    //   line's thickness, and it is resolved where it is fired rather than by
+    //   the hitbox loop. Its hitstun and knockback are zero on purpose: it takes
+    //   the charge off whoever it catches and gives them their frames straight
+    //   back. See `crate::bolt`.
     ["Bolt", "Fissure", "Fire pillar", ""],
     // Blood mage -- sustain through aggression. Everything costs health, and
     // every one of these has a cost in the table to prove it.

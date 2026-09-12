@@ -274,7 +274,6 @@ scalars! {
     MonsterSpawn,     "Ridgeback","Spawns this far out",        Fixed,   0,         fx(14,1);
     HunterSpawn,      "Ridgeback","Hunters start this far out", Fixed,   0,         fx(14,1);
     StepUp,           "Riding",   "Step you can walk up",       Fixed,   0,         fx(2,1);
-    BoltAimRange,      "Elementalist", "Bolt aim range",                    Fixed,  fx(1,1),  fx(30,1);
     BoltKnockSpeed,    "Elementalist", "Bolt knock speed",                  Fixed,  0,        fx(60,1);
     BoltKnockRange,    "Elementalist", "Bolt knock travel",                 Fixed,  fx(1,10), fx(20,1);
     BoltKnockDecelStart,"Elementalist","Bolt knock decel starts (x path)",  Fixed,  0,        fx(1,1);
@@ -282,8 +281,13 @@ scalars! {
     BoltKnockDamagePerSpeed, "Elementalist", "Bolt knock damage per m/s",   Int,    0,        50;
     BoltKnockStagger,  "Elementalist", "Bolt knock stagger",                Frames, 0,        90;
     BoltKnockPush,     "Elementalist", "Bolt knock push (x)",               Fixed,  0,        fx(3,1);
-    BoltFireDamageMul, "Elementalist", "Fire bolt damage (x)",              Fixed,  fx(1,1),  fx(4,1);
-    BoltFireKnockbackMul, "Elementalist", "Fire bolt knockback (x)",        Fixed,  fx(1,1),  fx(4,1);
+    FireBoltSpeed,     "Elementalist", "Fire bolt speed",                   Fixed,  fx(5,1),  fx(80,1);
+    FireBoltRange,     "Elementalist", "Fire bolt range",                   Fixed,  fx(1,1),  fx(40,1);
+    FireBoltRadius,    "Elementalist", "Fire bolt radius",                  Fixed,  fx(1,20), fx(2,1);
+    FireBoltDamage,    "Elementalist", "Fire bolt damage",                  Int,    0,        600;
+    FireBoltStagger,   "Elementalist", "Fire bolt stagger",                 Frames, 0,        90;
+    FireBoltBlockstun, "Elementalist", "Fire bolt blockstun",               Frames, 0,        90;
+    FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
     SpikeHeight,       "Blood mage", "Black spike height",                  Fixed,  fx(1,2),  fx(6,1);
     BloodletterFlight, "Blood mage", "Bloodletter, out and back",           Frames, 10,       180;
     BloodletterRadius, "Blood mage", "Bloodletter radius",                  Fixed,  fx(1,10), fx(2,1);
@@ -667,7 +671,7 @@ pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const SLOTS: usize = 4;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 178;
+pub const SCALAR_COUNT: usize = 182;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 20;

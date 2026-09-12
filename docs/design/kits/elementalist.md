@@ -74,43 +74,62 @@ Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 
-Ranged bolt, low damage. A poke, not a win condition — except that it reads
-what it is aimed through, which is the terrain-author identity showing up in
-the one input every class throws constantly.
+A **beam**, not a bolt. A short wind-up, and then an instant line out of her chest
+along exactly the line the crosshair is on, out to a short-to-middle distance.
+Nothing travels, so there is nothing to lead and nothing to dodge once it is
+thrown — what there is instead is a shot that goes wherever you are pointing,
+including up.
 
-> **Implemented** (`L`). What the shot is aimed through decides what it does,
-> checked once, on the frame it fires:
+> **Implemented** (`L`). What the line reaches **first** is the whole move,
+> checked every active frame and spending the move's one hit on whatever it
+> finds:
 >
-> - **Aimed through a structure first** — the structure blocks the shot the
->   way it blocks anything else, and the shot becomes the structure's problem
->   instead of the target's. It **kicks the structure forward**, fast, along
->   her facing. The kick dies off over the back quarter of its travel rather
->   than skidding to a stop on friction alone, so a stone caught early in its
->   flight hits like a boulder and one caught late barely nudges anyone. What
->   it deals to whoever it is still moving fast enough to catch — damage and a
->   stagger — is a function of its speed **relative to the target**, the same
->   quantity two colliding stones already hand each other. The bolt itself
->   never reaches past the structure: aimed through one, it does not also poke
->   whoever is standing beyond it.
-> - **Aimed through a fire pillar first** — a pillar is a hazard, not a wall,
->   so it does not stop the shot the way a structure does. It **charges** it
->   instead: the same bolt, empowered, still capable of reaching and hitting a
->   fighter beyond the pillar.
-> - **Aimed through neither** — the plain poke, unchanged.
+> - **a fighter** — small damage, and it takes the move they were winding up.
+>   **No stagger at all**: they are free again on the very next frame, and all
+>   they have lost is the charge. That trade is the move's identity in neutral.
+>   It is why the auto is worth throwing at someone who has already committed
+>   rather than only at someone standing still, and it is why it is the
+>   cheapest hit in the class — what it buys is an interrupt, not damage;
+> - **a structure** — the stone is sent **along the line**: through the ground
+>   when she is aimed down it, and up into the air when she is aimed above it.
+>   The kick dies off over the back quarter of its travel rather than skidding
+>   to a stop on friction alone, so a stone caught early in its flight hits like
+>   a boulder and one caught late barely nudges anyone. What it deals to whoever
+>   it is still moving fast enough to catch — damage and a stagger — is a
+>   function of its speed **relative to the target**, the same quantity two
+>   colliding stones already hand each other. The beam never reaches past the
+>   structure: aimed through one, it does not also poke whoever is standing
+>   beyond it;
+> - **fire** — a pillar is a hazard, not a wall, so it does not stop the beam.
+>   It **lights** one. A fire bolt leaves the pillar along the same line: fast,
+>   small, long range, low-to-middling damage and a little stagger. It is the
+>   one thing she throws that has a speed, and it starts *at the fire* — a bolt
+>   that came out of her hand instead would make the whole interaction
+>   invisible.
 >
-> Structure and pillar are compared by whichever the line reaches first, so a
-> structure sitting in front of a pillar screens it, and a pillar with nothing
-> in front of it still empowers a shot that goes on to land. The aim itself
-> reaches far further than the poke's own short hit-range against a fighter —
-> it has to, to find terrain that may be well past where the poke could ever
-> land — which is what makes this the class's first real point-blank-versus-
-> range distinction: what she is aimed through can matter long before what she
-> is aimed *at* is even in reach.
+> **The range is the move's own.** The beam's length and thickness are the move
+> table's `reach` and `radius` rather than knobs of their own, because the beam
+> *is* the move: a second copy of its range would only be a number the frame
+> table could disagree with. The fire bolt is what carries the shot past that
+> range, which is the trade a pillar buys — put fire between you and them and
+> the poke stops being a point-blank tool.
 >
-> This is the pass recorded as open in [../feel-log.md](../feel-log.md) under
-> "the autos are due a pass" — the Elementalist's autos interacting with
-> structures and persistent effects, and the hitscan-circle-at-reach test
-> starting to give way to something shaped like an actual shot. The melee
+> **Height decides this one.** It is the first fighter-on-fighter hit in the
+> game where it does: a crouch ducks a shot aimed over the head, a shot aimed
+> over a stone passes over it instead of kicking it, and someone standing on a
+> platform is out of reach of a level shot and in reach of one pointed at them.
+> Every other attack compares flat distance and says nothing about height.
+>
+> **What the shot looks like is what the shot is.** The line is drawn in the
+> game as the thin cylinder it is, from her chest to wherever it stopped, and
+> her body tilts on to it — spine, chest, shoulders and head — so a shot fired
+> forty degrees up is thrown forty degrees up. Both come off `state::hitbox`
+> and the aim in the snapshot, so the picture and the rule cannot drift.
+>
+> This replaces the version recorded in [../feel-log.md](../feel-log.md) as
+> "the autos are due a pass": a flat circle at a fixed distance in front of
+> her, which meant aiming up did nothing whatsoever, and a fire interaction
+> that was an instant long-range hit rather than a projectile. The melee
 > classes' equivalent pass, and the timing pass across all six, are still
 > outstanding.
 
@@ -196,17 +215,24 @@ their cover — the skill is placing them where they serve you more than the opp
 
 ## Open questions
 
-- **Settled for the auto, open for everything else.** Yes — the bolt is blocked by a
+- **Settled for the auto, open for everything else.** Yes — the beam is blocked by a
   structure in its way, and that self-obstruction is a real cost worth keeping. Fissure,
   Quake and Ice blast are unbuilt skillshots and have not been given the same answer;
   Ice blast in particular *wants* to reach structures rather than be stopped by the
   nearest one, so "blocks" cannot simply mean the same thing for every ability that
   travels.
-- Should the aim-through check on the auto also read *black spike*, or anything else a
-  future element adds to `effects.rs`? Right now it only recognises fire pillars,
+- **The beam ignores the arena.** Walls and platforms are not traced against, so a shot
+  aimed down at the floor passes through it and whiffs rather than stopping short of one.
+  Deliberate for now — stones are the one piece of terrain the shot is *for* — but it is
+  the obvious thing to revisit once the arena is more than a blockout.
+- Should the first-thing-it-meets check on the auto also read *black spike*, or anything
+  else a future element adds to `effects.rs`? Right now it only recognises fire pillars,
   because fire is the only element that currently ships with the class. The dispatch is
   written so a second kind is one more branch, not a rewrite — nothing has needed the
   second branch yet.
+- A fire bolt is stopped by a structure and expires at its range. Whether it should
+  instead *kick* one the way the beam does has not been played against: a bolt of fire is
+  not a shove, but a stone taking a hit and not moving reads oddly.
 - Raise places a stone 2.5 m ahead, so "cast beneath yourself to launch into the air" above
   still has no input. The lift exists; the targeting for it does not.
 - Do structures block your own projectiles? Almost certainly yes, and that self-obstruction

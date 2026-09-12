@@ -484,9 +484,9 @@ Airborne attacks are still the grounded ones.
 > documents in [`kits/`](kits/) and `cargo run -p sim --bin frametable` for what is bound
 > today.
 >
-> The Blood mage's table below has been brought up to date because the class was reworked on
-> 2026-09-12 and a stale table beside a finished implementation is worse than no table. The
-> other five have not.
+> Two rows have been brought up to date because the abilities behind them were finished and a
+> stale table beside a working implementation is worse than no table: the Elementalist's auto,
+> which is a beam now, and the whole of the Blood mage's. The rest have not.
 
 ## Dual mage
 
@@ -586,7 +586,7 @@ differentiation.
 
 | Input | Result |
 | --- | --- |
-| `L` | Ranged bolt auto |
+| `L` | Ranged auto — a beam along the crosshair, and whatever it meets first |
 | `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
 | direction + click | Fissure, Quake, Ice blast |
 | `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |
