@@ -52,6 +52,14 @@ upward**: the floor, the top of a platform, the top of a stone. That is "the
 ground". The side of a platform, the side of a stone, a body, the creature and
 the range sphere are not.
 
+## The four lines of effect
+
+Two are **skillshots**: they start with the raycast above and go where it lands.
+Two are not: they are pointed by something the player already decided — which
+way their body is facing, or where they put the mechanic — and consult nothing.
+
+Every move declares which, in the move table. There is no fifth.
+
 ## The two kinds of skillshot
 
 ### Grounded
@@ -84,12 +92,80 @@ a landing spot.
   point**, and that line is its whole reach. There is no separate range number:
   the sphere is part of the raycast.
 
-### Not a skillshot at all
+## The two that are not skillshots
 
-A melee swing. A sword is a body moving, and pointing the camera at the floor
-must not put the blade there — a swing comes out along `facing`, at the move's
-own reach. It is named here so that "which of the three is this move" has an
-answer for every move rather than being a thing each caller decides.
+### Swing
+
+A melee attack. A body moving, so it does not raycast and nothing can stop it
+short — its reach is simply the move's reach, off the body.
+
+But it is **not level**. Melee happens in the air and on slopes, and a swing
+pinned to the horizontal misses things that are plainly in front of you. The
+yaw is the body's facing, which already follows the mouse at the turn rate. The
+pitch comes from the camera, with a **dead zone below the horizon**:
+
+```text
+   above the horizon      the swing follows the camera exactly
+   the first 45° below    the swing stays level — the standard arc
+   further down           the swing follows what is left over
+```
+
+So at −45° the swing is the same as at 0°, at −46° it is that swing tilted one
+degree down, and so on. The dead zone is the whole trick: the camera sits above
+the shoulder, so looking *at* somebody standing at your own height means looking
+slightly **down** at them. Without it, every swing thrown at an opponent would
+tilt into the floor. At the dead zone's edge the tilt is still zero and moves a
+degree per degree from there, so there is no step to feel.
+
+45° is [`tuning::swing_level_to`](../../crates/sim/src/tuning.rs).
+
+**The dead zone is a standing rule.** Off the floor the pitch is followed
+exactly, all the way down. Two reasons, and the first is the one that matters:
+
+- The dead zone corrects for *the camera sitting above the shoulder of somebody
+  standing on the same floor as their target*. That is a fact about two
+  fighters on one floor. In the air, the thing you are looking down at really
+  is below you, and charging the first 45 degrees of that is just a swing that
+  misses.
+- It also makes the air game arithmetically impossible. The look-down limit is
+  85 degrees, so a 45-degree dead zone caps the tilt a falling fighter can
+  reach at 40 -- and the Champion's aerial spike only connects at 45 or more.
+  Measured rather than guessed: on `main` the spike lands for look angles
+  between 45 and 85 degrees down.
+
+`aim::swing_path` takes `grounded` for exactly that, which is the same split
+the Champion's own swing shapes already make.
+
+### At the mechanic
+
+Wherever the class mechanic is standing. One move: the Reaver's Guillotine
+lotus, whose blades erupt at the shadow.
+
+The player *did* aim it with the crosshair — when they placed the shadow, which
+is a grounded cast. Throwing the move only cashes that in. Re-aiming it at the
+throw would quietly delete the reason shadow placement is a decision, which is
+most of the class.
+
+The volume follows the mechanic **live**, because the Reaver can recall the
+shadow while the blades are out.
+
+## Which move uses which
+
+Declared per move in the move table, not inferred, so the question has an answer
+for every slot and `cargo run -p sim --bin frametable` prints it in the `aimed`
+column. It used to be worked out from what a move left behind, which answered
+for the two abilities that plant something and quietly called everything else a
+swing.
+
+| Line of effect | Moves |
+| --- | --- |
+| **Grounded** | Fissure, Fire pillar, Black spike, Judgement |
+| **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
+| **Swing** | every melee attack: Bash, Slam, Grapple, Sweep, Drive, Uppercut, Slash, Executioner, Rend, Step strike |
+| **At the mechanic** | Guillotine lotus |
+
+The mechanic inputs are aimed too, through the same two functions: Raise and the
+shadow are grounded casts, and the Bulwark's thrown shield is a skillshot.
 
 **A swing still commits to a plane, and the crosshair is where the plane comes
 from.** Added 2026-09-12 with the Champion's rebuild. The yaw of a swing is the
@@ -162,11 +238,15 @@ gets the same one.
 
 ## Open
 
-- **Fissure** is written as a grounded ability that races along the ground to
-  its target. The path it needs already exists; the ability does not.
-- **The melee swing** could in principle become a very short non-grounded
-  skillshot, which would make the matrix two entries rather than three. Nobody
-  has argued for it, and "pointing the camera down must not swing at the floor"
-  is the reason not to. The Champion's rebuild made the case weaker rather than
-  stronger: its weapons are *shapes* that sweep through a plane, and a
-  skillshot's answer is a point.
+- **Fissure** travels along the ground to its target, which the grounded path
+  already provides as `from` → `to`. It is aimed correctly now; the travel and
+  the structure it plants at the point of impact are still unbuilt, so today its
+  volume simply appears at the target.
+- **The dead zone is one number for every class and every move.** A spear at
+  1.55× reach and a grapple at arm's length plausibly want different answers,
+  and a swing thrown while falling fast plausibly wants a different one again.
+  Nobody has played it yet; it is one knob until somebody has.
+- **The Champion's weapons are shapes, not points.** They sweep through a plane
+  rather than arriving somewhere, which is the strongest argument yet that a
+  swing is its own line of effect and not a very short skillshot: a skillshot's
+  answer is a point.

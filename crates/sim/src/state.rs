@@ -1144,8 +1144,9 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         // body.
         aim::Kind::Swing => match m.shape {
             moves::Shape::None => return None,
-            // The original: a disc at arm's length, along the facing.
-            moves::Shape::Cylinder => return Some(disc(p.pos.add(p.facing.scale(m.reach)))),
+            // The original: a disc at arm's length, along the line the
+            // swing came out on -- the facing's yaw, the camera's pitch.
+            moves::Shape::Cylinder => return Some(disc(p.pos.add(p.aim_dir().scale(m.reach)))),
             moves::Shape::Swing(plane) => {
                 // The hand stays near the body and the head of the weapon
                 // travels the long arc -- which is how a real swing works, and
@@ -1185,6 +1186,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 (hub, hub.add(p.aim_dir().scale(out)), false)
             }
         },
+        // At the mechanic, and *live*: the shadow can be moved while the blades
+        // are out, which is the Reaver's own recall, and the volume has to go
+        // with it.
+        aim::Kind::AtTheMechanic => return Some(disc(p.mechanic.placed().unwrap_or(p.pos))),
     };
     Some(Hitbox {
         from,
@@ -2112,12 +2117,14 @@ fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
         aim::Kind::Skillshot => aim::skillshot_path(who, input, m.reach, scene),
         // Not aimed at anything -- a body moving. What it commits to is the
         // **plane** it swings in: the yaw is the facing, which is locked
-        // already, and the pitch is the rest of the same look. A disc-shaped
-        // swing ignores this entirely and is worked out live from the body in
-        // `hitbox`, because a poke thrown on the move has to travel with it;
-        // the Champion's weapons read it, because a hammer that came down
-        // level would not be a hammer.
-        aim::Kind::Swing => aim::swing_path(p.pos, input, m.reach),
+        // already, and the pitch is the rest of the same look, dead-zoned so
+        // that looking slightly down at somebody does not tilt the swing into
+        // the floor. The Champion's weapons read the plane; a disc-shaped
+        // swing only reads the direction. The dead zone is a standing rule:
+        // off the ground you are above what you are hitting, and the swing
+        // follows the camera the whole way.
+        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, p.grounded, m.reach),
+        aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
     };
 }
 

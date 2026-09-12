@@ -845,6 +845,18 @@ pub fn disabled_damage_mul() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DisabledDamageMul))
 }
 
+/// How far below the horizon a melee swing stays level.
+///
+/// The camera sits above the shoulder, so looking *at* someone standing at your
+/// own height means looking slightly down at them. Without a dead zone a swing
+/// that followed the camera would tilt into the floor every time you fought
+/// anybody. Inside it the swing is the standard arc in front of the body;
+/// outside it, up or down by whatever is left over. Degrees, because that is
+/// how the rest of the camera's angles are written. See `crate::aim::swing_path`.
+pub fn swing_level_to() -> i32 {
+    oven::scalar(Scalar::SwingLevelTo)
+}
+
 // ---------------------------------------------------------------------------
 // The Ridgeback
 //

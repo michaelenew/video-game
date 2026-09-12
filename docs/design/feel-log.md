@@ -1796,3 +1796,113 @@ you left the floor. Fine most of the time, a visible hitch on a jump out of a sp
 
 **Verdict** kept. Worst discontinuity across a 600-frame scripted match is back under the
 bar, and this one is a real seam rather than a threshold that needed raising.
+### 2026-09-12 — every move declares its line of effect
+
+**Changed** the move table gained a `line of effect` field, and three moves changed kind:
+Fissure and Judgement to **grounded**, Lance to **skillshot**. `cargo run -p sim --bin
+frametable` prints the column.
+
+**Why** the aiming pass left the *kind* inferred: a move was grounded if what it left behind
+was grounded, a skillshot if a flag said so, and a swing otherwise. That answered correctly for
+the two abilities that plant something and quietly called everything else a swing. Going
+through the roster against the kit documents found three that are not:
+
+| Move | Kit says | Was aimed as | Now |
+| --- | --- | --- | --- |
+| Fissure | "a skillshot that races forward through the ground… spawns a structure at the point of impact" | swing, 7 m reach | grounded |
+| Lance | "line skillshot" in both forms | swing, 4 m reach | skillshot |
+| Judgement | "a delayed area strike… range medium" | swing, 3 m reach | grounded |
+
+All three were bubbles hung several metres off the body, pointing wherever it happened to be
+facing. None of them is *built* yet — Fissure does not travel, Lance is not a line, Judgement
+has no delay — so what changed today is only where their volumes appear, which is now the
+place the crosshair is on rather than a fixed step ahead.
+
+**The inference is gone rather than fixed.** Deriving the answer from the effect was the sort
+of rule that is right until the first ability that does not fit, and then silently wrong.
+What survives from it is a *test*: `one_aim.rs` asserts that a move planting something
+grounded is aimed at the ground, and that a move throwing something that travels is aimed
+through the air. Those directions are always true; the reverse is not, because Fissure plants
+a structure, which belongs to the mechanic rather than to the effects array.
+
+**Found and not fixed: Guillotine lotus.** Its range is "at the shadow" — the blades erupt
+where the Reaver put the mechanic. That is not any of the three: the player aimed when they
+placed the shadow, not when they threw the move. It is currently a swing with a reach of
+**zero**, which puts its volume on the caster's own body, so it is wrong however the question
+is answered. Recorded in [aiming.md](aiming.md) under Open rather than guessed at.
+
+**Also considered and rejected:** asserting that a swing's reach may not exceed roughly twice
+its radius. It catches the "hole in front" the log already records above — a one-circle hit
+test with reach past its own radius has a gap nothing can be hit in — but that is a property
+of the hit test rather than of the aiming, and the rule as written failed Rend at 2.6 m
+against 1.2 m, which is a tuning question and not a miscategorisation. Left alone.
+
+**Verdict** structural, and open on feel. Nobody has thrown the three retargeted moves.
+
+### 2026-09-12 — a swing is aimed too, with a dead zone
+
+**Changed** melee no longer comes out flat. A swing's yaw is still the body's facing; its
+**pitch follows the camera outside a dead zone below the horizon**:
+
+```text
+   above the horizon      follows exactly
+   the first 45° below    stays level -- the standard arc in front of the character
+   further down           follows what is left over
+```
+
+So −45° is the same swing as 0°, −46° is that swing tilted one degree down. New knob,
+`aim.swing_stays_level_to (deg down)`, and a new line of effect, `aim::swing_path`.
+
+**Why** "aim direction for melee matters a lot in the air and on hills" — and it does: a swing
+pinned to the horizontal misses things plainly in front of you the moment either fighter
+leaves the flat. The reason it had been pinned was the opposite error, and the dead zone is
+what answers it: **the camera sits above the shoulder, so looking at somebody standing at your
+own height means looking slightly down at them.** A swing that followed the camera exactly
+would tilt into the floor in the most common situation in the game. Neither "ignore pitch" nor
+"follow pitch" is right; the dead zone is, and it costs one number.
+
+Written as a sum rather than a branch — `max(pitch, 0) + min(pitch + dead, 0)` — so the two
+halves cannot disagree about the boundary. There is no step at the edge: a test sweeps a tenth
+of a degree at a time across it and fails on any jump over 0.4°.
+
+**Guillotine lotus got a fourth line of effect: at the mechanic.** Its kit entry has always
+said "Range: at the shadow", and it was declared a swing with a reach of *zero* — so its
+volume came out on the Reaver's own chest and the move did nothing it was written to do. The
+player aims it when they *place* the shadow; throwing it only cashes that in, and re-aiming it
+at the throw would delete the reason shadow placement is a decision. The volume follows the
+shadow live, because the Reaver can recall it while the blades are out.
+
+That makes four lines of effect, all of them functions in `aim.rs`: two that start with the
+crosshair's raycast, and two pointed by something the player decided earlier.
+
+**The animation follows.** A swing's tilt arrives at the renderer already dead-zoned, as the
+angle the attack actually came out at, so the same pose layer the Elementalist's beam uses now
+serves melee. A grounded cast is deliberately *not* tilted — a pillar comes out of the floor
+and the caster is gesturing at the place, so looking down to plant one must not double her
+over.
+
+**Verdict** open. Nobody has swung at anything on a slope or in the air yet, and 45° is a
+guess — one number for a grapple at arm's length and a spear at 1.55× reach, which may well
+want to differ.
+
+### 2026-09-12 — the dead zone is a standing rule
+
+Merging the Champion's air game into the dead zone broke the class immediately:
+`the_combo_the_class_is_built_around_is_playable` failed, because the aerial spike only
+connects at **45° of tilt or more** and the look-down limit is 85°. Subtract a 45° dead zone
+and the most tilt a falling Champion can reach is 40. The move became unthrowable — not worse,
+unavailable.
+
+The fix is not a smaller number. It is that the dead zone was only ever an answer to a
+*grounded* fact: the camera sits above the shoulder, so looking at somebody standing on your
+own floor means looking slightly down at them. Off the floor there is no shared floor to
+correct for, and the thing under your reticle genuinely is below you. So `aim::swing_path`
+takes `grounded`, and airborne swings follow the camera exactly, all the way down.
+
+This is the split main's own swing shapes already make — in the air the Champion's fan is
+thrown *around* the aim rather than in front of the body — and it is what the brief asked for:
+"aim direction for melee matters a lot in the air and on hills."
+
+**Verdict** open, same as the entry above. 45° on the ground is still a guess, and now the
+question of whether a fighter who has just left the ground wants the zone to fade rather than
+vanish is a real one. Nobody has played it.

@@ -448,15 +448,23 @@ fn aim_along(pose: Pose, input: PoseInput, kind: u8) -> Pose {
     out.clamped(crate::pose::reference())
 }
 
-/// Does this move leave the body along the crosshair rather than along the
-/// flat facing?
+/// Does this move leave the body at an angle, rather than level?
 ///
 /// Straight from the move table, so the animation cannot disagree with the
-/// simulation about which moves are aimed. A swing is a body moving, and
-/// pointing the camera at the floor should not put a sword there; a grounded
-/// cast comes out of the floor and the body is only gesturing at it.
+/// simulation about which moves are tilted. Two of the four are: a skillshot
+/// flies at what the crosshair is on, and a swing comes out along the body
+/// tilted by the camera's pitch outside its dead zone. The other two are not —
+/// a grounded cast comes out of the floor and the body is only gesturing at it,
+/// and a move aimed at the mechanic is pointed at something the player placed
+/// earlier.
+///
+/// The angle itself arrives as `aim_pitch`, already dead-zoned: by the time the
+/// pose sees it, it is the angle the attack actually came out at.
 pub fn aims_along_the_crosshair(class: Class, kind: u8) -> bool {
-    sim::moves::get(class, kind).aim() == sim::aim::Kind::Skillshot
+    matches!(
+        sim::moves::get(class, kind).aim(),
+        sim::aim::Kind::Skillshot | sim::aim::Kind::Swing
+    )
 }
 
 /// Which clip animates one class's move slot.

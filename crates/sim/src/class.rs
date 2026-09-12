@@ -323,6 +323,23 @@ pub enum Mechanic {
 }
 
 impl Mechanic {
+    /// Where this mechanic is standing in the world, if anywhere.
+    ///
+    /// A thrown shield, a placed shadow, the oldest structure. Held, toggled or
+    /// counted mechanics — a shield in hand, a weapon form, a meter — are
+    /// nowhere, and answer `None`.
+    ///
+    /// Exists because one move is aimed *at the mechanic* rather than at the
+    /// crosshair: see [`crate::aim::mechanic_path`].
+    pub fn placed(&self) -> Option<V3> {
+        match self {
+            Mechanic::Shield(s) => s.world_pos(),
+            Mechanic::Shadow { at } => *at,
+            Mechanic::Structures(slots) => slots.iter().flatten().next().map(|s| s.at),
+            Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => None,
+        }
+    }
+
     /// One line for the HUD.
     pub fn summary(&self) -> alloc_free::Summary {
         alloc_free::Summary::of(self)

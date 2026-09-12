@@ -484,7 +484,7 @@ fn stone_at(w: &mut World, at: V3) {
 #[test]
 fn a_grounded_cast_lands_exactly_where_the_ray_landed() {
     // "If we hit the ground, cast it exactly there. Not a pixel different."
-    let mut w = elementalist();
+    let w = elementalist();
     for step in 0..40 {
         let look = Input::looking_at(0, 0, down(5 + step));
         let (seen, cast) = with_scene(&w, |scene| {
@@ -511,7 +511,7 @@ fn a_skillshot_aimed_at_the_floor_flies_level_over_the_spot() {
     // A shot that cannot land on the ground still has to go *at* the place the
     // player is pointing: straight up from that spot to the height it leaves
     // her at, and level from there.
-    let mut w = elementalist();
+    let w = elementalist();
     let look = Input::looking_at(0, 0, down(20));
     let (seen, path) = with_scene(&w, |scene| {
         (
@@ -621,4 +621,232 @@ fn a_body_in_the_way_is_what_you_are_pointing_at() {
         }
     }
     assert!(found, "the sweep never crossed the other fighter at all");
+}
+
+// ---------------------------------------------------------------------------
+// The swing, and its dead zone
+// ---------------------------------------------------------------------------
+//
+// A swing is a body moving, so it does not raycast — but its *angle* comes from
+// the camera, because melee happens in the air and on slopes and a swing pinned
+// to the horizontal misses things plainly in front of you. With a dead zone
+// below the horizon, because the camera sits above the shoulder: looking at
+// someone at your own height means looking slightly down at them.
+
+/// How far above the horizon a swing at this pitch comes out, in degrees.
+///
+/// Standing, which is where the dead zone applies.
+fn swing_tilt(w: &World, pitch: i16) -> f32 {
+    swing_tilt_from(w, pitch, true)
+}
+
+/// The same, saying whether the fighter has their feet on the floor.
+fn swing_tilt_from(w: &World, pitch: i16, grounded: bool) -> f32 {
+    let reach = Fx::from_int(2);
+    let path = aim::swing_path(
+        w.players[0].pos,
+        w.players[0].facing,
+        Input::looking_at(0, 0, pitch),
+        grounded,
+        reach,
+    );
+    let rise = path.to.y.sub(path.from.y).to_f32_for_render();
+    (rise / reach.to_f32_for_render())
+        .clamp(-1.0, 1.0)
+        .asin()
+        .to_degrees()
+}
+
+#[test]
+fn a_swing_follows_the_camera_upward_exactly() {
+    let w = elementalist();
+    for degrees in [5, 15, 30, 60] {
+        let tilt = swing_tilt(&w, up(degrees));
+        assert!(
+            (tilt - degrees as f32).abs() < 1.0,
+            "looking {degrees} degrees up swung {tilt:.1} degrees up"
+        );
+    }
+}
+
+#[test]
+fn a_swing_stays_level_through_the_dead_zone_below_the_horizon() {
+    // The whole point of the dead zone: you fight people by looking slightly
+    // down at them, and the swing must not follow that into the floor.
+    let w = elementalist();
+    let dead = t::swing_level_to();
+    for degrees in 0..=dead {
+        let tilt = swing_tilt(&w, down(degrees));
+        assert!(
+            tilt.abs() < 1.0,
+            "looking {degrees} degrees down -- inside the {dead}-degree dead zone -- \
+             tilted the swing {tilt:.1} degrees"
+        );
+    }
+}
+
+#[test]
+fn past_the_dead_zone_a_swing_follows_what_is_left_over() {
+    // "-45 is the same swing as 0, -46 is the same swing tilted down 1 degree."
+    let w = elementalist();
+    let dead = t::swing_level_to();
+    for over in [1, 5, 20] {
+        let tilt = swing_tilt(&w, down(dead + over));
+        assert!(
+            (tilt + over as f32).abs() < 1.0,
+            "looking {over} degrees past the dead zone tilted the swing {tilt:.1}, \
+             not {} degrees down",
+            over
+        );
+    }
+}
+
+#[test]
+fn the_dead_zone_has_no_step_at_its_edge() {
+    // A boundary the swing jumps across would be felt as the blade snapping to
+    // a new angle for one degree of mouse movement.
+    let w = elementalist();
+    let dead = t::swing_level_to();
+    let mut worst: f32 = 0.0;
+    let mut last: Option<f32> = None;
+    for tenth in -((dead + 20) * 10)..=200 {
+        let tilt = swing_tilt(&w, (tenth * 65536 / 3600) as i16);
+        if let Some(prev) = last {
+            worst = worst.max((tilt - prev).abs());
+        }
+        last = Some(tilt);
+    }
+    assert!(
+        worst < 0.4,
+        "one tenth of a degree of mouse movement moved the swing {worst:.2} degrees"
+    );
+}
+
+#[test]
+fn a_swing_aimed_steeply_down_reaches_below_the_body() {
+    // What the angle buys, stated as a position: a disc-shaped swing thrown at
+    // something underneath you. Level, the volume sits at the body's own
+    // height; aimed down past the dead zone, it is below it.
+    //
+    // The Bulwark, because its poke is the plain disc at arm's length -- the
+    // Champion's weapons are *shapes* that sweep an arc, and where the head of
+    // one is partway through a swing is that class's own question.
+    let thrown = |pitch: i16| {
+        let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
+        w.players[1].pos = V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(12));
+        for _ in 0..30 {
+            w.advance([Input::looking_at(Input::LEFT, 0, pitch), Input::default()]);
+            if let Some(hb) = sim::state::hitbox(&w.players[0]) {
+                return hb.to.y.sub(w.players[0].pos.y).to_f32_for_render();
+            }
+        }
+        panic!("the poke never came out");
+    };
+
+    let level = thrown(0);
+    let steep = thrown(down(t::swing_level_to() + 40));
+    assert!(
+        level.abs() < 0.1,
+        "a level swing came out {level:.2} m off the body's own height"
+    );
+    assert!(
+        steep < -0.5,
+        "a swing aimed well past the dead zone came out {steep:.2} m from the body, \
+         which is not below it"
+    );
+}
+
+#[test]
+fn in_the_air_a_swing_follows_the_camera_all_the_way_down() {
+    // The dead zone is a *standing* rule. It exists because the camera sits
+    // above the shoulder, so looking at somebody at your own height is looking
+    // slightly down at them -- a fact about two fighters on the same floor.
+    //
+    // Off the floor there is no shared floor to reason from, and the thing you
+    // are looking down at is genuinely below you. Charging it the first 45
+    // degrees would also make the air game unusable rather than merely mushy:
+    // the look-down limit is 85 degrees, so a dead zone of 45 caps the tilt a
+    // falling fighter can reach at 40, and the Champion's aerial spike only
+    // connects at 45 or more.
+    let w = elementalist();
+    for degrees in [10, 45, 60, 80] {
+        let tilt = swing_tilt_from(&w, down(degrees), false);
+        assert!(
+            (tilt + degrees as f32).abs() < 1.0,
+            "airborne, looking {degrees} degrees down swung {tilt:.1} degrees"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// At the mechanic
+// ---------------------------------------------------------------------------
+
+/// A Reaver with the shadow placed ahead of her, and the gap it sits at.
+fn with_a_shadow() -> (World, V3) {
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(8));
+    w.players[1].pos = V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(-12));
+    // `E` places it where the crosshair is, which is a grounded cast.
+    run(&mut w, 2, E, down(20));
+    run(&mut w, 2, 0, down(20));
+    let Mechanic::Shadow { at: Some(spot) } = w.players[0].mechanic else {
+        panic!("the fixture never placed a shadow");
+    };
+    (w, spot)
+}
+
+#[test]
+fn the_blades_erupt_at_the_shadow_rather_than_on_the_caster() {
+    // Guillotine lotus is specced "Range: at the shadow". It used to be
+    // declared a swing with a reach of zero, which put its volume on the
+    // Reaver's own body -- the move was unusable as written and the overlay
+    // showed exactly that, a bubble sitting on her chest.
+    let (mut w, shadow) = with_a_shadow();
+    let stood = w.players[0].pos;
+    assert!(
+        shadow.sub(stood).flat_len().raw() > Fx::ONE.raw(),
+        "the fixture placed the shadow on top of her, so this proves nothing"
+    );
+
+    let mut seen = None;
+    for _ in 0..40 {
+        run(&mut w, 1, Q, down(20));
+        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
+            seen = Some(hb);
+            break;
+        }
+    }
+    let hb = seen.expect("Guillotine never put a volume out");
+    assert!(
+        hb.to.sub(shadow).flat_len().raw() < Fx::ONE.raw(),
+        "the blades came out {:.1} m from the shadow",
+        hb.to.sub(shadow).flat_len().to_f32_for_render()
+    );
+    assert!(
+        hb.to.sub(stood).flat_len().raw() > Fx::ONE.raw(),
+        "the blades came out on the caster's own body"
+    );
+}
+
+#[test]
+fn standing_where_the_shadow_is_is_what_gets_you_cut() {
+    let (mut w, shadow) = with_a_shadow();
+    let health = |w: &World| w.players[1].health;
+
+    // Out of the way: the move is thrown and nothing happens.
+    let mut clear = w.clone();
+    run(&mut clear, 40, Q, down(20));
+    assert_eq!(
+        health(&clear),
+        sim::state::max_health(),
+        "Guillotine cut somebody standing nowhere near the shadow"
+    );
+
+    w.players[1].pos = V3::new(shadow.x, Fx::ZERO, shadow.z);
+    run(&mut w, 40, Q, down(20));
+    assert!(
+        health(&w) < sim::state::max_health(),
+        "standing on the shadow cost nothing when the blades came up"
+    );
 }

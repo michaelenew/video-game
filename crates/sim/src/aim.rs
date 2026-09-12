@@ -69,9 +69,9 @@
 //! `crate::camera`, which says what that bought and what it cost.
 
 use crate::arena;
-use crate::class::Structure;
+use crate::class::{Mechanic, Structure};
 use crate::effects::{EffectKind, Effects};
-use crate::fixed::Fx;
+use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::input::Input;
 use crate::math::V3;
 use crate::monster::Monster;
@@ -116,14 +116,52 @@ pub enum Kind {
     Grounded,
     /// Flies to the point the crosshair is on. [`skillshot_path`].
     Skillshot,
-    /// Not aimed: out along `facing`, at the move's own reach.
+    /// A body moving: out along `facing`, at the move's own reach, tilted by
+    /// the camera's pitch outside a dead zone. [`swing_path`].
     Swing,
+    /// Wherever the class mechanic is standing. The player aimed when they put
+    /// it there. [`mechanic_path`].
+    AtTheMechanic,
 }
 
 impl Kind {
-    /// Does the crosshair decide where this goes?
+    /// Does the crosshair's raycast decide where this goes?
+    ///
+    /// Two of the four. The other two are pointed by something the player
+    /// already decided -- which way their body is facing, or where they put the
+    /// mechanic -- and consult nothing.
     pub const fn is_a_skillshot(self) -> bool {
         matches!(self, Kind::Grounded | Kind::Skillshot)
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Kind::Grounded => "grounded",
+            Kind::Skillshot => "skillshot",
+            Kind::Swing => "swing",
+            Kind::AtTheMechanic => "mechanic",
+        }
+    }
+
+    /// How the move table stores it. Unknown codes read as a swing, which is
+    /// the one that asks nothing of the world and so cannot be wrong by
+    /// accident.
+    pub const fn from_code(code: u8) -> Kind {
+        match code {
+            1 => Kind::Grounded,
+            2 => Kind::Skillshot,
+            3 => Kind::AtTheMechanic,
+            _ => Kind::Swing,
+        }
+    }
+
+    pub const fn code(self) -> u8 {
+        match self {
+            Kind::Swing => 0,
+            Kind::Grounded => 1,
+            Kind::Skillshot => 2,
+            Kind::AtTheMechanic => 3,
+        }
     }
 }
 
@@ -137,29 +175,6 @@ pub struct Scene<'a> {
     pub players: &'a [Player; MAX_PLAYERS],
     pub effects: &'a Effects,
     pub quarry: Option<&'a Monster>,
-}
-
-/// The line a **swing** is thrown along: from the hand, out at the move's
-/// reach, in the direction the player is looking.
-///
-/// No raycast, because a swing is not aimed *at* anything -- it is a body
-/// moving, and it stops where the weapon stops rather than where the crosshair
-/// lands. What it takes from the crosshair is the **plane**: the yaw is the
-/// facing, which is already locked, and the pitch is the rest of the same
-/// look. That matters for exactly one class so far, and it is most of what the
-/// class is -- the Champion's hammer comes down in the plane you are aiming
-/// along, and its aerials are thrown at the floor or at the sky on purpose.
-///
-/// It is here rather than beside the move for the same reason everything else
-/// in this file is: the look direction is one of the two ingredients of the
-/// mistake this module exists to prevent, so the places that turn it into a
-/// line are all in one file where they can be compared.
-pub fn swing_path(pos: V3, input: Input, reach: Fx) -> Path {
-    let from = origin(pos);
-    Path {
-        from,
-        to: from.add(input.look_dir().scale(reach)),
-    }
 }
 
 /// Where a fighter standing at `pos` casts from: the height abilities leave at.
@@ -340,6 +355,96 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
         Met::Solid | Met::Reach => seen.at,
     };
     Path { from, to }
+}
+
+/// The line a **swing** comes out along: the body's own direction, tilted by
+/// how far the camera is looking up or down.
+///
+/// No raycast, because a swing is not aimed *at* anything — it is a body
+/// moving, and it stops where the weapon stops rather than where the crosshair
+/// lands. What it takes from the crosshair is the **plane**. The yaw is the
+/// facing, because a cut goes where your shoulders are; the pitch is the
+/// camera's, because melee happens in the air and on slopes and a swing pinned
+/// to the horizontal misses things that are plainly in front of you. It is most
+/// of what the Champion is — a hammer comes down in the plane you are aiming
+/// along, and its aerials are thrown at the floor or at the sky on purpose.
+///
+/// **There is a dead zone below the horizon, and it is the whole trick.** The
+/// camera sits above the shoulder, so looking at somebody standing at your own
+/// height means looking slightly *down* at them; a swing that followed that
+/// exactly would tilt into the floor every time you fought anyone. So:
+///
+/// ```text
+///   pitch above the horizon    the swing follows it exactly
+///   the first N degrees below  the swing stays level -- the standard arc
+///   further down than that     the swing follows what is left over
+/// ```
+///
+/// At the dead zone's edge the tilt is still zero and it moves a degree per
+/// degree from there, so there is no step at the boundary. `N` is
+/// [`crate::tuning::swing_level_to`].
+///
+/// **Standing only.** The correction it makes is about two fighters sharing a
+/// floor; off the floor the thing under the reticle really is below you, so
+/// `grounded == false` follows the pitch exactly all the way down. It is also
+/// the difference between the air game working and not: the look-down limit is
+/// 85 degrees, and a 45-degree dead zone would cap a falling fighter's tilt at
+/// 40 when the Champion's spike needs 45.
+///
+/// It is here rather than beside the move for the same reason everything else
+/// in this file is: the look direction is one of the two ingredients of the
+/// mistake this module exists to prevent, so the places that turn it into a
+/// line are all in one file where they can be compared.
+pub fn swing_path(pos: V3, facing: V3, look: Input, grounded: bool, reach: Fx) -> Path {
+    // From the hand: an overhead begins at the chest and a rising cut is aimed
+    // from there. Where along the body a given weapon actually hinges is
+    // `moves::swing_hub`'s business.
+    let from = origin(pos);
+    let tilt = swing_tilt(look, grounded);
+    let flat = cos_turns(tilt);
+    let dir = V3::new(facing.x.mul(flat), sin_turns(tilt), facing.z.mul(flat));
+    Path {
+        from,
+        to: from.add(dir.scale(reach)),
+    }
+}
+
+/// How far a swing tilts, given where the camera is looking.
+///
+/// Written as a sum rather than a branch so the two halves cannot disagree
+/// about the boundary: above the horizon the first term is the pitch and the
+/// second is zero, below it the first is zero and the second is whatever is
+/// left after the dead zone is spent.
+///
+/// **The dead zone is a standing rule.** Its whole reason is that you fight
+/// people at your own height by looking slightly down at them, and that is a
+/// thing that happens with your feet on the floor. Off the ground you are
+/// genuinely above what you are hitting, so the swing follows the camera all
+/// the way down -- the same split `moves::swing_base` already makes for the
+/// plane a weapon sweeps in.
+fn swing_tilt(look: Input, grounded: bool) -> Fx {
+    let pitch = look.pitch_turns();
+    if !grounded {
+        return pitch;
+    }
+    let dead = Fx::ratio(t::swing_level_to(), 360);
+    pitch.max(Fx::ZERO).add(pitch.add(dead).min(Fx::ZERO))
+}
+
+/// Where the class mechanic is standing.
+///
+/// One move works this way -- the Reaver's Guillotine lotus, whose blades erupt
+/// at the shadow. The player *did* aim it, with the crosshair, when they placed
+/// the shadow; throwing the move only cashes that in. Re-aiming it here would
+/// quietly delete the reason shadow placement is a decision.
+///
+/// Falls back to the caster's own feet when the mechanic is nowhere, which the
+/// move table's `needs_mechanic` should already have prevented.
+pub fn mechanic_path(from: V3, mechanic: &Mechanic) -> Path {
+    Path {
+        from,
+        to: mechanic.placed().unwrap_or(from),
+    }
 }
 
 // ---------------------------------------------------------------------------

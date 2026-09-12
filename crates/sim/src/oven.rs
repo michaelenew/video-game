@@ -300,6 +300,7 @@ scalars! {
     SweepHeight,      "Champion", "Sweep thrown from (x chest)",Fixed,   fx(1,10),  fx(3,2);
     SweepDip,         "Champion", "Sweep travels below level",  Fixed,   0,         fx(1,8);
     ThrustExtend,     "Champion", "Thrust out on the first active frame (x)", Fixed, 0, fx(1,1);
+    SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
 }
 
 // ---------------------------------------------------------------------------
@@ -458,12 +459,11 @@ pub enum MoveField {
     // health back on the hit -- see `moves::Move::cost` and `leech`.
     Cost,
     Leech,
-    // And again, for which of the three kinds of aiming a move uses. Derived
-    // where it can be -- a move that plants something on the floor is grounded
-    // whatever else it does -- so this is only the one bit that cannot be:
-    // flies at the crosshair, or swings where the body is facing. See
-    // `moves::Move::aim` and `crate::aim`.
-    Skillshot,
+    // And again, for which line of effect a move uses: 0 swings out along the
+    // body, 1 lands on the ground at the crosshair, 2 flies to what the
+    // crosshair is on, 3 erupts at the class mechanic. `aim::Kind`'s own
+    // numbering. See `moves::Move::aim` and `crate::aim`.
+    Aim,
     // And again for the Champion's rebuild: how far a swing travels, and how
     // often a move that keeps hitting is allowed to hit again.
     Arc,
@@ -492,7 +492,7 @@ impl MoveField {
         MoveField::Effect,
         MoveField::Cost,
         MoveField::Leech,
-        MoveField::Skillshot,
+        MoveField::Aim,
         MoveField::Arc,
         MoveField::Rehit,
     ];
@@ -519,7 +519,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Skillshot => "Flies at the crosshair",
+            MoveField::Aim => "Line of effect (0-3)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
         }
@@ -535,12 +535,11 @@ impl MoveField {
             | MoveField::AirStall => Unit::Frames,
             MoveField::Damage => Unit::Int,
             MoveField::Mobility => Unit::Percent,
-            MoveField::Unblockable
-            | MoveField::HitsCrouching
-            | MoveField::NeedsMechanic
-            | MoveField::Skillshot => Unit::Flag,
+            MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
+                Unit::Flag
+            }
             MoveField::Grabs | MoveField::Rehit => Unit::Frames,
-            MoveField::Effect | MoveField::Cost => Unit::Int,
+            MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
             MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
         }
@@ -548,6 +547,9 @@ impl MoveField {
 
     pub const fn range(self) -> (i32, i32) {
         match self {
+            // Four lines of effect, and the numbering is `aim::Kind`'s. A
+            // slider that ran to six hundred would let somebody pick a fifth.
+            MoveField::Aim => (0, 3),
             // Signed, because a spike is a launch pointed the other way: the
             // Champion's aerial hammer drives an airborne target into the
             // floor with the same number that an uppercut lifts them with.
@@ -703,7 +705,7 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 186;
+pub const SCALAR_COUNT: usize = 187;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody

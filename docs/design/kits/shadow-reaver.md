@@ -55,6 +55,17 @@ shadow; keeps it
 Blades erupt from the shadow. They return after a delay, or immediately if you move the
 shadow, dealing damage scaled to the target's missing health. The execute tool.
 
+> **Implemented, at the shadow.** It is the one move in the game aimed *at the mechanic*
+> rather than at the crosshair or along the body — the player aimed when they placed the
+> shadow, and throwing this only cashes that in. See [../aiming.md](../aiming.md).
+>
+> It briefly erupted **on the Reaver's own body**: the move was declared a swing with a reach
+> of zero, so its volume came out where she was standing. Nothing about the ability worked,
+> and the overlay showed exactly that. The volume follows the shadow live, so recalling it
+> while the blades are out takes them with it.
+>
+> The delay, the return, and the scaling with missing health are still unbuilt.
+
 ### Executioner
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
 shadow; consumes it
