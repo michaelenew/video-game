@@ -160,6 +160,19 @@ fn every_move_says_which_of_the_three_it_is() {
                     m.name
                 );
             }
+            // A thing that flies through the air is aimed through the air. If
+            // one of these came out as a swing it would travel along the body's
+            // flat facing and quietly ignore the crosshair -- which is the bug
+            // this whole file exists to stop coming back.
+            if sim::effects::EffectKind::from_code(m.effect).is_some_and(|k| k.travels()) {
+                assert_eq!(
+                    m.aim(),
+                    Kind::Skillshot,
+                    "{} {} throws something that travels but is not aimed like it",
+                    class.name(),
+                    m.name
+                );
+            }
         }
     }
     assert!(

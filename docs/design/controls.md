@@ -28,7 +28,10 @@ Six sentences, and everything else follows:
 3. **WASD means move.**
 4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
 5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
-   class does, each on its own key.
+   class does, each on its own key. `E` is usually an instant change of state — throw the
+   shield, cycle the form, place the shadow, raise a structure — but it does not have to be:
+   where a class's mechanic has no state to change, `E` is a fourth ability with a wind-up
+   and a recovery like any other. See [Where `E` is an ability](#where-e-is-an-ability).
 6. **The mouse means *where*.** You look with it, you are pointed where you look, and
    your attacks go where you are pointed — **including up and down.** The crosshair is a
    line in space, and an area ability lands on the first thing that line meets.
@@ -334,6 +337,24 @@ dodges rather than extra inputs. For the Reaver this is what makes movement and 
 placement the same action, which is the fix that keeps the class from being denied its
 mobility.
 
+### Where `E` is an ability
+
+**Settled 2026-09-12.** The mechanic key is described above as the thing only that class
+does, and for most of the roster that is a state change with no frames to it. The Blood mage
+is the exception, and the reason is worth stating because it will come up again: **her
+mechanic is health**, which is spent by casting rather than by pressing a key, so `E` had
+nothing to do and sat unused for the whole of a match.
+
+It casts Black spike now — a real move with a startup you can be punished during, a reach the
+crosshair aims, and a cost. Nothing about the grammar changed: `E` still means "the thing
+only this class does".
+
+What changed is the move table, which grew a **fourth slot** for it. The other three —
+`LMB`, `Shift+LMB`, `Q` — still mean the same thing on every class, which is the property
+that lets one control scheme drive six kits. The fourth means whatever that class's mechanic
+means, and most classes leave it empty. `cargo run -p sim --bin frametable` prints the key
+beside every move.
+
 ## Movement
 
 Movement is the core of how the game feels, so it gets pinned down before the attack and
@@ -465,6 +486,19 @@ Airborne attacks are still the grounded ones.
 
 ---
 
+## The per-class schemes
+
+> **These six sections predate the 2026-09-11 grammar** and are sketches of a twelve-ability
+> kit rather than a record of what is in the game. They put the mechanic on `M` or on `R` and
+> treat `q` and `e` as spare keys, which is exactly the arrangement the grammar above
+> replaced. Read them as intent for the *shape* of each class's full kit; read the kit
+> documents in [`kits/`](kits/) and `cargo run -p sim --bin frametable` for what is bound
+> today.
+>
+> Two rows have been brought up to date because the abilities behind them were finished and a
+> stale table beside a working implementation is worse than no table: the Elementalist's auto,
+> which is a beam now, and the whole of the Blood mage's. The rest have not.
+
 ## Dual mage
 
 The mechanic is on the primary buttons, and it is not optional.
@@ -570,18 +604,25 @@ differentiation.
 
 ### Blood mage
 
+Current as of 2026-09-12, and the four rows marked **bound** are what the game does.
+
 | Input | Result |
 | --- | --- |
-| `L` | Melee auto with lifesteal |
-| `R` | **Rend.** Press again to reactivate — the signature second decision |
-| direction + click | Cripple, Black spike, Affliction |
-| `shift` + click | Reaper's debt, Seal of the unforgiven |
+| `L` | **Bloodletter** — the auto. A blade out to a fixed distance and back, cutting on both passes and paying out on the catch. **Bound** |
+| `shift` + `L` | **Rend** — the committed melee rake. **Bound** |
+| `Q` | **Grasp** — four arms out in a cone that arc inward to converge; all four roots. **Bound** |
+| `E` | **Black spike** — a spike in a draining, slowing field, placed at long range. **Bound**, and the one place in the game where the mechanic key is an ability rather than a state change |
+| direction + click | Cripple, Affliction, and the reactivating projectile Rend was meant to be |
+| the seals | Unplaced. Seal of the unforgiven wants a button of its own and there is not an obvious one |
+
+Every bound ability costs health on the press and returns a share of its damage on the hit.
+That is the class mechanic, and it is the only class with a cost in the move table.
 
 ## Open questions
 
-- **`q` and `e`.** Currently unused. Twenty inputs is already more than a prototype needs, so
-  they stay free. If `M` and `LR` prove unreliable, `q` and `e` are the natural replacements
-  — they are fast, adjacent to WASD, and cost no finger travel.
+- ~~**`q` and `e`.** Currently unused.~~ **Answered 2026-09-11**: they are the class special
+  and the class mechanic, and the reasoning is in
+  [Why the special and the mechanic left the mouse](#why-the-special-and-the-mechanic-left-the-mouse).
 - **Does `s` + click mean "low attack" or "defensive option"?** It should mean one thing
   across all classes. Low attack is the platform-fighter convention.
 - **Camera-relative or character-relative direction?** Determines whether `a`/`d` really do

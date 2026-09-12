@@ -288,6 +288,14 @@ scalars! {
     FireBoltStagger,   "Elementalist", "Fire bolt stagger",                 Frames, 0,        90;
     FireBoltBlockstun, "Elementalist", "Fire bolt blockstun",               Frames, 0,        90;
     FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
+    SpikeHeight,       "Blood mage", "Black spike height",                  Fixed,  fx(1,2),  fx(6,1);
+    BloodletterFlight, "Blood mage", "Bloodletter, out and back",           Frames, 10,       180;
+    BloodletterRadius, "Blood mage", "Bloodletter radius",                  Fixed,  fx(1,10), fx(2,1);
+    GraspFlight,       "Blood mage", "Grasp, arms out and in",              Frames, 6,        120;
+    GraspSpread,       "Blood mage", "Grasp, how wide the cone opens",      Fixed,  fx(1,10), fx(6,1);
+    GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
+    GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
+    DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -442,6 +450,15 @@ pub enum MoveField {
     SelfLift,
     Grabs,
     Effect,
+    // Appended again, for the Blood mage's economy. Health out on the press,
+    // health back on the hit -- see `moves::Move::cost` and `leech`.
+    Cost,
+    Leech,
+    // And again, for which of the three kinds of aiming a move uses. Derived
+    // where it can be -- a move that plants something on the floor is grounded
+    // whatever else it does -- so this is only the one bit that cannot be:
+    // flies at the crosshair, or swings where the body is facing. See
+    // `moves::Move::aim` and `crate::aim`.
     Skillshot,
 }
 
@@ -465,6 +482,8 @@ impl MoveField {
         MoveField::SelfLift,
         MoveField::Grabs,
         MoveField::Effect,
+        MoveField::Cost,
+        MoveField::Leech,
         MoveField::Skillshot,
     ];
 
@@ -488,6 +507,8 @@ impl MoveField {
             MoveField::SelfLift => "Self lift",
             MoveField::Grabs => "Grab hold",
             MoveField::Effect => "Leaves behind",
+            MoveField::Cost => "Health cost",
+            MoveField::Leech => "Leech (%)",
             MoveField::Skillshot => "Flies at the crosshair",
         }
     }
@@ -507,7 +528,8 @@ impl MoveField {
             | MoveField::NeedsMechanic
             | MoveField::Skillshot => Unit::Flag,
             MoveField::Grabs => Unit::Frames,
-            MoveField::Effect => Unit::Int,
+            MoveField::Effect | MoveField::Cost => Unit::Int,
+            MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
         }
     }
@@ -656,12 +678,12 @@ pub const MONSTER_MOVES: usize = 6;
 pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
-pub const SLOTS: usize = 3;
+pub const SLOTS: usize = 4;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 174;
+pub const SCALAR_COUNT: usize = 182;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 19;
+pub const MOVE_FIELDS: usize = 21;
 
 // ---------------------------------------------------------------------------
 // The live store
@@ -830,6 +852,12 @@ impl Knob {
             Knob::Scalar(s) => s.family().to_string(),
             Knob::View(_) => "Camera".to_string(),
             Knob::Air(c, _) => format!("Air · {}", c.name()),
+            // An unbound slot still has storage -- the stride is the same for
+            // every class -- so it still has knobs, and they need a heading
+            // that says why nothing in the game reads them.
+            Knob::Move(c, slot, _) if !crate::moves::bound(c, slot) => {
+                format!("{} · no {} ability", c.name(), crate::moves::binding(slot))
+            }
             Knob::Move(c, slot, _) => format!(
                 "{} · {} [{}]",
                 c.name(),
@@ -865,7 +893,11 @@ impl Knob {
             Knob::Move(c, slot, f) => format!(
                 "move.{}.{}.{}",
                 slug(c.name()),
-                slug(crate::moves::get(c, slot as u8).name),
+                if crate::moves::bound(c, slot) {
+                    slug(crate::moves::get(c, slot as u8).name)
+                } else {
+                    format!("unbound_{}", crate::moves::binding(slot).to_lowercase())
+                },
                 slug(f.label())
             ),
             Knob::Monster(slot, f) => format!(

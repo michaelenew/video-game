@@ -16,9 +16,21 @@
 //! re-simulation would be the most expensive thing in the tick. A hard cap also
 //! makes "what happens when you spam it" a decision rather than an emergent
 //! property: the oldest goes.
+//!
+//! ## Movement is a function of age, never a velocity
+//!
+//! Two of the four travel — a blade thrown out and caught again, four arms that
+//! open into a cone and close to a point. Neither carries a velocity. Where
+//! they are is worked out from `age` every frame, so the whole flight is a pure
+//! function of the frame the effect was cast on plus the frame it is now, and a
+//! rollback that re-simulates the middle of a flight reproduces it exactly
+//! rather than re-integrating it and landing somewhere near.
 
+use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::moves::Move;
+use crate::state::MAX_PLAYERS;
 use crate::tuning as t;
 
 pub const MAX_EFFECTS: usize = 8;
@@ -28,20 +40,46 @@ pub const MAX_EFFECTS: usize = 8;
 /// array's shape at every call site.
 pub type Effects = [Option<Effect>; MAX_EFFECTS];
 
+/// Everything an effect can hit: both fighters, and the creature.
+///
+/// The creature gets a slot of its own rather than being squeezed in beside the
+/// fighters because it is not one — it has parts, a hide and a poise bar. What
+/// this index is for is only the bookkeeping of *what has already been hit*,
+/// which is the same question for all three.
+pub const VICTIMS: usize = MAX_PLAYERS + 1;
+/// Where the creature sits in that numbering.
+pub const QUARRY_VICTIM: usize = MAX_PLAYERS;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EffectKind {
     /// Elementalist. Narrow and short at first, then grows: a wide, punishing
     /// base and a taller column above it.
     FirePillar,
-    /// Blood mage. A field that drains and slows anyone standing in it.
+    /// Blood mage. A spike standing in a field that drains and slows anyone
+    /// inside it, and feeds a share of what it drains back to the caster.
     BlackSpike,
+    /// Blood mage. The auto: a blade thrown a fixed distance and caught again,
+    /// cutting on both passes and bringing the blood home with it.
+    Bloodletter,
+    /// Blood mage. Four arms thrown out in a cone that arc back inward to meet
+    /// at the far end. Caught by all four and you are rooted.
+    Grasp,
 }
+
+/// How many arms a Grasp has, and which corner each one leaves by.
+///
+/// Top left, bottom left, top right, bottom right — the sign pair is
+/// `(sideways, vertical)` against the line the ability was aimed along.
+pub const GRASP_ARMS: usize = 4;
+pub const GRASP_CORNERS: [(i32, i32); GRASP_ARMS] = [(-1, 1), (-1, -1), (1, 1), (1, -1)];
 
 impl EffectKind {
     pub const fn name(self) -> &'static str {
         match self {
             EffectKind::FirePillar => "fire pillar",
             EffectKind::BlackSpike => "black spike",
+            EffectKind::Bloodletter => "bloodletter",
+            EffectKind::Grasp => "grasp",
         }
     }
 
@@ -53,7 +91,20 @@ impl EffectKind {
     pub const fn grounded(self) -> bool {
         match self {
             EffectKind::FirePillar | EffectKind::BlackSpike => true,
+            // Both of these are thrown *through* the air along the line the
+            // player is looking, so the crosshair means a direction rather than
+            // a place on the floor.
+            EffectKind::Bloodletter | EffectKind::Grasp => false,
         }
+    }
+
+    /// Does it stay where it was put?
+    ///
+    /// The two that do are places on the map and are drawn and tested where
+    /// they were cast. The two that do not work out where they are from their
+    /// age -- see the module header.
+    pub const fn travels(self) -> bool {
+        matches!(self, EffectKind::Bloodletter | EffectKind::Grasp)
     }
 
     /// Which move index spawns this, for the move tables.
@@ -61,7 +112,34 @@ impl EffectKind {
         match code {
             1 => Some(EffectKind::FirePillar),
             2 => Some(EffectKind::BlackSpike),
+            3 => Some(EffectKind::Bloodletter),
+            4 => Some(EffectKind::Grasp),
             _ => None,
+        }
+    }
+
+    /// How long one of these lives, in frames.
+    pub fn life(self) -> u16 {
+        match self {
+            EffectKind::FirePillar => t::pillar_life(),
+            EffectKind::BlackSpike => t::spike_life(),
+            EffectKind::Bloodletter => t::bloodletter_flight(),
+            EffectKind::Grasp => t::grasp_flight(),
+        }
+    }
+
+    /// What it deals each time it connects.
+    ///
+    /// The two that stay put have a number of their own, because the move that
+    /// placed them **also** hit on its own at the moment of casting and the two
+    /// are not the same event: a fire pillar's eruption is not its burn. The
+    /// two that travel take the move's, because for those the effect *is* the
+    /// hit — the caster's body never touches anybody.
+    pub fn damage(self, m: &Move) -> i32 {
+        match self {
+            EffectKind::FirePillar => t::pillar_damage(),
+            EffectKind::BlackSpike => t::spike_drain(),
+            EffectKind::Bloodletter | EffectKind::Grasp => m.damage,
         }
     }
 }
@@ -71,14 +149,80 @@ pub struct Effect {
     pub kind: EffectKind,
     /// Who made it. An effect never hurts its owner.
     pub owner: u8,
+    /// Which move made it.
+    ///
+    /// Kept rather than copying out the half-dozen numbers an effect needs,
+    /// because a detached hit wants everything an attached one has: how far it
+    /// goes, what it deals, how long it stuns, whether guard stops it. One
+    /// lookup answers all of that from the same table the move itself reads, so
+    /// there is no second copy of an ability's numbers to disagree with the
+    /// first.
+    pub class: Class,
+    pub slot: u8,
+    /// Where it was cast. For the two that stay put this is where they are; for
+    /// the two that travel it is where they left from and where they come back
+    /// to.
     pub pos: V3,
+    /// The line it was thrown along, as a unit vector. Zero for the two that do
+    /// not go anywhere.
+    pub dir: V3,
     /// Frames since it appeared. Growth is a function of this, so it is a pure
     /// function of the snapshot and rollback reproduces it exactly.
     pub age: u16,
     pub life: u16,
+    /// Who has already been hit, and by which part.
+    ///
+    /// One bit per (part, victim). A blade has two parts — the pass out and the
+    /// pass back — and clears the mask between them, so it can catch the same
+    /// person twice. A Grasp has four, one per arm, and never clears: an arm
+    /// hits you once, and how many *different* arms have is exactly the
+    /// question the root is asking.
+    pub struck: u16,
+    /// Damage this has dealt and not yet paid back.
+    ///
+    /// Only the blade uses it. The archive is specific that the health arrives
+    /// **when it returns**, which is the whole risk of the ability: the cut
+    /// lands immediately and the payment has to survive the flight home.
+    pub banked: i32,
 }
 
 impl Effect {
+    /// Put one into the world.
+    pub fn cast(kind: EffectKind, owner: u8, class: Class, slot: u8, pos: V3, dir: V3) -> Effect {
+        Effect {
+            kind,
+            owner,
+            class,
+            slot,
+            pos,
+            dir,
+            age: 0,
+            life: kind.life().max(1),
+            struck: 0,
+            banked: 0,
+        }
+    }
+
+    /// The move that made this.
+    pub fn source(&self) -> Move {
+        crate::moves::get(self.class, self.slot)
+    }
+
+    /// What it deals each time it connects.
+    pub fn damage(&self) -> i32 {
+        self.kind.damage(&self.source())
+    }
+
+    /// Percent of what it deals that goes back to the caster.
+    pub fn leech(&self) -> u8 {
+        self.source().leech
+    }
+
+    /// Health owed for `dealt` damage.
+    pub fn leeched(&self, dealt: i32) -> i32 {
+        self.source().leeched(dealt)
+    }
+
     /// How far through its life, as a fraction.
     ///
     /// Fixed point, so growth curves are deterministic. Saturates at one rather
@@ -120,11 +264,30 @@ impl Effect {
         (base, column)
     }
 
+    /// The volume a black spike occupies: a disc of ground with a spike
+    /// standing in the middle of it.
+    ///
+    /// A slab rather than a flat circle, so that **a drain field can be jumped
+    /// over**. It used to be tested on flat distance alone, which made it the
+    /// one hazard in the game with infinite height -- you could be draining
+    /// three metres above it at the top of a jump. Height decides a pillar and
+    /// it decides this, for the same reason: what you can see is a thing of a
+    /// certain size, and the hit test should agree with your eyes.
+    pub fn spike_volume(&self) -> Pillar {
+        Pillar {
+            radius: t::spike_radius(),
+            bottom: Fx::ZERO,
+            top: t::spike_height(),
+        }
+    }
+
     /// Radius of a field effect. Drain fields do not grow; they are a place.
     pub fn field_radius(&self) -> Fx {
         match self.kind {
             EffectKind::BlackSpike => t::spike_radius(),
             EffectKind::FirePillar => self.pillar_volumes().0.radius,
+            EffectKind::Bloodletter => t::bloodletter_radius(),
+            EffectKind::Grasp => t::grasp_arm_radius(),
         }
     }
 
@@ -137,6 +300,115 @@ impl Effect {
         let every = t::effect_tick_frames().max(1);
         self.age > 0 && self.age % every == 0
     }
+
+    // -- The two that travel ------------------------------------------------
+
+    /// Where the blade is, as a fraction of its throw: out to one at the turn
+    /// and back to zero at the catch.
+    ///
+    /// A triangle rather than a curve on purpose. A thrown blade that eased in
+    /// and out would hang at the far end, and hanging is what a *placed* effect
+    /// does; this one is meant to read as a single continuous throw whose only
+    /// event is the turn.
+    fn out_and_back(&self) -> Fx {
+        let p = self.progress();
+        let half = Fx::ratio(1, 2);
+        if p.raw() <= half.raw() {
+            p.mul(Fx::from_int(2))
+        } else {
+            Fx::ONE.sub(p).mul(Fx::from_int(2))
+        }
+    }
+
+    /// True once the blade has turned and is on its way home.
+    pub fn returning(&self) -> bool {
+        self.age as u32 * 2 > self.life as u32
+    }
+
+    /// Which pass the blade is on: nought out, one back.
+    pub fn pass(&self) -> usize {
+        self.returning() as usize
+    }
+
+    /// Where the blade is this frame.
+    pub fn blade_at(&self) -> V3 {
+        self.pos
+            .add(self.dir.scale(self.source().reach.mul(self.out_and_back())))
+    }
+
+    /// Where one arm of a Grasp is this frame.
+    ///
+    /// Along the aim by however far through the throw it is, and off it by a
+    /// bulge that is zero at both ends and widest halfway. `4p(1 - p)` is the
+    /// cheapest curve with exactly that shape, and it needs no trigonometry, so
+    /// the arms are the same on every machine.
+    pub fn arm_at(&self, arm: usize) -> V3 {
+        let p = self.progress();
+        let bulge = Fx::from_int(4).mul(p).mul(Fx::ONE.sub(p));
+        let (side, up) = GRASP_CORNERS[arm.min(GRASP_ARMS - 1)];
+        let (right, lift) = frame_about(self.dir);
+        let spread = t::grasp_spread().mul(bulge);
+        self.pos
+            .add(self.dir.scale(self.source().reach.mul(p)))
+            .add(right.scale(spread.mul(Fx::from_int(side))))
+            .add(lift.scale(spread.mul(Fx::from_int(up))))
+    }
+
+    // -- Bookkeeping --------------------------------------------------------
+
+    fn bit(part: usize, victim: usize) -> u16 {
+        1u16 << (part * VICTIMS + victim)
+    }
+
+    /// Has this part already caught this victim?
+    pub fn already_hit(&self, part: usize, victim: usize) -> bool {
+        self.struck & Effect::bit(part, victim) != 0
+    }
+
+    /// Mark a victim hit by one part, and say whether it was already.
+    pub fn take_hit(&mut self, part: usize, victim: usize) -> bool {
+        if self.already_hit(part, victim) {
+            return false;
+        }
+        self.struck |= Effect::bit(part, victim);
+        true
+    }
+
+    /// How many different parts have caught this victim.
+    pub fn parts_landed(&self, victim: usize, parts: usize) -> usize {
+        (0..parts)
+            .filter(|part| self.already_hit(*part, victim))
+            .count()
+    }
+
+    /// Forget everyone hit so far, so the next pass starts clean.
+    pub fn forget_hits(&mut self) {
+        self.struck = 0;
+    }
+}
+
+/// A sideways and an upward axis square to `dir`.
+///
+/// Sideways is `dir` turned a quarter turn in the horizontal plane, which is
+/// defined for everything except looking exactly at your own feet; upward is
+/// what is left. Straight up or down the two are degenerate and it falls back
+/// to the world axes, which is the right answer there — a cone fired at the
+/// floor has no "left" that means anything to the player.
+fn frame_about(dir: V3) -> (V3, V3) {
+    let flat = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
+    if flat.flat_len().raw() < Fx::ratio(1, 100).raw() {
+        return (
+            V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        );
+    }
+    let right = flat.normalized();
+    let up = V3::new(
+        right.y.mul(dir.z).sub(right.z.mul(dir.y)),
+        right.z.mul(dir.x).sub(right.x.mul(dir.z)),
+        right.x.mul(dir.y).sub(right.y.mul(dir.x)),
+    );
+    (right, up.normalized())
 }
 
 /// One cylindrical slab of a pillar.

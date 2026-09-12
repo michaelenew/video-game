@@ -109,6 +109,21 @@ impl Class {
         }
     }
 
+    /// Does this class hit harder when its victim cannot move?
+    ///
+    /// The Blood mage's damage identity, carried forward from the archive: she
+    /// *naturally deals increased damage on disabled enemies*. A trait rather
+    /// than a knob because it is a fact about who the class is; how much it is
+    /// worth is `tuning::disabled_damage_mul`, which is a knob like everything
+    /// else that decides how a fight feels.
+    ///
+    /// It is what makes her Grasp a setup rather than a small reward. Landing
+    /// all four arms roots somebody, and the root is only worth the cost of
+    /// setting up if something is waiting on the other side of it.
+    pub const fn preys_on_the_disabled(self) -> bool {
+        matches!(self, Class::BloodMage)
+    }
+
     pub fn starting_mechanic(self) -> Mechanic {
         match self {
             Class::Bulwark => Mechanic::Shield(Shield::Held),

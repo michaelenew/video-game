@@ -70,7 +70,10 @@ them: a structure, a fire pillar.
 
 ### Not grounded
 
-Things that fly: the Elementalist's auto, the Bulwark's thrown shield.
+Things that fly: the Elementalist's auto, the Bulwark's thrown shield, and the
+Blood mage's Bloodletter and Grasp — the last two throw something that then
+travels on its own, so what the crosshair gives them is the *line* rather than
+a landing spot.
 
 - **Hit the ground** — draw a line straight up from that spot to the height of
   the character's ability origin. The shot flies level over the place the
@@ -98,6 +101,11 @@ so a body the camera could not see is still a body the shot passes through.
 Each ability states which kinds of thing its path can meet. The Elementalist's
 beam meets bodies, stones and **fire**; the fire bolt that a pillar lights meets
 bodies and stones but not fire, or it could not leave the pillar that lit it.
+
+An ability whose *effect* travels — the Blood mage's thrown blade, her Grasp —
+takes the path's direction and flies its own distance along it, rather than
+stopping where the crosshair's ray stopped. A blade thrown at something four
+metres away still flies its full distance; the crosshair picked the line.
 
 ## What this rules out
 

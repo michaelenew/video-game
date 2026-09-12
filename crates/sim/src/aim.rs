@@ -17,7 +17,8 @@
 //!
 //! ```text
 //!   Grounded    the thing lands on the floor       structures, fire pillar
-//!   Skillshot   the thing flies through the air    the Elementalist's auto
+//!   Skillshot   the thing flies through the air    the Elementalist's auto,
+//!                                                   the Blood mage's blade
 //!   Swing       not aimed at all                   every melee attack
 //! ```
 //!

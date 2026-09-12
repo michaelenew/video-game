@@ -679,6 +679,78 @@ pub fn fire_bolt_knockback() -> Fx {
 }
 
 // ---------------------------------------------------------------------------
+// The Blood mage
+//
+// Everything she throws costs blood and gives it back on the hit, and those two
+// numbers are per move -- they are in the move table beside the damage, where
+// the rest of an ability's economy lives. What is here is the *shape* of the
+// three things she puts into the world: how tall the spike stands, how far the
+// blade flies, and how wide the arms of a Grasp open before they close.
+// ---------------------------------------------------------------------------
+
+/// How tall the black spike stands out of the ground.
+///
+/// Cosmetic and gameplay at once, and the reason it is a number rather than a
+/// constant in the renderer: the spike is the tell. A field that is only a
+/// stain on the floor is one you do not see until you are standing in it, which
+/// makes a placement ability into a trap, and the class wants you to look at
+/// the thing and decide to walk around it.
+pub fn spike_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeHeight))
+}
+
+/// Frames the Bloodletter takes to fly out and come all the way home.
+///
+/// The whole flight, both passes. Half of it is the way out.
+pub fn bloodletter_flight() -> u16 {
+    oven::scalar(Scalar::BloodletterFlight) as u16
+}
+
+/// How fat the blade is. Small: it is a thrown knife, not a wave.
+pub fn bloodletter_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BloodletterRadius))
+}
+
+/// Frames the Grasp's four arms take to open and converge.
+pub fn grasp_flight() -> u16 {
+    oven::scalar(Scalar::GraspFlight) as u16
+}
+
+/// How far off the centre line the arms bow at their widest.
+///
+/// The reason the ability is not just four copies of one skillshot: they leave
+/// as a cone and arrive as a point, so the volume they sweep is a lens rather
+/// than a line, and standing anywhere inside it gets you clipped by one or two.
+/// All four is a much smaller place to be, which is what makes the root a read.
+pub fn grasp_spread() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspSpread))
+}
+
+/// How fat one arm is.
+pub fn grasp_arm_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspArmRadius))
+}
+
+/// Frames you are rooted for after being caught by all four arms.
+///
+/// Brief on purpose. It is a hard stop, and the design only allows one behind a
+/// hard condition -- see `ability-spec.md`. Being in the one place all four
+/// arms pass through is that condition.
+pub fn grasp_root() -> u16 {
+    oven::scalar(Scalar::GraspRoot) as u16
+}
+
+/// What a Blood mage's damage is multiplied by against something that cannot
+/// move -- rooted, staggered, held, or a creature on its side.
+///
+/// The class's damage identity, and the reason its root is a setup rather than
+/// a small reward. See `class::Class::preys_on_the_disabled` for which classes
+/// it applies to and `state::Player::disabled` for what counts.
+pub fn disabled_damage_mul() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DisabledDamageMul))
+}
+
+// ---------------------------------------------------------------------------
 // The Ridgeback
 //
 // See `docs/design/monsters.md`. Three groups, and they are edited separately

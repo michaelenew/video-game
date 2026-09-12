@@ -460,8 +460,16 @@ pub fn aims_along_the_crosshair(class: Class, kind: u8) -> bool {
 }
 
 /// Which clip animates one class's move slot.
+///
+/// Clamped to the last slot the class actually binds, so a class whose mechanic
+/// is a state change rather than an ability never asks for a clip that does not
+/// exist -- see `sim::moves::bound`.
 pub fn move_clip(class: Class, slot: u8) -> Clip {
-    let slot = slot.min(2);
+    let slot = if sim::moves::bound(class, slot as usize) {
+        slot
+    } else {
+        2
+    };
     match (class, slot) {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
         (Class::Bulwark, 1) => Clip::BulwarkCommitted,
@@ -477,7 +485,8 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Elementalist, _) => Clip::ElementalistSpecial,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
-        (Class::BloodMage, _) => Clip::BloodSpecial,
+        (Class::BloodMage, 2) => Clip::BloodSpecial,
+        (Class::BloodMage, _) => Clip::BloodMechanic,
         (Class::DualMage, 0) => Clip::DualPoke,
         (Class::DualMage, 1) => Clip::DualCommitted,
         (Class::DualMage, _) => Clip::DualSpecial,

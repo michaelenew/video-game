@@ -1,4 +1,4 @@
-//! The Blood mage: Rend, Black spike, Reaper's debt.
+//! The Blood mage: Bloodletter, Rend, Grasp, Black spike.
 //!
 //! ## What the class fights like
 //!
@@ -23,23 +23,26 @@
 //!   body. No overhead goes past the ear, no lunge is long, and the knees give
 //!   at the end of everything.
 //!
-//! ## The three read as three distances
+//! ## The four read as four distances
 //!
 //! An opponent has to know which one is coming, and here they are told by
 //! where the caster is *pointing* in the first three frames:
 //!
 //! ```text
-//!   Rend           one hand cocked out and up, close in    -- at you
-//!   Black spike    one hand climbing, one pointing low     -- at the floor
-//!   Reaper's debt  the feet square and both arms open      -- at nothing; planted
+//!   Bloodletter  one hand drawn back low, behind the hip  -- past you
+//!   Rend         one hand cocked out and up, close in     -- at you
+//!   Grasp        the feet square and both arms opening    -- around you
+//!   Black spike  one hand climbing, one pointing low      -- at the floor
 //! ```
 //!
-//! Reaper's debt is the odd one and deliberately so: it is the only pose in
-//! the game that squares its feet. Everything else in the repository stands
-//! bladed, on `locomotion::stance`, because a bladed fighter can turn. A
-//! channel cannot -- `you cannot turn while it runs` is the whole cost of the
-//! move -- so it plants two feet on a line, facing where it is going to fire,
-//! and does not get them back until the recovery is nearly over.
+//! Grasp is the odd one and deliberately so: it is the only pose in the game
+//! that squares its feet. Everything else in the repository stands bladed, on
+//! `locomotion::stance`, because a bladed stance is what lets a body turn and
+//! lead with one side. This move has no lead side -- it is two arms doing the
+//! same thing at the same time, mirrored, and the four arms it throws leave in
+//! four symmetric directions. A body that is about to do something symmetrical
+//! squares up to do it, and squaring up is legible from across the arena long
+//! before the arms mean anything.
 //!
 //! ## Frames come from the move table
 //!
@@ -77,18 +80,18 @@ use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
 use view::skeleton::Joint;
 
 pub fn clips() -> Vec<Recipe> {
-    vec![rend(), black_spike(), reapers_debt()]
+    vec![bloodletter(), rend(), grasp(), black_spike()]
 }
 
 // ---------------------------------------------------------------------------
 // The body all three are thrown from
 // ---------------------------------------------------------------------------
 
-/// The two spots the channel stands on: square, wide, and level with each
+/// The two spots the Grasp stands on: square, wide, and level with each
 /// other. Nothing else in the game stands like this, which is the point.
 ///
 /// Seven centimetres ahead of where the idle's weight sits, and that is not a
-/// detail. The channel drops the hips more than twenty centimetres and holds
+/// detail. The move drops the hips more than twenty centimetres and holds
 /// them there; with the feet under the body the shins lean far enough forward
 /// to ask both ankles for more dorsiflexion than they have, the levelling
 /// clamps, and the character stands in the floor for forty frames. Feet a
@@ -152,7 +155,7 @@ fn footing(pose: Pose, lift_l: f32, lift_r: f32) -> Pose {
     )
 }
 
-/// The squared base, for the channel and nothing else.
+/// The squared base, for the Grasp and nothing else.
 fn rooted(pose: Pose, lift_l: f32, lift_r: f32) -> Pose {
     stand(
         pose,
@@ -189,24 +192,166 @@ fn ready() -> Pose {
 }
 
 // ---------------------------------------------------------------------------
+// Bloodletter
+// ---------------------------------------------------------------------------
+
+/// The auto: a blade thrown underarm, out to a fixed distance and back again.
+///
+/// The gesture is a **release**, not a strike, and the whole clip is arranged
+/// so that the caster's own body never claims the hit. The move has no hitbox
+/// of its own -- the blade in the air is the threat -- so an arm that finished
+/// in a fist over somebody's head would be the animation telling a lie about
+/// where the danger is. It finishes open instead.
+///
+/// Underarm rather than overarm for two reasons, and the second one is the real
+/// one. The hand never rises above the elbow, so the silhouette stays low and
+/// nothing about it can be confused with the Black spike's climbing hand. And a
+/// low release is what puts the blade out at chest height on a flat line, which
+/// is where it actually flies.
+///
+/// The recovery comes home to `ready()`, whose lead hand is already open with
+/// the palm turned up. That is not a coincidence being taken advantage of: the
+/// blade is coming back, and the pose a Blood mage waits in is a hand held out
+/// to catch it. The catch itself is forty-odd frames after the clip is over --
+/// the flight is much longer than the move -- so the animation cannot show it,
+/// and the most it can do is be standing in the right shape when it happens.
+///
+/// It leaves the caster most of their walking speed, so the renderer blends a
+/// real stride back in underneath. The legs here stay close to the idle's for
+/// that reason: anything ambitious down there would be fighting a walk cycle.
+fn bloodletter() -> Recipe {
+    let clip = Clip::BloodPoke;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    // Drawn back by the first third of the startup. Any later and there is one
+    // frame of arm travelling the whole way, which reads as a twitch.
+    let draw = (contact / 3).max(2);
+    let paid = recover + (end - recover) / 3;
+    let home = end.saturating_sub(3);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "Seven frames of startup is under the reaction threshold, so \
+                none of this is a telegraph -- what it owes an opponent is the \
+                *shape*, and the shape is a low underarm draw and release. The \
+                arm opens rather than closing: the move leaves no hitbox on the \
+                caster, and a hand that finished in a fist would be claiming a \
+                threat that is ten metres away by then. The draw is LINEAR \
+                because five frames is not enough room to shape anything, and \
+                the same reasoning as Rend applies to the release. The recovery \
+                pays the class's usual bill -- hand to the ribs, chest shut over \
+                it -- and then comes back to the open palm of `ready`, which is \
+                the hand the blade is going to land in."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(draw, drawn(), Ease::LINEAR),
+            Key::eased(contact, flung(), Ease::STRIKE),
+            Key::eased(recover, emptied(), Ease::OUT),
+            Key::eased(paid, spent(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The draw, on frame two: the throwing hand pulled back and **down**, behind
+/// the hip, palm turned up under the blade. The chest winds away with it.
+///
+/// The head turns back onto the line while the chest turns off it, the same
+/// trick Rend uses: a body winding up to throw something at a particular place
+/// has to keep looking at the place.
+fn drawn() -> Pose {
+    footing(
+        ready()
+            .hips(0.014, -0.090, -0.024)
+            .root(5.0, 0.0, -20.0)
+            .spine(13.0, 0.0, -12.0)
+            .chest(8.0, 0.0, -20.0)
+            .head(-12.0, 0.0, 24.0)
+            .shoulder_l(-40.0, 16.0, -16.0)
+            .forearm_l(34.0, 14.0)
+            .wrist_l(-30.0, 10.0, 0.0)
+            // The rear hand tightens in and stays out of the silhouette. It has
+            // nothing to do with this move.
+            .shoulder_r(-8.0, 10.0, -24.0)
+            .forearm_r(112.0, -18.0)
+            .wrist_r(-20.0, -8.0, 0.0),
+        0.0,
+        0.006,
+    )
+}
+
+/// Release, on the frame the blade leaves: the arm has swung through to
+/// roughly straight along the line, the hand is open, and the chest has
+/// unwound past square.
+///
+/// The only nearly-straight elbow in the file, and it earns it -- this is the
+/// one thing the class does at range, and every other move here is a body
+/// folding onto something close.
+fn flung() -> Pose {
+    footing(
+        ready()
+            .hips(-0.010, -0.100, 0.040)
+            .root(8.0, 0.0, -4.0)
+            .spine(12.0, 0.0, 8.0)
+            .chest(8.0, 0.0, 16.0)
+            .head(-4.0, 0.0, -2.0)
+            .shoulder_l(52.0, 10.0, 6.0)
+            .forearm_l(16.0, -8.0)
+            .wrist_l(14.0, -12.0, 0.0)
+            .shoulder_r(-6.0, 12.0, -22.0)
+            .forearm_r(108.0, -16.0)
+            .wrist_r(-18.0, -8.0, 0.0),
+        0.0,
+        0.016,
+    )
+}
+
+/// The first recovery frame: the throwing arm has come down out of the release
+/// and the hand is still open. Nothing has closed yet.
+fn emptied() -> Pose {
+    footing(
+        ready()
+            .hips(-0.004, -0.120, 0.020)
+            .root(9.0, 0.0, -8.0)
+            .spine(18.0, 0.0, 6.0)
+            .chest(11.0, 0.0, 9.0)
+            .head(-14.0, 0.0, 2.0)
+            .shoulder_l(26.0, 16.0, -14.0)
+            .forearm_l(64.0, 16.0)
+            .wrist_l(-14.0, -6.0, 0.0)
+            .shoulder_r(-8.0, 11.0, -22.0)
+            .forearm_r(112.0, -16.0)
+            .wrist_r(-18.0, -8.0, 0.0),
+        0.0,
+        0.010,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Rend
 // ---------------------------------------------------------------------------
 
-/// A raking claw at chest-to-chest range, and the neutral tool.
+/// A raking claw at chest-to-chest range, and the committed melee option.
 ///
-/// Six frames of startup is under the reaction threshold, so none of this is a
-/// telegraph -- the opponent cannot answer a Rend on sight, only learn its
-/// shape. What the animation owes them instead is the *range*: this is the one
+/// It sat on the auto slot until the class got a real auto, and moving it to
+/// shift + click is a change of weight rather than a change of gesture: the
+/// same rake, given fourteen frames of wind-up instead of six and eighteen of
+/// bill instead of thirteen. The keys are all derived from `clip.phases()`, so
+/// the pose sequence stretched into the longer frame count by itself.
+///
+/// Fourteen frames is over the reaction threshold, so unlike the auto this one
+/// **is** a telegraph, and the coil on frame four is what an opponent gets to
+/// answer. What the animation owes them after that is the *range*: this is the
 /// move in the class that happens close enough to touch, and the elbow stays
 /// folded through the whole of it so the hand never gets far from the body.
 /// An arm that straightens out in front is a thrust, and a thrust would teach
 /// a spacing the move does not have.
 ///
-/// It leaves the caster most of their walking speed, so the renderer blends a
-/// real stride back in underneath. The legs here stay close to the idle's for
-/// that reason: anything ambitious down there would be fighting a walk cycle.
+/// It roots the caster, so there is no stride to blend underneath any more.
 fn rend() -> Recipe {
-    let clip = Clip::BloodPoke;
+    let clip = Clip::BloodCommitted;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
     let end = clip.length() - 1;
     // The claw is out by the first third of the startup. Any later and there
@@ -225,19 +370,17 @@ fn rend() -> Recipe {
                 read as a thrust from twice the distance. The rake does not end \
                 in the air: the claw carries through and comes back into the \
                 caster's own sternum, which is the cost, and the lowest frame \
-                of the clip is five frames after contact rather than anywhere \
-                in the wind-up. The rake itself is LINEAR: four frames is not \
-                enough room to shape it, and a smooth ease across that gap puts \
-                a third of a metre of hand into the single frame before the \
-                hitbox appears. MARTIAL rather than CRISP because the claw \
-                wants to carry past and settle -- with six frames of startup \
-                the telegraph has to come from the torso anyway, and the torso \
-                is the fast part of a martial body."
+                of the clip is well after contact rather than anywhere in the \
+                wind-up. The rake itself is LINEAR: a smooth ease across the \
+                gap before contact puts a third of a metre of hand into the \
+                single frame before the hitbox appears. MARTIAL rather than \
+                CRISP because the claw wants to carry past and settle, and the \
+                torso is the fast part of a martial body."
             .into(),
         keys: vec![
-            // Out of neutral at full speed. Six frames of startup leaves no
-            // room for a wind-up that waits, so the coil lands on frame two
-            // and OUT is what gets it there.
+            // Out of neutral at full speed, and then a coil that holds. The
+            // startup is over the reaction threshold now, so there is room for
+            // a wind-up that waits -- and the waiting is the telegraph.
             Key::eased(0, ready(), Ease::OUT),
             Key::eased(cock, cocked(), Ease::LINEAR),
             Key::eased(contact, raked(), Ease::STRIKE),
@@ -343,30 +486,39 @@ fn spent() -> Pose {
 // Black spike
 // ---------------------------------------------------------------------------
 
-/// A hand driven into the floor, and something comes up two and a half metres
-/// in front of it.
+/// A hand driven into the floor, and something comes up a long way in front of
+/// it.
+///
+/// On `E`, which is where the thing only this class does belongs -- her
+/// mechanic is health, so there is no state for the key to toggle and it is
+/// free to be an ability instead. It is also the slowest thing she has: thirty
+/// frames of wind-up, twice the reaction threshold, because the ability is a
+/// placement the other player is meant to see coming and step out of.
 ///
 /// The power goes **down**, and everything is arranged to say so before it
-/// happens: on frame three the free hand drops and points along the ground at
-/// the spot while the other climbs, the wind-up never goes higher than the ear
-/// -- this body does not get an overhead -- and the descent is hips and spine
-/// rather than shoulder. The spike erupts at `reach` on the first active frame,
-/// two and a half metres from the hand that planted it, so the head comes up
-/// off the floor at contact and watches the place it is going to appear. A
-/// caster staring at their own knuckles while the interesting thing happens two
-/// metres away is the easiest way there is to make a ranged move read as a
-/// whiff.
+/// happens: early in the wind-up the free hand drops and points along the
+/// ground at the spot while the other climbs, the wind-up never goes higher
+/// than the ear -- this body does not get an overhead -- and the descent is
+/// hips and spine rather than shoulder. The spike erupts at `reach` on the
+/// first active frame, nine metres from the hand that planted it, so the head
+/// comes up off the floor at contact and watches the place it is going to
+/// appear. A caster staring at their own knuckles while the interesting thing
+/// happens nine metres away is the easiest way there is to make a ranged move
+/// read as a whiff.
 ///
 /// The hand finishes at knee height rather than flat on the floor. Going the
 /// last twenty-five centimetres costs a fold that twenty frames of recovery
 /// cannot stand up out of, and over a spine already bent thirty degrees it
 /// reads as the same gesture.
 fn black_spike() -> Recipe {
-    let clip = Clip::BloodCommitted;
+    let clip = Clip::BloodMechanic;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
     let end = clip.length() - 1;
     // Committed to inside the first sixth of the startup, at the top by not
     // quite half, a beat of hang, and then falling for the whole of the rest.
+    // Written in sixths and ninths rather than frame numbers, so a retune moves
+    // the shape with it -- which is what happened when the cast went from
+    // eighteen frames to thirty and this clip needed no edit at all.
     let open = (contact / 6).max(2);
     let top = (contact * 7 / 18).max(open + 2);
     let hang = (contact * 5 / 9).max(top + 1);
@@ -378,8 +530,8 @@ fn black_spike() -> Recipe {
     Recipe {
         clip,
         looseness: Looseness::MARTIAL,
-        notes: "Eighteen frames of startup is the second longest telegraph the \
-                class has, and all of it is spent going up so that there is \
+        notes: "Thirty frames of startup is the longest telegraph in the class \
+                by a distance, and all of it is spent going up so that there is \
                 somewhere to come down from. The wind-up stops at the ear \
                 rather than overhead, which is characterisation and also \
                 arithmetic: a hand that starts above the head has a metre and a \
@@ -396,7 +548,7 @@ fn black_spike() -> Recipe {
                 clamps, and the sole ends up pitched through the floor. Sitting \
                 back is both what a heavy body does and what keeps the foot on \
                 the ground. MARTIAL rather than HEAVY: HEAVY's forearms would \
-                still be climbing at frame eight of an eighteen-frame startup, \
+                still be climbing a third of the way into the startup, \
                 and the weight would arrive as lateness. It is in the pose \
                 instead."
             .into(),
@@ -409,8 +561,8 @@ fn black_spike() -> Recipe {
             // HOLD is the telegraph. The pose barely changes between here and
             // the hang three frames later, so what an opponent gets is a body
             // stopped at the top of its reach with a hand behind its ear.
-            // Eighteen frames of startup is well over the reaction threshold,
-            // and this is the part of it they get to react to.
+            // Thirty frames of startup is twice the reaction threshold, and
+            // this is the part of it they get to react to.
             Key::eased(top, gathered(), Ease::HOLD),
             Key::eased(hang, hung(), Ease::LINEAR),
             // Eight frames of constant speed, not an ease. A body falling onto
@@ -536,10 +688,10 @@ fn driving(pose: Pose, wrist: V3, cock: f32) -> Pose {
 /// in front of the lead foot, the body has folded over it, and the eyes have
 /// already left it for the place the spike is coming out of.
 ///
-/// The eyes matter more than they look. The spike appears two and a half metres
-/// away, and a caster staring at their own knuckles while the interesting thing
-/// happens somewhere else is the easiest way to make a ranged move read as a
-/// whiff.
+/// The eyes matter more than they look. The spike appears most of the way
+/// across the arena, and a caster staring at their own knuckles while the
+/// interesting thing happens somewhere else is the easiest way to make a ranged
+/// move read as a whiff.
 ///
 /// Most of the fold is spine and chest rather than root. The root takes the
 /// legs with it, so leaning it thirty degrees on top of a squat this deep asks
@@ -636,29 +788,33 @@ fn stooped() -> Pose {
 }
 
 // ---------------------------------------------------------------------------
-// Reaper's debt
+// Grasp
 // ---------------------------------------------------------------------------
 
-/// The channel. Twenty-two frames of holding still in one direction, five of
-/// releasing, and twenty-eight of paying for it.
+/// Four arms thrown out in a cone and pulled back in to meet.
 ///
-/// The rule the whole clip exists to communicate is that **facing is locked**.
-/// A player who does not know that walks into it sideways and never learns
-/// why they lived; a player who does know it treats the caster as a piece of
-/// terrain for half a second, which is the move. So the first thing that
-/// happens is the feet: they come off the blade and square up wide, level with
-/// each other, pointing at the thing that is about to be fired at. Nothing
-/// else in the game stands like that, and it is legible from across the arena
-/// long before the arms mean anything.
+/// It replaced Reaper's debt on `Q`, and it inherited this clip rather than
+/// getting a new one because the gesture was already exactly right: the arms
+/// open steadily to their full span through the wind-up and then **shut
+/// together in front of the sternum** on the frame the ability comes out. That
+/// is the ability, drawn on the caster's own body -- wide, then a point. What
+/// changed is the prose and the reasons, not the poses.
 ///
-/// The cone widens the longer it is held, so the arms open all the way through
-/// the startup rather than reaching a pose and waiting in it. What they never
-/// do is come up: this is not a summoning, it is a body being opened.
-fn reapers_debt() -> Recipe {
+/// The stance is the thing to read. The feet come off the blade and square up
+/// wide, level with each other, pointing down the line the arms are going to
+/// leave along. Nothing else in the game stands like that. It used to be
+/// justified by a channel that could not turn; the justification now is
+/// **symmetry** -- this is the only move in the game with no lead side, four
+/// arms leaving in four mirrored directions, and a body about to do something
+/// symmetrical squares up to do it.
+///
+/// What the arms never do is come up: this is not a summoning, it is a body
+/// being opened.
+fn grasp() -> Recipe {
     let clip = Clip::BloodSpecial;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
     let end = clip.length() - 1;
-    // The feet are down inside the first sixth of the channel, the weight is
+    // The feet are down inside the first sixth of the wind-up, the weight is
     // in by a third, and the arms spend the rest of it opening.
     let plant = (contact / 6).max(3);
     let sink = (contact / 3).max(plant + 2);
@@ -671,38 +827,35 @@ fn reapers_debt() -> Recipe {
     Recipe {
         clip,
         looseness: Looseness::MARTIAL,
-        notes: "A channel, so the startup is not a wind-up: nothing here \
-                gathers and then goes. The feet square up by frame three and \
-                then do not move again until the recovery is nearly over, \
-                which is the pose saying out loud that the caster cannot turn \
-                -- every other stance in the game is bladed, because a bladed \
-                fighter can. The hips also sit back behind the ankles rather \
+        notes: "The clip is the ability: arms wide, then a point. They open \
+                steadily through the whole wind-up and shut together in front \
+                of the sternum on the frame the arms leave, which is the same \
+                shape the four of them fly in -- out in a cone, back in to \
+                converge. The feet square up by frame three and then do not \
+                move again until the recovery is nearly over. That is the only \
+                squared stance in the game, and it is here because this is the \
+                only move with no lead side: two arms doing the same thing at \
+                once, mirrored. The hips also sit back behind the ankles rather \
                 than over them: a squat this deep with the weight forward asks \
                 the ankles for dorsiflexion they do not have and puts both \
                 soles through the floor, and sitting back is what a body being \
-                emptied does anyway. The arms open steadily across the whole \
-                twenty-two frames because the cone widens with the hold, and \
-                they open *downward and out* rather than up -- this is a body \
-                being opened, not a spell being summoned. The release is the \
-                hands shutting together in front of the sternum rather than a \
-                sweep, which keeps the fastest thing in the clip travelling \
-                forty centimetres instead of ninety. Twenty-eight frames of \
-                recovery, and the class's whole identity is in them: the knees \
-                give, the hands come to the ribs, and the feet are the last \
-                thing to come back. MARTIAL rather than HEAVY, which looks like \
-                the wrong call for the longest move in the game and is not -- \
-                HEAVY arms run three and a half frames behind the keys, and a \
-                release that arrives three and a half frames after the hitbox \
-                teaches the wrong frame to everybody watching. The weight is in \
-                the pose and in the twenty-eight frames afterwards, which is \
-                where it belongs."
+                emptied does anyway. The release is the hands shutting together \
+                rather than a sweep, which keeps the fastest thing in the clip \
+                travelling forty centimetres instead of ninety. The recovery \
+                carries the class's whole identity: the knees give, the hands \
+                come to the ribs, and the feet are the last thing to come back. \
+                MARTIAL rather than HEAVY -- HEAVY arms run three and a half \
+                frames behind the keys, and a release that arrives three and a \
+                half frames after the hitbox teaches the wrong frame to \
+                everybody watching. The weight is in the pose and in the \
+                recovery, which is where it belongs."
             .into(),
         keys: vec![
             Key::eased(0, ready(), Ease::OUT),
             Key::eased(plant, squared(), Ease::SMOOTH),
             Key::eased(sink, sunk(), Ease::SMOOTH),
             Key::eased(open, opening(), Ease::SMOOTH),
-            // The last frame of the channel, and the pose an opponent spends
+            // The last frame of the wind-up, and the pose an opponent spends
             // the tail of it looking at. One frame from here to contact, left
             // at full speed: a release is a release, and the single-frame gap
             // is what makes the difference between the wind-up and the strike
@@ -718,8 +871,9 @@ fn reapers_debt() -> Recipe {
 }
 
 /// Frame three: off the blade and onto two square feet, a little forward of
-/// where the idle stands. The hips have turned eleven degrees to face the line
-/// and the head has stopped compensating for a turn that is no longer there.
+/// where the idle stands. The hips have turned to face the line the arms will
+/// leave along, and the head has stopped compensating for a turn that is no
+/// longer there.
 fn squared() -> Pose {
     rooted(
         ready()
@@ -760,7 +914,7 @@ fn sunk() -> Pose {
     )
 }
 
-/// Two thirds of the way through the channel: the arms have come out and down,
+/// Two thirds of the way through the wind-up: the arms have come out and down,
 /// the palms have rolled to face each other, and the chest has hollowed.
 fn opening() -> Pose {
     rooted(
@@ -781,8 +935,9 @@ fn opening() -> Pose {
     )
 }
 
-/// The last frame of the channel and the widest the cone gets: arms out to
-/// their full span, chest hollow, head down between them.
+/// The last frame of the wind-up and the widest the arms get: out to their
+/// full span, chest hollow, head down between them. This is the cone the four
+/// arms are about to leave in.
 fn wide() -> Pose {
     rooted(
         ready()
@@ -802,8 +957,10 @@ fn wide() -> Pose {
     )
 }
 
-/// Contact: the cone shuts. The hands drive together in front of the sternum
-/// and the whole body goes forward over a base it cannot step out of.
+/// Contact: the arms shut. The hands drive together in front of the sternum --
+/// the convergence, drawn on the caster half a second before the four arms
+/// out in the world do the same thing -- and the whole body goes forward over a
+/// base it has not moved off.
 fn released() -> Pose {
     rooted(
         ready()
