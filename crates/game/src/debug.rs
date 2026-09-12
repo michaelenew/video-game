@@ -43,6 +43,13 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         return;
     }
     let frame: Frame = view::interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    let v3 = |v: sim::V3| {
+        Vec3::new(
+            v.x.to_f32_for_render(),
+            v.y.to_f32_for_render(),
+            v.z.to_f32_for_render(),
+        )
+    };
 
     for (i, p) in frame.players.iter().enumerate() {
         let pos = Vec3::from_array(p.pos);
@@ -67,23 +74,26 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         // rebuilt here. Only during active frames: if you can see it, it is out.
         if let Some(hb) = sim::state::hitbox(&sim.cur.players[i]) {
             let colour = hitbox_colour(hb.hits_crouching, hb.spent);
-            let at = Vec3::new(
-                hb.centre.x.to_f32_for_render(),
-                pos.y,
-                hb.centre.z.to_f32_for_render(),
-            );
-            // A cylinder, not a sphere. The test compares *flat* distance and
-            // says nothing about height -- you cannot duck under an attack or
-            // jump over it, only out-range it, and whether an overhead beats a
-            // crouch is a property of the move rather than of its geometry. A
-            // sphere would imply a vertical extent the rules do not have.
-            cylinder(
-                &mut gizmos,
-                at,
-                hb.radius.to_f32_for_render(),
-                body_height(),
-                colour,
-            );
+            let radius = hb.radius.to_f32_for_render();
+            if hb.flat {
+                // A cylinder, not a sphere, for the moves that still use the
+                // flat rule. Their test compares *flat* distance and says
+                // nothing about height -- you cannot duck under one of these
+                // or jump over it, only out-range it -- so a sphere would
+                // imply a vertical extent the rules do not have.
+                let at = Vec3::new(
+                    hb.centre().x.to_f32_for_render(),
+                    pos.y,
+                    hb.centre().z.to_f32_for_render(),
+                );
+                cylinder(&mut gizmos, at, radius, body_height(), colour);
+            } else {
+                // A capsule, drawn in three dimensions because it is tested in
+                // three: the Champion's swings have a top and a bottom, which
+                // is the whole reason an aerial can miss someone standing
+                // underneath it.
+                capsule(&mut gizmos, v3(hb.from), v3(hb.to), radius, colour);
+            }
         }
 
         // Guard arc: 120 degrees, and brighter during the parry window.
@@ -195,6 +205,31 @@ fn body_height() -> f32 {
 ///
 /// Enough lines to read as a volume at a glance and few enough not to bury the
 /// fighters underneath it.
+/// A capsule: the volume the Champion's weapons sweep.
+///
+/// Four lines along the length and a ring at each end, which is enough to read
+/// where a swing is pointing and how thick it is without burying the fight
+/// under gizmo lines. The ends are rings rather than hemispheres for the same
+/// reason: what you are looking for when you step through frames is *where the
+/// blade is*, and a wireframe ball at each end is mostly noise.
+fn capsule(gizmos: &mut Gizmos, from: Vec3, to: Vec3, radius: f32, colour: Color) {
+    let axis = to - from;
+    let dir = axis.try_normalize().unwrap_or(Vec3::X);
+    let side = dir.any_orthonormal_vector();
+    let up = dir.cross(side);
+    let ring = Quat::from_mat3(&Mat3::from_cols(side, up, dir));
+    for end in [from, to] {
+        gizmos.circle(Isometry3d::new(end, ring), radius, colour);
+    }
+    for k in 0..4 {
+        let a = k as f32 / 4.0 * std::f32::consts::TAU;
+        let off = (side * a.cos() + up * a.sin()) * radius;
+        gizmos.line(from + off, to + off, colour);
+    }
+    // The line the weapon lies on, so a capsule seen end-on still reads.
+    gizmos.line(from, to, colour);
+}
+
 fn cylinder(gizmos: &mut Gizmos, base: Vec3, radius: f32, height: f32, colour: Color) {
     let flat = Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
     for h in [0.02, height * 0.5, height] {

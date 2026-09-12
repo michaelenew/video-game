@@ -112,14 +112,12 @@ pub extern "C" fn hit_r(i: u32) -> i32 {
 }
 
 fn hitbox(i: u32) -> Option<(sim::V3, Fx)> {
-    let pl = p(i);
-    let Action::Active { kind, .. } = pl.action else {
-        return None;
-    };
-    // Straight from the move table, so the overlay cannot drift from the
-    // simulation the way a duplicated constant would.
-    let m = sim::moves::get(pl.class, kind);
-    Some((pl.pos.add(pl.facing.scale(m.reach)), m.radius))
+    // Straight from the simulation, so the overlay cannot drift from it the way
+    // a rebuilt volume would. The browser overlay draws a circle, so it gets the
+    // middle of the volume -- which for the Champion's swings and thrusts is
+    // the middle of the weapon rather than a point at arm's length.
+    let box_out = sim::state::hitbox(p(i))?;
+    Some((box_out.centre(), box_out.radius))
 }
 
 /// Frame data for the debug overlay: startup, active, recovery.

@@ -63,9 +63,20 @@ impl Input {
     /// Crouch. Lowers your hurtbox and slows you -- the answer to a high
     /// attack, and the reason not every whiff is free.
     pub const CROUCH: u16 = 1 << 9;
-    /// The class mechanic -- **E**. Throw the shield, change form, place the
-    /// shadow, raise a structure. Not an attack, so it is not a click.
+    /// The class mechanic -- **E**. Throw the shield, Rush, place the shadow,
+    /// raise a structure. Not an attack, so it is not a click.
     pub const MECHANIC: u16 = 1 << 10;
+    /// Middle click -- the scroll wheel pressed down.
+    ///
+    /// A third attack button, and it exists because the Champion needs three.
+    /// The class special and the class mechanic were deliberately moved *off*
+    /// middle click (see `controls.md`) on the grounds that it is not a button
+    /// you can find reliably mid-fight -- but that argument was about a button
+    /// nobody presses often. A weapon you swing constantly is the opposite
+    /// case: it is found by use rather than by aim, and the option table in
+    /// `controls.md` has always counted `M` among the attack buttons. There is
+    /// a keyboard stand-in for it either way.
+    pub const MIDDLE: u16 = 1 << 11;
 
     /// Buttons only, looking down the positive X axis, level.
     pub const fn new(bits: u16) -> Input {
@@ -146,7 +157,7 @@ impl Input {
     }
 
     pub const fn any_click(self) -> bool {
-        self.bits & (Input::LEFT | Input::RIGHT | Input::SPECIAL) != 0
+        self.bits & (Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL) != 0
     }
 
     /// Shift beats WASD when both are held, so a move-while-casting option

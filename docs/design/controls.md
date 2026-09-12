@@ -33,6 +33,22 @@ Six sentences, and everything else follows:
    your attacks go where you are pointed — **including up and down.** The crosshair is a
    line in space, and an area ability lands on the first thing that line meets.
 
+### Middle click is an attack button again — settled 2026-09-12
+
+Not a reversal of the section below. The special and the mechanic stayed on `Q` and `E`;
+what changed is that **middle click is now the third click**, and the option table at the
+bottom of this document always counted it as one.
+
+Only the Champion uses it: its three mouse buttons are three weapons — sword, hammer, spear
+— so the button that was "the least reachable one" is now a weapon you swing constantly.
+That inverts the small problem below. A button nobody presses is found by aim and therefore
+badly; a button you press every second is found by use. `U` stands in for it on a hand or a
+trackpad that cannot press a scroll wheel at all, the same way `J` and `K` stand in for the
+other two.
+
+`E` no longer doubles as middle click in the keyboard bindings, because middle click means
+something of its own now.
+
 ### Why the special and the mechanic left the mouse
 
 They used to be middle click and shift + middle click. Two problems, and the second is the
@@ -71,9 +87,11 @@ never comes out as a dodge.
 - **Airdodge**: shift plus a direction, **once per airtime**. It wipes vertical speed rather
   than adding to it, so it is a sideways commitment and never a second jump. A second one
   would turn a jump into flight.
-- Space while airborne does nothing yet.
-- Airborne attacks are currently the grounded ones. That is a placeholder, not a decision —
-  see below.
+- Space while airborne does nothing, **with one exception**: while a Champion's uppercut has
+  hold of somebody, it takes the pair of you higher, once. See
+  [kits/champion.md](kits/champion.md#uppercut--middle-click).
+- **Airborne attacks are their own moves on the class that has them.** Settled 2026-09-12
+  for the Champion and still open for everyone else — see below.
 
 ## Open since the dodge moved
 
@@ -88,9 +106,11 @@ of them is settled:
 - **Differentiating move + attack.** Directional attacks (`w`/`a`/`d`/`s` + click) still work,
   but the modifier space is tighter than it was and the option table below was written under
   the old rule.
-- **Aerials as variants.** The intended direction is that an airborne attack is a *variant of
-  its grounded counterpart* — the same move with different frame data — rather than a separate
-  move list. Nothing is implemented.
+- **Aerials as variants — settled for the Champion, 2026-09-12.** The intended direction was
+  that an airborne attack is a *variant of its grounded counterpart* — the same button,
+  different move — rather than a separate move list, and that is exactly how the Champion is
+  built: three buttons, and a row of the move grid per stance. It generalises, and nobody
+  else has been given the treatment yet.
 - **Neutral shift.** Shift with no direction and no click does nothing. A spot dodge in place
   is the obvious candidate.
 - **Double jump.** Space while airborne does nothing. The airdodge is the only air commitment
@@ -315,11 +335,19 @@ same job on every class.
 | **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
 
 The prototype binds the first three of these: left click pokes, shift + left click is the
-committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` stand in for the
-clicks on keyboards where that is easier.
+committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` and `U` stand in for
+the three clicks on keyboards where that is easier.
 
-That last row does real work. The Champion's Rush and the Reaver's Shadow dash *are* their
-dodges rather than extra inputs. For the Reaver this is what makes movement and shadow
+The Champion does not read that table at all. Its three clicks are three weapons and `E` is
+Rush; shift + click and `Q` are unused on it. That is a deliberate exception rather than a
+drift — the shared grammar is what lets one control scheme drive six kits, and a class whose
+*identity* is which weapon is in its hands has to spend its clicks on the weapons.
+
+That last row does real work. The Reaver's Shadow dash *is* its dodge rather than an extra
+input. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
+that matters (one charge, cancels recoveries, changes what the attack buttons do), and
+putting it on shift + direction would have made the class's central decision share an input
+with the universal defensive one. For the Reaver this is what makes movement and shadow
 placement the same action, which is the fix that keeps the class from being denied its
 mobility.
 
@@ -487,28 +515,39 @@ put the direction choice in a modifier the player could ignore.
 > The argument against is that a dropped payoff in a 60-second match feels terrible. If it
 > proves bad, swap the finishers onto `shift`+`L`/`R` and move the ordinary abilities out.
 
-## Champion
+## Champion — built 2026-09-12
 
-**`L` / `M` / `R` are sword / hammer / spear.** Pressing a form you are not currently in
-triggers the switch, animated from whatever the current context is.
+**`L` / `M` / `R` are sword / hammer / spear**, and there is no form to switch to: pressing
+the button *is* having that weapon in your hands. What the button means never changes. What
+changes is which of that weapon's moves comes out, and that is decided by **where your feet
+are**.
 
-**This means the mid-animation swap needs no new input.** Press a different form's button
-during active frames and you get the cross-form ending. The mechanic and the control are the
-same thing, which is the strongest argument that the mechanic is right.
+| | `L` | `M` | `R` |
+| --- | --- | --- | --- |
+| On foot | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| Airborne | Air sword | Air hammer — spikes | Air spear — a fan around the aim |
+| Rushing | Rush slash | Uppercut | Rush stab, or Pole vault aimed at the floor |
 
 | Input | Result |
 | --- | --- |
-| `L` / `M` / `R` | Auto in that form, or switch to it if you are in another |
-| `L`/`M`/`R` during active frames | The swap. Changes the move's tail |
-| `w` + any click | Charge attack |
-| `a`/`d` + any click | Lateral. Directional knockback — the combo backbone |
-| `s` + any click | Low / grounded attack |
-| `shift` + click | Abilities. Shift versus no-shift is **bigger versus smaller, and different in kind** |
-| `space` + direction | **Rush.** The class's dodge is its chargeable, bankable dash, and it still cancels recovery |
+| `E` | **Rush.** One charge. A dash, and it cancels any recovery |
+| `space`, airborne, holding somebody | The uppercut's second leap. Both of you go higher |
 
-Direction plus click carries most of the class's feel. These want varied, semi-directional
-knockback so that where you hit from determines where they go — that is what makes the
-combo game read.
+Ten moves, three buttons, one modifier key, no chords. The full kit is in
+[kits/champion.md](kits/champion.md).
+
+**The mid-animation swap still needs no new input**, and it is now easier to say what it
+means: press a different weapon's button during active frames and the move ends in that
+weapon. It is not built.
+
+The directional variants below are not built on this class and may not be wanted — the
+stance rows already do the work that `w`/`a`/`d`/`s` plus a click was meant to do, and
+three rows of three is as much as one class should ask a player to hold.
+
+| Input | Not built |
+| --- | --- |
+| `w` / `a`/`d` / `s` + click | Charge, lateral, low — directional knockback as the combo backbone |
+| `shift` + click | The six-ability kit: Drive, Sweep, Throw, Brace |
 
 ## Bulwark
 
@@ -568,9 +607,9 @@ differentiation.
 
 ## Open questions
 
-- **`q` and `e`.** Currently unused. Twenty inputs is already more than a prototype needs, so
-  they stay free. If `M` and `LR` prove unreliable, `q` and `e` are the natural replacements
-  — they are fast, adjacent to WASD, and cost no finger travel.
+- **`q` and `e`.** ~~Currently unused.~~ Both are bound: `q` is the class special and `e` is
+  the class mechanic, moved off the mouse for the reasons at the top of this document. `q`
+  is free again on the Champion specifically, whose three clicks are its three weapons.
 - **Does `s` + click mean "low attack" or "defensive option"?** It should mean one thing
   across all classes. Low attack is the platform-fighter convention.
 - **Camera-relative or character-relative direction?** Determines whether `a`/`d` really do

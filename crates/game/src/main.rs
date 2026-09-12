@@ -1130,13 +1130,21 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     if keys.pressed(KeyCode::KeyK) || mouse.pressed(MouseButton::Right) {
         v |= SimInput::RIGHT;
     }
+    // The third attack button. It exists for the Champion, whose three mouse
+    // buttons are three weapons -- see `sim::moves::champion` -- and `U` stands
+    // in for it on a hand or a trackpad that cannot find a scroll click, which
+    // is most of them.
+    if keys.pressed(KeyCode::KeyU) || mouse.pressed(MouseButton::Middle) {
+        v |= SimInput::MIDDLE;
+    }
     // Q and E, not a chord on a click. The special and the mechanic are the
     // two things a class does that nothing else does; burying them under a
-    // modifier made them feel optional.
+    // modifier made them feel optional. E used to double as middle click, and
+    // cannot any more now that middle click means something of its own.
     if keys.pressed(KeyCode::KeyQ) {
         v |= SimInput::SPECIAL;
     }
-    if keys.pressed(KeyCode::KeyE) || mouse.pressed(MouseButton::Middle) {
+    if keys.pressed(KeyCode::KeyE) {
         v |= SimInput::MECHANIC;
     }
     if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {

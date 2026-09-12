@@ -9,6 +9,7 @@
 
 use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
+use sim::moves;
 use sim::state::{Action, MAX_PLAYERS};
 use sim::{Input, World};
 
@@ -371,14 +372,33 @@ fn a_slowed_fighter_covers_less_ground() {
 // The Champion
 // ---------------------------------------------------------------------------
 
+const LMB: u16 = Input::LEFT;
+const MMB: u16 = Input::MIDDLE;
+const RMB: u16 = Input::RIGHT;
+
+/// A Champion nose to nose with a Bulwark, already mid-Rush.
+///
+/// Every Rush move needs the dash under it, and the dash is one charge on a
+/// long recharge, so the fixture spends it rather than each test doing so.
+fn rushing(toward: u16) -> World {
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, E, 0);
+    run(&mut w, 1, 0, 0);
+    let _ = toward;
+    w
+}
+
 #[test]
 fn the_uppercut_takes_both_fighters_off_the_ground() {
     // The move is a leap, and it is a leap you bring someone along on. Either
     // half alone is a different move: without the lift it is a launcher you
     // cannot follow up on, and without the launch it is an escape.
-    let mut w = engaged(Class::Champion);
+    //
+    // It is a **Rush move** now -- middle click during the dash -- which is
+    // what makes it a combo rather than a button. See `docs/design/champion.md`.
+    let mut w = rushing(LOOK_RIGHT);
     let mut lifted = [false; MAX_PLAYERS];
-    run(&mut w, 2, Q, 0);
+    run(&mut w, 2, MMB, 0);
     for _ in 0..60 {
         w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         for (i, seen) in lifted.iter_mut().enumerate() {
@@ -389,6 +409,386 @@ fn the_uppercut_takes_both_fighters_off_the_ground() {
     assert!(
         lifted[1],
         "the uppercut connected but left its victim standing, so there is nothing to chase"
+    );
+}
+
+#[test]
+fn pressing_jump_inside_an_uppercut_takes_the_pair_of_you_higher() {
+    // "We are settling this in the air." The leap is the whole reason the
+    // uppercut holds on to somebody rather than merely launching them: you get
+    // to decide, after it connects, how high this exchange is going to happen.
+    let climb = |leap: bool| {
+        let mut w = rushing(LOOK_RIGHT);
+        run(&mut w, 2, MMB, 0);
+        let mut best = 0.0f32;
+        for f in 0..70 {
+            // Held down it would be one press; tapped, it is an input.
+            let space = if leap && (10..12).contains(&f) {
+                Input::SPACE
+            } else {
+                0
+            };
+            w.advance([Input::aimed(space, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            best = best.max(w.players[1].pos.y.to_f32_for_render());
+        }
+        best
+    };
+    let plain = climb(false);
+    let leapt = climb(true);
+    assert!(
+        leapt > plain + 0.2,
+        "the victim topped out at {leapt:.2} m with the leap and {plain:.2} m without it"
+    );
+}
+
+#[test]
+fn the_three_buttons_are_three_weapons() {
+    // The whole input scheme in one assertion: a click is a weapon, and which
+    // of that weapon's moves comes out is decided by where your feet are. If
+    // this ever starts passing by accident -- two buttons throwing one move --
+    // the class is back to being a mode toggle.
+    use sim::class::Form;
+    let thrown = |button: u16| {
+        let mut w = engaged(Class::Champion);
+        run(&mut w, 2, button, 0);
+        let kind = w.players[0].action.attack_kind().expect("nothing came out");
+        let form = match w.players[0].mechanic {
+            Mechanic::Forms { form, .. } => form,
+            _ => panic!("the Champion lost its mechanic"),
+        };
+        (kind, form)
+    };
+    assert_eq!(thrown(LMB), (0, Form::Sword));
+    assert_eq!(thrown(MMB), (1, Form::Hammer));
+    assert_eq!(thrown(RMB), (2, Form::Spear));
+}
+
+#[test]
+fn the_same_button_is_a_different_move_in_the_air() {
+    // Aerials are variants of their grounded counterpart rather than a separate
+    // list -- the direction `controls.md` has had open since the dodge moved.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 4, Input::SPACE, 0);
+    assert!(!w.players[0].grounded, "the fixture never left the ground");
+    run(&mut w, 2, LMB, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(sim::moves::champion::AIR_SWORD),
+        "left click in the air still threw the standing sword"
+    );
+}
+
+#[test]
+fn a_spear_put_into_the_ground_vaults_and_one_levelled_at_someone_stabs() {
+    // Two moves on one button, separated by where you are pointing. The
+    // separator has to be legible, so it is the most physical one available: a
+    // pole vault *is* a spear planted in the floor.
+    let down = -(1 << 13); // an eighth of a turn below the horizon
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, E, 0);
+    for _ in 0..2 {
+        w.advance([
+            Input::looking_at(RMB, LOOK_RIGHT, down),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+    }
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(sim::moves::champion::POLE_VAULT),
+        "a spear aimed at the floor mid-Rush did not vault"
+    );
+
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, E, 0);
+    run(&mut w, 2, RMB, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(sim::moves::champion::RUSH_STAB),
+        "a spear levelled mid-Rush did not stab"
+    );
+}
+
+#[test]
+fn the_vault_trades_the_dash_for_height() {
+    // It is movement, not an attack: it has no hit volume at all, and what it
+    // buys is a way into the air that a jump cannot reach.
+    let down = -(1 << 13);
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, E, 0);
+    let mut top = 0.0f32;
+    for f in 0..80 {
+        let bits = if (1..3).contains(&f) { RMB } else { 0 };
+        w.advance([
+            Input::looking_at(bits, LOOK_RIGHT, down),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+        top = top.max(w.players[0].pos.y.to_f32_for_render());
+        assert!(
+            sim::state::hitbox(&w.players[0]).is_none() || f > 40,
+            "the vault put a hitbox in the world"
+        );
+    }
+    let jump = {
+        let mut w = engaged(Class::Champion);
+        let mut top = 0.0f32;
+        for _ in 0..80 {
+            w.advance([
+                Input::aimed(Input::SPACE, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
+            top = top.max(w.players[0].pos.y.to_f32_for_render());
+        }
+        top
+    };
+    assert!(
+        top > jump,
+        "the vault reached {top:.2} m and a plain jump reaches {jump:.2} m, so planting the \
+         spear bought nothing"
+    );
+}
+
+#[test]
+fn the_sword_keeps_cutting_while_the_dash_runs() {
+    // The run-through: the samurai walks past a line of people and they fall
+    // over afterwards. One long active window that re-arms, rather than a
+    // stronger single hit, because the point is that you were *moving* through
+    // them the whole time.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, E, 0);
+    let before = w.players[1].health;
+    let single = sim::moves::get(Class::Champion, sim::moves::champion::RUSH_SLASH).damage;
+    run(&mut w, 2, LMB, 0);
+    run(&mut w, 40, 0, 0);
+    let dealt = before - w.players[1].health;
+    assert!(
+        dealt > single,
+        "one pass of the run-through dealt {dealt}, which is one cut's {single}"
+    );
+}
+
+#[test]
+fn an_airborne_target_is_driven_into_the_floor() {
+    // The other half of the air game. Hitting somebody up is only worth doing
+    // if there is something to do to them up there, and the aerial hammer is
+    // it: a spike, and then the ground charges for the landing.
+    let mut w = engaged(Class::Champion);
+    // The Champion dropping from above, the victim still on the way up. Set
+    // rather than played out, because what is being asserted is the spike and
+    // not the twenty-frame combo that gets you here.
+    w.players[1].pos.y = sim::Fx::from_int(3);
+    w.players[1].vel.y = sim::Fx::from_int(14);
+    w.players[1].grounded = false;
+    w.players[0].pos.y = sim::Fx::from_int(4);
+    w.players[0].grounded = false;
+    let before = w.players[1].health;
+    let down = -(1 << 14); // straight down
+    let mut staggered = false;
+    for f in 0..90 {
+        let bits = if (0..2).contains(&f) { MMB } else { 0 };
+        w.advance([
+            Input::looking_at(bits, LOOK_RIGHT, down),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+        staggered |= matches!(w.players[1].action, Action::Stagger { .. });
+    }
+    let dealt = before - w.players[1].health;
+    let swing = sim::moves::get(Class::Champion, sim::moves::champion::AIR_HAMMER).damage;
+    assert!(
+        dealt > swing,
+        "the spike dealt {dealt} and the swing alone is {swing}, so the floor charged nothing"
+    );
+    assert!(
+        staggered,
+        "they got up off the floor as if they had walked into it"
+    );
+}
+
+/// Park a defender at `(ahead, up, across)` metres from the Champion, throw
+/// `button`, and say whether it connected.
+///
+/// In the Champion's own frame: `ahead` along the facing, `across` to its
+/// right. Positions rather than distances, because what is being asserted is
+/// that the three weapons own three different *pieces of space* -- which no
+/// single reach number can say.
+fn reaches(button: u16, ahead: f32, across: f32, ducking: bool) -> bool {
+    let m = |v: f32| sim::Fx::ratio((v * 1000.0) as i32, 1000);
+    let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
+    // Player one spawns looking down +x, so ahead is +x and its right is +z.
+    let base = w.players[0].pos;
+    let park = |w: &mut World| {
+        w.players[1].pos = sim::V3::new(base.x.add(m(ahead)), base.y, m(across));
+    };
+    park(&mut w);
+    let duck = if ducking { Input::CROUCH } else { 0 };
+    let before = w.players[1].health;
+    for f in 0..50 {
+        let bits = if f < 2 { button } else { 0 };
+        w.advance([
+            Input::aimed(bits, LOOK_RIGHT),
+            Input::aimed(duck, LOOK_LEFT),
+        ]);
+        // Nobody is allowed to walk into anybody: the question is what the
+        // swing covers from where it was thrown.
+        park(&mut w);
+        if w.players[1].health < before {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn the_three_weapons_own_three_different_pieces_of_space() {
+    // The point of the whole rebuild, as one assertion. A reach number cannot
+    // say any of this -- it takes a shape.
+    //
+    // Sword: **across**. It catches somebody standing well off to the side and
+    // it does not reach far in front.
+    assert!(
+        reaches(LMB, 0.9, 1.4, false),
+        "the sword does not cover its own flank"
+    );
+    assert!(
+        !reaches(LMB, 3.2, 0.0, false),
+        "the sword reaches as far as a spear"
+    );
+
+    // Spear: **out**. The longest line in the game, and a thin one -- it misses
+    // the same flank the sword owns.
+    assert!(reaches(RMB, 3.2, 0.0, false), "the spear does not reach");
+    assert!(
+        !reaches(RMB, 0.9, 1.8, false),
+        "the spear covers the flank too"
+    );
+
+    // Hammer: **down**. Shortest of the three, and the only one that arrives at
+    // floor level -- so it is the answer to somebody ducking under the spear's
+    // line, which is the one thing a longer weapon cannot do for you.
+    assert!(
+        reaches(MMB, 1.4, 0.0, false),
+        "the hammer does not reach in front of itself"
+    );
+    assert!(
+        !reaches(MMB, 3.2, 0.0, false),
+        "the hammer reaches as far as a spear"
+    );
+    assert!(
+        reaches(MMB, 1.4, 0.0, true) && !reaches(RMB, 1.4, 0.0, true),
+        "the hammer and the spear agree about a crouching opponent"
+    );
+}
+
+#[test]
+fn the_air_spear_pays_its_shove_out_on_contact() {
+    // The fan is a repositioning tool you have to earn: catching somebody with
+    // it kicks you the way you are holding. Thrown at nothing it is just a
+    // poke, which is what stops it being free flight.
+    let speed = |hit: bool| {
+        let mut w = engaged(Class::Champion);
+        if !hit {
+            // Out of the way, so the identical script whiffs.
+            w.players[1].pos =
+                sim::V3::new(sim::Fx::from_int(25), w.players[1].pos.y, sim::Fx::ZERO);
+        }
+        run(&mut w, 4, Input::SPACE, 0);
+        let mut best = 0.0f32;
+        for f in 0..30 {
+            let bits = if (0..2).contains(&f) { RMB } else { 0 } | Input::W;
+            w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            let v = w.players[0].vel;
+            best = best
+                .max((v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt());
+        }
+        best
+    };
+    let landed = speed(true);
+    let whiffed = speed(false);
+    assert!(
+        landed > whiffed + 1.0,
+        "the fan reached {landed:.2} m/s on a hit and {whiffed:.2} m/s on a whiff"
+    );
+}
+
+#[test]
+fn the_combo_the_class_is_built_around_is_playable() {
+    // Hammer, cancel the recovery with Rush, uppercut into the air, leap
+    // higher, and spike them back into the floor. Every piece of this is tested
+    // on its own above; this is the assertion that they **connect** -- that the
+    // hammer's advantage is long enough to Rush out of, that the uppercut
+    // catches somebody already in hitstun, that the carry lasts long enough to
+    // throw a twenty-two frame startup off the end of, and that the spike lands
+    // before they hit the ground on their own.
+    //
+    // A loop that works step by step and does not join up is the usual way a
+    // combo class turns out not to be one.
+    let mut w = engaged(Class::Champion);
+    let start = w.players[1].health;
+
+    run(&mut w, 2, MMB, 0); // hammer
+    run(&mut w, 22, 0, 0); // into its recovery
+    run(&mut w, 1, E, 0); // Rush, cancelling it
+    run(&mut w, 2, MMB, 0); // uppercut, which grabs and lifts
+    run(&mut w, 8, 0, 0);
+    run(&mut w, 1, Input::SPACE, 0); // both of you, higher
+    run(&mut w, 24, 0, 0);
+    assert!(
+        !w.players[1].grounded && w.players[1].pos.y.to_f32_for_render() > 3.0,
+        "the uppercut did not take them anywhere: {:.2} m",
+        w.players[1].pos.y.to_f32_for_render()
+    );
+
+    // And the spike, aimed down.
+    let down = -(1 << 13);
+    let mut staggered = false;
+    for f in 0..80 {
+        let bits = if f < 2 { MMB } else { 0 };
+        w.advance([
+            Input::looking_at(bits, LOOK_RIGHT, down),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+        staggered |= matches!(w.players[1].action, Action::Stagger { .. });
+    }
+    assert!(staggered, "they were never put on the floor");
+
+    let dealt = start - w.players[1].health;
+    let biggest = moves::table(Class::Champion)
+        .iter()
+        .map(|m| m.damage)
+        .max()
+        .unwrap();
+    assert!(
+        dealt > biggest,
+        "the whole loop dealt {dealt}, and one Rush stab deals {biggest} -- the combo is \
+         not worth doing"
+    );
+    // And it is not a round-ender either: a combo that takes most of a health
+    // bar would make the first read the whole match.
+    assert!(
+        dealt < sim::tuning::max_health() / 2,
+        "the loop deals {dealt} of {} health in one go",
+        sim::tuning::max_health()
+    );
+}
+
+#[test]
+fn rush_cancels_a_recovery() {
+    // The class's "break my own pattern" tool, and the reason one charge is a
+    // real decision. Without it every combo ends where the frame data says it
+    // ends.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 2, MMB, 0);
+    // Deep into the hammer's recovery, which is the longest tail it has.
+    run(&mut w, 24, 0, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Recovery { .. }),
+        "the fixture is not in a recovery: {:?}",
+        w.players[0].action
+    );
+    run(&mut w, 1, E, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Free),
+        "Rush did not cancel the recovery: {:?}",
+        w.players[0].action
     );
 }
 

@@ -2,6 +2,7 @@
 status: decided
 decided: 2026-09-10
 renamed: 2026-09-11
+rebuilt: 2026-09-12
 formerly: Bellator, Shifter
 supersedes: docs/archive/combat-design/shifter-skills.md
 ---
@@ -28,6 +29,32 @@ change the auto attack and carry signature moves. The Rush charge governs commit
 
 The class should be **one of the strongest classes when played linearly**, with mechanics
 that incentivise nonlinear play sometimes. The two sections below are how that gets built.
+
+> **Rebuilt 2026-09-12.** The form is no longer a mode and Rush is no longer unimplemented.
+> Each weapon is a **mouse button** with its own moves on the ground, in the air and out of
+> a Rush — ten moves on three buttons — and the uppercut has moved from the class special
+> onto Rush + hammer, where it is a combo hinge rather than a committed launcher. The
+> diagnosis in [The core addition](#the-core-addition--mid-animation-form-swap) below was
+> right about *why* the class was linear and the fix went one step further than the
+> sentence it is written in: the toggle is gone rather than made mid-animation. The swap
+> itself is still worth building and is now easier to state — see
+> [kits/champion.md](kits/champion.md#still-to-build).
+
+## What the mode toggle cost, stated properly
+
+Worth keeping, because it generalises past this class.
+
+A form multiplier **cannot make two moves feel different, because it does not change what
+they do — it changes how much.** A spear with 1.55× reach is a sword that reaches further;
+a hammer with 1.35× damage is a sword that hits harder. All three were the same swing, the
+same shape, at the same height, and the choice between them was arithmetic. So playing the
+class was arithmetic.
+
+What actually separates weapons is **shape**: a sword goes across, a hammer goes down, a
+spear goes out. Those are three different questions about where the other player is
+standing, and none of them is a number you can multiply. Giving each weapon its own moves
+with their own hit volumes is what the nine multipliers were reaching for and could not
+reach.
 
 ## The core addition — mid-animation form swap
 
@@ -74,18 +101,42 @@ band — while having a real ceiling.
 
 ## Carried forward from the old notes
 
-- Rush as a chargeable dash, one charge, shift-click to charge.
+- Rush as a chargeable dash, one charge, shift-click to charge. **Built**, on `E`, as a
+  dash that also cancels any recovery.
 - Per-form auto attacks: sword medium melee strike, hammer short blow (staggers while
-  rushing), spear long thrust (vault off the ground while moving or rushing).
+  rushing), spear long thrust (vault off the ground while moving or rushing). **Built**,
+  and the two parenthetical notes turned out to be the good half of the idea: the hammer
+  thrown out of a Rush is the uppercut, and the spear planted while rushing is the vault.
 - Per-form signature moves: Uppercut (sword), Hammerfall (hammer), Spear toss (spear).
+  Uppercut is built, on the hammer rather than the sword — a launcher is a heavy weapon's
+  move. The other two are open.
 - The reforge idea for combining weapons at the cost of an accessory slot — "quicksilver
   ___" as the reforged weapon title.
+
+## The air is the class — added 2026-09-12
+
+The rebuild settled something the original notes left implicit. **Verticality is where this
+kit's depth lives**, and it is a better home for it than the swap matrix because it needs no
+extra inputs at all: the same three buttons mean three different moves off the ground.
+
+The loop is: hit them up, get somewhere else fast, and have an attack already waiting when
+they arrive. Hammer to stagger, Rush to cancel the recovery, uppercut to take them both up,
+space to take it higher, air hammer to put them back into the floor. Every step costs
+something real — frames, the one Rush charge, or committing to the air with them.
+
+It is the anime pattern, and the reason it works as *play* rather than as spectacle is that
+the reposition is the hard part. Launching somebody is easy. Being where they land is not.
 
 ## Open questions
 
 - Is the mid-animation swap free, or does it cost Rush? Free is more expressive; costed
   makes it compete with the cancel and forces a choice. Leaning free, with the risk being
-  the whiff itself.
-- Three forms or more? Four gives sixteen enders but the readability cost is steep.
+  the whiff itself. **Now cheaper to answer**: the weapon is a button, so the swap is
+  "press a different button during the active frames" rather than a mode change.
+- Three forms or more? Four gives sixteen enders but the readability cost is steep — and
+  steeper now that each weapon carries three moves rather than one.
 - Does the swap have a window, or can it happen any time during active frames? A window
   is a cleaner mechanical test.
+- **Does `Q` want something?** The class special is unassigned: the three weapons are the
+  three clicks and Rush is the mechanic. A dead key is not a problem, but it is a free slot
+  and the swap matrix may want it.

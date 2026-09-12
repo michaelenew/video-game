@@ -1453,3 +1453,104 @@ between them now, and the mismatch is documented rather than assumed away.
 **Verdict** open. `the_eye_never_changes_pace_abruptly_at_a_zone_boundary` is the new guard: it
 compares the change in pace at each boundary against an ordinary step of the mouse elsewhere, and
 with the easing removed it fails at level with thirteen times the ordinary change.
+
+---
+
+### 2026-09-12 — the Champion's weapon stopped being a number
+
+**Changed** the class rebuilt. The form toggle and its nine reach/damage/recovery
+multipliers are deleted; the three weapons are the three mouse buttons, each with its own
+moves on the ground, in the air and out of a Rush — ten moves in total. Rush is built, on
+`E`. The uppercut moved from `Q` to Rush + hammer. Autos have shaped hitboxes for the first
+time.
+
+**Why** the class's whole premise is *choosing a distance*, and nothing about playing it
+made you choose one. All three forms threw the same three moves at the same three heights;
+the form multiplied the numbers. That is the diagnosis worth keeping, because it is not
+about this class:
+
+> A multiplier cannot make two moves feel different, because it does not change what they
+> do — it changes how much. A spear with 1.55× reach is a sword that reaches further.
+
+What separates weapons is **shape**. A sword goes across, a hammer goes down, a spear goes
+out — three different questions about where the other player is standing, and none of them
+is a coefficient. So the hitbox stopped being a disc at arm's length and became a **capsule
+that moves**: a line from the hand to the head of the weapon, swept over the active frames.
+
+**Verdict** open, and already load-bearing: two thirds of the tuning below exists because
+the capsule made height matter for the first time.
+
+### 2026-09-12 — a sword that sweeps at chest height misses a low ridge
+
+**Changed** the flat sweep is thrown from 0.7 of the cast height and travels 0.03 turns
+below level (`champion.sweep_thrown_from`, `champion.sweep_travels_below_level`), rather
+than from the chest, dead level.
+
+**Why** the hunt harness caught it before a person could have. With the sweep thrown level
+from the chest, the scripted hunter stopped being able to break the Ridgeback's poise at
+all — zero topples across six hunts, where the old disc broke it reliably. The ridge is a
+35 cm strip lying on the animal's back, and a sword swept at chest height genuinely passes
+over it. That is correct physics and it made the climb pointless.
+
+It is also what the animation has always said the move is: `champion.rs` calls Sweep "a low
+horizontal cut… the hands stay at hip height". The hitbox was simply not doing what the
+clip was doing. This is the first time the two have been able to disagree, because it is
+the first time the hitbox has had a height.
+
+**Verdict** kept. Topples are back and they come from the swing rather than from standing
+nearby.
+
+### 2026-09-12 — 113 and 120, or: why the poke's damage is 66
+
+**Changed** the Champion's sword from 95 to 66, and the other autos with it — hammer 48,
+spear 58.
+
+**Why** worth writing down because the number is not arbitrary and looks it. The
+Ridgeback's ridge multiplies damage by 1.75 and it flinches at 120. The old Sweep did 65,
+which is 113.75 on the ridge — **just under**. A sword at 95 does 166, which flinches it
+every single hit, and a creature you can keep permanently flinched never bucks you off: the
+hunter got on once, stayed for 1590 frames, took zero damage, and killed it in 35 seconds.
+Six hunts out of six.
+
+One damage number crossing one threshold turned a fight into a treadmill. The fix is
+one number, but the lesson is that `flinch_threshold` and `vuln_ridge` between them draw a
+line across every class's poke damage, and nothing in the code says so.
+
+**Verdict** kept. 1 hunt won out of 6, topples in most of them, rides ending in bucks.
+Worth revisiting as a *creature* number rather than a fighter one — a flinch that could be
+sustained indefinitely is the real bug.
+
+### 2026-09-12 — the uppercut as a combo rather than a button
+
+**Changed** Uppercut is no longer the class special thrown from standing (16f startup,
+committed, on `Q`). It is Rush + middle click: 8f startup, no slowing of the dash, it holds
+its victim for 26 frames and carries them up, and pressing space once during the hold takes
+both fighters higher.
+
+**Why** the old one did not feel good and the reason is that it was a *commitment to the
+air* rather than a *continuation*. Sixteen frames of telegraph from a standstill, and if it
+missed you were airborne, helpless, and had announced it. Nothing about being in the air
+was a reward, because you got there by committing to getting there.
+
+Out of a Rush it is the opposite: you are already moving, the dash paid for the approach,
+and the only decision left is whether to spend the charge. Then the extra leap makes the
+height itself a choice made *after* it connects, which is the one moment in an exchange
+when a player has information nobody else has.
+
+**Verdict** open. The leap is the part to watch — it may want to be spendable more than
+once, or to cost something.
+
+### 2026-09-12 — the takeoff to flight handover was a cut
+
+**Changed** the last three frames of `jump_takeoff` blend into the flight pose they are
+about to become.
+
+**Why** found by the Champion rebuild rather than aimed at. The animation continuity guard
+went from 0.428 m in one frame to 0.462 against a 0.45 bar, and the frame it failed on was
+an airborne fighter doing nothing at all. The join between the takeoff clip and the
+rise/apex/fall selection is a hard switch *inside one shape*, so the crossfade never saw it
+and never softened it — and how bad it looked depended on how fast you were travelling when
+you left the floor. Fine most of the time, a visible hitch on a jump out of a sprint.
+
+**Verdict** kept. Worst discontinuity across a 600-frame scripted match is back under the
+bar, and this one is a real seam rather than a threshold that needed raising.

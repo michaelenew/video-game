@@ -339,7 +339,7 @@ impl Hunter {
             // Nothing to punish means a poke; a real opening is worth the slow
             // one, which is what makes an opening worth having.
             if seen.open {
-                Input::LEFT | Input::SHIFT
+                heavy(me.class)
             } else {
                 Input::LEFT
             }
@@ -389,6 +389,22 @@ impl Hunter {
             0
         };
         Input::aimed(swing, wire)
+    }
+}
+
+/// Which button throws the class's committed attack.
+///
+/// Everywhere but the Champion it is shift plus left click, per `controls.md`.
+/// The Champion's three mouse buttons are three weapons instead, and the
+/// committed one is the hammer on middle click -- so this hunter punishes an
+/// opening with a hammer, and never with the class's *biggest* hits, which all
+/// live behind a Rush charge it deliberately does not spend. It is here to
+/// measure the creature, not to show off a kit.
+fn heavy(class: sim::Class) -> u16 {
+    if class == sim::Class::Champion {
+        Input::MIDDLE
+    } else {
+        Input::LEFT | Input::SHIFT
     }
 }
 

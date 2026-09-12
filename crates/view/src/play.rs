@@ -404,14 +404,23 @@ fn attack(input: PoseInput, kind: u8) -> Pose {
 
 /// Which clip animates one class's move slot.
 pub fn move_clip(class: Class, slot: u8) -> Clip {
-    let slot = slot.min(2);
+    // Clamped per class, because they no longer all have three: the Champion
+    // has ten, one per square of its weapon-by-stance grid.
+    let slot = slot.min(sim::moves::slots(class) as u8 - 1);
     match (class, slot) {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
         (Class::Bulwark, 1) => Clip::BulwarkCommitted,
         (Class::Bulwark, _) => Clip::BulwarkSpecial,
-        (Class::Champion, 0) => Clip::ChampionPoke,
-        (Class::Champion, 1) => Clip::ChampionCommitted,
-        (Class::Champion, _) => Clip::ChampionSpecial,
+        (Class::Champion, 0) => Clip::ChampionSword,
+        (Class::Champion, 1) => Clip::ChampionHammer,
+        (Class::Champion, 2) => Clip::ChampionSpear,
+        (Class::Champion, 3) => Clip::ChampionAirSword,
+        (Class::Champion, 4) => Clip::ChampionAirHammer,
+        (Class::Champion, 5) => Clip::ChampionAirSpear,
+        (Class::Champion, 6) => Clip::ChampionRushSlash,
+        (Class::Champion, 7) => Clip::ChampionUppercut,
+        (Class::Champion, 8) => Clip::ChampionRushStab,
+        (Class::Champion, _) => Clip::ChampionVault,
         (Class::ShadowReaver, 0) => Clip::ReaverPoke,
         (Class::ShadowReaver, 1) => Clip::ReaverCommitted,
         (Class::ShadowReaver, _) => Clip::ReaverSpecial,
@@ -502,12 +511,32 @@ fn free(input: PoseInput) -> Pose {
 fn airborne(input: PoseInput) -> Pose {
     let takeoff = Clip::JumpTakeoff.length();
     if input.air_frames < takeoff {
-        return Clip::JumpTakeoff.at(input.air_frames as u32);
+        let pose = Clip::JumpTakeoff.at(input.air_frames as u32);
+        // **Hand over rather than cut.** The takeoff's last frame and the
+        // flight's first are two separately authored poses, and the join
+        // between them was a hard switch inside one shape -- so the crossfade
+        // in `Crossfade` never saw it and never softened it. How bad the seam
+        // looked depended on how fast you were going when you left the floor,
+        // which is exactly the kind of bug that hides: fine most of the time,
+        // and a visible hitch on the jumps that happen mid-sprint.
+        //
+        // The last few frames of the takeoff blend into the flight pose they
+        // are about to become, which costs nothing and removes the seam
+        // entirely.
+        const HANDOVER: u16 = 3;
+        let into = takeoff.saturating_sub(HANDOVER);
+        if input.air_frames >= into {
+            let k = (input.air_frames - into + 1) as f32 / HANDOVER as f32;
+            return pose.blend(&flight(input, 0), k.clamp(0.0, 1.0));
+        }
+        return pose;
     }
-    let since = (input.air_frames - takeoff) as u32;
+    flight(input, (input.air_frames - takeoff) as u32)
+}
 
-    // Rising, hanging, falling -- picked from vertical speed, and cross-faded
-    // so the turn at the top is a turn rather than a cut.
+/// Rising, hanging, falling -- picked from vertical speed, and cross-faded so
+/// the turn at the top is a turn rather than a cut.
+fn flight(input: PoseInput, since: u32) -> Pose {
     const HANG: f32 = 3.5;
     if input.rise > HANG {
         Clip::JumpRise.at(since)

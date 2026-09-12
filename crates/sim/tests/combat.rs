@@ -476,36 +476,61 @@ fn releasing_a_direction_still_stops_you_crisply() {
 // The hitbox the overlay draws
 // ---------------------------------------------------------------------------
 
-/// A world with player one mid-swing and player two parked at `gap` from the
-/// centre of the attack volume, along the attack direction.
+/// A world with player one mid-swing and player two parked at `gap` past the
+/// far end of the attack volume, along the line the weapon lies on.
+///
+/// Past the **head of the weapon**, not out from the middle of a disc. Half
+/// the roster still swings a disc at arm's length, for which the two are the
+/// same thing; the Champion swings a capsule, and the only boundary a capsule
+/// has that does not depend on which way you approach it is the one off its
+/// end.
 fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     use sim::state::hitbox;
 
     let mut w = World::with_classes([class, class]);
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
+    let held = [Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
 
+    // The volume the **next** frame will test with, found by stepping a copy.
+    //
+    // Reading the current one and then advancing was fine while every attack
+    // was a disc that sat still for its whole active window. A swing does not:
+    // it has moved by the time the hit is resolved, so the box to park a
+    // defender against is the one the hit test is about to use, not the one on
+    // screen a frame earlier.
+    let mut found = None;
     for _ in 0..40 {
-        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
-        if hitbox(&w.players[0]).is_some() {
+        let mut peek = w.clone();
+        peek.advance(held);
+        if let Some(next) = hitbox(&peek.players[0]) {
+            found = Some(next);
             break;
         }
+        w.advance(held);
     }
-    let hb = hitbox(&w.players[0]).expect("never reached an active frame");
+    let hb = found.expect("never reached an active frame");
 
     // Exactly the threshold the hit test uses: the attack radius plus the
     // defender's body radius, which is why the overlay draws both cylinders.
     let threshold = (hb.radius.to_f32_for_render()
         + sim::tuning::body_radius().to_f32_for_render())
         * gap_factor;
+    // Along the blade, away from the hand. A disc has no blade, so it keeps
+    // the old +X -- which is the direction player one is facing.
+    let axis = hb.to.sub(hb.from);
+    let out = if axis.flat_len().raw() > 0 {
+        sim::V3::new(axis.x, Fx::ZERO, axis.z).normalized()
+    } else {
+        sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
+    };
+    let step = Fx::ratio((threshold * 1000.0) as i32, 1000);
     w.players[1].pos = sim::V3::new(
-        hb.centre
-            .x
-            .add(Fx::ratio((threshold * 1000.0) as i32, 1000)),
+        hb.to.x.add(out.x.mul(step)),
         w.players[1].pos.y,
-        hb.centre.z,
+        hb.to.z.add(out.z.mul(step)),
     );
-    w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    w.advance(held);
     w
 }
 
@@ -513,8 +538,9 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
 fn the_drawn_hitbox_is_the_one_that_hits() {
     // The overlay draws `state::hitbox`, and the hit test uses it too. This
     // pins that they agree at the boundary, for every class -- including the
-    // Champion, whose weapon form multiplies reach and which an overlay
-    // rebuilding the box from the move table on its own would get wrong.
+    // Champion, whose swings are capsules that move over their active frames
+    // and which an overlay rebuilding the box from the move table on its own
+    // would get wrong on every frame but the first.
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(

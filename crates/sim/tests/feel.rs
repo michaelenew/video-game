@@ -17,9 +17,17 @@ use sim::tuning as t;
 
 fn every_move() -> impl Iterator<Item = (&'static str, Move)> {
     // By value: move data is live now, so there is no `'static` table to borrow.
-    ALL_CLASSES
-        .iter()
-        .flat_map(|c| moves::table(*c).into_iter().map(move |m| (c.name(), m)))
+    //
+    // Moves with no hit volume are left out. There is one -- the Champion's
+    // pole vault -- and it is not an attack that happens to miss, it is a way
+    // into the air on the attack grammar's button. Every assertion below is
+    // about what connecting with somebody is worth, and it never connects.
+    ALL_CLASSES.iter().flat_map(|c| {
+        moves::table(*c)
+            .into_iter()
+            .filter(|m| m.strikes())
+            .map(move |m| (c.name(), m))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -69,13 +77,39 @@ fn committed_moves_are_more_punishable_than_pokes() {
 fn landing_a_hit_keeps_the_initiative_or_resets_neutral() {
     // On hit you should be no worse off than the defender, or hitting someone
     // would be a mistake.
-    for (class, m) in every_move() {
+    //
+    // A move that **re-hits** is exempt, and the exemption is real rather than
+    // a convenience. `on_hit` is hitstun minus the frames you are still busy
+    // for, and it assumes the exchange is over once you connect. The
+    // Champion's Rush slash is still swinging when the next cut lands, so the
+    // arithmetic is measuring the wrong thing: what it costs is the whole
+    // active window, and what it pays is every cut inside it.
+    for (class, m) in every_move().filter(|(_, m)| m.rehit == 0) {
         assert!(
             m.on_hit() >= 0,
             "{class} {}: {:+} on hit — connecting leaves you at a disadvantage",
             m.name,
             m.on_hit()
         );
+    }
+}
+
+#[test]
+fn a_move_that_keeps_hitting_lands_more_than_once_inside_its_own_swing() {
+    // The other half of that exemption. A re-hit interval longer than the
+    // active window would be a normal move with a misleading field on it, and
+    // the exemption above would be hiding a move that is simply minus on hit.
+    for class in ALL_CLASSES {
+        for m in moves::table(class).iter().filter(|m| m.rehit > 0) {
+            assert!(
+                m.active > m.rehit,
+                "{}: {} re-hits every {} frames and is only active for {}",
+                class.name(),
+                m.name,
+                m.rehit,
+                m.active
+            );
+        }
     }
 }
 
@@ -213,16 +247,26 @@ fn the_dodge_outruns_a_walk() {
 }
 
 #[test]
-fn every_class_has_the_same_number_of_exemplar_moves() {
-    // Not a design law, just a guard against a half-finished class shipping
-    // unnoticed. Relax it deliberately when a class legitimately grows.
-    let counts: Vec<_> = ALL_CLASSES
-        .iter()
-        .map(|c| (c.name(), moves::table(*c).len()))
-        .collect();
-    let first = counts[0].1;
-    for (name, n) in &counts {
-        assert_eq!(*n, first, "{name} has {n} moves, others have {first}");
+fn no_class_is_half_finished() {
+    // Not a design law, just a guard against a class shipping with a gap in it.
+    //
+    // This used to require every class to have *the same* number of moves, with
+    // a note to relax it when one legitimately grew. The Champion legitimately
+    // grew: its three mouse buttons are three weapons, each of which behaves
+    // differently on foot, in the air and out of a Rush, so it carries ten
+    // where the others carry the original three. What is still worth pinning is
+    // the floor -- poke, committed, special -- and that the growth is
+    // deliberate rather than a table somebody appended to by accident.
+    use sim::Class;
+    for class in ALL_CLASSES {
+        let n = moves::table(class).len();
+        let expected = if class == Class::Champion { 10 } else { 3 };
+        assert_eq!(
+            n,
+            expected,
+            "{} has {n} moves and should have {expected}",
+            class.name()
+        );
     }
 }
 

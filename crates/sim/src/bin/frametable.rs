@@ -60,6 +60,19 @@ fn main() {
         );
         for m in moves::table(class) {
             let mut notes = Vec::new();
+            // A move with no hit volume has no frame advantage worth printing:
+            // the columns are all about what connecting is worth, and it never
+            // connects. The Champion's pole vault is the only one.
+            if !m.strikes() {
+                println!(
+                    "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   movement, no hitbox",
+                    m.name, m.startup, m.active, m.recovery, "--", "--", "--"
+                );
+                continue;
+            }
+            if m.rehit > 0 {
+                notes.push("re-hits");
+            }
             if m.unblockable {
                 notes.push("unblockable");
             }
@@ -78,15 +91,22 @@ fn main() {
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
+            // On-hit means nothing for a move that is still swinging when it
+            // lands again, so it is left blank rather than printed wrong.
+            let on_hit = if m.rehit > 0 {
+                "--".to_string()
+            } else {
+                format!("{:+}", m.on_hit())
+            };
             println!(
-                "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}   {}",
+                "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}   {}",
                 m.name,
                 m.startup,
                 m.active,
                 m.recovery,
                 m.damage,
                 m.on_block(),
-                m.on_hit(),
+                on_hit,
                 notes.join(", ")
             );
         }
