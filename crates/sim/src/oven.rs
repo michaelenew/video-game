@@ -335,14 +335,22 @@ macro_rules! view_knobs {
 // Angles are degrees, negative being below the horizon. Screen fractions are
 // percentages measured from the bottom of the screen, so the crosshair sits at
 // 50 by definition.
+//
+// The **sphere radius** is the one that decides how the whole thing feels. The
+// eye rides a sphere of that radius centred on the fighter's feet, so it is the
+// distance the camera keeps -- and, because the eye has nowhere else to go, it
+// is also what decides how far down the look-down range the fighter can be held
+// near the bottom of the frame. Smaller keeps them low further down and draws
+// them bigger; larger draws them smaller and hands the job over to the floor
+// zone sooner.
 view_knobs! {
+    Sphere,         "Sphere radius (m)",        Fixed,   fx(1,1), fx(30,1);
     LookDownLimit,  "Look down limit",          Int,     10,  89;
     LookUpLimit,    "Look up limit",            Int,     10,  89;
     FloorZoneFrom,  "Floor zone, from",         Int,     10,  89;
     NeutralZoneTo,  "Neutral zone, to",         Int,     1,   45;
     HeadLockAt,     "Head lock, at",            Int,     1,   45;
     FeetNeutral,    "Feet, neutral (%)",        Int,     0,   50;
-    HeadNeutral,    "Head, neutral (%)",        Int,     1,   50;
     FeetFloor,      "Feet, floor (%)",          Int,     0,   50;
     HeadGapLevel,   "Head to crosshair (%)",    Int,     0,   30;
     MinElevation,   "Eye elevation, least",     Int,     0,   89;

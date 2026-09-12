@@ -1204,3 +1204,66 @@ screen the fighter fills. Pull back, smaller fighter, which is the same wish.
 **Verdict** open. The shape is what was asked for and the waypoints are pinned by tests rather
 than by screenshots, which is the point of the exercise. The number most likely to want moving
 is the neutral zone's steep boundary, for the reason above.
+
+### 2026-09-12 — the camera moves on a fixed sphere
+
+**Changed** the eye rides a sphere of fixed radius centred on the fighter's feet, and the only
+thing the rig solves is where on it. The old second condition — "the fighter fills a fixed
+share of the screen" — is gone, and with it the `Head, neutral` knob; `Sphere radius (m)` takes
+its place and starts at 6. The eye elevation bounds moved to 60/60.
+
+**Why** the previous solve met two conditions at once, so it had to move the camera in and out
+to do it: 6.9 m at −10 down to 2.6 m at −45. A camera that dollies while the player is only
+steering is the thing that reads as "the camera is doing something". Fixing the radius removes
+the freedom that was being spent on it.
+
+**The solve got simpler, not harder.** One unknown and one condition. With the eye at
+`R(cos e, sin e)` and the feet at the centre of that circle, asking for the fighter to sit a
+given angle below the crosshair is `A·cos(e) + B·sin(e) = C` — the `R²` terms cancel — which is
+the standard shape that collapses to a single cosine. Two roots, an `acos` either side of a
+lead angle, and the camera is the flatter one that is genuinely behind the fighter. The
+two-circle radical-line construction it replaces was correct but was doing twice the work for a
+question that only had one unknown in it.
+
+**What the geometry insists on, which fixing the radius did not fix.** The crosshair sits where
+the aim ray meets the ground, which walks in from about 7 m ahead at −10 to 1.2 m at −45. The
+camera is trying to open a gap between the fighter and that mark, and the aim is closing it. On
+a sphere of radius `R` the widest *any* eye sees the pair is `atan(mark / R)`, so:
+
+| Aim | Mark ahead | Most the sphere can open | Where the feet land |
+| --- | --- | --- | --- |
+| −10 | 7.1 m | over half the screen | 5% |
+| −15 | 4.7 m | over half | 6% |
+| −20 | 3.4 m | over half | 15% |
+| −25 | 2.7 m | 40% | 21% |
+| −30 | 2.2 m | 33% | 26% |
+| −45 | 1.2 m | 19% | 35% |
+| −85 | 0.1 m | 2% | 49% |
+
+Two different limits bite down that list. Above about −20 the sphere could open more than half
+a screen, but only from an eye swung past vertical, so what actually stops it is the **eye
+ceiling** at 60 degrees. Below that the **sphere itself** is the limit and the ceiling is
+irrelevant. Either way the 5% waypoint holds to about −15 at six metres and then the fighter
+rides up the screen whatever the rig does. This is not the fixed sphere's fault — the previous version bought the
+same waypoint by dollying to 2.6 m, and *no* fixed radius satisfies the zone as written: 5% at
+−45 wants 2.5 m, and the fighter filling only a fifth of the screen wants about 9 m. The zone
+as prescribed asks for both.
+
+**The floor zone turned out to cost nothing.** Its waypoint is "pan until the camera points at
+the fighter's feet", and the camera already points at the crosshair's mark, which is itself
+sweeping onto the feet as the player looks down. So the *view* pans onto them with the eye
+staying exactly where it is. Setting the elevation floor equal to the ceiling makes the whole
+look-down range one unmoving camera, and the fighter walks from 5% to 49% of the screen without
+the eye travelling a centimetre.
+
+**That also removed a snap.** With the two bounds apart, the last degree and a half of look-down
+used to swing the eye about five metres, chasing the final one percent of "feet exactly on the
+crosshair" — a waypoint that is within a hand's breadth of satisfied from anywhere by then.
+`the_camera_never_jumps_as_the_aim_sweeps` now sweeps four hundred samples across the whole
+range and holds the eye to a fifth of the sphere per degree; the fastest thing left is the
+handover into the fighter's head, which is a designed sprint.
+
+**Verdict** open. Measured and looked at, at −10, −27 and −45: low and small, then clear of the
+reticle, then mid-screen with the crosshair on the chest, which is what aiming a metre from your
+own feet has to look like. The number most likely to want moving is the sphere radius, and the
+table above says what it buys.

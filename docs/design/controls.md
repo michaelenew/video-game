@@ -117,7 +117,7 @@ bottom, so the crosshair is at 50 by definition.
 | --- | --- | --- |
 | **−90 to −85** | Not allowed | At the pole the fighter's vertical plane stops being defined and the camera has nothing to be behind |
 | **−85 to −45** | The floor zone | The feet walk up the screen from 5% to 50%, so at the bottom the camera is looking at the fighter's own feet — the shot that puts a stone underneath you |
-| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, head at 25%: low in the frame and the same size throughout |
+| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, low in the frame, with the eye a fixed six metres out |
 | **−10 to 0** | The turn | Attention moves from the feet to the head, until at level the crosshair rides just above the head. With no ground under the aim to read it against, the fighter's own head is what a mid-range skillshot keys off |
 | **0 to +10** | The handover | The eye walks into the fighter and the body fades out |
 | **+10 to +85** | First person | The eye *is* the point abilities come out of, so the crosshair's line in space and the ability's line are the same line |
@@ -128,16 +128,29 @@ is in the Oven under **Camera**, and those are the only camera values in it — 
 [architecture.md](architecture.md) for why they are the one family kept out of the desync
 checksum.
 
-**Solved in closed form, once a frame.** Each condition is "see these two points a given angle
-apart", and the places from which a segment subtends a fixed angle form a *circle* through its
-ends — the inscribed angle theorem. So the eye is where two circles cross, which is a line and
-a quadratic. No search, nothing baked, and exact rather than nearly.
+**The eye rides a fixed sphere.** Below the horizon there is one place the camera can be:
+somewhere on a sphere of the tuned radius, centred on the fighter's feet. Aiming around moves
+it *along* that sphere and never off it, so the camera never dollies in and out while the
+player is only steering. The radius is the headline knob, and the player's own distance
+setting scales it.
+
+**Solved in closed form, once a frame.** One unknown — how far around the sphere the eye has
+climbed — and one condition, that the anchor point on the fighter lands at its mark on the
+screen. Writing the eye as `R(cos e, sin e)` turns that into `A·cos(e) + B·sin(e) = C`, which
+collapses to a single cosine and an `acos`. No search, nothing baked, and exact rather than
+nearly.
 
 **One thing the geometry insists on, worth knowing before tuning.** The crosshair's mark on the
-ground sits `cast height / tan(pitch)` ahead: about 7 m at −10 and barely 1.2 m at −45. Holding
-the fighter at a fixed spot on screen while the mark sweeps that far in swings the eye from a
-normal third-person arm at −10 to almost directly overhead at −45. If the neutral zone should
-feel like one camera rather than two, the lever is its steep boundary.
+ground sits `cast height / tan(pitch)` ahead: about 7 m at −10 and barely 1.2 m at −45. The
+camera is trying to open a gap between the fighter and that mark, and the aim is closing it.
+From a sphere of radius `R` the widest any eye can see the pair is `atan(mark / R)`, so past a
+certain angle **no camera can hold the fighter low** — at six metres the 5% waypoint holds to
+about −15 and then the fighter rides up the screen whatever the rig does. That walk-up is the
+floor zone arriving early, and it is smooth, but the zone table above describes intent rather
+than what a six-metre sphere can deliver. Three levers, in the order worth trying: a smaller
+sphere opens the angle (and draws the fighter bigger), a higher eye ceiling buys a little more
+by swinging overhead, and moving the neutral zone's steep boundary up to about −20 makes the
+table honest without changing a pixel.
 
 Two consequences are worth stating because they are design, not implementation:
 
