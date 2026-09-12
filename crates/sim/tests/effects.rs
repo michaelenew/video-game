@@ -10,7 +10,7 @@
 use sim::class::{Class, Mechanic};
 use sim::effects::EffectKind;
 use sim::state::{Action, MAX_PLAYERS};
-use sim::{Input, World};
+use sim::{Fx, Input, World};
 
 const Q: u16 = Input::SPECIAL;
 const E: u16 = Input::MECHANIC;
@@ -129,16 +129,41 @@ fn standing_in_a_fire_pillar_costs_you_and_standing_in_your_own_does_not() {
 }
 
 #[test]
-fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
+fn an_auto_aimed_through_a_fire_pillar_lights_a_fire_bolt() {
     // The auto reads what it is aimed through. A fire pillar is a hazard, not
-    // a wall, so it charges the shot instead of stopping it -- unlike a
-    // structure in the same spot. See docs/design/kits/elementalist.md.
+    // a wall, so it does not stop the beam -- it lights one, and what leaves
+    // the pillar is a real projectile with a speed and a long range. See
+    // docs/design/kits/elementalist.md.
     let mut w = as_class(Class::Elementalist);
-    tap(&mut w, Q, 20); // plant a pillar ahead, along the same aim as Bolt
-    assert_eq!(
-        effects_of(&w, EffectKind::FirePillar).len(),
-        1,
-        "fixture planted no pillar to aim through"
+    // Clear of the raised platforms, which reach four metres either side of
+    // the middle: a pillar planted on one stands a platform's height up and a
+    // level shot correctly passes underneath it. And the other fighter well
+    // out of the way, so what the beam meets first is the fire.
+    w.players[0].pos = sim::V3::new(Fx::from_int(-10), Fx::ZERO, Fx::from_int(8));
+    w.players[1].pos = sim::V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(8));
+    tap(&mut w, Q, 60); // plant a pillar ahead, and let her recover from it
+    let pillars = effects_of(&w, EffectKind::FirePillar);
+    assert_eq!(pillars.len(), 1, "fixture planted no pillar to aim through");
+    assert!(
+        w.bolts.iter().all(|b| b.is_none()),
+        "fixture started with a bolt already in the air"
+    );
+
+    // The pillar reaches further than the beam does, so she has to close
+    // before she can shoot through her own fire. Walked rather than assumed:
+    // both ranges are tuned, and a fixture that took the gap on faith would
+    // start passing or failing for reasons that have nothing to do with it.
+    let reach = sim::moves::get(Class::Elementalist, 0).reach;
+    let gap = |w: &World| pillars[0].pos.sub(w.players[0].pos).flat_len();
+    for _ in 0..240 {
+        if gap(&w).raw() < reach.raw() {
+            break;
+        }
+        run(&mut w, 1, Input::W, 0);
+    }
+    assert!(
+        gap(&w).raw() < reach.raw(),
+        "fixture never got within the beam's own range of the pillar"
     );
 
     for _ in 0..60 {
@@ -149,15 +174,33 @@ fn a_bolt_aimed_through_a_fire_pillar_hits_as_a_fire_bolt() {
     }
     assert!(
         matches!(w.players[0].action, Action::Active { kind: 0, .. }),
-        "Bolt never became active"
+        "the auto never became active"
     );
+    let lit = w.bolts.iter().flatten().next().copied();
+    let lit = lit.expect("aiming the auto through a fire pillar lit no fire bolt");
+
+    // It comes *from the fire*, not from her hand. Anything else and the
+    // interaction is invisible: the player would see a bolt leave the
+    // Elementalist and have no way to know the pillar had anything to do
+    // with it.
+    let live = effects_of(&w, EffectKind::FirePillar)[0];
+    let edge = live.pillar_volumes().0.radius;
+    let off = lit.pos.sub(live.pos).flat_len();
     assert!(
-        w.players[0].bolt_fire,
-        "a bolt aimed through a fire pillar was not empowered"
+        off.raw() <= edge.add(sim::tuning::fire_bolt_radius()).raw(),
+        "the bolt was lit {} m from the pillar, whose base is {} m across",
+        off.to_f32_for_render(),
+        edge.to_f32_for_render()
     );
+
+    // And it flies. The beam is instant; this is the one part with a speed.
+    let before = lit.pos;
+    run(&mut w, 3, 0, 0);
+    let moved = w.bolts.iter().flatten().next().copied();
+    let moved = moved.expect("the fire bolt vanished before it had gone anywhere");
     assert!(
-        !w.players[0].bolt_blocked,
-        "a fire pillar blocked the shot the way a structure does, which it should not"
+        moved.pos.sub(before).len().raw() > 0,
+        "the fire bolt never left the pillar"
     );
 }
 

@@ -476,8 +476,14 @@ fn releasing_a_direction_still_stops_you_crisply() {
 // The hitbox the overlay draws
 // ---------------------------------------------------------------------------
 
-/// A world with player one mid-swing and player two parked at `gap` from the
-/// centre of the attack volume, along the attack direction.
+/// A world with player one mid-swing and player two parked at `gap` past the
+/// far end of the attack volume, along the attack direction.
+///
+/// The *far end* rather than the centre, because one of the six attacks is a
+/// line: the Elementalist's auto is a beam out of her chest, and a defender
+/// standing at the middle of it is inside it however far away they are put.
+/// Measuring from the end is the one thing that means the same for a bubble
+/// and a beam -- for a bubble the two points are the same.
 fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     use sim::state::hitbox;
 
@@ -499,11 +505,9 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
         + sim::tuning::body_radius().to_f32_for_render())
         * gap_factor;
     w.players[1].pos = sim::V3::new(
-        hb.centre
-            .x
-            .add(Fx::ratio((threshold * 1000.0) as i32, 1000)),
+        hb.to.x.add(Fx::ratio((threshold * 1000.0) as i32, 1000)),
         w.players[1].pos.y,
-        hb.centre.z,
+        hb.to.z,
     );
     w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
     w

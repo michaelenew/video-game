@@ -552,7 +552,7 @@ differentiation.
 
 | Input | Result |
 | --- | --- |
-| `L` | Ranged bolt auto |
+| `L` | Ranged auto — a beam along the crosshair, and whatever it meets first |
 | `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
 | direction + click | Fissure, Quake, Ice blast |
 | `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |

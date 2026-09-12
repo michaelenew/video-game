@@ -8,6 +8,24 @@
 use sim::class::{ALL_CLASSES, Class};
 use sim::oven::{self, AirField, Knob, MonsterField, MoveField, Scalar, Unit};
 use sim::{Input, World};
+use std::sync::{Mutex, MutexGuard};
+
+/// Held by every test that reads or writes the live store.
+///
+/// Separate binaries keep the mutating tests away from `combat.rs` and
+/// `feel.rs`, which is why this file exists -- but they do not keep them away
+/// from *each other*. Tests inside one binary run in parallel, so "nothing is
+/// dirty" and "editing the oven makes it dirty" were racing, and the loser
+/// failed roughly one run in fifteen under load. A lock is the honest answer:
+/// there is one store, and two tests that disagree about its contents cannot
+/// both be right at the same instant.
+static STORE: Mutex<()> = Mutex::new(());
+
+fn the_store() -> MutexGuard<'static, ()> {
+    // A panicking test poisons the lock, and the second failure would then be
+    // reported instead of the first. The store is put back either way.
+    STORE.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 #[test]
 fn the_registry_covers_every_stored_value() {
@@ -46,6 +64,7 @@ fn every_knob_has_a_unique_id() {
 
 #[test]
 fn every_knob_starts_inside_its_own_range() {
+    let _store = the_store();
     // A value outside its slider range means the range is wrong, since the
     // committed value is by definition one someone chose.
     for knob in oven::all_knobs() {
@@ -62,6 +81,7 @@ fn every_knob_starts_inside_its_own_range() {
 
 #[test]
 fn the_committed_file_is_what_the_oven_would_write() {
+    let _store = the_store();
     // Catches a hand-edited `tuned.rs`, and catches a bake that wrote the file
     // but did not get committed. Either one leaves the repository saying
     // something the game does not do.
@@ -88,6 +108,7 @@ fn the_committed_file_is_what_the_oven_would_write() {
 
 #[test]
 fn nothing_is_dirty_before_anything_is_touched() {
+    let _store = the_store();
     assert!(!oven::is_dirty());
     for knob in oven::all_knobs() {
         assert!(!knob.is_dirty(), "{} starts dirty", knob.id());
@@ -109,11 +130,13 @@ fn fixed_point_values_display_without_floating_point() {
 
 /// Everything that writes to the store, in one test.
 ///
-/// Tests inside a binary run in parallel, so a second mutating test would race
-/// this one. One test that puts the store back when it is done is simpler than
-/// a lock, and cannot be forgotten.
+/// One writer, and it puts the store back when it is done. That was once the
+/// whole story, on the reasoning that a single mutating test cannot race
+/// itself -- which was true, and missed that the *readers* race it. They take
+/// `the_store` too now.
 #[test]
 fn editing_the_oven_changes_the_game_and_can_be_undone() {
+    let _store = the_store();
     let knob = Knob::Move(Class::Bulwark, 0, MoveField::Startup);
     let original = knob.raw();
 
@@ -150,6 +173,7 @@ fn editing_the_oven_changes_the_game_and_can_be_undone() {
 
 #[test]
 fn the_tuning_is_part_of_the_desync_checksum() {
+    let _store = the_store();
     // Tuning is a rule rather than state, so rollback never carries it. Two
     // peers tuned differently would otherwise diverge silently and look like a
     // netcode bug; this is what turns that into an immediate desync.
@@ -257,6 +281,7 @@ fn a_family_is_gathered_even_when_its_knobs_are_scattered() {
 
 #[test]
 fn moving_a_camera_knob_is_a_change_to_the_simulation() {
+    let _store = the_store();
     // This used to assert the opposite, and the reversal is the point.
     //
     // A camera decides what you *see*, so for a while these were kept out of
