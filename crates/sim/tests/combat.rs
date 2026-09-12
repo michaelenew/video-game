@@ -491,13 +491,14 @@ fn swings_with(class: sim::class::Class) -> u16 {
 }
 
 /// A world with player one mid-swing and player two parked at `gap` past the
-/// far end of the attack volume, along the attack direction.
+/// far end of the attack volume, along the line the weapon lies on.
 ///
-/// The *far end* rather than the centre, because one of the six attacks is a
-/// line: the Elementalist's auto is a beam out of her chest, and a defender
-/// standing at the middle of it is inside it however far away they are put.
-/// Measuring from the end is the one thing that means the same for a bubble
-/// and a beam -- for a bubble the two points are the same.
+/// The **far end** rather than the centre, because most of what the game throws
+/// is a line. The Elementalist's auto is a beam out of her chest, and a
+/// defender standing at the middle of it is inside it however far away they are
+/// put; the Champion's weapons are capsules that sweep, and the only boundary a
+/// capsule has that does not depend on which way you approach it is the one off
+/// its end. For a bubble the two points are the same, so it means that too.
 fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     use sim::state::hitbox;
 
@@ -505,14 +506,26 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     let mut w = World::with_classes([class, class]);
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
+    let held = [Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
 
+    // The volume the **next** frame will test with, found by stepping a copy.
+    //
+    // Reading the current one and then advancing was fine while every attack
+    // was a disc that sat still for its whole active window. A swing does not:
+    // it has moved by the time the hit is resolved, so the box to park a
+    // defender against is the one the hit test is about to use, not the one on
+    // screen a frame earlier.
+    let mut found = None;
     for _ in 0..40 {
-        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
-        if hitbox(&w.players[0]).is_some() {
+        let mut peek = w.clone();
+        peek.advance(held);
+        if let Some(next) = hitbox(&peek.players[0]) {
+            found = Some(next);
             break;
         }
+        w.advance(held);
     }
-    let hb = hitbox(&w.players[0]).expect("never reached an active frame");
+    let hb = found.expect("never reached an active frame");
 
     // Exactly the threshold the hit test uses: the attack radius plus the
     // defender's body radius, which is why the overlay draws both cylinders.
@@ -521,9 +534,9 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
         * gap_factor;
     let step = Fx::ratio((threshold * 1000.0) as i32, 1000);
     // Out along the volume's own direction. For a bubble that is the body's
-    // facing; for a beam it is the line, which may be pointing anywhere at all
-    // -- the Elementalist's ends wherever the crosshair was, and at a level
-    // look that is above head height.
+    // facing; for anything with a length of its own it is that line, which may
+    // be pointing anywhere at all -- the Elementalist's beam ends wherever the
+    // crosshair was, and the Champion's weapons sweep through an arc.
     let along = if hb.is_a_beam() {
         hb.to.sub(hb.from).normalized()
     } else {
@@ -534,7 +547,7 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     // the end of the volume" means the same thing at any height.
     let half = sim::tuning::body_height().div(Fx::from_int(2));
     w.players[1].pos = sim::V3::new(spot.x, spot.y.sub(half).max(Fx::ZERO), spot.z);
-    w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    w.advance(held);
     w
 }
 
@@ -565,8 +578,9 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
 fn the_drawn_hitbox_is_the_one_that_hits() {
     // The overlay draws `state::hitbox`, and the hit test uses it too. This
     // pins that they agree at the boundary, for every class -- including the
-    // Champion, whose weapon form multiplies reach and which an overlay
-    // rebuilding the box from the move table on its own would get wrong.
+    // Champion, whose swings are capsules that move over their active frames
+    // and which an overlay rebuilding the box from the move table on its own
+    // would get wrong on every frame but the first.
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(

@@ -101,7 +101,7 @@ impl Class {
     pub const fn resource(self) -> &'static str {
         match self {
             Class::Bulwark => "shield position",
-            Class::Champion => "rush charge and weapon form",
+            Class::Champion => "a rush charge, and which weapon is in hand",
             Class::ShadowReaver => "shadow position",
             Class::Elementalist => "structure slots",
             Class::BloodMage => "health",
@@ -129,7 +129,9 @@ impl Class {
             Class::Bulwark => Mechanic::Shield(Shield::Held),
             Class::Champion => Mechanic::Forms {
                 form: Form::Sword,
-                rush_charged: true,
+                rush: 0,
+                recharge: 0,
+                rush_vel: V3::ZERO,
             },
             Class::ShadowReaver => Mechanic::Shadow { at: None },
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -176,8 +178,20 @@ impl Shield {
 // Champion
 // ---------------------------------------------------------------------------
 
-/// Three range bands. The form multiplies every move rather than each form
-/// having its own move list -- three numbers instead of three tables.
+/// Three range bands, one per mouse button.
+///
+/// The form used to be a **mode**: a button cycled it and it multiplied the
+/// reach, damage and recovery of a shared three-move table. That is why the
+/// class read as linear -- the weapon was a number, so picking one was picking
+/// a number, and the three of them threw the same three moves.
+///
+/// It is a **button** now. Left click is the sword, middle click the hammer,
+/// right click the spear, each with its own moves on the ground, in the air
+/// and out of a Rush; the form is which of them you last threw. That makes
+/// this enum presentation and bookkeeping -- the HUD line, the animation, the
+/// weapon in the fighter's hands -- rather than a multiplier, and the
+/// differences between the weapons live where a player can feel them, in the
+/// frame data and the shape of the hitbox.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Form {
     Hammer,
@@ -196,14 +210,17 @@ impl Form {
         }
     }
 
-    /// Reach, damage, and recovery multipliers. Hammer hits hardest and
-    /// recovers slowest; spear reaches furthest and hits weakest.
+    /// Which weapon one of the Champion's moves is thrown with.
     ///
-    /// Nine numbers that are most of the class -- three kits out of one move
-    /// table -- so they live in the Oven with everything else that decides how
-    /// a fighter feels.
-    pub fn modifiers(self) -> (Fx, Fx, Fx) {
-        crate::tuning::form_modifiers(self)
+    /// A function of the move rather than of a stored mode, which is the whole
+    /// of the rebuild in one line: you cannot throw a hammer move with the
+    /// spear out, because the button that threw it *was* the hammer.
+    pub const fn of_move(kind: u8) -> Form {
+        match crate::moves::champion::weapon(kind) {
+            crate::moves::champion::HAMMER => Form::Hammer,
+            crate::moves::champion::SPEAR => Form::Spear,
+            _ => Form::Sword,
+        }
     }
 }
 
@@ -277,9 +294,22 @@ pub struct Structure {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mechanic {
     Shield(Shield),
+    /// The Champion: which weapon was last swung, and where Rush is.
+    ///
+    /// Rush is one stored charge that dashes and, spent from a recovery,
+    /// cancels it -- so the whole of it is "how many frames of dash are left"
+    /// and "how long until I get another one". The velocity rides along
+    /// because a dash has to hold its line: facing follows the mouse while you
+    /// are free to act, and a dash steered by the mouse is a turn, not a dash.
     Forms {
         form: Form,
-        rush_charged: bool,
+        /// Frames of dash left. Non-zero means the Champion is rushing, which
+        /// is what makes the mouse buttons throw the Rush moves.
+        rush: u16,
+        /// Frames until the charge is back. Zero is ready.
+        recharge: u16,
+        /// The horizontal velocity the dash drives, in metres per second.
+        rush_vel: V3,
     },
     Shadow {
         at: Option<V3>,
@@ -334,16 +364,20 @@ pub mod alloc_free {
                 Mechanic::Shield(Shield::Held) => Summary::Text("shield: held"),
                 Mechanic::Shield(Shield::Planted { .. }) => Summary::Text("shield: planted"),
                 Mechanic::Shield(Shield::Flying { .. }) => Summary::Text("shield: in flight"),
-                Mechanic::Forms { form, rush_charged } => {
-                    Summary::Text(match (form, rush_charged) {
-                        (Form::Hammer, true) => "hammer / rush ready",
-                        (Form::Hammer, false) => "hammer",
-                        (Form::Sword, true) => "sword / rush ready",
-                        (Form::Sword, false) => "sword",
-                        (Form::Spear, true) => "spear / rush ready",
-                        (Form::Spear, false) => "spear",
-                    })
-                }
+                Mechanic::Forms {
+                    form,
+                    rush,
+                    recharge,
+                    ..
+                } => Summary::Text(match (form, *rush > 0, *recharge == 0) {
+                    (_, true, _) => "RUSHING",
+                    (Form::Hammer, _, true) => "hammer / rush ready",
+                    (Form::Hammer, _, false) => "hammer",
+                    (Form::Sword, _, true) => "sword / rush ready",
+                    (Form::Sword, _, false) => "sword",
+                    (Form::Spear, _, true) => "spear / rush ready",
+                    (Form::Spear, _, false) => "spear",
+                }),
                 Mechanic::Shadow { at: Some(_) } => Summary::Text("shadow: out"),
                 Mechanic::Shadow { at: None } => Summary::Text("shadow: held"),
                 Mechanic::Structures(slots) => Summary::Value(

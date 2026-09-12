@@ -119,6 +119,23 @@ degree per degree from there, so there is no step to feel.
 
 45° is [`tuning::swing_level_to`](../../crates/sim/src/tuning.rs).
 
+**The dead zone is a standing rule.** Off the floor the pitch is followed
+exactly, all the way down. Two reasons, and the first is the one that matters:
+
+- The dead zone corrects for *the camera sitting above the shoulder of somebody
+  standing on the same floor as their target*. That is a fact about two
+  fighters on one floor. In the air, the thing you are looking down at really
+  is below you, and charging the first 45 degrees of that is just a swing that
+  misses.
+- It also makes the air game arithmetically impossible. The look-down limit is
+  85 degrees, so a 45-degree dead zone caps the tilt a falling fighter can
+  reach at 40 -- and the Champion's aerial spike only connects at 45 or more.
+  Measured rather than guessed: on `main` the spike lands for look angles
+  between 45 and 85 degrees down.
+
+`aim::swing_path` takes `grounded` for exactly that, which is the same split
+the Champion's own swing shapes already make.
+
 ### At the mechanic
 
 Wherever the class mechanic is standing. One move: the Reaver's Guillotine
@@ -150,6 +167,27 @@ swing.
 The mechanic inputs are aimed too, through the same two functions: Raise and the
 shadow are grounded casts, and the Bulwark's thrown shield is a skillshot.
 
+**A swing still commits to a plane, and the crosshair is where the plane comes
+from.** Added 2026-09-12 with the Champion's rebuild. The yaw of a swing is the
+facing, which is locked when the move starts; the *pitch* is the rest of the
+same look, and `aim::swing_path` is the one place that turns the two into a
+line. No raycast: a swing stops where the weapon stops rather than where the
+crosshair lands, so there is nothing for it to hit-test against.
+
+The distinction is worth keeping straight, because the two halves of the
+sentence pull opposite ways:
+
+- **Where the volume sits** is the body's business. A disc at arm's length is
+  placed along the flattened `facing` and always has been — aiming at the floor
+  does not move it, which is the rule above.
+- **Which plane a shaped weapon sweeps through** is the crosshair's. The
+  Champion's hammer comes down in the plane you are looking along, its aerials
+  are thrown at the floor or the sky on purpose, and a spear levelled at
+  somebody below you is most of why pitch is on the wire at all.
+
+A class whose swings are discs never reads the pitch, so this changes nothing
+for five of the six.
+
 ## What the path runs into
 
 Separate from the aiming ray, and separate on purpose. The camera's ray says
@@ -175,6 +213,19 @@ crosshair's and parallel rays never converge. The reticle sits on one spot and
 the ability goes to another, by metres, and the error grows with distance —
 which is exactly the bug report that produced this document.
 
+> **`aim::swing_path` is that ray, and is not that mistake**, which is worth
+> being precise about because the two are one line apart. The mistake is using
+> it to answer *where does this go* — a target, at a distance, which the
+> crosshair is also pointing at and disagrees about. A swing asks nothing of
+> the kind: it stops at arm's length, the crosshair is not promising anything
+> out there, and what it takes from the look is the **angle it sweeps at**
+> rather than a point it is trying to reach. Two lines a metre long that start
+> at the same shoulder cannot be metres apart at the end of them.
+>
+> The test for whether a new use is the mistake: *is it pointing at something
+> the player can see the reticle on?* If yes, it is a skillshot and belongs in
+> the raycast. If it stops on the body's own scale, it is a swing.
+
 **A hitbox at a fixed distance in front of the character.** The version before
 that. Aiming up did nothing at all.
 
@@ -195,3 +246,7 @@ gets the same one.
   1.55× reach and a grapple at arm's length plausibly want different answers,
   and a swing thrown while falling fast plausibly wants a different one again.
   Nobody has played it yet; it is one knob until somebody has.
+- **The Champion's weapons are shapes, not points.** They sweep through a plane
+  rather than arriving somewhere, which is the strongest argument yet that a
+  swing is its own line of effect and not a very short skillshot: a skillshot's
+  answer is a point.

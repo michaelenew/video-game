@@ -59,7 +59,7 @@ poke is a design choice in a closed arena, not a gap.
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Raise | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto | Reworked |
-| [Champion](kits/champion.md) | Rush charge, and which form you end in | `L`/`M`/`R` = sword/hammer/spear | Reworked |
+| [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear · `E` Rush | Rebuilt |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
 | ~~Gatekeeper~~ | — | — | Retired |
 

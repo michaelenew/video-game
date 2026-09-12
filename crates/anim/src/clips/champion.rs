@@ -1,4 +1,4 @@
-//! The Champion: Sweep, Drive, Uppercut.
+//! The Champion: three weapons on three buttons, ten clips.
 //!
 //! GENERATED-FRIENDLY: the animation hub (F9) rewrites this file when it saves,
 //! in the same shape you would write by hand. Editing it by hand is fine and
@@ -7,18 +7,36 @@
 //!
 //! ## What the class fights like
 //!
-//! Range bands and flow. One weapon that changes form between hammer, sword and
-//! spear, multiplying reach, damage and recovery -- so what the Champion is
-//! doing at every moment is *choosing a distance*, and the three moves have to
-//! occupy visibly different space or that choice is invisible to the person
-//! opposite. Sweep owns the width in front of the fighter, Drive owns the line,
-//! and Uppercut owns the air above it. Three shapes that cannot be mistaken for
-//! each other across the arena, thrown by one body.
+//! Range bands and flow. Three weapons on three mouse buttons -- sword, hammer,
+//! spear -- and each of them behaves differently on foot, in the air and out of
+//! a Rush. So what the Champion is doing at every moment is *choosing a
+//! distance*, and the clips have to occupy visibly different space or that
+//! choice is invisible to the person opposite. **The sword owns the width, the
+//! hammer owns the line under it, and the spear owns the distance.** Three
+//! shapes that cannot be mistaken for each other across the arena, thrown by
+//! one body.
 //!
-//! It is one body. All three are the same trained fighter with both hands on
-//! the same haft, standing on the two spots the idle stands on, so a move thrown
+//! The ten read as a grid, and the grid is the thing to keep true:
+//!
+//! ```text
+//!              sword               hammer              spear
+//!   on foot    across the front    overhead to floor   lunging thrust
+//!   airborne   down across body    wind up and smash   fan around the aim
+//!   rushing    cutting past        rising launch       dash into the point
+//! ```
+//!
+//! Read down a column and it is one weapon in three situations, so the *grip*
+//! and the weight have to stay recognisable. Read across a row and it is three
+//! weapons in one situation, so the *shape* has to differ completely. A player
+//! who cannot tell which of your ten is coming has to guess, and guessing is
+//! not the game.
+//!
+//! It is one body. All ten are the same trained fighter with both hands on the
+//! same haft, standing on the two spots the idle stands on, so a move thrown
 //! out of neutral does not shuffle the feet or change the grip -- it just
-//! starts, and it puts them back where it found them.
+//! starts, and it puts them back where it found them. The exceptions are the
+//! aerials, which have no floor to put them back on, and the Rush moves, which
+//! start from a body already travelling.
 //!
 //! ## The grip
 //!
@@ -83,7 +101,18 @@ const GRIP: f32 = 0.12;
 const CARRY: Ease = Ease::new(0.05, 0.40, 0.95, 0.60);
 
 pub fn clips() -> Vec<Recipe> {
-    vec![sweep(), drive(), uppercut()]
+    vec![
+        sweep(),
+        slam(),
+        drive(),
+        air_sword(),
+        air_hammer(),
+        air_spear(),
+        rush_slash(),
+        uppercut(),
+        rush_stab(),
+        vault(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +268,7 @@ impl Score {
 /// the hands stay at hip height, the hips drive the arc rather than following
 /// it, and the fighter finishes facing somewhere other than where they started.
 fn sweep() -> Recipe {
-    let clip = Clip::ChampionPoke;
+    let clip = Clip::ChampionSword;
     let (windup, contact, through) = clip.phases().expect("sweep animates a move");
     let last = clip.length().saturating_sub(1);
 
@@ -367,7 +396,7 @@ fn sweep() -> Recipe {
 /// somewhere it cannot easily come back from, and then twenty frames of coming
 /// back from it.
 fn drive() -> Recipe {
-    let clip = Clip::ChampionCommitted;
+    let clip = Clip::ChampionSpear;
     let (windup, contact, through) = clip.phases().expect("drive animates a move");
     let last = clip.length().saturating_sub(1);
 
@@ -508,7 +537,7 @@ fn drive() -> Recipe {
 /// runs out, so the last key hands over to the falling and landing clips rather
 /// than pretending to arrive.
 fn uppercut() -> Recipe {
-    let clip = Clip::ChampionSpecial;
+    let clip = Clip::ChampionUppercut;
     let (windup, contact, through) = clip.phases().expect("uppercut animates a move");
     let last = clip.length().saturating_sub(1);
 
@@ -677,6 +706,796 @@ fn uppercut() -> Recipe {
                 the air on purpose -- at that lift the fighter is still most of \
                 a metre up when the recovery runs out, so the last key hands \
                 over to the fall rather than pretending to land."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hammer -- overhead to the floor
+// ---------------------------------------------------------------------------
+
+/// Everything above the head, and then everything on the ground.
+///
+/// The hammer is the one move in the set whose hit volume goes *under* the
+/// fighter: an arc in the vertical plane that finishes at floor level, which is
+/// what lets it reach a crouching opponent and a ridge lying along an animal's
+/// back. So the pose has to end with the head of the weapon genuinely down
+/// there, not merely angled at it -- a slam that stops at knee height is a
+/// slam that stops at knee height in the hit test too, and the two would
+/// disagree about a move whose whole job is the bottom of its arc.
+///
+/// It is also the slowest thing the Champion has on the ground, and the
+/// telegraph is the product: fifteen frames of raising a weight over your head
+/// is a sentence the opponent can read from across the arena, and they are
+/// meant to.
+fn slam() -> Recipe {
+    let clip = Clip::ChampionHammer;
+    let (windup, contact, through) = clip.phases().expect("slam animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // First read: the weight starts going up, and the body sinks under it.
+    let lift = {
+        let body = Pose::rest()
+            .hips(0.0, -0.11, -0.04)
+            .root(4.0, -2.0, 14.0)
+            .spine(6.0, -4.0, 10.0)
+            .chest(2.0, -3.0, 12.0)
+            .head(-8.0, 0.0, -26.0)
+            .wrists(-4.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.10, 1.34, 0.06], [0.28, 0.90, -0.34]),
+            -4.0,
+            0.03,
+        )
+    };
+
+    // The top of the wind-up: overhead and slightly behind, body open, weight
+    // on the back foot. This is the shape the opponent is deciding against.
+    let over = {
+        let body = Pose::rest()
+            .hips(0.02, -0.06, -0.08)
+            .root(-8.0, -1.0, 8.0)
+            .spine(-12.0, -2.0, 6.0)
+            .chest(-8.0, -2.0, 8.0)
+            .head(-18.0, 0.0, -14.0)
+            .wrists(6.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.02, 1.66, -0.06], [-0.06, 0.86, -0.51]),
+            -8.0,
+            0.05,
+        )
+    };
+
+    // Contact: the head of the weapon at the floor in front, the whole body
+    // dropped over it, the rear heel driven down. Everything is committed --
+    // this is the frame that makes the twenty-two of recovery look earned.
+    let strike = {
+        let body = Pose::rest()
+            .hips(0.0, -0.26, 0.16)
+            .root(30.0, 0.0, -4.0)
+            .spine(34.0, 0.0, -6.0)
+            .chest(16.0, 0.0, -8.0)
+            .head(6.0, 0.0, 10.0)
+            .wrists(-14.0, 0.0, 0.0);
+        weapon(body, [0.02, 0.58, 0.62], [0.02, -0.72, 0.69])
+            .plant_l([-0.16, GROUND, 0.28])
+            .toe_l(-4.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
+            .toe_r(0.0)
+    };
+
+    // The floor takes it. Knees bent, weapon flat, nothing moving -- the beat
+    // where a heavy move has arrived and has not yet begun to come back.
+    let settled = {
+        let body = Pose::rest()
+            .hips(0.0, -0.30, 0.12)
+            .root(32.0, 0.0, -2.0)
+            .spine(34.0, 0.0, -4.0)
+            .chest(14.0, 0.0, -4.0)
+            .head(8.0, 0.0, 6.0)
+            .wrists(-10.0, 0.0, 0.0);
+        weapon(body, [0.02, 0.48, 0.66], [0.0, -0.34, 0.94])
+            .plant_l([-0.16, GROUND, 0.28])
+            .toe_l(-2.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
+            .toe_r(0.0)
+    };
+
+    // Hauling it back up. The recovery is long and it should look like lifting
+    // something heavy rather than like waiting.
+    let haul = {
+        let body = Pose::rest()
+            .hips(0.0, -0.16, 0.04)
+            .root(16.0, -1.0, 10.0)
+            .spine(18.0, -2.0, 8.0)
+            .chest(8.0, -1.0, 10.0)
+            .head(2.0, 0.0, -16.0)
+            .wrists(-8.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.04, 0.94, 0.44], [0.02, 0.46, 0.89]),
+            -4.0,
+            0.04,
+        )
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), Ease::OUT);
+    score.key(tell(windup), lift, Ease::SMOOTH);
+    score.key(part(tell(windup), windup, 0.7), over, Ease::OUT);
+    score.key(contact, strike, Ease::STRIKE);
+    score.key(through, settled, Ease::OUT);
+    score.key(part(through, last, 0.55), haul, CARRY);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::HEAVY,
+        notes: "The overhead. Fifteen frames of raising a weight over your head \
+                is the most readable telegraph in the kit and it is meant to be: \
+                this is the button you get hit by when you guessed wrong, not \
+                the one you get surprised by. The contact key puts the head of \
+                the weapon on the floor rather than pointed at it, because the \
+                hit volume goes to floor level and a pose that stopped at the \
+                knee would be telling the opponent a different move happened. \
+                Heavy looseness -- past the top of the arc nothing is driving \
+                it but its own weight -- and a held beat on the floor before \
+                the recovery starts, which is what makes twenty-two frames of \
+                hauling it back up read as the price of the swing."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Air sword -- the same cut, rolled into the vertical
+// ---------------------------------------------------------------------------
+
+/// The sword's arc taken out of the horizontal and put into the plane you are
+/// aiming down.
+///
+/// The grounded sweep crosses the front of the body; this one crosses the front
+/// of the *opponent*, from high on one side to low on the other. That is the
+/// whole difference and it has to be unmistakable, because the two share a
+/// button: if the air version read as a horizontal cut with the feet off the
+/// ground, the player would have no way to know which of the two they threw.
+///
+/// There is no floor here, so the legs are doing what legs do in the air --
+/// trailing, gathering, counterweighting the arms. Nothing is planted.
+fn air_sword() -> Recipe {
+    let clip = Clip::ChampionAirSword;
+    let (windup, contact, through) = clip.phases().expect("air sword animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    let air = |body: Pose, gather: f32| {
+        body.plant_l([-0.15, 0.30 + gather, 0.10 - gather * 0.4])
+            .toe_l(14.0)
+            .plant_r([0.15, 0.22 + gather * 0.8, -0.16 - gather * 0.3])
+            .toe_r(10.0)
+    };
+
+    // Wound up and over the shoulder, knees drawn up: the compact shape that
+    // says a cut is coming down rather than across.
+    let cocked = {
+        let body = Pose::rest()
+            .hips(0.03, -0.04, -0.04)
+            .root(-6.0, -3.0, 16.0)
+            .spine(-8.0, -5.0, 12.0)
+            .chest(-4.0, -4.0, 12.0)
+            .head(-12.0, 0.0, -28.0)
+            .wrists(2.0, 0.0, 0.0);
+        air(weapon(body, [0.16, 1.58, -0.02], [0.34, 0.78, -0.53]), 0.16)
+    };
+
+    // Through the cut: the weapon has crossed the body from high right to low
+    // left and the legs have swung the other way to pay for it.
+    let cut = {
+        let body = Pose::rest()
+            .hips(-0.04, -0.08, 0.06)
+            .root(16.0, 4.0, -10.0)
+            .spine(20.0, 6.0, -12.0)
+            .chest(10.0, 4.0, -14.0)
+            .head(6.0, 0.0, 22.0)
+            .wrists(-6.0, 0.0, 0.0);
+        air(
+            weapon(body, [-0.06, 0.86, 0.50], [-0.34, -0.80, 0.50]),
+            0.02,
+        )
+    };
+
+    // Past the bottom of the arc, body folded over it.
+    let follow = {
+        let body = Pose::rest()
+            .hips(-0.05, -0.10, 0.02)
+            .root(20.0, 5.0, -18.0)
+            .spine(22.0, 6.0, -16.0)
+            .chest(10.0, 4.0, -18.0)
+            .head(8.0, 0.0, 30.0)
+            .wrists(-8.0, 0.0, 0.0);
+        air(
+            weapon(body, [-0.22, 0.74, 0.30], [-0.56, -0.74, 0.36]),
+            -0.04,
+        )
+    };
+
+    // Back to a guard that can hand over to falling.
+    let recover = {
+        let body = Pose::rest()
+            .hips(0.0, -0.05, 0.0)
+            .root(4.0, 1.0, 8.0)
+            .spine(7.0, 1.0, 7.0)
+            .chest(4.0, 1.0, 10.0)
+            .head(-2.0, 0.0, -18.0)
+            .wrists(-8.0, 0.0, 0.0);
+        air(weapon(body, [0.0, 1.16, 0.26], [-0.16, 0.70, 0.70]), 0.06)
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), Ease::OUT);
+    score.key(tell(windup), cocked, Ease::LINEAR);
+    score.key(contact, cut, Ease::LINEAR);
+    score.key(part(through, last, 0.3), follow, Ease::LINEAR);
+    score.key(last, recover, Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The sword in the air: the same arc, turned ninety degrees. It \
+                shares a button with the grounded sweep, so the one thing it \
+                must never read as is a horizontal cut with the feet off the \
+                floor -- high on one side to low on the other, and the legs \
+                swinging the opposite way to pay for it. Nothing is planted \
+                because there is nothing to plant on; the feet gather on the \
+                wind-up and trail through the cut, which is what airborne \
+                weight looks like. It ends on a guard the falling clips can \
+                take over from rather than on the standing one, which would \
+                snap the legs straight the frame control came back."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Air hammer -- the smash
+// ---------------------------------------------------------------------------
+
+/// Twenty-two frames of winding up, and then everything downward.
+///
+/// This is the longest startup the class has, and it is the move the air game
+/// is built on: it drives an airborne opponent into the floor, and the floor
+/// charges them for the landing. A startup that long is only fair if it is
+/// legible, so the wind-up is one held shape -- both arms straight overhead,
+/// body arched back -- rather than a gradual gather. You should be able to see
+/// it coming and move.
+fn air_hammer() -> Recipe {
+    let clip = Clip::ChampionAirHammer;
+    let (windup, contact, through) = clip.phases().expect("air hammer animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    let air = |body: Pose, tuck: f32| {
+        body.plant_l([-0.15, 0.24 + tuck, 0.08 - tuck * 0.5])
+            .toe_l(12.0)
+            .plant_r([0.15, 0.18 + tuck, -0.14 - tuck * 0.5])
+            .toe_r(12.0)
+    };
+
+    // Gathering: the weapon comes up in front and the knees come with it.
+    let gather = {
+        let body = Pose::rest()
+            .hips(0.0, -0.02, -0.02)
+            .root(-4.0, 0.0, 10.0)
+            .spine(-6.0, 0.0, 8.0)
+            .chest(-2.0, 0.0, 10.0)
+            .head(-14.0, 0.0, -18.0)
+            .wrists(0.0, 0.0, 0.0);
+        air(weapon(body, [0.04, 1.42, 0.16], [0.04, 0.92, 0.39]), 0.12)
+    };
+
+    // The held shape: straight overhead, arched, knees up. One silhouette for
+    // most of the startup, because a telegraph that keeps changing is not one.
+    let wound = {
+        let body = Pose::rest()
+            .hips(0.0, 0.02, -0.06)
+            .root(-16.0, 0.0, 4.0)
+            .spine(-20.0, 0.0, 2.0)
+            .chest(-12.0, 0.0, 4.0)
+            .head(-26.0, 0.0, -6.0)
+            .wrists(10.0, 0.0, 0.0);
+        air(weapon(body, [0.0, 1.78, -0.10], [-0.04, 0.94, -0.34]), 0.26)
+    };
+
+    // The smash. Everything above the head goes below it: arms driven down in
+    // front, legs kicked back behind, body folded hard over the blow. The hit
+    // volume goes well under the fighter and the pose has to go with it.
+    let smash = {
+        let body = Pose::rest()
+            .hips(0.0, -0.12, 0.10)
+            .root(40.0, 0.0, -2.0)
+            .spine(40.0, 0.0, -4.0)
+            .chest(18.0, 0.0, -4.0)
+            .head(14.0, 0.0, 8.0)
+            .wrists(-16.0, 0.0, 0.0);
+        air(weapon(body, [0.02, 0.42, 0.52], [0.02, -0.88, 0.47]), -0.16)
+    };
+
+    // Carried past it, still folded, the legs starting to come back under.
+    let through_pose = {
+        let body = Pose::rest()
+            .hips(0.0, -0.14, 0.06)
+            .root(34.0, 0.0, 0.0)
+            .spine(32.0, 0.0, -2.0)
+            .chest(14.0, 0.0, -2.0)
+            .head(12.0, 0.0, 4.0)
+            .wrists(-12.0, 0.0, 0.0);
+        air(weapon(body, [0.02, 0.52, 0.44], [0.0, -0.62, 0.78]), -0.08)
+    };
+
+    let recover = {
+        let body = Pose::rest()
+            .hips(0.0, -0.05, 0.0)
+            .root(6.0, 0.0, 8.0)
+            .spine(8.0, 0.0, 7.0)
+            .chest(4.0, 0.0, 10.0)
+            .head(-2.0, 0.0, -18.0)
+            .wrists(-8.0, 0.0, 0.0);
+        air(weapon(body, [0.0, 1.14, 0.26], [-0.14, 0.60, 0.79]), 0.06)
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), Ease::OUT);
+    score.key(tell(windup), gather, Ease::SMOOTH);
+    score.key(part(tell(windup), windup, 0.45), wound, Ease::OUT);
+    score.key(contact, smash, Ease::STRIKE);
+    score.key(through, through_pose, Ease::OUT);
+    score.key(part(through, last, 0.6), recover, Ease::SMOOTH);
+    score.key(last, recover, Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::HEAVY,
+        notes: "Twenty-two frames of startup, which is the longest thing the \
+                class has and only fair because it is legible: the wind-up \
+                settles into one held shape -- arms straight overhead, body \
+                arched, knees up -- and stays there, because a telegraph that \
+                keeps changing is not a telegraph. Then everything above the \
+                head goes below it. The smash key drives the weapon under the \
+                fighter's own feet, which is where the hit volume goes, and \
+                kicks the legs back behind to pay for it. This is the move that \
+                puts an airborne opponent into the floor, so the pose has to \
+                look like it is aimed at the floor and not at them."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Air spear -- the fan
+// ---------------------------------------------------------------------------
+
+/// A wide sweep around wherever you are pointing, left to right.
+///
+/// The lightest thing in the set, and the only one thrown with one hand on the
+/// haft near the butt: it is a fan rather than a cut, it catches whatever is in
+/// a wide band around the aim, and connecting kicks the Champion the way they
+/// are holding. So the body reads as *turning* rather than as striking -- the
+/// arms are long, the torso rotates around a still head, and the legs trail
+/// through the turn like a skater's.
+fn air_spear() -> Recipe {
+    let clip = Clip::ChampionAirSpear;
+    let (windup, contact, through) = clip.phases().expect("air spear animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    let air = |body: Pose, trail: f32| {
+        body.plant_l([-0.16 - trail * 0.3, 0.26, 0.06 - trail])
+            .toe_l(16.0)
+            .plant_r([0.16 - trail * 0.2, 0.20, -0.14 - trail * 0.6])
+            .toe_r(12.0)
+    };
+
+    // Wound across to the left, the point already out at arm's length: the fan
+    // starts on that side and travels, so the wind-up has to be on the far end
+    // of the arc from where it finishes.
+    let wound = {
+        let body = Pose::rest()
+            .hips(-0.04, -0.04, 0.02)
+            .root(4.0, 5.0, -20.0)
+            .spine(6.0, 7.0, -16.0)
+            .chest(2.0, 5.0, -18.0)
+            .head(-4.0, 0.0, 26.0)
+            .wrists(-4.0, 0.0, 0.0);
+        air(weapon(body, [-0.18, 1.24, 0.24], [-0.86, 0.10, 0.50]), 0.10)
+    };
+
+    // The middle of the fan, straight out along the aim. The torso has rotated
+    // through square and the head has stayed pointed where the mouse is.
+    let sweep_mid = {
+        let body = Pose::rest()
+            .hips(0.0, -0.06, 0.06)
+            .root(4.0, 0.0, 2.0)
+            .spine(6.0, 0.0, 0.0)
+            .chest(2.0, 0.0, -2.0)
+            .head(-2.0, 0.0, 2.0)
+            .wrists(-2.0, 0.0, 0.0);
+        air(weapon(body, [0.02, 1.22, 0.40], [0.04, 0.02, 1.0]), 0.0)
+    };
+
+    // Finished out to the right, everything wound the other way, the legs
+    // trailing the turn.
+    let finish = {
+        let body = Pose::rest()
+            .hips(0.04, -0.04, 0.02)
+            .root(4.0, -5.0, 22.0)
+            .spine(6.0, -7.0, 18.0)
+            .chest(2.0, -5.0, 20.0)
+            .head(-4.0, 0.0, -26.0)
+            .wrists(-4.0, 0.0, 0.0);
+        air(weapon(body, [0.20, 1.24, 0.22], [0.88, 0.08, 0.47]), -0.10)
+    };
+
+    let recover = {
+        let body = Pose::rest()
+            .hips(0.0, -0.05, 0.0)
+            .root(4.0, 0.0, 8.0)
+            .spine(7.0, 0.0, 7.0)
+            .chest(4.0, 0.0, 10.0)
+            .head(-2.0, 0.0, -18.0)
+            .wrists(-8.0, 0.0, 0.0);
+        air(weapon(body, [0.0, 1.16, 0.26], [-0.14, 0.62, 0.77]), 0.04)
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), Ease::OUT);
+    score.key(tell(windup), wound, Ease::LINEAR);
+    score.key(contact, sweep_mid, Ease::LINEAR);
+    score.key(part(contact, through, 0.9), finish, Ease::LINEAR);
+    score.key(last, recover, Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The fan. It sweeps a wide band around wherever the mouse is \
+                pointing, left to right, and it kicks you the way you are \
+                holding if it catches anybody -- so it has to read as the body \
+                *turning* rather than as a strike: long arms, torso rotating \
+                around a head that stays pointed at the aim, legs trailing \
+                through the turn. The wind-up is on the far side of the arc \
+                from the finish, which is the only way a sweep looks like it \
+                travelled rather than appeared. Light and crisp; it is the \
+                fastest thing the class has in the air and the weakest per hit."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rush slash -- cutting as you run past
+// ---------------------------------------------------------------------------
+
+/// Twenty frames of active, three cuts, and the feet never stop.
+///
+/// The samurai walks through a line of people and they fall over behind him.
+/// Mechanically it is one long active window that re-arms every seven frames,
+/// alternating direction; the animation has to match that exactly or the cuts
+/// land on frames where the body is between them.
+///
+/// Nothing here is planted. The dash drives the fighter at a fixed speed
+/// regardless of what the legs do, so the legs are running -- and the *arms*
+/// carry the whole move, which is the one place in this file where that is the
+/// right answer rather than a failure.
+fn rush_slash() -> Recipe {
+    let clip = Clip::ChampionRushSlash;
+    let (windup, contact, through) = clip.phases().expect("rush slash animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // A stride, parameterised so the same shape can be dropped at each cut with
+    // the legs in the opposite phase.
+    let running = |body: Pose, phase: f32| {
+        body.plant_l([-0.15, 0.10 + 0.20 * phase.max(0.0), 0.34 * phase])
+            .toe_l(18.0 * phase)
+            .plant_r([0.15, 0.10 + 0.20 * (-phase).max(0.0), -0.34 * phase])
+            .toe_r(-18.0 * phase)
+    };
+
+    let carry = {
+        let body = Pose::rest()
+            .hips(0.0, -0.08, 0.08)
+            .root(10.0, 0.0, 12.0)
+            .spine(12.0, 0.0, 10.0)
+            .chest(6.0, 0.0, 12.0)
+            .head(-6.0, 0.0, -20.0)
+            .wrists(-6.0, 0.0, 0.0);
+        running(weapon(body, [0.10, 1.20, 0.22], [0.30, 0.24, 0.92]), 0.6)
+    };
+
+    // Cut one, right to left. The torso leads and the weapon crosses in front
+    // of a body that is still travelling forward.
+    let cut_right = {
+        let body = Pose::rest()
+            .hips(-0.03, -0.10, 0.10)
+            .root(12.0, 4.0, -16.0)
+            .spine(16.0, 6.0, -14.0)
+            .chest(8.0, 4.0, -16.0)
+            .head(0.0, 0.0, 24.0)
+            .wrists(-4.0, 0.0, 0.0);
+        running(
+            weapon(body, [-0.10, 1.06, 0.44], [-0.62, -0.10, 0.78]),
+            -0.5,
+        )
+    };
+
+    // Cut two, back the other way. Same body, mirrored, one stride later.
+    let cut_left = {
+        let body = Pose::rest()
+            .hips(0.03, -0.10, 0.10)
+            .root(12.0, -4.0, 18.0)
+            .spine(16.0, -6.0, 15.0)
+            .chest(8.0, -4.0, 17.0)
+            .head(0.0, 0.0, -24.0)
+            .wrists(-4.0, 0.0, 0.0);
+        running(weapon(body, [0.14, 1.10, 0.42], [0.66, -0.06, 0.75]), 0.5)
+    };
+
+    let away = {
+        let body = Pose::rest()
+            .hips(0.0, -0.07, 0.06)
+            .root(8.0, 0.0, 10.0)
+            .spine(10.0, 0.0, 9.0)
+            .chest(5.0, 0.0, 11.0)
+            .head(-4.0, 0.0, -18.0)
+            .wrists(-6.0, 0.0, 0.0);
+        running(weapon(body, [0.04, 1.18, 0.28], [0.10, 0.34, 0.94]), -0.3)
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), Ease::OUT);
+    score.key(tell(windup), carry, Ease::LINEAR);
+    // One key per re-hit, on the frame the cut re-arms. The interval comes out
+    // of the move table, so retuning it moves the keys rather than leaving the
+    // animation cutting between the hits.
+    let rehit = sim::moves::get(sim::Class::Champion, sim::moves::champion::RUSH_SLASH).rehit;
+    let mut at = contact;
+    let mut left = false;
+    while at < through && rehit > 0 {
+        score.key(at, if left { cut_left } else { cut_right }, Ease::LINEAR);
+        left = !left;
+        at += rehit;
+    }
+    score.key(through, away, Ease::LINEAR);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "The run-through. One long active window that re-arms every few \
+                frames and alternates direction, so the animation drops a cut \
+                key on exactly the frames the move can hit again -- read out of \
+                the move table rather than typed in, or a retune leaves the \
+                body between cuts on the frames that land. Nothing is planted: \
+                the dash drives the fighter at its own speed whatever the legs \
+                do, so the legs are running and the arms carry the whole move. \
+                That is normally a failure and here it is the point -- you are \
+                not stopping to swing, you are swinging because you are going \
+                past."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rush stab -- the dash put into the point
+// ---------------------------------------------------------------------------
+
+/// The one Rush move that stops.
+///
+/// Everything the dash had goes into the point: both feet arrive planted, the
+/// body is braced against its own momentum, and the weapon is out further than
+/// anything else in the game reaches. It is the Champion's biggest single hit
+/// and its longest recovery, and both facts have to be in the pose -- a stab
+/// that finished standing up would be asking why it costs twenty-four frames.
+fn rush_stab() -> Recipe {
+    let clip = Clip::ChampionRushStab;
+    let (windup, contact, through) = clip.phases().expect("rush stab animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Planting: the lead foot goes out hard to stop the dash, the weapon
+    // chambers along the hip. Nine frames, and every one of them is braking.
+    let plant = {
+        let body = Pose::rest()
+            .hips(0.03, -0.18, -0.04)
+            .root(-4.0, -2.0, 22.0)
+            .spine(-2.0, -5.0, 16.0)
+            .chest(0.0, -4.0, 18.0)
+            .head(-4.0, 0.0, -40.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.16, 1.10, -0.10], [-0.12, 0.06, 0.99])
+            .plant_l([-0.17, GROUND, 0.46])
+            .toe_l(-18.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.04])
+            .toe_r(0.0)
+    };
+
+    // Contact: one line from the back heel to the point, further out than the
+    // lunge goes because the dash paid for it.
+    let strike = {
+        let body = Pose::rest()
+            .hips(0.0, -0.26, 0.34)
+            .root(16.0, 0.0, -6.0)
+            .spine(18.0, 2.0, -10.0)
+            .chest(7.0, 2.0, -14.0)
+            .head(-4.0, 0.0, 22.0)
+            .wrists(-2.0, 0.0, 0.0);
+        weapon(body, [0.02, 1.24, 1.10], [-0.02, 0.0, 1.0])
+            .plant_l([-0.17, GROUND, 0.70])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.12, REAR[2] - 0.06])
+            .toe_floor_r()
+    };
+
+    // Bottomed out: the arms have given and the weight has caught up.
+    let spent = {
+        let body = Pose::rest()
+            .hips(-0.03, -0.31, 0.36)
+            .root(20.0, 0.0, -2.0)
+            .spine(20.0, 3.0, -6.0)
+            .chest(9.0, 2.0, -10.0)
+            .head(-8.0, 0.0, 16.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [0.0, 1.12, 1.00], [-0.06, -0.14, 0.99])
+            .plant_l([-0.17, GROUND, 0.70])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.14, REAR[2] - 0.06])
+            .toe_floor_r()
+    };
+
+    // Hauling out of the longest recovery in the kit.
+    let pull = {
+        let body = Pose::rest()
+            .hips(0.02, -0.16, 0.10)
+            .root(7.0, -2.0, 9.0)
+            .spine(9.0, -2.0, 7.0)
+            .chest(4.0, -1.0, 9.0)
+            .head(-2.0, 0.0, -16.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.10, 1.14, 0.18], [-0.16, 0.40, 0.90])
+            .plant_l([-0.155, GROUND + 0.06, 0.32])
+            .toe_l(-10.0)
+            .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
+            .toe_floor_r()
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), CARRY);
+    score.key(part(tell(windup), windup, 0.5), plant, Ease::OUT);
+    score.key(contact, strike, Ease::STRIKE);
+    score.key(through, spent, CARRY);
+    score.key(part(through, last, 0.45), pull, CARRY);
+    score.key(last, ready(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "The dash stopped dead and put into the point. Nine frames of \
+                startup and all of them are braking: the lead foot goes out \
+                hard, the weapon chambers along the hip, and then everything \
+                the Rush was carrying arrives at the end of the haft. It \
+                reaches further than the standing lunge because the run paid \
+                for it, and it costs the longest recovery in the kit, so the \
+                spent key is the arms genuinely giving rather than a shorter \
+                version of contact. Martial looseness: this is a technique, not \
+                a swing."
+            .into(),
+        keys: score.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pole vault -- the spear in the floor
+// ---------------------------------------------------------------------------
+
+/// No strike in it at all.
+///
+/// The only clip in the set with no hit volume behind it, and the animation is
+/// the entire explanation of the move: you are travelling, you put the butt of
+/// the spear into the ground in front of you, and the run becomes height. If it
+/// does not read as *planting*, the fighter looks like they jumped for no
+/// reason.
+///
+/// Both hands stay on the haft and the haft stays pointed at the spot on the
+/// floor, which is what the grip solver is for -- the hands climb the shaft as
+/// the body comes up over it.
+fn vault() -> Recipe {
+    let clip = Clip::ChampionVault;
+    let (windup, contact, through) = clip.phases().expect("vault animates a move");
+    let last = clip.length().saturating_sub(1);
+
+    // Reaching down and forward with the point, still running. The read is the
+    // spear going *down*, which nothing else in the kit does.
+    let reach = {
+        let body = Pose::rest()
+            .hips(0.0, -0.14, 0.12)
+            .root(20.0, 0.0, 8.0)
+            .spine(22.0, 0.0, 6.0)
+            .chest(10.0, 0.0, 8.0)
+            .head(-6.0, 0.0, -14.0)
+            .wrists(-10.0, 0.0, 0.0);
+        weapon(body, [0.06, 1.00, 0.46], [0.04, -0.72, 0.69])
+            .plant_l([-0.15, GROUND + 0.14, 0.26])
+            .toe_l(16.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
+            .toe_r(0.0)
+    };
+
+    // The plant. The point is in the floor ahead, the arms are straight, and
+    // the whole body is about to swing around that fixed point.
+    let planted = {
+        let body = Pose::rest()
+            .hips(0.0, -0.20, 0.20)
+            .root(26.0, 0.0, 2.0)
+            .spine(26.0, 0.0, 0.0)
+            .chest(12.0, 0.0, 2.0)
+            .head(-10.0, 0.0, -4.0)
+            .wrists(-14.0, 0.0, 0.0);
+        weapon(body, [0.04, 0.88, 0.60], [0.02, -0.80, 0.60])
+            .plant_l([-0.15, GROUND, 0.40])
+            .toe_l(-6.0)
+            .plant_r([REAR[0], REAR[1] + 0.10, REAR[2]])
+            .toe_floor_r()
+    };
+
+    // Over the top: the body swung up around the planted point, knees up,
+    // hands climbing the haft. This is the frame the lift lands on.
+    let over = {
+        let body = Pose::rest()
+            .hips(0.0, 0.04, 0.06)
+            .root(-10.0, 0.0, -4.0)
+            .spine(-14.0, 0.0, -4.0)
+            .chest(-8.0, 0.0, -4.0)
+            .head(-20.0, 0.0, 4.0)
+            .wrists(4.0, 0.0, 0.0);
+        weapon(body, [0.02, 1.30, 0.34], [0.0, -0.64, 0.77])
+            .plant_l([-0.15, 0.42, 0.16])
+            .toe_l(26.0)
+            .plant_r([0.15, 0.34, -0.10])
+            .toe_r(22.0)
+    };
+
+    // Off it, and airborne: the spear comes back up in front and the legs
+    // gather. From here the falling clips take over.
+    let airborne = {
+        let body = Pose::rest()
+            .hips(0.0, -0.02, 0.0)
+            .root(-2.0, 0.0, 4.0)
+            .spine(0.0, 0.0, 5.0)
+            .chest(0.0, 0.0, 8.0)
+            .head(-8.0, 0.0, -12.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [0.02, 1.28, 0.22], [-0.08, 0.74, 0.67])
+            .plant_l([-0.15, 0.36, 0.10])
+            .toe_l(16.0)
+            .plant_r([0.15, 0.28, -0.14])
+            .toe_r(14.0)
+    };
+
+    let mut score = Score::new();
+    score.key(0, ready(), CARRY);
+    score.key(tell(windup), reach, Ease::LINEAR);
+    score.key(contact, planted, Ease::OUT);
+    score.key(part(contact, through, 0.8), over, Ease::IN);
+    score.key(last, airborne, Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "The only clip in the set with nothing to hit. The animation is \
+                the whole explanation of the move -- you are travelling, the \
+                butt of the spear goes into the ground in front of you, and the \
+                run becomes height -- so if it does not read as planting, the \
+                fighter looks like they jumped for no reason. Both hands stay \
+                on the haft and the haft stays pointed at the spot on the \
+                floor; the hands climb it as the body swings up over the fixed \
+                point, which is what the grip solver exists for. It ends \
+                airborne and gathered, because the move does: the lift is \
+                bigger than a jump and the falling clips take it from there."
             .into(),
         keys: score.0,
     }

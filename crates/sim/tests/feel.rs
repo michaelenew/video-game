@@ -11,16 +11,23 @@
 //! Record what you tried in the feel log, including the things you reverted.
 
 use sim::class::ALL_CLASSES;
-use sim::fixed::Fx;
 use sim::moves::{self, Move};
 use sim::state::{SLOT_COMMITTED, SLOT_POKE};
 use sim::tuning as t;
 
 fn every_move() -> impl Iterator<Item = (&'static str, Move)> {
     // By value: move data is live now, so there is no `'static` table to borrow.
-    ALL_CLASSES
-        .iter()
-        .flat_map(|c| moves::table(*c).into_iter().map(move |m| (c.name(), m)))
+    //
+    // Moves with no hit volume are left out. There is one -- the Champion's
+    // pole vault -- and it is not an attack that happens to miss, it is a way
+    // into the air on the attack grammar's button. Every assertion below is
+    // about what connecting with somebody is worth, and it never connects.
+    ALL_CLASSES.iter().flat_map(|c| {
+        moves::table(*c)
+            .into_iter()
+            .filter(|m| m.strikes())
+            .map(move |m| (c.name(), m))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -71,18 +78,45 @@ fn landing_a_hit_keeps_the_initiative_or_resets_neutral() {
     // On hit you should be no worse off than the defender, or hitting someone
     // would be a mistake.
     //
-    // Except for a move that hands out no stun at all, which is not buying the
-    // initiative and cannot be measured as though it were. The Elementalist's
-    // auto is the one of those: a beam that takes whatever the opponent was
-    // charging and gives them their frames straight back. What keeps that
-    // honest is the test below, not this one.
-    for (class, m) in every_move().filter(|(_, m)| m.hitstun > 0) {
+    // Two exemptions, both real rather than convenient.
+    //
+    // A move that hands out **no stun at all** is not buying the initiative and
+    // cannot be measured as though it were. The Elementalist's auto is the one
+    // of those: a beam that takes whatever the opponent was charging and gives
+    // them their frames straight back. What keeps that honest is the first test
+    // below, not this one.
+    //
+    // A move that **re-hits** breaks the arithmetic itself. `on_hit` is hitstun
+    // minus the frames you are still busy for, and it assumes the exchange is
+    // over once you connect. The Champion's Rush slash is still swinging when
+    // the next cut lands, so what it costs is the whole active window and what
+    // it pays is every cut inside it. The second test below is its guard.
+    for (class, m) in every_move().filter(|(_, m)| m.hitstun > 0 && m.rehit == 0) {
         assert!(
             m.on_hit() >= 0,
             "{class} {}: {:+} on hit — connecting leaves you at a disadvantage",
             m.name,
             m.on_hit()
         );
+    }
+}
+
+#[test]
+fn a_move_that_keeps_hitting_lands_more_than_once_inside_its_own_swing() {
+    // The guard on the second exemption. A re-hit interval longer than the
+    // active window would be a normal move with a misleading field on it, and
+    // the exemption above would be hiding a move that is simply minus on hit.
+    for class in ALL_CLASSES {
+        for m in moves::table(class).iter().filter(|m| m.rehit > 0) {
+            assert!(
+                m.active > m.rehit,
+                "{}: {} re-hits every {} frames and is only active for {}",
+                class.name(),
+                m.name,
+                m.rehit,
+                m.active
+            );
+        }
     }
 }
 
@@ -254,138 +288,44 @@ fn the_dodge_outruns_a_walk() {
 }
 
 #[test]
-fn every_class_has_the_three_shared_slots() {
-    // Not a design law, just a guard against a half-finished class shipping
-    // unnoticed. The three shared slots -- poke, committed, special -- mean the
-    // same thing on every class, which is what lets one control scheme drive
-    // six kits, so every class has to fill all three.
+fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
+    // Not a design law, just a guard against a class shipping with a gap in it
+    // -- or with a table somebody appended to by accident.
     //
-    // The fourth is `E`, and it is **not** shared: it is the class mechanic,
-    // which is an instant state change on most of the roster and an ability
-    // only on the Blood mage. A class having one is a decision about that
-    // class, not a gap in it.
-    use sim::state::{SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
+    // The three shared slots -- poke, committed, special -- mean the same thing
+    // on every class, which is what lets one control scheme drive six kits, so
+    // every class has to fill all three. What a class has **past** them is a
+    // decision about that class: the Blood mage's fourth is on `E`, because her
+    // mechanic is health and there is nothing to toggle, and the Champion's ten
+    // are three weapons by three stances plus the vault.
+    use sim::Class;
+    use sim::state::{SLOT_COMMITTED, SLOT_POKE, SLOT_SPECIAL};
     for class in ALL_CLASSES {
         for slot in [SLOT_POKE, SLOT_COMMITTED, SLOT_SPECIAL] {
             assert!(
                 moves::bound(class, slot as usize),
                 "{} has nothing on {}",
                 class.name(),
-                moves::binding(slot as usize)
+                moves::binding(class, slot as usize)
             );
         }
+        let n = moves::table(class).len();
+        let expected = match class {
+            Class::Champion => 10,
+            Class::BloodMage => 4,
+            _ => 3,
+        };
+        assert_eq!(
+            n,
+            expected,
+            "{} has {n} moves and should have {expected}",
+            class.name()
+        );
     }
     assert!(
-        ALL_CLASSES
-            .iter()
-            .any(|c| moves::bound(*c, SLOT_MECHANIC as usize)),
-        "nothing binds the mechanic slot, so the fourth column is dead weight"
+        ALL_CLASSES.iter().any(|c| moves::on_e(*c).is_some()),
+        "nothing binds an ability to the mechanic key, so the slot is dead weight"
     );
-}
-
-/// The most damage one cast of a move can do to one target.
-///
-/// Every ability the Blood mage has is a *several* rather than a one: the blade
-/// cuts on the way out and again on the way back, the Grasp is four arms, and
-/// the spike is a field that ticks for as long as somebody is standing in it.
-/// A cost weighed against a single connection would say all four are a losing
-/// trade, and the class would be unplayable by its own numbers.
-fn best_case(m: &Move) -> i32 {
-    use sim::effects::{EffectKind, GRASP_ARMS};
-    match EffectKind::from_code(m.effect) {
-        Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
-        Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
-        // A field, for as long as it stands. The move's own hit lands too.
-        Some(kind @ (EffectKind::BlackSpike | EffectKind::FirePillar)) => {
-            let ticks = kind.life() / t::effect_tick_frames().max(1);
-            m.damage + kind.damage(m) * ticks as i32
-        }
-        None => m.damage,
-    }
-}
-
-#[test]
-fn a_root_outlives_the_hitstun_that_delivers_it() {
-    // A root is only visible in the frames after you can act again. Deliver it
-    // with a move whose hitstun is longer and it is a no-op that reads, in the
-    // hand, as the ability simply not working.
-    use sim::state::SLOT_SPECIAL;
-    let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
-    assert!(
-        t::grasp_root() > grasp.hitstun,
-        "the Grasp roots for {} frames and stuns for {}, so the root is invisible",
-        t::grasp_root(),
-        grasp.hitstun
-    );
-}
-
-#[test]
-fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
-    // Both ends. Below about a fifth extra it is a number nobody notices and
-    // the Grasp goes back to being a root with no payoff; far above it and
-    // landing one disable is the match, which is the opposite of a game built
-    // on reads and whiff punishment.
-    let mul = t::disabled_damage_mul();
-    assert!(
-        mul.raw() > Fx::ratio(6, 5).raw(),
-        "the bonus is {}x, which nobody will feel",
-        mul.to_f32_for_render()
-    );
-    assert!(
-        mul.raw() < Fx::from_int(2).raw(),
-        "the bonus is {}x, so one read ends the round",
-        mul.to_f32_for_render()
-    );
-
-    // And the disable it is built around has to outlast the wind-up of
-    // something worth spending it on, or there is nothing to follow up with.
-    let root = t::grasp_root();
-    let fastest = moves::table(sim::class::Class::BloodMage)
-        .iter()
-        .map(|m| m.startup)
-        .min()
-        .expect("the class has moves");
-    assert!(
-        root > fastest,
-        "the root lasts {root} frames and her fastest move takes {fastest} to \
-         come out, so nothing can be landed inside it"
-    );
-}
-
-#[test]
-fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
-    // The class is its economy: health out on the press, health back on the
-    // hit. Both halves on every one of her abilities, and on nobody else's --
-    // a second class quietly acquiring a health cost would mean the mechanic
-    // had stopped being an identity and become a tax.
-    for class in ALL_CLASSES {
-        let blood = class == sim::class::Class::BloodMage;
-        for m in moves::table(class) {
-            assert_eq!(
-                m.cost > 0,
-                blood,
-                "{} {}: health cost {} does not match the class mechanic",
-                class.name(),
-                m.name,
-                m.cost
-            );
-            if blood {
-                assert!(
-                    m.leech > 0,
-                    "{}: costs health and gives none of it back, so it is pure downside",
-                    m.name
-                );
-                let best = m.leeched(best_case(&m));
-                assert!(
-                    best > m.cost,
-                    "{}: thrown perfectly it returns {best} and cost {}, so playing well \
-                     still loses you the fight",
-                    m.name,
-                    m.cost
-                );
-            }
-        }
-    }
 }
 
 #[test]

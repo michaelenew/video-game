@@ -238,6 +238,28 @@ pub struct Player {
     /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
     /// so the victim can be kept at arm's length rather than merely stunned.
     pub held_by: u8,
+    /// Was the jump button down last frame? The press edge, kept in the
+    /// snapshot for the same reason `mechanic_held` is: rollback re-runs these
+    /// frames, so an edge remembered outside the snapshot is an edge that
+    /// disappears the first time a frame is replayed.
+    ///
+    /// The ordinary jump does not need it -- it is level-triggered, and
+    /// deliberately, so that holding space hops the moment you land. The
+    /// uppercut's extra leap does: it is worth height, and a held button that
+    /// spent it every frame would make the leap automatic rather than timed.
+    pub space_held: bool,
+    /// The uppercut's extra leap has been spent this carry. Cleared when an
+    /// uppercut starts and whenever the feet are back on the floor.
+    pub leap_used: bool,
+    /// Downward speed banked by a spike, cashed in when this fighter lands.
+    ///
+    /// The Champion's aerial hammer drives an airborne target into the ground,
+    /// and the ground is meant to be the larger half of that: the hit does its
+    /// damage, and then the landing does more. Carried as the speed rather
+    /// than as a flag so the cost scales with how far they had to fall --
+    /// bounded above by terminal velocity, which is what makes the worst case
+    /// knowable.
+    pub slam: Fx,
 
     // -- Animation clocks ---------------------------------------------------
     //
@@ -485,6 +507,9 @@ impl Default for Player {
             rooted: 0,
             mechanic_held: false,
             held_by: NOBODY,
+            space_held: false,
+            leap_used: false,
+            slam: Fx::ZERO,
             stride: 0,
             air_frames: 0,
             since_landed: 0,
@@ -656,6 +681,13 @@ impl World {
         let beast = self.monster;
         let seen = self.players;
         let effects = self.effects;
+        // Who has hold of somebody, worked out before anybody moves. The
+        // uppercut's leap needs it and a fighter cannot see the other one from
+        // inside `step_player`, which only ever gets its own body.
+        let carrying: [bool; MAX_PLAYERS] = std::array::from_fn(|i| {
+            seen.iter()
+                .any(|v| matches!(v.action, Action::Held { .. }) && v.held_by == i as u8)
+        });
         for (i, (p, input)) in self.players.iter_mut().zip(inputs).enumerate() {
             if p.aboard() {
                 p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
@@ -666,7 +698,7 @@ impl World {
                 effects: &effects,
                 quarry: beast.as_ref(),
             };
-            step_player(p, i, input, &field, beast.as_ref(), &scene);
+            step_player(p, i, input, &field, beast.as_ref(), &scene, carrying[i]);
             advance_clocks(p);
         }
 
@@ -746,6 +778,13 @@ impl World {
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
                 self.players[attacker].hit_used = true;
+                // The aerial spear pays its shove out on contact rather than
+                // on the throw: catch somebody with the fan and it kicks you
+                // the way you are holding, so it is a repositioning tool you
+                // have to earn. Read from the live input rather than from a
+                // direction locked at the throw, because the whole point is
+                // that you choose where to go *as* it connects.
+                champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
@@ -903,6 +942,9 @@ impl World {
             h.write_i32(p.slow_mul.raw());
             h.write_u32(p.rooted as u32);
             h.write_u32(p.mechanic_held as u32);
+            h.write_u32(p.space_held as u32);
+            h.write_u32(p.leap_used as u32);
+            h.write_i32(p.slam.raw());
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
@@ -1010,21 +1052,29 @@ pub(crate) struct Hit {
 /// illustrates is worse than no overlay: it is confidently wrong at exactly the
 /// moment you are trying to work out why something did not connect.
 ///
-/// A **capsule between two points**, because one of the six attacks in the game
-/// is a line and the other seventeen are bubbles, and a bubble is the case where
-/// both ends are the same point. Keeping one shape rather than two is what lets
-/// the overlay, the creature's hit test and the web tool all stay honest about
-/// the Elementalist's beam without each growing a special case.
+/// A **capsule between two points**, because most of what the game throws is a
+/// line -- the Elementalist's beam, and every one of the Champion's weapons --
+/// and a bubble is the case where both ends are the same point. Keeping one
+/// shape rather than two is what lets the overlay, the creature's hit test and
+/// the web tool all stay honest about every kind of attack without each growing
+/// a special case.
+///
+/// `flat` says which rule tests it. A disc at arm's length -- what every move
+/// in the game used to be, and what everything outside the Champion's list
+/// still is -- is measured in the horizontal plane only, with no top and no
+/// bottom. See `moves::Shape`.
 #[derive(Clone, Copy, Debug)]
 pub struct Hitbox {
-    /// Where the volume starts. The attacker's own height for a swing; the
-    /// point abilities come out of for a beam.
+    /// Where the volume starts: the hand end of a weapon, and the point
+    /// abilities come out of for a beam.
     pub from: V3,
-    /// Where it ends. Equal to `from` for anything that is not a beam.
+    /// Where it ends. Equal to `from` for a disc.
     pub to: V3,
-    /// The attack's radius. A defender is hit when their body circle overlaps
-    /// this one, so the test threshold is this plus `BODY_RADIUS`.
+    /// The attack's radius. A defender is hit when their body overlaps it, so
+    /// the test threshold is this plus `BODY_RADIUS`.
     pub radius: Fx,
+    /// The old rule: measure flat, and ignore height entirely.
+    pub flat: bool,
     /// False means an overhead: it passes over a crouching defender.
     pub hits_crouching: bool,
     pub unblockable: bool,
@@ -1034,7 +1084,8 @@ pub struct Hitbox {
 }
 
 impl Hitbox {
-    /// The middle of the volume. The same point as `from` for a swing.
+    /// The middle of the volume. What a single-point overlay wants to draw at,
+    /// what the browser build reports, and the same point as `from` for a disc.
     pub fn centre(&self) -> V3 {
         self.from
             .add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))
@@ -1046,60 +1097,133 @@ impl Hitbox {
     }
 }
 
-/// The attack volume out this frame, if any. `None` outside active frames.
+/// The attack volume out this frame, if any. `None` outside active frames, and
+/// `None` for a move that has no volume at all -- the pole vault is movement,
+/// not an attack.
 pub fn hitbox(p: &Player) -> Option<Hitbox> {
-    let Action::Active { kind, .. } = p.action else {
+    let Action::Active { kind, left } = p.action else {
         return None;
     };
     let m = moves::get(p.class, kind);
-    // A move with no radius has no volume of its own. It is a gesture that puts
-    // something into the world, and the thing it put there does all the
-    // hitting -- the Blood mage's thrown blade and her Grasp are both that
-    // shape. Answering `None` here is what keeps the caster's own body from
-    // quietly poking people at point blank while the ability is elsewhere.
+    // Two ways to have no volume, and both answer `None` here.
+    //
+    // A move with no radius is a gesture that puts something into the world,
+    // and the thing it put there does all the hitting -- the Blood mage's
+    // thrown blade and her Grasp are both that shape. Answering `None` keeps
+    // the caster's own body from quietly poking people at point blank while
+    // the ability is elsewhere. A move with no *shape* puts nothing anywhere:
+    // the Champion's pole vault is movement.
     if !m.strikes() {
         return None;
     }
-    let (from, to) = match m.aim() {
+    // Which of the three ways this move is pointed decides where its volume
+    // is. Two of them are skillshots and were solved when the move started;
+    // the third is a body moving, and that is where the Champion's weapons
+    // live -- see `moves::Shape`.
+    let disc = |at: V3| Hitbox {
+        from: at,
+        to: at,
+        radius: m.radius,
+        flat: true,
+        hits_crouching: m.hits_crouching,
+        unblockable: m.unblockable,
+        spent: p.hit_used,
+    };
+    let (from, to, flat) = match m.aim() {
         // A line from her hand to the point the crosshair was on, ending
         // wherever the shot actually stopped.
         aim::Kind::Skillshot => {
             let beam = beam_of(p);
-            (beam.from, beam.at(p.beam_reach))
+            (beam.from, beam.at(p.beam_reach), false)
         }
         // Where the thing was planted. The burst that comes with it has to be
         // there too, or the ability is two abilities pointing different ways.
-        aim::Kind::Grounded => (p.aim_at(), p.aim_at()),
-        // Out along the body at the angle the swing was committed to: live
-        // origin, locked direction, because a move that can be thrown on the
-        // move has to travel with the body. The Champion's form multiplies
-        // reach rather than each form having its own table, and applying it
-        // here, once, is why the overlay cannot disagree with the hit test
-        // about where a spear reaches.
-        aim::Kind::Swing => {
-            let reach_mul = match p.mechanic {
-                Mechanic::Forms { form, .. } => form.modifiers().0,
-                _ => Fx::ONE,
-            };
-            let at = p.pos.add(p.aim_path.dir().scale(m.reach.mul(reach_mul)));
-            (at, at)
-        }
+        aim::Kind::Grounded => return Some(disc(p.aim_at())),
+        // Not aimed at a point -- a body moving. Live rather than locked,
+        // because a move that can be thrown on the move has to travel with the
+        // body.
+        aim::Kind::Swing => match m.shape {
+            moves::Shape::None => return None,
+            // The original: a disc at arm's length, along the line the
+            // swing came out on -- the facing's yaw, the camera's pitch.
+            moves::Shape::Cylinder => return Some(disc(p.pos.add(p.aim_dir().scale(m.reach)))),
+            moves::Shape::Swing(plane) => {
+                // The hand stays near the body and the head of the weapon
+                // travels the long arc -- which is how a real swing works, and
+                // why the volume is a line from the body rather than a ball at
+                // the end of one. A fighter standing inside the arc is caught
+                // by the haft.
+                let hub = moves::swing_hub(p.pos, plane);
+                let base = moves::swing_base(p.facing, p.aim_dir(), plane, p.grounded);
+                let half = m.arc.mul(Fx::ratio(1, 2));
+                // Where the head of the weapon is, as a fraction of the way
+                // through this swing. A move that re-hits swings once per
+                // interval and alternates, which is what makes Rush slash read
+                // as a figure of eight cut through a crowd rather than one long
+                // smear.
+                let (through, back) = swing_progress(&m, left);
+                let angle = if back {
+                    half.neg().add(m.arc.mul(through))
+                } else {
+                    half.sub(m.arc.mul(through))
+                };
+                (
+                    hub,
+                    hub.add(moves::turned(base, angle, plane).scale(m.reach)),
+                    false,
+                )
+            }
+            moves::Shape::Thrust => {
+                // The point is already out by the time the move is active; the
+                // active frames are the last of the extension. Along the line
+                // the swing was committed to rather than along the flattened
+                // facing: a spear levelled at somebody below you is the whole
+                // reason pitch is on the wire.
+                let hub = aim::origin(p.pos);
+                let (through, _) = swing_progress(&m, left);
+                let start = t::thrust_extend();
+                let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
+                (hub, hub.add(p.aim_dir().scale(out)), false)
+            }
+        },
         // At the mechanic, and *live*: the shadow can be moved while the blades
         // are out, which is the Reaver's own recall, and the volume has to go
         // with it.
-        aim::Kind::AtTheMechanic => {
-            let at = p.mechanic.placed().unwrap_or(p.pos);
-            (at, at)
-        }
+        aim::Kind::AtTheMechanic => return Some(disc(p.mechanic.placed().unwrap_or(p.pos))),
     };
     Some(Hitbox {
         from,
         to,
         radius: m.radius,
+        flat,
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
     })
+}
+
+/// How far through its swing a move is, and whether this swing is the return
+/// stroke.
+///
+/// `left` is the active frames remaining, counting down, so the first active
+/// frame is the start of the arc. A move that re-hits restarts the fraction
+/// every interval and flips direction each time -- otherwise a twenty-frame
+/// active window would draw one slow smear rather than three cuts.
+fn swing_progress(m: &moves::Move, left: u16) -> (Fx, bool) {
+    let elapsed = m.active.saturating_sub(left);
+    let (span, index) = if m.rehit > 0 {
+        (m.rehit, elapsed / m.rehit)
+    } else {
+        (m.active, 0)
+    };
+    let within = if m.rehit > 0 {
+        elapsed % m.rehit
+    } else {
+        elapsed
+    };
+    let last = span.saturating_sub(1).max(1);
+    let through = Fx::ratio(within.min(last) as i32, last as i32);
+    (through, index % 2 == 1)
 }
 
 /// The line a skillshot travels this frame.
@@ -1155,25 +1279,58 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         return None;
     }
 
-    let damage_mul = match attacker.mechanic {
-        Mechanic::Forms { form, .. } => form.modifiers().1,
-        _ => Fx::ONE,
-    }
-    .mul(preying(attacker.class, defender.disabled()));
+    let damage_mul = preying(attacker.class, defender.disabled());
 
-    let delta = defender.pos.sub(box_out.centre());
-    if delta.flat_len().raw() > box_out.radius.add(t::body_radius()).raw() {
+    let reach = box_out.radius.add(t::body_radius());
+    let hit_at_all = if box_out.flat {
+        // The original rule, kept for every move that has not been given a
+        // shape: flat distance from the middle of the disc, with no top and no
+        // bottom. You cannot duck under one of these or jump over it.
+        let delta = defender.pos.sub(box_out.centre());
+        delta.flat_len().raw() <= reach.raw()
+    } else {
+        // A capsule against a standing body. Height genuinely decides this
+        // one, which is the whole point of the Champion's air game: a hammer
+        // aimed at the floor reaches a fighter beneath you and not one beside
+        // you, and a fan thrown level goes over the head of anybody crouched.
+        let spine = V3::new(
+            defender.pos.x,
+            defender.pos.y.add(defender.hurt_height()),
+            defender.pos.z,
+        );
+        crate::math::segment_gap(box_out.from, box_out.to, defender.pos, spine).raw() <= reach.raw()
+    };
+    if !hit_at_all {
         return None;
     }
 
     let (guarding, parried) = guard_against(defender, attacker.pos, m.unblockable);
 
+    // A fighter already off the ground has nothing to brace against, so the
+    // same swing carries them much further -- and a launch aimed *downward*
+    // only means anything to someone who has room to fall. That pair is the
+    // Champion's air game stated as two lines: knock them up, follow them up,
+    // and the next hit is worth double.
+    let airborne = !defender.grounded;
+    let air_mul = if airborne && !m.shape.flat() {
+        t::air_hit_knockback()
+    } else {
+        Fx::ONE
+    };
+    // A spike is wasted on somebody standing on the floor: they are already
+    // there. It reads as an ordinary heavy hit instead.
+    let launch = if m.launch.raw() < 0 && !airborne {
+        Fx::ZERO
+    } else {
+        m.launch
+    };
+
     Some(Hit {
         damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
-        knockback: m.knockback,
-        launch: m.launch,
+        knockback: m.knockback.mul(air_mul),
+        launch,
         grabs: m.grabs,
         by,
         dir: attacker.facing,
@@ -1236,12 +1393,30 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
         }
+        // Anything that is not itself a spike clears one that was banked: being
+        // caught on the way down and thrown somewhere else is not the landing
+        // the spike was charging for.
+        defender.slam = Fx::ZERO;
         if hit.launch.raw() > 0 {
             // Taken off the ground. Launch *sets* vertical speed rather than
             // adding to it, so being hit on the way down does not cancel out.
             defender.vel.y = hit.launch;
             defender.grounded = false;
+        } else if hit.launch.raw() < 0 {
+            // Spiked. The same rule pointed the other way, and the speed is
+            // banked so that the landing can charge for it -- see
+            // `Player::slam`. Terminal velocity is what the ground actually
+            // sees, so banking the intent rather than the arrival would
+            // overstate it.
+            defender.vel.y = hit.launch;
+            defender.grounded = false;
+            defender.slam = hit.launch.abs();
         }
+    }
+    // Whatever else it did, it broke the dash. A Rush you could be hit out of
+    // and keep is a Rush with invulnerability attached.
+    if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
+        *rush = 0;
     }
 }
 
@@ -1325,6 +1500,7 @@ fn step_player(
     field: &Field,
     beast: Option<&Monster>,
     scene: &Scene,
+    carrying: bool,
 ) {
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
@@ -1371,6 +1547,13 @@ fn step_player(
     // edge has to be recomputed from the snapshot, not remembered outside it.
     let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
     p.mechanic_held = input.has(Input::MECHANIC);
+    // The jump button's press edge, for the one thing that needs one. The
+    // ordinary jump stays level-triggered -- holding space through a landing
+    // should hop again -- but the uppercut's extra leap is worth height, and a
+    // held button would spend it on the first frame it was available rather
+    // than on the frame the player chose.
+    let pressed_space = input.has(Input::SPACE) && !p.space_held;
+    p.space_held = input.has(Input::SPACE);
 
     let look = V3::from_turns(p.aim(input));
     if p.action.actionable() || p.action.stunned() {
@@ -1391,28 +1574,53 @@ fn step_player(
     // only while you are otherwise free to move.
     p.crouching = input.has(Input::CROUCH) && p.grounded && p.action.actionable();
 
+    // **Rush is the universal cancel.** Spent from a recovery it ends the
+    // recovery, which is the Champion's whole answer to having committed to the
+    // wrong move -- and, more often, what turns two moves into a combo. One
+    // charge means that is always a decision. See `docs/design/champion.md`.
+    if pressed_mechanic && matches!(p.action, Action::Recovery { .. }) && start_rush(p, input) {
+        p.action = Action::Free;
+    }
+
     p.action = match countdown(p, want_guard) {
         Some(next) => next,
         None => {
             // Clicks are checked before the dodge, which is what disambiguates
             // shift. Shift with a click is the stronger version of that attack;
             // shift with only a direction is a dodge. See controls.md.
-            if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
+            //
+            // The Champion has no special: its identity is the three weapons on
+            // the three clicks, and `Q` is free.
+            if input.has(Input::SPECIAL)
+                && p.class != Class::Champion
+                && p.mechanic_ready(SLOT_SPECIAL)
+            {
                 begin_move(p, who, SLOT_SPECIAL, input, scene, true)
             } else if pressed_mechanic {
                 // `E` is the class mechanic, and on most classes that is an
-                // instant change of state with no frames to it. Where the class
-                // binds an ability to the slot instead -- the Blood mage, whose
+                // instant change of state with no frames to it -- throw the
+                // shield, Rush, place the shadow, raise a structure. Where the
+                // class puts an ability there instead -- the Blood mage, whose
                 // mechanic is health and so has nothing to toggle -- it is
                 // thrown like any other move, with a startup you can be
                 // punished during and a cost you pay on the press.
-                if moves::bound(p.class, SLOT_MECHANIC as usize) && p.mechanic_ready(SLOT_MECHANIC)
-                {
-                    begin_move(p, who, SLOT_MECHANIC, input, scene, true)
-                } else {
-                    mechanic_action(p, who, input, scene);
-                    Action::Free
+                match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    Some(slot) => begin_move(p, who, slot, input, scene, true),
+                    None => {
+                        mechanic_action(p, who, input, scene);
+                        Action::Free
+                    }
                 }
+            }
+            // The Champion's three mouse buttons are three weapons, and where
+            // its feet are decides which of that weapon's moves comes out --
+            // see `moves::champion`. After the mechanic, so that Rush can be
+            // started while a click is held down, and before the plain-click
+            // branch, because right click means spear here and guard
+            // everywhere else.
+            else if let Some(kind) = champion_move(p, input) {
+                begin_champion(p, kind);
+                begin_move(p, who, kind, input, scene, true)
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
                     SLOT_COMMITTED
@@ -1462,6 +1670,8 @@ fn step_player(
         }
     };
 
+    rearm_multihit(p);
+
     // Horizontal movement.
     //
     // How much a move hinders you is proportional to how much it commits you.
@@ -1486,6 +1696,16 @@ fn step_player(
         // mid-jump is not immediately steered out of.
         p.vel.x = p.vel.x.mul(t::stun_decay());
         p.vel.z = p.vel.z.mul(t::stun_decay());
+    } else if let Some(drive) = rushing(p) {
+        // A dash holds its line. Facing follows the mouse whenever you are
+        // free to act, so a Rush steered by where you happen to be looking
+        // would be a turn rather than a dash -- and the Rush moves are aimed
+        // *across* the line you are running, which only means anything if the
+        // line stays put. The attack thrown out of it does not slow it: that
+        // is what "cast while rushing" has to mean for the sword's run-through
+        // to be the move it is meant to be.
+        p.vel.x = drive.x;
+        p.vel.z = drive.z;
     } else if !p.grounded {
         // In the air, input *accelerates* rather than assigns. Momentum is
         // conserved when you let go, which is the whole difference between a
@@ -1547,6 +1767,15 @@ fn step_player(
         p.jump_hold = t::jump_hold_frames();
     }
 
+    // The second half of the uppercut. You are both off the ground and you
+    // have hold of them; pressing jump again takes the pair of you higher,
+    // once. This is the "we are settling this in the air" button, and it is the
+    // only thing space does while airborne.
+    if pressed_space && carrying && !p.leap_used && !p.grounded {
+        p.vel.y = p.vel.y.add(t::uppercut_leap());
+        p.leap_used = true;
+    }
+
     if !p.grounded {
         if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
@@ -1591,6 +1820,9 @@ fn step_player(
 
     p.pos = p.pos.add(p.vel.scale(DT));
 
+    // How fast this fighter was going when the floor arrived. Read before the
+    // resolve, which is what stops it.
+    let impact = p.vel.y;
     let was_grounded = p.grounded;
     let r = arena::resolve(p.pos, p.vel, was_grounded);
     let r = stones::resolve_body(field, r.pos, r.vel, r.grounded, was_grounded);
@@ -1601,10 +1833,241 @@ fn step_player(
         meet_the_creature(p, beast);
     }
     if p.grounded {
+        // Driven into the floor. The hit that spiked them did its damage in
+        // the air; this is the ground collecting the rest, and it is most of
+        // why knocking someone down is worth more than knocking them away.
+        if p.slam.raw() > 0 && !was_grounded {
+            let cost = Fx::from_int(t::slam_damage()).mul(impact.abs()).to_int();
+            p.health = (p.health - cost).max(0);
+            p.stun_total = t::slam_stagger();
+            p.action = Action::Stagger {
+                left: t::slam_stagger(),
+            };
+        }
+        p.slam = Fx::ZERO;
         p.air_dodged = false;
         p.jump_hold = 0;
         p.air_stall = 0;
+        p.leap_used = false;
     }
+}
+
+// ---------------------------------------------------------------------------
+// The Champion
+// ---------------------------------------------------------------------------
+//
+// Three weapons on three mouse buttons, and a dash that changes what all three
+// of them do. The move list is a grid -- see `moves::champion` -- and what
+// follows is everything that reads it: which move a click asks for, what
+// throwing one does to the dash, what the dash does to your feet, how a dash
+// begins, and the two consequences of swinging a shape rather than a disc.
+
+/// Which of the Champion's ten moves this click asks for, if any.
+///
+/// `None` for every other class, which is what keeps the shared grammar in
+/// `step_player` unchanged for the five of them. The order of the three tests
+/// is the design: **rushing beats airborne beats standing**, because the Rush
+/// moves are the ones you spent a charge to reach and they should not be taken
+/// away by the fact that the uppercut has already left the floor.
+fn champion_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return None;
+    }
+    let weapon = if input.has(Input::LEFT) {
+        c::SWORD
+    } else if input.has(Input::MIDDLE) {
+        c::HAMMER
+    } else if input.has(Input::RIGHT) {
+        c::SPEAR
+    } else {
+        return None;
+    };
+    if rushing(p).is_some() {
+        // Right click during a Rush is two moves told apart by where you are
+        // pointing, which is the honest separator: a pole vault *is* a spear
+        // put into the ground, and levelling it at somebody is a stab.
+        if weapon == c::SPEAR && input.pitch_turns().raw() <= t::vault_pitch().neg().raw() {
+            return Some(c::POLE_VAULT);
+        }
+        return Some(c::RUSHING + weapon);
+    }
+    Some(if p.grounded {
+        c::ON_FOOT + weapon
+    } else {
+        c::IN_THE_AIR + weapon
+    })
+}
+
+/// What throwing one of the Champion's moves does to the weapon in hand and to
+/// the dash underneath it.
+fn begin_champion(p: &mut Player, kind: u8) {
+    use moves::champion as c;
+    let Mechanic::Forms {
+        rush,
+        recharge,
+        rush_vel,
+        ..
+    } = p.mechanic
+    else {
+        return;
+    };
+    // The weapon is whichever button was pressed. Nothing else sets it: there
+    // is no mode to be in any more.
+    let form = Form::of_move(kind);
+    let (rush, rush_vel) = match kind {
+        // Planting the spear spends the run on height. The dash is kept alive
+        // for exactly as long as the plant takes so the approach does not stop
+        // dead underneath it, and slowed, because a vault that kept its whole
+        // run would be a jump with extra steps.
+        c::POLE_VAULT => {
+            let m = moves::get(p.class, kind);
+            (m.startup + m.active, rush_vel.scale(t::vault_carry()))
+        }
+        // The stab is the one Rush move that *stops*. All of the speed goes
+        // into the point, which is what buys it the damage.
+        c::RUSH_STAB => (0, V3::ZERO),
+        // Everything else rides the dash out.
+        _ => (rush, rush_vel),
+    };
+    if kind == c::UPPERCUT {
+        p.leap_used = false;
+    }
+    p.mechanic = Mechanic::Forms {
+        form,
+        rush,
+        recharge,
+        rush_vel,
+    };
+}
+
+/// Which part of the creature a fighter's attack volume touches.
+///
+/// The creature's own test takes a point and a height above it, so each kind of
+/// volume is handed over as what it actually is.
+///
+/// A disc has no height of its own and never had: a flat spot at arm's length,
+/// a whole body tall, exactly as it was before capsules existed. A **capsule
+/// is a line**, so it is asked down its length, a weapon's thickness deep at
+/// each point, and the softest answer wins -- which is the same rule the
+/// creature already uses when one volume covers two parts, applied one step
+/// earlier.
+///
+/// The consequence is worth stating because it is the design rather than the
+/// implementation: a sword swept across at chest height passes **over** a low
+/// ridge, and a hammer brought down on it does not. Breaking the Ridgeback's
+/// poise is a matter of putting the head of the right weapon on the weak point,
+/// not of standing next to it and swinging.
+fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<usize> {
+    if box_out.flat {
+        return beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height());
+    }
+    const SAMPLES: i32 = 5;
+    let thick = box_out.radius;
+    let mut best: Option<usize> = None;
+    for i in 0..=SAMPLES {
+        let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, SAMPLES));
+        let foot = V3::new(at.x, at.y.sub(thick), at.z);
+        if let Some(part) = beast.part_struck(foot, thick, thick.add(thick)) {
+            // Softest wins, the creature's own rule: a swing that reaches a
+            // leg with its haft and the ridge with its head has hit the ridge.
+            best = Some(match best {
+                Some(seen)
+                    if monster::vulnerability(seen).raw() >= monster::vulnerability(part).raw() =>
+                {
+                    seen
+                }
+                _ => part,
+            });
+        }
+    }
+    best
+}
+
+/// The shove the aerial spear's fan gives the Champion when it lands.
+///
+/// A no-op for anything that is not that move, so the caller can apply it to
+/// every hit without asking.
+fn champion_fan_boost(p: &mut Player, input: Input) {
+    let Some(kind) = p.action.attack_kind() else {
+        return;
+    };
+    if p.class != Class::Champion || kind != moves::champion::AIR_SPEAR {
+        return;
+    }
+    let (ax, az) = input.move_axis();
+    // Holding nothing still gets you something -- forward, along the line the
+    // fan was thrown down. A move whose reward you can fail to collect by not
+    // touching a key is a move that feels broken rather than demanding.
+    let dir = if ax == 0 && az == 0 {
+        V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+    } else {
+        move_dir(p.aim(input), ax, az)
+    };
+    let boost = t::spear_fan_boost();
+    p.vel.x = p.vel.x.add(dir.x.mul(boost));
+    p.vel.z = p.vel.z.add(dir.z.mul(boost));
+    clamp_air_speed(p);
+}
+
+/// Let a move that keeps hitting hit again.
+///
+/// `hit_used` is what makes a swing land once. A move with a re-hit interval
+/// puts it back every interval instead, which is the whole implementation of
+/// running a sword through a crowd: one long active window, and the rule that
+/// usually closes it after the first contact relaxed to a rhythm.
+fn rearm_multihit(p: &mut Player) {
+    let Action::Active { kind, left } = p.action else {
+        return;
+    };
+    let m = moves::get(p.class, kind);
+    if m.rehit == 0 {
+        return;
+    }
+    if m.active.saturating_sub(left) % m.rehit == 0 {
+        p.hit_used = false;
+    }
+}
+
+/// The velocity a dash is driving this frame, or `None` if there is no dash.
+fn rushing(p: &Player) -> Option<V3> {
+    match p.mechanic {
+        Mechanic::Forms { rush, rush_vel, .. } if rush > 0 => Some(rush_vel),
+        _ => None,
+    }
+}
+
+/// Spend the charge and start the dash. False if there was no charge to spend.
+///
+/// The dash goes where you are **holding**, not where you are looking, so that
+/// Rush is a retreat and a sidestep as well as an approach -- and so that the
+/// run-through can be aimed across an opponent rather than only at one.
+fn start_rush(p: &mut Player, input: Input) -> bool {
+    let Mechanic::Forms {
+        form, recharge: 0, ..
+    } = p.mechanic
+    else {
+        return false;
+    };
+    let (ax, az) = input.move_axis();
+    let dir = if ax == 0 && az == 0 {
+        p.facing
+    } else {
+        move_dir(p.aim(input), ax, az)
+    };
+    p.mechanic = Mechanic::Forms {
+        form,
+        rush: t::rush_frames(),
+        // The charge is gone until the dash has finished *and* the recharge has
+        // run, so the two never overlap and "rush ready" on the HUD means it.
+        recharge: t::rush_frames() + t::rush_recharge(),
+        rush_vel: V3::new(
+            dir.x.mul(t::rush_speed()),
+            Fx::ZERO,
+            dir.z.mul(t::rush_speed()),
+        ),
+    };
+    true
 }
 
 /// Start a move: commit to where it is aimed, pay what it costs, and enter the
@@ -1652,12 +2115,15 @@ fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
     p.aim_path = match m.aim() {
         aim::Kind::Grounded => aim::grounded_path(who, input, m.reach, scene),
         aim::Kind::Skillshot => aim::skillshot_path(who, input, m.reach, scene),
-        // `facing` is already this frame's, so the yaw is the mouse's; what
-        // this adds is the pitch. `hitbox` re-measures the *distance* from the
-        // body every frame, because a swing thrown on the move travels with the
-        // body and the Champion's form multiplies its reach -- but the
-        // direction is locked here with everything else.
-        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, m.reach),
+        // Not aimed at anything -- a body moving. What it commits to is the
+        // **plane** it swings in: the yaw is the facing, which is locked
+        // already, and the pitch is the rest of the same look, dead-zoned so
+        // that looking slightly down at somebody does not tilt the swing into
+        // the floor. The Champion's weapons read the plane; a disc-shaped
+        // swing only reads the direction. The dead zone is a standing rule:
+        // off the ground you are above what you are hitting, and the swing
+        // follows the camera the whole way.
+        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, p.grounded, m.reach),
         aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
     };
 }
@@ -1677,7 +2143,12 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     p.air_stall = moves::get(p.class, kind).air_stall;
 
     let (ax, az) = input.move_axis();
-    if kind != SLOT_POKE || (ax == 0 && az == 0) {
+    // The class's fast button, which for the Champion in the air is the sword.
+    // Its hammer is the committed one and its spear pays for the shove by
+    // having to connect first -- see the fan's boost in `advance`.
+    let fast =
+        kind == SLOT_POKE || (p.class == Class::Champion && kind == moves::champion::AIR_SWORD);
+    if !fast || (ax == 0 && az == 0) {
         return;
     }
     let dir = move_dir(p.aim(input), ax, az);
@@ -1790,18 +2261,11 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
             });
         }
 
-        // Cycle the weapon form. Every move's reach, damage and recovery are
-        // multiplied by it, so this is three kits from one table.
-        Mechanic::Forms { form, rush_charged } => {
-            let next = match form {
-                Form::Hammer => Form::Sword,
-                Form::Sword => Form::Spear,
-                Form::Spear => Form::Hammer,
-            };
-            p.mechanic = Mechanic::Forms {
-                form: next,
-                rush_charged,
-            };
+        // Rush. It used to cycle the weapon form, which was the mode this
+        // rebuild deleted -- the weapon is a mouse button now, so the mechanic
+        // key is free for the mechanic the class is actually built around.
+        Mechanic::Forms { .. } => {
+            start_rush(p, input);
         }
 
         // Place the shadow ahead, or reclaim it. Mobility and setup are the
@@ -1884,6 +2348,23 @@ fn step_mechanic(p: &mut Player) {
             });
         }
 
+        // The dash and its charge, both counting down. Saturating, so a dash
+        // that has run out sits at zero rather than wrapping into a very long
+        // one.
+        Mechanic::Forms {
+            form,
+            rush,
+            recharge,
+            rush_vel,
+        } => {
+            p.mechanic = Mechanic::Forms {
+                form,
+                rush: rush.saturating_sub(1),
+                recharge: recharge.saturating_sub(1),
+                rush_vel,
+            };
+        }
+
         // Leaving the leash snaps the shadow back.
         Mechanic::Shadow { at: Some(spot) } => {
             if spot.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
@@ -1946,10 +2427,17 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*outbound as u32);
             h.write_i32(travelled.raw());
         }
-        Mechanic::Forms { form, rush_charged } => {
+        Mechanic::Forms {
+            form,
+            rush,
+            recharge,
+            rush_vel,
+        } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
-            h.write_u32(*rush_charged as u32);
+            h.write_u32(*rush as u32);
+            h.write_u32(*recharge as u32);
+            hash_v3(h, rush_vel);
         }
         Mechanic::Shadow { at } => {
             h.write_u32(4);
@@ -2551,16 +3039,28 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     p.action = match countdown(p, want_guard) {
         Some(next) => next,
         None => {
-            if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
+            if input.has(Input::SPECIAL)
+                && p.class != Class::Champion
+                && p.mechanic_ready(SLOT_SPECIAL)
+            {
                 begin_move(p, who, SLOT_SPECIAL, input, scene, false)
             } else if pressed_mechanic {
-                if moves::bound(p.class, SLOT_MECHANIC as usize) && p.mechanic_ready(SLOT_MECHANIC)
-                {
-                    begin_move(p, who, SLOT_MECHANIC, input, scene, false)
-                } else {
-                    mechanic_action(p, who, input, scene);
-                    Action::Free
+                match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    Some(slot) => begin_move(p, who, slot, input, scene, false),
+                    None => {
+                        mechanic_action(p, who, input, scene);
+                        Action::Free
+                    }
                 }
+            }
+            // Aboard, your feet are on something solid, so the Champion reads
+            // the standing row of its grid. A Rush started up here goes
+            // nowhere useful -- there is no ground under it to dash along --
+            // but nothing needs to say so: `grounded` is true aboard, so the
+            // standing row is what `champion_move` picks anyway.
+            else if let Some(kind) = champion_move(p, input) {
+                begin_champion(p, kind);
+                begin_move(p, who, kind, input, scene, false)
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
                     SLOT_COMMITTED
@@ -2932,17 +3432,10 @@ impl World {
             if bolt::throws_a_beam(&attacker, kind) {
                 continue;
             }
-            let Some(part) =
-                beast.part_struck(box_out.centre(), box_out.radius, attacker.hurt_height())
-            else {
+            let Some(part) = part_under(&beast, &attacker, &box_out) else {
                 continue;
             };
-            let scale = match attacker.mechanic {
-                Mechanic::Forms { form, .. } => form.modifiers().1,
-                _ => Fx::ONE,
-            };
             let raw = Fx::from_int(moves::get(attacker.class, kind).damage)
-                .mul(scale)
                 .mul(preying(attacker.class, beast.disabled()))
                 .to_int();
             let dealt = beast.take_hit(part, raw);

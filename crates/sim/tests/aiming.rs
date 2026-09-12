@@ -484,7 +484,7 @@ fn stone_at(w: &mut World, at: V3) {
 #[test]
 fn a_grounded_cast_lands_exactly_where_the_ray_landed() {
     // "If we hit the ground, cast it exactly there. Not a pixel different."
-    let mut w = elementalist();
+    let w = elementalist();
     for step in 0..40 {
         let look = Input::looking_at(0, 0, down(5 + step));
         let (seen, cast) = with_scene(&w, |scene| {
@@ -511,7 +511,7 @@ fn a_skillshot_aimed_at_the_floor_flies_level_over_the_spot() {
     // A shot that cannot land on the ground still has to go *at* the place the
     // player is pointing: straight up from that spot to the height it leaves
     // her at, and level from there.
-    let mut w = elementalist();
+    let w = elementalist();
     let look = Input::looking_at(0, 0, down(20));
     let (seen, path) = with_scene(&w, |scene| {
         (
@@ -634,12 +634,20 @@ fn a_body_in_the_way_is_what_you_are_pointing_at() {
 // someone at your own height means looking slightly down at them.
 
 /// How far above the horizon a swing at this pitch comes out, in degrees.
+///
+/// Standing, which is where the dead zone applies.
 fn swing_tilt(w: &World, pitch: i16) -> f32 {
+    swing_tilt_from(w, pitch, true)
+}
+
+/// The same, saying whether the fighter has their feet on the floor.
+fn swing_tilt_from(w: &World, pitch: i16, grounded: bool) -> f32 {
     let reach = Fx::from_int(2);
     let path = aim::swing_path(
         w.players[0].pos,
         w.players[0].facing,
         Input::looking_at(0, 0, pitch),
+        grounded,
         reach,
     );
     let rise = path.to.y.sub(path.from.y).to_f32_for_render();
@@ -716,11 +724,15 @@ fn the_dead_zone_has_no_step_at_its_edge() {
 
 #[test]
 fn a_swing_aimed_steeply_down_reaches_below_the_body() {
-    // What the angle buys, stated as a position: the Champion's poke thrown
-    // from the air at something underneath her. Level, the volume sits at her
-    // own height; aimed down past the dead zone, it is below her feet.
+    // What the angle buys, stated as a position: a disc-shaped swing thrown at
+    // something underneath you. Level, the volume sits at the body's own
+    // height; aimed down past the dead zone, it is below it.
+    //
+    // The Bulwark, because its poke is the plain disc at arm's length -- the
+    // Champion's weapons are *shapes* that sweep an arc, and where the head of
+    // one is partway through a swing is that class's own question.
     let thrown = |pitch: i16| {
-        let mut w = World::with_classes([Class::Champion, Class::Bulwark]);
+        let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
         w.players[1].pos = V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(12));
         for _ in 0..30 {
             w.advance([Input::looking_at(Input::LEFT, 0, pitch), Input::default()]);
@@ -742,6 +754,28 @@ fn a_swing_aimed_steeply_down_reaches_below_the_body() {
         "a swing aimed well past the dead zone came out {steep:.2} m from the body, \
          which is not below it"
     );
+}
+
+#[test]
+fn in_the_air_a_swing_follows_the_camera_all_the_way_down() {
+    // The dead zone is a *standing* rule. It exists because the camera sits
+    // above the shoulder, so looking at somebody at your own height is looking
+    // slightly down at them -- a fact about two fighters on the same floor.
+    //
+    // Off the floor there is no shared floor to reason from, and the thing you
+    // are looking down at is genuinely below you. Charging it the first 45
+    // degrees would also make the air game unusable rather than merely mushy:
+    // the look-down limit is 85 degrees, so a dead zone of 45 caps the tilt a
+    // falling fighter can reach at 40, and the Champion's aerial spike only
+    // connects at 45 or more.
+    let w = elementalist();
+    for degrees in [10, 45, 60, 80] {
+        let tilt = swing_tilt_from(&w, down(degrees), false);
+        assert!(
+            (tilt + degrees as f32).abs() < 1.0,
+            "airborne, looking {degrees} degrees down swung {tilt:.1} degrees"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

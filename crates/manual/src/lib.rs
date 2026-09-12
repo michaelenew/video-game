@@ -114,7 +114,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword.",
                 "J poke",
             ),
             s(
@@ -124,18 +124,57 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "K or right click",
-                "Guard. The first few frames parry.",
+                "Guard. The first few frames parry. On the Champion it is the spear, which has no guard.",
                 "K guard",
             ),
             s(
+                "U or middle click",
+                "The third attack button. Only the Champion has one: it is the hammer.",
+                "U third attack",
+            ),
+            s(
                 "Q",
-                "The class special. The fire pillar, the uppercut, the grapple — the move only that class has.",
+                "The class special. The fire pillar, the grapple — the move only that class has. The Champion has none: its three weapons are its three clicks.",
                 "Q special",
             ),
             s(
-                "E or middle click",
-                "The class mechanic. Different on every class: throw the shield, change form, place the shadow, raise a structure — or, on the Blood mage, cast the Black spike, because her mechanic is health and there is nothing to toggle.",
+                "E",
+                "The class mechanic. Different on every class: throw the shield, Rush, place the shadow, raise a structure — or, on the Blood mage, cast the Black spike, because her mechanic is health and there is nothing to toggle.",
                 "E mechanic",
+            ),
+        ],
+    },
+    Section {
+        title: "The Champion",
+        blurb: "Three weapons on three clicks, and a dash that changes what all three of them do. The button is the weapon; where your feet are picks the move.",
+        entries: &[
+            s(
+                "Left click",
+                "Sword. Arc across the front. Most damage, least commitment — the move you combo with.",
+                "LMB sword",
+            ),
+            s(
+                "Middle click (or U)",
+                "Hammer. Arc down to the floor. Slow, short, and it staggers — the move you start with.",
+                "MMB hammer",
+            ),
+            s(
+                "Right click",
+                "Spear. A line straight ahead. Longest reach, and it goes over anyone crouching.",
+                "RMB spear",
+            ),
+            e(
+                "In the air",
+                "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
+            ),
+            s(
+                "E",
+                "Rush. A dash on one charge, and it cancels any recovery.",
+                "E rush",
+            ),
+            e(
+                "While rushing",
+                "Sword cuts as you run past without stopping the dash. Hammer is the uppercut — it launches, holds on, and space takes you both higher. Spear stabs, or vaults if you are pointing at the floor.",
             ),
         ],
     },

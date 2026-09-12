@@ -176,6 +176,75 @@ fn component(v: V3, axis: usize) -> Fx {
     }
 }
 
+/// The closest distance between two line segments.
+///
+/// This is what a capsule hit test is: an attack is a line with a thickness and
+/// a body is a line with a thickness, and they touch when the gap between the
+/// two lines is less than the two thicknesses added together. Everything the
+/// Champion swings is tested with it, which is what lets a hammer brought down
+/// on somebody miss a fighter standing behind them and catch one crouching in
+/// front.
+///
+/// The standard clamped solve, and worth reading once because the clamping is
+/// the whole of it. Two infinite lines have exactly one closest pair, found by
+/// solving a two-by-two system; two *segments* may have that pair off either
+/// end, in which case the answer is on an endpoint and the remaining parameter
+/// has to be re-solved against it. Degenerate cases -- a zero-length segment,
+/// two parallel ones -- fall out of the same branches rather than needing their
+/// own.
+///
+/// Fixed point throughout. The products here are bounded by a four-metre weapon
+/// and a twenty-eight metre arena, which is comfortably inside what 16.16 holds,
+/// and a division by a near-zero denominator saturates into a parameter that is
+/// then clamped -- so the parallel case is safe rather than special.
+pub fn segment_gap(a0: V3, a1: V3, b0: V3, b1: V3) -> Fx {
+    let d1 = a1.sub(a0);
+    let d2 = b1.sub(b0);
+    let r = a0.sub(b0);
+    let a = d1.dot(d1);
+    let e = d2.dot(d2);
+    let f = d2.dot(r);
+    let tiny = Fx::from_raw(4);
+    let unit = |v: Fx| v.clamp(Fx::ZERO, Fx::ONE);
+
+    let (s, t) = if a.raw() <= tiny.raw() && e.raw() <= tiny.raw() {
+        (Fx::ZERO, Fx::ZERO)
+    } else if a.raw() <= tiny.raw() {
+        (Fx::ZERO, unit(f.div(e)))
+    } else {
+        let c = d1.dot(r);
+        if e.raw() <= tiny.raw() {
+            (unit(c.neg().div(a)), Fx::ZERO)
+        } else {
+            let b = d1.dot(d2);
+            let denom = a.mul(e).sub(b.mul(b));
+            let s = if denom.raw() != 0 {
+                unit(b.mul(f).sub(c.mul(e)).div(denom))
+            } else {
+                Fx::ZERO
+            };
+            let t = b.mul(s).add(f).div(e);
+            if t.raw() < 0 {
+                (unit(c.neg().div(a)), Fx::ZERO)
+            } else if t.raw() > Fx::ONE.raw() {
+                (unit(b.sub(c).div(a)), Fx::ONE)
+            } else {
+                (s, t)
+            }
+        }
+    };
+    big_len(a0.add(d1.scale(s)).sub(b0.add(d2.scale(t))))
+}
+
+/// Linear blend of two points.
+pub const fn lerp3(from: V3, to: V3, at: Fx) -> V3 {
+    V3::new(
+        lerp(from.x, to.x, at),
+        lerp(from.y, to.y, at),
+        lerp(from.z, to.z, at),
+    )
+}
+
 /// Linear blend. `at` outside 0..1 extrapolates, which is occasionally what you
 /// want and never a surprise.
 pub const fn lerp(from: Fx, to: Fx, at: Fx) -> Fx {

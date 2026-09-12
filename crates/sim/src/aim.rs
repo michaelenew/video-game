@@ -360,11 +360,14 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// The line a **swing** comes out along: the body's own direction, tilted by
 /// how far the camera is looking up or down.
 ///
-/// A swing is a body moving, so it does not raycast and it cannot be stopped
-/// short by anything -- its `to` is simply the move's reach away. What the
-/// camera gives it is an *angle*, and that matters more than it sounds: melee
-/// happens in the air and on slopes, where a swing pinned to the horizontal
-/// misses things that are plainly in front of you.
+/// No raycast, because a swing is not aimed *at* anything — it is a body
+/// moving, and it stops where the weapon stops rather than where the crosshair
+/// lands. What it takes from the crosshair is the **plane**. The yaw is the
+/// facing, because a cut goes where your shoulders are; the pitch is the
+/// camera's, because melee happens in the air and on slopes and a swing pinned
+/// to the horizontal misses things that are plainly in front of you. It is most
+/// of what the Champion is — a hammer comes down in the plane you are aiming
+/// along, and its aerials are thrown at the floor or at the sky on purpose.
 ///
 /// **There is a dead zone below the horizon, and it is the whole trick.** The
 /// camera sits above the shoulder, so looking at somebody standing at your own
@@ -380,8 +383,24 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// At the dead zone's edge the tilt is still zero and it moves a degree per
 /// degree from there, so there is no step at the boundary. `N` is
 /// [`crate::tuning::swing_level_to`].
-pub fn swing_path(from: V3, facing: V3, look: Input, reach: Fx) -> Path {
-    let tilt = swing_tilt(look);
+///
+/// **Standing only.** The correction it makes is about two fighters sharing a
+/// floor; off the floor the thing under the reticle really is below you, so
+/// `grounded == false` follows the pitch exactly all the way down. It is also
+/// the difference between the air game working and not: the look-down limit is
+/// 85 degrees, and a 45-degree dead zone would cap a falling fighter's tilt at
+/// 40 when the Champion's spike needs 45.
+///
+/// It is here rather than beside the move for the same reason everything else
+/// in this file is: the look direction is one of the two ingredients of the
+/// mistake this module exists to prevent, so the places that turn it into a
+/// line are all in one file where they can be compared.
+pub fn swing_path(pos: V3, facing: V3, look: Input, grounded: bool, reach: Fx) -> Path {
+    // From the hand: an overhead begins at the chest and a rising cut is aimed
+    // from there. Where along the body a given weapon actually hinges is
+    // `moves::swing_hub`'s business.
+    let from = origin(pos);
+    let tilt = swing_tilt(look, grounded);
     let flat = cos_turns(tilt);
     let dir = V3::new(facing.x.mul(flat), sin_turns(tilt), facing.z.mul(flat));
     Path {
@@ -396,8 +415,18 @@ pub fn swing_path(from: V3, facing: V3, look: Input, reach: Fx) -> Path {
 /// about the boundary: above the horizon the first term is the pitch and the
 /// second is zero, below it the first is zero and the second is whatever is
 /// left after the dead zone is spent.
-fn swing_tilt(look: Input) -> Fx {
+///
+/// **The dead zone is a standing rule.** Its whole reason is that you fight
+/// people at your own height by looking slightly down at them, and that is a
+/// thing that happens with your feet on the floor. Off the ground you are
+/// genuinely above what you are hitting, so the swing follows the camera all
+/// the way down -- the same split `moves::swing_base` already makes for the
+/// plane a weapon sweeps in.
+fn swing_tilt(look: Input, grounded: bool) -> Fx {
     let pitch = look.pitch_turns();
+    if !grounded {
+        return pitch;
+    }
     let dead = Fx::ratio(t::swing_level_to(), 360);
     pitch.max(Fx::ZERO).add(pitch.add(dead).min(Fx::ZERO))
 }

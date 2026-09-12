@@ -61,14 +61,39 @@ fn main() {
             );
         }
         println!(
-            "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} notes",
+            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} notes",
             "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "aimed"
         );
-        for (slot, m) in (0..moves::SLOTS)
-            .filter(|slot| moves::bound(class, *slot))
-            .map(|slot| (slot, moves::get(class, slot as u8)))
+        for (slot, m) in (0..moves::slots(class)).map(|slot| (slot, moves::get(class, slot as u8)))
         {
             let mut notes = Vec::new();
+            // A move with no volume of its own has no frame advantage worth
+            // printing: those columns are all about what connecting is worth,
+            // and this one never connects. Two kinds -- the ones that put
+            // something in the world and let it do the hitting, and the
+            // Champion's pole vault, which puts nothing anywhere.
+            if !m.strikes() {
+                let what = if m.shape.strikes() {
+                    "places something; the thing it placed hits"
+                } else {
+                    "movement, no hitbox"
+                };
+                println!(
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   {what}",
+                    moves::binding(class, slot),
+                    m.name,
+                    m.startup,
+                    m.active,
+                    m.recovery,
+                    "--",
+                    "--",
+                    "--"
+                );
+                continue;
+            }
+            if m.rehit > 0 {
+                notes.push("re-hits");
+            }
             if m.unblockable {
                 notes.push("unblockable");
             }
@@ -96,16 +121,23 @@ fn main() {
             if !blood.is_empty() {
                 notes.push(&blood);
             }
+            // On-hit means nothing for a move that is still swinging when it
+            // lands again, so it is left blank rather than printed wrong.
+            let on_hit = if m.rehit > 0 {
+                "--".to_string()
+            } else {
+                format!("{:+}", m.on_hit())
+            };
             println!(
-                "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}  {:<10} {}",
-                moves::binding(slot),
+                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}  {:<10} {}",
+                moves::binding(class, slot),
                 m.name,
                 m.startup,
                 m.active,
                 m.recovery,
                 m.damage,
                 m.on_block(),
-                m.on_hit(),
+                on_hit,
                 // Which line of effect it uses, so "where does this actually
                 // go" is answerable from the table rather than from the source.
                 m.aim().name(),
