@@ -7,17 +7,24 @@
 //! functions is still one -- but nothing may *accumulate*.
 //!
 //! ```text
-//! pose = f(action, frames into it, distance walked, airtime, turn rate, health)
+//! pose = f(action, frames into it, stride phase, airtime, turn rate, health)
 //! ```
+//!
+//! There is one exception, and it is deliberate: `Crossfade`, at the bottom of
+//! this file, is renderer-local state. A fade that hiccups across a rollback's
+//! one to eight frames is imperceptible, and the cut it removes is not.
 //!
 //! ## Three tricks worth knowing about
 //!
-//! **Locomotion is driven by distance, not by time.** A walk cycle on a fixed
-//! cadence slides its feet the moment the body moves at any other speed. Ours
-//! indexes the cycle by ground covered, so a footfall happens every stride's
-//! worth of metres, at any speed, and the directional clips are sampled at the
-//! *same phase* before being blended -- which is what keeps a diagonal from
-//! producing two feet on the ground at once.
+//! **Locomotion is driven by ground covered, not by time.** A walk cycle on a
+//! fixed cadence slides its feet the moment the body moves at any other speed.
+//! Ours indexes the cycle by a stride phase the simulation carries, so a
+//! footfall happens every stride's worth of metres at any speed, and the
+//! directional clips are sampled at the *same phase* before being blended --
+//! which is what keeps a diagonal from producing two feet on the ground at
+//! once. The phase is an accumulator rather than `distance / stride`, because a
+//! stride is longer at a sprint than at a walk and dividing by a changing
+//! number makes the phase jump by whole cycles.
 //!
 //! **Stun clips are indexed from the end.** `HitStun { left }` counts down, and
 //! what matters is that the character is back on their feet on the exact frame
