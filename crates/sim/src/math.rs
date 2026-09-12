@@ -69,3 +69,126 @@ impl V3 {
         self.x.mul(self.x).add(self.z.mul(self.z)).sqrt()
     }
 }
+
+/// Linear blend. `at` outside 0..1 extrapolates, which is occasionally what you
+/// want and never a surprise.
+pub const fn lerp(from: Fx, to: Fx, at: Fx) -> Fx {
+    from.add(to.sub(from).mul(at))
+}
+
+/// Smoothstep: `3t^2 - 2t^3`, clamped to 0..1.
+///
+/// Arithmetic rather than a knob. The 3 and the 2 are the definition of the
+/// curve in the same way the 3 in a cubic Bezier is -- changing them would not
+/// change how anything feels, it would stop it being a smoothstep.
+pub fn smoothstep(t: Fx) -> Fx {
+    let t = t.clamp(Fx::ZERO, Fx::ONE);
+    let sq = t.mul(t);
+    let two = Fx::ONE.add(Fx::ONE);
+    let three = two.add(Fx::ONE);
+    three.mul(sq).sub(two.mul(sq).mul(t))
+}
+
+/// A triangle that rises 0 -> 1 -> 0 across 0..1. The shape of a windup
+/// followed by a return.
+pub fn arch(t: Fx) -> Fx {
+    let t = t.clamp(Fx::ZERO, Fx::ONE);
+    let two = Fx::ONE.add(Fx::ONE);
+    if t.raw() * 2 <= Fx::ONE.raw() {
+        smoothstep(t.mul(two))
+    } else {
+        smoothstep(Fx::ONE.sub(t).mul(two))
+    }
+}
+
+/// Wrap an angle in turns into the half-open range (-1/2, 1/2].
+///
+/// Exact, and free: `Fx` is 16.16, so the fractional bits of the raw integer
+/// *are* the fraction of a turn. This is the arithmetic that makes integer
+/// angles worth having.
+pub fn wrap_turns(turns: Fx) -> Fx {
+    let frac = (turns.raw() as u32) & 0xFFFF;
+    if frac >= 0x8000 {
+        Fx::from_raw(frac as i32 - 0x1_0000)
+    } else {
+        Fx::from_raw(frac as i32)
+    }
+}
+
+/// The angle of a direction, in turns, matching `V3::from_turns`: zero looks
+/// down positive X and the angle increases toward positive Z.
+///
+/// A rational approximation rather than a lookup table, because the table would
+/// need to be much finer than the sine table to be worth having.
+///
+/// The shape is the standard octant reduction. Fold the input into one eighth
+/// of the circle by forming `r = (x - |z|) / (x + |z|)`; that `r` is exactly
+/// `tan(pi/4 - phi)`, so recovering the angle is `1/8 - atan(r)/2pi` in turns,
+/// and the negative-x branch is the same thing offset to `3/8`. What is left is
+/// `atan` on `[-1, 1]`, fitted by an odd cubic-in-`r-squared`.
+///
+/// Three terms rather than two: two is the version that circulates, and it is
+/// half a degree out at its worst, which is enough to make a creature's aim
+/// visibly miss. Three costs one more multiply and brings the worst case to
+/// about **0.0002 of a turn** -- a thirteenth of a degree.
+///
+/// Every coefficient is an exact 16.16 constant and every step is integer
+/// arithmetic, so there is no rounding for two machines to disagree about.
+pub fn atan2_turns(z: Fx, x: Fx) -> Fx {
+    if z.raw() == 0 && x.raw() == 0 {
+        return Fx::ZERO;
+    }
+    let az = z.abs();
+    let eighth = Fx::from_raw(1 << 13);
+    let three_eighths = Fx::from_raw(3 << 13);
+    let (r, base) = if x.raw() >= 0 {
+        (x.sub(az).div(x.add(az)), eighth)
+    } else {
+        (x.add(az).div(az.sub(x)), three_eighths)
+    };
+    // atan(r) / 2pi, as a1*r + a3*r^3 + a5*r^5, in Horner form.
+    let a1 = Fx::from_raw(10388);
+    let a3 = Fx::from_raw(-3048);
+    let a5 = Fx::from_raw(866);
+    let sq = r.mul(r);
+    let angle = base.sub(r.mul(a1.add(sq.mul(a3.add(sq.mul(a5))))));
+    if z.raw() < 0 { angle.neg() } else { angle }
+}
+
+/// Length of a vector whose components are too large to square in 16.16.
+///
+/// `V3::len` squares its components first, and a squared 16.16 value saturates
+/// just past 181. That is ample for a position in a twenty-eight metre arena
+/// and useless for an **acceleration**, which is where the creature's buck
+/// lives: the shake produces several hundred metres per second squared, and
+/// `len` reports 181 for all of them. Silently, because saturation is not an
+/// error.
+///
+/// Squaring in `i64` instead costs one integer square root and is exact over
+/// the whole range 16.16 can hold.
+pub fn big_len(v: V3) -> Fx {
+    let (x, y, z) = (v.x.raw() as i64, v.y.raw() as i64, v.z.raw() as i64);
+    Fx::from_raw(isqrt(x * x + y * y + z * z))
+}
+
+/// Integer square root of a 64-bit value, saturating into `i32`.
+///
+/// A fixed iteration count rather than "until it converges": a value that
+/// depends on how hard it was to compute is not something two machines can be
+/// relied on to agree about.
+fn isqrt(n: i64) -> i32 {
+    if n <= 0 {
+        return 0;
+    }
+    let mut guess: i64 = 1 << 31;
+    let mut i = 0;
+    while i < 40 {
+        guess = (guess + n / guess) >> 1;
+        i += 1;
+    }
+    if guess > i32::MAX as i64 {
+        i32::MAX
+    } else {
+        guess as i32
+    }
+}

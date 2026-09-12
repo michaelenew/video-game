@@ -169,6 +169,32 @@ impl CameraRig {
     /// `dt` is real seconds, so the camera stays frame-rate independent even
     /// though the simulation is fixed-step.
     pub fn update(&mut self, dt: f32, player: [f32; 3], yaw: f32, pitch: f32) -> Framing {
+        self.update_around(dt, player, yaw, pitch, Surroundings::default())
+    }
+
+    /// The same, with a creature in the arena.
+    ///
+    /// It is handled by the two rules the rig already has rather than by a
+    /// third. Beside it, the animal is **geometry**: the arm marches back and
+    /// stops short, the same as it does for a wall. Standing on it, the animal
+    /// is a **surface**: the eye rests on its back and rides along, the same as
+    /// it does on the floor.
+    ///
+    /// Which of the two applies is not a judgement call, it is whether the
+    /// fighter is on it -- and getting that wrong is very visible. Treating it
+    /// as geometry while riding jams the camera against the rider's back,
+    /// because an arm pointing backwards from someone standing on an animal
+    /// goes straight into the animal. Treating it as a surface while beside it
+    /// would let the camera sit inside its ribs.
+    pub fn update_around(
+        &mut self,
+        dt: f32,
+        player: [f32; 3],
+        yaw: f32,
+        pitch: f32,
+        around: Surroundings<'_>,
+    ) -> Framing {
+        let beast = around.beast;
         let target = [player[0], player[1] + self.cfg.look_height, player[2]];
 
         if !self.initialised {
@@ -239,7 +265,15 @@ impl CameraRig {
         // It stops applying once the rig is climbing into the head: up there
         // the eye is at the fighter's eyes, which is above the floor by
         // definition, and a clamp that still fired would be fighting the climb.
-        let lowest = GROUND + FLOOR_CLEARANCE;
+        let underfoot = beast.map_or(GROUND, |b| {
+            let eye = sim::V3::new(
+                fx_of(self.focus[0] + offset[0]),
+                sim::Fx::ZERO,
+                fx_of(self.focus[2] + offset[2]),
+            );
+            b.top_under(eye).to_f32_for_render().max(GROUND)
+        });
+        let lowest = underfoot + FLOOR_CLEARANCE;
         offset[1] = offset[1].max((lowest - self.focus[1]) * (1.0 - sky));
 
         // Rightward in the horizontal plane, matching the simulation's own
@@ -258,7 +292,28 @@ impl CameraRig {
         // that is already inside the fighter has nothing left to be blocked by,
         // and terrain shoving the view around is exactly what makes panning the
         // sky unpleasant in third person.
-        let clear = lerp(unobstructed_fraction(self.focus, offset), 1.0, sky);
+        // A creature you are standing on is not in your way -- and neither is
+        // one you are standing *under*. The second follows the same reasoning
+        // as the tiny minimum arm length: an arm that begins inside something
+        // has nothing left to be blocked by, and clamping it anyway points the
+        // camera at the back of the fighter's head while a dinosaur walks over
+        // them, which is the one moment they most need to see.
+        let inside_it = beast.is_some_and(|b| {
+            b.contains(
+                sim::V3::new(
+                    fx_of(self.focus[0]),
+                    fx_of(self.focus[1]),
+                    fx_of(self.focus[2]),
+                ),
+                fx_of(PADDING),
+            )
+        });
+        let blocker = if around.aboard || inside_it {
+            None
+        } else {
+            beast
+        };
+        let clear = lerp(unobstructed_fraction(self.focus, offset, blocker), 1.0, sky);
         for axis in offset.iter_mut() {
             *axis *= clear;
         }
@@ -304,9 +359,13 @@ fn smoothstep(lo: f32, hi: f32, at: f32) -> f32 {
 /// Marches the segment rather than solving it analytically: the arena is a
 /// handful of boxes and this runs once a frame on the render side, where exact
 /// determinism does not matter.
-fn unobstructed_fraction(focus: [f32; 3], offset: [f32; 3]) -> f32 {
+/// How far outside a solid the camera is held. Shared with the rule that says
+/// a solid you are already inside cannot block you, so the two cannot disagree
+/// about where "inside" starts.
+const PADDING: f32 = 0.45;
+
+fn unobstructed_fraction(focus: [f32; 3], offset: [f32; 3], beast: Option<&sim::Monster>) -> f32 {
     const STEPS: usize = 24;
-    const PADDING: f32 = 0.45;
     // Deliberately tiny. An arm that refuses to shorten past a comfortable
     // distance will happily hold the camera *inside* a wall when the fighter
     // stands close to one, which is far worse than going briefly first-person.
@@ -321,7 +380,14 @@ fn unobstructed_fraction(focus: [f32; 3], offset: [f32; 3]) -> f32 {
             focus[1] + offset[1] * t,
             focus[2] + offset[2] * t,
         ];
-        if inside_geometry(p, PADDING) {
+        let blocked = inside_geometry(p, PADDING)
+            || beast.is_some_and(|b| {
+                b.contains(
+                    sim::V3::new(fx_of(p[0]), fx_of(p[1]), fx_of(p[2])),
+                    fx_of(PADDING),
+                )
+            });
+        if blocked {
             return (t - 1.0 / STEPS as f32).max(MINIMUM);
         }
     }
@@ -349,4 +415,23 @@ fn inside_geometry(p: [f32; 3], pad: f32) -> bool {
 /// different monitors for no reason the player can see.
 fn smoothing_for(per_tick: f32, dt: f32) -> f32 {
     1.0 - (1.0 - per_tick).powf(dt * crate::TICK_HZ)
+}
+
+/// What else is in the arena this frame.
+///
+/// A struct rather than two arguments because the pair is one fact -- there is
+/// an animal, and whether you are on it changes what it is to the camera -- and
+/// a bare `bool` at a call site says nothing about which way round it goes.
+#[derive(Clone, Copy, Default)]
+pub struct Surroundings<'a> {
+    pub beast: Option<&'a sim::Monster>,
+    /// The fighter the camera is following is standing on it.
+    pub aboard: bool,
+}
+
+/// RENDER-ONLY. Metres to the simulation's fixed point, for asking the
+/// creature about a position the renderer computed. Nothing here feeds back
+/// into a simulation -- the camera is not in the snapshot.
+fn fx_of(v: f32) -> sim::Fx {
+    sim::Fx::from_raw((v * crate::FX) as i32)
 }

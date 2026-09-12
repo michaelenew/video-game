@@ -65,6 +65,10 @@ pub const SECTIONS: &[Section] = &[
                 "Pick classes. Matched loosely: bulwark, champion, reaver, elementalist, blood, dual.",
             ),
             e(
+                "cargo run -p game -- --hunt",
+                "Start against the Ridgeback instead of each other. H switches either way in game.",
+            ),
+            e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",
                 "Peer-to-peer against someone else. Rollback netcode, no server.",
             ),
@@ -132,6 +136,37 @@ pub const SECTIONS: &[Section] = &[
                 "E or middle click",
                 "The class mechanic. Different on every class: throw the shield, change form, place the shadow, raise a structure.",
                 "E mechanic",
+            ),
+        ],
+    },
+    Section {
+        title: "Hunting the Ridgeback",
+        blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",
+        entries: &[
+            s(
+                "H",
+                "Hunt the Ridgeback, or go back to fighting each other. Restarts the match either way.",
+                "H hunt",
+            ),
+            e(
+                "Land on it",
+                "There is no mount button. Jump onto the tail, or drop onto its back from a platform, and you are on it.",
+            ),
+            e(
+                "W A S D",
+                "Aboard, these are relative to the surface under your feet. The creature turning turns you with it.",
+            ),
+            e(
+                "Ctrl or C",
+                "Aboard, crouch braces. It multiplies your grip, and it is the only defence up there -- there is no dodge on a back two metres wide.",
+            ),
+            e(
+                "Space",
+                "Leave, carrying whatever the creature was doing with you. The answer to the rear-and-slam, which nothing holds through.",
+            ),
+            e(
+                "The red strip",
+                "The ridge: unarmoured, and out of reach from the ground. Enough damage there puts the creature on its side.",
             ),
         ],
     },
@@ -247,6 +282,14 @@ pub const SECTIONS: &[Section] = &[
                 "Re-bake the animation clips from their recipes.",
             ),
             e(
+                "cargo run -p hunt --bin fight",
+                "Play a scripted hunt and report on it: how much of what the creature throws can be answered on sight, how long the openings are, how varied its moves are, and how long anyone stays on its back.",
+            ),
+            e(
+                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n>",
+                "The same, with a different class, several seeds, or the play sequence printed move by move.",
+            ),
+            e(
                 "cargo run -p net --bin soak",
                 "Headless rollback soak: thousands of frames, checked for divergence.",
             ),
@@ -322,6 +365,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "docs/design/feel-log.md",
                 "What was tried, and what it felt like.",
+            ),
+            e(
+                "docs/design/monsters.md",
+                "The Ridgeback: the fight, the ride, the control algorithm, and how the fight is measured.",
             ),
         ],
     },

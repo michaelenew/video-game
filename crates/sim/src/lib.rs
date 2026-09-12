@@ -13,6 +13,7 @@ pub mod effects;
 pub mod fixed;
 pub mod input;
 pub mod math;
+pub mod monster;
 pub mod moves;
 pub mod oven;
 pub mod state;
@@ -24,6 +25,7 @@ pub use class::{Class, Mechanic};
 pub use fixed::Fx;
 pub use input::Input;
 pub use math::V3;
+pub use monster::Monster;
 pub use moves::Move;
 pub use state::{PlayerId, World};
 

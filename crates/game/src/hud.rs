@@ -10,6 +10,12 @@ use sim::state::{Action, Phase};
 const P1: Color = Color::srgb(0.29, 0.66, 1.0);
 const P2: Color = Color::srgb(1.0, 0.54, 0.30);
 const INK: Color = Color::srgb(0.86, 0.90, 0.96);
+/// The creature. Its health bar reads in the same colour as the ridge, which is
+/// the part of it you are trying to reduce.
+const QUARRY: Color = Color::srgb(0.86, 0.32, 0.22);
+/// Its poise -- how close it is to going over. A different colour because it is
+/// a different resource and it refills.
+const POISE: Color = Color::srgb(0.98, 0.78, 0.35);
 const DIM: Color = Color::srgb(0.52, 0.58, 0.67);
 
 #[derive(Component)]
@@ -17,6 +23,20 @@ pub struct HealthBar(pub usize);
 
 #[derive(Component)]
 pub struct StateText(pub usize);
+
+/// The creature's health, and how close it is to losing its footing.
+///
+/// One row rather than two, because they are read together: the question the
+/// player is asking is "can I get it down before it gets me", and poise is the
+/// answer to "is it worth climbing right now".
+#[derive(Component)]
+pub struct QuarryRow;
+
+#[derive(Component)]
+pub struct QuarryBar;
+
+#[derive(Component)]
+pub struct PoiseBar;
 
 #[derive(Component)]
 pub struct RoundText;
@@ -77,6 +97,26 @@ pub fn setup(mut commands: Commands) {
                 ));
                 spawn_health(top, 1, P2);
                 spawn_class_button(top, 1, P2);
+            });
+
+            // The creature's bars, under the fighters' own. Hidden entirely in
+            // a versus match rather than drawn empty: a bar for something that
+            // is not there is a thing to wonder about.
+            root.spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    row_gap: Val::Px(3.0),
+                    margin: UiRect::top(Val::Px(8.0)),
+                    ..default()
+                },
+                Visibility::Hidden,
+                QuarryRow,
+            ))
+            .with_children(|row| {
+                spawn_meter(row, 12.0, QUARRY, QuarryBar);
+                spawn_meter(row, 5.0, POISE, PoiseBar);
             });
 
             // Middle: the round banner, empty while fighting.
@@ -184,6 +224,35 @@ fn spawn_class_button(parent: &mut ChildSpawnerCommands, who: usize, colour: Col
     ));
 }
 
+/// A bar that fills from the left, with its own tag component.
+fn spawn_meter<T: Component>(
+    parent: &mut ChildSpawnerCommands,
+    height: f32,
+    colour: Color,
+    tag: T,
+) {
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(62.0),
+                height: Val::Px(height),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+        ))
+        .with_children(|bar| {
+            bar.spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(colour),
+                tag,
+            ));
+        });
+}
+
 fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
     parent
         .spawn((
@@ -217,6 +286,11 @@ fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
 // make them disjoint; the `Without` bounds prove it. Adding a fifth means
 // adding it to the other four -- which is the cost of the pattern, and the
 // reason the compiler cannot catch a miss here.
+type QuarryQuery<'w, 's> =
+    Query<'w, 's, &'static mut Node, (With<QuarryBar>, Without<PoiseBar>, Without<HealthBar>)>;
+type PoiseQuery<'w, 's> =
+    Query<'w, 's, &'static mut Node, (With<PoiseBar>, Without<QuarryBar>, Without<HealthBar>)>;
+
 type StateQuery<'w, 's> = Query<
     'w,
     's,
@@ -262,10 +336,17 @@ type SensitivityQuery<'w, 's> = Query<
     ),
 >;
 
+// A Bevy system's parameter list *is* its dependency declaration: every entry
+// is something the scheduler has to know this system touches. Splitting one to
+// get under a count would split the system, which is the opposite of the point.
+#[allow(clippy::too_many_arguments)]
 pub fn update(
     sim: Res<crate::Sim>,
     settings: Res<crate::settings::Settings>,
     mut bars: Query<(&HealthBar, &mut Node)>,
+    mut quarry: QuarryQuery,
+    mut poise: PoiseQuery,
+    mut quarry_row: Query<&mut Visibility, With<QuarryRow>>,
     mut states: StateQuery,
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
@@ -282,6 +363,25 @@ pub fn update(
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
         node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
+    }
+
+    // The creature, if there is one.
+    if let Ok(mut visible) = quarry_row.single_mut() {
+        *visible = if sim.cur.monster.is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if let Some(beast) = sim.cur.monster {
+        if let Ok(mut node) = quarry.single_mut() {
+            let share = beast.health.max(0) as f32 / sim::tuning::monster_health().max(1) as f32;
+            node.width = Val::Percent(100.0 * share);
+        }
+        if let Ok(mut node) = poise.single_mut() {
+            let share = beast.poise.max(0) as f32 / sim::tuning::poise_max().max(1) as f32;
+            node.width = Val::Percent(100.0 * share.min(1.0));
+        }
     }
 
     for (tag, mut text) in states.iter_mut() {
@@ -307,7 +407,11 @@ pub fn update(
     if let Ok(mut t) = banner.single_mut() {
         *t = Text::new(match sim.cur.phase {
             Phase::Fighting => String::new(),
+            Phase::RoundOver { winner, .. } if winner == sim::state::QUARRY => {
+                "the Ridgeback stands".into()
+            }
             Phase::RoundOver { winner, .. } if winner == u8::MAX => "double KO".into(),
+            Phase::RoundOver { .. } if sim.cur.monster.is_some() => "the hunt is over".into(),
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         });
     }
