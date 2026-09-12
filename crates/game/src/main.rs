@@ -29,7 +29,7 @@ use bevy::prelude::*;
 use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
-use view::play::{PoseInput, pose_for};
+use view::play::{Crossfade, PoseInput};
 use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate};
 
@@ -132,6 +132,7 @@ fn main() {
         .init_resource::<Look>()
         .init_resource::<palette::Palette>()
         .init_resource::<hub::Hub>()
+        .init_resource::<Fades>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -203,6 +204,12 @@ pub struct Sim {
     /// from "this rig is wrong" while looking at the thing, in one keypress.
     bind_pose: bool,
 }
+
+/// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
+/// whatever it was, which is wrong by a few frames of blend weight and
+/// invisible. See `view::play::Crossfade`.
+#[derive(Resource, Default)]
+struct Fades([Crossfade; MAX_PLAYERS]);
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
 /// the second set of keys.
@@ -1037,6 +1044,8 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
 /// characters without them sliding.
 fn apply_poses(
     sim: Res<Sim>,
+    time: Res<Time>,
+    mut fades: ResMut<Fades>,
     hub: Option<Res<crate::hub::Hub>>,
     mut roots: Query<(&Fighter, &mut Transform), Without<BodyPart>>,
     mut parts: Query<(&BodyPart, &mut Transform), Without<Fighter>>,
@@ -1062,7 +1071,7 @@ fn apply_poses(
         let class = sim.cur.players[owner].class;
         let mut input = PoseInput::of(&p, class, frame.round_left);
         input.bind_pose = sim.bind_pose;
-        let mut pose = pose_for(input);
+        let mut pose = fades.0[owner].pose(input, time.delta_secs());
         // The hub takes over whichever fighter it is previewing, so an edit is
         // visible on a real character in the real arena rather than in a
         // separate viewer that flatters it.

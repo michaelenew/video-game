@@ -209,14 +209,21 @@ pub struct Player {
     // snapshot*: rollback re-simulates past frames, and a walk cycle or a
     // landing that runs off the renderer's own clock slides and pops every
     // time it happens. See `docs/design/architecture.md`.
-    /// Horizontal distance walked, in 1/65536 of a metre, wrapping.
+    /// Where the body is in its stride, as a fraction of one two-step cycle in
+    /// 1/65536ths, wrapping.
     ///
     /// A walk cycle driven from the frame counter skates: the feet keep the
-    /// same cadence whether the body is crawling or sprinting. Driven from
-    /// distance, a footfall happens every stride's worth of ground covered,
-    /// which is the definition of not sliding. Wrapping is harmless -- the
-    /// renderer only ever takes it modulo a stride.
-    pub distance: u32,
+    /// same cadence whether the body is crawling or sprinting. This is driven
+    /// by ground covered instead, so a footfall happens every stride's worth of
+    /// metres at any speed.
+    ///
+    /// It is an **accumulator**, not a ratio, and that distinction is the whole
+    /// reason it lives here rather than being worked out in the renderer from a
+    /// distance travelled. A stride is longer at a sprint than at a walk and
+    /// shorter sideways than forwards, so `distance / stride` jumps by whole
+    /// cycles the moment the stride changes -- which reads as both legs
+    /// teleporting. Integrating `speed / stride` cannot do that.
+    pub stride: u16,
     /// Frames off the ground, saturating. On the ground it holds how long the
     /// last flight was, which is what tells a hop from a fall.
     pub air_frames: u16,
@@ -300,7 +307,7 @@ impl Default for Player {
             slowed: 0,
             mechanic_held: false,
             held_by: NOBODY,
-            distance: 0,
+            stride: 0,
             air_frames: 0,
             since_landed: 0,
             parried: 0,
@@ -533,7 +540,7 @@ impl World {
             h.write_u32(p.air_stall as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
-            h.write_u32(p.distance);
+            h.write_u32(p.stride as u32);
             h.write_u32(p.air_frames as u32);
             h.write_u32(p.since_landed as u32);
             h.write_u32(p.parried as u32);
@@ -1373,11 +1380,49 @@ fn advance_clocks(p: &mut Player) {
     }
     p.parried = p.parried.saturating_sub(1);
 
-    // Ground covered this frame, in the same 16.16 units the position is in.
-    // Horizontal only: falling is not walking.
-    let step = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len().mul(DT);
-    p.distance = p.distance.wrapping_add(step.raw().max(0) as u32);
+    // Ground covered this frame as a fraction of one stride. The raw 16.16 bits
+    // of a fraction of a turn *are* the phase, so there is no conversion.
+    let advance = p.vel.flat_len().mul(DT).div(stride_length(p));
+    p.stride = p.stride.wrapping_add(advance.raw().clamp(0, 65535) as u16);
 }
+
+/// How much ground one full cycle of this body's current gait covers.
+///
+/// Blended by speed, shortened when the movement is sideways, and short again
+/// when crouched. The renderer plays the clips at the phase this produces and
+/// the clips were authored against the same numbers, so the three agree by
+/// construction rather than by anybody remembering to keep them in step.
+fn stride_length(p: &Player) -> Fx {
+    if p.crouching {
+        return t::CROUCH_STRIDE;
+    }
+    let speed = p.vel.flat_len();
+    let gait = speed
+        .sub(t::WALK_AT)
+        .div(t::RUN_AT.sub(t::WALK_AT))
+        .clamp(Fx::ZERO, Fx::ONE);
+    let base = t::WALK_STRIDE.add(t::RUN_STRIDE.sub(t::WALK_STRIDE).mul(gait));
+
+    // How much of the travel is straight ahead. A pure sidestep gets the full
+    // shortening; a forward run gets none.
+    if speed.raw() <= 0 {
+        return base;
+    }
+    let along = p
+        .vel
+        .dot(p.facing)
+        .abs()
+        .div(speed)
+        .clamp(Fx::ZERO, Fx::ONE);
+    let scale = t::STRAFE_STRIDE.add(Fx::ONE.sub(t::STRAFE_STRIDE).mul(along));
+    base.mul(scale).max(SHORTEST_STRIDE)
+}
+
+/// A floor on the stride, so the phase cannot be divided by something near
+/// zero. Not a feel number: a tenth of a metre is far below any stride the
+/// constants above can produce, and it exists only to stop a division blowing
+/// up if they are ever retuned to nonsense.
+const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10);
 
 /// Let a body come to rest without accepting input. Used during the pause
 /// between rounds.

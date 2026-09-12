@@ -471,7 +471,7 @@ fn pitch_is_clamped() {
 // Posing -- the property that matters is purity
 // ---------------------------------------------------------------------------
 
-fn input_at(action: Action, distance: f32, frame: u32) -> PoseInput {
+fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
     PoseInput {
         class: sim::Class::Bulwark,
         action,
@@ -479,7 +479,7 @@ fn input_at(action: Action, distance: f32, frame: u32) -> PoseInput {
         crouching: false,
         speed: 0.0,
         travel: [0.0, 0.0],
-        distance,
+        stride,
         air_frames: 0,
         since_landed: frame as u16,
         parried: 0,
@@ -558,7 +558,7 @@ fn walking_moves_the_legs_and_idling_does_not() {
     let mut swung: f32 = 0.0;
     for i in 0..20 {
         let mut at = moving;
-        at.distance = i as f32 * 0.12;
+        at.stride = i as f32 * 0.06;
         swung = swung.max((leg(&pose_for(at)) - leg(&pose_for(moving))).abs());
     }
     assert!(
@@ -570,7 +570,7 @@ fn walking_moves_the_legs_and_idling_does_not() {
     let mut idle_swing: f32 = 0.0;
     for i in 0..20 {
         let mut at = idle;
-        at.distance = i as f32 * 0.12;
+        at.stride = i as f32 * 0.06;
         idle_swing = idle_swing.max((leg(&pose_for(at)) - leg(&pose_for(idle))).abs());
     }
     assert!(idle_swing < 1.0, "a standing character is striding");
@@ -612,5 +612,81 @@ fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
                 framing.eye
             );
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Playing a whole match through the animation system
+// ---------------------------------------------------------------------------
+
+/// Run a scripted match and hand every frame to the poser the way the renderer
+/// does. Returns the pose drawn on each frame for player one.
+fn play_through(frames: u32) -> Vec<view::Pose> {
+    let mut w = World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
+    let mut fade = view::play::Crossfade::default();
+    let mut drawn = Vec::new();
+    let mut prev = w.clone();
+    for i in 0..frames {
+        // A script that visits every branch of the selection: walking, running,
+        // turning, jumping, dodging, attacking, guarding, being hit.
+        let phase = i % 120;
+        let bits = match phase {
+            0..=20 => Input::W,
+            21..=32 => Input::W | Input::A,
+            33..=40 => Input::SPACE,
+            41..=48 => Input::SHIFT | Input::D,
+            49..=60 => Input::LEFT,
+            61..=72 => Input::SHIFT | Input::LEFT,
+            73..=86 => Input::RIGHT,
+            87..=96 => Input::CROUCH,
+            97..=104 => Input::S,
+            _ => 0,
+        };
+        let aim = ((i * 700) % 65536) as u16;
+        let prev = w.clone();
+        w.advance([Input::aimed(bits, aim), Input::new(Input::RIGHT)]);
+        let frame = view::interpolate(&prev, &w, 1.0);
+        let input =
+            view::play::PoseInput::of(&frame.players[0], w.players[0].class, frame.round_left);
+        drawn.push(fade.pose(input, 1.0 / 60.0));
+    }
+    drawn
+}
+
+#[test]
+fn nothing_the_animation_system_draws_is_a_jump() {
+    // Clips are switched, not cross-faded, inside `pose_for`; the fade on top is
+    // what stops walking into a wind-up from being a visible cut. This is the
+    // test that says it works, over a match that visits every branch.
+    let drawn = play_through(600);
+    let mut worst = 0.0f32;
+    let mut at = 0;
+    for (i, pair) in drawn.windows(2).enumerate() {
+        let jump = pair[0].separation(&pair[1]);
+        if jump > worst {
+            worst = jump;
+            at = i;
+        }
+    }
+    // This is a no-*cut* test, not a smoothness ceiling. A sprint legitimately
+    // advances more than a frame of its own clip per rendered frame, so the
+    // figure here is a couple of times that; what it catches is the ten-unit
+    // jumps that come from switching animation without a fade.
+    assert!(
+        worst < 3.5,
+        "the pose jumped {worst:.2} between frames {at} and {}",
+        at + 1
+    );
+}
+
+#[test]
+fn nothing_the_animation_system_draws_is_broken() {
+    let skeleton = view::pose::reference();
+    for (i, pose) in play_through(600).iter().enumerate() {
+        for (c, v) in pose.channels.iter().enumerate() {
+            assert!(v.is_finite(), "frame {i} channel {c} is {v}");
+        }
+        let bad = pose.violations(skeleton);
+        assert!(bad.is_empty(), "frame {i}: {bad:?}");
     }
 }

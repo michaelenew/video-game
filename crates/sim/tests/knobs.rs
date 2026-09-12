@@ -37,6 +37,11 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10)",
+        "A division guard, not a stride. Far below any value the stride constants \
+         can produce; it exists so the phase cannot be divided by nearly zero.",
+    ),
+    (
         "pub const PARRY_FLOURISH: u16 = 14",
         "How long the parry's celebration animation plays. It is a renderer clock kept \
          in the snapshot so it survives a rollback; it decides nothing about combat, \

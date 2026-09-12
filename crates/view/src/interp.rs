@@ -34,9 +34,10 @@ pub struct PlayerView {
     /// to come from velocity rather than from the input because a shove or a
     /// dodge moves you in directions you never asked for.
     pub travel: [f32; 2],
-    /// Ground covered, in metres, wrapping. Drives the stride so feet land
-    /// where the body actually is rather than on a fixed cadence.
-    pub distance: f32,
+    /// Where the body is in its stride, in cycles, wrapping. Drives the walk
+    /// and run clips so feet land where the body actually is rather than on a
+    /// fixed cadence.
+    pub stride: f32,
     pub air_frames: u16,
     pub since_landed: u16,
     pub parried: u16,
@@ -138,7 +139,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         crouching: c.crouching,
         speed,
         travel,
-        distance: c.distance as f32 / crate::FX,
+        stride: c.stride as f32 / 65536.0,
         air_frames: c.air_frames,
         since_landed: c.since_landed,
         parried: c.parried,

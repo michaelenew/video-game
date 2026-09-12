@@ -40,34 +40,22 @@ use crate::skeleton::Group;
 use sim::Class;
 use sim::state::Action;
 
-/// Speed at which the walk cycle is at full weight, in metres per second.
+/// The stride numbers, in the renderer's units.
 ///
-/// The guarding walk speed is two, and it is the speed a fighter spends most of
-/// a tense exchange at, so that is what "walking" is calibrated to. The free
-/// movement speed of seven is a run by any honest measure, whatever the tuning
-/// knob is called.
-pub const WALK_AT: f32 = 2.2;
-pub const RUN_AT: f32 = 7.0;
+/// They live in `sim::tuning` because the **simulation** advances the stride
+/// phase with them -- see `Player::stride` for why that cannot be worked out
+/// here -- and the clips are authored against the same values. One copy, three
+/// users, no drift.
+const fn metres(v: sim::Fx) -> f32 {
+    v.raw() as f32 / 65536.0
+}
 
-/// How much ground one full cycle of each clip covers.
-///
-/// **This is the number that decides whether the feet skate**, and the clips are
-/// authored against it: the recipes in `anim::clips::locomotion` import these
-/// constants and place every planted foot by arithmetic from them. Changing one
-/// without re-baking makes the feet slide, which is why they live here, once.
-///
-/// The values are not free choices. A leg is 0.87 m long and a hip is 0.86 m off
-/// the floor at contact, so a foot can be at most about 0.34 m ahead of the hip
-/// before the leg runs out -- and stride length follows from that, not the other
-/// way round.
-pub const WALK_STRIDE: f32 = 1.10;
-pub const RUN_STRIDE: f32 = 2.70;
-pub const CROUCH_STRIDE: f32 = 0.80;
-
-/// A sidestep covers less ground per cycle than a stride forward, because a leg
-/// swung sideways runs out of hip long before one swung forward runs out of
-/// leg. Applied in proportion to how sideways the movement actually is.
-pub const STRAFE_STRIDE: f32 = 0.72;
+pub const WALK_AT: f32 = metres(sim::tuning::WALK_AT);
+pub const RUN_AT: f32 = metres(sim::tuning::RUN_AT);
+pub const WALK_STRIDE: f32 = metres(sim::tuning::WALK_STRIDE);
+pub const RUN_STRIDE: f32 = metres(sim::tuning::RUN_STRIDE);
+pub const CROUCH_STRIDE: f32 = metres(sim::tuning::CROUCH_STRIDE);
+pub const STRAFE_STRIDE: f32 = metres(sim::tuning::STRAFE_STRIDE);
 
 /// Turn rates, in turns per second, at which the two turn clips reach full
 /// weight.
@@ -91,8 +79,8 @@ pub struct PoseInput {
     pub speed: f32,
     /// Strafe and forward velocity in the character's own frame.
     pub travel: [f32; 2],
-    /// Metres walked, wrapping.
-    pub distance: f32,
+    /// Where the body is in its stride, in cycles, wrapping.
+    pub stride: f32,
     pub air_frames: u16,
     pub since_landed: u16,
     pub parried: u16,
@@ -118,7 +106,7 @@ impl PoseInput {
             crouching: view.crouching,
             speed: view.speed,
             travel: view.travel,
-            distance: view.distance,
+            stride: view.stride,
             air_frames: view.air_frames,
             since_landed: view.since_landed,
             parried: view.parried,
@@ -129,6 +117,184 @@ impl PoseInput {
             round_left,
             bind_pose: false,
         }
+    }
+}
+
+/// What produced a pose, as a number.
+///
+/// Only ever compared for equality. The renderer uses it to notice that the
+/// character has switched to a different animation and cross-fade rather than
+/// cut -- which is the one piece of animation state that is allowed to live
+/// outside the snapshot, because a fade that hiccups across a rollback's one to
+/// eight frames is imperceptible and a cut every time you start walking is not.
+pub type Shape = u32;
+
+/// The whole animation system, and what produced it.
+pub fn pose_and_shape(input: PoseInput) -> (Pose, Shape) {
+    let pose = pose_for(input);
+    (pose, shape_of(input))
+}
+
+/// Which branch of the selection this state lands in.
+///
+/// Deliberately coarse: two frames of the same walk are the same shape, and a
+/// walk and a run are too, because the blend between them is continuous and
+/// fading it against itself would only soften it. What has to be caught is a
+/// *discontinuity* -- walking into an attack, an attack into a hit.
+fn shape_of(input: PoseInput) -> Shape {
+    if input.health <= 0 {
+        return 1;
+    }
+    match input.action {
+        Action::Startup { kind, .. }
+        | Action::Active { kind, .. }
+        | Action::Recovery { kind, .. } => {
+            // The three phases of one move are one shape: they are consecutive
+            // frames of a single clip, and fading between them would blur the
+            // contact frame, which is the one frame that must be sharp.
+            100 + kind as u32
+        }
+        Action::Guard { .. } => 200,
+        Action::BlockStun { .. } => 201,
+        Action::HitStun { .. } => 202,
+        Action::Stagger { .. } => 203,
+        Action::Held { .. } => 204,
+        Action::Dodge { .. } => 205,
+        Action::Free => {
+            if !input.grounded {
+                206
+            } else if input.crouching {
+                207
+            } else if input.speed < 0.5 {
+                // Standing and moving are different animations, and the
+                // simulation goes from one to the other in a single frame -- it
+                // has no ground friction to speak of, on purpose. Without the
+                // distinction here, stopping is a cut from a full sprint to an
+                // idle with nothing in between.
+                208
+            } else {
+                209
+            }
+        }
+    }
+}
+
+/// Renderer-local cross-fade between animations.
+///
+/// Held outside the snapshot on purpose. A rollback rewinds the fade to
+/// whatever it was, which is wrong by up to eight frames of blend weight and
+/// invisible; cutting straight from a walk into a wind-up is visible every
+/// single time.
+#[derive(Clone, Copy, Debug)]
+pub struct Crossfade {
+    /// What was on screen when the animation last changed.
+    from: Pose,
+    /// What was on screen last frame, which is what the next fade starts from.
+    drawn: Pose,
+    shape: Shape,
+    /// Frames of fade left.
+    left: f32,
+    /// Frames the fade runs for.
+    length: f32,
+    /// How fast the body is going, smoothed.
+    ///
+    /// Only the blend weights read this -- the stride phase comes from the
+    /// simulation, so smoothing the speed cannot make the legs run on the spot.
+    /// It exists because the simulation accelerates from a standstill to a
+    /// sprint in three frames, and blending idle to walk to run that fast is a
+    /// pop however good the clips are.
+    speed: f32,
+    /// Which way the body is going, smoothed.
+    ///
+    /// The four directional walk clips are blended by this, and the raw value
+    /// changes in one frame when a key goes down -- so a step to the side
+    /// arrives as a cut from one cycle to another. Smoothing the *direction*
+    /// rather than fading the result is the better fix: the stride phase still
+    /// comes from distance walked, so the feet stay where they belong while the
+    /// body turns into the new direction over a few frames.
+    travel: [f32; 2],
+}
+
+impl Default for Crossfade {
+    fn default() -> Self {
+        Crossfade {
+            from: Pose::rest(),
+            drawn: Pose::rest(),
+            shape: Shape::MAX,
+            left: 0.0,
+            length: 6.0,
+            speed: 0.0,
+            travel: [0.0, 1.0],
+        }
+    }
+}
+
+impl Crossfade {
+    /// Pose this frame, fading out of whatever was on screen when the animation
+    /// last changed. `dt` is real seconds, so the fade is the same length at any
+    /// refresh rate.
+    pub fn pose(&mut self, input: PoseInput, dt: f32) -> Pose {
+        let mut input = input;
+        input.travel = self.smooth_travel(input.travel, dt);
+        let k = (dt * 60.0 * 0.2).clamp(0.0, 1.0);
+        self.speed += (input.speed - self.speed) * k;
+        // The shape is decided by the real speed, so stopping still cuts to a
+        // fade at the moment it happens; only the gait blend is eased.
+        let (_, shape) = pose_and_shape(input);
+        let blended = PoseInput {
+            speed: self.speed,
+            ..input
+        };
+        let target = pose_for(blended);
+        if shape != self.shape {
+            // Fade from the picture that was actually on screen, not from the
+            // old clip's idea of this frame: the point is that nothing jumps,
+            // and a fade interrupted halfway has to continue from where it got
+            // to rather than snapping back to where it started.
+            self.from = if self.shape == Shape::MAX {
+                target
+            } else {
+                self.drawn
+            };
+            self.shape = shape;
+            self.left = self.length;
+        }
+        let out = if self.left > 0.0 {
+            // Eased, so the fade has no corner at either end.
+            let t = 1.0 - (self.left / self.length).clamp(0.0, 1.0);
+            let k = t * t * (3.0 - 2.0 * t);
+            self.from.blend(&target, k)
+        } else {
+            target
+        };
+        self.left = (self.left - dt * 60.0).max(0.0);
+        self.drawn = out;
+        out
+    }
+
+    /// Ease the travel direction toward where the body is actually going,
+    /// keeping the speed exact -- the speed decides the gait and must not lag.
+    fn smooth_travel(&mut self, want: [f32; 2], dt: f32) -> [f32; 2] {
+        let speed = (want[0] * want[0] + want[1] * want[1]).sqrt();
+        if speed < 0.2 {
+            // Stopped: there is no direction to smooth toward, and normalising
+            // noise would spin the character on the spot.
+            return want;
+        }
+        let unit = [want[0] / speed, want[1] / speed];
+        let k = (dt * 60.0 * 0.16).clamp(0.0, 1.0);
+        let mut blended = [
+            self.travel[0] + (unit[0] - self.travel[0]) * k,
+            self.travel[1] + (unit[1] - self.travel[1]) * k,
+        ];
+        let len = (blended[0] * blended[0] + blended[1] * blended[1]).sqrt();
+        if len < 1e-4 {
+            blended = unit;
+        } else {
+            blended = [blended[0] / len, blended[1] / len];
+        }
+        self.travel = blended;
+        [blended[0] * speed, blended[1] * speed]
     }
 }
 
@@ -337,8 +503,7 @@ fn crouched(input: PoseInput) -> Pose {
     let entry = Clip::CrouchIn.length();
     let settle = (input.since_landed.min(entry) as f32 / entry as f32).clamp(0.0, 1.0);
     let held = if input.speed > 0.4 {
-        let phase = input.distance / CROUCH_STRIDE;
-        Clip::CrouchWalk.at_fractional(phase * Clip::CrouchWalk.length() as f32)
+        Clip::CrouchWalk.at_fractional(input.stride * Clip::CrouchWalk.length() as f32)
     } else {
         Clip::CrouchIdle.at(input.since_landed as u32)
     };
@@ -358,14 +523,10 @@ fn locomotion(input: PoseInput) -> Pose {
     }
 
     let gait = ((speed - WALK_AT) / (RUN_AT - WALK_AT)).clamp(0.0, 1.0);
-    let stride = WALK_STRIDE + (RUN_STRIDE - WALK_STRIDE) * gait;
-    // Shortened in proportion to how sideways the travel is, matching how the
-    // strafe clips were authored. Get this wrong and the sidesteps skate even
-    // though the forward walk does not.
-    let [strafe, forward] = input.travel;
-    let sideways = strafe.abs() / (strafe.abs() + forward.abs()).max(1e-4);
-    let stride = stride * (1.0 - (1.0 - STRAFE_STRIDE) * sideways);
-    let phase = input.distance / stride.max(0.2);
+    // The phase is already in cycles: the simulation integrated `speed / stride`
+    // to get it, which is the only way to keep it continuous when the stride
+    // itself changes with speed and direction.
+    let phase = input.stride;
 
     let walk = directional(input, phase, false);
     let run = directional(input, phase, true);

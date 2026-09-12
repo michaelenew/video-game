@@ -239,13 +239,21 @@ animation.
 `view::play::pose_for` chooses and blends. Three tricks in it are worth knowing
 about, because clips are authored against them:
 
-**Locomotion is driven by distance, not time.** A walk cycle on a fixed cadence
-skates the moment the body moves at any other speed. The cycle is indexed by
-ground covered, so a footfall happens every stride's worth of metres at any
-speed. The four directional clips are sampled at the *same* stride phase before
-being blended, which is what keeps a diagonal from producing two planted feet at
-once. `WALK_STRIDE`, `RUN_STRIDE`, `CROUCH_STRIDE` and `STRAFE_STRIDE` live in
-`view::play` and the recipes import them, so there is one of each number.
+**Locomotion is driven by ground covered, not by time.** A walk cycle on a fixed
+cadence skates the moment the body moves at any other speed. The cycle is
+indexed by a **stride phase** the simulation carries in the snapshot, so a
+footfall happens every stride's worth of metres at any speed. The four
+directional clips are sampled at the *same* phase before being blended, which is
+what keeps a diagonal from producing two planted feet at once.
+
+The phase is an **accumulator**, not a ratio, and that is load-bearing: a stride
+is longer at a sprint than at a walk and shorter sideways than forwards, so
+`distance / stride` jumps by whole cycles the moment the stride changes — which
+reads as both legs teleporting, and did, before this was fixed. Integrating
+`speed / stride` each tick cannot do that. `WALK_STRIDE`, `RUN_STRIDE`,
+`CROUCH_STRIDE` and `STRAFE_STRIDE` live in `sim::tuning` because the simulation
+is what integrates with them; `view::play` mirrors them as `f32` at compile time
+and the recipes import those, so there is one of each number.
 
 **Stun clips are indexed from the end.** `HitStun { left }` counts down, and
 what matters is that the character is back on their feet on the exact frame
@@ -257,6 +265,16 @@ so there is no turn event to start a clip on — only a body that is currently
 rotating fast or slow. Frame zero of a turn clip must be neutral and its last
 frame a full committed turn; the renderer picks the frame from how fast the body
 is actually rotating and layers the difference over whatever the legs are doing.
+
+### Cross-fading
+
+`pose_for` switches clips; it does not fade between them. The fade lives in
+`view::play::Crossfade`, which the renderer owns — the one piece of animation
+state deliberately kept **outside** the snapshot, because a fade that hiccups
+across a rollback's one to eight frames is imperceptible and a cut every time
+you start walking is not. It fades on a coarse *shape* change (an attack
+beginning, a body being hit, a sprint stopping) and also eases the travel
+direction and the gait blend, which the simulation changes in a single frame.
 
 ## Looking at it
 
