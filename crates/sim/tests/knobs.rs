@@ -64,6 +64,23 @@ const EXEMPT: &[(&str, &str)] = &[
         "Derived from the tick rate. The tick rate is a networking decision, not a feel one.",
     ),
     (
+        "const TAIL_PIVOT_X: Fx = Fx::ratio(-24, 10)",
+        "Where the tail hinges is one of the creature's proportions, and the proportions are \
+         `const` for the same reason the arena's geometry is: a shape rather than a feel number, \
+         and not part of the rollback snapshot. The number you would actually reach for -- how \
+         big the animal is -- is `monster_scale`, which multiplies all of it and is in the Oven.",
+    ),
+    (
+        "const QUARTER: Fx = Fx::from_raw(1 << 14)",
+        "An angle unit, not a quantity: it puts the shake's pitch wobble a quarter turn out of \
+         phase with its yaw. Exact by construction in the u16 turn space.",
+    ),
+    (
+        "const HALF_TURN: Fx = Fx::from_raw(1 << 15)",
+        "An angle unit, not a quantity. Half of the u16 turn space, exact by construction, used \
+         to face a spawning creature at the hunters without arithmetic.",
+    ),
+    (
         "Fx::ratio(1, 2)",
         "Half of an overlap, given to each of the two bodies. Arithmetic, not a knob: any other \
          value would move the pair's centre of mass.",
