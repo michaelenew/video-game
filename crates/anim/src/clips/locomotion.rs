@@ -73,12 +73,13 @@ pub fn stance() -> Pose {
         .elbow_r(44.0)
         .wrist_r(-8.0, 0.0, 0.0)
         .plant_l([L - 0.03, GROUND, 0.16])
-        .plant_r([R + 0.03, GROUND, -0.15])
+        // The rear heel is off the floor, which is what a bladed stance does.
+        // Raising it means raising the *ankle* and pivoting on the toe -- tipping
+        // the foot about an ankle that is still at floor height just drives the
+        // toe through the ground, which is what the first version of this did.
+        .plant_r([R + 0.03, GROUND + 0.032, -0.15])
         .toe_l(0.0)
-        // The rear heel is off the floor, which is what a bladed stance does
-        // and also the only thing an ankle can do at this angle: levelling the
-        // foot here would ask for more dorsiflexion than the joint has.
-        .toe_r(12.0)
+        .toe_floor_r()
 }
 
 fn idle() -> Recipe {
@@ -99,19 +100,20 @@ fn idle() -> Recipe {
         .spine(5.0, 2.5, 6.0)
         .head(-3.0, 1.5, 7.0)
         .plant_l([L - 0.03, GROUND, 0.16])
-        .plant_r([R + 0.03, GROUND, -0.15])
+        .plant_r([R + 0.03, GROUND + 0.038, -0.15])
         .toe_l(0.0)
-        .toe_r(10.0);
+        .toe_floor_r();
 
     let weight_right = stance()
         .hips(0.018, -0.058, 0.0)
         .root(2.0, 2.0, -13.0)
         .spine(5.0, -2.0, 6.0)
         .head(-2.0, -1.0, 2.0)
+        .plant_r([R + 0.03, GROUND + 0.012, -0.15])
         .plant_l([L - 0.03, GROUND, 0.16])
         .plant_r([R + 0.03, GROUND, -0.15])
-        .toe_l(-3.0)
-        .toe_r(14.0);
+        .toe_l(-2.0)
+        .toe_floor_r();
 
     Recipe {
         clip: Clip::Idle,
@@ -310,7 +312,11 @@ fn run(clip: Clip, travel: Travel) -> Recipe {
         stance: 0.25,
         lift: 0.32,
         // A run lands on the ball of the foot, not the heel.
-        contact_height: GROUND + 0.045,
+        // Barely above the floor. A run lands on the ball of the foot, but the
+        // foot's own angle lags the leg by two and a half frames -- so a steep
+        // landing pitch is still pointing down when the leg has already brought
+        // the ankle to the ground, and the toe goes through it.
+        contact_height: GROUND + 0.015,
         tuck: 0.0,
         toe_rise: 0.125,
         roll_from: 0.30,

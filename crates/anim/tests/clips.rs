@@ -9,7 +9,7 @@
 use view::clips::{ALL, Clip, Family};
 use view::play::{CROUCH_STRIDE, RUN_STRIDE, STRAFE_STRIDE, WALK_STRIDE};
 use view::pose::{Pose, reference};
-use view::skeleton::{JOINTS, Joint};
+use view::skeleton::{Group, JOINTS, Joint};
 
 /// Only the clips somebody has actually written. Unauthored ones bake as a held
 /// rest pose and would pass everything here for the wrong reason.
@@ -117,19 +117,66 @@ fn every_baked_number_is_a_number() {
 fn baked_motion_is_continuous() {
     // A jump between adjacent frames is a pop, and a pop is the thing players
     // notice before anything else.
+    //
+    // Measured as how far each joint *moves*, not as how far its angles change.
+    // A forearm rolling ninety degrees through a sword cut is a large number in
+    // the twist channel and no motion at all on screen, and a test that cannot
+    // tell those apart either forbids real animation or lets real pops through.
+    let skeleton = reference();
     for b in authored() {
         for (i, pair) in b.frames.windows(2).enumerate() {
+            // The opening frame of a one-shot is deliberately explosive -- a
+            // dodge leaves at seventeen metres a second and a takeoff at
+            // eighteen -- and the game never shows it raw: `Crossfade` eases
+            // into every one of these over six frames. What has to be smooth is
+            // the body of the clip, and every frame of a loop, which is seen
+            // exactly as baked.
+            if i == 0 && !b.clip.looping() {
+                continue;
+            }
+            let before = view::skeleton::solve(skeleton, &pair[0]);
+            let after = view::skeleton::solve(skeleton, &pair[1]);
+            // Measured *relative to the hips*. A body that is travelling moves
+            // every joint on it, and a dive roll or a takeoff moves them all
+            // very fast -- that is the character going somewhere, not the pose
+            // jumping. What a viewer reads as a pop is a limb moving relative
+            // to the body it is attached to.
+            let root = {
+                let (p, q) = (before.origin[0], after.origin[0]);
+                [q[0] - p[0], q[1] - p[1], q[2] - p[2]]
+            };
             for j in JOINTS {
-                let (a, c) = (pair[0].angles(j), pair[1].angles(j));
-                for k in 0..3 {
-                    let jump = (c[k] - a[k]).to_degrees().abs();
-                    assert!(
-                        jump < 32.0,
-                        "{}: {} channel {k} jumped {jump:.0} degrees at frame {i}",
-                        b.clip.name(),
-                        j.name()
-                    );
-                }
+                let (p, q) = (before.origin[j.index()], after.origin[j.index()]);
+                let moved = ((q[0] - p[0] - root[0]).powi(2)
+                    + (q[1] - p[1] - root[1]).powi(2)
+                    + (q[2] - p[2] - root[2]).powi(2))
+                .sqrt();
+                // The ceiling depends on where the joint is. A hand is at the
+                // end of a two-metre lever and legitimately whips -- a sprint's
+                // swing foot travels at twice the body's speed. A *hip* doing
+                // that is a teleport, because the body it is attached to cannot
+                // go there.
+                let ceiling = match (j.depth(), j.group()) {
+                    (_, Group::Root | Group::Spine | Group::Chest) => 0.15,
+                    (_, Group::Head) => 0.30,
+                    (0, _) => 0.24,
+                    // A knee or an elbow whipping through the first frames of a
+                    // dive is the fastest thing on the body relative to it.
+                    (1, _) => 0.30,
+                    // A hand or a foot at the end of its lever. Thirty-six
+                    // centimetres a frame is twenty-one metres a second
+                    // relative to the hips, which is about what a sprinter's
+                    // foot does at the top of its swing -- so it is the edge of
+                    // human rather than a number chosen to fit the clips.
+                    _ => 0.36,
+                };
+                assert!(
+                    moved < ceiling,
+                    "{}: {} moved {moved:.3} m (ceiling {ceiling}) relative to the hips between frames {i} and {}",
+                    b.clip.name(),
+                    j.name(),
+                    i + 1
+                );
             }
         }
     }
@@ -385,16 +432,23 @@ fn an_idle_keeps_both_feet_down() {
         .find(|b| b.clip == Clip::Idle)
         .expect("idle is authored");
     for (i, pose) in idle.frames.iter().enumerate() {
-        let skin = view::skeleton::solve(skeleton, pose);
+        let mut lowest = f32::MAX;
         for foot in [Joint::FootL, Joint::FootR] {
-            let (centre, _) = skin.box_of(skeleton, foot);
-            let sole = centre[1] - skeleton.bone(foot).half[1];
+            let (heel, toe) = pose.foot_contact(skeleton, foot == Joint::FootL);
+            let sole = heel[1].min(toe[1]);
+            lowest = lowest.min(sole);
+            // A raised rear heel is a stance, not a step. A whole foot in the
+            // air is a step, and an idle does not take one.
             assert!(
-                sole < 0.03,
+                sole < 0.055,
                 "idle frame {i}: {} is {sole:.3} m off the ground",
                 foot.name()
             );
         }
+        assert!(
+            lowest < 0.02,
+            "idle frame {i}: neither foot is on the floor"
+        );
     }
 }
 
@@ -467,5 +521,131 @@ fn the_clips_that_mirror_a_simulation_clock_are_the_same_length_as_it() {
         "the collapse is {} frames and the round pause is {} -- it would be cut off",
         Clip::Defeat.length(),
         sim::tuning::round_over_frames()
+    );
+}
+
+/// Where each clip's feet are, frame by frame. Not a test -- a readout, for
+/// when one of the floor tests fails and the question is *which frame*.
+#[test]
+#[ignore]
+fn report_floor_clearance() {
+    let skeleton = reference();
+    for b in authored() {
+        let worst = b
+            .frames
+            .iter()
+            .map(|p| p.lowest_foot(skeleton))
+            .fold(f32::MAX, f32::min);
+        let at = b
+            .frames
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, c)| a.lowest_foot(skeleton).total_cmp(&c.lowest_foot(skeleton)))
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        println!("{:<22} lowest {worst:+.4} at frame {at}", b.clip.name());
+    }
+}
+
+/// Worst relative motion per group across everything authored. A readout for
+/// choosing the ceilings in `baked_motion_is_continuous` from what bodies
+/// actually do, rather than one clip at a time.
+#[test]
+#[ignore]
+fn report_worst_motion() {
+    let skeleton = reference();
+    let mut worst: Vec<(String, f32, String)> = Vec::new();
+    for b in authored() {
+        for (i, pair) in b.frames.windows(2).enumerate() {
+            if i == 0 && !b.clip.looping() {
+                continue;
+            }
+            let before = view::skeleton::solve(skeleton, &pair[0]);
+            let after = view::skeleton::solve(skeleton, &pair[1]);
+            let r = {
+                let (p, q) = (before.origin[0], after.origin[0]);
+                [q[0] - p[0], q[1] - p[1], q[2] - p[2]]
+            };
+            for j in JOINTS {
+                let (p, q) = (before.origin[j.index()], after.origin[j.index()]);
+                let m = ((q[0] - p[0] - r[0]).powi(2)
+                    + (q[1] - p[1] - r[1]).powi(2)
+                    + (q[2] - p[2] - r[2]).powi(2))
+                .sqrt();
+                let key = format!("{:?} depth {}", j.group(), j.depth());
+                match worst.iter_mut().find(|(k, _, _)| *k == key) {
+                    Some(e) if m > e.1 => {
+                        e.1 = m;
+                        e.2 = format!("{} {} frame {i}", b.clip.name(), j.name());
+                    }
+                    Some(_) => {}
+                    None => {
+                        worst.push((key, m, format!("{} {} frame {i}", b.clip.name(), j.name())))
+                    }
+                }
+            }
+        }
+    }
+    worst.sort_by(|a, c| c.1.total_cmp(&a.1));
+    for (k, m, who) in worst {
+        println!("{k:<18} {m:.3}   {who}");
+    }
+}
+
+/// Every clip that fails the continuity ceilings, in one list. Used when a
+/// batch of new clips lands, so the whole set can be triaged at once instead of
+/// one assertion at a time.
+#[test]
+#[ignore]
+fn report_discontinuous_clips() {
+    let skeleton = reference();
+    let mut bad: Vec<String> = Vec::new();
+    for b in authored() {
+        let mut worst = (0.0f32, String::new());
+        for (i, pair) in b.frames.windows(2).enumerate() {
+            if i == 0 && !b.clip.looping() {
+                continue;
+            }
+            let before = view::skeleton::solve(skeleton, &pair[0]);
+            let after = view::skeleton::solve(skeleton, &pair[1]);
+            let r = {
+                let (p, q) = (before.origin[0], after.origin[0]);
+                [q[0] - p[0], q[1] - p[1], q[2] - p[2]]
+            };
+            for j in JOINTS {
+                let (p, q) = (before.origin[j.index()], after.origin[j.index()]);
+                let m = ((q[0] - p[0] - r[0]).powi(2)
+                    + (q[1] - p[1] - r[1]).powi(2)
+                    + (q[2] - p[2] - r[2]).powi(2))
+                .sqrt();
+                let ceiling = match (j.depth(), j.group()) {
+                    (_, Group::Root | Group::Spine | Group::Chest) => 0.15,
+                    (_, Group::Head) => 0.30,
+                    (0, _) => 0.24,
+                    (1, _) => 0.30,
+                    _ => 0.36,
+                };
+                let over = m / ceiling;
+                if over > 1.0 && over > worst.0 {
+                    worst = (over, format!("{} frame {i} at {m:.3}", j.name()));
+                }
+            }
+        }
+        if worst.0 > 1.0 {
+            bad.push(format!(
+                "{:<24} {:.2}x  {}",
+                b.clip.name(),
+                worst.0,
+                worst.1
+            ));
+        }
+    }
+    for line in &bad {
+        println!("{line}");
+    }
+    println!(
+        "{} of {} authored clips are over",
+        bad.len(),
+        authored().len()
     );
 }

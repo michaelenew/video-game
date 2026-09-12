@@ -96,8 +96,17 @@ pub fn reach(pose: &mut Pose, skeleton: &Skeleton, upper: Joint, target: V3, pol
     );
     let twist = twist_for_axis(skeleton, upper, swing, spread, hinge);
 
-    pose.set_angles(upper, [swing, spread, twist]);
-    pose.set_angles(middle, [bend, 0.0, 0.0]);
+    // Clamped to what the joint can do. The solve is a closed form and will
+    // happily return an angle no hip has: asking for a foot behind and across
+    // the other leg produces a hundred degrees of adduction, and without this
+    // that lands in the authored pose as a number a body cannot hold. The limb
+    // reaches as far as the joint allows and stops, which is what a body does.
+    let limits = |j: Joint, a: [f32; 3]| {
+        let (s, p, t) = skeleton.bone(j).limits.clamp(a[0], a[1], a[2]);
+        [s, p, t]
+    };
+    pose.set_angles(upper, limits(upper, [swing, spread, twist]));
+    pose.set_angles(middle, limits(middle, [bend, 0.0, 0.0]));
 
     // Report the truth: limits and reach are both allowed to refuse.
     let after = solve(skeleton, pose);

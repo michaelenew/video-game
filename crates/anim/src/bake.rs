@@ -99,10 +99,16 @@ impl Feel {
     /// hand trails that, which is where follow-through actually comes from --
     /// and getting it for free from the skeleton beats asking every author to
     /// remember it.
-    fn at_depth(&self, depth: u8) -> Feel {
+    fn at_depth(&self, depth: u8, group: Group) -> Feel {
         let d = depth as f32;
+        // Legs taper far less than arms. A trailing hand is follow-through and
+        // the whole reason the taper exists; a trailing *foot* is a foot in the
+        // floor, because the ground is at a fixed height and does not wait for
+        // it. Two and a half frames of ankle lag is enough to leave a running
+        // toe still pointed down after the leg has planted.
+        let taper = if group == Group::Legs { 0.2 } else { 0.5 };
         Feel {
-            lag: self.lag * (1.0 + 0.5 * d),
+            lag: self.lag * (1.0 + taper * d),
             ring: (self.ring * (1.0 - 0.12 * d)).max(0.2),
         }
     }
@@ -278,7 +284,7 @@ fn channel_springs(looseness: &Looseness) -> [Spring; CHANNELS] {
         *s = Spring::new(0.0, f, d);
     }
     for j in JOINTS {
-        let feel = looseness.group(j.group()).at_depth(j.depth());
+        let feel = looseness.group(j.group()).at_depth(j.depth(), j.group());
         let (f, d) = feel.spring();
         for c in 0..3 {
             springs[3 + j.index() * 3 + c] = Spring::new(0.0, f, d);

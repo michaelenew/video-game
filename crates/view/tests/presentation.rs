@@ -480,6 +480,8 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         crouched_for: 0,
         speed: 0.0,
         travel: [0.0, 0.0],
+        eased_speed: 0.0,
+        eased_travel: [0.0, 0.0],
         stride,
         air_frames: 0,
         since_landed: frame as u16,
@@ -551,6 +553,8 @@ fn walking_moves_the_legs_and_idling_does_not() {
     let mut moving = input_at(Action::Free, 0.0, 12);
     moving.speed = 7.0;
     moving.travel = [0.0, 7.0];
+    moving.eased_speed = 7.0;
+    moving.eased_travel = [0.0, 7.0];
     let leg = |p: &view::Pose| p.degrees(Joint::ThighL, 0);
 
     let mut swung: f32 = 0.0;
@@ -656,23 +660,40 @@ fn nothing_the_animation_system_draws_is_a_jump() {
     // what stops walking into a wind-up from being a visible cut. This is the
     // test that says it works, over a match that visits every branch.
     let drawn = play_through(600);
+    let skeleton = view::pose::reference();
     let mut worst = 0.0f32;
-    let mut at = 0;
+    let mut at = (0usize, "");
     for (i, pair) in drawn.windows(2).enumerate() {
-        let jump = pair[0].separation(&pair[1]);
-        if jump > worst {
-            worst = jump;
-            at = i;
+        let before = view::skeleton::solve(skeleton, &pair[0]);
+        let after = view::skeleton::solve(skeleton, &pair[1]);
+        // Relative to the hips, like the clip standard in `anim`: a body that
+        // is travelling moves every joint on it, and that is the character
+        // going somewhere rather than the pose jumping.
+        let root = {
+            let (p, q) = (before.origin[0], after.origin[0]);
+            [q[0] - p[0], q[1] - p[1], q[2] - p[2]]
+        };
+        for j in view::skeleton::JOINTS {
+            let (p, q) = (before.origin[j.index()], after.origin[j.index()]);
+            let moved = ((q[0] - p[0] - root[0]).powi(2)
+                + (q[1] - p[1] - root[1]).powi(2)
+                + (q[2] - p[2] - root[2]).powi(2))
+            .sqrt();
+            if moved > worst {
+                worst = moved;
+                at = (i, j.name());
+            }
         }
     }
-    // This is a no-*cut* test, not a smoothness ceiling. A sprint legitimately
-    // advances more than a frame of its own clip per rendered frame, so the
-    // figure here is a couple of times that; what it catches is the ten-unit
-    // jumps that come from switching animation without a fade.
+    // Comfortably above what any single clip is allowed and far below a cut:
+    // switching from a sprint into a wind-up without a fade moves a hand about
+    // a metre in one frame, and that is the failure this exists to catch.
     assert!(
-        worst < 3.5,
-        "the pose jumped {worst:.2} between frames {at} and {}",
-        at + 1
+        worst < 0.45,
+        "{} moved {worst:.3} m relative to the hips between frames {} and {}",
+        at.1,
+        at.0,
+        at.0 + 1
     );
 }
 

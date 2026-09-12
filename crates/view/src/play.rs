@@ -86,6 +86,16 @@ pub struct PoseInput {
     pub speed: f32,
     /// Strafe and forward velocity in the character's own frame.
     pub travel: [f32; 2],
+    /// The same two, eased.
+    ///
+    /// Two versions on purpose. The simulation goes from a standstill to a
+    /// sprint in three frames and swaps travel direction in one, which no blend
+    /// between walk cycles can follow -- so the *blend weights* read the eased
+    /// pair. But a **choice** must read the real one: which way a dodge went is
+    /// decided on its first frame and cannot be revised, and picking it from a
+    /// value that is still catching up switches clips two frames into the roll.
+    pub eased_speed: f32,
+    pub eased_travel: [f32; 2],
     /// Where the body is in its stride, in cycles, wrapping.
     pub stride: f32,
     pub air_frames: u16,
@@ -118,6 +128,8 @@ impl PoseInput {
             crouching: view.crouching,
             speed: view.speed,
             travel: view.travel,
+            eased_speed: view.speed,
+            eased_travel: view.travel,
             stride: view.stride,
             air_frames: view.air_frames,
             since_landed: view.since_landed,
@@ -249,16 +261,23 @@ impl Crossfade {
     /// refresh rate.
     pub fn pose(&mut self, input: PoseInput, dt: f32) -> Pose {
         let mut input = input;
-        input.travel = self.smooth_travel(input.travel, dt);
-        let k = (dt * 60.0 * 0.2).clamp(0.0, 1.0);
+        // Slower coming down than going up. Starting to run is a decision and
+        // should look like one; stopping is momentum running out, and blending
+        // a sprint into an idle in five frames looks like the character was
+        // switched off rather than slowed down.
+        let rate = if input.speed > self.speed {
+            0.20
+        } else {
+            0.075
+        };
+        let k = (dt * 60.0 * rate).clamp(0.0, 1.0);
         self.speed += (input.speed - self.speed) * k;
+        input.eased_speed = self.speed;
+        input.eased_travel = self.smooth_travel(input.travel, dt);
         // The shape is decided by the real speed, so stopping still starts a
-        // fade at the moment it happens; only the gait blend is eased.
+        // fade at the moment it happens; only the blending is eased.
         let shape = shape_of(input);
-        let target = pose_for(PoseInput {
-            speed: self.speed,
-            ..input
-        });
+        let target = pose_for(input);
         if shape != self.shape {
             // Fade from the picture that was actually on screen, not from the
             // old clip's idea of this frame: the point is that nothing jumps,
@@ -285,29 +304,29 @@ impl Crossfade {
         out
     }
 
-    /// Ease the travel direction toward where the body is actually going,
-    /// keeping the speed exact -- the speed decides the gait and must not lag.
+    /// Ease the travel *direction*, and give it the eased speed.
+    ///
+    /// The direction is remembered when the body stops, rather than collapsing
+    /// to nothing: the eased speed takes several frames to come down, and a
+    /// direction of zero during those frames leaves the walk blend with no
+    /// clips to weight and nothing to draw.
     fn smooth_travel(&mut self, want: [f32; 2], dt: f32) -> [f32; 2] {
         let speed = (want[0] * want[0] + want[1] * want[1]).sqrt();
-        if speed < 0.2 {
-            // Stopped: there is no direction to smooth toward, and normalising
-            // noise would spin the character on the spot.
-            return want;
+        if speed >= 0.2 {
+            let unit = [want[0] / speed, want[1] / speed];
+            let k = (dt * 60.0 * 0.16).clamp(0.0, 1.0);
+            let blended = [
+                self.travel[0] + (unit[0] - self.travel[0]) * k,
+                self.travel[1] + (unit[1] - self.travel[1]) * k,
+            ];
+            let len = (blended[0] * blended[0] + blended[1] * blended[1]).sqrt();
+            self.travel = if len < 1e-4 {
+                unit
+            } else {
+                [blended[0] / len, blended[1] / len]
+            };
         }
-        let unit = [want[0] / speed, want[1] / speed];
-        let k = (dt * 60.0 * 0.16).clamp(0.0, 1.0);
-        let mut blended = [
-            self.travel[0] + (unit[0] - self.travel[0]) * k,
-            self.travel[1] + (unit[1] - self.travel[1]) * k,
-        ];
-        let len = (blended[0] * blended[0] + blended[1] * blended[1]).sqrt();
-        if len < 1e-4 {
-            blended = unit;
-        } else {
-            blended = [blended[0] / len, blended[1] / len];
-        }
-        self.travel = blended;
-        [blended[0] * speed, blended[1] * speed]
+        [self.travel[0] * self.speed, self.travel[1] * self.speed]
     }
 }
 
@@ -375,8 +394,8 @@ fn attack(input: PoseInput, kind: u8) -> Pose {
     // its feet nailed down is the tell that an attack was animated in
     // isolation from the locomotion it interrupts.
     let mobility = sim::moves::get(input.class, kind).mobility as f32 / 100.0;
-    if mobility > 0.05 && input.speed > 0.6 && input.grounded {
-        let weight = (input.speed / RUN_AT).clamp(0.0, 1.0) * mobility * 0.7;
+    if mobility > 0.05 && input.eased_speed > 0.6 && input.grounded {
+        let weight = (input.eased_speed / RUN_AT).clamp(0.0, 1.0) * mobility * 0.7;
         let legs = locomotion(input);
         return pose.blend(&pose.take_group(&legs, Group::Legs), weight);
     }
@@ -532,7 +551,7 @@ fn crouched(input: PoseInput) -> Pose {
 /// diagonal walk with both feet planted at once, because the two clips drift
 /// out of step with each other within a couple of seconds.
 fn locomotion(input: PoseInput) -> Pose {
-    let speed = input.speed;
+    let speed = input.eased_speed;
     if speed < 0.15 {
         return Clip::Idle.at(idle_phase(input));
     }
@@ -578,9 +597,15 @@ fn directional(input: PoseInput, phase: f32, run: bool) -> Pose {
         )
     };
 
-    let [strafe, forward] = input.travel;
-    let len = (strafe * strafe + forward * forward).sqrt().max(1e-4);
-    let (sx, sz) = (strafe / len, forward / len);
+    let [strafe, forward] = input.eased_travel;
+    let len = (strafe * strafe + forward * forward).sqrt();
+    // Degenerate only if something upstream handed us a zero vector at speed;
+    // facing forward is the honest answer rather than a pose of nothing.
+    let (sx, sz) = if len < 1e-3 {
+        (0.0, 1.0)
+    } else {
+        (strafe / len, forward / len)
+    };
 
     let w = [
         (fwd, sz.max(0.0)),
@@ -642,7 +667,7 @@ fn turn_layer(input: PoseInput, base: Pose) -> Pose {
 
     // Walking absorbs a lot of a turn already; layering the full lean on top of
     // a run bends the character in half.
-    let damped = 1.0 - 0.45 * (input.speed / RUN_AT).clamp(0.0, 1.0);
+    let damped = 1.0 - 0.45 * (input.eased_speed / RUN_AT).clamp(0.0, 1.0);
     base.layered(&delta, damped)
         .clamped(crate::pose::reference())
 }

@@ -352,28 +352,59 @@ impl Pose {
         let parent = foot.parent().expect("a foot hangs off a shin");
         let skin = crate::skeleton::solve(skeleton, &self);
         let shin = skin.rot[parent.index()];
-        let ankle_y = skin.origin[foot.index()][1];
+        let ankle = skin.origin[foot.index()];
 
-        // The toe's height is `length * (Q cos a - P sin a)` above the ankle,
-        // where P and Q are how much the shin tilts the foot's own up and
-        // forward axes. Setting that equal to what is wanted is one `acos`.
-        let p = shin.rotate([0.0, 1.0, 0.0])[1];
-        let q = shin.rotate([0.0, 0.0, 1.0])[1];
-        // A little above the floor rather than exactly on it: the tip is the
-        // middle of the end of the box, and a pitched box's front-bottom corner
-        // hangs below that. Cheaper than solving for the corner, and the error
-        // is in the safe direction.
-        let drop = bone.half[1] + 0.025 * skeleton.scale + 0.022;
-        let k = (drop - ankle_y) / bone.length;
-        let r = (p * p + q * q).sqrt().max(1e-5);
-        let phi = (-p).atan2(q);
-        // Two solutions, mirrored about the shin's own tilt. Take the one with
-        // the toe down: that is the half of the stride this is for.
-        let angle = phi + (k / r).clamp(-1.0, 1.0).acos();
+        // How low the sole gets for a given ankle angle. Solved against the
+        // actual corners of the box rather than against the middle of its end,
+        // because a foot pitched forty degrees puts its front-bottom corner
+        // several centimetres below where the centreline says -- and several
+        // centimetres is the whole difference between rolling onto a toe and
+        // standing in the floor.
+        let lowest = |angle: f32| {
+            let rot = shin.mul(crate::math::Quat::from_x(angle * bone.swing_sign));
+            let centre = math::add(ankle, rot.rotate(bone.box_at));
+            let h = bone.half;
+            let mut low = f32::MAX;
+            for sx in [-1.0, 1.0f32] {
+                for sz in [-1.0, 1.0f32] {
+                    let corner = rot.rotate([sx * h[0], -h[1], sz * h[2]]);
+                    low = low.min(centre[1] + corner[1]);
+                }
+            }
+            low
+        };
 
         let (lo, hi) = bone.limits.swing;
+        // Start level and roll the toe down until the sole reaches the floor.
+        // Monotone across that range, so twenty halvings settle it.
+        let level = {
+            let p = shin.rotate([0.0, 1.0, 0.0])[1];
+            let q = shin.rotate([0.0, 0.0, 1.0])[1];
+            (q.atan2(p) / bone.swing_sign).clamp(lo, hi)
+        };
+        // A few millimetres of daylight rather than exactly touching. The
+        // solver's springs lag the keys, and a foot that is precisely on the
+        // floor at every key is under it between them.
+        const CLEARANCE: f32 = 0.008;
+        let mut low = level;
+        let mut high = hi;
+        if lowest(level) <= CLEARANCE {
+            // Already in the floor at level: the ankle is below where a flat
+            // foot would put it, and there is nothing to roll onto.
+            low = lo;
+            high = level;
+        }
+        for _ in 0..20 {
+            let mid = 0.5 * (low + high);
+            if lowest(mid) > CLEARANCE {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+
         let mut a = self.angles(foot);
-        a[0] = (angle / bone.swing_sign).clamp(lo, hi);
+        a[0] = low.clamp(lo, hi);
         self.set_angles(foot, a);
         self
     }
@@ -396,7 +427,19 @@ impl Pose {
         let mut p = self.level(foot);
         let mut a = p.angles(foot);
         let (lo, hi) = reference().bone(foot).limits.swing;
-        a[0] = (a[0] + degrees * RAD).clamp(lo, hi);
+        let mut want = (a[0] + degrees * RAD).clamp(lo, hi);
+        if degrees > 0.0 {
+            // Dropping the toe past where the sole meets the floor is not
+            // something a foot can do -- what it does instead is lift the heel,
+            // which is a pivot about the toe and is exactly what `toe_floor`
+            // solves. Capping here means `toe_l(30)` on a foot already flat on
+            // the ground is a no-op rather than a toe through the floorboards,
+            // and an author cannot get it wrong by not knowing how high the
+            // ankle happens to be.
+            let ceiling = self.pivot(foot).angles(foot)[0];
+            want = want.min(ceiling);
+        }
+        a[0] = want;
         p.set_angles(foot, a);
         p
     }
