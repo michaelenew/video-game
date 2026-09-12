@@ -291,6 +291,7 @@ scalars! {
     GraspSpread,       "Blood mage", "Grasp, how wide the cone opens",      Fixed,  fx(1,10), fx(6,1);
     GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
     GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
+    DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -666,7 +667,7 @@ pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const SLOTS: usize = 4;
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 177;
+pub const SCALAR_COUNT: usize = 178;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
 pub const MOVE_FIELDS: usize = 20;

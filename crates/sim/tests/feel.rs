@@ -11,6 +11,7 @@
 //! Record what you tried in the feel log, including the things you reverted.
 
 use sim::class::ALL_CLASSES;
+use sim::fixed::Fx;
 use sim::moves::{self, Move};
 use sim::state::{SLOT_COMMITTED, SLOT_POKE};
 use sim::tuning as t;
@@ -275,6 +276,39 @@ fn a_root_outlives_the_hitstun_that_delivers_it() {
         "the Grasp roots for {} frames and stuns for {}, so the root is invisible",
         t::grasp_root(),
         grasp.hitstun
+    );
+}
+
+#[test]
+fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
+    // Both ends. Below about a fifth extra it is a number nobody notices and
+    // the Grasp goes back to being a root with no payoff; far above it and
+    // landing one disable is the match, which is the opposite of a game built
+    // on reads and whiff punishment.
+    let mul = t::disabled_damage_mul();
+    assert!(
+        mul.raw() > Fx::ratio(6, 5).raw(),
+        "the bonus is {}x, which nobody will feel",
+        mul.to_f32_for_render()
+    );
+    assert!(
+        mul.raw() < Fx::from_int(2).raw(),
+        "the bonus is {}x, so one read ends the round",
+        mul.to_f32_for_render()
+    );
+
+    // And the disable it is built around has to outlast the wind-up of
+    // something worth spending it on, or there is nothing to follow up with.
+    let root = t::grasp_root();
+    let fastest = moves::table(sim::class::Class::BloodMage)
+        .iter()
+        .map(|m| m.startup)
+        .min()
+        .expect("the class has moves");
+    assert!(
+        root > fastest,
+        "the root lasts {root} frames and her fastest move takes {fastest} to \
+         come out, so nothing can be landed inside it"
     );
 }
 

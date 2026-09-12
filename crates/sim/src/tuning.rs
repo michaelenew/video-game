@@ -711,6 +711,16 @@ pub fn grasp_root() -> u16 {
     oven::scalar(Scalar::GraspRoot) as u16
 }
 
+/// What a Blood mage's damage is multiplied by against something that cannot
+/// move -- rooted, staggered, held, or a creature on its side.
+///
+/// The class's damage identity, and the reason its root is a setup rather than
+/// a small reward. See `class::Class::preys_on_the_disabled` for which classes
+/// it applies to and `state::Player::disabled` for what counts.
+pub fn disabled_damage_mul() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DisabledDamageMul))
+}
+
 // ---------------------------------------------------------------------------
 // The Ridgeback
 //

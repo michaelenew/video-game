@@ -105,7 +105,7 @@ Nothing here blocks a prototype.
 | Champion | Whether the mid-animation swap costs Rush |
 | Shadow Reaver | Whether the shadow has collision |
 | Elementalist | Structure cap of three is a readability guess, not a balance one. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them |
-| Blood mage | Health cost flat or percentage |
+| Blood mage | Health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
 
 ## 5 · Parked — not slated for initial implementation
 

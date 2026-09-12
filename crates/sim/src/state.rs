@@ -397,6 +397,25 @@ impl Player {
         self.rooted > 0
     }
 
+    /// Are this fighter's options gone?
+    ///
+    /// Rooted, staggered, or held. **Hitstun is deliberately not in the list**,
+    /// and that is the whole of the definition: hitstun happens on every hit
+    /// anybody lands, so counting it would turn "increased damage to disabled
+    /// enemies" into "increased damage from the second hit onward", which is a
+    /// flat damage bonus wearing a costume.
+    ///
+    /// What is in the list is what `ability-spec.md` calls a hard stop, and the
+    /// design only allows those behind a hard condition -- a parry for the
+    /// stagger, a grab for the hold, every arm of a Grasp for the root. Each
+    /// one had to be *earned*, which is exactly what a payoff should be waiting
+    /// on. Blockstun is not one: they blocked, which was the correct decision,
+    /// and rewarding the attacker for it would make guarding worse than
+    /// standing still.
+    pub const fn disabled(&self) -> bool {
+        self.rooted > 0 || matches!(self.action, Action::Stagger { .. } | Action::Held { .. })
+    }
+
     /// Pay for a move out of your own health, and take the return on one.
     ///
     /// Both clamp. Self-damage stops at one -- dying to your own button is not
@@ -1050,6 +1069,22 @@ fn aimed(m: &moves::Move) -> bool {
     EffectKind::from_code(m.effect).is_some()
 }
 
+/// What a class's damage is multiplied by against a victim who cannot move.
+///
+/// One function, used by every path a fighter can deal damage down: a swing, a
+/// blade in the air, an arm of a Grasp, a field ticking, and all of the same
+/// against the creature. They used to be five separate pieces of arithmetic and
+/// this is the kind of rule that is only worth having if it is true everywhere
+/// -- a class trait that applies to three of a class's four abilities is not a
+/// trait, it is a bug somebody will find in a match.
+fn preying(class: Class, victim_disabled: bool) -> Fx {
+    if victim_disabled && class.preys_on_the_disabled() {
+        t::disabled_damage_mul()
+    } else {
+        Fx::ONE
+    }
+}
+
 fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
@@ -1076,7 +1111,8 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let damage_mul = match attacker.mechanic {
         Mechanic::Forms { form, .. } => form.modifiers().1,
         _ => Fx::ONE,
-    };
+    }
+    .mul(preying(attacker.class, defender.disabled()));
 
     // Every other move is a sphere sitting at `box_out.centre`. The
     // Elementalist's auto is a real skillshot instead: it can catch the
@@ -2243,7 +2279,9 @@ impl World {
     /// difference between a Blood mage who can stand in a fight trading and one
     /// who has to survive until a timer runs out to be repaid.
     fn drain(&mut self, victim: usize, effect: &Effect) {
-        let damage = effect.damage();
+        let damage = Fx::from_int(effect.damage())
+            .mul(preying(effect.class, self.players[victim].disabled()))
+            .to_int();
         let dealt = damage.min(self.players[victim].health);
         self.players[victim].health = (self.players[victim].health - damage).max(0);
         let owed = effect.leeched(dealt);
@@ -2269,15 +2307,18 @@ impl World {
         let parried = !m.unblockable
             && matches!(p.action, Action::Guard { held } if held < t::parry_window())
             && facing_it;
+        let damage = Fx::from_int(m.damage)
+            .mul(preying(effect.class, p.disabled()))
+            .to_int();
         let dealt = if guarding || parried {
             0
         } else {
-            m.damage.min(p.health)
+            damage.min(p.health)
         };
         apply_hit(
             &mut self.players[victim],
             Hit {
-                damage: m.damage,
+                damage,
                 hitstun: m.hitstun,
                 blockstun: m.blockstun,
                 knockback: m.knockback,
@@ -2310,7 +2351,10 @@ impl World {
         let Some(struck) = beast.part_struck(at, radius, t::body_height()) else {
             return 0;
         };
-        let dealt = beast.take_hit(struck, effect.damage());
+        let raw = Fx::from_int(effect.damage())
+            .mul(preying(effect.class, beast.disabled()))
+            .to_int();
+        let dealt = beast.take_hit(struck, raw);
         self.monster = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
@@ -2748,6 +2792,7 @@ impl World {
             };
             let raw = Fx::from_int(moves::get(attacker.class, kind).damage)
                 .mul(scale)
+                .mul(preying(attacker.class, beast.disabled()))
                 .to_int();
             let dealt = beast.take_hit(part, raw);
             self.players[i].heal(moves::get(attacker.class, kind).leeched(dealt));

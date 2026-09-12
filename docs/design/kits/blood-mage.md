@@ -44,12 +44,29 @@ either broken or unplayable depending on how much of your health bar a cast repr
 numbers are a first pass out of the prototype rather than a derivation, and
 `cargo run -p sim --bin frametable` prints what they currently are.
 
-**Naturally deals increased damage to disabled enemies** — carried forward from the archive
-as the class's damage identity. Not implemented, and it is the most obviously missing piece
-now: as of 2026-09-12 the class has a disable of its own for the first time (Grasp's root),
-so the trait finally has a partner inside the kit rather than depending on a team-mate. Land
-all four arms, then hit them with something. That is the combo the archive is describing, and
-half of it exists.
+### Naturally deals increased damage to disabled enemies
+
+The class's damage identity, carried forward from the archive, and **implemented**: everything
+a Blood mage does is multiplied by 1.4 against something that cannot move.
+
+**Disabled means rooted, staggered, held, or a creature on its side.** Not hitstun, and that
+exclusion is the whole of the definition — hitstun happens on every hit anybody lands, so
+counting it would turn the trait into "increased damage from the second hit onward", which is
+a flat damage bonus in a costume. What is on the list is what
+[../ability-spec.md](../ability-spec.md) calls a hard stop, and the design only allows those
+behind a hard condition: a parry for the stagger, a grab for the hold, every arm of a Grasp
+for the root, a broken poise bar for the topple. Each one was *earned*, which is what a payoff
+should be waiting on. Blockstun is not on the list: they blocked, which was correct, and
+paying the attacker for it would make guarding worse than standing still.
+
+It applies to every way she deals damage — a swing, a blade in the air, an arm of a Grasp, a
+field ticking, and all of the same against the creature. A trait that applied to three of a
+class's four abilities would not be a trait, it would be a bug somebody finds in a match.
+
+**This is what makes Grasp a setup.** Four arms is expensive and the root is short; without
+something waiting on the other side of it, landing all four would be a small reward for a hard
+read. With it, the root is a window you spend — and because leech is a percentage of damage
+dealt, the bonus compounds into the health you get back.
 
 The archive also makes lifesteal the class's *weapon* identity — "anything a blood mage
 reforges becomes a reaping ___ and has lifesteal" — which is the same loop one layer down and
@@ -116,7 +133,8 @@ return if most of it lands
 A short-range skillshot that fires four arms — top left, bottom left, top right, bottom
 right. They leave in a cone, bow outward, and arc back inward to converge at the far end.
 Each arm damages on its own. **Anything caught by all four is rooted** for about two thirds
-of a second.
+of a second — and a rooted enemy takes 1.4× from everything this class has, which is what the
+root is for.
 
 The volume they sweep is a lens rather than a line, so standing anywhere near it gets you
 clipped by one or two arms. All four is a much smaller place to be, which is what makes the
@@ -126,7 +144,8 @@ about hard stops needing hard conditions.
 Rooted means your feet do not carry you and you cannot dodge or jump. It is not a stun: you
 can still turn, guard and swing at whoever put the arms round your legs. The root is
 deliberately longer than the hitstun of the arms that deliver it, or it would expire before
-the victim could notice it.
+the victim could notice it — and longer than her fastest move's startup, or there would be
+nothing she could land inside it.
 
 Unblockable, and the class's answer to a turtle now that Reaper's debt is gone.
 
@@ -239,8 +258,14 @@ together.
 ## Playing it
 
 Open with Black spike to make a place the other player does not want to be, use Grasp when
-they have to cross it, commit to Rend when the root lands, and pay yourself back with
-Bloodletter in between. You are always a little below full health on purpose.
+they have to cross it, commit to Rend while the root holds them — that is where the 1.4×
+lives, and Rend's fourteen frames of wind-up fit comfortably inside forty frames of root — and
+pay yourself back with Bloodletter in between. You are always a little below full health on
+purpose.
+
+In a hunt the same sentence reads differently and means the same thing: the climb breaks its
+poise, the topple is the disable, and everything you do to a Ridgeback on its side is worth
+half again as much.
 
 ## Open questions
 
@@ -252,11 +277,12 @@ Bloodletter in between. You are always a little below full health on purpose.
 - Does the root want to stop you attacking as well? It does not, on the grounds that the
   design's default is a root you can still act in. If the class turns out to need a real
   opening rather than a slow one, this is the knob.
-- **Should landing the root be worth extra damage?** The archive says the class deals
-  increased damage to disabled enemies, and Grasp is now a disable. Implementing it would
-  make the four-arm hit a setup rather than a small reward, which is the shape the archive
-  describes. Left out deliberately for now: it is a second scoring rule on every hit the
-  class makes, and it should be added once there is a reason to believe the root lands often
-  enough to matter.
+- **Is 1.4× the right bonus against a disabled enemy?** Guessed. The feel tests bound it
+  between 1.2 and 2 — below the floor nobody notices it and Grasp goes back to being a root
+  with no payoff; above the ceiling one read ends the round, which is the opposite of a game
+  built on whiff punishment. Where it sits inside that range is a play question.
+- **Should the trait be the whole answer to Grasp's cost?** Grasp is the most expensive thing
+  in the kit and the root is short. If the follow-up window turns out to be too tight to use,
+  the root's length is the first knob and the bonus is the second.
 - Only one seal is specified. The archive has three; the other two are power-level knobs and
   can wait.

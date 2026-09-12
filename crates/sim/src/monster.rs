@@ -837,6 +837,16 @@ impl Monster {
         }
     }
 
+    /// On its side, with its options gone.
+    ///
+    /// The creature's answer to `state::Player::disabled`, and drawn on the
+    /// same line: a topple is the long window the whole climb exists to earn,
+    /// and a flinch is the cheap one that happens whenever it is hit hard
+    /// enough. Only the earned one counts.
+    pub fn disabled(&self) -> bool {
+        matches!(self.doing, Doing::Toppled { .. })
+    }
+
     pub fn alive(&self) -> bool {
         self.health > 0
     }

@@ -635,6 +635,97 @@ fn a_drain_field_feeds_the_hunter_who_laid_it() {
 }
 
 #[test]
+fn a_topple_is_a_disable_and_a_flinch_is_not() {
+    // Drawn on the same line as the fighters' own list. A topple is the long
+    // window the whole climb exists to earn and the one state the creature
+    // cannot act out of; a flinch is the cheap one that happens whenever it is
+    // hit hard enough, and it is excluded for exactly the reason hitstun is.
+    let state = |doing: Doing| {
+        let mut w = parked();
+        let mut beast = w.monster.expect("a hunt has a creature");
+        beast.doing = doing;
+        w.monster = Some(beast);
+        w.monster.expect("a hunt has a creature").disabled()
+    };
+    assert!(!state(Doing::Prowl), "a prowling creature is disabled");
+    assert!(
+        !state(Doing::Flinch { left: 10 }),
+        "a flinch counts, so the bonus fires on every heavy hit"
+    );
+    assert!(
+        state(Doing::Toppled { left: 200 }),
+        "a topple does not count, so the whole climb pays nothing extra"
+    );
+}
+
+#[test]
+fn a_blood_mage_hits_a_toppled_creature_harder() {
+    // The trait has to mean something in a hunt, or it is a versus-only feature
+    // on a class that has just had its versus-only bugs fixed.
+    //
+    // The creature is **frozen** and the fighter **placed**, rather than either
+    // of them being allowed to move: a toppled Ridgeback lies lower and pitched,
+    // so a fixture that walked into it would be measuring where its shoulder
+    // ended up. The spot is searched for, not typed, and the condition is that
+    // the claw lands on the *same part* in both states -- the hide's
+    // vulnerability differs part to part, and comparing two different parts
+    // would say nothing about the rule.
+    let claw = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    let still = |doing: Doing| {
+        let mut w = parked();
+        let mut beast = w.monster.expect("a hunt has a creature");
+        beast.pos = V3::ZERO;
+        beast.doing = doing;
+        w.monster = Some(beast);
+        w
+    };
+    let up = Doing::Prowl;
+    let over = Doing::Toppled { left: 400 };
+
+    let part_at = |w: &World, x: Fx| {
+        w.monster.expect("a hunt has a creature").part_struck(
+            V3::new(x.add(claw.reach), Fx::ZERO, Fx::ZERO),
+            claw.radius,
+            sim::tuning::body_height(),
+        )
+    };
+    let stand_at = (-80..0)
+        .map(|tenth| Fx::ratio(tenth, 10))
+        .find(|x| {
+            let a = part_at(&still(up), *x);
+            a.is_some() && a == part_at(&still(over), *x)
+        })
+        .expect("nowhere reaches the same part whether it is up or down");
+
+    let hit = |doing: Doing| {
+        let mut w = still(doing);
+        w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
+        let before = beast_health(&w);
+        for f in 0..(claw.startup + claw.active + 4) {
+            // Held down, and held still: the creature would otherwise stand up,
+            // walk off, or decide to bite.
+            let mut beast = w.monster.expect("a hunt has a creature");
+            beast.doing = doing;
+            beast.pos = V3::ZERO;
+            beast.speed = Fx::ZERO;
+            w.monster = Some(beast);
+            w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
+            let held = if f < 2 { Input::SHIFT | Input::LEFT } else { 0 };
+            w.advance([Input::new(held), Input::default()]);
+        }
+        before - beast_health(&w)
+    };
+
+    let standing = hit(up);
+    let floored = hit(over);
+    assert!(standing > 0, "fixture: the claw never reached the creature");
+    assert!(
+        floored > standing,
+        "a toppled creature took {floored} where a standing one took {standing}"
+    );
+}
+
+#[test]
 fn a_hazard_never_touches_a_hunting_partner() {
     // Friendly fire is off in a hunt, and the condition is the creature being
     // there rather than a flag -- the same rule direct hits already follow. A

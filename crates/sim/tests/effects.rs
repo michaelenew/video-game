@@ -700,6 +700,91 @@ fn a_rooted_fighter_cannot_walk_dodge_or_jump() {
     );
 }
 
+/// What one swing of `slot` takes off a fighter who has been put into `setup`.
+///
+/// The comparison the trait is about: the same move, the same distance, the
+/// same frame, against a victim whose options are gone and against one whose
+/// are not.
+fn one_hit(setup: impl Fn(&mut World)) -> i32 {
+    let mut w = engaged(Class::BloodMage);
+    run(&mut w, 20, 0, 0);
+    setup(&mut w);
+    let before = w.players[1].health;
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    run(&mut w, 2, Input::SHIFT | Input::LEFT, 0);
+    run(&mut w, (m.startup + m.active + 2) as u32, 0, 0);
+    before - w.players[1].health
+}
+
+#[test]
+fn a_blood_mage_hits_harder_when_you_cannot_move() {
+    // The class's damage identity, out of the archive: *naturally deals
+    // increased damage on disabled enemies*. It is what turns the Grasp's root
+    // from a small reward into a setup -- four arms is expensive, and it is
+    // only worth the cost if something is waiting on the other side of it.
+    let free = one_hit(|_| {});
+    let rooted = one_hit(|w| w.players[1].root(120));
+    assert!(free > 0, "fixture: the claw did not connect at all");
+    assert!(
+        rooted > free,
+        "a rooted fighter took {rooted} where a free one took {free}"
+    );
+
+    let expected = sim::fixed::Fx::from_int(free)
+        .mul(sim::tuning::disabled_damage_mul())
+        .to_int();
+    assert!(
+        (rooted - expected).abs() <= 1,
+        "the bonus is {rooted} against {free}, which is not the knob"
+    );
+}
+
+#[test]
+fn hitstun_is_not_a_disable() {
+    // The line the whole definition rests on. Hitstun happens on every hit
+    // anybody lands, so counting it would make the trait "increased damage
+    // from the second hit onward" -- a flat damage bonus in a costume, and one
+    // that would need no read at all.
+    let stunned = one_hit(|w| {
+        w.players[1].action = Action::HitStun { left: 90 };
+    });
+    let free = one_hit(|_| {});
+    assert_eq!(
+        stunned, free,
+        "being in hitstun counted as being disabled, so the bonus is free"
+    );
+}
+
+#[test]
+fn nobody_else_preys_on_the_disabled() {
+    // A second class quietly acquiring it would mean the trait had stopped
+    // being an identity.
+    use sim::class::ALL_CLASSES;
+    for class in ALL_CLASSES {
+        assert_eq!(
+            class.preys_on_the_disabled(),
+            class == Class::BloodMage,
+            "{} hits the disabled harder",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn the_grasp_sets_up_its_own_payoff() {
+    // The two halves together, which is the point of implementing either. Root
+    // them with every arm, then hit them while they are held there.
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    looking(&mut w, 2, Q, pitch, 0);
+    run(&mut w, 60, 0, 0);
+    assert!(w.players[1].rooted > 0, "fixture rooted nobody");
+    assert!(
+        w.players[1].disabled(),
+        "the root does not count as a disable, so the payoff never fires"
+    );
+}
+
 #[test]
 fn a_slowed_fighter_covers_less_ground() {
     let mut w = as_class(Class::BloodMage);

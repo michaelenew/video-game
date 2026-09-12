@@ -54,6 +54,12 @@ fn main() {
             tenths(mob.fall_cap),
             tenths(mob.air_speed),
         );
+        if class.preys_on_the_disabled() {
+            println!(
+                "  x{} damage to anything rooted, staggered, held or toppled",
+                tenths(t::disabled_damage_mul())
+            );
+        }
         println!(
             "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
             "key", "move", "st", "act", "rec", "damage", "on block", "on hit"
