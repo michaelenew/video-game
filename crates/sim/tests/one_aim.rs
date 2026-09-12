@@ -150,28 +150,34 @@ fn every_move_says_which_of_the_three_it_is() {
         for slot in 0..sim::moves::SLOTS {
             let m = sim::moves::get(class, slot as u8);
             kinds.push(m.aim());
-            // A grounded move is aimed at the floor, so it must have something
-            // to put there; a skillshot is not grounded, or it would be both.
-            if m.aim() == Kind::Grounded {
-                assert!(
-                    sim::effects::EffectKind::from_code(m.effect).is_some(),
-                    "{} {} is grounded but leaves nothing on the ground",
-                    class.name(),
-                    m.name
-                );
-            }
-            // A thing that flies through the air is aimed through the air. If
-            // one of these came out as a swing it would travel along the body's
-            // flat facing and quietly ignore the crosshair -- which is the bug
-            // this whole file exists to stop coming back.
-            if sim::effects::EffectKind::from_code(m.effect).is_some_and(|k| k.travels()) {
-                assert_eq!(
-                    m.aim(),
-                    Kind::Skillshot,
-                    "{} {} throws something that travels but is not aimed like it",
-                    class.name(),
-                    m.name
-                );
+            // The two directions that can be checked from the move's own data.
+            // A move may be grounded without leaving anything behind -- Fissure
+            // races along the floor and plants a structure, which is the
+            // mechanic's business rather than the effects array's -- so this
+            // only runs the way round that is always true.
+            if let Some(leaves) = sim::effects::EffectKind::from_code(m.effect) {
+                if leaves.grounded() {
+                    assert_eq!(
+                        m.aim(),
+                        Kind::Grounded,
+                        "{} {} plants something on the floor but is not aimed at the floor",
+                        class.name(),
+                        m.name
+                    );
+                }
+                // A thing that flies through the air is aimed through the air.
+                // One of these coming out as a swing would travel along the
+                // body's flat facing and quietly ignore the crosshair, which is
+                // the bug this whole file exists to stop coming back.
+                if leaves.travels() {
+                    assert_eq!(
+                        m.aim(),
+                        Kind::Skillshot,
+                        "{} {} throws something that travels but is not aimed like it",
+                        class.name(),
+                        m.name
+                    );
+                }
             }
         }
     }

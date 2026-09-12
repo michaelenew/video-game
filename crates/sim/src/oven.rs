@@ -454,12 +454,11 @@ pub enum MoveField {
     // health back on the hit -- see `moves::Move::cost` and `leech`.
     Cost,
     Leech,
-    // And again, for which of the three kinds of aiming a move uses. Derived
-    // where it can be -- a move that plants something on the floor is grounded
-    // whatever else it does -- so this is only the one bit that cannot be:
-    // flies at the crosshair, or swings where the body is facing. See
+    // And again, for which of the three lines of effect a move uses: 0 swings
+    // where the body is facing, 1 lands on the ground at the crosshair, 2 flies
+    // to what the crosshair is on. `aim::Kind`'s own numbering. See
     // `moves::Move::aim` and `crate::aim`.
-    Skillshot,
+    Aim,
 }
 
 impl MoveField {
@@ -484,7 +483,7 @@ impl MoveField {
         MoveField::Effect,
         MoveField::Cost,
         MoveField::Leech,
-        MoveField::Skillshot,
+        MoveField::Aim,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -509,7 +508,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Skillshot => "Flies at the crosshair",
+            MoveField::Aim => "Line of effect (0/1/2)",
         }
     }
 
@@ -523,18 +522,22 @@ impl MoveField {
             | MoveField::AirStall => Unit::Frames,
             MoveField::Damage => Unit::Int,
             MoveField::Mobility => Unit::Percent,
-            MoveField::Unblockable
-            | MoveField::HitsCrouching
-            | MoveField::NeedsMechanic
-            | MoveField::Skillshot => Unit::Flag,
+            MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
+                Unit::Flag
+            }
             MoveField::Grabs => Unit::Frames,
-            MoveField::Effect | MoveField::Cost => Unit::Int,
+            MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
             MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
         }
     }
 
     pub const fn range(self) -> (i32, i32) {
+        // Three lines of effect, and the numbering is `aim::Kind`'s. A slider
+        // that ran to six hundred would let somebody pick a fourth.
+        if matches!(self, MoveField::Aim) {
+            return (0, 2);
+        }
         match self.unit() {
             Unit::Frames => (0, 90),
             Unit::Int => (0, 600),

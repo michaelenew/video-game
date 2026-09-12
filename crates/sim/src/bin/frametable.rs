@@ -61,8 +61,8 @@ fn main() {
             );
         }
         println!(
-            "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
-            "key", "move", "st", "act", "rec", "damage", "on block", "on hit"
+            "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} notes",
+            "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "aimed"
         );
         for (slot, m) in (0..moves::SLOTS)
             .filter(|slot| moves::bound(class, *slot))
@@ -97,7 +97,7 @@ fn main() {
                 notes.push(&blood);
             }
             println!(
-                "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}   {}",
+                "  {:<12}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}  {:<10} {}",
                 moves::binding(slot),
                 m.name,
                 m.startup,
@@ -106,6 +106,9 @@ fn main() {
                 m.damage,
                 m.on_block(),
                 m.on_hit(),
+                // Which line of effect it uses, so "where does this actually
+                // go" is answerable from the table rather than from the source.
+                m.aim().name(),
                 notes.join(", ")
             );
         }

@@ -52,14 +52,15 @@ pub struct Move {
     /// Which persistent effect this move leaves behind, if any.
     /// See `effects::EffectKind::from_code`.
     pub effect: u8,
-    /// Does this fly through the air toward the crosshair?
+    /// Which of the three lines of effect this move uses, as
+    /// [`crate::aim::Kind`]'s own numbering.
     ///
-    /// The one bit of a move's aiming that cannot be derived. Whether it is
-    /// *grounded* is a property of the thing it places -- a pillar of flame
-    /// comes out of the floor whatever move made it -- but "flies at what I am
-    /// pointing at" against "swings where my body is facing" is a decision per
-    /// move. See [`Move::aim`].
-    pub skillshot: bool,
+    /// **Declared, not inferred.** It used to be worked out from what the move
+    /// leaves behind, which answered for the two abilities that plant something
+    /// and quietly called everything else a swing -- so Fissure, which the kit
+    /// describes as racing along the ground to a point, came out as a bubble
+    /// seven metres in front of the body. Every move states its own.
+    pub aim_code: u8,
     /// Percent of walking speed you keep while the move runs.
     ///
     /// Zero roots you, which is what commitment means and is correct for the
@@ -97,17 +98,7 @@ impl Move {
     /// the ability came to disagree in the first place. See [`crate::aim`],
     /// which is the only place allowed to act on it.
     pub fn aim(&self) -> crate::aim::Kind {
-        use crate::aim::Kind;
-        // A move that plants something on the floor is aimed at the floor,
-        // whatever else it does. Derived rather than declared, so the two can
-        // never disagree.
-        if crate::effects::EffectKind::from_code(self.effect).is_some_and(|k| k.grounded()) {
-            Kind::Grounded
-        } else if self.skillshot {
-            Kind::Skillshot
-        } else {
-            Kind::Swing
-        }
+        crate::aim::Kind::from_code(self.aim_code)
     }
 
     /// Frames the attacker is still busy after the first active frame connects.
@@ -272,7 +263,7 @@ pub fn get(class: Class, kind: u8) -> Move {
         effect: raw(F::Effect) as u8,
         cost: raw(F::Cost),
         leech: raw(F::Leech) as u8,
-        skillshot: raw(F::Skillshot) != 0,
+        aim_code: raw(F::Aim) as u8,
     }
 }
 

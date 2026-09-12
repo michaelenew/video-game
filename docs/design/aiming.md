@@ -91,6 +91,23 @@ must not put the blade there — a swing comes out along `facing`, at the move's
 own reach. It is named here so that "which of the three is this move" has an
 answer for every move rather than being a thing each caller decides.
 
+## Which move uses which
+
+Declared per move in the move table, not inferred, so the question has an answer
+for every slot and `cargo run -p sim --bin frametable` prints it in the `aimed`
+column. It used to be worked out from what a move left behind, which answered
+for the two abilities that plant something and quietly called everything else a
+swing.
+
+| Line of effect | Moves |
+| --- | --- |
+| **Grounded** | Fissure, Fire pillar, Black spike, Judgement |
+| **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
+| **Swing** | every melee attack: Bash, Slam, Grapple, Sweep, Drive, Uppercut, Slash, Executioner, Rend, Step strike |
+
+The mechanic inputs are aimed too, through the same two functions: Raise and the
+shadow are grounded casts, and the Bulwark's thrown shield is a skillshot.
+
 ## What the path runs into
 
 Separate from the aiming ray, and separate on purpose. The camera's ray says
@@ -128,8 +145,17 @@ gets the same one.
 
 ## Open
 
-- **Fissure** is written as a grounded ability that races along the ground to
-  its target. The path it needs already exists; the ability does not.
+- **Guillotine lotus does not fit.** Its kit entry gives its range as "at the
+  shadow" — the blades erupt where the Reaver put the mechanic, which is a place
+  the player aimed at *earlier* rather than one they are pointing at now. It is
+  currently declared a swing with a reach of zero, which puts its volume on the
+  caster's own body; that is wrong however the question is answered. Either
+  there is a fourth line of effect ("at the mechanic"), or the move should be
+  aimed afresh when it is thrown. Nothing else in the roster has this shape.
+- **Fissure** travels along the ground to its target, which the grounded path
+  already provides as `from` → `to`. It is aimed correctly now; the travel and
+  the structure it plants at the point of impact are still unbuilt, so today its
+  volume simply appears at the target.
 - **The melee swing** could in principle become a very short non-grounded
   skillshot, which would make the matrix two entries rather than three. Nobody
   has argued for it, and "pointing the camera down must not swing at the floor"

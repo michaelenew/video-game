@@ -1696,3 +1696,46 @@ aim yet. What is worth watching: whether the beam ending *on* what the crosshair
 rather than always running its full range — reads as the shot being eaten by scenery, and
 whether needing to aim down slightly to hit someone at your own height is comfortable or
 merely correct.
+
+### 2026-09-12 — every move declares its line of effect
+
+**Changed** the move table gained a `line of effect` field, and three moves changed kind:
+Fissure and Judgement to **grounded**, Lance to **skillshot**. `cargo run -p sim --bin
+frametable` prints the column.
+
+**Why** the aiming pass left the *kind* inferred: a move was grounded if what it left behind
+was grounded, a skillshot if a flag said so, and a swing otherwise. That answered correctly for
+the two abilities that plant something and quietly called everything else a swing. Going
+through the roster against the kit documents found three that are not:
+
+| Move | Kit says | Was aimed as | Now |
+| --- | --- | --- | --- |
+| Fissure | "a skillshot that races forward through the ground… spawns a structure at the point of impact" | swing, 7 m reach | grounded |
+| Lance | "line skillshot" in both forms | swing, 4 m reach | skillshot |
+| Judgement | "a delayed area strike… range medium" | swing, 3 m reach | grounded |
+
+All three were bubbles hung several metres off the body, pointing wherever it happened to be
+facing. None of them is *built* yet — Fissure does not travel, Lance is not a line, Judgement
+has no delay — so what changed today is only where their volumes appear, which is now the
+place the crosshair is on rather than a fixed step ahead.
+
+**The inference is gone rather than fixed.** Deriving the answer from the effect was the sort
+of rule that is right until the first ability that does not fit, and then silently wrong.
+What survives from it is a *test*: `one_aim.rs` asserts that a move planting something
+grounded is aimed at the ground, and that a move throwing something that travels is aimed
+through the air. Those directions are always true; the reverse is not, because Fissure plants
+a structure, which belongs to the mechanic rather than to the effects array.
+
+**Found and not fixed: Guillotine lotus.** Its range is "at the shadow" — the blades erupt
+where the Reaver put the mechanic. That is not any of the three: the player aimed when they
+placed the shadow, not when they threw the move. It is currently a swing with a reach of
+**zero**, which puts its volume on the caster's own body, so it is wrong however the question
+is answered. Recorded in [aiming.md](aiming.md) under Open rather than guessed at.
+
+**Also considered and rejected:** asserting that a swing's reach may not exceed roughly twice
+its radius. It catches the "hole in front" the log already records above — a one-circle hit
+test with reach past its own radius has a gap nothing can be hit in — but that is a property
+of the hit test rather than of the aiming, and the rule as written failed Rend at 2.6 m
+against 1.2 m, which is a tuning question and not a miscategorisation. Left alone.
+
+**Verdict** structural, and open on feel. Nobody has thrown the three retargeted moves.

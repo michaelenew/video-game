@@ -125,6 +125,33 @@ impl Kind {
     pub const fn is_a_skillshot(self) -> bool {
         matches!(self, Kind::Grounded | Kind::Skillshot)
     }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Kind::Grounded => "grounded",
+            Kind::Skillshot => "skillshot",
+            Kind::Swing => "swing",
+        }
+    }
+
+    /// How the move table stores it. Unknown codes read as a swing, which is
+    /// the one that asks nothing of the world and so cannot be wrong by
+    /// accident.
+    pub const fn from_code(code: u8) -> Kind {
+        match code {
+            1 => Kind::Grounded,
+            2 => Kind::Skillshot,
+            _ => Kind::Swing,
+        }
+    }
+
+    pub const fn code(self) -> u8 {
+        match self {
+            Kind::Swing => 0,
+            Kind::Grounded => 1,
+            Kind::Skillshot => 2,
+        }
+    }
 }
 
 /// Everything a ray can meet.

@@ -29,8 +29,11 @@ Then there are exactly **two kinds of skillshot**, and one thing that is not one
 | Skillshot | `aim::skillshot_path` | Ground: that spot raised to the caster's ability-origin height, so it flies level over it. Anything else — wall, body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
 | Swing | neither | Not aimed. Out along `facing` at the move's reach, because a sword is a body moving and pointing the camera at the floor must not put the blade there. |
 
-Which one a move is comes from `Move::aim()`, and it is in the move table so
-every move has an answer.
+Which one a move is comes from `Move::aim()`, **declared** in the move table so
+every move has an answer, and printed in the `aimed` column of
+`cargo run -p sim --bin frametable`. Inferring it from what a move leaves behind
+is what let Fissure — a skillshot that races along the ground, by its own kit
+entry — come out as a bubble seven metres in front of the body.
 
 **The mistake this prevents, which has been made three times:** taking a ray
 from the *chest* along the *look angle*. That ray is parallel to the crosshair's
