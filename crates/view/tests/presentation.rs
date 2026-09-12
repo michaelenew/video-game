@@ -164,6 +164,11 @@ fn settled(pitch: f32) -> (view::camera::Framing, [f32; 3]) {
 
 /// Where a world point lands, as a fraction up the screen from the bottom. The
 /// crosshair is at one half by definition, because the camera points at it.
+///
+/// Through a tangent, because the screen is a flat plane a fixed distance in
+/// front of the eye rather than an arc: twice the angle off centre is more than
+/// twice the distance up the glass. It matters at the edges, which is where the
+/// zones put the fighter.
 fn on_screen(f: view::camera::Framing, point: [f32; 3]) -> f32 {
     let to = |p: [f32; 3]| {
         let v = [p[0] - f.eye[0], p[1] - f.eye[1], p[2] - f.eye[2]];
@@ -175,7 +180,22 @@ fn on_screen(f: view::camera::Framing, point: [f32; 3]) -> f32 {
     let dot: f32 = (0..3).map(|i| centre[i] * target[i]).sum();
     let angle = dot.clamp(-1.0, 1.0).acos();
     let signed = if target[1] < centre[1] { -angle } else { angle };
-    0.5 + signed / fov()
+    0.5 + signed.tan() / (2.0 * (fov() * 0.5).tan())
+}
+
+/// The most the sphere can open up between the fighter and the crosshair, as a
+/// fraction of the screen.
+///
+/// The eye is a fixed radius from the feet and the crosshair's mark on the
+/// ground is `mark` metres in front of them, so the widest any eye on that
+/// sphere sees the pair is `atan(mark / radius)`. This is the ceiling every
+/// framing below the horizon is working under, and it shrinks as the player
+/// looks down because the mark comes in.
+fn most_the_sphere_can_open(pitch: f32) -> f32 {
+    let z = zones();
+    let cast = sim::tuning::cast_height().to_f32_for_render();
+    let mark = cast / pitch.abs().tan();
+    (mark / z.sphere).atan().tan() / (2.0 * (fov() * 0.5).tan())
 }
 
 fn feet_of(at: [f32; 3]) -> [f32; 3] {
@@ -304,65 +324,142 @@ fn the_mouse_is_never_smoothed() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_neutral_zone_holds_the_fighter_low_and_the_same_size() {
-    // Where most of a match is spent. The feet sit near the bottom of the frame
-    // and the fighter keeps one size across the whole band, so nothing about
-    // the framing moves while the player is only steering.
+fn the_eye_rides_a_fixed_sphere() {
+    // The one thing the rig is not allowed to do while the player is only
+    // steering: change how far away it is. The eye has exactly one place to be
+    // -- somewhere on a sphere of the tuned radius centred on the fighter's
+    // feet -- so aiming around moves it *along* that sphere and never off it.
+    //
+    // This is what a camera that dollies in and out feels wrong about, and it
+    // is worth pinning as a distance rather than as a framing, because a
+    // framing can be met by a hundred cameras and only one of them is this one.
     let z = zones();
-    // Stopping short of the steep boundary, where the eye runs into its own
-    // elevation ceiling -- see `the_steep_end_of_the_neutral_zone_runs_out_of_sky`.
-    for step in 0..=8 {
-        let pitch = -ramp(z.neutral_to, z.floor_from * 0.9, step as f32 / 8.0);
+    for step in 0..=34 {
+        let pitch = -ramp(0.0, z.down_limit, step as f32 / 34.0);
         let (f, at) = settled(pitch);
-        let feet = on_screen(f, feet_of(at));
-        let head = on_screen(f, head_of(at));
-        // Tight, because the placement is solved in closed form rather than
-        // walked toward: two circles crossing, not a search that stops when it
-        // is close enough.
+        let feet = feet_of(at);
+        let radius = ((f.eye[0] - feet[0]).powi(2)
+            + (f.eye[1] - feet[1]).powi(2)
+            + (f.eye[2] - feet[2]).powi(2))
+        .sqrt();
         assert!(
-            (feet - z.feet_neutral).abs() < 0.005,
-            "at {:.0} degrees the feet are at {:.1}% instead of {:.1}%",
+            (radius - z.sphere).abs() < 0.02,
+            "at {:.0} degrees the eye is {radius:.2} m out, not the {:.2} m sphere",
             pitch.to_degrees(),
-            feet * 100.0,
-            z.feet_neutral * 100.0
-        );
-        assert!(
-            (head - z.head_neutral).abs() < 0.005,
-            "at {:.0} degrees the head is at {:.1}% instead of {:.1}%",
-            pitch.to_degrees(),
-            head * 100.0,
-            z.head_neutral * 100.0
+            z.sphere
         );
     }
 }
 
 #[test]
-fn the_steep_end_of_the_neutral_zone_runs_out_of_sky() {
-    // Worth pinning because it is geometry rather than a bug, and because it is
-    // the first thing to look at if the neutral zone ever feels wrong.
+fn the_neutral_zone_holds_the_fighter_low() {
+    // Where most of a match is spent, and the waypoint that decides it: the
+    // feet near the bottom of the frame, so the fighter is not sitting on the
+    // reticle.
     //
-    // The crosshair's mark on the ground is `cast height / tan(pitch)`: seven
-    // metres ahead at the shallow end of the zone and barely one at the steep
-    // end. Holding the fighter at a fixed spot on screen while the mark sweeps
-    // in that far swings the eye from a normal third-person arm to almost
-    // directly overhead -- and then it hits the ceiling on how high it may get,
-    // and the fighter starts drifting up the screen early.
-    //
-    // Every lever is a knob: narrow the zone, raise the ceiling, or raise the
-    // cast height so the mark reaches further for the same angle.
+    // Checked over the part of the zone where the sphere can still deliver it.
+    // Further down it cannot, and that is geometry rather than a bug -- see
+    // `holding_the_fighter_low_runs_out_as_the_crosshair_comes_in`.
     let z = zones();
-    let (f, at) = settled(-z.floor_from);
-    let feet = on_screen(f, feet_of(at));
-    assert!(
-        feet > z.feet_neutral,
-        "the steep end is not clamping at all, so this test has stopped meaning anything"
-    );
-    assert!(
-        feet < z.feet_neutral + 0.05,
-        "the steep end of the neutral zone has drifted to {:.1}%, well off the {:.1}% asked for",
-        feet * 100.0,
-        z.feet_neutral * 100.0
-    );
+    for step in 0..=4 {
+        let pitch = -ramp(z.neutral_to, z.neutral_to * 1.5, step as f32 / 4.0);
+        let (f, at) = settled(pitch);
+        let feet = on_screen(f, feet_of(at));
+        // Tight, because the placement is solved in closed form rather than
+        // walked toward: one unknown and one condition, not a search that stops
+        // when it is close enough.
+        assert!(
+            (feet - z.feet_neutral).abs() < 0.02,
+            "at {:.0} degrees the feet are at {:.1}% instead of {:.1}%",
+            pitch.to_degrees(),
+            feet * 100.0,
+            z.feet_neutral * 100.0
+        );
+    }
+}
+
+#[test]
+fn holding_the_fighter_low_runs_out_as_the_crosshair_comes_in() {
+    // The geometry that decides how much of the look-down range the neutral
+    // zone can actually cover, pinned so that it reads as a fact rather than as
+    // a disappointment.
+    //
+    // The crosshair sits where the aim ray meets the ground, so it walks in
+    // from about seven metres ahead of the fighter at ten degrees down to
+    // barely one at forty-five. Once it is that close the fighter and the
+    // crosshair are only a few degrees apart *from anywhere on the sphere* --
+    // at most `atan(mark / radius)` -- and no camera can hold them half a
+    // screen apart. The rig then does the best the sphere allows, which is what
+    // this checks: not the number it was asked for, but the number the geometry
+    // leaves available.
+    //
+    // Every lever is a knob. A smaller sphere opens the angle and holds the
+    // fighter low further down, at the cost of drawing them bigger; a higher
+    // eye ceiling buys a little more of it by swinging overhead.
+    let z = zones();
+    for degrees in [-25.0f32, -35.0, -45.0] {
+        let pitch = degrees.to_radians();
+        let (f, at) = settled(pitch);
+        let feet = on_screen(f, feet_of(at));
+        let best = most_the_sphere_can_open(pitch);
+        assert!(
+            feet > z.feet_neutral,
+            "at {degrees:.0} degrees the sphere is not running out at all, so this test has stopped meaning anything"
+        );
+        assert!(
+            0.5 - feet <= best + 0.02,
+            "at {degrees:.0} degrees the feet are {:.1}% below the crosshair, past the {:.1}% the sphere can open",
+            (0.5 - feet) * 100.0,
+            best * 100.0
+        );
+        // And it is getting most of the way to that ceiling, rather than
+        // giving up early and leaving the fighter mid-screen. Only most: the
+        // sphere's best is measured from an eye swung past vertical, and the
+        // eye ceiling stops well short of that on purpose.
+        assert!(
+            0.5 - feet > best * 0.6,
+            "at {degrees:.0} degrees the feet are only {:.1}% below the crosshair, well short of the {:.1}% available",
+            (0.5 - feet) * 100.0,
+            best * 100.0
+        );
+    }
+}
+
+#[test]
+fn the_camera_never_jumps_as_the_aim_sweeps() {
+    // The failure a solved camera is prone to, and the one a player would
+    // notice instantly: two roots, a clamp releasing, or a condition going from
+    // impossible to possible, and the eye teleports across the arena between
+    // one frame and the next.
+    //
+    // Swept finely, and against the eye rather than the framing, because the
+    // framing can stay put while the camera swings around behind it.
+    let z = zones();
+    let steps = 400;
+    let mut previous: Option<[f32; 3]> = None;
+    for step in 0..=steps {
+        let pitch = -z.down_limit + step as f32 / steps as f32 * (z.down_limit + z.up_limit);
+        let (f, at) = settled(pitch);
+        let eye = [f.eye[0] - at[0], f.eye[1] - at[1], f.eye[2] - at[2]];
+        if let Some(was) = previous {
+            let moved =
+                ((eye[0] - was[0]).powi(2) + (eye[1] - was[1]).powi(2) + (eye[2] - was[2]).powi(2))
+                    .sqrt();
+            let per_degree = moved / (z.down_limit + z.up_limit).to_degrees() * steps as f32;
+            // As a share of the sphere rather than in metres, because the eye
+            // slides along that sphere and a bigger one covers more ground for
+            // the same change of angle. The fastest the rig moves on purpose is
+            // the handover into the fighter's head, at about a tenth of the
+            // radius per degree; a clamp releasing used to manage most of it in
+            // a single degree.
+            assert!(
+                per_degree < 0.2 * z.sphere,
+                "the eye jumped {per_degree:.2} m per degree at {:.1} degrees",
+                pitch.to_degrees()
+            );
+        }
+        previous = Some(eye);
+    }
 }
 
 #[test]
@@ -370,6 +467,12 @@ fn the_floor_zone_walks_the_fighter_up_the_screen() {
     // Below the neutral zone the fighter climbs toward the crosshair, so that
     // at the bottom of the range the camera is looking at their own feet --
     // which is the shot that puts a stone underneath you.
+    //
+    // On a fixed sphere the eye does not have to move for this. The camera is
+    // pointed at the crosshair's mark, and the mark is itself sweeping onto the
+    // fighter's feet as the player looks down, so the *view* pans onto them
+    // while the eye stays exactly where it was. That is the whole floor zone,
+    // and it costs the rig nothing.
     let z = zones();
     let mut last = f32::MIN;
     for step in 0..=8 {
@@ -492,9 +595,10 @@ fn the_camera_never_ends_up_under_the_floor() {
 
 #[test]
 fn pulling_the_camera_back_makes_the_fighter_smaller() {
-    // What is left of the distance setting. The rig has no free distance -- the
-    // framing decides where the eye goes -- so the setting scales how much of
-    // the screen the fighter fills, which is the same wish.
+    // The distance setting means what it says again: it scales the sphere. The
+    // fighter getting smaller is the consequence rather than the mechanism,
+    // which is the right way round -- a player asking for the camera to be
+    // further back means the camera, not the fighter.
     let at = [0.0, 0.0, 8.0];
     let pitch = zones().neutral_pitch();
     let target = aim_at(at, 0.0, pitch);
