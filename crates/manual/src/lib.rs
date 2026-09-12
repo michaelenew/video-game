@@ -246,7 +246,7 @@ pub const SECTIONS: &[Section] = &[
             s("F3 and F4", "Field of view, 2 degrees a step.", "F3 F4 fov"),
             s(
                 "F5 and F6",
-                "Camera distance, 0.4 m a step.",
+                "Camera distance -- how big the fighter draws, 0.4 m a step.",
                 "F5 F6 camera distance",
             ),
         ],

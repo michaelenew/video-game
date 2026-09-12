@@ -102,17 +102,42 @@ of them is settled:
 Aim is the camera direction. The player turns by turning the camera; there is no separate
 turn control and no auto-facing.
 
-**The camera sits directly behind the fighter, and well above their head.** Directly behind
-is not a preference: the camera points at the aim point, so an eye slid to one shoulder would
-turn the whole view and `W` would stop walking up the screen. Well above is what puts the
-fighter in the *lower part of the frame* — they and the aim point are both on the ground and
-they are nearer, so a higher eye separates the two. At chest height they coincide and the
-fighter stands on the crosshair, which is what the first attempt at this looked like.
+**The camera sits directly behind the fighter.** Not a preference: the camera points at the
+aim point, so an eye slid to one shoulder would turn the whole view and `W` would stop walking
+up the screen.
 
-**Aim above the horizon and the camera comes in quickly**, bringing the fighter up to the
-middle of the screen and fading them out as it arrives, until you are simply panning the sky
-from behind their eyes. There is no other way to look up at something without your own head
-in the way.
+### The camera is prescribed, zone by zone — settled 2026-09-12
+
+Where the eye goes is not a set of offsets any more. It is stated as **where the fighter should
+appear on screen** at each vertical aim angle, and the eye is whatever satisfies that. Angles
+below are degrees, negative below the horizon; screen positions are percentages up from the
+bottom, so the crosshair is at 50 by definition.
+
+| Zone | What it is for | What it asks for |
+| --- | --- | --- |
+| **−90 to −85** | Not allowed | At the pole the fighter's vertical plane stops being defined and the camera has nothing to be behind |
+| **−85 to −45** | The floor zone | The feet walk up the screen from 5% to 50%, so at the bottom the camera is looking at the fighter's own feet — the shot that puts a stone underneath you |
+| **−45 to −10** | **The neutral zone**, where most of a match is spent | Feet at 5%, head at 25%: low in the frame and the same size throughout |
+| **−10 to 0** | The turn | Attention moves from the feet to the head, until at level the crosshair rides just above the head. With no ground under the aim to read it against, the fighter's own head is what a mid-range skillshot keys off |
+| **0 to +10** | The handover | The eye walks into the fighter and the body fades out |
+| **+10 to +85** | First person | The eye *is* the point abilities come out of, so the crosshair's line in space and the ability's line are the same line |
+| **+85 to +90** | Not allowed | As below |
+
+**The shape is the design; the numbers are knobs.** Every boundary angle and every percentage
+is in the Oven under **Camera**, and those are the only camera values in it — see
+[architecture.md](architecture.md) for why they are the one family kept out of the desync
+checksum.
+
+**Solved in closed form, once a frame.** Each condition is "see these two points a given angle
+apart", and the places from which a segment subtends a fixed angle form a *circle* through its
+ends — the inscribed angle theorem. So the eye is where two circles cross, which is a line and
+a quadratic. No search, nothing baked, and exact rather than nearly.
+
+**One thing the geometry insists on, worth knowing before tuning.** The crosshair's mark on the
+ground sits `cast height / tan(pitch)` ahead: about 7 m at −10 and barely 1.2 m at −45. Holding
+the fighter at a fixed spot on screen while the mark sweeps that far in swings the eye from a
+normal third-person arm at −10 to almost directly overhead at −45. If the neutral zone should
+feel like one camera rather than two, the lever is its steep boundary.
 
 Two consequences are worth stating because they are design, not implementation:
 

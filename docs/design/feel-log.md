@@ -1142,3 +1142,65 @@ that *place* something are aimed.
 the ground you are always looking at a stone's *side* and never at its top — stacking by aiming
 needs you to be above the cap. That is honest geometry rather than a bug, and it may still want
 an answer.
+
+### 2026-09-12 — the camera became a prescription
+**Changed** The rig stopped being a set of offsets and became a set of **zones in the vertical
+aim angle**, each one stating where the fighter should appear on screen. Every boundary and
+every percentage is in the Oven under a new **Camera** family. See
+[controls.md](controls.md#the-camera-is-prescribed-zone-by-zone--settled-2026-09-12).
+
+**Why** Reported, and the reason is the valuable part: *"I think this is becoming a problem
+where the intent with the camera is not clear between threads so we keep causing reversions."*
+Three passes in two days had each moved the camera for a good local reason and undone something
+the last one bought. A rig described as "arm length, orbit lift, shoulder offset" cannot be
+argued with, because none of those is a thing anybody wants — they are means. Stated as *where
+the fighter sits in the frame at each angle*, the intent survives the next change, and a
+disagreement is about a number rather than about what the camera is for.
+
+**Closed form, and the geometry hands it over.** Asked for "solved per frame" the first version
+did nested bisection, which was rejected on the spot and rightly: *"solved per frame needs to
+mean closed form solution, to be clear."* It turns out there is one, and it is pretty. Each
+condition is "see these two points a given angle apart", and the set of places from which a
+segment subtends a fixed angle is a **circle through its two ends** — the inscribed angle
+theorem, the same one that says every angle standing on a diameter is a right angle. Two
+conditions, two circles, and the eye is where they cross: subtract them for the radical line,
+intersect that with either circle, take the root that is behind the fighter. Thirty-odd
+operations, exact, and nothing to bake.
+
+It also fixed a real error. The bisection's inner loop was hunting for the distance that makes
+the fighter the right size, and the closed form for that is one line — `R = k·cos ε + body·sin ε`
+— which disagreed with the small-angle estimate the rest of the design had been sketched
+against by nearly two metres at steep angles.
+
+**The camera left the desync checksum, and that is now safe.** Camera numbers were deliberately
+kept out of the Oven when it was built, because everything in it is folded into the checksum and
+two people must be able to play each other at different fields of view. They can go in now, in
+their own family that `hash` skips, and the reason is this week's other change: **aiming stopped
+going through the camera.** The aim is solved from the fighter's own cast origin, so where the
+eye sits changes nothing about where an ability lands. A camera knob is a personal setting in a
+way it could not have been a month ago.
+
+**What the geometry insists on.** Two things came out of the numbers rather than out of the
+spec, and both are worth knowing before tuning.
+
+*The neutral zone is two cameras.* The crosshair's mark on the ground sits `cast height /
+tan(pitch)` ahead — about 7 m at −10 and 1.2 m at −45. Holding the fighter at a fixed 5% of the
+screen while the mark sweeps in that far swings the eye from 51 degrees of elevation at 6.9 m to
+85 degrees at 2.6 m, which is a normal third-person arm at one end and almost directly overhead
+at the other. Nothing is wrong; it is what "keep the fighter still while the crosshair comes in"
+means. The lever is the zone's steep boundary.
+
+*The last few degrees of the look down are degenerate.* At the bottom of the range the crosshair
+is already at the fighter's feet, so "put the feet on the crosshair" is satisfied by any camera
+at all — and asking for it *exactly* demands an eye in line with them, which is an eye on the
+floor. A least-elevation knob is what stops the rig chasing that, and it only applies in that
+zone: at level the eye has to come down almost beside the fighter to keep their head just under
+the mark.
+
+**The distance setting survived with a new job.** The rig has no free distance any more — where
+the eye goes is decided by where the fighter has to land — so `F5`/`F6` scale how much of the
+screen the fighter fills. Pull back, smaller fighter, which is the same wish.
+
+**Verdict** open. The shape is what was asked for and the waypoints are pinned by tests rather
+than by screenshots, which is the point of the exercise. The number most likely to want moving
+is the neutral zone's steep boundary, for the reason above.

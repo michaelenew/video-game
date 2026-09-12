@@ -671,3 +671,18 @@ pub const MONSTER: [i32; 132] = [
                0, // monster.shake.appetite = 0
              900, // monster.shake.appetite_per_rider = 900
 ];
+
+#[rustfmt::skip]
+pub const VIEW: [i32; 11] = [
+              85, // camera.look_down_limit = 85
+              85, // camera.look_up_limit = 85
+              45, // camera.floor_zone,_from = 45
+              10, // camera.neutral_zone,_to = 10
+              10, // camera.head_lock,_at = 10
+               5, // camera.feet,_neutral_(%) = 5
+              25, // camera.head,_neutral_(%) = 25
+              50, // camera.feet,_floor_(%) = 50
+               4, // camera.head_to_crosshair_(%) = 4
+              30, // camera.eye_elevation,_least = 30
+              85, // camera.eye_elevation,_most = 85
+];

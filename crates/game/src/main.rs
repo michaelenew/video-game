@@ -368,9 +368,8 @@ impl Default for Look {
             // Player one spawns at -X looking toward +X, where player two is.
             yaw: env_f32("SHOT_YAW").unwrap_or(0.0),
             // Resting a little below the horizon, not level -- see
-            // `RigConfig::neutral_pitch`.
-            pitch: env_f32("SHOT_PITCH")
-                .unwrap_or(-view::camera::RigConfig::default().neutral_pitch),
+            // `Zones::neutral_pitch`.
+            pitch: env_f32("SHOT_PITCH").unwrap_or(view::camera::Zones::tuned().neutral_pitch()),
             yaw_two: std::f32::consts::PI,
             grabbed: false,
         }
@@ -1333,7 +1332,6 @@ fn mouse_look(
         settings.save();
     }
 
-    let rig_cfg = view::camera::RigConfig::default();
     if look.grabbed {
         let sensitivity = settings.radians_per_pixel();
         let (mut dx, mut dy) = (0.0, 0.0);
@@ -1342,7 +1340,8 @@ fn mouse_look(
             dy += ev.delta.y;
         }
         look.yaw += dx * sensitivity;
-        look.pitch = (look.pitch - dy * sensitivity).clamp(-rig_cfg.pitch_down, rig_cfg.pitch_up);
+        let zones = view::camera::Zones::tuned();
+        look.pitch = (look.pitch - dy * sensitivity).clamp(-zones.down_limit, zones.up_limit);
     } else {
         motion.clear();
     }
@@ -1403,6 +1402,7 @@ fn drive_camera(
 ) {
     if settings.is_changed() {
         rig.0.set_distance(settings.distance);
+        rig.0.set_fov(settings.fov_radians());
     }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
     // The camera follows whichever fighter this client is driving.
