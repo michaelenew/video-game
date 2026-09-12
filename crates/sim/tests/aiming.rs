@@ -1,15 +1,15 @@
 //! Where abilities go.
 //!
-//! One rule under all of it: follow the line the player is looking along, out
-//! from the point abilities come from, and stop at the first of the terrain or
-//! the edge of the ability's reach. These are the assertions for what that buys
-//! — placing an area where you want it rather than where you are standing, and
-//! never being able to place it somewhere the ability cannot reach.
+//! One rule under all of it, and `crate::aim` is the only place that knows it:
+//! **one raycast, from the camera through the crosshair, and the ability goes
+//! to the first thing it meets.** These are the assertions for what that
+//! buys — the thing you are pointing at is the thing you hit, whether you are
+//! pointing at the floor, at a wall, at a person, or at the sky.
 
 use sim::aim;
-use sim::class::{MAX_STRUCTURES, Mechanic, Structure};
+use sim::class::{Mechanic, Structure};
 use sim::effects::EffectKind;
-use sim::state::{MAX_PLAYERS, SLOT_SPECIAL};
+use sim::state::SLOT_SPECIAL;
 use sim::stones::Phase;
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
@@ -37,6 +37,23 @@ fn run(w: &mut World, frames: u32, bits: u16, pitch: i16) {
 fn tap(w: &mut World, bits: u16, pitch: i16, then: u32) {
     run(w, 2, bits, pitch);
     run(w, then, 0, pitch);
+}
+
+/// Ask `aim` something about a world as it stands.
+///
+/// The scene is everything a ray can meet, and it is borrowed from copies —
+/// which is also how the simulation builds it, so a test cannot accidentally
+/// ask a question the game could not.
+fn with_scene<T>(w: &World, ask: impl FnOnce(&aim::Scene) -> T) -> T {
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    ask(&aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: w.monster.as_ref(),
+    })
 }
 
 fn elementalist() -> World {
@@ -171,7 +188,7 @@ fn the_target_locks_when_the_move_starts() {
 
     // Throw it looking well down, then look level for the rest of the move.
     run(&mut w, 2, Q, down(45));
-    let locked = w.players[0].aim_at;
+    let locked = w.players[0].aim_at();
     run(&mut w, 40, 0, up(2));
 
     assert!(
@@ -188,7 +205,7 @@ fn an_aimed_move_hits_where_it_was_aimed() {
     let mut w = elementalist();
     with_a_stone(&mut w);
     run(&mut w, 2, Q, down(45));
-    let locked = w.players[0].aim_at;
+    let locked = w.players[0].aim_at();
     run(&mut w, 20, 0, down(45));
 
     let mut seen = None;
@@ -320,8 +337,8 @@ fn the_reach_sphere_bounds_what_the_terrain_can_do_to_the_aim() {
     // wall -- a fraction of a degree of mouse movement swinging the target
     // across the arena. Stopping at the reach bounds that jump to the ability's
     // own range, which is the most it could ever have meant.
-    let stones = [None; MAX_PLAYERS * MAX_STRUCTURES];
-    let stood = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
+    let mut w = elementalist();
+    w.players[0].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::ZERO);
     let reach = Fx::from_int(6);
 
     let mut last: Option<V3> = None;
@@ -330,7 +347,7 @@ fn the_reach_sphere_bounds_what_the_terrain_can_do_to_the_aim() {
         // Sweep through the angles that graze the near platform's edge.
         let tilt = down(2) + (step * 24) as i16;
         let look = Input::looking_at(0, 0, tilt);
-        let at = aim::intent(stood, look, reach, true, &stones);
+        let at = with_scene(&w, |scene| aim::grounded_path(0, look, reach, scene).to);
         if let Some(prev) = last {
             worst = worst.max(at.sub(prev).flat_len());
         }
@@ -344,34 +361,63 @@ fn the_reach_sphere_bounds_what_the_terrain_can_do_to_the_aim() {
 }
 
 #[test]
-fn the_trace_stops_at_the_arena_rather_than_running_through_it() {
-    let stones = [None; MAX_PLAYERS * MAX_STRUCTURES];
-    // Clear of the two raised platforms, which reach four metres either side of
-    // the middle -- a level ray from the centre of the arena meets one of those
-    // long before it reaches a wall.
-    let from = V3::new(Fx::ZERO, t::cast_height(), Fx::from_int(8));
-    let far = Fx::from_int(60);
-    // Level, down the +X axis: the wall stands just outside the play area.
-    let dir = Input::looking_at(0, 0, 0).look_dir();
-    let hit = aim::trace(from, dir, far, &stones).expect("level aim hit nothing at all");
+fn the_ray_stops_on_the_platform_rather_than_running_through_it() {
+    // Terrain is a candidate, and the top of a platform counts as ground: it
+    // is a surface you stand on, so a pillar planted there stands on it and a
+    // shot aimed at it flies level over it. A ray that ran through to the
+    // floor beyond would put both a metre and a half below where the crosshair
+    // was.
+    //
+    // Swept rather than aimed at one angle, because where the eye sits is the
+    // camera's business and this test is not about the camera.
+    let mut w = elementalist();
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-13), Fx::ZERO, Fx::from_int(-13));
+
+    let on_the_platform = |at: V3| at.x.to_f32_for_render() > 5.0 && at.x.to_f32_for_render() < 9.0;
+    let mut landed_on_top = false;
+    for step in 0..90 {
+        let look = Input::looking_at(0, 0, down(step));
+        let seen = with_scene(&w, |scene| aim::sight(0, look, Fx::from_int(20), scene));
+        if !on_the_platform(seen.at) {
+            continue;
+        }
+        assert!(
+            seen.at.y.to_f32_for_render() > 1.4,
+            "the ray came out {:.2} m up inside the platform at x={:.1}",
+            seen.at.y.to_f32_for_render(),
+            seen.at.x.to_f32_for_render()
+        );
+        if (seen.at.y.to_f32_for_render() - 1.5).abs() < 0.1 {
+            landed_on_top = true;
+            assert_eq!(
+                seen.met,
+                aim::Met::Ground,
+                "the top of a platform is a surface you stand on, so it is ground"
+            );
+        }
+    }
     assert!(
-        (hit.to_f32_for_render() - 14.0).abs() < 1.5,
-        "the level trace stopped at {:.1} m; the wall is at 14",
-        hit.to_f32_for_render()
+        landed_on_top,
+        "the sweep never once landed on the platform, so it proves nothing"
     );
 }
 
 #[test]
-fn a_free_placement_is_not_dragged_down_to_the_floor() {
-    // Grounded is a property of the thing being placed. Something that is not
-    // has to be able to sit in the air, or aiming up would mean nothing.
-    let stones = [None; MAX_PLAYERS * MAX_STRUCTURES];
+fn a_skillshot_is_not_dragged_down_to_the_floor() {
+    // Grounded is a property of the thing being thrown. Something that is not
+    // has to be able to end in the air, or aiming up would mean nothing.
+    let mut w = elementalist();
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    w.players[1].pos = V3::new(Fx::from_int(-13), Fx::ZERO, Fx::from_int(-13));
     let look = Input::looking_at(0, 0, up(40));
-    let at = aim::intent(V3::ZERO, look, Fx::from_int(5), false, &stones);
+    let path = with_scene(&w, |scene| {
+        aim::skillshot_path(0, look, Fx::from_int(5), scene)
+    });
     assert!(
-        at.y.raw() > t::cast_height().raw(),
-        "an ungrounded placement aimed upward landed at {:.2} m",
-        at.y.to_f32_for_render()
+        path.to.y.raw() > path.from.y.raw(),
+        "a skillshot aimed forty degrees up ended at {:.2} m, no higher than it left at",
+        path.to.y.to_f32_for_render()
     );
 }
 
@@ -418,4 +464,161 @@ fn looking_level_is_what_it_always_was() {
         ahead(&w, pillar(&w).pos),
         reach.to_f32_for_render()
     );
+}
+
+// ---------------------------------------------------------------------------
+// The one rule
+// ---------------------------------------------------------------------------
+//
+// The player's frame of reference is the crosshair, so the property under all
+// of these is the same: the thing the reticle is on is the thing the ability
+// reaches. Every bug this file has ever caught has been the two drifting apart.
+
+/// A stone standing fully out of the ground at a chosen spot, as terrain.
+fn stone_at(w: &mut World, at: V3) {
+    let mut stone = Structure::raised(at);
+    stone.age = t::structure_rise();
+    w.players[0].mechanic = Mechanic::Structures([Some(stone), None, None]);
+}
+
+#[test]
+fn a_grounded_cast_lands_exactly_where_the_ray_landed() {
+    // "If we hit the ground, cast it exactly there. Not a pixel different."
+    let mut w = elementalist();
+    for step in 0..40 {
+        let look = Input::looking_at(0, 0, down(5 + step));
+        let (seen, cast) = with_scene(&w, |scene| {
+            (
+                aim::sight(0, look, Fx::from_int(10), scene),
+                aim::grounded_path(0, look, Fx::from_int(10), scene).to,
+            )
+        });
+        if seen.met != aim::Met::Ground {
+            continue;
+        }
+        assert_eq!(
+            (cast.x.raw(), cast.y.raw(), cast.z.raw()),
+            (seen.at.x.raw(), seen.at.y.raw(), seen.at.z.raw()),
+            "the cast landed {:?} and the crosshair was on {:?}",
+            cast,
+            seen.at
+        );
+    }
+}
+
+#[test]
+fn a_skillshot_aimed_at_the_floor_flies_level_over_the_spot() {
+    // A shot that cannot land on the ground still has to go *at* the place the
+    // player is pointing: straight up from that spot to the height it leaves
+    // her at, and level from there.
+    let mut w = elementalist();
+    let look = Input::looking_at(0, 0, down(20));
+    let (seen, path) = with_scene(&w, |scene| {
+        (
+            aim::sight(0, look, Fx::from_int(10), scene),
+            aim::skillshot_path(0, look, Fx::from_int(10), scene),
+        )
+    });
+    assert_eq!(
+        seen.met,
+        aim::Met::Ground,
+        "fixture did not aim at the floor"
+    );
+    assert_eq!(
+        (path.to.x.raw(), path.to.z.raw()),
+        (seen.at.x.raw(), seen.at.z.raw()),
+        "the shot ended over {:?} and the crosshair was on {:?}",
+        path.to,
+        seen.at
+    );
+    assert_eq!(
+        path.to.y.raw(),
+        path.from.y.raw(),
+        "a shot aimed at the floor dived into it instead of flying level"
+    );
+}
+
+#[test]
+fn a_skillshot_ends_on_whatever_the_crosshair_is_on() {
+    // The convergence, stated as bluntly as it can be. This is the bug that
+    // keeps coming back: a ray from the *chest* along the *look angle* is
+    // parallel to the crosshair's ray and never meets it, so the reticle sits
+    // on one thing and the shot goes past it -- by more the further away it is.
+    let mut w = elementalist();
+    // A stone to the side of straight ahead, so a parallel ray would miss it
+    // and a converging one cannot.
+    stone_at(&mut w, V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8)));
+
+    let mut checked = 0;
+    for step in 0..40 {
+        let look = Input::looking_at(0, 0, down(step));
+        let (seen, path) = with_scene(&w, |scene| {
+            (
+                aim::sight(0, look, Fx::from_int(14), scene),
+                aim::skillshot_path(0, look, Fx::from_int(14), scene),
+            )
+        });
+        if seen.met != aim::Met::Solid {
+            continue;
+        }
+        checked += 1;
+        assert_eq!(
+            (path.to.x.raw(), path.to.y.raw(), path.to.z.raw()),
+            (seen.at.x.raw(), seen.at.y.raw(), seen.at.z.raw()),
+            "the shot ended at {:?} and the crosshair was on {:?}",
+            path.to,
+            seen.at
+        );
+    }
+    assert!(checked > 0, "the sweep never met anything solid at all");
+}
+
+#[test]
+fn nothing_between_the_camera_and_the_character_is_aimed_at() {
+    // The eye sits behind the shoulder, so the ray starts behind the fighter.
+    // A stone back there is scenery the camera is looking through, not a thing
+    // the player is pointing at -- and aiming through your own cover is not a
+    // mechanic anybody asked for.
+    let mut clear = elementalist();
+    let look = Input::looking_at(0, 0, down(10));
+    let open = with_scene(&clear, |scene| aim::sight(0, look, Fx::from_int(10), scene));
+
+    let behind = clear.players[0]
+        .pos
+        .sub(V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO));
+    stone_at(&mut clear, behind);
+    let blocked = with_scene(&clear, |scene| aim::sight(0, look, Fx::from_int(10), scene));
+
+    assert_eq!(
+        (open.at.x.raw(), open.at.z.raw()),
+        (blocked.at.x.raw(), blocked.at.z.raw()),
+        "a stone standing behind the fighter moved the aim from {:?} to {:?}",
+        open.at,
+        blocked.at
+    );
+}
+
+#[test]
+fn a_body_in_the_way_is_what_you_are_pointing_at() {
+    // Bodies are on the raycast's list. Putting the reticle on someone and
+    // having the shot sail past them is the same complaint as all the others.
+    let mut w = elementalist();
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    w.players[1].pos = V3::new(Fx::from_int(6), Fx::ZERO, Fx::from_int(8));
+
+    let mut found = false;
+    for step in 0..30 {
+        let look = Input::looking_at(0, 0, down(step));
+        let seen = with_scene(&w, |scene| aim::sight(0, look, Fx::from_int(12), scene));
+        let apart = seen.at.sub(w.players[1].pos).flat_len().to_f32_for_render();
+        if apart < t::body_radius().to_f32_for_render() + 0.05 && seen.at.y.raw() > 0 {
+            found = true;
+            assert_eq!(
+                seen.met,
+                aim::Met::Solid,
+                "a fighter read as ground, so a shot would fly level over their head"
+            );
+        }
+    }
+    assert!(found, "the sweep never crossed the other fighter at all");
 }

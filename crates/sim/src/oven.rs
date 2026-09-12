@@ -442,6 +442,7 @@ pub enum MoveField {
     SelfLift,
     Grabs,
     Effect,
+    Skillshot,
 }
 
 impl MoveField {
@@ -464,6 +465,7 @@ impl MoveField {
         MoveField::SelfLift,
         MoveField::Grabs,
         MoveField::Effect,
+        MoveField::Skillshot,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -486,6 +488,7 @@ impl MoveField {
             MoveField::SelfLift => "Self lift",
             MoveField::Grabs => "Grab hold",
             MoveField::Effect => "Leaves behind",
+            MoveField::Skillshot => "Flies at the crosshair",
         }
     }
 
@@ -499,9 +502,10 @@ impl MoveField {
             | MoveField::AirStall => Unit::Frames,
             MoveField::Damage => Unit::Int,
             MoveField::Mobility => Unit::Percent,
-            MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
-                Unit::Flag
-            }
+            MoveField::Unblockable
+            | MoveField::HitsCrouching
+            | MoveField::NeedsMechanic
+            | MoveField::Skillshot => Unit::Flag,
             MoveField::Grabs => Unit::Frames,
             MoveField::Effect => Unit::Int,
             _ => Unit::Fixed,
@@ -657,7 +661,7 @@ pub const CLASSES: usize = 6;
 pub const SCALAR_COUNT: usize = 174;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 18;
+pub const MOVE_FIELDS: usize = 19;
 
 // ---------------------------------------------------------------------------
 // The live store

@@ -52,6 +52,14 @@ pub struct Move {
     /// Which persistent effect this move leaves behind, if any.
     /// See `effects::EffectKind::from_code`.
     pub effect: u8,
+    /// Does this fly through the air toward the crosshair?
+    ///
+    /// The one bit of a move's aiming that cannot be derived. Whether it is
+    /// *grounded* is a property of the thing it places -- a pillar of flame
+    /// comes out of the floor whatever move made it -- but "flies at what I am
+    /// pointing at" against "swings where my body is facing" is a decision per
+    /// move. See [`Move::aim`].
+    pub skillshot: bool,
     /// Percent of walking speed you keep while the move runs.
     ///
     /// Zero roots you, which is what commitment means and is correct for the
@@ -64,6 +72,26 @@ pub struct Move {
 }
 
 impl Move {
+    /// Which of the three kinds of aiming this move uses.
+    ///
+    /// Every move has an answer, and the answer is here rather than at each
+    /// call site -- a caller that decided for itself is how the crosshair and
+    /// the ability came to disagree in the first place. See [`crate::aim`],
+    /// which is the only place allowed to act on it.
+    pub fn aim(&self) -> crate::aim::Kind {
+        use crate::aim::Kind;
+        // A move that plants something on the floor is aimed at the floor,
+        // whatever else it does. Derived rather than declared, so the two can
+        // never disagree.
+        if crate::effects::EffectKind::from_code(self.effect).is_some_and(|k| k.grounded()) {
+            Kind::Grounded
+        } else if self.skillshot {
+            Kind::Skillshot
+        } else {
+            Kind::Swing
+        }
+    }
+
     /// Frames the attacker is still busy after the first active frame connects.
     pub const fn busy_after_contact(&self) -> i32 {
         (self.active as i32 - 1) + self.recovery as i32
@@ -115,12 +143,12 @@ const NAMES: [[&str; SLOTS]; 6] = [
     //   Guillotine: blades erupt from the shadow, so it needs one placed.
     ["Slash", "Executioner", "Guillotine"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
-    //   Bolt: the odd one out. It is a *beam* -- an instant ray along the
-    //   crosshair -- so its `reach` is the line's length and its `radius` is the
-    //   line's thickness, and it is resolved where it is fired rather than by
-    //   the hitbox loop. Its hitstun and knockback are zero on purpose: it takes
-    //   the charge off whoever it catches and gives them their frames straight
-    //   back. See `crate::bolt`.
+    //   Bolt: the game's one *skillshot* -- an instant line from her hand to
+    //   whatever the crosshair is on, so its `reach` is the max-range sphere
+    //   and its `radius` is the line's thickness. Resolved where it is fired
+    //   rather than by the hitbox loop, and its hitstun and knockback are zero
+    //   on purpose: it takes the charge off whoever it catches and gives them
+    //   their frames straight back. See `crate::bolt`.
     ["Bolt", "Fissure", "Fire pillar"],
     // Blood mage -- sustain through aggression. Everything costs health.
     //   Reaper's debt: committed and directional, you cannot turn while it channels.
@@ -176,6 +204,7 @@ pub fn get(class: Class, kind: u8) -> Move {
         self_lift: Fx::from_raw(raw(F::SelfLift)),
         grabs: raw(F::Grabs) as u16,
         effect: raw(F::Effect) as u8,
+        skillshot: raw(F::Skillshot) != 0,
     }
 }
 

@@ -504,11 +504,21 @@ fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     let threshold = (hb.radius.to_f32_for_render()
         + sim::tuning::body_radius().to_f32_for_render())
         * gap_factor;
-    w.players[1].pos = sim::V3::new(
-        hb.to.x.add(Fx::ratio((threshold * 1000.0) as i32, 1000)),
-        w.players[1].pos.y,
-        hb.to.z,
-    );
+    let step = Fx::ratio((threshold * 1000.0) as i32, 1000);
+    // Out along the volume's own direction. For a bubble that is the body's
+    // facing; for a beam it is the line, which may be pointing anywhere at all
+    // -- the Elementalist's ends wherever the crosshair was, and at a level
+    // look that is above head height.
+    let along = if hb.is_a_beam() {
+        hb.to.sub(hb.from).normalized()
+    } else {
+        w.players[0].facing
+    };
+    let spot = hb.to.add(along.scale(step));
+    // Placed by the middle of the body rather than by the feet, so "just past
+    // the end of the volume" means the same thing at any height.
+    let half = sim::tuning::body_height().div(Fx::from_int(2));
+    w.players[1].pos = sim::V3::new(spot.x, spot.y.sub(half).max(Fx::ZERO), spot.z);
     w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
     w
 }

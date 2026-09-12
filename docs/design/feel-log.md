@@ -1515,3 +1515,65 @@ long-range poke for a class that is supposed to want you at terrain range.
 
 **Still open from "the autos are due a pass, as a set":** the melee classes' autos, and the timing
 pass across all six. This closed the Elementalist's.
+
+### 2026-09-12 — one aiming model, written down and enforced
+
+**Changed** every decision about where an ability goes now comes from
+`crates/sim/src/aim.rs`, through one of two functions. The specification is the new
+[aiming.md](aiming.md). `crates/sim/tests/one_aim.rs` fails the build if anything else in the
+simulation reaches for a ray-against-shape primitive, for the camera's eye, or for the look
+direction.
+
+**Why** aiming had been got wrong three times, and the third time was mine. The mistake has
+the same shape every time: someone needs to know where an ability should go, works it out next
+to the ability that needs it, and writes a ray from the **chest** along the **look angle**.
+That ray is *parallel* to the crosshair's and parallel rays never converge — the reticle sits
+on one spot and the ability goes to another, by metres, and the error grows with distance.
+
+It had survived this long because grounded abilities were separately settled onto the floor,
+which hides it: a fire pillar traced from the chest and one traced from the eye land in
+roughly the same place once both are dropped to the ground. Building something that *flies* on
+the same sentence is what exposed it.
+
+**The model.** One raycast, from the camera through the crosshair, ignoring anything behind
+the character model. It meets terrain, other players, monsters, structures, and the ability's
+own max-range sphere; whatever it reaches first is what the player is pointing at. Then
+exactly two kinds of skillshot:
+
+- **grounded** — on the ground, cast exactly there; at the sphere, max range on the ground in
+  the mouse's direction; on anything else, the floor beneath it. If it travels, from the
+  character to that point.
+- **not grounded** — on the ground, that spot raised straight up to the height the shot leaves
+  at, so it flies level over the place the crosshair is on; on anything else, the point of
+  intersection exactly. Straight line from the caster, and that line is its whole reach.
+
+A melee swing is neither and is named as such, because "a sword is a body moving" is a rule
+somebody would otherwise delete by accident.
+
+**Three things fell out of it that are worth recording.**
+
+*Fire is not on the aiming ray's list.* You can see through flame, so a pillar must never
+steal the crosshair — but a shot that travels through one still notices it. Separating "where
+is the player pointing" from "what is in the way of the thing they threw" is what makes both
+true at once, and it is now two functions rather than one confused one.
+
+*A level look does not point at the enemy's chest.* The camera sits above the shoulder, so at
+level pitch the reticle is above head height and a shot goes over them. That is correct — it
+is how a third-person camera works — but every test fixture in the suite had been written
+assuming otherwise, which is a good measure of how thoroughly the old model had leaked. They
+aim by sweeping for the angle that puts the crosshair on the thing now, which is what a player
+does and is robust against the camera being retuned.
+
+*The Bulwark's thrown shield had the same bug*, quietly, and is fixed by the same change: it
+flies at what the crosshair is on rather than along the look angle from the chest.
+
+**Also:** the move table gained a `flies at the crosshair` flag, so every move states which of
+the three kinds it is rather than leaving each caller to work it out. `Player` carries one
+`aim_path` instead of a target and a direction that could disagree — one object cannot drift
+from itself.
+
+**Verdict** open on feel; settled on structure. Nobody has played against the corrected
+aim yet. What is worth watching: whether the beam ending *on* what the crosshair found —
+rather than always running its full range — reads as the shot being eaten by scenery, and
+whether needing to aim down slightly to hit someone at your own height is comfortable or
+merely correct.

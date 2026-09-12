@@ -5,7 +5,8 @@ Everything currently decided, proposed, or parked, in one place. This supersedes
 
 **Start here:** [combat kernel](combat-kernel.md) → [controls](controls.md) →
 [ability spec](ability-spec.md) → a class kit. For implementation, see
-[architecture](architecture.md).
+[architecture](architecture.md); before touching anything that is *pointed at
+something*, see [aiming](aiming.md).
 
 ---
 
@@ -72,6 +73,7 @@ few enough to balance and to read in third person.
 | [combat-kernel.md](combat-kernel.md) | No cooldowns, TTK, what that breaks | Decided |
 | [controls.md](controls.md) | Input grammar, per-class schemes | Proposed |
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
+| [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
 | [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
 | [champion.md](champion.md) | Forms and the mid-animation swap | Decided |

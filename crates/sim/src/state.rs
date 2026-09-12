@@ -13,9 +13,9 @@
 //! need to be findable. See `docs/design/feel-log.md`.
 
 use crate::DT;
-use crate::aim;
+use crate::aim::{self, Contact, Path, Scene};
 use crate::arena;
-use crate::bolt::{self, Beam, Flight, MAX_BOLTS, Struck};
+use crate::bolt::{self, Flight, MAX_BOLTS};
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Mechanic};
 use crate::effects::{Effect, EffectKind, MAX_EFFECTS};
@@ -304,27 +304,22 @@ pub struct Player {
     /// simulation tested rather than a reconstruction of it that can drift, and
     /// so a rollback redraws the same one. See [`crate::bolt`].
     pub beam_reach: Fx,
-    /// Where the move currently running was aimed.
+    /// The line the move currently running was aimed along: where it leaves
+    /// from and where it ends.
+    ///
+    /// **A path rather than a point and a direction**, because those two can
+    /// disagree and did: a direction taken from the look angle and a target
+    /// taken from the crosshair are parallel rays that never converge, so the
+    /// reticle sat on one spot and the ability went to another. One object
+    /// cannot drift from itself. Solved by `crate::aim`, which is the only
+    /// thing allowed to produce one.
     ///
     /// Locked when the move starts, for the same reason facing is: a target you
     /// could drag during startup would let a whiff be rescued after the fact,
     /// and an area you could slide onto someone during the wind-up would make
     /// the telegraph worth nothing. You commit to a place when you commit to
     /// the move.
-    ///
-    /// It is where the ability *lands*, already solved against the terrain and
-    /// the move's reach -- see `crate::aim`.
-    pub aim_at: V3,
-    /// The line the move was aimed along when it was locked in, as a unit
-    /// vector -- pitch included, unlike `facing`, which is flattened to the
-    /// horizontal because a body only ever turns to face level.
-    ///
-    /// A real skillshot travels along this rather than along `facing`: the
-    /// Elementalist's auto reads what stands in front of her along it, and a
-    /// structure it catches is kicked along it too, so aiming above the
-    /// horizon throws the structure up rather than merely forward. See
-    /// `docs/design/kits/elementalist.md`.
-    pub aim_dir: V3,
+    pub aim_path: Path,
 }
 
 impl Player {
@@ -383,6 +378,17 @@ impl Player {
         input.aim_turns().add(self.carry_yaw)
     }
 
+    /// Where the move currently running is aimed: the end of its path.
+    pub fn aim_at(&self) -> V3 {
+        self.aim_path.to
+    }
+
+    /// The line it travels along, as a unit vector -- pitch included, unlike
+    /// `facing`, which is flattened because a body only ever turns level.
+    pub fn aim_dir(&self) -> V3 {
+        self.aim_path.dir()
+    }
+
     /// Height of the hurtbox. Crouching ducks under anything aimed high.
     pub fn hurt_height(&self) -> Fx {
         if self.crouching {
@@ -426,8 +432,7 @@ impl Default for Player {
             grip_vel: V3::ZERO,
             grip_settle: 0,
             beam_reach: Fx::ZERO,
-            aim_at: V3::ZERO,
-            aim_dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            aim_path: Path::default(),
         }
     }
 }
@@ -579,12 +584,24 @@ impl World {
             self.monster = Some(beast);
         }
 
+        // Everything the aiming ray can meet, as it stood at the top of the
+        // frame. Copied rather than borrowed because the loop below takes each
+        // fighter mutably -- and snapshotting is right anyway: both players
+        // aim against the same world, so neither ordering wins.
         let beast = self.monster;
-        for (p, input) in self.players.iter_mut().zip(inputs) {
+        let seen = self.players;
+        let effects = self.effects;
+        for (i, (p, input)) in self.players.iter_mut().zip(inputs).enumerate() {
             if p.aboard() {
                 p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
             }
-            step_player(p, input, &field, beast.as_ref());
+            let scene = Scene {
+                stones: &field,
+                players: &seen,
+                effects: &effects,
+                quarry: beast.as_ref(),
+            };
+            step_player(p, i, input, &field, beast.as_ref(), &scene);
             advance_clocks(p);
         }
 
@@ -608,7 +625,7 @@ impl World {
                 // against the terrain and the move's reach. It used to be a
                 // fixed distance straight ahead at floor level, which meant an
                 // area ability could only ever be placed by walking.
-                spawn_effect(&mut self.effects, kind, i as u8, p.aim_at);
+                spawn_effect(&mut self.effects, kind, i as u8, p.aim_at());
             }
         }
 
@@ -683,9 +700,11 @@ impl World {
         }
 
         step_effects(&mut self.effects, &mut self.players);
+        let standing = self.effects;
         bolt::step(
             &mut self.bolts,
             &mut self.players,
+            &standing,
             self.monster.is_none(),
             &mut self.monster,
         );
@@ -770,7 +789,7 @@ impl World {
             }
         }
         for p in &self.players {
-            for v in [p.pos, p.vel, p.facing, p.aim_at, p.aim_dir] {
+            for v in [p.pos, p.vel, p.facing, p.aim_path.from, p.aim_path.to] {
                 h.write_i32(v.x.raw());
                 h.write_i32(v.y.raw());
                 h.write_i32(v.z.raw());
@@ -930,40 +949,33 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         return None;
     };
     let m = moves::get(p.class, kind);
-    // The Champion's form multiplies reach rather than each form having its own
-    // table. Applying it here, once, is why the overlay cannot disagree with
-    // the hit test about where a spear reaches.
-    let reach_mul = match p.mechanic {
-        Mechanic::Forms { form, .. } => form.modifiers().0,
-        _ => Fx::ONE,
-    };
-    // The Elementalist's auto is a line out of her chest along the crosshair,
-    // ending wherever it stopped -- at a stone, a body, a pillar, or its own
-    // range. It used to be a circle a fixed distance in front of her, which is
-    // what made aiming up do nothing at all. See `crate::bolt`.
-    if bolt::throws_a_beam(p, kind) {
-        let beam = beam_of(p, kind);
-        return Some(Hitbox {
-            from: beam.from,
-            to: beam.at(p.beam_reach),
-            radius: beam.radius,
-            hits_crouching: m.hits_crouching,
-            unblockable: m.unblockable,
-            spent: p.hit_used,
-        });
-    }
-    // An aimed move hits where it was aimed. A swing does not: a sword is a
-    // body moving, and pointing the camera at the floor should not put the
-    // blade there. Only the moves that *place* something are aimed, and they
-    // are the ones the crosshair is promising a spot to.
-    let centre = if aimed(&m) {
-        p.aim_at
-    } else {
-        p.pos.add(p.facing.scale(m.reach.mul(reach_mul)))
+    let (from, to) = match m.aim() {
+        // A line from her hand to the point the crosshair was on, ending
+        // wherever the shot actually stopped.
+        aim::Kind::Skillshot => {
+            let beam = beam_of(p);
+            (beam.from, beam.at(p.beam_reach))
+        }
+        // Where the thing was planted. The burst that comes with it has to be
+        // there too, or the ability is two abilities pointing different ways.
+        aim::Kind::Grounded => (p.aim_at(), p.aim_at()),
+        // Not aimed: out along the body, live rather than locked, because the
+        // body keeps moving during a move it can be thrown on the move. The
+        // Champion's form multiplies reach rather than each form having its own
+        // table, and applying it here, once, is why the overlay cannot disagree
+        // with the hit test about where a spear reaches.
+        aim::Kind::Swing => {
+            let reach_mul = match p.mechanic {
+                Mechanic::Forms { form, .. } => form.modifiers().0,
+                _ => Fx::ONE,
+            };
+            let at = p.pos.add(p.facing.scale(m.reach.mul(reach_mul)));
+            (at, at)
+        }
     };
     Some(Hitbox {
-        from: centre,
-        to: centre,
+        from,
+        to,
         radius: m.radius,
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
@@ -971,24 +983,18 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     })
 }
 
-/// The line the Elementalist's auto is fired along.
+/// The line a skillshot travels this frame.
 ///
-/// Its length and thickness are the move table's own `reach` and `radius`,
-/// rather than knobs of their own: the beam *is* the move, so its range is the
-/// move's range and the frame table tells the truth about it.
-pub fn beam_of(p: &Player, kind: u8) -> Beam {
-    let m = moves::get(p.class, kind);
-    Beam {
+/// **Locked target, live origin.** The point was committed to when the move
+/// started -- that is what stops a whiff being rescued by turning afterwards --
+/// but it leaves her hand, and her hand moves: the auto keeps most of her
+/// walking speed, so a line still anchored where she was standing two frames
+/// ago would visibly detach from her.
+pub fn beam_of(p: &Player) -> Path {
+    Path {
         from: aim::origin(p.pos),
-        dir: p.aim_dir,
-        range: m.reach,
-        radius: m.radius,
+        to: p.aim_path.to,
     }
-}
-
-/// Does this move place something, and therefore go where it was aimed?
-fn aimed(m: &moves::Move) -> bool {
-    EffectKind::from_code(m.effect).is_some()
 }
 
 fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
@@ -1176,12 +1182,19 @@ fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
     })
 }
 
-fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monster>) {
+fn step_player(
+    p: &mut Player,
+    who: usize,
+    input: Input,
+    field: &Field,
+    beast: Option<&Monster>,
+    scene: &Scene,
+) {
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     if p.aboard() {
         match beast {
-            Some(beast) => return step_rider(p, input, field, beast),
+            Some(beast) => return step_rider(p, who, input, beast, scene),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
             None => p.mount = monster::NO_PART,
@@ -1250,14 +1263,14 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
             // shift with only a direction is a dodge. See controls.md.
             if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
                 p.hit_used = false;
-                lock_aim(p, SLOT_SPECIAL, input, field);
+                lock_aim(p, who, SLOT_SPECIAL, input, scene);
                 arm_aerial(p, SLOT_SPECIAL, input);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, 2).startup,
                 }
             } else if pressed_mechanic {
-                mechanic_action(p, input, field);
+                mechanic_action(p, who, input, scene);
                 Action::Free
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
@@ -1267,7 +1280,7 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
                 };
                 p.hit_used = false;
                 steer_meter(p, input, kind);
-                lock_aim(p, kind, input, field);
+                lock_aim(p, who, kind, input, scene);
                 arm_aerial(p, kind, input);
                 Action::Startup {
                     kind,
@@ -1446,15 +1459,31 @@ fn step_player(p: &mut Player, input: Input, field: &Field, beast: Option<&Monst
     }
 }
 
-/// Work out where this move lands, and hold it there for the move's duration.
+/// Work out where this move goes, and hold it there for the move's duration.
 ///
 /// The same commitment facing is: once the move is out, the mouse moves the
-/// camera and not the ability. See `Player::aim_at`.
-fn lock_aim(p: &mut Player, kind: u8, input: Input, field: &Field) {
+/// camera and not the ability. See `Player::aim_path`.
+///
+/// **Three lines, and none of them decide anything.** Which of the two kinds of
+/// skillshot a move is comes from the move table (`Move::aim`), and what that
+/// kind means comes from `crate::aim`. A move that needs some third answer
+/// needs `crate::aim` to grow it, not a branch here -- that is how the
+/// crosshair and the ability came to disagree.
+fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
     let m = moves::get(p.class, kind);
-    let grounded = EffectKind::from_code(m.effect).is_some_and(|k| k.grounded());
-    p.aim_at = aim::intent(p.pos, input, m.reach, grounded, field);
-    p.aim_dir = input.look_dir();
+    p.aim_path = match m.aim() {
+        aim::Kind::Grounded => aim::grounded_path(who, input, m.reach, scene),
+        aim::Kind::Skillshot => aim::skillshot_path(who, input, m.reach, scene),
+        // Not aimed at all. Recorded for completeness -- `hitbox` works a
+        // swing out live from the body rather than reading this, because a
+        // swing thrown on the move has to travel with the body and the
+        // Champion's form multiplies its reach. A swing has nothing to commit
+        // to: facing is already locked, and that is the commitment.
+        aim::Kind::Swing => Path {
+            from: p.pos,
+            to: p.pos.add(p.facing.scale(m.reach)),
+        },
+    };
 }
 
 /// Start an aerial's hang, and its shove, if this one is thrown in the air.
@@ -1528,27 +1557,27 @@ fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
 /// One button means something different on every class, which is where the
 /// identity lives -- see `controls.md`. Everything else about the control
 /// scheme is shared.
-fn mechanic_action(p: &mut Player, input: Input, field: &Field) {
-    let look = input.look_dir();
+fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
     let from = aim::origin(p.pos);
-    let pos = p.pos;
-    // Where the mechanic would put something, if it puts something: the same
-    // solved point an ability gets. The mechanic fires on the press with no
-    // startup, so there is nothing to lock it against -- it is simply used.
-    let placed = |reach| aim::intent(pos, input, reach, true, field);
+    // The mechanic fires on the press with no startup, so there is nothing to
+    // lock it against -- it asks `crate::aim` the same question an ability
+    // does and uses the answer immediately.
+    let placed = |reach| aim::grounded_path(who, input, reach, scene).to;
     match p.mechanic {
         // Throw commits you: faster, exposed, and unable to block until it is
         // back. Recall damages along the return path; reactivating mid-flight
         // leaps you to it, which is the Bulwark's approach tool.
         Mechanic::Shield(shield) => {
             p.mechanic = Mechanic::Shield(match shield {
-                // Thrown along the line the player is looking, not flat ahead.
-                // It is the one ability in the game that travels, so it is the
-                // one place "the crosshair is a line in space" has to mean the
-                // flight path and not just the landing spot.
+                // A skillshot: it flies at what the crosshair is on, not along
+                // the look angle from the chest. Those are parallel lines that
+                // never meet, and the shield is thrown far enough that the gap
+                // between them is most of a body.
                 Shield::Held => Shield::Flying {
                     pos: from,
-                    vel: look.scale(t::shield_speed()),
+                    vel: aim::skillshot_path(who, input, t::shield_range(), scene)
+                        .dir()
+                        .scale(t::shield_speed()),
                     outbound: true,
                     travelled: Fx::ZERO,
                 },
@@ -2080,7 +2109,7 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
 /// metre-per-second dash on a surface two metres wide is a way to fall off by
 /// accident, and taking it away is what makes bracing a real answer rather than
 /// a worse version of one you already had.
-fn step_rider(p: &mut Player, input: Input, field: &Field, beast: &Monster) {
+fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: &Scene) {
     let part = p.mount as usize;
     let held = p.local;
     let radius = t::body_radius();
@@ -2141,13 +2170,13 @@ fn step_rider(p: &mut Player, input: Input, field: &Field, beast: &Monster) {
         None => {
             if input.has(Input::SPECIAL) && p.mechanic_ready(SLOT_SPECIAL) {
                 p.hit_used = false;
-                lock_aim(p, SLOT_SPECIAL, input, field);
+                lock_aim(p, who, SLOT_SPECIAL, input, scene);
                 Action::Startup {
                     kind: SLOT_SPECIAL,
                     left: moves::get(p.class, SLOT_SPECIAL).startup,
                 }
             } else if pressed_mechanic {
-                mechanic_action(p, input, field);
+                mechanic_action(p, who, input, scene);
                 Action::Free
             } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
                 let kind = if input.has(Input::SHIFT) {
@@ -2157,7 +2186,7 @@ fn step_rider(p: &mut Player, input: Input, field: &Field, beast: &Monster) {
                 };
                 p.hit_used = false;
                 steer_meter(p, input, kind);
-                lock_aim(p, kind, input, field);
+                lock_aim(p, who, kind, input, scene);
                 Action::Startup {
                     kind,
                     left: moves::get(p.class, kind).startup,
@@ -2372,42 +2401,36 @@ impl World {
             return;
         }
 
-        let beam = beam_of(&shooter, kind);
+        // The line: her hand to the point the crosshair was on when she threw
+        // it. Not a direction and a range -- see `crate::aim`.
+        let beam = beam_of(&shooter);
+        let m = moves::get(shooter.class, kind);
         let field = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let beast = self.monster;
         // In a hunt the two of you are on the same side, so the only thing
         // worth shooting is the creature. One condition, in one place.
-        let versus = self.monster.is_none();
-        let struck = bolt::trace(beam, i as u8, &self.players, versus, &field, &self.effects);
-        let quarry = self
-            .monster
-            .as_ref()
-            .and_then(|b| b.part_struck_along(beam.from, beam.dir, beam.range, beam.radius))
-            .filter(|(_, d)| struck.is_none_or(|s| d.raw() < s.dist().raw()));
+        let versus = beast.is_none();
+        let scene = Scene {
+            stones: &field,
+            players: &seen,
+            effects: &effects,
+            quarry: beast.as_ref(),
+        };
+        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
 
         // How long the line actually is, whether or not it still has a hit to
         // spend. A spent beam is still a beam, and it is still drawn.
-        let stopped = quarry
-            .map(|(_, d)| d)
-            .or(struck.map(|s| s.dist()))
-            .unwrap_or(beam.range);
-        self.players[i].beam_reach = stopped;
+        self.players[i].beam_reach = met.map_or(beam.length(), |c| c.dist());
         if shooter.hit_used {
             return;
         }
 
-        if let Some((part, _)) = quarry {
-            if let Some(mut beast) = self.monster {
-                beast.take_hit(part, moves::get(shooter.class, kind).damage);
-                self.monster = Some(beast);
-                self.players[i].hit_used = true;
-            }
-            return;
-        }
-
-        match struck {
-            Some(Struck::Fighter { index, .. }) => {
-                let damage = moves::get(shooter.class, kind).damage;
-                if bolt::poke(&mut self.players[index], shooter.pos, damage) == bolt::Poked::Parried
+        match met {
+            Some(Contact::Fighter { index, .. }) => {
+                if bolt::poke(&mut self.players[index], shooter.pos, m.damage)
+                    == bolt::Poked::Parried
                 {
                     self.players[i].action = Action::Stagger {
                         left: t::parry_stagger(),
@@ -2417,17 +2440,24 @@ impl World {
                 }
                 self.players[i].hit_used = true;
             }
-            // The stone goes where the mouse is pointing, pitch included:
-            // along the ground aimed down it, up into the air aimed above it.
-            Some(Struck::Stone { index, .. }) => {
-                stones::kick(&mut self.players, index, beam.dir);
+            // The stone goes along the line, pitch included: through the
+            // ground aimed down it, up into the air aimed above it.
+            Some(Contact::Stone { index, .. }) => {
+                stones::kick(&mut self.players, index, beam.dir());
                 self.players[i].hit_used = true;
             }
             // A hazard is not a wall. The beam does not stop at the fire, it
             // lights it, and what leaves the pillar is the poke.
-            Some(Struck::Fire { dist }) => {
-                bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir);
+            Some(Contact::Fire { dist }) => {
+                bolt::light(&mut self.bolts, i as u8, beam.at(dist), beam.dir());
                 self.players[i].hit_used = true;
+            }
+            Some(Contact::Quarry { part, .. }) => {
+                if let Some(mut beast) = self.monster {
+                    beast.take_hit(part, m.damage);
+                    self.monster = Some(beast);
+                    self.players[i].hit_used = true;
+                }
             }
             None => {}
         }

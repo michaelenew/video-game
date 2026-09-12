@@ -1,160 +1,474 @@
-//! Where an ability goes.
+//! Where an ability goes. **The only place in the game that decides.**
 //!
-//! One rule, for everything a fighter places or throws:
+//! # The rule
 //!
-//! > **Follow the line the player is looking along, out from the point
-//! > abilities come from, and stop at the first of two things: the terrain, or
-//! > the edge of the ability's range.**
+//! The player's whole frame of reference is the crosshair. So:
 //!
-//! That is the whole module. Everything else here is the arithmetic for
-//! "first", done in fixed point so two machines agree on it.
+//! > **Every skillshot starts with one raycast, from the camera through the
+//! > crosshair, ignoring anything behind the character model. Take the first
+//! > thing it meets. That point is what the player is pointing at, and the
+//! > ability goes there.**
 //!
-//! ## Why the ray starts at the eye
+//! That ray meets **terrain, other players, monsters, structures, and the
+//! ability's own max-range sphere** — one list, a property of the world rather
+//! than of the ability doing the aiming. Whatever it reaches first wins.
 //!
-//! Because the crosshair is the aim. The player is not pointing a gun held at
-//! their chest; they are pointing at a *place on the screen*, and the middle of
-//! the screen is a ray out of the eye. Trace that ray, take what it meets
-//! first, and that is what they meant. Then draw the line from the ability's
-//! own origin to it, and send the ability along that.
+//! # The two kinds, and the one thing that is not one
 //!
-//! Tracing from the chest instead -- which this did, and which is the obvious
-//! thing to do -- makes the crosshair a liar wherever the eye is not on the
-//! chest. The two rays are parallel, so they never converge: aimed down at the
-//! ground in the middle of the neutral zone, the reticle sat on a spot about
-//! four metres beyond where the ability actually landed.
+//! ```text
+//!   Grounded    the thing lands on the floor       structures, fire pillar
+//!   Skillshot   the thing flies through the air    the Elementalist's auto
+//!   Swing       not aimed at all                   every melee attack
+//! ```
+//!
+//! **Grounded** — [`grounded_path`]:
+//!
+//! - Hit the ground, and it is cast *exactly* there. Not a pixel different.
+//! - Hit the max-range sphere, and it is cast at max range on the ground, in
+//!   the direction the mouse is facing.
+//! - Anything else — a body, a wall, a stone — drops to whatever is underneath
+//!   it, because the thing being placed comes out of the floor.
+//! - If it travels, it travels from the character to that point.
+//!
+//! **Skillshot** — [`skillshot_path`]:
+//!
+//! - Hit the ground, and the target is that spot raised straight up to the
+//!   height the ability leaves the caster at. The shot flies level over the
+//!   place the crosshair is on rather than diving into the dirt.
+//! - Hit anything else — terrain that is not ground, a character, a monster,
+//!   or the max-range sphere — and the target is the point of intersection
+//!   exactly.
+//! - Either way the ability travels in a straight line from the caster to that
+//!   point, and that line is its whole reach.
+//!
+//! **Swing** is not aimed. A sword is a body moving, and pointing the camera at
+//! the floor must not put the blade there; a swing comes out along `facing`, at
+//! the move's own reach. It is in this list so that "which of the three is
+//! this move" is a question with an answer for every move rather than a thing
+//! each caller decides for itself — see [`crate::moves::Move::aim`].
+//!
+//! # Why this file exists, and why nothing else may do this
+//!
+//! Because the two rays are not the same ray. The camera sits behind and above
+//! the shoulder, so a ray from the *chest* along the *look direction* is
+//! parallel to the crosshair's and never converges with it: the reticle sits on
+//! one spot and the ability goes to another, by metres, and the error grows
+//! with distance. Every version of this bug has been someone writing their own
+//! intersection logic next to the ability that needed it.
+//!
+//! So: **all ray-against-shape arithmetic lives in [`crate::math`], and all
+//! decisions about where an ability goes live here.** `crates/sim/tests/one_aim.rs`
+//! fails the build if another module reaches for the primitives directly.
+//! Adding an ability means calling [`grounded_path`] or [`skillshot_path`]; if
+//! neither fits, change them, and the change is then true of every ability at
+//! once.
 //!
 //! The cost is that this has to know where the eye is, so the camera's geometry
 //! is simulation state and its numbers are in the desync checksum. See
 //! `crate::camera`, which says what that bought and what it cost.
-//!
-//! ## Why the range is a sphere and not a clamp on the ground
-//!
-//! Trace to terrain alone and the target lurches: aim a hair over the lip of a
-//! platform and the hit jumps from two metres away to the far wall, so a
-//! fraction of a degree of mouse movement swings the ability across the arena.
-//! Stopping the trace at the range sphere bounds that jump to the ability's own
-//! reach, and gives the player both halves of what they want at once — aim at
-//! the ground to pick a *direction*, or aim at a spot inside your reach to pick
-//! a *place*, and in both cases it went where the crosshair was.
-//!
-//! ## What counts as terrain
-//!
-//! The floor, the arena's solids, and **stones** — the Elementalist's
-//! structures are objects you can aim at and land things on top of, which is
-//! most of the point of them being solid.
-//!
-//! Fighters are deliberately not traced against. An aim that snapped to a body
-//! walking through the line would move the target without the player moving the
-//! mouse.
-//!
-//! Instead, **a ray that lands on the floor means the person standing there**.
-//! Anything not placed on the ground targets the middle of a fighter who would
-//! be standing at that spot rather than the spot itself, so putting the reticle
-//! at someone's feet throws the bolt through their chest. On anything that is
-//! not the floor -- a platform, a stone -- the point is taken exactly, because
-//! there the player is pointing at a surface and not through it.
 
-use crate::arena::{self, Solid};
+use crate::arena;
 use crate::class::Structure;
+use crate::effects::{EffectKind, Effects};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
+use crate::monster::Monster;
+use crate::state::{MAX_PLAYERS, Player};
 use crate::stones::Field;
 use crate::tuning as t;
 
-/// Where a fighter standing at `pos` casts from.
+/// A straight line something follows, from where it leaves to where it ends.
+///
+/// Both kinds of skillshot produce one, so the thing that travels and the thing
+/// the overlay draws are the same object and cannot disagree about direction.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Path {
+    pub from: V3,
+    pub to: V3,
+}
+
+impl Path {
+    /// Unit vector along the path. Zero for a path of no length.
+    pub fn dir(self) -> V3 {
+        self.to.sub(self.from).normalized()
+    }
+
+    pub fn length(self) -> Fx {
+        self.to.sub(self.from).len()
+    }
+
+    /// A point some distance along it.
+    pub fn at(self, dist: Fx) -> V3 {
+        self.from.add(self.dir().scale(dist))
+    }
+}
+
+/// Which of the three ways a move is pointed.
+///
+/// Every move answers this, and [`crate::moves::Move::aim`] is where it is
+/// answered. Two of the three are skillshots and go through the raycast above;
+/// the third is a body moving and does not.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kind {
+    /// Lands on the floor. [`grounded_path`].
+    Grounded,
+    /// Flies to the point the crosshair is on. [`skillshot_path`].
+    Skillshot,
+    /// Not aimed: out along `facing`, at the move's own reach.
+    Swing,
+}
+
+impl Kind {
+    /// Does the crosshair decide where this goes?
+    pub const fn is_a_skillshot(self) -> bool {
+        matches!(self, Kind::Grounded | Kind::Skillshot)
+    }
+}
+
+/// Everything a ray can meet.
+///
+/// One bundle rather than an argument each, because "what can be aimed at" is a
+/// property of the world: an ability that quietly left bodies out of its own
+/// trace would aim through people.
+pub struct Scene<'a> {
+    pub stones: &'a Field,
+    pub players: &'a [Player; MAX_PLAYERS],
+    pub effects: &'a Effects,
+    pub quarry: Option<&'a Monster>,
+}
+
+/// Where a fighter standing at `pos` casts from: the height abilities leave at.
 pub fn origin(pos: V3) -> V3 {
     V3::new(pos.x, pos.y.add(t::cast_height()), pos.z)
 }
 
-/// What the crosshair is on, and therefore what the ability is aimed at.
+// ---------------------------------------------------------------------------
+// The one raycast
+// ---------------------------------------------------------------------------
+
+/// What the crosshair's ray met.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Met {
+    /// A surface you could stand on: the floor, the top of a platform, the top
+    /// of a stone. The one case the two kinds of ability treat differently.
+    Ground,
+    /// Anything else solid — a wall, the side of a platform or a stone, a
+    /// fighter, the creature.
+    Solid,
+    /// Nothing at all within the ability's reach, so the max-range sphere.
+    Reach,
+}
+
+/// Where the crosshair is pointing, and what is there.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Sighted {
+    pub at: V3,
+    /// Distance along the camera's ray, for comparing two candidates.
+    pub dist: Fx,
+    pub met: Met,
+}
+
+/// **The** raycast: from the camera, through the crosshair, out to the edge of
+/// what this ability can reach.
 ///
-/// The one entry point. Everything a fighter places or throws comes through
-/// here, so that "where the crosshair is" means one thing across the whole game
-/// rather than one thing per ability.
-///
-/// `grounded` is a property of the thing being placed rather than of the move
-/// that places it: a pillar of flame comes out of the floor whatever you were
-/// doing when you cast it. It decides which of the two readings of the same ray
-/// applies -- a place on the ground, or a person standing in it.
-pub fn intent(pos: V3, look: Input, reach: Fx, grounded: bool, stones: &Field) -> V3 {
-    let eye = crate::camera::eye(pos, look);
+/// `who` is the caster's index. Nothing between the camera and the character is
+/// a candidate — the eye sits behind the shoulder, and a wall the camera
+/// happens to be looking through is not a thing the player is aiming at.
+pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
+    let caster = &scene.players[who];
+    let eye = crate::camera::eye(caster.pos, look);
     let dir = look.look_dir();
-    let cast = origin(pos);
+    let cast = origin(caster.pos);
 
-    // Whichever comes first: the terrain, or the edge of what this ability can
-    // reach. The reach is a sphere about the *cast origin* rather than a length
-    // along the ray, because it is the ability's range and the ability starts at
-    // the fighter. The ray only decides the direction.
-    let stop = reach_hit(eye, dir, cast, reach);
-    let limit = stop.unwrap_or(Fx::MAX);
-    let (distance, on_floor) = match (first_hit(eye, dir, limit, stones), stop) {
-        (Some(hit), _) => hit,
-        (None, Some(edge)) => (edge, false),
-        // The ray leaves the arena without meeting anything at all, which wants
-        // the reach laid flat rather than a point in the sky: an ability with
-        // nowhere to land still has to land somewhere ahead of you.
-        (None, None) => {
-            let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
-            return settle(cast.add(flat.scale(reach)), stones);
-        }
-    };
+    // The near clip: the front of the character model, along the ray.
+    let near = cast.sub(eye).dot(dir).sub(t::body_radius()).max(Fx::ZERO);
+    // The far clip: the ability's own range, as a sphere about the caster
+    // rather than a length along the ray, because the range belongs to the
+    // ability and the ability starts at the fighter. Met from within or
+    // without, and it is the *far* crossing that counts -- the near one is the
+    // ray on its way past the caster.
+    let sphere = reach_hit(eye, dir, cast, reach);
+    let limit = sphere.unwrap_or(Fx::MAX);
 
-    let at = eye.add(dir.scale(distance));
-    if grounded {
-        settle(at, stones)
-    } else if on_floor {
-        // A spot on the floor stands for the person standing in it.
-        V3::new(at.x, at.y.add(t::body_height().div(Fx::from_int(2))), at.z)
-    } else {
-        at
-    }
-}
-
-/// Distance to the first terrain along the ray, if anything is within `limit`.
-pub fn trace(from: V3, dir: V3, limit: Fx, stones: &Field) -> Option<Fx> {
-    first_hit(from, dir, limit, stones).map(|(d, _)| d)
-}
-
-/// The same, and whether what it found was the floor rather than an object.
-///
-/// The difference matters for anything not placed on the ground: the floor
-/// stands for a fighter standing on it, and an object stands for itself.
-fn first_hit(from: V3, dir: V3, limit: Fx, stones: &Field) -> Option<(Fx, bool)> {
-    let mut best: Option<(Fx, bool)> = None;
-    let mut keep = |hit: Option<Fx>, floor: bool| {
+    let mut best: Option<(Fx, Met)> = None;
+    let mut keep = |hit: Option<Fx>, met: Met| {
         if let Some(d) = hit {
-            if d.raw() >= 0 && d.raw() <= limit.raw() && best.is_none_or(|(b, _)| d.raw() < b.raw())
+            if d.raw() >= near.raw()
+                && d.raw() <= limit.raw()
+                && best.is_none_or(|(b, _)| d.raw() < b.raw())
             {
-                best = Some((d, floor));
+                best = Some((d, met));
             }
         }
     };
 
-    keep(floor_hit(from, dir), true);
+    // Terrain. Ground is whatever faces upward, which is what decides whether
+    // a skillshot flies level over the spot or straight at it.
+    keep(floor_hit(eye, dir), Met::Ground);
     for solid in arena::SOLIDS.iter() {
-        keep(box_hit(from, dir, solid), false);
+        let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
+        keep(hit, facing(hit, eye, dir, solid.max.y));
     }
-    for stone in stones.iter().flatten() {
-        keep(stone_hit(from, dir, stone), false);
+    for stone in scene.stones.iter().flatten() {
+        let hit = stone_hit(eye, dir, stone);
+        keep(hit, facing(hit, eye, dir, stone.top()));
     }
-    best
+    // Bodies. Aimed at, not aimed through: a fighter standing where the
+    // crosshair is *is* what the player is pointing at.
+    for (i, p) in scene.players.iter().enumerate() {
+        if i == who || p.health <= 0 {
+            continue;
+        }
+        keep(body_hit(eye, dir, p, Fx::ZERO), Met::Solid);
+    }
+    if let Some(beast) = scene.quarry {
+        keep(
+            beast
+                .part_struck_along(eye, dir, limit, Fx::ZERO)
+                .map(|(_, d)| d),
+            Met::Solid,
+        );
+    }
+
+    match (best, sphere) {
+        (Some((dist, met)), _) => Sighted {
+            at: eye.add(dir.scale(dist)),
+            dist,
+            met,
+        },
+        (None, Some(edge)) => Sighted {
+            at: eye.add(dir.scale(edge)),
+            dist: edge,
+            met: Met::Reach,
+        },
+        // The ray leaves the world without meeting anything, and without even
+        // crossing the reach sphere -- which needs the eye to be outside it and
+        // pointing away. Nothing to aim at, so the ability goes as far as it can
+        // along the line anyway.
+        (None, None) => Sighted {
+            at: cast.add(dir.scale(reach)),
+            dist: reach,
+            met: Met::Reach,
+        },
+    }
 }
 
-/// How far along the ray the ability's own range runs out.
-///
-/// A sphere about the cast origin, met from outside it or from within, and it
-/// is the *far* crossing that counts: the near one is the ray on its way in
-/// past the fighter, which is behind anything being aimed at.
-fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
-    let m = from.sub(centre);
-    let b = m.dot(dir);
-    let under = b.mul(b).sub(m.len_sq().sub(radius.mul(radius)));
-    if under.raw() < 0 {
-        return None;
+/// Does a hit land on the upward face of a shape whose top is at `top`?
+fn facing(hit: Option<Fx>, from: V3, dir: V3, top: Fx) -> Met {
+    match hit {
+        Some(d) if from.y.add(dir.y.mul(d)).sub(top).abs().raw() <= arena::SKIN.raw() => {
+            Met::Ground
+        }
+        _ => Met::Solid,
     }
-    let far = under.sqrt().sub(b);
-    (far.raw() > 0).then_some(far)
+}
+
+// ---------------------------------------------------------------------------
+// The two kinds of skillshot
+// ---------------------------------------------------------------------------
+
+/// Where a **grounded** ability lands, and the line it takes to get there.
+///
+/// A structure, a fire pillar: things that come out of the floor, whatever the
+/// caster was doing when they cast them. `from` is the character, so an ability
+/// that races along the ground has its path already.
+pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    let caster = &scene.players[who];
+    let seen = sight(who, look, reach, scene);
+    let to = match seen.met {
+        // Out at the edge of the ability's range: max range on the ground, in
+        // the direction the mouse is facing. Settling the sphere's own point
+        // instead would make an upward aim land short, which reads as the
+        // ability refusing to go where it was pointed.
+        Met::Reach => {
+            let dir = look.look_dir();
+            let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+            settle(origin(caster.pos).add(flat.scale(reach)), scene.stones)
+        }
+        // On the ground, exactly there -- `settle` is a no-op on a surface
+        // something already stands on. On a body or a wall, the floor beneath
+        // it, because that is where the thing being placed can exist.
+        Met::Ground | Met::Solid => settle(seen.at, scene.stones),
+    };
+    Path {
+        from: caster.pos,
+        to,
+    }
+}
+
+/// The line a **skillshot** flies along: from the caster's ability origin to
+/// the point the crosshair is on.
+///
+/// Its length is the ability's whole reach. There is no separate range: the
+/// max-range sphere is part of the raycast, so a shot that meets nothing ends
+/// on the sphere and a shot that meets something ends on that.
+pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
+    let from = origin(scene.players[who].pos);
+    let seen = sight(who, look, reach, scene);
+    let to = match seen.met {
+        // Aimed at the floor. Raised straight up to the height the shot leaves
+        // at, so it flies level over the spot the crosshair is on instead of
+        // burying itself in the ground a metre in front of her.
+        Met::Ground => V3::new(seen.at.x, from.y, seen.at.z),
+        // A wall, a body, the creature, the edge of the range: the point
+        // itself, because that is the thing the player is looking at.
+        Met::Solid | Met::Reach => seen.at,
+    };
+    Path { from, to }
+}
+
+// ---------------------------------------------------------------------------
+// What a path runs into
+// ---------------------------------------------------------------------------
+
+/// Which kinds of thing a travelling ability can hit.
+///
+/// Stated per ability rather than assumed, because they genuinely differ: the
+/// Elementalist's beam lights a fire pillar it passes through, and the bolt
+/// that comes out of the pillar does not.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Targets {
+    pub fighters: bool,
+    pub stones: bool,
+    pub fire: bool,
+    pub quarry: bool,
+}
+
+impl Targets {
+    pub const fn none() -> Targets {
+        Targets {
+            fighters: false,
+            stones: false,
+            fire: false,
+            quarry: false,
+        }
+    }
+
+    pub const fn fighters(mut self, yes: bool) -> Targets {
+        self.fighters = yes;
+        self
+    }
+
+    pub const fn stones(mut self) -> Targets {
+        self.stones = true;
+        self
+    }
+
+    pub const fn fire(mut self) -> Targets {
+        self.fire = true;
+        self
+    }
+
+    pub const fn quarry(mut self, yes: bool) -> Targets {
+        self.quarry = yes;
+        self
+    }
+}
+
+/// What a travelling ability meets, and how far along its path it sits.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Contact {
+    Fighter { index: usize, dist: Fx },
+    Stone { index: usize, dist: Fx },
+    Fire { dist: Fx },
+    Quarry { part: usize, dist: Fx },
+}
+
+impl Contact {
+    pub fn dist(self) -> Fx {
+        match self {
+            Contact::Fighter { dist, .. }
+            | Contact::Stone { dist, .. }
+            | Contact::Fire { dist }
+            | Contact::Quarry { dist, .. } => dist,
+        }
+    }
+}
+
+/// The first thing a straight path runs into, or `None` if it reaches its end
+/// clear.
+///
+/// Separate from [`sight`] and deliberately so: the camera's ray says *where
+/// the player is pointing*, and this says *what is actually in the way of the
+/// thing they threw*. The two lines are not the same line, and a body the
+/// camera could not see is still a body the shot passes through.
+///
+/// `girth` is the travelling thing's own radius, added to whatever it is tested
+/// against, so "do these two volumes touch" is one ray against one shape.
+pub fn first_along(
+    path: Path,
+    girth: Fx,
+    owner: u8,
+    scene: &Scene,
+    targets: Targets,
+) -> Option<Contact> {
+    let (from, dir, limit) = (path.from, path.dir(), path.length());
+    let mut best: Option<Contact> = None;
+    let mut keep = |found: Contact| {
+        if found.dist().raw() <= limit.raw()
+            && best.is_none_or(|b| found.dist().raw() < b.dist().raw())
+        {
+            best = Some(found);
+        }
+    };
+
+    if targets.fighters {
+        for (index, p) in scene.players.iter().enumerate() {
+            if index as u8 == owner || p.health <= 0 || p.action.invulnerable() {
+                continue;
+            }
+            if let Some(dist) = body_hit(from, dir, p, girth) {
+                keep(Contact::Fighter { index, dist });
+            }
+        }
+    }
+    if targets.stones {
+        for (index, slot) in scene.stones.iter().enumerate() {
+            let Some(stone) = slot else { continue };
+            if let Some(dist) = crate::math::ray_hits_cylinder(
+                from,
+                dir,
+                stone.at,
+                t::structure_radius().add(girth),
+                stone.standing_height(),
+            ) {
+                keep(Contact::Stone { index, dist });
+            }
+        }
+    }
+    if targets.fire {
+        for slot in scene.effects.iter() {
+            let Some(e) = slot else { continue };
+            if e.kind != EffectKind::FirePillar {
+                continue;
+            }
+            // Both of a pillar's volumes: the wide base you walk into and the
+            // column above it that stops you jumping over.
+            let (base, column) = e.pillar_volumes();
+            for slab in [base, column] {
+                let foot = V3::new(e.pos.x, e.pos.y.add(slab.bottom), e.pos.z);
+                if let Some(dist) = crate::math::ray_hits_cylinder(
+                    from,
+                    dir,
+                    foot,
+                    slab.radius.add(girth),
+                    slab.top.sub(slab.bottom),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+            }
+        }
+    }
+    if targets.quarry {
+        if let Some((part, dist)) = scene
+            .quarry
+            .and_then(|b| b.part_struck_along(from, dir, limit, girth))
+        {
+            keep(Contact::Quarry { part, dist });
+        }
+    }
+    best
 }
 
 /// Drop a point onto whatever it would stand on.
@@ -173,6 +487,18 @@ pub fn settle(at: V3, stones: &Field) -> V3 {
 // The shapes
 // ---------------------------------------------------------------------------
 
+/// How far along the ray the ability's own range runs out.
+fn reach_hit(from: V3, dir: V3, centre: V3, radius: Fx) -> Option<Fx> {
+    let m = from.sub(centre);
+    let b = m.dot(dir);
+    let under = b.mul(b).sub(m.len_sq().sub(radius.mul(radius)));
+    if under.raw() < 0 {
+        return None;
+    }
+    let far = under.sqrt().sub(b);
+    (far.raw() > 0).then_some(far)
+}
+
 /// The arena floor. A plane rather than a box, because that is what the
 /// simulation collides against -- `arena::resolve` treats `y <= 0` as the
 /// ground and never consults `SOLIDS` for it.
@@ -181,11 +507,6 @@ fn floor_hit(from: V3, dir: V3) -> Option<Fx> {
         return None;
     }
     Some(from.y.div(dir.y.neg()))
-}
-
-/// One of the arena's blocks.
-fn box_hit(from: V3, dir: V3, solid: &Solid) -> Option<Fx> {
-    crate::math::ray_hits_box(from, dir, solid.min, solid.max)
 }
 
 /// A stone: an upright cylinder standing on its base, with both end caps.
@@ -201,5 +522,18 @@ fn stone_hit(from: V3, dir: V3, stone: &Structure) -> Option<Fx> {
         t::structure_radius(),
         // Still buried, so there is nothing there to hit.
         stone.standing_height(),
+    )
+}
+
+/// A fighter: the upright cylinder their hurtbox already is, swollen by
+/// `girth`. Crouching lowers it, which is what lets a crouch duck a shot aimed
+/// over the head.
+fn body_hit(from: V3, dir: V3, victim: &Player, girth: Fx) -> Option<Fx> {
+    crate::math::ray_hits_cylinder(
+        from,
+        dir,
+        victim.pos,
+        t::body_radius().add(girth),
+        victim.hurt_height(),
     )
 }
