@@ -451,10 +451,12 @@ fn aim_along(pose: Pose, input: PoseInput, kind: u8) -> Pose {
 /// Does this move leave the body along the crosshair rather than along the
 /// flat facing?
 ///
-/// One move, for now, and it is the one that is a line. A swing is a body
-/// moving, and pointing the camera at the floor should not put a sword there.
+/// Straight from the move table, so the animation cannot disagree with the
+/// simulation about which moves are aimed. A swing is a body moving, and
+/// pointing the camera at the floor should not put a sword there; a grounded
+/// cast comes out of the floor and the body is only gesturing at it.
 pub fn aims_along_the_crosshair(class: Class, kind: u8) -> bool {
-    class == Class::Elementalist && kind == sim::state::SLOT_POKE
+    sim::moves::get(class, kind).aim() == sim::aim::Kind::Skillshot
 }
 
 /// Which clip animates one class's move slot.

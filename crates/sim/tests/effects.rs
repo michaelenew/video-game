@@ -43,7 +43,15 @@ fn looking(w: &mut World, frames: u32, a: u16, pitch: i16, b: u16) {
 /// pointing at anything the next time one of them moves.
 fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
     let reach = sim::moves::get(w.players[0].class, slot).reach;
-    let field = sim::stones::gather(&w.players);
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    let scene = sim::aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: w.monster.as_ref(),
+    };
     let middle = sim::V3::new(
         target.x,
         sim::tuning::body_height().div(sim::fixed::Fx::from_int(2)),
@@ -52,14 +60,12 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
     (0..=80)
         .map(|step| -(step * 200) as i16)
         .min_by_key(|pitch| {
-            let at = sim::aim::intent(
-                w.players[0].pos,
-                Input::looking_at(0, LOOK_RIGHT, *pitch),
-                reach,
-                false,
-                &field,
-            );
-            at.sub(middle).len().raw()
+            let look = Input::looking_at(0, LOOK_RIGHT, *pitch);
+            sim::aim::skillshot_path(0, look, reach, &scene)
+                .to
+                .sub(middle)
+                .len()
+                .raw()
         })
         .expect("the scan is not empty")
 }

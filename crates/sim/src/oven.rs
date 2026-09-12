@@ -454,6 +454,12 @@ pub enum MoveField {
     // health back on the hit -- see `moves::Move::cost` and `leech`.
     Cost,
     Leech,
+    // And again, for which of the three kinds of aiming a move uses. Derived
+    // where it can be -- a move that plants something on the floor is grounded
+    // whatever else it does -- so this is only the one bit that cannot be:
+    // flies at the crosshair, or swings where the body is facing. See
+    // `moves::Move::aim` and `crate::aim`.
+    Skillshot,
 }
 
 impl MoveField {
@@ -478,6 +484,7 @@ impl MoveField {
         MoveField::Effect,
         MoveField::Cost,
         MoveField::Leech,
+        MoveField::Skillshot,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -502,6 +509,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
+            MoveField::Skillshot => "Flies at the crosshair",
         }
     }
 
@@ -515,9 +523,10 @@ impl MoveField {
             | MoveField::AirStall => Unit::Frames,
             MoveField::Damage => Unit::Int,
             MoveField::Mobility => Unit::Percent,
-            MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
-                Unit::Flag
-            }
+            MoveField::Unblockable
+            | MoveField::HitsCrouching
+            | MoveField::NeedsMechanic
+            | MoveField::Skillshot => Unit::Flag,
             MoveField::Grabs => Unit::Frames,
             MoveField::Effect | MoveField::Cost => Unit::Int,
             MoveField::Leech => Unit::Percent,
@@ -674,7 +683,7 @@ pub const CLASSES: usize = 6;
 pub const SCALAR_COUNT: usize = 182;
 pub const AIR_COUNT: usize = CLASSES * 4;
 pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 20;
+pub const MOVE_FIELDS: usize = 21;
 
 // ---------------------------------------------------------------------------
 // The live store
