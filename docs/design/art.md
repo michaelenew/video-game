@@ -318,35 +318,146 @@ stone is anisotropic and whether the palette separates; it does not say whether
 stone looks like stone, and the gap between those two is exactly where
 procedural materials go wrong. Every material bug above was found by looking.
 
+## Lighting, and the one number it comes from
+
+**How high the sun is, and everything else follows.** Its direction, its
+colour, how bright it is, what colour the sky is, how much light comes back
+down out of it. Six answers from one parameter, with physics rather than taste
+between them.
+
+Air scatters short wavelengths far harder than long ones -- Rayleigh's result,
+and the reason the sky is blue at all. So sunlight reaching the ground has been
+filtered, by an amount that depends on how much air it crossed: one atmosphere
+overhead, nearly forty at the horizon. Run Beer's law per colour channel and
+**sunset comes out**. Nobody picks the colour of the sunset and nobody can pick
+it wrong.
+
+It replaced three hand-tuned magnitudes -- a key, a fill and an ambient -- with
+no relationship to each other, so moving one meant re-judging the other two by
+eye. They had also drifted into compensating for placeholder materials: the key
+sat at 11,000 lux to make surfaces of 0.02 reflectance read, and the moment the
+materials became physical the arena blew out to near-white.
+
+The **fill light is gone**, and that is the point rather than a saving. It was
+aimed at the inside faces of the walls, which the key never reaches. A second
+sun is a lie that costs a shadow direction; what lights those faces outdoors is
+the sky, which is now a real quantity with a real colour. Skylight being cooler
+than sunlight is also what makes a lit face and a shadowed face read as
+*different surfaces* rather than one surface at two brightnesses.
+
+The scene is now lit in **real lux**, so the camera is set like a real one
+pointed at daylight. Physical lights with a film speed meant for a lamplit room
+is just a blown-out picture.
+
+### What the engine draws and what this computes
+
+Bevy renders the sky with Hillaire's atmospheric scattering, which is a better
+piece of work than anything belonging in this crate and exactly what
+[architecture.md](architecture.md) says to take from the engine rather than
+write.
+
+The two are not a second implementation of one answer. The engine computes
+**in-scattering** -- the light the air sends toward the eye, which is the image
+of the sky. `art::sky` computes **transmittance** -- the light that survives the
+trip to the ground, which is the lamp. Different quantities from the same
+physics, and the renderer has no way to hand back the second in a form a
+directional light can wear.
+
+Two things the model will not do, stated rather than discovered: the blue at the
+base of a gas flame is chemistry, not temperature, and the blackbody fit bottoms
+out at 1667 K, below which it turns around and returns the same colour for two
+temperatures. Clamped, and the consequence is right anyway -- an ember fading
+past deep orange fades by getting *dimmer*, not redder.
+
+## Spectacle: emission, bloom, and the light a hit throws
+
+A surface emitting more light than white has nowhere to go in an eight-bit image
+and simply clips. With a high-dynamic-range camera and bloom, the excess spills
+into neighbouring pixels, and **that spill is what the eye reads as brightness**
+rather than as pale colour. It is the difference between a fire that is orange
+and a fire that is burning, and it costs one component.
+
+A hit spawns a point light that dies over a fifth of a second. Near free, and it
+lights the surroundings -- so a hit beside a wall washes the wall, which is the
+part that reads as force. It is **warm white rather than the attacker's
+colour**: the simulation records that you are in hitstun, not who put you there.
+With two fighters "the other one" is a safe guess and it is wrong the moment
+coop puts four players and several monsters in the arena. The flash says *a hit
+landed*, which is true, instead of *who landed it*, which is not known.
+
+### How a see-through material combines depends on why it is see-through
+
+Three attempts, and the sequence is the lesson.
+
+**Something that glows adds.** Fire is emitted light: it makes what is behind it
+brighter and never darker. Alpha-blending it multiplies the background by a
+near-black albedo, so every dim part of the flame paints a grey smear -- which
+is exactly what the pillar did, rendering as a dark drum with flames on top.
+
+**An additive material needs no alpha at all.** Black adds nothing, so the
+silhouette is already carved by the emission. Carving it *again* with alpha
+left the flame as a few thin streaks with the body missing.
+
+**Something that blocks light blends.** The Reaver's shadow is an absence, so it
+must be able to darken what is behind it, which is the one thing adding cannot
+do.
+
+Along the way: marking a flame `unlit` turned it black, because Bevy adds
+emission *inside* the lighting pass. Skipping the pass skips the glow, leaving
+only the near-black albedo the flame was given precisely because it was supposed
+to be glowing.
+
+## Trails, which this architecture gets almost free
+
+The usual way to draw a swing trail is to record where the weapon was each frame
+and join the dots. Under rollback a history buffer is a liability: re-simulating
+frame 90 twice appends the same point twice, and an eight-frame rollback leaves
+eight stale points smearing through a swing that never happened.
+
+None of that is necessary. **Pose is a pure function of simulation state**,
+which rollback already requires -- and a pure function can be asked about the
+past. Where the hand was eight frames ago is the pose function evaluated at
+`frames_into - 8`. No buffer, nothing in the snapshot, nothing to invalidate,
+and correct across a rollback by construction, because the recomputation uses
+the corrected state. A stateful feature becomes a stateless one.
+
+Two things it taught:
+
+**The reach comes from whatever drives the pose.** The first version capped it
+by `frames_into`, which counts within a *phase* -- so at the start of an active
+window it is nearly zero, which is exactly when the swing is fastest and the
+trail should be longest. Every swing got a one-quad ribbon a few centimetres
+long. A clip's elapsed counter runs across the whole move, so walking that back
+crosses into the wind-up where the arc actually is.
+
+**A trail is only as good as the animation under it.** The procedural fallback
+poses are *one pose per phase*: the whole active window is a single static arm
+position, so a trail sampled across it is the same edge eight times. Baked clips
+move, because the spring solver fills in every frame between the keys. So trails
+are drawn where there is a clip and nowhere else -- which makes generating clips
+from frame data a prerequisite rather than a nicety.
+
 ## Next, in order
 
-1. **Lighting and atmosphere, before any more materials.** A flat-shaded scene
-   with good light, fog and a real sky reads as deliberate; a well-textured one
-   with bad lighting reads as broken. Both are nearly free of assets, and an
-   atmospheric sky is pure maths. This is the highest ratio of result to effort
-   left on the board and it is not more texture.
-2. **Emission and bloom as the spectacle budget.** [The combat
-   kernel](combat-kernel.md) makes ability spectacle an explicit goal. Emissive
-   geometry plus bloom is the highest ratio of spectacle to effort in real-time
-   graphics, and the fire and arcane materials already emit above white in
-   order to trigger it.
-3. **Weapon trails, which this architecture gets almost free.** Pose is a pure
-   function of state, so the position of a weapon eight frames ago can be
-   *recomputed on demand* rather than recorded. No history buffer, nothing in
-   the snapshot, and correct across a rollback by construction. The one caveat
-   is that it only reaches back to the start of the current action, which is
-   exactly as far as a swing goes.
-4. **Animation generated from frame data that already exists.** Every move has
-   a startup, an active and a recovery window. Anticipate, extend, settle —
+1. **Stone as a volume, not a texture.** The current stone is a 2D field
+   sampled on a surface, and it looks like one. Real stone has a grain
+   structure that depends on how it formed -- igneous, metamorphic,
+   sedimentary -- with mineral populations, veins, weathering and fractures
+   that are three-dimensional facts about the material. Model the volume and
+   bake each surface as its *intersection* with that volume, and the pattern
+   stops repeating and starts wrapping around corners correctly. The same
+   method extends to natural terrain.
+2. **Animation generated from frame data that already exists.** Every move has
+   a startup, an active and a recovery window. Anticipate, extend, settle --
    with [the spring solver](architecture.md#the-animation-factory) filling in
-   between — gives every move a passable clip from numbers already in the Oven.
-   Then hand-tune the ones that matter.
-5. **Procedural bodies.** The fighters are six boxes; the natural next step is
-   not glTF but a parameter vector — proportions, plate coverage, palette. Six
+   between -- gives every move a passable clip from numbers already in the
+   Oven. Trails depend on this, per above.
+3. **Procedural bodies.** The fighters are six boxes; the natural next step is
+   not glTF but a parameter vector -- proportions, plate coverage, palette. Six
    classes become six vectors and coop monsters become more of them. And since
    silhouette would then be a parameter, *silhouette distinctness becomes
    measurable*: render two classes in orthographic black and compare. Whether
    you can tell two fighters apart stops being a judgement call, the same way
    the palette already has.
-6. **A triplanar shader for the environment**, when the floor starts reading as
+4. **A triplanar shader for the environment**, when the floor starts reading as
    wallpaper and not before.

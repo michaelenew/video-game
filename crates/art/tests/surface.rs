@@ -3,7 +3,7 @@
 use art::bake::{self, Plan};
 use art::materials::{self, BAKE_SIZE, Material};
 use art::palette;
-use art::surface::{Emission, Field, FieldKind, Surface};
+use art::surface::{Emission, Field, FieldKind, Surface, Transparency};
 
 /// How much a field changes as you walk a metre along an axis. Sampled a
 /// millimetre at a time, which is far above the rate any frequency in the
@@ -262,6 +262,7 @@ fn relief_means_the_same_thing_at_every_resolution() {
         roughness: (0.9, 0.9),
         metallic: 0.0,
         emission: Emission::None,
+        transparency: Transparency::Opaque,
         relief: 0.03,
     };
 

@@ -11,6 +11,7 @@ pub mod baked;
 pub mod camera;
 pub mod interp;
 pub mod pose;
+pub mod trail;
 
 pub use camera::{CameraRig, Framing};
 pub use interp::{Frame, PlayerView, interpolate};

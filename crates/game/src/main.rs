@@ -19,14 +19,19 @@
 mod bake;
 mod crosshair;
 mod debug;
+mod flash;
 mod hud;
 mod palette;
+mod ribbon;
 mod settings;
 mod surfaces;
 
+use bevy::core_pipeline::bloom::Bloom;
 use bevy::input::mouse::MouseMotion;
+use bevy::pbr::Atmosphere;
 use bevy::prelude::*;
-use sim::state::MAX_PLAYERS;
+use bevy::render::camera::Exposure;
+pub use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
 use view::pose::{PARTS, Part, PoseInput, part_size, pose_for};
@@ -137,7 +142,16 @@ fn main() {
         })
         .insert_resource(settings::Settings::load())
         .init_resource::<InsideOwnHead>()
-        .add_systems(Startup, (setup, hud::setup, crosshair::setup))
+        .add_systems(
+            Startup,
+            (
+                setup,
+                hud::setup,
+                crosshair::setup,
+                flash::setup,
+                ribbon::setup,
+            ),
+        )
         .add_systems(
             Update,
             (
@@ -153,6 +167,8 @@ fn main() {
                 place_shields,
                 place_effects,
                 place_structures,
+                flash::run,
+                ribbon::update,
                 drive_camera,
                 hide_own_body,
                 hud::toggle_class_buttons,
@@ -392,52 +408,118 @@ fn setup(
             ..default()
         }),
         Transform::from_xyz(0.0, 6.0, 14.0).looking_at(Vec3::new(0.0, 1.0, 0.0), Vec3::Y),
+        // High dynamic range, which is not a quality setting here -- it is what
+        // lets a value be *brighter than white*. The fire and arcane materials
+        // emit several times white on purpose, and without this they clip to
+        // flat orange before anything downstream ever sees them.
+        Camera {
+            hdr: true,
+            ..default()
+        },
+        // The scene is lit in real lux -- around 80,000 from the sun -- so the
+        // camera has to be set like a real one pointed at daylight. This is the
+        // other half of making the lighting physical: physical lights with a
+        // film speed meant for a lamplit room is just a blown-out picture.
+        Exposure::SUNLIGHT,
+        // Hillaire's atmospheric scattering, which Bevy ships. It draws the sky
+        // *and* the haze in front of the far wall, both from the sun that is
+        // already in the scene. `architecture.md` says to take this sort of
+        // thing from the engine rather than write it, and this is exactly that
+        // sort of thing.
+        // Emission above white has nowhere to go in an eight-bit image and
+        // just clips. With bloom in front of it the excess spills into
+        // neighbouring pixels instead, and *that spill* is what the eye reads
+        // as brightness rather than as pale colour. It is the difference
+        // between a fire that is orange and a fire that is burning, and it
+        // costs one component.
+        Bloom::NATURAL,
+        Atmosphere {
+            // The ground the atmosphere thinks it is sitting on, which decides
+            // how much light bounces back up into the haze. Taken from what the
+            // floor material actually reflects rather than guessed: the arena
+            // is dark stone, and telling the sky it is standing on snow puts a
+            // glow under the horizon that nothing in the scene accounts for.
+            ground_albedo: Vec3::splat(art::materials::GROUND.mean_albedo()),
+            ..Atmosphere::EARTH
+        },
         MainCamera,
     ));
 
-    // The key light, and the numbers came down hard when the generated
-    // materials landed.
+    // Everything below comes out of one number: how high the sun is.
     //
-    // The placeholders were flat colours around 0.02 reflectance -- darker
-    // than asphalt, darker than anything real -- and the lighting had been
-    // raised until they read. The generated materials are physically plausible
-    // (ground 0.06, stone 0.09, skin 0.22, which is asphalt, dark granite and
-    // skin), so the same lighting blew the arena out to near-white on the
-    // first capture. Lighting tuned against a non-physical albedo is a debt
-    // that comes due the moment the albedo becomes physical.
+    // It used to be three hand-tuned magnitudes -- a key, a fill and an ambient
+    // -- with no relationship to each other, so moving one meant re-judging the
+    // other two by eye. They had also drifted into compensating for placeholder
+    // materials: the key sat at 11,000 lux to make surfaces of 0.02 reflectance
+    // read, and when the materials became physical the arena blew out to
+    // near-white.
+    //
+    // `art::sky` answers what the engine cannot: given an elevation, what
+    // colour the sun is, how much of it arrives, and what colour and strength
+    // the skylight is. The reddening is not a choice -- air scatters blue about
+    // three times harder than red, so a low sun has lost its blue on the way
+    // in. See docs/design/art.md.
+    let sky = art::sky::Sky::at(settings.sun_elevation, settings.sun_azimuth);
+
     commands.spawn((
         DirectionalLight {
-            illuminance: 2_400.0,
+            color: linear(sky.sun_color),
+            illuminance: sky.sun_illuminance,
             shadows_enabled: true,
             ..default()
         },
-        Transform::from_xyz(6.0, 14.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_translation(Vec3::ZERO)
+            .looking_to(Vec3::from_array(sky.sun_direction), Vec3::Y),
     ));
-    // A second, dimmer light from behind and opposite, with no shadows. The
-    // old camera looked down on the arena from outside it; this one looks along
-    // the floor at the inside faces of the walls, which the key light never
-    // reaches. Without a fill they read as flat black and the fight happens in
-    // front of a void.
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 700.0,
-            shadows_enabled: false,
-            ..default()
-        },
-        Transform::from_xyz(-8.0, 6.0, -7.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
+
+    // The second light is gone, and that is the point rather than a saving.
+    //
+    // It was a fill aimed at the inside faces of the walls, which the key never
+    // reaches and which read as flat black without it. A second sun is a lie
+    // that costs a shadow direction; what actually lights those faces outdoors
+    // is the sky, and the sky is now in the rig as a real quantity with a real
+    // colour. Skylight being cooler than sunlight is also what makes a lit face
+    // and a shadowed face read as *different surfaces* rather than as one
+    // surface at two brightnesses.
     commands.insert_resource(AmbientLight {
-        color: Color::srgb(0.65, 0.72, 0.85),
-        brightness: 120.0,
+        color: linear(sky.sky_color),
+        brightness: sky.sky_illuminance,
         ..default()
     });
 
-    // Floor.
+    // Floor, and it runs to the horizon rather than stopping at the arena.
+    //
+    // Forty metres was enough when the sky was flat black -- nothing showed
+    // past the walls because there was nothing out there to see. With a real
+    // sky there is a horizon, and a floor that stops short of it leaves a hard
+    // black band between the two: the arena reads as floating in a void, which
+    // is worse than the void was.
+    //
+    // Six kilometres, which sounds absurd for a thirty-metre arena and is the
+    // cheapest possible fix. A plane's far edge never actually reaches the
+    // horizon -- it only gets closer to it -- so the question is whether the
+    // remaining sliver is under a pixel. At nine hundred metres it was a
+    // visible dark line. This is one triangle pair either way.
+    //
+    // The play area is unchanged. This is scenery, and the collision geometry
+    // in `sim::arena` neither knows nor cares -- which is the point of the
+    // renderer owning nothing.
+    const GROUND_REACH: f32 = 6_000.0;
     commands.spawn((
-        Mesh3d(meshes.add(surfaces::tangented(
-            Plane3d::default().mesh().size(40.0, 40.0).build(),
-        ))),
-        MeshMaterial3d(skins.ground.clone()),
+        Mesh3d(
+            meshes.add(surfaces::tangented(
+                Plane3d::default()
+                    .mesh()
+                    .size(GROUND_REACH, GROUND_REACH)
+                    .build(),
+            )),
+        ),
+        MeshMaterial3d(surfaces::build(
+            &art::materials::GROUND,
+            surfaces::repeat_for(&art::materials::GROUND, Vec2::splat(GROUND_REACH)),
+            &mut images,
+            &mut materials,
+        )),
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 
@@ -518,7 +600,15 @@ fn setup(
     // A fixed pool, one pair of cylinders per effect slot, because the
     // simulation's effect array is itself fixed. Spawning and despawning meshes
     // as effects come and go would put allocation on the rollback path.
-    let unit = meshes.add(surfaces::tangented(Cylinder::new(0.5, 1.0).mesh().build()));
+    // No end caps. A fire pillar is a column of flame, and a flat disc across
+    // the top of it is the one part of the shape that cannot be anything but a
+    // cylinder -- it survives the alpha fade because a cap's texels come from
+    // the middle of the field rather than its edge, so it stays solid exactly
+    // where the sides have gone. Structures reuse the mesh and are better for
+    // it too: you see the inside of the far wall rather than a lid.
+    let unit = meshes.add(surfaces::tangented(
+        Cylinder::new(0.5, 1.0).mesh().without_caps().build(),
+    ));
     for slot in 0..sim::effects::MAX_EFFECTS {
         for part in 0..2 {
             commands.spawn((
@@ -546,6 +636,17 @@ fn setup(
         }
     }
     commands.insert_resource(skins);
+}
+
+/// Linear RGB from `art` into a Bevy colour.
+///
+/// Through the linear constructor, not the sRGB one. Everything in `art` works
+/// in linear light because that is the space physical quantities live in, and
+/// handing those numbers to `Color::srgb` would apply a transfer function to
+/// values that have already had one applied -- which looks like a slightly
+/// wrong colour rather than like a bug.
+pub fn linear(c: [f32; 3]) -> Color {
+    Color::LinearRgba(LinearRgba::rgb(c[0], c[1], c[2]))
 }
 
 /// Stop drawing the local fighter once the camera is inside them.
@@ -1086,7 +1187,7 @@ fn apply_poses(
 ///
 /// The game side picks, because it is what knows the move tables. `view` stays
 /// ignorant of what an overhead is.
-fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip, u16)> {
+pub fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip, u16)> {
     use sim::state::Action;
     use view::pose::Clip;
     let elapsed = |kind: u8, phase: u8, left: u16| -> u16 {
@@ -1119,7 +1220,7 @@ fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip
 }
 
 /// How far into the current phase, and how long that phase runs.
-fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
+pub fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
     use sim::state::Action;
     let move_frames = |k: u8| sim::moves::frames(class, k);
     match p.action {

@@ -57,6 +57,17 @@ pub struct Settings {
     pub fov: f32,
     /// Camera distance behind the fighter, in metres.
     pub distance: f32,
+    /// How high the sun is, in degrees above the horizon.
+    ///
+    /// The whole lighting rig hangs off this one number -- the key light's
+    /// colour and strength, the skylight's colour and strength, and the sky
+    /// itself. See `art::sky`. A setting rather than a constant because it is
+    /// the fastest way to see the arena in a completely different light, and
+    /// because like everything else in this file it is *look*, which two peers
+    /// are free to disagree about without the fight coming apart.
+    pub sun_elevation: f32,
+    /// Which way the sun is, in degrees of compass bearing.
+    pub sun_azimuth: f32,
     /// Keys we did not recognise, kept so saving does not discard them.
     other: BTreeMap<String, String>,
 }
@@ -70,6 +81,16 @@ impl Default for Settings {
             // are meant to be moving around inside.
             fov: 58.0,
             distance: 10.9,
+            // Afternoon, and the elevation is a readability decision as much as
+            // a look one. High noon is flat -- shadows go straight down, the
+            // arena loses its modelling, and it is the one time of day the sun
+            // has no colour to give. But a *very* low sun puts half the arena
+            // in its own shadow, and a fighting game where you cannot see the
+            // fighter has traded the wrong thing for atmosphere. This is high
+            // enough to light the floor across its whole width and low enough
+            // to rake the walls and come in warm.
+            sun_elevation: 22.0,
+            sun_azimuth: 40.0,
             other: BTreeMap::new(),
         }
     }
@@ -139,7 +160,16 @@ impl Settings {
                 }
                 ("fov", Some(v)) => s.fov = v.clamp(MIN_FOV, MAX_FOV),
                 ("camera_distance", Some(v)) => s.distance = v.clamp(MIN_DISTANCE, MAX_DISTANCE),
-                ("sensitivity" | "fov" | "camera_distance", None) => {}
+                // Clamped just below the horizon rather than at it: the rig
+                // fades the sun out over the last couple of degrees, and being
+                // able to reach the bottom of that fade is how you find out
+                // whether dusk reads.
+                ("sun_elevation", Some(v)) => s.sun_elevation = v.clamp(-2.0, 90.0),
+                ("sun_azimuth", Some(v)) => s.sun_azimuth = v.rem_euclid(360.0),
+                (
+                    "sensitivity" | "fov" | "camera_distance" | "sun_elevation" | "sun_azimuth",
+                    None,
+                ) => {}
                 _ => {
                     s.other.insert(key.to_string(), value.to_string());
                 }
@@ -153,9 +183,15 @@ impl Settings {
         out.push_str("# sensitivity: mouse turn rate, 1.0 is the default feel.\n");
         out.push_str("# fov: vertical field of view, degrees.\n");
         out.push_str("# camera_distance: how far behind the fighter the camera sits, metres.\n");
+        out.push_str(
+            "# sun_elevation: degrees above the horizon. Drives the whole lighting rig.\n",
+        );
+        out.push_str("# sun_azimuth: compass bearing of the sun, degrees.\n");
         out.push_str(&format!("sensitivity = {:.3}\n", self.sensitivity));
         out.push_str(&format!("fov = {:.1}\n", self.fov));
         out.push_str(&format!("camera_distance = {:.2}\n", self.distance));
+        out.push_str(&format!("sun_elevation = {:.1}\n", self.sun_elevation));
+        out.push_str(&format!("sun_azimuth = {:.1}\n", self.sun_azimuth));
         for (key, value) in &self.other {
             out.push_str(&format!("{key} = {value}\n"));
         }

@@ -104,6 +104,41 @@ pub fn build(
         base_color: Color::WHITE,
         perceptual_roughness: 1.0,
         metallic: 1.0,
+        // How a see-through material combines with what is behind it, and the
+        // answer differs by *why* it is see-through.
+        //
+        // **Something that glows adds.** Fire is emitted light: it makes what
+        // is behind it brighter and never darker, and where there is no flame
+        // it does nothing at all. Alpha-blending it instead multiplies the
+        // background by a near-black albedo, so every dim part of the flame
+        // paints a grey smear -- which is exactly what the fire pillar did,
+        // rendering as a dark drum with flames on top of it. Adding also means
+        // the silhouette takes care of itself: black adds nothing, so the
+        // cylinder stops existing wherever the flame is out, with no alpha
+        // needed to carve it.
+        //
+        // **Something that blocks light blends.** The Reaver's shadow is an
+        // absence, so it has to be able to make what is behind it darker,
+        // which is the one thing adding cannot do.
+        alpha_mode: if maps.emissive_strength > 1.0 {
+            AlphaMode::Add
+        } else if maps.has_alpha {
+            AlphaMode::Blend
+        } else {
+            AlphaMode::Opaque
+        },
+        // Deliberately *not* `unlit`, which this reached for first and which
+        // turned every flame into a black drum.
+        //
+        // The reasoning was sound -- a flame is light, not a lit surface, so
+        // taking the lighting off it should stop the sun putting a highlight
+        // on it. The mistake is where Bevy adds emission: inside the lighting
+        // pass. Marking a material unlit skips that pass, and the glow goes
+        // with it, leaving only the near-black albedo the flame was given
+        // precisely *because* it was supposed to be glowing.
+        //
+        // The albedo already does the job: at 0.02 reflectance there is
+        // nothing for the sun to highlight.
         uv_transform: Affine2::from_scale(repeat),
         ..default()
     })
@@ -126,7 +161,6 @@ pub struct Surfaces {
     pub blood: Handle<StandardMaterial>,
     pub shadow: Handle<StandardMaterial>,
     pub stone: Handle<StandardMaterial>,
-    pub ground: Handle<StandardMaterial>,
     pub leather: Handle<StandardMaterial>,
     /// Per player: skin, cloth, armour.
     pub skin: Vec<Handle<StandardMaterial>>,
@@ -159,12 +193,6 @@ impl Surfaces {
             blood: build(&materials::BLOOD, one, images, mats),
             shadow: build(&materials::SHADOW, one, images, mats),
             stone: build(&materials::STONE, Vec2::splat(2.0), images, mats),
-            // The floor is forty metres across and the tile is four, so it
-            // repeats ten times. That is the point at which one triplanar
-            // shader starts to earn its place -- see the header of `art::bake`
-            // -- and the point at which it does not is now a thing that can be
-            // looked at rather than argued about.
-            ground: build(&materials::GROUND, Vec2::splat(10.0), images, mats),
             leather: build(&materials::LEATHER, one, images, mats),
             skin,
             cloth,

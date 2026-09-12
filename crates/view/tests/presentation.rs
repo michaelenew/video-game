@@ -616,3 +616,173 @@ fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Weapon trails
+// ---------------------------------------------------------------------------
+
+mod trails {
+    use sim::state::Action;
+    use view::pose::PoseInput;
+    use view::trail;
+
+    fn swinging(frames_into: u16) -> PoseInput {
+        PoseInput {
+            clip: None,
+            action: Action::Active { kind: 0, left: 3 },
+            frames_into,
+            frames_total: 10,
+            speed: 0.0,
+            grounded: true,
+            crouching: false,
+            sim_frame: 600,
+        }
+    }
+
+    #[test]
+    fn a_trail_is_recomputed_rather_than_remembered() {
+        // The property the whole design rests on. Asking twice has to give the
+        // same answer, because that is what makes a rollback -- which asks
+        // again with corrected state -- produce a correct trail instead of a
+        // smear through a swing that never happened.
+        let a = trail::sweep(swinging(6), 8);
+        let b = trail::sweep(swinging(6), 8);
+        assert_eq!(a, b);
+        assert!(!a.is_empty());
+    }
+
+    #[test]
+    fn a_clip_lets_the_trail_reach_back_through_the_whole_move() {
+        // The bug that made the first version invisible. `frames_into` counts
+        // within a *phase*, so at the start of an active window it is nearly
+        // zero -- which is exactly when the swing is fastest and the trail
+        // should be longest. A clip's elapsed count runs across the whole move,
+        // so walking that back crosses into the wind-up where the arc is.
+        let just_became_active = PoseInput {
+            clip: Some((view::pose::Clip::Overhead, 15)),
+            frames_into: 1,
+            ..swinging(1)
+        };
+        assert_eq!(
+            trail::sweep(just_became_active, 8).len(),
+            8,
+            "the trail is being cut short by the phase counter instead of the clip"
+        );
+    }
+
+    #[test]
+    fn a_trail_stops_at_the_start_of_its_own_action() {
+        // `frames_into` counts within an action and the previous action is not
+        // recoverable from here, so reaching further back would be inventing
+        // motion. Worse, subtracting past zero on a `u16` wraps to 65535 and
+        // silently indexes the pose function with a frame from the far end of
+        // the move.
+        for into in 0..8u16 {
+            let sweep = trail::sweep(swinging(into), 8);
+            assert_eq!(
+                sweep.len(),
+                into as usize + 1,
+                "at {into} frames in, the trail reached back {} samples",
+                sweep.len()
+            );
+        }
+        assert_eq!(
+            trail::sweep(swinging(40), 8).len(),
+            8,
+            "a long action should cap"
+        );
+    }
+
+    #[test]
+    fn the_newest_sample_is_the_current_pose() {
+        // A trail whose head lags the weapon reads as the weapon outrunning its
+        // own arc, which looks like a bug in the animation rather than in the
+        // trail.
+        let sweep = trail::sweep(swinging(5), 8);
+        let now = trail::sweep(swinging(5), 1);
+        assert_eq!(sweep[0], now[0]);
+        assert_eq!(sweep[0].age, 0.0);
+    }
+
+    #[test]
+    fn age_runs_from_now_into_the_past() {
+        let sweep = trail::sweep(swinging(20), 8);
+        let mut last = -1.0;
+        for e in &sweep {
+            assert!(e.age > last, "ages are not increasing: {:?}", sweep);
+            last = e.age;
+        }
+        assert!(last < 1.0);
+    }
+
+    #[test]
+    fn the_blade_hangs_below_a_resting_arm() {
+        // The direction test anyone can check by holding their own arm out. An
+        // arm at rest points down, so the edge does too -- and its far end is
+        // further from the shoulder than its near end.
+        let idle = PoseInput {
+            action: Action::Free,
+            frames_into: 0,
+            ..swinging(0)
+        };
+        let edge = trail::sweep(idle, 1)[0];
+        assert!(
+            edge.far[1] < edge.near[1],
+            "the far end of the blade is above the near end: {edge:?}"
+        );
+        let reach = (edge.far[1] - edge.near[1]).abs();
+        assert!(reach > 0.5, "the blade is only {reach:.2} m long");
+    }
+
+    #[test]
+    fn a_baked_swing_moves_the_edge_and_standing_still_does_not() {
+        // What `speed` is for: a move whose arm barely travels should not get a
+        // ribbon, and the only way to know is to compare.
+        let idle = PoseInput {
+            action: Action::Free,
+            ..swinging(30)
+        };
+        assert_eq!(trail::speed(&trail::sweep(idle, 8)), 0.0);
+
+        let swung = PoseInput {
+            clip: Some((view::pose::Clip::Poke, 8)),
+            frames_into: 8,
+            ..swinging(8)
+        };
+        assert!(
+            trail::speed(&trail::sweep(swung, 8)) > 0.05,
+            "a baked swing does not out-travel standing still"
+        );
+    }
+
+    #[test]
+    fn a_trail_is_only_as_good_as_the_animation_under_it() {
+        // Worth pinning because it is the thing that decides where trails can
+        // be turned on, and it is invisible from the outside.
+        //
+        // **The procedural fallback poses are one pose per phase.** The whole
+        // active window of a move is a single static arm position, so a trail
+        // sampled across it is the same edge eight times -- a stationary
+        // ribbon, which reads as a rendering fault rather than as a swing.
+        // Baked clips do move, because the spring solver fills in every frame
+        // between the keys.
+        //
+        // So a trail is drawn where there is a clip and nowhere else, and the
+        // way to widen that is to give more moves clips -- which is what
+        // generating them from frame data is for.
+        let procedural = swinging(6);
+        assert_eq!(
+            trail::speed(&trail::sweep(procedural, 8)),
+            0.0,
+            "the procedural active pose has started moving -- good, but the renderer's \
+             rule for when to draw a trail was written assuming it does not"
+        );
+
+        let baked = PoseInput {
+            clip: Some((view::pose::Clip::Overhead, 11)),
+            frames_into: 11,
+            ..swinging(11)
+        };
+        assert!(trail::speed(&trail::sweep(baked, 8)) > 0.05);
+    }
+}

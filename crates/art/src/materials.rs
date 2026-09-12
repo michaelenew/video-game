@@ -32,7 +32,7 @@
 //! by another field, so features wander instead of running straight).
 
 use crate::color::{Lch, Ramp};
-use crate::surface::{Emission, Field, FieldKind, Surface};
+use crate::surface::{Emission, Field, FieldKind, Surface, Transparency};
 
 /// How many pixels a side each material is baked at.
 ///
@@ -96,6 +96,22 @@ impl Material {
         self.extent
     }
 
+    /// What this material reflects on average, as a linear fraction.
+    ///
+    /// For the renderer, which sometimes needs a single number for a whole
+    /// surface -- how much light bounces off the ground into the sky, say.
+    /// Sampled across the ramp rather than taken from its middle, because a
+    /// ramp is rarely symmetric.
+    pub fn mean_albedo(&self) -> f32 {
+        let mut total = 0.0;
+        const STEPS: usize = 17;
+        for k in 0..STEPS {
+            let c = self.surface.ramp.at(k as f32 / (STEPS - 1) as f32);
+            total += (c[0] + c[1] + c[2]) / 3.0;
+        }
+        total / STEPS as f32
+    }
+
     /// Texels per cycle of the finest thing in this material, at a resolution.
     ///
     /// Under about four, the fine detail stops being detail and becomes
@@ -150,6 +166,7 @@ pub const STONE: Material = Material {
         roughness: (0.98, 0.82),
         metallic: 0.0,
         emission: Emission::None,
+        transparency: Transparency::Opaque,
         relief: 0.035,
     },
     extent: 2.0,
@@ -189,6 +206,7 @@ pub const GROUND: Material = Material {
         roughness: (0.99, 0.90),
         metallic: 0.0,
         emission: Emission::None,
+        transparency: Transparency::Opaque,
         relief: 0.05,
     },
     extent: 4.0,
@@ -229,6 +247,7 @@ pub const SKIN: Material = Material {
         roughness: (0.62, 0.48),
         metallic: 0.0,
         emission: Emission::None,
+        transparency: Transparency::Opaque,
         relief: 0.004,
     },
     extent: 1.0,
@@ -264,6 +283,7 @@ pub fn cloth(tint: Lch) -> Material {
             roughness: (0.94, 0.80),
             metallic: 0.0,
             emission: Emission::None,
+            transparency: Transparency::Opaque,
             relief: 0.004,
         },
         extent: 1.0,
@@ -303,6 +323,7 @@ pub fn armour(tint: Lch) -> Material {
             roughness: (0.70, 0.16),
             metallic: 1.0,
             emission: Emission::None,
+            transparency: Transparency::Opaque,
             relief: 0.016,
         },
         extent: 1.0,
@@ -328,6 +349,7 @@ pub const LEATHER: Material = Material {
         roughness: (0.92, 0.68),
         metallic: 0.0,
         emission: Emission::None,
+        transparency: Transparency::Opaque,
         relief: 0.008,
     },
     extent: 1.0,
@@ -363,7 +385,15 @@ pub const FIRE: Material = Material {
         detail: Field::new(FieldKind::Fbm, [2.6, 1.3, 2.6], 0x1102).octaves(3),
         warp: 0.85,
         grain: 0.30,
-        contrast: 1.0,
+        // Opened right up, and for the same reason the floor material was:
+        // four octaves of noise cluster hard around their middle, and fire's
+        // spanned only 0.42 to 0.59. Everything downstream reads that number --
+        // the colour ramp, the emission, and now the alpha -- so a narrow scalar
+        // makes a *uniform* flame: no dark gaps, no bright core, and an alpha
+        // that is half-there everywhere instead of solid in the middle and gone
+        // at the edge. The fade was wired up correctly and did nothing visible
+        // until this moved.
+        contrast: 3.5,
         ramp: Ramp::two(c(0.02, 0.004, 0.08), c(0.06, 0.010, 0.10)),
         roughness: (1.0, 1.0),
         metallic: 0.0,
@@ -372,6 +402,19 @@ pub const FIRE: Material = Material {
             hot: 2600.0,
             strength: 9.0,
         },
+        // Opaque, and that is not the obvious answer.
+        //
+        // Most of the cylinder is not flame, so it wants a silhouette eaten
+        // away at the edges -- which is what this was, and it worked badly.
+        // Carving it with alpha fights the thing already doing the job: fire
+        // is drawn *additively*, and black adds nothing, so the shape is
+        // already carved by the emission itself. Doing it twice made the flame
+        // a few thin streaks with the body missing.
+        //
+        // The rule that came out of it: **an additive material does not need
+        // alpha.** Its brightness is its coverage. Alpha is for things that
+        // block light, which is why the shadow below still uses it.
+        transparency: Transparency::Opaque,
         relief: 0.0,
     },
     extent: 2.0,
@@ -399,6 +442,7 @@ pub const BLOOD: Material = Material {
         roughness: (0.80, 0.18),
         metallic: 0.0,
         emission: Emission::Glow { strength: 0.35 },
+        transparency: Transparency::Opaque,
         relief: 0.006,
     },
     extent: 1.5,
@@ -421,11 +465,14 @@ pub const SHADOW: Material = Material {
         detail: Field::new(FieldKind::Fbm, [5.0, 5.0, 5.0], 0x1302).octaves(2),
         warp: 0.55,
         grain: 0.35,
-        contrast: 1.0,
+        // See `fire`: the fade needs a scalar that reaches both ends.
+        contrast: 4.0,
         ramp: Ramp::two(c(0.02, 0.008, 0.72), c(0.14, 0.030, 0.72)),
         roughness: (1.0, 1.0),
         metallic: 0.0,
         emission: Emission::None,
+        // A shadow with a crisp edge is a solid object.
+        transparency: Transparency::Fades { floor: 0.10 },
         relief: 0.0,
     },
     extent: 2.0,
@@ -445,7 +492,7 @@ pub fn arcane(tint: Lch) -> Material {
             detail: Field::new(FieldKind::Ridged, [5.5, 5.5, 5.5], 0x1402).octaves(2),
             warp: 0.65,
             grain: 0.45,
-            contrast: 1.0,
+            contrast: 3.0,
             ramp: Ramp::three(
                 Lch::new(0.10, tint.c * 0.5, tint.h),
                 Lch::new(0.55, tint.c * 1.4, tint.h),
@@ -454,6 +501,8 @@ pub fn arcane(tint: Lch) -> Material {
             roughness: (1.0, 1.0),
             metallic: 0.0,
             emission: Emission::Glow { strength: 5.0 },
+            // Additive, so the glow is its own silhouette. See `FIRE`.
+            transparency: Transparency::Opaque,
             relief: 0.0,
         },
         extent: 1.5,

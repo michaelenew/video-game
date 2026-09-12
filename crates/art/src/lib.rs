@@ -68,6 +68,7 @@
 //! | [`surface`] | One evaluator. A material is a point in its parameter space |
 //! | [`materials`] | Every material in the game, as rows of numbers |
 //! | [`palette`] | Who is who, and what will hurt you |
+//! | [`sky`] | The whole lighting rig, from how high the sun is |
 //! | [`bake`] | Parameters to textures a renderer already eats |
 //! | [`png`] | A dependency-free encoder, so a material can be *looked at* |
 
@@ -77,4 +78,5 @@ pub mod materials;
 pub mod noise;
 pub mod palette;
 pub mod png;
+pub mod sky;
 pub mod surface;

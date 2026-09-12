@@ -84,6 +84,13 @@ pub struct Maps {
     pub emissive: Texture,
     /// What to multiply the emissive texture by. One when nothing glows.
     pub emissive_strength: f32,
+    /// Whether any texel is less than fully opaque.
+    ///
+    /// Reported rather than inferred from the surface, because a material that
+    /// *can* fade may still come out solid at a given tile -- and switching a
+    /// material to alpha blending it does not need costs correct depth sorting
+    /// for nothing.
+    pub has_alpha: bool,
 }
 
 /// How to bake.
@@ -241,11 +248,16 @@ pub fn bake(surface: &Surface, plan: Plan) -> Maps {
                     h[i] = t;
 
                     let s = surface.shade(t);
+                    // Alpha rides in the albedo map's fourth channel, which is
+                    // where every renderer already looks for it. Linear, not
+                    // sRGB: coverage is a fraction of a surface, not a colour,
+                    // and putting it through a transfer function meant for
+                    // light makes every soft edge the wrong softness.
                     a[i * 4..i * 4 + 4].copy_from_slice(&[
                         to_byte_srgb(s.albedo[0]),
                         to_byte_srgb(s.albedo[1]),
                         to_byte_srgb(s.albedo[2]),
-                        255,
+                        to_byte_linear(s.alpha),
                     ]);
                     // glTF's packing, which Bevy reads directly: red is free
                     // for ambient occlusion, green is roughness, blue is
@@ -311,12 +323,14 @@ pub fn bake(surface: &Surface, plan: Plan) -> Maps {
         }
     }
 
+    let has_alpha = albedo.pixels.chunks(4).any(|p| p[3] < 250);
     Maps {
         albedo,
         normal,
         metallic_roughness: orm,
         emissive,
         emissive_strength: peak,
+        has_alpha,
     }
 }
 

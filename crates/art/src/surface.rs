@@ -191,6 +191,26 @@ impl Field {
     }
 }
 
+/// Whether the surface is all there.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Transparency {
+    /// Solid. Everything the arena is built out of.
+    Opaque,
+    /// The field decides how much of the surface exists: below `floor` there
+    /// is nothing, and it comes in over the range above it.
+    ///
+    /// This is what separates a flame from a lampshade. A fire drawn on a
+    /// solid cylinder is a bright orange *object* with a hard silhouette and a
+    /// visible top edge, however good the emission texture on it is -- the eye
+    /// reads the outline before it reads anything else. Eating the edges away
+    /// with the same field that makes the flame gives it a ragged, moving
+    /// boundary, which is most of what fire *is*.
+    ///
+    /// Also the right answer for the Reaver's shadow, for the opposite reason:
+    /// a shadow with a crisp edge is a solid object.
+    Fades { floor: f32 },
+}
+
 /// How light leaves the surface.
 #[derive(Clone, Copy, Debug)]
 pub enum Emission {
@@ -238,6 +258,7 @@ pub struct Surface {
     pub roughness: (f32, f32),
     pub metallic: f32,
     pub emission: Emission,
+    pub transparency: Transparency,
     /// Height relief in metres, for the normal map. This is the parameter that
     /// decides whether a surface reads as textured or as painted.
     pub relief: f32,
@@ -262,6 +283,8 @@ pub struct Sample {
     pub roughness: f32,
     pub metallic: f32,
     pub emissive: Rgb,
+    /// How much of the surface is here, 0..1.
+    pub alpha: f32,
     /// The raw scalar, 0..1. Kept because the normal map is its gradient and
     /// recomputing colour to get it would be three times the work.
     pub height: f32,
@@ -343,8 +366,39 @@ impl Surface {
                 [c[0] * i, c[1] * i, c[2] * i]
             }
         };
+        let alpha = match self.transparency {
+            Transparency::Opaque => 1.0,
+            Transparency::Fades { floor } => {
+                // **A thing you can only see because it glows is exactly as
+                // present as it is bright.**
+                //
+                // Fading on the raw field instead gets this backwards, and the
+                // pillar showed it: where the flame was dim the surface was
+                // still more than half opaque, so the bottom of it rendered as
+                // a dark grey drum with flames on top. Near-black albedo is
+                // *correct* for fire -- it is emitted light, not a lit surface
+                // -- which is exactly why the dim parts have to be absent
+                // rather than dark.
+                //
+                // So the fade reads whatever actually drives the brightness.
+                // `Hot` cubes its field, so its alpha does too; `Glow` tracks
+                // its ramp, which is near enough linear; and something that
+                // does not emit at all falls back to the field itself, which
+                // is right for the Reaver's shadow -- an absence is not dim,
+                // it is *there*, and it is the arena behind it that is dark.
+                let driver = match self.emission {
+                    Emission::Hot { .. } => t * t * t,
+                    _ => t,
+                };
+                let a = ((driver - floor) / (1.0 - floor).max(1e-3)).clamp(0.0, 1.0);
+                // Smoothstepped rather than linear, so the boundary reads as a
+                // soft edge rather than as a band where the alpha ramp starts.
+                a * a * (3.0 - 2.0 * a)
+            }
+        };
         Sample {
             albedo,
+            alpha,
             roughness: self.roughness.0 + (self.roughness.1 - self.roughness.0) * t,
             metallic: self.metallic,
             emissive,
