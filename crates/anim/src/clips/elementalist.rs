@@ -1,10 +1,10 @@
-//! Bolt, Fissure and the fire pillar.
+//! Bolt, Fissure, the fire pillar, and Cataclysm.
 //!
 //! The Elementalist does not fight, she *authors terrain*: she raises things
 //! out of the floor and then detonates them. Nothing in her vocabulary is a
 //! swing. The hands and forearms do the talking, the feet are a base rather
 //! than a step, and the torso turns to aim instead of to swing. She is also not
-//! frail -- tall and narrow with a heavy head, and two of her three moves put
+//! frail -- tall and narrow with a heavy head, and three of her four moves put
 //! her whole weight behind a gesture.
 //!
 //! ## The three read as three directions
@@ -17,6 +17,15 @@
 //!   Fissure   both hands sweep up, the body grows taller      -- up, then down
 //!   Pillar    both hands sweep down, the body sinks           -- down, then up
 //! ```
+//!
+//! Cataclysm is not a fourth direction in that read: it is on its own button,
+//! so there is nothing to disambiguate it from. What it needs instead is the
+//! one silhouette none of the three above ever makes -- **forward**. Fissure
+//! and the pillar both keep their hands behind the line of her body the whole
+//! way through; Bolt reaches out but only from the elbow. Cataclysm is the
+//! first time both hands leave together and finish in front of her, because it
+//! is the first move that is thrown rather than planted or lifted -- see
+//! `heavy`.
 //!
 //! Fissure and the pillar end in opposite places too -- hands in the floor
 //! against hands over the head -- but the opening frames are what matters,
@@ -66,7 +75,7 @@ use view::skeleton::Joint;
 const THROUGH: Ease = Ease::new(0.10, 0.34, 0.90, 0.66);
 
 pub fn clips() -> Vec<Recipe> {
-    vec![bolt(), fissure(), fire_pillar()]
+    vec![bolt(), fissure(), fire_pillar(), heavy()]
 }
 
 // ---------------------------------------------------------------------------
@@ -601,6 +610,152 @@ fn settling_pose() -> Pose {
             .shoulders(74.0, 54.0, -30.0)
             .elbows(50.0)
             .wrists(-14.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Cataclysm
+// ---------------------------------------------------------------------------
+
+/// Both hands wound up behind her and thrown forward together. The heaviest
+/// single gesture in the kit, and the only one that finishes in front of her.
+///
+/// Twenty-four frames of startup, the longest she has: the wind-up sinks and
+/// coils for the whole of it, low behind her before it is ever thrown, which
+/// is what tells a Cataclysm from a Fissure or a pillar on sight -- neither of
+/// those winds up *backward*. Contact is the release, and the follow-through
+/// carries her weight past it rather than stopping there: HEAVY earns its
+/// name here more than anywhere else in the file.
+fn heavy() -> Recipe {
+    let clip = Clip::ElementalistHeavy;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    // Loading inside the first fifth, fully wound by three quarters of the
+    // way through the startup, and held there a beat before the throw -- the
+    // same shape the pillar's own lift uses, coiled the other way.
+    let coil = (contact / 5).max(2);
+    let wind = (contact * 3 / 4).max(coil + 1);
+    let settle = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::HEAVY,
+        notes: "A throw, not a lift or a plant: both hands wind up behind her \
+                low and to one side and finish together out in front, which is \
+                the one silhouette Fissure and the pillar never make -- neither \
+                of them ever puts a hand ahead of her hips. The wind-up spends \
+                the whole of the startup, coiling further right up to the last \
+                quarter of it, so the release on contact reads as everything \
+                let go at once rather than as a swing that was already moving. \
+                The follow-through overbalances her forward and the recovery \
+                is spent gathering that back rather than holding a pose, which \
+                is what a throw this size costs."
+            .into(),
+        keys: vec![
+            // Down and back fast, mirroring the pillar's own tell but to one
+            // side instead of straight down -- this is a throw, not a lift.
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(coil, coiled(), Ease::SMOOTH),
+            // Fully wound and held: ANTICIPATE is the same held-breath beat
+            // the pillar's `gripped` uses before its own haul.
+            Key::eased(wind, wound(), Ease::ANTICIPATE),
+            Key::eased(contact, unleashed(), Ease::STRIKE),
+            Key::eased(recover, overthrown(), Ease::OUT),
+            Key::eased(settle, gathering(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: both hands sweep down and back to one side, knees bending, chest
+/// turning away from the target to load the throw.
+fn coiled() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.09, -0.03)
+            .root(-6.0, 0.0, -14.0)
+            .spine(-8.0, 0.0, 10.0)
+            .chest(-12.0, 0.0, 16.0)
+            // Eyes stay on the target while the shoulders wind away from it.
+            .head(6.0, 0.0, -14.0)
+            .shoulders(70.0, 26.0, -30.0)
+            .elbows(64.0)
+            .wrists(-24.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Fully wound and held for a beat: as coiled as she gets, hands drawn back
+/// past her hip, weight sunk low, chest turned hard away from the throw.
+fn wound() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.16, -0.06)
+            .root(-14.0, 0.0, -22.0)
+            .spine(-18.0, 0.0, 16.0)
+            .chest(-18.0, 0.0, 26.0)
+            .head(16.0, 0.0, -22.0)
+            .shoulders(112.0, 20.0, -34.0)
+            .elbows(104.0)
+            .wrists(-32.0, 0.0, 0.0),
+        0.0,
+        0.02,
+    )
+}
+
+/// Contact, on the frame the shot leaves: both hands thrown forward and open
+/// together, the chest snapped square, the whole coil spent at once.
+fn unleashed() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.045, 0.05)
+            .root(16.0, 0.0, 6.0)
+            .spine(22.0, 0.0, -4.0)
+            .chest(28.0, 0.0, -8.0)
+            .head(-10.0, 0.0, 5.0)
+            .shoulders(26.0, 14.0, 14.0)
+            .elbows(8.0)
+            .wrists(32.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The end of the active window: carried past the release, weight still
+/// travelling forward, hands lower and further out than at contact.
+fn overthrown() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.05, 0.06)
+            .root(20.0, 0.0, 8.0)
+            .spine(26.0, 0.0, -5.0)
+            .chest(32.0, 0.0, -9.0)
+            .head(-12.0, 0.0, 6.0)
+            .shoulders(18.0, 12.0, 10.0)
+            .elbows(4.0)
+            .wrists(38.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Gathering the overbalance back in: arms falling from the throw toward
+/// neutral, chest and hips coming square again.
+fn gathering() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.07, 0.02)
+            .root(8.0, 0.0, 0.0)
+            .spine(8.0, 0.0, -1.0)
+            .chest(8.0, 0.0, -3.0)
+            .head(-4.0, 0.0, 2.0)
+            .shoulders(32.0, 20.0, -6.0)
+            .elbows(48.0)
+            .wrists(-6.0, 0.0, 0.0),
         0.0,
         0.0,
     )

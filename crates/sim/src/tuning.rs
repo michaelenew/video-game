@@ -719,15 +719,57 @@ pub fn thrust_extend() -> Fx {
 
 /// Where the inner edge of a wing sits, as a fraction of the move's reach.
 ///
-/// A wing is a **section of a torus** lying flat around the caster (see
-/// `moves::Shape::Wing`), so it has a hole in the middle, and this is how big
-/// the hole is. The design statement is that the inner arc passes through where
-/// the punching elbow starts -- close in, tucked against the body -- which is
-/// what makes stepping *inside* the wing a bad answer to it rather than the
-/// only answer to it. `view/tests/kinematics.rs` checks it against the elbow in
-/// the baked clip, because the simulation has no idea where an elbow is.
+/// A wing is a **section of a torus** lying flat (see `moves::Shape::Wing`), and
+/// this is how big the hole in it is. Near one, which is the point: the volume
+/// is a **thin curved blade travelling through the air**, not a pie slice. At
+/// 0.16 -- where it sat until 2026-09-13 -- the section reached from the
+/// caster's own elbow out to full range on every frame, which is a filled disc
+/// with a pinhole in it, and a filled disc is what this shape exists not to be.
+///
+/// The band it leaves runs from `wing_inner` of the reach out to the reach, so
+/// this knob and `Move::reach` together say both where the blade is and how
+/// deep it is. `view/tests/kinematics.rs` checks the band against the punch in
+/// the baked clip, because the simulation has no idea where a fist is.
 pub fn wing_inner() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WingInner))
+}
+
+/// How far the ring's middle sits toward the caster's **other** arm, as a
+/// fraction of the move's reach.
+///
+/// A ring centred on the body is the same distance from it at every bearing, so
+/// however short the section is it reads as a piece of a halo rather than as
+/// something thrown. Pushing the middle off her breaks that: the blade comes in
+/// close beside her on the punching arm's side and swings wide in front, which
+/// is a swipe passing by rather than a circle drawn around her.
+///
+/// Toward the other arm rather than the punching one, because the pivot has to
+/// be on the far side of the body from the fist for the near part of the arc to
+/// be the part beside that fist.
+pub fn wing_offside() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingOffside))
+}
+
+/// And how far forward of her the ring's middle sits, as a fraction of reach.
+///
+/// The other half of placing the ring. It moves where the blade *finishes*
+/// without changing how curved it is, which is the difference between a punch
+/// that ends at arm's length and one that ends a pace in front of her.
+pub fn wing_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingAhead))
+}
+
+/// Where the leading edge stops, in turns off straight ahead, toward the
+/// punching arm's side.
+///
+/// **Not dead centre**, and that is the whole of it: the two autos are told
+/// apart by which arm threw them, so each one has to finish in front of *its
+/// own* hand. A wing that closed on the body's centre line put both of them in
+/// the same place at the moment the player is reading which one landed.
+///
+/// Signed by the arm in `moves::wing`, so one knob mirrors.
+pub fn wing_finish() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingFinish))
 }
 
 /// How much of a wing's span its **tip** is, on the last frame it is out.
@@ -747,6 +789,18 @@ pub fn wing_tip() -> Fx {
 /// for.
 pub fn wing_tipper() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WingTipper))
+}
+
+/// How big the tip is.
+///
+/// **The tip is a bubble, not a slice.** It is the foremost point of the ring
+/// and nothing else -- one frame, at the end of the blade -- so it carries a
+/// radius of its own rather than inheriting `Move::radius`, which is how deep
+/// the band behind it is. Two different questions: one is how forgiving the
+/// wing is about distance, the other is how forgiving the tip is about exactly
+/// where the end of it was.
+pub fn wing_tip_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingTipRadius))
 }
 
 /// How far along the bar landing an auto moves the Dual mage.
@@ -972,6 +1026,61 @@ pub fn fire_bolt_blockstun() -> u16 {
 
 pub fn fire_bolt_knockback() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FireBoltKnockback))
+}
+
+// Cataclysm: the heavy, on right click. What it does when it lands is
+// `crate::tornado`'s and the structure-destroying blast's own numbers; these
+// two are the ones neither the move table nor the fire bolt's own knobs cover.
+
+/// Half-angle of the blast a destroyed structure goes up in, as a cosine.
+/// Wide on purpose -- it is meant to catch whoever was standing near the
+/// structure, not to reward lining up a second shot through it.
+pub fn cataclysm_cone_cos() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CataclysmConeCos))
+}
+
+pub fn cataclysm_blast_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CataclysmBlastRadius))
+}
+
+// The fire tornado: what a fire pillar becomes when Cataclysm passes through
+// it instead of just charging it. See `crate::tornado`.
+
+/// How fast it crosses the arena. Visibly faster than a walk, so outrunning
+/// one head-on is not an option -- stepping off its line is.
+pub fn tornado_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TornadoSpeed))
+}
+
+/// How far its pull reaches from its own live centre, which moves.
+pub fn tornado_pull_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TornadoPullRadius))
+}
+
+/// Acceleration toward the centre for anyone caught inside the pull radius,
+/// in the same units gravity is -- comparable in strength, deliberately, so
+/// getting pulled in reads as a real force rather than a nudge.
+pub fn tornado_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TornadoPull))
+}
+
+/// Damage on each tick to anyone it is holding, on the same cadence every
+/// other standing hazard ticks on. See `tuning::effect_tick_frames`.
+pub fn tornado_damage() -> i32 {
+    oven::scalar(Scalar::TornadoDamage)
+}
+
+/// A short stagger on each tick -- enough that holding a direction cannot
+/// simply cancel the pull the instant it starts, not long enough to be an
+/// uninterruptible lock between ticks.
+pub fn tornado_stagger() -> u16 {
+    oven::scalar(Scalar::TornadoStagger) as u16
+}
+
+/// How long it lives before it burns out, whether or not it ever leaves the
+/// arena first.
+pub fn tornado_life() -> u16 {
+    oven::scalar(Scalar::TornadoLife) as u16
 }
 
 // ---------------------------------------------------------------------------

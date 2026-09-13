@@ -460,6 +460,20 @@ pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
     scatter(players, &field);
 }
 
+/// Remove the stone at `index` outright, and say where it was.
+///
+/// The Elementalist's Cataclysm breaks a structure rather than moving it --
+/// see `docs/design/kits/elementalist.md`. Everything else that ever happens
+/// to a stone displaces it; the cap-of-three eviction is otherwise the only
+/// way one leaves the field, and that only ever happens to the fighter's own
+/// oldest. This is the one place combat actually destroys one.
+pub fn destroy(players: &mut [Player; MAX_PLAYERS], index: usize) -> Option<V3> {
+    let mut field = gather(players);
+    let at = field[index].take().map(|s| s.at);
+    scatter(players, &field);
+    at
+}
+
 // ---------------------------------------------------------------------------
 // Stones against fighters
 // ---------------------------------------------------------------------------
