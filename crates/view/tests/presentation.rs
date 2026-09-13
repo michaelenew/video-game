@@ -1096,6 +1096,59 @@ fn the_body_is_simply_drawn_while_the_fighter_is_out_in_the_open() {
 }
 
 #[test]
+fn only_a_close_eye_ever_takes_the_whole_body() {
+    // The rule, swept across the entire look range. There are two reasons to
+    // stop drawing the fighter you are driving and only one of them is allowed
+    // to finish the job: the crosshair reason **dims**, and the eye being close
+    // is what makes somebody disappear.
+    //
+    // Why it matters is a spacing argument rather than a rendering one. A body
+    // that winks out while the camera is still a full arm behind it takes its
+    // own position with it, and where you are standing is what every decision
+    // about range is measured from -- how far the other fighter is, whether you
+    // are inside your own reach, which way you would dodge.
+    let z = zones();
+    let mut seen_dim = false;
+    let mut seen_gone = false;
+    for step in 0..=120 {
+        let pitch = -z.down_limit + (z.down_limit + z.up_limit) * step as f32 / 120.0;
+        let (f, at) = settled(pitch);
+        let body = sim::tuning::body_height().to_f32_for_render();
+        let middle = [at[0], at[1] + body * 0.5, at[2]];
+        let reach = (0..3)
+            .map(|i| (f.eye[i] - middle[i]).powi(2))
+            .sum::<f32>()
+            .sqrt();
+        if reach > z.fade_near {
+            assert!(
+                f.hidden < 1.0,
+                "at {:.0} deg the eye is {reach:.2} m out and the body is gone \
+                 anyway -- only being close is supposed to do that",
+                pitch.to_degrees()
+            );
+            assert!(
+                f.hidden <= z.crosshair_dim + 0.001,
+                "at {:.0} deg the body is {:.0}% faded, past the {:.0}% the \
+                 crosshair reason is allowed",
+                pitch.to_degrees(),
+                f.hidden * 100.0,
+                z.crosshair_dim * 100.0
+            );
+        }
+        seen_dim |= f.hidden > 0.01 && f.hidden < 1.0;
+        seen_gone |= f.hidden >= 1.0;
+    }
+    // Both halves have to actually happen in the sweep, or the assertion above
+    // is being satisfied by a fade that never fires at all.
+    assert!(seen_dim, "the body was never dimmed anywhere in the range");
+    assert!(
+        seen_gone,
+        "the body never went away, so looking up no longer hands over to first \
+         person -- see `Framing::hidden`"
+    );
+}
+
+#[test]
 fn the_eye_never_changes_pace_abruptly_at_a_zone_boundary() {
     // The camera being continuous is not the same as the camera being smooth.
     // Every version of this rig has held the eye's *position* together across a

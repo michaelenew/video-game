@@ -441,9 +441,10 @@ view_knobs! {
     SmoothTurn,     "Smooth, the turn (%)",     Int,     0,   100;
     SmoothHandover, "Smooth, handover (%)",     Int,     0,   100;
     SmoothEyes,     "Smooth, first person (%)", Int,     0,   100;
+    CrosshairDim,   "Body dims to (%)",         Int,     0,   100;
 }
 
-pub const VIEW_COUNT: usize = 17;
+pub const VIEW_COUNT: usize = 18;
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data

@@ -108,16 +108,25 @@ pub struct Framing {
     /// How much of the fighter's own body to take away, 0 to 1.
     ///
     /// Two separate reasons to stop drawing it, and the stronger one wins.
+    /// **Only one of them can reach 1**, and which one is the whole rule:
     ///
     /// It goes **translucent as it comes up on the crosshair**, because a body
     /// the player is trying to aim past is worse than no body at all, and the
     /// reticle is the one thing on screen they are holding still on purpose.
+    /// This one is capped at [`Zones::crosshair_dim`]: it is a dim, and it
+    /// stays a dim however squarely the head sits under the reticle. A fighter
+    /// who vanished outright with the camera still a full arm behind them would
+    /// take their own position with them, and where you are standing is what
+    /// every spacing decision in the game is made from.
     ///
     /// It goes **fully away when the eye gets close**, measured as a plain
     /// distance to the body rather than as a zone. That matters: the eye can
     /// end up against the fighter's back with the aim pointed nowhere near the
     /// sky -- a wall behind them pulls the arm in, and then the whole frame is
     /// the inside of a shoulder. Distance catches that, and a zone never could.
+    /// Because this is the only reason allowed to take the whole body, the body
+    /// disappears exactly when the eye is close enough that there was nothing
+    /// to see anyway.
     pub hidden: f32,
 }
 
@@ -196,6 +205,12 @@ pub struct Zones {
     /// How close the eye may get before the fighter's own body stops being
     /// drawn at all, in metres.
     pub fade_near: f32,
+    /// The most of the body the **crosshair** reason may ever take, 0 to 1.
+    ///
+    /// A dim rather than a disappearance. Coming up on the reticle is a reason
+    /// to see *through* somebody, not a reason for them to stop existing --
+    /// see [`Framing::hidden`].
+    pub crosshair_dim: f32,
 }
 
 impl Zones {
@@ -216,6 +231,7 @@ impl Zones {
             feet_floor: pct(V::FeetFloor),
             head_gap: pct(V::HeadGapLevel),
             fade_near: metres(V::FadeNear),
+            crosshair_dim: pct(V::CrosshairDim),
         }
     }
 
@@ -435,7 +451,12 @@ impl CameraRig {
         let to_head = [back, body - up];
         let under = pitch - to_head[1].atan2(to_head[0].max(1e-4));
         let gap = 0.5 - (0.5 - under.tan() / (2.0 * (self.cfg.fov * 0.5).tan()));
-        let covering = 1.0 - (gap / (2.0 * zones.head_gap).max(0.01)).clamp(0.0, 1.0);
+        // Scaled by the cap, so the crosshair reason dims and never more. Full
+        // transparency is `crowding`'s alone, and crowding is a near-plane
+        // measurement -- which is what makes "gone" mean "the eye is inside
+        // you" rather than "you drifted under the reticle".
+        let covering =
+            (1.0 - (gap / (2.0 * zones.head_gap).max(0.01)).clamp(0.0, 1.0)) * zones.crosshair_dim;
         // At the target, so screen centre *is* the target and the reticle never
         // has to move. Degenerate only if the two coincide, which cannot happen
         // while the eye is behind the fighter and the target is in front.

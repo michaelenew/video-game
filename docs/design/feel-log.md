@@ -2784,3 +2784,33 @@ resolved: a full second is a long time to hold still, and if opponents learn to 
 while watching the marker the move is worse at every depth than the fixed ten metres was at
 one. The blade's worry is the opposite — a return that always lands may have made an auto
 attack too safe for a class whose whole economy is supposed to be a gamble.
+
+### 2026-09-13 — your own body dims under the crosshair, it does not vanish
+
+**Changed** the fade on the fighter you are driving. There have always been two reasons to stop
+drawing them and the stronger one wins; now only one of the two can reach the whole body.
+
+```
+before   crosshair fade and near-eye fade both ran 0 -> 1, and either could
+         take the body away on its own
+now      the crosshair fade is capped at 60% ("Body dims to"); the near-eye
+         fade still runs to 100% and is the only thing that does
+```
+
+**Why** it was firing at full strength with the camera nine metres away. Looking down — which is
+most of the time, since the floor zone runs to −85° — puts your own body high on the screen and
+squarely under the reticle, so the crosshair reason saturated while the arm was at full length.
+The test that pins this now reports the old behaviour as *"at −85 deg the eye is 8.30 m out and
+the body is gone anyway"*, which is the bug in one line.
+
+**The argument is about spacing, not rendering.** A body that winks out takes its own position
+with it, and where you are standing is what every judgement about range is measured from: how
+far the other fighter is, whether you are inside your own reach, which way you would dodge. A
+dim gets the body out of the way of the shot without costing the player that. When the eye is
+genuinely close there was nothing to see anyway, so that case still earns the whole body — and
+it is what carries the first-person handover, which is unchanged.
+
+**Verdict** open, and the number is the open part. Sixty per cent is a guess: enough to see the
+reticle and whatever is behind the shoulder, not so much that the body stops reading as a body.
+If aiming past your own head still feels obstructed the knob goes up, and the thing to watch for
+at the top of its range is the fade starting to read as a disappearance again.
