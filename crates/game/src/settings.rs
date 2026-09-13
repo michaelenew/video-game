@@ -37,17 +37,11 @@ pub const MIN_FOV: f32 = 40.0;
 pub const MAX_FOV: f32 = 100.0;
 const FOV_STEP: f32 = 2.0;
 
-/// How far behind the fighter the camera sits, in metres.
-pub const MIN_DISTANCE: f32 = 3.0;
-pub const MAX_DISTANCE: f32 = 18.0;
-const DISTANCE_STEP: f32 = 0.4;
-
 /// Which number a key press is reaching for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Knob {
     Sensitivity,
     Fov,
-    Distance,
 }
 
 #[derive(Clone, Debug, PartialEq, Resource)]
@@ -55,8 +49,6 @@ pub struct Settings {
     pub sensitivity: f32,
     /// Vertical field of view, in degrees.
     pub fov: f32,
-    /// Camera distance behind the fighter, in metres.
-    pub distance: f32,
     /// Keys we did not recognise, kept so saving does not discard them.
     other: BTreeMap<String, String>,
 }
@@ -69,7 +61,6 @@ impl Default for Settings {
             // 45-degree view from six metres reads as cramped in an arena you
             // are meant to be moving around inside.
             fov: 58.0,
-            distance: 10.9,
             other: BTreeMap::new(),
         }
     }
@@ -103,19 +94,12 @@ impl Settings {
             Knob::Fov => {
                 self.fov = (self.fov + sign * FOV_STEP).clamp(MIN_FOV, MAX_FOV);
             }
-            Knob::Distance => {
-                self.distance =
-                    (self.distance + sign * DISTANCE_STEP).clamp(MIN_DISTANCE, MAX_DISTANCE);
-            }
         }
     }
 
     /// One line for the heads-up display.
     pub fn label(&self) -> String {
-        format!(
-            "mouse {:.2}   fov {:.0}   dist {:.1}",
-            self.sensitivity, self.fov, self.distance
-        )
+        format!("mouse {:.2}   fov {:.0}", self.sensitivity, self.fov)
     }
 
     pub fn parse(text: &str) -> Settings {
@@ -138,8 +122,7 @@ impl Settings {
                     s.sensitivity = v.clamp(MIN_SENSITIVITY, MAX_SENSITIVITY)
                 }
                 ("fov", Some(v)) => s.fov = v.clamp(MIN_FOV, MAX_FOV),
-                ("camera_distance", Some(v)) => s.distance = v.clamp(MIN_DISTANCE, MAX_DISTANCE),
-                ("sensitivity" | "fov" | "camera_distance", None) => {}
+                ("sensitivity" | "fov", None) => {}
                 _ => {
                     s.other.insert(key.to_string(), value.to_string());
                 }
@@ -152,10 +135,8 @@ impl Settings {
         let mut out = String::from("# Arena prototype settings.\n");
         out.push_str("# sensitivity: mouse turn rate, 1.0 is the default feel.\n");
         out.push_str("# fov: vertical field of view, degrees.\n");
-        out.push_str("# camera_distance: how far behind the fighter the camera sits, metres.\n");
         out.push_str(&format!("sensitivity = {:.3}\n", self.sensitivity));
         out.push_str(&format!("fov = {:.1}\n", self.fov));
-        out.push_str(&format!("camera_distance = {:.2}\n", self.distance));
         for (key, value) in &self.other {
             out.push_str(&format!("{key} = {value}\n"));
         }
@@ -206,11 +187,9 @@ mod tests {
         s.nudge(Knob::Sensitivity, true);
         s.nudge(Knob::Sensitivity, true);
         s.nudge(Knob::Fov, true);
-        s.nudge(Knob::Distance, false);
         let round = Settings::parse(&s.to_text());
         assert!((round.sensitivity - s.sensitivity).abs() < 0.001);
         assert!((round.fov - s.fov).abs() < 0.05);
-        assert!((round.distance - s.distance).abs() < 0.005);
     }
 
     #[test]
@@ -250,23 +229,25 @@ mod tests {
         );
         assert_eq!(Settings::parse("sensitivity = inf").sensitivity, 1.0);
         assert_eq!(Settings::parse("fov = 300").fov, MAX_FOV);
+        // `camera_distance` is gone -- it moved the eye, and the eye is where
+        // the aiming ray starts -- but an old config file still has the line in
+        // it and must not be rejected for that.
         assert_eq!(
-            Settings::parse("camera_distance = 0").distance,
-            MIN_DISTANCE
+            Settings::parse("camera_distance = 3").fov,
+            MAX_FOV.min(58.0)
         );
     }
 
     #[test]
     fn nudging_is_symmetric_and_bounded() {
         let mut s = Settings::default();
-        for knob in [Knob::Sensitivity, Knob::Fov, Knob::Distance] {
+        for knob in [Knob::Sensitivity, Knob::Fov] {
             let before = Settings::default();
             s.nudge(knob, true);
             s.nudge(knob, false);
             assert!(
                 (s.sensitivity - before.sensitivity).abs() < 0.0001
-                    && (s.fov - before.fov).abs() < 0.0001
-                    && (s.distance - before.distance).abs() < 0.0001,
+                    && (s.fov - before.fov).abs() < 0.0001,
                 "{knob:?} did not come back"
             );
         }
@@ -274,20 +255,16 @@ mod tests {
         for _ in 0..400 {
             s.nudge(Knob::Sensitivity, false);
             s.nudge(Knob::Fov, false);
-            s.nudge(Knob::Distance, false);
         }
         assert_eq!(s.sensitivity, MIN_SENSITIVITY);
         assert_eq!(s.fov, MIN_FOV);
-        assert_eq!(s.distance, MIN_DISTANCE);
 
         for _ in 0..400 {
             s.nudge(Knob::Sensitivity, true);
             s.nudge(Knob::Fov, true);
-            s.nudge(Knob::Distance, true);
         }
         assert_eq!(s.sensitivity, MAX_SENSITIVITY);
         assert_eq!(s.fov, MAX_FOV);
-        assert_eq!(s.distance, MAX_DISTANCE);
     }
 
     #[test]

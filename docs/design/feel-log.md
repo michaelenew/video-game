@@ -687,6 +687,13 @@ Whether the hit test stays one circle, becomes a swept capsule from the fighter 
 point, or ranged autos become real projectiles is a decision for that pass. All three fix the
 table above; they differ in what else they make possible.
 
+> **Update, 2026-09-12: the Elementalist's third of this is done**, see the entry below —
+> "aimed through terrain" rather than "push structures around", which turned out to be the
+> more general shape and covers the effects interaction too. The hole-in-front-of-the-poke
+> table above is untouched: this pass changed what the shot does when something is in the
+> way, not the hit-test geometry against a fighter. The melee reshaping and the timing pass
+> are both still open.
+
 ### 2026-09-11 — the mechanic button fired every frame you held it
 **Reported** The Elementalist raises a structure once per frame while `E` is held; it should be
 one per press.
@@ -873,58 +880,1536 @@ across the board**. One name being out of place is a reason to look at all six: 
 (Bulwark, Elementalist, Blood mage, Dual mage) are descriptions and two (Shadow Reaver,
 Champion) are titles, and nobody has decided which register the game is in.
 
-### 2026-09-12 — stun, and the combo arc
-**Changed** Every point of damage now stuns, interrupts and shoves, through one funnel
-(`state::strike`). Four frames of contact freeze on a poke rising to eight on the heaviest
-move; hitstun and knockback multiplied by a swell that grows with the damage the victim has
-already taken; directional influence on the last frozen frame; per-class weight dividing
-knockback. Field effects go through the same path, so a fire pillar now interrupts instead of
-only draining. New knobs under **Stun** and **Effects**; weight under each class's air family.
+### 2026-09-13 — stun, and where the combo window sits
+**Changed** Every point of damage now freezes both fighters, interrupts, and shoves, through
+`apply_hit`. Three to eight frames of contact freeze by damage; hitstun and knockback
+multiplied by a swell that grows with the damage the victim has already taken; per-class weight
+dividing knockback; buttons pressed during a freeze handed back on the frame it ends. Field
+ticks go through the same path, so a fire pillar interrupts instead of only draining. New knobs
+under **Stun** and **Effects**; weight under each class's air family.
 
 **Why** The kernel says "Smash, not Tekken", and the hit reaction is where that lives. Hitstun
 existed as a per-move frame count and knockback as a per-move speed, but nothing connected
-them to the state of the fight, so every exchange in a round played identically and combos
-were not a thing the game had. The swell is Smash's percent, upside down for a bar that counts
-down. See [stun.md](stun.md).
+either to the state of the fight, so every exchange in a round played identically. The swell is
+Smash's percent, upside down for a bar that counts down. See [stun.md](stun.md).
 
-**Verdict** open — nobody has played it. What the simulation says is that at full health no
-class links a poke into a second poke, around half health four of six do, and by the last
-fifth it is down to one. That shape is the design; whether it reads as the fight heating up or
-as the rules changing halfway through is the question.
+**Verdict** open — nobody has played it. Measured against the built kits: nothing links at full
+health on either combo class. The **Dual mage** opens a window around half health where all
+four Dark/Light alternations connect — which is the rhythm the kit is built on, since the autos
+are how the meter is steered — and it has closed again by a quarter bar, because the autos then
+throw people too far to follow. The **Champion** gets no raw-move links until a quarter bar,
+where Sword and Spear become kill confirms; its real combo is the designed one, Hammer into a
+Rush cancel into the uppercut, and that works at any health because Rush buys the frames rather
+than hitstun doing it. That shape is the design. Whether it reads as the fight heating up or as
+the rules changing halfway through is the question.
 
-### 2026-09-12 — knockback decay 0.86 → 0.93
-**Changed** `defence.hitstun_decay`, the per-frame multiplier on knockback while stunned.
+### 2026-09-13 — the swell is a duel mechanic
+**Changed** Neither swell applies while the creature is on the field. In a hunt a blow does what
+the move table says.
 
-**Why** Found while tuning the swell: at 0.86 the knockback was over in about fifteen frames
-whatever its speed, so a poke moved a fighter twenty centimetres at full health and two metres
-at death's door — less than a chasing opponent covers walking. Knockback was, in effect,
-cosmetic, and the swell had nothing to bite on. At 0.93 the same numbers give roughly a metre
-at full health and five and a half near death, and the combo window closes on its own because
-distance finally outruns the window to follow it.
+**Why** Not a balance patch — the mechanic's premise fails in coop. The swell is a fighter's
+share of *their own bar*, and it is fair because the other fighter has a bar the same size and
+is running along it at the same rate. The creature carries ten times the health, so it barely
+moves along its own while the hunter runs the length of theirs: every hit you take makes the
+next one hold you longer and throw you further, against something that is never held longer in
+return. Measured, ungated it took the scripted hunt from four wins in six to **none** — the
+hunter spent the fight being thrown off the animal and walking back to it.
 
-**Verdict** open. This is the number most likely to be wrong, and it moves more than knockback:
-blocked pushback rides the same decay, so blocking now cedes noticeably more ground. That is
-the direction [defense.md](defense.md) wanted, but it was not measured against anyone's hands.
+**Verdict** kept. The creature's presence is the condition rather than a new flag, the same way
+`effects_reach` already decides whether fighters can hurt each other.
 
-### 2026-09-12 — two bugs the stun work turned up
-**Changed** `Class::mobility` now reads the Oven instead of a hardcoded table, and "a move
-comes out" is tested as a state transition rather than as "active, with a full count of frames
-left".
+### 2026-09-13 — knockback decay 0.86 → 0.93, and what it cost
+**Changed** `defence.hitstun_decay`. With it, the creature's five attack knockbacks and
+`riding.thrown, outward` scaled to 0.4.
 
-**Why** Neither was about stun; both were only visible once something else moved.
+**Why** At 0.86 knockback was over in about fifteen frames whatever its speed: a Champion's
+sword moved a fighter twenty-four centimetres at full health. Distance is the only thing that
+closes a self-loop — the frame maths says a fast move's swelled stun always outgrows its own
+startup — so without carry, moves link into themselves for the rest of the round. At 0.86 the
+Dual mage's auto chained **nine hits for a full half-bar**; at 0.93 it caps at two.
 
-The per-class air knobs — jump, gravity, fall cap, steering, six classes, twenty-four
-sliders — were in the Oven, in the baked file, and in the palette, and **the simulation never
-read any of them**. It read a `const` table in `class.rs` that happened to hold the same
-values. This is exactly the failure `tests/knobs.rs` was written after, and it slipped past
-that test because the literals were behind a helper function rather than inline. The values
-are unchanged; the sliders now do something.
+The second half is the cost, and it is the more interesting number. The decay is global, so
+every knockback authored against the old one is now worth roughly two and a half times the
+distance. That is fine in a duel, where both fighters were retuned by the same change, and it
+is not fine for the creature: the hunter was thrown off it twice as far and spent the fight
+walking back. Scaled to 0.4, the hunt is back to four wins in six, which is exactly where main
+had it.
+
+**Verdict** open, and flagged. Every remaining knockback number in the game is now nominally
+2.5x further than its author intended it; the two classes and the creature were checked, the
+rest were not.
+
+### 2026-09-13 — directional influence, and taking it out again
+**Changed** The first pass had a bespoke DI: the direction held on the last frozen frame bent
+the launch by up to twenty degrees, on its own knob. That is gone. A stunned fighter in the air
+simply keeps their ordinary air control.
+
+**Why** Reported, and right: the game already has Quake air strafing, and it already does the
+job — pointing where you are going buys nothing, pointing across your motion turns the vector
+without spending it, which is what DI is for. A second mechanic beside it would have been the
+same idea written twice, with two sets of numbers to keep agreeing.
+
+One thing had to be added for it to work: the air speed cap is a rule about how fast a fighter
+may make *themselves* go, and knockback routinely exceeds it. Left alone, holding a direction
+during a launch would have halved the hit you just took — pressing a direction must never be
+worth less knockback than pressing nothing. So the speed is restored along the new heading
+after the acceleration, and below the cap the whole thing is inert.
+
+**Verdict** kept, and it is the better mechanic: it is one system rather than two, a player who
+has learned to strafe already knows it, and being launched now hands back the only tool a hit
+did not take away.
+
+### 2026-09-13 — three bugs the stun work turned up
+**Changed** `Class::mobility` reads the Oven instead of a hardcoded table; "a move comes out" is
+tested as a state transition rather than as a frame count; the Blood mage's Bloodletter hitstun
+16 → 12 and the two field stuns to four frames each.
+
+**Why** None of them was about stun; all three were only visible once the timeline gained
+frames.
+
+The per-class air knobs — jump, gravity, fall cap, steering, six classes, twenty-four sliders —
+were in the Oven, in the baked file and in the palette, and **the simulation never read any of
+them**. It read a `const` table in `class.rs` holding the same values. This is exactly the
+failure `tests/knobs.rs` was written after; it slipped past because the literals sat behind a
+helper rather than inline. The values are unchanged; the sliders now do something.
 
 The second only appeared when contact freeze stopped the frames advancing: the first active
 frame of a move was inferred from its frame counter, so with the counter held still, one press
 of the Elementalist's mechanic raised seven structures. Inferring "first" from a count is fine
 right up until something legitimately stops counting.
 
-**Verdict** kept, both. The second is the more interesting one — the proxy was correct for
-every frame of every match until the day it was not, and the fix is to compare against the
-previous tick's action, which cannot drift.
+The third is the same rule twice. A repeating source of damage may not hold you for longer than
+it takes to repeat, or its next tick lands on somebody who never got to move. The Bloodletter's
+sixteen frames already sat inside its own twenty-four frame throw cycle with eight to spare, and
+the swell ate the margin — mashed, it chained twenty-five hits. The fields had the same problem
+against their twelve-frame cadence. Both are pinned by tests now rather than by luck.
+
+**Verdict** kept, all three.
+
+### 2026-09-12 — structures became stones
+**Changed** A structure stopped being a marker and became a **solid**. It carries a velocity,
+falls, shares the arena with the other stones and with both fighters, and costs something to
+stand on top of while it comes up. New module: `crates/sim/src/stones.rs`.
+
+**Why** Three things asked for at once, and they turn out to be one thing: stones that push
+each other, stones a fighter can stand on, and a stone that warns you before it hits you. The
+first two are the same rule — *whatever is in the way gets moved, along whichever axis is the
+shorter way out* — which is the least-penetration rule the arena already used for walls. A
+stone is a wall the Elementalist made, so it should behave like one, and `arena::resolve` grew
+a body size rather than acquiring a second copy of itself with different numbers in it. The
+last time a body size was written twice, attacks and walls disagreed about how wide a fighter
+was, and that is the bug the knob test exists to catch.
+
+**The eruption's own climb is what throws things.** The rise curve holds a stone barely out of
+the floor for half its rise and then bursts: over the last three frames the top climbs at about
+25 m/s, which is faster than anything else on the field moves. A stone or a fighter standing on
+that top keeps a fraction of it (`Lift kept`, 0.4) when the burst ends, so a stone raised
+underneath another pops it about a metre clear and a fighter standing over one is carried to
+about 2.9 m against a 2.2 m full hop. Nothing was invented to make that happen — it is the
+number the curve was already producing, handed on instead of discarded.
+
+**Off centre throws it sideways, and that is the only source of horizontal speed today.** A
+boulder coming up under the *edge* of another flips it clear rather than balancing it, in
+proportion to how far off centre it sits. Without that, "a stone knocked into another" would be
+a rule with nothing in the kit able to trigger it — the moves that launch stones properly are
+not built. With it, an off-centre raise throws one stone into the next and the knock is
+reachable in play.
+
+**Two slows now exist, so a slow had to become a strength rather than a flag.** `Player::slowed`
+was a frame count, and the multiplier lived on the drain field that set it. The churn under a
+rising stone is a *warning* — slight, 0.8 — and a drain field is a *wall* — 0.45. The strongest
+slow on you wins rather than the two compounding: two multiplied slows freeze you, and every
+new source would quietly make the last one worse.
+
+**Numbers.** Eruption begins at 0.15 of the rise, which lands on frame 7 of 14 — half telegraph,
+half burst, matching how the curve was described when it was added. Damage 40 and a 20-frame
+stagger: the stagger is the punishment, the damage is there so ignoring a telegraph is never
+free. It catches each fighter once, marked per victim on the stone, because a stone erupts once.
+
+**Verdict** open — played only through the test harness and a headless capture, which shows the
+lift and the throw doing what they should. The numbers most likely to be wrong are `Lift kept`
+and the eruption damage, and both are in the Oven under a new **Stones** family with the
+structure knobs that were scattered through *Effects*.
+
+**Still open.** Raise places a stone 2.5 m *ahead*, so "cast beneath yourself to launch into the
+air" from the kit still has no input — the lift works, the targeting for it does not exist.
+A stone lifted off centre rides up on the shoulder of the one below rather than sliding off it,
+which is the same thing the arena's platforms do and may want revisiting when stones are being
+thrown around in earnest.
+
+### 2026-09-12 — the Ridgeback, and measuring a monster fight
+**Changed** A creature in the arena, the machinery for standing on one, and 203 new knobs.
+`H` in game, `--hunt` on the command line. See [monsters.md](monsters.md).
+
+**Why** The frame has always said "coop against monsters" and there were none. The specific
+thing worth finding out is whether a fight against something you can *climb* works at all: the
+appeal is obvious and the failure modes are not.
+
+**Verdict** kept, and the interesting part is not the creature.
+
+**A fight report is worth more than a tuning session.** `cargo run -p hunt --bin fight` plays a
+scripted hunter and prints the dozen numbers a good fight needs -- how much of what the creature
+throws can be answered on sight, how long the openings are, how varied its moves are, how long
+anyone stays on its back, and how many hits landed that could not have been read. Every real
+problem in the first week came out of that output rather than out of playing it, including one
+that playing it could not have found: a fixed-point overflow that made *every buck in the game*
+do nothing, silently, because a squared 16.16 value saturates just past 181 and accelerations
+run into the hundreds. The symptom was a single number reading wrong — `thrown off: 0`.
+
+**The one measure that matters is "unanswerable hits".** A monster can score well on every other
+line and still feel cheap, and when it does it will be because of damage the player had no way
+to avoid. Defined as: an attack too fast to answer on sight *and* reaching further than its own
+volume extends, which is what happens when the animal walks into you during a startup shorter
+than human reaction. It is zero, and it is zero because the measure was written before the
+tuning rather than after.
+
+**Grip is one comparison and it replaced a whole category of authoring.** A rider comes off when
+the surface under their feet accelerates harder than they can hold on through. Nothing tags a
+move "this one throws people": the tail sweep throws whoever is on the tail and does nothing to
+someone on the shoulder, the middle of the spine is calm because it is near the axis the shake
+turns about, and none of that was written down anywhere. The tuning that followed was about
+where `grip` sits relative to the shake at the work spot, and that single number moved the fight
+from "the back is a safe room" to "the back is a wager" and back twice.
+
+**Open, and only play can answer them:** whether the ride reads as the fight or as a way to skip
+it; whether a person fights the front end enough to break a leg, which the scripted hunter never
+does; and whether the creature having a different move set depending on where you stand is the
+feature it looks like or a way to switch its moves off.
+
+### 2026-09-12 — the characters get a skeleton
+**Changed** The six free-floating boxes became sixteen joints hung off each other: two members
+per limb, a spine that bends and a chest that turns on top of it. A pose is now fifty-one
+angles and no positions at all. Stride length moved into `tuning.rs` as four constants
+(`WALK_STRIDE`, `RUN_STRIDE`, `CROUCH_STRIDE`, `STRAFE_STRIDE`), and the simulation gained six
+fields that exist only for the renderer.
+
+**Why** Five clips is the most the old model could carry. Nothing held an elbow to a shoulder,
+so every pose re-derived where the hand went, and a pose authored for one body could not play
+on another — which meant six classes would have meant six sets of everything. Joint angles are
+proportion-free, so one authored clip is now correct on the Bulwark's heavy frame and the Dual
+mage's slight one without being re-authored.
+
+The stride constants are not free choices and it is worth writing down why. A leg is 0.87 m
+long and a hip is 0.86 m off the floor at contact, so a foot can be at most about 0.34 m ahead
+of the hip before the leg runs out. Stride length follows from that, not the other way round:
+1.10 m per cycle walking, 2.70 m running, and a quarter off sideways because a leg swung
+sideways runs out of *hip* long before one swung forward runs out of leg. The first attempt
+used 1.35 m and 2.45 m, picked by eye, and the IK quietly refused to reach on every contact
+frame.
+
+**Verdict** kept, and one bug it exposed is worth the entry on its own. The walk cycle's phase
+was `distance walked / stride length`. A stride is longer at a sprint than at a walk, so the
+moment the speed changed the phase jumped by whole cycles — twenty-nine metres into a match,
+turning from a run into a diagonal moved a knee ninety degrees in a single frame. A phase has
+to be **integrated, not divided**: the simulation now accumulates `speed / stride` each tick.
+The same class of mistake is available anywhere a ratio is used where an integral belongs.
+
+**Open:** whether seven metres per second is the right free movement speed at all. At that
+speed a 1.8 m body is sprinting, and the "walk speed" knob is named for something the game
+does not have — the only walk in it is the guarding one at two. Nothing is wrong with a game
+where neutral is a sprint, but it should be on purpose.
+
+### 2026-09-12 — the Elementalist's auto reads what it is aimed through
+**Changed** Bolt (`L`) checks, once, on the frame it fires, what lies between the caster and
+her own short hit-range against a fighter — along a line much longer than that range, since
+the whole point is finding terrain the poke could never reach on its own. Aimed through a
+structure, the structure blocks it and gets kicked forward instead, fast at first and dying off
+over the back quarter of its travel; the bolt never reaches past it. Aimed through a fire
+pillar, the pillar does not block anything — it charges the same shot, which goes on to hit as
+normal, harder. Aimed through neither, the plain poke, unchanged. New module-level functions in
+`stones.rs` and `effects.rs` (`first_along_shot`, `first_fire_pillar_along`, `kick`), one shared
+geometry helper (`math::ray_hits_flat`), and two new transient flags on `Player`
+(`bolt_fire`, `bolt_blocked`) that `resolve_hit` reads and resets every time the move comes out,
+so a decision from one shot can never leak into the next.
+
+**Why** Recorded above as open: "the Elementalist's autos should push her structures around,
+and more generally interact with persistent effects." Pushing structures around and reading
+effects turned out to be the same mechanism once phrased as "what is this shot aimed through" —
+a single ray query answers both, ordered by whichever the line reaches first. Structures
+physically stop things in this game already; pillars are a hazard you choose to walk into, not
+a wall; making the bolt respect that distinction for free was the reason to build the query as a
+priority-ordered aim-through check rather than two independent special cases.
+
+**Verdict** open — implemented and covered by tests, not yet played. Three things worth
+recording regardless of how it lands:
+
+**A fast solid defeats the ordinary "don't let bodies overlap" rule, and the fix had to move
+upstream of it.** The obvious place for "did the kicked stone touch a fighter" was beside the
+existing churn/eruption checks in `stones::touch`, which runs *after* both fighters have moved
+for the frame. It never fired: `resolve_body` — the rule that keeps a fighter from ever
+penetrating a stone — had already pushed the stationary fighter back out to exactly `reach`
+every single frame, since a fast-approaching solid and a body-sized keep-out zone produce
+exactly that shove. The proximity check was reading a distance that the collision rule had
+already restored to the boundary before it ever got a turn. The fix is a second pass inside
+`stones::step`, which runs *before* anyone moves, comparing the stone's freshly-computed
+position against where the fighter stood at the *start* of the tick — catching the sweep before
+the push-out rule gets a chance to keep the two apart. The general lesson: a check phrased as
+"is A closer to B than X" is not safe from a rule elsewhere in the same tick whose entire job is
+making that never true.
+
+**Damage is speed relative to the target, reusing the number `knock` already computes between
+two stones**, rather than the stone's raw speed. A closing-speed formula is the one that already
+generalises to "the target is also moving" without a special case for it, and it is also why the
+new deceleration is a *ceiling* on the stone's own speed rather than a directly-assigned value:
+collisions with other stones on the way should be allowed to cost it further, never hand
+speed back.
+
+**The deceleration is keyed to distance travelled, not frames, mirroring the structure rise
+curve's own reasoning.** A stone parked against a wall partway through its travel should not
+keep coasting at full speed just because the clock is still running, and a straight frame-based
+timer would do exactly that. Progress is measured against how far it has actually gone.
+
+**Open questions**, none of them blocking a prototype:
+
+- Whether `bolt_aim_range` — set well beyond the poke's own hit-range on the theory that a
+  ranged shot's aim should reach further than its point-blank kill zone — is anywhere close to
+  the right number. It is the first knob in this pass nobody has played against yet.
+- Whether the kicked stone should still deal its ordinary "stone lands on you" cover-collision
+  cost on top of the knock damage, or whether the two should be mutually exclusive. Right now
+  both can happen in the same encounter and nothing has tried to break that.
+- Melee autos and the timing pass, unchanged from the note above — this closed one third of
+  "the autos are due a pass, as a set," not the set.
+
+### 2026-09-12 — abilities go where the crosshair is
+**Changed** Area abilities stopped appearing a fixed distance straight ahead and started
+landing where the player is pointing. Pitch went on the wire to make that possible, the camera
+was rebuilt around it, and the crosshair stopped moving.
+
+**Why** The old rule — spawn at `pos + facing × reach`, flattened to the floor — meant the only
+way to place a fire pillar or a stone anywhere was to walk there. For a class whose whole
+identity is authoring terrain, that is the wrong verb.
+
+**The rule.** Follow the line the player is looking along, out from the point abilities come
+out of, and stop at the first of the terrain or the edge of that ability's reach. One sentence,
+and every case falls out of it: a spot inside your reach is placed exactly; a spot past it goes
+as far along that line as it can; the sky, for something that comes out of the ground, gives
+full reach flat ahead.
+
+**The reach sphere is the interesting half.** Tracing to terrain alone lurches — aim a hair
+over the lip of a platform and the hit jumps from two metres to the far wall, so a fraction of
+a degree swings the ability across the arena. Stopping at the reach bounds that jump to the
+ability's own range, which is the most it could ever have meant. It also gives both halves of
+what a player wants at once: aim at the ground to pick a *direction*, or aim at a spot inside
+your reach to pick a *place*.
+
+**The ray starts at the fighter, not at the eye**, which is the opposite of what a
+third-person shooter does. Two reasons, and the second is the binding one. It makes the aimed
+line and the travelled line the same line, so pointing at the floor short of someone gives the
+ray that passes through them. And the eye cannot be in the simulation at all: camera distance
+is a per-player setting and the follow position is smoothed, so solving the aim from there
+would have two peers at different zoom levels placing a pillar in different spots with neither
+of them wrong.
+
+**Three passes on the camera, and the first two were wrong.**
+
+*Orbit the cast origin.* If the eye sits exactly on the ability's line then the screen's centre
+ray **is** that line, which is exact and needs no machinery. It also puts the camera at chest
+height: the horizon climbs to the top of the frame and you cannot see the arena you are
+fighting in. Zero parallax is not worth a view from a fighter's sternum.
+
+*Leave the camera on the look axis and move the reticle.* Honest — the mark is drawn where the
+ability actually lands, sliding off centre by the parallax. Reported immediately, and correctly:
+*"a jumping crosshair would feel really really bad, like the player has no real control."* The
+reticle is the one thing on screen a player is deliberately holding still.
+
+*Point the camera at the aim point.* What shipped. The crosshair is pinned to the exact centre
+of the screen and the **view** absorbs the parallax instead, as a few degrees of pitch. The eye
+is then free to sit where it frames the fight best.
+
+**Which turned out to be directly behind and well above.** Reported: *"the camera appears to be
+behind and to the right… it feels quite cramped because the character model is almost right on
+the crosshairs no matter where you aim."* Both halves were real and they have different causes.
+The over-the-shoulder slide turns the whole view once the camera points at the target, so `W`
+stops walking up the screen — it is gone. And the fighter was on the reticle because the eye was
+at 1.4 m over their feet: the aim point and the fighter are both on the ground with the fighter
+nearer, so how far apart they sit on screen is a function of eye height. Lifted to 4 m, the
+fighter's head rests about seven degrees below the crosshair.
+
+**The handover moved to the horizon.** It used to start forty degrees up and finish at the pitch
+limit, which left a wide band with the arm dragging along the floor behind the fighter. Now the
+climb starts the moment the aim crosses the horizon and is complete half a radian above it, and
+the body **fades** rather than popping out at a threshold — one continuous motion, the fighter
+rising to the middle of the screen and thinning out as they get there.
+
+**Numbers.** Cast height 1.25 m — chest, not eyes, so the shot does not read as first-person
+fire from a third-person body. Orbit lift 1.4 → 4.0. Neutral pitch 0.26 → 0.10, which lands the
+resting aim about twelve metres out: the mark sits `cast_height / tan(pitch)` ahead, and the
+origin of that ray dropped from a point above the fighter's head to their chest. Raise's reach
+2.5 → 4 m, because 2.5 m stopped meaning "where the stone goes" and started meaning "how far you
+may aim", and 2.5 m is barely enough room to aim in.
+
+**Verdict** open — played through the harness and four headless captures: resting framing,
+aiming down at your own feet, aiming up into the fade, and the reticle pinned through all of
+them. The number most likely to be wrong is `sky_full`: a twenty-degree glance upward currently
+costs you sight of your own fighter, which may be too eager for a game with this much
+verticality.
+
+**What did not change.** Melee swings are still flat, at `pos + facing × reach`. A sword is a
+body moving, and pointing the camera at the floor should not put the blade there. Only the moves
+that *place* something are aimed.
+
+**Still open.** A stone stands a whole body height and abilities come out of the chest, so from
+the ground you are always looking at a stone's *side* and never at its top — stacking by aiming
+needs you to be above the cap. That is honest geometry rather than a bug, and it may still want
+an answer.
+
+### 2026-09-12 — the camera became a prescription
+**Changed** The rig stopped being a set of offsets and became a set of **zones in the vertical
+aim angle**, each one stating where the fighter should appear on screen. Every boundary and
+every percentage is in the Oven under a new **Camera** family. See
+[controls.md](controls.md#the-camera-is-prescribed-zone-by-zone--settled-2026-09-12).
+
+**Why** Reported, and the reason is the valuable part: *"I think this is becoming a problem
+where the intent with the camera is not clear between threads so we keep causing reversions."*
+Three passes in two days had each moved the camera for a good local reason and undone something
+the last one bought. A rig described as "arm length, orbit lift, shoulder offset" cannot be
+argued with, because none of those is a thing anybody wants — they are means. Stated as *where
+the fighter sits in the frame at each angle*, the intent survives the next change, and a
+disagreement is about a number rather than about what the camera is for.
+
+**Closed form, and the geometry hands it over.** Asked for "solved per frame" the first version
+did nested bisection, which was rejected on the spot and rightly: *"solved per frame needs to
+mean closed form solution, to be clear."* It turns out there is one, and it is pretty. Each
+condition is "see these two points a given angle apart", and the set of places from which a
+segment subtends a fixed angle is a **circle through its two ends** — the inscribed angle
+theorem, the same one that says every angle standing on a diameter is a right angle. Two
+conditions, two circles, and the eye is where they cross: subtract them for the radical line,
+intersect that with either circle, take the root that is behind the fighter. Thirty-odd
+operations, exact, and nothing to bake.
+
+It also fixed a real error. The bisection's inner loop was hunting for the distance that makes
+the fighter the right size, and the closed form for that is one line — `R = k·cos ε + body·sin ε`
+— which disagreed with the small-angle estimate the rest of the design had been sketched
+against by nearly two metres at steep angles.
+
+**The camera left the desync checksum, and that is now safe.** Camera numbers were deliberately
+kept out of the Oven when it was built, because everything in it is folded into the checksum and
+two people must be able to play each other at different fields of view. They can go in now, in
+their own family that `hash` skips, and the reason is this week's other change: **aiming stopped
+going through the camera.** The aim is solved from the fighter's own cast origin, so where the
+eye sits changes nothing about where an ability lands. A camera knob is a personal setting in a
+way it could not have been a month ago.
+
+**What the geometry insists on.** Two things came out of the numbers rather than out of the
+spec, and both are worth knowing before tuning.
+
+*The neutral zone is two cameras.* The crosshair's mark on the ground sits `cast height /
+tan(pitch)` ahead — about 7 m at −10 and 1.2 m at −45. Holding the fighter at a fixed 5% of the
+screen while the mark sweeps in that far swings the eye from 51 degrees of elevation at 6.9 m to
+85 degrees at 2.6 m, which is a normal third-person arm at one end and almost directly overhead
+at the other. Nothing is wrong; it is what "keep the fighter still while the crosshair comes in"
+means. The lever is the zone's steep boundary.
+
+*The last few degrees of the look down are degenerate.* At the bottom of the range the crosshair
+is already at the fighter's feet, so "put the feet on the crosshair" is satisfied by any camera
+at all — and asking for it *exactly* demands an eye in line with them, which is an eye on the
+floor. A least-elevation knob is what stops the rig chasing that, and it only applies in that
+zone: at level the eye has to come down almost beside the fighter to keep their head just under
+the mark.
+
+**The distance setting survived with a new job.** The rig has no free distance any more — where
+the eye goes is decided by where the fighter has to land — so `F5`/`F6` scale how much of the
+screen the fighter fills. Pull back, smaller fighter, which is the same wish.
+
+**Verdict** open. The shape is what was asked for and the waypoints are pinned by tests rather
+than by screenshots, which is the point of the exercise. The number most likely to want moving
+is the neutral zone's steep boundary, for the reason above.
+
+### 2026-09-12 — the camera moves on a fixed sphere
+
+**Changed** the eye rides a sphere of fixed radius centred on the fighter's feet, and the only
+thing the rig solves is where on it. The old second condition — "the fighter fills a fixed
+share of the screen" — is gone, and with it the `Head, neutral` knob; `Sphere radius (m)` takes
+its place and starts at 6. The eye elevation bounds moved to 60/60.
+
+**Why** the previous solve met two conditions at once, so it had to move the camera in and out
+to do it: 6.9 m at −10 down to 2.6 m at −45. A camera that dollies while the player is only
+steering is the thing that reads as "the camera is doing something". Fixing the radius removes
+the freedom that was being spent on it.
+
+**The solve got simpler, not harder.** One unknown and one condition. With the eye at
+`R(cos e, sin e)` and the feet at the centre of that circle, asking for the fighter to sit a
+given angle below the crosshair is `A·cos(e) + B·sin(e) = C` — the `R²` terms cancel — which is
+the standard shape that collapses to a single cosine. Two roots, an `acos` either side of a
+lead angle, and the camera is the flatter one that is genuinely behind the fighter. The
+two-circle radical-line construction it replaces was correct but was doing twice the work for a
+question that only had one unknown in it.
+
+**What the geometry insists on, which fixing the radius did not fix.** The crosshair sits where
+the aim ray meets the ground, which walks in from about 7 m ahead at −10 to 1.2 m at −45. The
+camera is trying to open a gap between the fighter and that mark, and the aim is closing it. On
+a sphere of radius `R` the widest *any* eye sees the pair is `atan(mark / R)`, so:
+
+| Aim | Mark ahead | Most the sphere can open | Where the feet land |
+| --- | --- | --- | --- |
+| −10 | 7.1 m | over half the screen | 5% |
+| −15 | 4.7 m | over half | 6% |
+| −20 | 3.4 m | over half | 15% |
+| −25 | 2.7 m | 40% | 21% |
+| −30 | 2.2 m | 33% | 26% |
+| −45 | 1.2 m | 19% | 35% |
+| −85 | 0.1 m | 2% | 49% |
+
+Two different limits bite down that list. Above about −20 the sphere could open more than half
+a screen, but only from an eye swung past vertical, so what actually stops it is the **eye
+ceiling** at 60 degrees. Below that the **sphere itself** is the limit and the ceiling is
+irrelevant. Either way the 5% waypoint holds to about −15 at six metres and then the fighter
+rides up the screen whatever the rig does. This is not the fixed sphere's fault — the previous version bought the
+same waypoint by dollying to 2.6 m, and *no* fixed radius satisfies the zone as written: 5% at
+−45 wants 2.5 m, and the fighter filling only a fifth of the screen wants about 9 m. The zone
+as prescribed asks for both.
+
+**The floor zone turned out to cost nothing.** Its waypoint is "pan until the camera points at
+the fighter's feet", and the camera already points at the crosshair's mark, which is itself
+sweeping onto the feet as the player looks down. So the *view* pans onto them with the eye
+staying exactly where it is. Setting the elevation floor equal to the ceiling makes the whole
+look-down range one unmoving camera, and the fighter walks from 5% to 49% of the screen without
+the eye travelling a centimetre.
+
+**That also removed a snap.** With the two bounds apart, the last degree and a half of look-down
+used to swing the eye about five metres, chasing the final one percent of "feet exactly on the
+crosshair" — a waypoint that is within a hand's breadth of satisfied from anywhere by then.
+`the_camera_never_jumps_as_the_aim_sweeps` now sweeps four hundred samples across the whole
+range and holds the eye to a fifth of the sphere per degree; the fastest thing left is the
+handover into the fighter's head, which is a designed sprint.
+
+**Verdict** open. Measured and looked at, at −10, −27 and −45: low and small, then clear of the
+reticle, then mid-screen with the crosshair on the chest, which is what aiming a metre from your
+own feet has to look like. The number most likely to want moving is the sphere radius, and the
+table above says what it buys.
+
+### 2026-09-12 — the eye has to keep moving, and the floor zone needs its own reason to
+
+**Changed** sphere 6 m → 4 m; eye elevation bounds 60/60 → 40/89; and the floor zone now walks
+the eye down toward its floor itself, easing from the framing's own answer at −45 to lying along
+the fighter's feet at −85.
+
+**Why** reported: past −45 the camera only panned. It was meant to keep working around the
+sphere *as well*, the pan being what the floor zone adds on top. Two separate things were
+stopping it, and only one of them was a number.
+
+**The one that was my mistake.** Setting the elevation floor equal to the ceiling pinned the eye
+outright. The previous entry argued that was elegant — the floor zone's waypoint is met for free,
+because the camera points at a mark that is itself sweeping onto the feet — and the waypoint
+*is* met. It is not the whole zone. A camera that stops moving while the player can feel they
+are still turning reads as the rig giving up, and no amount of the framing coming out right
+makes up for it.
+
+**The one that was geometry, and is the useful finding.** From a sphere of radius `R` the widest
+any eye sees the fighter and the crosshair's mark is `atan(mark / R)`, and the mark comes in from
+about 7 m ahead at −10 to 1.2 m at −45. Ask for a wider gap than that and the solve **saturates**:
+it parks the eye against the top of the sphere, where it answers nothing. Saturation is the
+failure mode to watch for, and it is invisible to a framing test — a parked eye that happens to
+be in the right place still frames correctly. It is why `the_neutral_zone_works_the_eye_around_
+the_sphere` exists alongside the framing test, and why the floor zone needed a mechanism rather
+than a number: below −35 at any playable radius, the framing has nothing left to say.
+
+**So the floor zone walks the eye down itself.** It eases from the framing's own answer at the
+handover — so there is no seam by construction — to the elevation floor at the bottom of the
+range. The pan rides on top: the camera is pointed at the mark, the mark is sweeping onto the
+feet, so the view comes round to the fighter while the eye comes down. Two motions, which is
+what the zone was always described as.
+
+| Aim | Feet | Eye elevation |
+| --- | --- | --- |
+| −10 | 5% | 41° |
+| −20 | 5% | 58° |
+| −27 | 5% | 73° |
+| −45 | 22% | 89° |
+| −55 | 32% | 77° |
+| −65 | 39% | 65° |
+| −85 | 48% | 40° |
+
+**Why four metres and not less.** The neutral zone is reachable down to about −28 at 4 m, −45 at
+2.5 m, and the whole prescription lands exactly at 2.1 m. But the radius is also how big the
+fighter is drawn: at 2.5 m a 1.8 m body fills three-quarters of the frame and the crosshair sits
+buried in their chest, which is a worse version of the complaint that started all this. Four
+metres puts the feet at 5% and the head at 28% at the aim the rig rests at — which is the 5%-to-
+25% framing originally asked for — and holds it over the band actually used for aiming at people
+and at ground a few metres ahead.
+
+**Verdict** open. The two tests that matter are the eye ones: at least 25 degrees of sweep around
+the sphere across the reachable neutral zone, and at least half a radius of travel across the
+floor zone while the feet climb a fifth of the screen. The pinned tuning fails the second with
+"the eye only travelled 0.00 m", which is exactly the report.
+
+### 2026-09-12 — the camera is an orbit with a tilt, and nothing is solved
+
+**Changed** the whole rig. The eye no longer satisfies a condition; it is placed by a
+subtraction. Each zone names a sphere — centre, radius, tilt — and the eye sits at
+`tilt - pitch` around it. Sphere 7 m below the horizon, contracting to 0.2 m at the head above
+it. The camera points down the look axis rather than at the aim point.
+
+**Why** three attempts at solving the eye from the framing all ended the same way: the condition
+becomes unreachable partway down the range, the solve saturates, and the eye parks against a
+limit where it stops answering the mouse. Reported twice as "the camera stops moving", and both
+times the fix I reached for was a number.
+
+**The thing I had backwards.** The sphere is centred on the thing being framed, so the line from
+the eye to that centre *is* the radius the eye is standing on — whichever way round the sphere
+it has walked. Turn the view up off that line by a fixed angle and the centre lands at a fixed
+place on the screen, at every eye position, for free. **The framing is a consequence of the tilt,
+not a condition on the position.** Which leaves the position free to be the mouse, directly, at
+one degree of orbit per degree of mouse, with nothing that can saturate. Every previous version
+of this file describing a solve was solving a problem that did not need to exist.
+
+**What it costs, and it is not small.** The camera no longer points at the ability's landing
+point — it points down the look axis, which is what the prescription asks for. So the crosshair
+and the spot a grounded ability lands on are no longer the same place:
+
+| Aim | Crosshair marks | Ability lands | Apart |
+| --- | --- | --- | --- |
+| −10 | 18.0 m ahead | 7.1 m | 10.9 m |
+| −27 | 6.9 m ahead | 2.5 m | 4.4 m |
+| −45 | 4.4 m ahead | 1.2 m | 3.2 m |
+| −70 | 1.3 m ahead | 0.5 m | 0.8 m |
+
+The two rays are parallel — same direction, different origin — so the miss is the eye's offset
+from the chest, and it only closes where the sphere has contracted onto the head. Closing it
+properly means the aim tracing from the *eye* rather than from the chest, which makes the
+camera's geometry simulation state: it would go into the checksum, peers would have to agree on
+it, and the personal distance setting could not scale it any more. That is an architecture
+decision rather than a tuning one, so it is written down here rather than taken.
+
+**Verdict** open, and deliberately not merged on its own. The camera is exactly the prescription
+and measures out at every waypoint; the aiming correspondence is the open question.
+
+### 2026-09-12 — the crosshair is the aim, so the eye is in the simulation
+
+**Changed** the aiming ray starts at the eye instead of at the fighter's chest, and
+`sim::camera` places the eye, so the camera's geometry is simulation state. Camera knobs are in
+`oven::hash` now. Camera distance stopped being a personal setting.
+
+**Why** the previous entry shipped a camera that framed exactly as prescribed and left the
+reticle sitting four metres from where a grounded ability actually landed. Both rays had the
+right *direction* and different origins, so they never converged — parallel lines do not meet.
+The targeting rule had already been written down and settles it: work out what the player is
+pointing at, then draw the line from the ability's origin to it.
+
+**Measured, aimed at open ground, reach 20 m:**
+
+| Aim | Crosshair | Lands | Apart |
+| --- | --- | --- | --- |
+| −10 | 18.0 m | 14.0 m | 4.0 m — the range sphere, correctly |
+| −20 | 9.14 m | 9.14 m | **0.00 m** |
+| −27 | 6.88 m | 6.88 m | **0.00 m** |
+| −45 | 4.42 m | 4.42 m | **0.00 m** |
+| −85 | 0.00 m | 0.00 m | **0.00 m** |
+
+Exact wherever the crosshair is inside the ability's reach, and clamped to the reach beyond it,
+which is the rule as written.
+
+**What it cost, which is not nothing.** Camera numbers decide where abilities land, so they are
+gameplay numbers: hashed, shared, and a peer tuned differently now desyncs loudly instead of
+quietly placing things somewhere else. The personal distance setting had to go with it — it
+scaled the sphere, the sphere is the eye, and the eye is the aim. Field of view survived only
+because the *framing* is measured against a tuned field of view of its own, so a player's choice
+changes what is projected and never where the eye is.
+
+**Two things moved that were not asked for, and are worth knowing.** Aiming down brings the
+reticle in more slowly than it used to, because the ray starts seven metres behind and above the
+fighter rather than at their chest: the reticle reaches their own feet at about −85 rather than
+−45. And **a stone can no longer be raised directly underneath another** — pointing at where its
+base would be means pointing at the stone, and a stone you point at is a surface you land on
+top of. Aimed at its foot the new one comes up against its near face and still shoulders it
+aside, which is the interaction the stone physics was built for; it is the dead-centre lift that
+is now out of reach.
+
+**Verdict** open. The contract the whole aiming pass exists for is exact again, measured rather
+than argued, and the camera keeps the orbit from the previous entry unchanged.
+
+### 2026-09-12 — the Blood mage's kit is its mechanic now
+
+**Changed** the whole of the class's implemented kit, and the first implementation of the
+mechanic it has been described by since it was written down.
+
+| Key | Was | Is |
+| --- | --- | --- |
+| `LMB` | Rend, a melee poke | **Bloodletter** — a blade out and back, cutting on both passes |
+| `Shift+LMB` | Black spike | **Rend**, moved down and given committed weight |
+| `Q` | Reaper's debt | **Grasp** — four arms out in a cone that converge, rooting on all four |
+| `E` | nothing at all | **Black spike**, at 9 m instead of 2.5 and a 30-frame cast instead of 18 |
+
+And every one of the four now has a **health cost** and a **leech percentage** in the move
+table: 15/40% for the auto up to 120/30% for the spike, against a thousand-point bar.
+
+**Why** the class was described as "everything costs health and the good outcomes give it
+back" and not one line of that existed in the simulation. Its abilities were free, they
+returned nothing, and the one thing on the roster that was supposed to be a resource loop was
+four ordinary attacks with a red colour scheme.
+
+**Three things were broken rather than missing, and they are worth separating out:**
+
+- **The spike drained nobody in a hunt.** Effects were applied to fighters and the creature
+  was not one, so a Blood mage hunting alone put a spike in the ground, drained an empty patch
+  of arena and got nothing. Half a kit doing nothing in one of the game's two modes, invisible
+  because the versus tests passed. Fixed for every effect, so the fire pillar burns the
+  creature too now — it did not before either.
+- **Friendly fire was on for hazards.** The same fix opened it: a drain field was about to
+  become the one thing in the game that could kill a team-mate. Effects now go through the
+  same "is there a creature" condition direct hits already use, rather than a second flag that
+  could get out of step with the first.
+- **The spike had no spike.** It was drawn as a twelve-centimetre stain on the floor, which is
+  a thing you find out about by standing in it. It is a cone standing in a disc now, at
+  `spike_height`, and the field is tested as a slab of that height rather than as an
+  infinitely tall cylinder — so it can be jumped over, and what you see is what catches you.
+
+**Why the spike moved to `E`.** Shift + click means "the committed version of your attack" on
+every class, and the spike is not that — it is a placement. Meanwhile `E` is the class
+mechanic and the Blood mage's mechanic is *health*, which is not a thing you press a key to
+change, so her `E` did nothing for the whole of a match. This cost a fourth column in the move
+table, which five classes leave empty. That is the price and it is worth it: the alternative
+was a slot that means one thing on five classes and another on the sixth.
+
+**Why the auto is a returning blade.** It is the archive's "low CD ability", and it is the
+simplest possible statement of the class: throw something away, get it back if things go
+well. The payment arriving **on the catch** rather than on the cut is what makes an auto
+attack a small commitment instead of a free poke — the blade is in the air for forty-eight
+frames and the health is not yours until it comes home.
+
+**Why the spike's return is continuous.** The archive pays out when the last tether breaks.
+Nobody has built tethers, and a lump sum at the end is an ability you survive a timer to
+collect on rather than one you build a fight around. Thirty per cent per drain tick means a
+Blood mage standing in a fight is being paid the whole time it is up.
+
+**The one number that had to move twice.** The Grasp's root started at 26 frames against the
+arms' own 24 frames of hitstun, which made it invisible — it expired inside the stun that
+delivered it. It is 40 now, and `a_root_outlives_the_hitstun_that_delivers_it` pins the
+relationship so it cannot silently invert again during tuning.
+
+**Verdict** open. The frame data holds every property in `feel.rs`, including a new one that
+says a Blood mage ability thrown perfectly must return more than it cost — which the Grasp
+failed at 35% leech and passes at 55%. None of it has been played. The costs in particular
+are a guess: the class is downstream of TTK, and what fraction of a health bar a cast should
+represent is exactly the question a prototype answers and a document cannot.
+
+### 2026-09-13 — why the drain's healing is invisible, and it is not the bug
+
+**Found** the field's return being reported as missing a second time, after the bug that was
+actually causing it had been fixed. The second cause is not a bug at all, and it is worth a
+dated entry because it will be reported a third time otherwise.
+
+**Health cannot go over the bar, and the eruption gets there first.** The spike costs sixty,
+the eruption returns fifty-nine of it on the frame it lands, and every tick of the field after
+that is clamped away. Measured, with a target standing in the field for its whole life:
+
+| Cast at | Eruption returns | Field returns |
+| --- | --- | --- |
+| 1000 / 1000 | +59 | **+1** |
+| 700 / 1000 | +59 | +90 |
+
+So the ability reads as broken in exactly the situation anybody tests it in — the first cast of
+a fresh round, at full health — and works from the moment you have taken a hit.
+
+**Which is arguably the class working.** She heals when she is hurt and gains nothing when she
+is whole, so the spike is nearly free at the top of the bar and a large swing when she needs
+one. That is a good shape and nobody designed it; it fell out of the cost and the leech being
+close to equal.
+
+**If it should be felt at full health**, the eruption is what eats the headroom, and the
+written design already says what to do: the spike *returns a share of everything it drains*,
+and arrival damage is not a drain. Stopping the eruption leeching would leave the room for the
+field to fill. It needs a second leech number — one move has one today — and it cuts what the
+ability returns overall, so it is a decision rather than a correction. Left to the next tuning
+pass.
+
+**Verdict** no change. Written down, and the kit document carries the table.
+
+
+### 2026-09-13 — a Grasp that closes pulls you in
+
+**Changed** `grab_hold` on Grasp means something now. Catch somebody with every one of the four
+arms and they are hauled to the caster's arm's length, held for twenty frames, and rooted for
+twenty more after the hands open.
+
+**Why** the knob had been set to 20 in a bake and was doing nothing at all: the arms are an
+effect, and the effect delivery path hard-coded `grabs: 0`. It carried damage, stun, blockstun,
+knockback and launch, and dropped the grab on the floor. A table that can be edited and is not
+read is worse than a table with a gap in it.
+
+**The thing that decided the design.** The obvious implementation — every arm grabs — does not
+work, and the reason is worth writing down because it is not a balance argument. The arms do
+not all land on the same frame:
+
+```
+f38  arms landed: [1, 3]      the bottom pair
+f39  arms landed: [0, 1, 2, 3]  the top pair, one frame later
+```
+
+A grab drags its victim to the caster. So a grab on the first contact moves them ten metres out
+from under the arms still in flight, the top pair miss, and `parts_landed == GRASP_ARMS` is
+never true — **the grab would silently delete the root**. The two payoffs go on the same
+condition because the first one eats the second otherwise.
+
+That turns out to be the better ability anyway. One or two arms is damage and you stay where you
+are; all four and the cone closes, takes you with it, and leaves you in melee range of somebody
+whose next swing is worth 1.4× against anything that cannot move. Rend is thirty-six frames end
+to end and the window is forty, so exactly one of them fits — which is the shape a read should
+pay out in.
+
+**How it is tested.** A sweep rather than a fixture. The interesting positions are a hand's
+width apart — the arms converge, so four arms and two arms are about a metre from each other —
+and a test that picked one of them would be pinned to today's cone width rather than to the
+rule. `only_a_full_grasp_catches_anybody` walks the victim across the cone and asserts the
+biconditional at every step: held exactly when all four landed, rooted exactly when all four
+landed, and it fails if the sweep never sees both cases.
+
+**Verdict** open. The reach is ten metres, which makes this the longest pull in the game by a
+distance; if it is too much, the reach is the first knob and the hold is the second.
+
+
+### 2026-09-13 — the field was draining the creature into thin air, and the kit hit twice as hard as it meant to
+
+**Changed** two things, and only one of them is tuning.
+
+**The bug.** A Blood mage's black spike, standing in a hunt, took health off the Ridgeback and
+returned her none of it. The two field effects called the creature-damage path and **discarded
+what it told them**:
+
+```rust
+self.gore_the_creature(effect, 0, effect.pos, volume.radius);   // returns the damage dealt
+```
+
+Every other way she deals damage pays her: a swing, a blade in the air, an arm of a Grasp, a
+field ticking on a *fighter*. Fields on the creature did not, so half her economy was missing
+in one of the game's two modes.
+
+Two things hid it, and both are worth naming because they will hide the next one:
+
+- **Versus never sees it.** A field only meets the creature in a hunt, and the versus tests are
+  where the drain was proved to work.
+- **The eruption pays out on the same cast.** The spike hits once when it arrives, that hit
+  leeches correctly, and it lands a few frames before the field's first tick. `assert!(health >
+  before)` over a window containing both is satisfied by the wrong one. The test now starts
+  measuring *after* the eruption is over, and it fails if the payment is removed — checked by
+  removing it.
+
+**The number the bug cost, on the way past.** `hits again every` was set to 1 on the spike
+while chasing this, on the reasonable-looking guess that it was what made a persistent drain
+persist. It is not: it is the re-hit interval for the **move's own hitbox** during its active
+frames, and the spike's window is four frames, so it turned one eruption into four or five. The
+field's clock is `effects.damage tick interval` and always was.
+
+**The tuning.** With the eruption multiplied by five and a Grasp at 95 per arm, one cast of the
+spike was 64% of a health bar and a Grasp was 38%. Halved, with the health costs halved beside
+them so that **every ratio the last pass tuned is untouched**:
+
+| | damage | cost | returned | dmg/cost | back/cost |
+| --- | --- | --- | --- | --- | --- |
+| Bloodletter | 80 → 40 | 15 → 8 | 32 → 16 | 5.33 → 5.00 | 2.13 → 2.00 |
+| Rend | 130 → 65 | 60 → 30 | 65 → 32 | 2.17 → 2.17 | 1.08 → 1.07 |
+| Grasp | 380 → 192 | 90 → 45 | 209 → 105 | 4.22 → 4.27 | 2.32 → 2.33 |
+| Black spike | 640 → 320 | 120 → 60 | 377 → 188 | 5.33 → 5.33 | 3.14 → 3.13 |
+
+The drift is integer rounding on two costs and nothing else. The spike's eruption absorbs the
+re-hit going away: forty dealt five times is one hit of a hundred, halved from two hundred, so
+reverting the accident and halving the damage are the same edit. The field's own tick went 22 →
+11 with it.
+
+**Two tests restored and one added.** A merge two days ago dropped
+`the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything`,
+`a_root_outlives_the_hitstun_that_delivers_it` and the bounds on the disabled multiplier —
+which are precisely the assertions that keep a bake like this honest, and they were gone for
+the bake that needed them. They are back, and `best_case` understands re-hit now.
+
+The new one is `the_blood_mage_does_not_kill_in_two_buttons`, and it is the one that would have
+caught this: **her per-hit numbers say very little about what a cast is worth.** Every ability
+she has connects several times — two passes, four arms, twenty ticks — so 95 in the table is
+380 in the hand. Nothing in the table looked wrong.
+
+**Verdict** open. The ratios are the ones that were played and liked; only the scale moved.
+
+
+### 2026-09-12 — the Blood mage's root has something on the other side of it
+
+**Changed** a Blood mage's damage is multiplied by **1.4 against anything that cannot move**.
+Disabled means rooted, staggered, held, or a creature on its side. One knob,
+`disabled_damage_mul`, under Blood mage.
+
+**Why** the entry above gave the class a root and left it as its own reward. Four arms of a
+Grasp is the most expensive thing in the kit, the root is forty frames, and landing it bought
+you forty frames of somebody standing still — which is worth something, but not ninety health
+and twenty frames of recovery. The archive has the answer and has had it since 2016: *naturally
+deals increased damage on disabled enemies*. Until this week the class had no disable of its
+own, so the trait would have been a bonus against a team-mate's crowd control. It has one now.
+
+**What counts, and the one exclusion that is the whole definition.** Hitstun is **not** a
+disable. It happens on every hit anybody lands, so counting it would make the trait "increased
+damage from the second hit onward" — a flat damage bonus in a costume, needing no read at all.
+What is on the list is what `ability-spec.md` calls a hard stop, and the design only allows
+those behind a hard condition:
+
+| Disabled | Earned by |
+| --- | --- |
+| Rooted | every arm of a Grasp |
+| Staggered | a parry |
+| Held | a grab |
+| Toppled | breaking the creature's poise, which is what the climb is for |
+
+Blockstun is deliberately absent. They blocked, which was the correct decision, and paying the
+attacker for it would make guarding worse than standing still.
+
+**One function, five callers.** A swing, a blade in the air, an arm of a Grasp, a field
+ticking, and all of the same against the creature. They were five separate pieces of damage
+arithmetic and the multiplier goes through one `preying()` in all of them — a class trait that
+applied to three of a class's four abilities would not be a trait, it would be a bug somebody
+finds in a match.
+
+**The two relationships that had to be pinned.** The bonus is bounded between 1.2 and 2: below
+the floor nobody feels it and the Grasp is a root with no payoff, above the ceiling one read
+ends the round. And **the root has to outlast her fastest startup**, or there is nothing she
+can land inside it — forty frames against Bloodletter's seven and Rend's fourteen, so both
+fit.
+
+**The awkward part, and it is in the test rather than the game.** Comparing damage against a
+toppled Ridgeback to damage against a standing one is not a fair comparison by default: a
+toppled creature lies lower and pitched, so the same swing lands on a different part, and the
+hide's vulnerability differs part to part. The fixture freezes the animal, searches for a spot
+where the claw reaches the *same part* whether it is up or down, and stands the fighter there.
+Worth writing down because the first two versions measured geometry and reported it as the
+rule being broken.
+
+**Verdict** open, like everything else in the class this week. 1.4 is a guess inside a bounded
+range; whether the root is long enough to actually use is the play question, and if it is not,
+the root's length is the first knob and the bonus is the second.
+
+
+### 2026-09-12 — the zones hand over instead of swapping
+
+**Changed** each zone's ramp is eased in and out, over a share of its own span given by a new
+per-zone percentage. Floor 100, the turn 50, the handover 50; the neutral zone and first person
+hold still and have nothing to ease.
+
+**Why** reported: the transitions felt unpolished — the camera suddenly starts behaving
+differently. That is exactly right, and the measurement says why. Every version of this rig has
+held the eye's **position** together across a boundary. What none of them held together was its
+**speed**:
+
+| Boundary | Before | After |
+| --- | --- | --- |
+| −45 | 0.086 → 0.162 m/deg | 0.135 → 0.162, no step |
+| −10 | 0.160 → 0.275 | eases across 0.16 → 0.27 |
+| 0 | 0.270 → 0.921 | eases across |
+| +10 | 0.900 → **0.000** | eases to a stop |
+
+The +10 one is the worst and the most telling: the eye is sweeping at nearly a metre per degree
+and then stops dead, because the handover's contraction hits the end of its ramp. Nothing jumps,
+and it still feels like something did.
+
+**Why easing the ramp rather than averaging two zones.** The first attempt was the literal
+reading — blend the two zones' cameras across a window straddling the boundary — and it does not
+work, for a reason worth writing down. **Outside its own band a zone is frozen at the waypoint it
+was heading for**, which is exactly its neighbour's value, so the two zones being blended are
+identical on one side of every boundary and the average changes nothing there. Worse, blending a
+ramping zone against its own frozen endpoint is *algebraically the same thing* as remapping that
+zone's ramp — so the window was already an easing, just one centred on the wrong place: it
+reached full weight at the boundary instead of zero, which left the kink exactly where it started.
+
+Put the easing inside the ramp and every boundary is covered by whichever side is actually
+moving. The curve is the cubic `u²(2 − u)`: flat where it starts, and arriving at exactly the
+gradient of the straight line it rejoins, so the two meet without a corner.
+
+**Found on the way, and fixed:** `the_neutral_zone_holds_the_fighter_low` was already failing on
+main. The framing field of view was baked to 57 while the renderer draws at 58, so the feet land
+at 16.7% of the screen where the knob asks for 16. That is the design working — the framing has
+its own field of view precisely so that a player widening theirs cannot move their aim — but the
+test was comparing a framing-space waypoint against a render-space measurement. It converts
+between them now, and the mismatch is documented rather than assumed away.
+
+**Verdict** open. `the_eye_never_changes_pace_abruptly_at_a_zone_boundary` is the new guard: it
+compares the change in pace at each boundary against an ordinary step of the mouse elsewhere, and
+with the easing removed it fails at level with thirteen times the ordinary change.
+
+### 2026-09-12 — the Elementalist's auto became a line
+
+**Changed** the auto from a flat circle at a fixed distance in front of her to a **beam**: an
+instant ray from her chest along the crosshair, out to the move's own reach. Its `reach` went
+4 m → 9 m and its `radius` 0.7 → 0.35 — longer and thinner, because it is a line now. Hitstun
+14 → 0 and knockback 2 → 0. `bolt_aim_range`, `fire_bolt_damage_(x)` and `fire_bolt_knockback_(x)`
+are gone; seven knobs for a real fire-bolt projectile replace them.
+
+**Why** the complaint was that aiming up did nothing: *"even when I aim upwards, the auto attack
+still just follows along the ground."* It did, and the reason was one function. Every trace the
+move used — against a stone, against a fire pillar, against a body — went through a flat,
+height-free ray test, so the pitch of the aim was thrown away before anything was compared. The
+shot went the same distance along the ground whatever the crosshair said, and the overlay drew
+the same upright cylinder a fixed distance ahead, which is what made it look correct and behave
+wrongly at the same time.
+
+**The fix is a shape, not a special case.** `math::ray_hits_cylinder` is a real
+three-dimensional ray against an upright cylinder with both caps, and a fighter, a stone and each
+slab of a fire pillar are all upright cylinders. The aim resolver already traced stones that way;
+now everything does, and the flat version is deleted rather than left around to be used again by
+mistake. The arena's boxes went the same way into `math::ray_hits_box`, which is also what lets
+the beam ask the Ridgeback which *part* a line reaches first.
+
+**What it meets first is the whole move** — a fighter, a structure, or fire — rather than the old
+two-way "is it aimed through a structure or a pillar" with the fighter check bolted on separately.
+Three outcomes and one comparison is both smaller and the thing a player can actually state.
+
+**The fighter case is the design change worth arguing about.** It does small damage, it takes the
+move they were charging, and it hands their frames straight back: no hitstun, no stagger, no
+shove. That breaks `landing_a_hit_keeps_the_initiative_or_resets_neutral`, which is a real
+property and not one to wave away — so the test now excludes moves that hand out no stun at all
+and a new one, `a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws`, states the price:
+such a move must be minus on hit and must be the smallest hit in its class. What it buys is an
+interrupt, and a move that bought an interrupt *and* damage would beat the moves that pay stun for
+theirs. Blockstun stayed at 6: "no stagger" is about landing it, and guard is still worth holding.
+
+**The fire interaction is a projectile now, not a longer instant hit.** It used to be the same
+hitscan shot with its damage and knockback multiplied and its range quietly swapped for the
+20 m aim range — a poke that could cross the arena instantly, which is not a poke. A pillar
+**lights** a bolt instead: 38 m/s, 0.3 m across, 24 m of range, 70 damage, 9 frames of stagger,
+and it starts *at the pillar*. Starting it at her hand was the tempting simplification and it
+would have made the whole interaction invisible.
+
+**The picture and the rule come from the same place.** `state::hitbox` is a capsule between two
+points rather than a sphere at one — a swing is the case where both ends coincide — so the game,
+the debug overlay and the browser tool all draw the volume that was tested. The shot is drawn as
+the thin cylinder it is, and the body tilts on to the aim through spine, chest, shoulders and
+head, which is what the bolt clip's own author's note had been asking for: the off hand was "the
+only thing in the pose that says which way the bolt went".
+
+**Also fixed on the way.** `nothing_is_dirty_before_anything_is_touched` was racing the one
+mutating Oven test about one run in fifteen under load — a pre-existing flake, reproduced 14 times
+in 200 runs on the commit before this work. The readers take the same lock as the writer now.
+
+**Verdict** open — none of the seven new numbers has been played against, and the beam's 9 m is a
+guess at "short-to-middle". The two properties worth watching are whether the interrupt is strong
+enough to be worth the total lack of pressure, and whether a pillar plus an auto is too easy a
+long-range poke for a class that is supposed to want you at terrain range.
+
+**Still open from "the autos are due a pass, as a set":** the melee classes' autos, and the timing
+pass across all six. This closed the Elementalist's.
+
+### 2026-09-12 — one aiming model, written down and enforced
+
+**Changed** every decision about where an ability goes now comes from
+`crates/sim/src/aim.rs`, through one of two functions. The specification is the new
+[aiming.md](aiming.md). `crates/sim/tests/one_aim.rs` fails the build if anything else in the
+simulation reaches for a ray-against-shape primitive, for the camera's eye, or for the look
+direction.
+
+**Why** aiming had been got wrong three times, and the third time was mine. The mistake has
+the same shape every time: someone needs to know where an ability should go, works it out next
+to the ability that needs it, and writes a ray from the **chest** along the **look angle**.
+That ray is *parallel* to the crosshair's and parallel rays never converge — the reticle sits
+on one spot and the ability goes to another, by metres, and the error grows with distance.
+
+It had survived this long because grounded abilities were separately settled onto the floor,
+which hides it: a fire pillar traced from the chest and one traced from the eye land in
+roughly the same place once both are dropped to the ground. Building something that *flies* on
+the same sentence is what exposed it.
+
+**The model.** One raycast, from the camera through the crosshair, ignoring anything behind
+the character model. It meets terrain, other players, monsters, structures, and the ability's
+own max-range sphere; whatever it reaches first is what the player is pointing at. Then
+exactly two kinds of skillshot:
+
+- **grounded** — on the ground, cast exactly there; at the sphere, max range on the ground in
+  the mouse's direction; on anything else, the floor beneath it. If it travels, from the
+  character to that point.
+- **not grounded** — on the ground, that spot raised straight up to the height the shot leaves
+  at, so it flies level over the place the crosshair is on; on anything else, the point of
+  intersection exactly. Straight line from the caster, and that line is its whole reach.
+
+A melee swing is neither and is named as such, because "a sword is a body moving" is a rule
+somebody would otherwise delete by accident.
+
+**Three things fell out of it that are worth recording.**
+
+*Fire is not on the aiming ray's list.* You can see through flame, so a pillar must never
+steal the crosshair — but a shot that travels through one still notices it. Separating "where
+is the player pointing" from "what is in the way of the thing they threw" is what makes both
+true at once, and it is now two functions rather than one confused one.
+
+*A level look does not point at the enemy's chest.* The camera sits above the shoulder, so at
+level pitch the reticle is above head height and a shot goes over them. That is correct — it
+is how a third-person camera works — but every test fixture in the suite had been written
+assuming otherwise, which is a good measure of how thoroughly the old model had leaked. They
+aim by sweeping for the angle that puts the crosshair on the thing now, which is what a player
+does and is robust against the camera being retuned.
+
+*The Bulwark's thrown shield had the same bug*, quietly, and is fixed by the same change: it
+flies at what the crosshair is on rather than along the look angle from the chest.
+
+**Also:** the move table gained a `flies at the crosshair` flag, so every move states which of
+the three kinds it is rather than leaving each caller to work it out. `Player` carries one
+`aim_path` instead of a target and a direction that could disagree — one object cannot drift
+from itself.
+
+**Verdict** open on feel; settled on structure. Nobody has played against the corrected
+aim yet. What is worth watching: whether the beam ending *on* what the crosshair found —
+rather than always running its full range — reads as the shot being eaten by scenery, and
+whether needing to aim down slightly to hit someone at your own height is comfortable or
+merely correct.
+---
+
+### 2026-09-12 — the Champion's weapon stopped being a number
+
+**Changed** the class rebuilt. The form toggle and its nine reach/damage/recovery
+multipliers are deleted; the three weapons are the three mouse buttons, each with its own
+moves on the ground, in the air and out of a Rush — ten moves in total. Rush is built, on
+`E`. The uppercut moved from `Q` to Rush + hammer. Autos have shaped hitboxes for the first
+time.
+
+**Why** the class's whole premise is *choosing a distance*, and nothing about playing it
+made you choose one. All three forms threw the same three moves at the same three heights;
+the form multiplied the numbers. That is the diagnosis worth keeping, because it is not
+about this class:
+
+> A multiplier cannot make two moves feel different, because it does not change what they
+> do — it changes how much. A spear with 1.55× reach is a sword that reaches further.
+
+What separates weapons is **shape**. A sword goes across, a hammer goes down, a spear goes
+out — three different questions about where the other player is standing, and none of them
+is a coefficient. So the hitbox stopped being a disc at arm's length and became a **capsule
+that moves**: a line from the hand to the head of the weapon, swept over the active frames.
+
+**Verdict** open, and already load-bearing: two thirds of the tuning below exists because
+the capsule made height matter for the first time.
+
+### 2026-09-12 — a sword that sweeps at chest height misses a low ridge
+
+**Changed** the flat sweep is thrown from 0.7 of the cast height and travels 0.03 turns
+below level (`champion.sweep_thrown_from`, `champion.sweep_travels_below_level`), rather
+than from the chest, dead level.
+
+**Why** the hunt harness caught it before a person could have. With the sweep thrown level
+from the chest, the scripted hunter stopped being able to break the Ridgeback's poise at
+all — zero topples across six hunts, where the old disc broke it reliably. The ridge is a
+35 cm strip lying on the animal's back, and a sword swept at chest height genuinely passes
+over it. That is correct physics and it made the climb pointless.
+
+It is also what the animation has always said the move is: `champion.rs` calls Sweep "a low
+horizontal cut… the hands stay at hip height". The hitbox was simply not doing what the
+clip was doing. This is the first time the two have been able to disagree, because it is
+the first time the hitbox has had a height.
+
+**Verdict** kept. Topples are back and they come from the swing rather than from standing
+nearby.
+
+### 2026-09-12 — 113 and 120, or: why the poke's damage is 66
+
+**Changed** the Champion's sword from 95 to 66, and the other autos with it — hammer 48,
+spear 58.
+
+**Why** worth writing down because the number is not arbitrary and looks it. The
+Ridgeback's ridge multiplies damage by 1.75 and it flinches at 120. The old Sweep did 65,
+which is 113.75 on the ridge — **just under**. A sword at 95 does 166, which flinches it
+every single hit, and a creature you can keep permanently flinched never bucks you off: the
+hunter got on once, stayed for 1590 frames, took zero damage, and killed it in 35 seconds.
+Six hunts out of six.
+
+One damage number crossing one threshold turned a fight into a treadmill. The fix is
+one number, but the lesson is that `flinch_threshold` and `vuln_ridge` between them draw a
+line across every class's poke damage, and nothing in the code says so.
+
+**Verdict** kept. 1 hunt won out of 6, topples in most of them, rides ending in bucks.
+Worth revisiting as a *creature* number rather than a fighter one — a flinch that could be
+sustained indefinitely is the real bug.
+
+### 2026-09-12 — the uppercut as a combo rather than a button
+
+**Changed** Uppercut is no longer the class special thrown from standing (16f startup,
+committed, on `Q`). It is Rush + middle click: 8f startup, no slowing of the dash, it holds
+its victim for 26 frames and carries them up, and pressing space once during the hold takes
+both fighters higher.
+
+**Why** the old one did not feel good and the reason is that it was a *commitment to the
+air* rather than a *continuation*. Sixteen frames of telegraph from a standstill, and if it
+missed you were airborne, helpless, and had announced it. Nothing about being in the air
+was a reward, because you got there by committing to getting there.
+
+Out of a Rush it is the opposite: you are already moving, the dash paid for the approach,
+and the only decision left is whether to spend the charge. Then the extra leap makes the
+height itself a choice made *after* it connects, which is the one moment in an exchange
+when a player has information nobody else has.
+
+**Verdict** open. The leap is the part to watch — it may want to be spendable more than
+once, or to cost something.
+
+### 2026-09-12 — the takeoff to flight handover was a cut
+
+**Changed** the last three frames of `jump_takeoff` blend into the flight pose they are
+about to become.
+
+**Why** found by the Champion rebuild rather than aimed at. The animation continuity guard
+went from 0.428 m in one frame to 0.462 against a 0.45 bar, and the frame it failed on was
+an airborne fighter doing nothing at all. The join between the takeoff clip and the
+rise/apex/fall selection is a hard switch *inside one shape*, so the crossfade never saw it
+and never softened it — and how bad it looked depended on how fast you were travelling when
+you left the floor. Fine most of the time, a visible hitch on a jump out of a sprint.
+
+**Verdict** kept. Worst discontinuity across a 600-frame scripted match is back under the
+bar, and this one is a real seam rather than a threshold that needed raising.
+### 2026-09-12 — every move declares its line of effect
+
+**Changed** the move table gained a `line of effect` field, and three moves changed kind:
+Fissure and Judgement to **grounded**, Lance to **skillshot**. `cargo run -p sim --bin
+frametable` prints the column.
+
+**Why** the aiming pass left the *kind* inferred: a move was grounded if what it left behind
+was grounded, a skillshot if a flag said so, and a swing otherwise. That answered correctly for
+the two abilities that plant something and quietly called everything else a swing. Going
+through the roster against the kit documents found three that are not:
+
+| Move | Kit says | Was aimed as | Now |
+| --- | --- | --- | --- |
+| Fissure | "a skillshot that races forward through the ground… spawns a structure at the point of impact" | swing, 7 m reach | grounded |
+| Lance | "line skillshot" in both forms | swing, 4 m reach | skillshot |
+| Judgement | "a delayed area strike… range medium" | swing, 3 m reach | grounded |
+
+All three were bubbles hung several metres off the body, pointing wherever it happened to be
+facing. None of them is *built* yet — Fissure does not travel, Lance is not a line, Judgement
+has no delay — so what changed today is only where their volumes appear, which is now the
+place the crosshair is on rather than a fixed step ahead.
+
+**The inference is gone rather than fixed.** Deriving the answer from the effect was the sort
+of rule that is right until the first ability that does not fit, and then silently wrong.
+What survives from it is a *test*: `one_aim.rs` asserts that a move planting something
+grounded is aimed at the ground, and that a move throwing something that travels is aimed
+through the air. Those directions are always true; the reverse is not, because Fissure plants
+a structure, which belongs to the mechanic rather than to the effects array.
+
+**Found and not fixed: Guillotine lotus.** Its range is "at the shadow" — the blades erupt
+where the Reaver put the mechanic. That is not any of the three: the player aimed when they
+placed the shadow, not when they threw the move. It is currently a swing with a reach of
+**zero**, which puts its volume on the caster's own body, so it is wrong however the question
+is answered. Recorded in [aiming.md](aiming.md) under Open rather than guessed at.
+
+**Also considered and rejected:** asserting that a swing's reach may not exceed roughly twice
+its radius. It catches the "hole in front" the log already records above — a one-circle hit
+test with reach past its own radius has a gap nothing can be hit in — but that is a property
+of the hit test rather than of the aiming, and the rule as written failed Rend at 2.6 m
+against 1.2 m, which is a tuning question and not a miscategorisation. Left alone.
+
+**Verdict** structural, and open on feel. Nobody has thrown the three retargeted moves.
+
+### 2026-09-12 — a swing is aimed too, with a dead zone
+
+**Changed** melee no longer comes out flat. A swing's yaw is still the body's facing; its
+**pitch follows the camera outside a dead zone below the horizon**:
+
+```text
+   above the horizon      follows exactly
+   the first 45° below    stays level -- the standard arc in front of the character
+   further down           follows what is left over
+```
+
+So −45° is the same swing as 0°, −46° is that swing tilted one degree down. New knob,
+`aim.swing_stays_level_to (deg down)`, and a new line of effect, `aim::swing_path`.
+
+**Why** "aim direction for melee matters a lot in the air and on hills" — and it does: a swing
+pinned to the horizontal misses things plainly in front of you the moment either fighter
+leaves the flat. The reason it had been pinned was the opposite error, and the dead zone is
+what answers it: **the camera sits above the shoulder, so looking at somebody standing at your
+own height means looking slightly down at them.** A swing that followed the camera exactly
+would tilt into the floor in the most common situation in the game. Neither "ignore pitch" nor
+"follow pitch" is right; the dead zone is, and it costs one number.
+
+Written as a sum rather than a branch — `max(pitch, 0) + min(pitch + dead, 0)` — so the two
+halves cannot disagree about the boundary. There is no step at the edge: a test sweeps a tenth
+of a degree at a time across it and fails on any jump over 0.4°.
+
+**Guillotine lotus got a fourth line of effect: at the mechanic.** Its kit entry has always
+said "Range: at the shadow", and it was declared a swing with a reach of *zero* — so its
+volume came out on the Reaver's own chest and the move did nothing it was written to do. The
+player aims it when they *place* the shadow; throwing it only cashes that in, and re-aiming it
+at the throw would delete the reason shadow placement is a decision. The volume follows the
+shadow live, because the Reaver can recall it while the blades are out.
+
+That makes four lines of effect, all of them functions in `aim.rs`: two that start with the
+crosshair's raycast, and two pointed by something the player decided earlier.
+
+**The animation follows.** A swing's tilt arrives at the renderer already dead-zoned, as the
+angle the attack actually came out at, so the same pose layer the Elementalist's beam uses now
+serves melee. A grounded cast is deliberately *not* tilted — a pillar comes out of the floor
+and the caster is gesturing at the place, so looking down to plant one must not double her
+over.
+
+**Verdict** open. Nobody has swung at anything on a slope or in the air yet, and 45° is a
+guess — one number for a grapple at arm's length and a spear at 1.55× reach, which may well
+want to differ.
+
+### 2026-09-12 — the dead zone is a standing rule
+
+Merging the Champion's air game into the dead zone broke the class immediately:
+`the_combo_the_class_is_built_around_is_playable` failed, because the aerial spike only
+connects at **45° of tilt or more** and the look-down limit is 85°. Subtract a 45° dead zone
+and the most tilt a falling Champion can reach is 40. The move became unthrowable — not worse,
+unavailable.
+
+The fix is not a smaller number. It is that the dead zone was only ever an answer to a
+*grounded* fact: the camera sits above the shoulder, so looking at somebody standing on your
+own floor means looking slightly down at them. Off the floor there is no shared floor to
+correct for, and the thing under your reticle genuinely is below you. So `aim::swing_path`
+takes `grounded`, and airborne swings follow the camera exactly, all the way down.
+
+This is the split main's own swing shapes already make — in the air the Champion's fan is
+thrown *around* the aim rather than in front of the body — and it is what the brief asked for:
+"aim direction for melee matters a lot in the air and on hills."
+
+**Verdict** open, same as the entry above. 45° on the ground is still a guess, and now the
+question of whether a fighter who has just left the ground wants the zone to fade rather than
+vanish is a real one. Nobody has played it.
+
+### 2026-09-13 — bodies come off the aiming ray
+
+**The report:** "attacking a large monster is awkward because the crosshairs tend to sit high,
+so the attacks aim high if close in."
+
+Measured before changing anything, with a hunter standing five metres from the creature's
+centre — which is nose to nose, because the animal is four metres long from centre to snout.
+Its **head was the first thing the camera's ray met at every look angle in a sweep from 40°
+below the horizon to 40° above**, including aiming squarely at the dirt, at a point roughly
+1.1 m in front of her and 3 m up. So every skillshot she threw came out as a stub about a
+metre long pointed into the sky, at exactly the range where you cannot miss.
+
+Not a tuning problem. The ray answers **"which place in the world is under the crosshair"**,
+and a body is not a place — it is a thing standing in one. Putting bodies on the list made the
+aim point jump to the surface of whatever was between the player and the ground, and for a big
+animal that surface is metres above the thing they meant to hit. So other fighters and the
+creature came off the list. Terrain, structures and the ability's own max-range sphere stay.
+
+Nothing is lost, because *what a shot runs into* was always a separate question, asked along
+the ability's own path rather than along the camera's ray. The two were never the same line —
+the camera is behind and above — so a body the camera could not see was always still a body
+the shot went through. Put the reticle on somebody and the shot still reaches them; what
+changed is that the aim point is the ground behind them, so a level look is a level shot.
+
+**What it buys, measured after:** from the same spot, a level look now runs into the
+creature's barrel at 2.4 m — the flank, which is what a player standing on the ground is
+actually trying to hit. Looking up walks the shot to the neck and then the head; looking down
+past 25° puts it on the dirt in front of the animal, which is where it was pointed.
+
+Three test fixtures had quietly depended on the old rule and were saying something they did
+not mean:
+
+- `beam.rs` read "the crosshair is on them" off the raycast. It now means what a player means
+  by it — the line the reticle picks goes through them.
+- `effects.rs` aimed at *half a body height above the arena floor* rather than above the
+  target's own feet, which is a different point entirely for somebody standing on a platform.
+- The same fixture aimed at where it had just teleported the target, one frame before the
+  world dropped them onto the platform under them.
+
+**Verdict** open, and one thing to watch: a fighter standing on open ground is now aimed at
+through the floor behind them, so a shot at somebody backed against a wall ends on the wall
+rather than on them. Both hit. Nobody has played it.
+
+
+### 2026-09-13 — the Dual mage got both her arms
+
+**Changed** the kit on the buttons. Left click is the **dark auto**, right click is the
+**light auto**, `shift` + left is Lance, `Q` is Judgement, and `E` casts a new move,
+**Sweep**. Five moves where there were three, and both mouse buttons are attacks.
+
+Right click was doing nothing on this class. `want_guard` asks for a shield in hand and she
+has no shield, so half of the mechanic — *right click moves you lighter* — had no input at
+all, and the meter could only be driven one way. `E` was also dead, for the same reason the
+Blood mage's was before Black spike: the mechanic is a meter steered by which button attacks,
+so there is no state for a key to toggle.
+
+**Why the autos come out of the arms.** The class holds two forces apart, one in each arm,
+and the only information the player has about which one they just threw is which arm threw it
+and which way the bar moved. Both volumes leaving from the middle of the chest would make
+that unreadable. So a move now declares a **hand** next to its shape (`moves::hand`), and
+`aim::hand_origin` steps the swing's origin out to that shoulder. Everything else in the game
+is `Hand::Centre` and is untouched.
+
+The sides are the **skeleton's**, not the world's, and that is worth writing down because it
+looks like a bug until you check: the body is authored `+Z` forward with its left arm at
+`-X`, which is a left-handed frame in a right-handed world, so the arm the renderer calls the
+left one is drawn on the side a quarter turn *toward* strafe-right. Following the skeleton is
+the only choice that matters — what an animation and a hitbox have to agree about is which
+arm the player can see swinging — and `view/tests/kinematics.rs` now fails if the two ever
+disagree. Left as it is rather than fixed: unmirroring the model means negating the sideways
+coordinate of every authored key in every clip, which is a change with no visible payoff and
+a large blast radius.
+
+**The wing.** A new hit shape, `Shape::Wing`. It starts a little behind the fist, sweeps
+outward — away from the body, on whichever side the arm is — and **grows** to the move's whole
+reach across the active window, so the tip travels a spiral rather than an arc. Two and a half
+arm lengths at full extension, which `view/tests/kinematics.rs` checks against the Dual mage's
+own build rather than against a number typed twice.
+
+It is its own shape rather than a swing with a big arc for two reasons that are the same
+reason: a swing's head is at a fixed reach and a swing's inner end is at the shoulder. Both of
+those are what make a swing *safe to step inside*, and the wing is meant to be the opposite —
+the class is long and thin and loses to anyone who has closed.
+
+Both autos share one `arc`. The **hand supplies its sign** (`aim::Hand::outward`), so the
+mirror is structural rather than two knobs somebody has to keep equal and opposite.
+
+**Steering, corrected.** The autos now steer **on contact** and everything else on the press,
+which is what the design document has always said and what the implementation did not do —
+before this, swinging a poke at thin air walked the bar. And the side comes from the *move*
+rather than from the input bits: `shift` + left click has a modifier and a side in it, and
+reading the bits meant deciding which won. `moves::dual::side` answers it once. A move with no
+side — `Q`, `E` — pushes you further along the path you are already on, and does nothing at
+dead centre, which is the rule the document states for scroll click and both-click.
+
+**The animation.** The autos are one punch read twice: `Pose::other_arm` mirrors everything
+above the hips and re-plants the feet where they were, so a left jab and a right cross come
+off one set of keys. Mirroring the *stance* as well was the first attempt and is wrong — every
+clip in that file has to start and end on the idle's own stance, so a mirrored first frame
+swaps the character's footing on the frame the punch starts and swaps it back on the frame it
+ends.
+
+Sweep took three passes to get through the continuity ceiling, and the third one is the
+correct animation rather than a concession: the arms now cross the front **during the active
+frames** rather than before them, because that is when the hit volume crosses. The first two
+versions had the body arrive early and then wait, which is both a 0.4 m per frame hand and a
+lie about where the danger is.
+
+**Verdict** open on everything with a number in it. Nobody has played it. The specific
+questions: whether the wing's outward opening reads as a wing or as a wild swing, whether 50°
+of arc is enough to feel like it wraps, whether the punch at five frames of startup is too
+fast to see which arm it was, and whether Sweep at twelve frames is a real answer to somebody
+inside the punches or just a slower one.
+### 2026-09-13 — the Shadow Reaver's second body
+
+The class's whole kit was rebuilt around one change, and the change is a deletion: **the
+shadow can no longer be absent.**
+
+**Changed**
+
+- `Mechanic::Shadow` went from `Option<V3>` to a body with four states -- attending her,
+  going out, waiting, coming home. There is no "nowhere".
+- The mechanic became a **move** rather than an instant, in a fourth slot in the table:
+  *Send shadow* (on `E` at first; see the entry below),
+  8/3/14, reach 9 m, damage 70 on the way home. The shadow flies out in ten frames and stops;
+  pressed again it dashes home at 34 m/s through anybody in the way, cutting once and slowing
+  them to 0.55x.
+- The leash went from 8 m to **12 m**, and had to: the throw reaches 9, so at 8 the shadow
+  turned round on the frame it landed. A leash shorter than the throw is not a tuning
+  mistake, it is the setup deleting itself.
+- **Guillotine lotus** stopped being a disc at the shadow and became six blades that erupt
+  along curved paths (4.5 m, 7 frames), hang open for 40, and chase the shadow home over 26,
+  dealing 70% of what they dealt going out. 40 damage a blade, which is deliberately small:
+  six numbers can land at once.
+- **The shadow copies her swings**, 4 frames later, at **25%** of her damage, from wherever
+  it stands.
+- The forward dodge, thrown with the crosshair on the shadow, became the dash to it: 34 m/s
+  constant, invulnerable, and arriving collects the shadow.
+- Executioner picked up **right click**, which was dead on a class with no shield. Swapped
+  back a day later; see below.
+
+**Why** two reasons, and the second is the one that mattered.
+
+The stated one: the class read as a setup class that spends most of a match with no setup.
+`None` meant no swap, no Guillotine, no line -- and the fix the kit document had already
+reached for, *the baseline dash creates the shadow*, only papered over it.
+
+The one found while building it: **`Option` was making the code worse in the same shape it
+was making the class worse.** Every ability that read the mechanic carried a branch for the
+case where the mechanic did not exist, and every one of those branches was a design question
+nobody had answered. Deleting the case deleted the branches.
+
+**What the numbers are for.** The 25% is the class in one number: holding the shadow is a
+flat 1.25x on everything her body does, and sending it out trades that quarter for a second
+threat somewhere she is not. That is a real decision every few seconds, which is what a
+mechanic is supposed to be. The 40-per-blade is a guess bounded from above: standing exactly
+on the shadow through a whole lotus is six blades out and six back, which is 240 plus 168 of
+a thousand, and that is meant to be the execute rather than the opening.
+
+**Two implementation notes worth keeping**, because both were bugs first:
+
+- The blades are tested as **swept lines**, not as points. The eruption crosses 4.5 m in 7
+  frames and is fastest on the first of them, so a blade sampled as a ball starts the frame
+  at the shadow's feet and ends it a metre past whoever was standing there. The one victim
+  the ability is named for was the one it missed.
+- The echo is **a move index and an age**, and the shadow's own startup/active/recovery are
+  derived from the same table hers come from. A second state machine would have to agree with
+  the first, and eventually would not.
+
+**Verdict** open, and there is a lot here to play. Three specific worries:
+
+1. **The lotus dragged home may be too much.** It is two buttons, it covers the length of the
+   arena, and it hits everything twice. That is the intended fantasy; whether it is a fair
+   one is a question for a person.
+2. **The attending shadow may be hard to read.** It stands 0.9 m behind her, which from a
+   camera sitting directly behind her is exactly the direction that overlaps. It separates the
+   moment she moves or turns, and `reaver.shadow_trails_her_by` is the knob if it does not
+   separate enough.
+3. **Right click doing two things across the roster** -- guard on four classes, an attack on
+   two -- is now a real inconsistency rather than a Champion-shaped exception. It is the
+   cheapest of the three to reverse.
+
+
+### 2026-09-14 — the Reaver's two buttons, swapped
+
+**Changed** right click sends the shadow, `E` throws Executioner. It was the other way round
+for a day.
+
+**Why** nothing about the moves, and everything about which hand is doing what. Sending the
+shadow is a **placement**: a grounded cast at a patch of floor the player picked, and where
+that floor is is the decision the whole class is made of. Executioner is a swing off the
+body — yaw from the facing, pitch from the camera — and reads the crosshair as an angle
+rather than as a place.
+
+Sentence six of the control grammar is *the mouse means where*. Putting the aimed half on
+the mouse and the unaimed half on the key is that sentence applied, and the first
+arrangement had it backwards for no reason beyond `E` being the mechanic key everywhere
+else.
+
+The specific thing that made the first arrangement feel wrong, and the one worth writing
+down: **placing something with the hand that is not holding the mouse means committing to a
+spot you are about to stop looking at.** You press `E`, and the pointing you did a frame ago
+is already stale, because the mouse never stopped moving. On right click the press and the
+aim are the same gesture.
+
+**What it costs.** The Reaver is now the one class where `E` carries something that is not
+the mechanic, which makes the grammar's fifth sentence slightly less true than it was. The
+honest split is two rules rather than one — *a mechanic is an ability when pressing it is
+not free*, and *which button it lands on is the crosshair's question* — and both are now in
+controls.md.
+
+It also leaves Deadly mistake with nowhere to go: right click ignores `shift`, and `shift` +
+`E` is Executioner. That was true of the previous arrangement too, in mirror image.
+
+**Verdict** open. It is a two-line change and reversible, which is most of why it was worth
+trying rather than arguing about.
+
+### 2026-09-13 — the wing became a section of a torus
+
+**Changed** the Dual mage's autos from a line that reached out of the fist and grew, to
+**a chunk of a horizontal ring around her that sweeps from behind to in front**. The active
+window went 4 → 6 frames and the recovery 11 → 9 to pay for it, so the frame advantage is
+unchanged: +1 on hit, −6 on block.
+
+```
+before   a capsule from just behind the fist, sweeping ~50 deg outward and
+         growing from a third of its reach to all of it
+now      a ring centred on her own axis, inner arc 0.26 m and outer 1.65 m,
+         appearing 151 deg behind her on the punching arm's side and arriving
+         directly in front of the fist six frames later
+```
+
+**Why** the first version read as an arm attack with a long arm. The class is a vessel holding
+two forces, and what comes out of it should not be shaped like a limb — it should be shaped
+like something that was already circling her and got let out. A ring does that and a spoke
+does not, and the difference is where the volume *starts*: behind, where the player cannot see
+it coming, rather than at the fist where they were already looking.
+
+**The volume out on any one frame is the section's radius**, not a curved shape, and that is
+not a compromise: a radius of an annulus is straight, so the straight capsule the hit test
+already understands *is* the section at that angle. The ring is what the sweep carves. Six
+frames at 30 degrees each, with the reach threshold on top, leaves no angular gap for somebody
+to stand in.
+
+**Two of its numbers are now stated against her own body** — the inner arc passes through
+where the punching elbow starts, and the outer is two to three times further out than the fist
+gets, measured from that elbow. Neither is a thing the simulation can check, so
+`view/tests/kinematics.rs` reads them off the baked clip: 0.26 m at the elbow, 0.78 m at full
+extension, and the reach of 1.65 m is 2.7× the travel. Retiming the punch or re-authoring the
+cock moves the check with it. The two Oven knobs the growing version needed collapsed into one
+(`wing_inner`), because a section that does not grow has only an inside.
+
+**The plane is the floor's while she is standing**, which makes this the one attack in the game
+that ignores the camera's pitch outright. Airborne it tilts with the aim, which is the split
+`swing_base` already makes for a flat sweep thrown off the ground.
+
+**Verdict** open. The specific worries: 151 degrees behind her may be so far back that the
+first half of every auto is wasted on empty air, and a ring with a 0.26 m hole is a shape you
+can beat by standing *on* the mage, which no other melee move in the game rewards.

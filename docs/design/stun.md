@@ -1,6 +1,6 @@
 ---
 status: decided
-decided: 2026-09-12
+decided: 2026-09-13
 implements: the hit reaction the whole combat kernel assumed
 ---
 
@@ -40,7 +40,10 @@ What it buys is that a hit reads as a collision rather than as a number going do
 renderer gets this free — positions and poses are simulation state, so a frozen fighter is
 a frozen picture without the renderer knowing the mechanic exists.
 
-It also buys the victim something, which is the next-to-last section.
+It buys one more thing. Four to eight frames of a fighter's input being ignored is long
+enough to lose a button in, so **whatever was pressed during a freeze is handed back on the
+first frame that is not frozen**. The Champion's "we are settling this in the air" leap is
+pressed inside exactly that window, and before the buffer existed it was being swallowed.
 
 ### 2 · Stun — the interrupt
 
@@ -84,49 +87,100 @@ Damage is applied **before** the swell is read, exactly as Smash does it. The pr
 consequence is that the killing blow of a round lands with the largest swell there is, so
 the body goes a long way and both players can see the round end.
 
+### It is a duel mechanic
+
+**Neither swell applies while the creature is on the field.** In a hunt, a blow does exactly
+what the move table says.
+
+Not a balance decision — the mechanic's premise fails in coop. The swell is a fighter's share
+of *their own bar*, and it is only fair because the other fighter has a bar the same size and
+is running along it at the same rate. Take turns being hurt and you take turns being
+launchable, which is why it reads as an arc rather than as a punishment for falling behind.
+
+The creature carries ten times the health. It barely moves along its own bar while the hunter
+runs the length of theirs, so the mechanic becomes a one-way ratchet: every hit you take makes
+the next one hold you longer and throw you further, against something that is never held longer
+in return. Measured, ungated it took the scripted hunt from four wins in six to none — the
+hunter spent the fight being thrown off the animal and walking back to it.
+
+The creature's presence is the condition rather than a separate flag, the same way
+`effects_reach` already decides whether two fighters can hurt each other at all.
+
 ## The arc this produces
 
-The gap between the two growth rates is the entire combo design. Knockback swells far
-faster than hitstun does, so the distance a victim covers outruns the window their attacker
-has to follow them:
+The gap between the two growth rates is the entire combo design. Knockback swells far faster
+than hitstun does, so the distance a victim covers outruns the window their attacker has to
+follow them.
 
-| Point in the round | What a hit does |
-| --- | --- |
-| **Full health** | Short stun, small shove. The exchange resets and neutral starts again |
-| **Middle** | Stun has grown, knockback has not yet outrun it. **Moves link** |
-| **Near death** | The victim is thrown clear before the attacker recovers. The link is a launch |
+Measured against the built kits, with the attacker chasing:
 
-So combos are a *mid-round* phenomenon. They are not available immediately, they are not
-available forever, and the window closing is what stops a fight ending in a stunlock.
+| Point in the round | Champion | Dual mage |
+| --- | --- | --- |
+| **Full health** | nothing links | nothing links |
+| **Half** | nothing links | **all four Dark/Light alternations link** |
+| **A quarter** | Sword and Spear link into themselves | closed again |
+| **A tenth** | and into each other | closed |
 
-`combos_open_up_mid_round_and_close_again` in `crates/sim/tests/combat.rs` plays this out
-against the real simulation rather than asserting it from arithmetic, because it depends on
-walking speed, hitbox reach, recovery frames and the decay curve all at once, and any
-closed form of it would be a lie in at least one of those places.
+The Dual mage is the clean case: the window opens in the middle of a round on exactly the
+alternation the kit is built around — the two autos are how the meter is steered, so the combo
+and the mechanic are the same action — and it has closed by a quarter bar, because the autos
+then throw people too far to follow.
 
-## Directional influence — the skill in it
+The Champion gets no raw-move links until a quarter bar, where they become kill confirms. Its
+real combo is the designed one: hammer, cancel the recovery with Rush, uppercut into the air,
+leap, spike. That works at any health, because **Rush buys the frames rather than hitstun
+doing it** — which is the more interesting way for a class to combo, and the reason the class
+has a mechanic at all.
 
-**The victim chooses where the knockback puts them. They never choose how much of it they
-take.**
+`combos_open_up_mid_round_and_close_again` and
+`nothing_links_into_itself_while_the_victim_could_live_through_it` in
+`crates/sim/tests/combat.rs` play this out against the real simulation rather than asserting it
+from arithmetic, because it depends on walking speed, hitbox reach, recovery frames and the
+decay curve all at once, and any closed form of it would be a lie in at least one of those
+places.
 
-The direction they are holding on the last frozen frame bends the launch, by at most about
-twenty degrees. The whole freeze is the window to decide in, which is what makes hitlag part
-of the skill system rather than only part of the presentation.
+### No move may loop into itself
 
-The rule is one projection, and it is the same trick the Quake air control uses. Take the
-direction the victim is holding and subtract the part of it pointing along the launch; what
-is left is the part lying *across* it. Add that to the launch and renormalise. Hold the way
-you are already being sent and there is nothing left over, so nothing happens. Hold square
-to it and you get the full bend.
+The one hard rule underneath the arc. Every class has a fast move, and the frame maths says a
+fast move's swelled stun eventually outgrows its own startup — so **distance is the only thing
+that ends a self-loop**, which is what the knockback decay is for. Two moves needed their own
+numbers changed to satisfy it rather than the system bending around them: the Blood mage's
+Bloodletter, whose stun sat inside its own throw cycle with eight frames to spare, and both
+field ticks against their twelve-frame cadence.
 
-The speed is restored exactly afterwards. That asymmetry is the design: influence is a
-positioning read — away from a follow-up, toward the middle of the arena, along a wall
-instead of into it — and never an escape. A victim who could shorten their own knockback
-would have a defensive option that costs nothing and is always correct.
+Late in a round the same loop is a **kill confirm**, and that is a different thing. The bound
+the test holds is on damage, not on hits: a chain that only lasts because the victim dies
+partway through it is the system working.
 
-Influence does not apply to a hit you blocked. Blocked pushback is a fixed price in ground
-(see [defense.md](defense.md)) and letting it be aimed would quietly turn blocking into a
-movement option.
+## Steering out of it — the skill in it
+
+**A launched fighter keeps their air control.** That is the whole mechanic, and it is
+deliberately not a second one.
+
+Smash calls this directional influence and gives it a dedicated pass. The first version here
+did too — the direction held on the last frozen frame bent the launch by about twenty degrees.
+It was deleted, because the game already has the thing it was imitating. [Quake air
+strafing](architecture.md) is *already* a rule that turns your velocity without adding to it:
+point where you are already going and the projection leaves nothing to add, point across your
+motion and you get the whole budget. That is DI. Writing it twice would have meant two sets of
+numbers to keep agreeing with each other.
+
+So what a hit takes away is everything that makes you dangerous — the move, the jump, the
+dodge, the guard — and what it leaves is the one tool that only repositions. **Being launched
+is a trade rather than a sentence:** you are held longer, and you get your steering back to use
+while you are held.
+
+Two rules keep it honest.
+
+**It may never slow you down.** The air speed cap is a rule about how fast a fighter may make
+themselves go, and knockback routinely exceeds it. Left alone, holding a direction during a
+launch would have halved the hit you just took. Pressing a direction must never be worth less
+knockback than pressing nothing, so the speed is restored along the new heading afterwards and
+below the cap the whole thing is inert.
+
+**It is an air privilege.** A grounded stun is the plain tax it has always been. Skidding along
+the floor is not a moment anybody is flying through, and letting it be steered would hand every
+grounded hit an escape.
 
 ## Weight
 
@@ -172,30 +226,39 @@ that sustains through aggression should be easier to launch for it.
 ## What is not in yet
 
 - **Stale moves.** Smash weakens a move that has just been used, which is what stops a combo
-  being the same button four times. Worth having; it belongs to damage, not to stun, and it
-  wants the move table to grow past three moves a class first.
+  being the same button four times. Worth having; it belongs to damage rather than to stun, and
+  it would be a second answer to the self-loop problem the knockback decay currently handles
+  alone.
 - **Smash directional influence.** Shifting position during the freeze itself, on top of
-  bending the launch after it. It is a mashing mechanic, and mashing is the part of Smash's
-  stun system least worth copying.
-- **Tumble, knockdown and teching.** At some knockback threshold a victim should hit the
-  ground rather than land on their feet, with a timed input to recover. This is the obvious
-  next piece, and it needs the arena and the aerial game settled first.
+  steering after it. It is a mashing mechanic, and mashing is the part of Smash's stun system
+  least worth copying.
+- **Tumble, knockdown and teching.** At some knockback threshold a victim should hit the ground
+  rather than land on their feet, with a timed input to recover. This is the obvious next piece
+  now that hits genuinely throw people, and it wants the arena settled first.
 - **A guard meter and guard breaks.** Specified in [defense.md](defense.md), still unbuilt.
   Guard break is a stagger, not a stun.
+- **Hitlag on the creature's own flinch.** The animal freezes when it is cut and when it
+  connects, which is what keeps the exchange fair, but its flinch and poise are a separate
+  system from hitstun and do not swell with anything. That is the reason the swell has to be
+  switched off in a hunt rather than balanced there.
 
 ## Open numbers
 
 None of these can be reasoned out, and all of them are in the Oven under **Stun**.
 
-- **Is the combo window in the right place?** It currently opens around half health and has
-  closed by the last fifth. Whether that reads as "the fight is heating up" or as "the rules
-  changed halfway through" is a question for a person with a controller.
-- **Is twenty degrees of influence findable?** Too small and nobody learns it exists; too
-  large and it is an escape.
-- **Does the freeze read as impact or as a hitch?** Four to eight frames by damage. The
+- **Is the combo window in the right place?** It opens around half health on the Dual mage and
+  has closed by a quarter. Whether that reads as the fight heating up or as the rules changing
+  halfway through is a question for a person with a controller.
+- **Does the freeze read as impact or as a hitch?** Three to eight frames by damage. The
   heaviest move in the game freezes for less than reaction time, which is the bound the feel
   test holds, but the floor may be too low to feel at all on a poke.
-- **Knockback decay moved from 0.86 to 0.93 for this work**, which roughly doubles the
-  distance a shove carries. It is what gives the swell teeth — at 0.86 a hit at death moved
-  a fighter about two metres, which is not a launch — but it changes how every existing
-  knockback number reads, blocked pushback included. See [feel-log.md](feel-log.md).
+- **Knockback decay moved from 0.86 to 0.93 for this work**, which roughly doubles the distance
+  a shove carries and is what lets the swell close a self-loop at all. It is also the most
+  invasive number here: every knockback in the game is now worth about two and a half times the
+  distance its author intended. The two combo classes and the creature were re-checked and the
+  creature's numbers scaled to match; **nothing else was**, and blocked pushback in particular
+  now cedes noticeably more ground than it did. That is the direction
+  [defense.md](defense.md) wanted, and it was not measured against anyone's hands.
+- **Is the buffer the right length?** It currently holds for exactly the freeze. A fighting
+  game normally buffers through recovery as well, which is a larger decision about how
+  forgiving the inputs are.

@@ -9,12 +9,20 @@
 
 pub mod baked;
 pub mod camera;
+pub mod clips;
+pub mod ik;
 pub mod interp;
+pub mod math;
+pub mod play;
 pub mod pose;
+pub mod skeleton;
 
-pub use camera::{CameraRig, Framing};
+pub use camera::{CameraRig, Framing, Surroundings};
+pub use clips::Clip;
 pub use interp::{Frame, PlayerView, interpolate};
-pub use pose::{Part, PartTransform, Pose, pose_for};
+pub use play::{PoseInput, pose_for};
+pub use pose::Pose;
+pub use skeleton::{Joint, Skeleton};
 
 /// Simulation rate, mirrored from `sim` for convenience.
 pub const TICK_HZ: f32 = sim::TICK_HZ as f32;
@@ -24,6 +32,28 @@ pub(crate) const FX: f32 = 65536.0;
 
 pub(crate) fn fx(v: sim::Fx) -> f32 {
     v.raw() as f32 / FX
+}
+
+/// How a fighter's body sits in the world: the rotation from character space
+/// into the arena, given which way they face.
+///
+/// **The one place the two frames meet.** Character space is `+Z` along the
+/// facing, `+Y` up, and the left arm at `-X` (see [`pose`]); the arena's frame
+/// is the engine's. Everything drawn on a fighter goes through this -- the body
+/// parts, whatever their hands are holding -- and so does the test that checks
+/// the arm the simulation swings from is the arm the renderer draws. Written
+/// once so those two cannot drift apart, which for a class with a different
+/// force in each hand is the difference between a hitbox that comes out of the
+/// visible fist and one that comes out of the other one.
+///
+/// `facing` is the simulation's, flattened and unit: `[x, z]`.
+pub fn body_turn(facing: [f32; 2]) -> math::Quat {
+    math::Quat::from_y(facing[0].atan2(facing[1]))
+}
+
+/// Where a point in character space ends up in the arena.
+pub fn into_world(local: math::V3, pos: [f32; 3], facing: [f32; 2]) -> math::V3 {
+    math::add(pos, body_turn(facing).rotate(local))
 }
 
 /// Convert a look angle in radians to the simulation's aim unit.
@@ -39,4 +69,18 @@ pub fn aim_from_radians(yaw: f32) -> u16 {
 
 pub fn radians_from_aim(aim: u16) -> f32 {
     aim as f32 / 65536.0 * std::f32::consts::TAU
+}
+
+/// The same conversion for pitch, which is signed rather than wrapped.
+///
+/// Pitch does not wrap -- it is clamped well short of vertical either way, and
+/// an angle that wrapped past straight up would be a camera nobody could use --
+/// so it is a signed count of the same 1/65536 turn.
+pub fn pitch_from_radians(pitch: f32) -> i16 {
+    let turns = pitch / std::f32::consts::TAU;
+    (turns * 65536.0).round().clamp(-32768.0, 32767.0) as i16
+}
+
+pub fn radians_from_pitch(pitch: i16) -> f32 {
+    pitch as f32 / 65536.0 * std::f32::consts::TAU
 }

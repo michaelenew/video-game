@@ -1,18 +1,23 @@
 //! The crosshair.
 //!
-//! It marks **where your attack will go**, which is not always the middle of
-//! the screen.
+//! It marks **where the next ability would land**, and it does that by never
+//! moving: it sits at the exact centre of the screen, always, and the *camera*
+//! is what turns to keep the aim point under it.
 //!
-//! Facing locks the instant a move starts, and turns at a limited rate while
-//! guarding (see `controls.md`). During those frames the camera still goes
-//! wherever the mouse goes, but the fighter does not -- so a reticle painted at
-//! screen centre would be telling you a lie exactly when the answer matters.
+//! That is the whole design, and the ordering matters. The alternative --
+//! leaving the camera pointed along the raw look axis and sliding the reticle
+//! to wherever the aim really lands -- would be equally honest and would feel
+//! terrible. A reticle that wanders reads as the aim slipping out of your
+//! hands, and the reticle is the one thing on screen a player is deliberately
+//! holding still. So the parallax from the camera sitting above the fighter's
+//! head goes into the view instead, where it is a few degrees of pitch nobody
+//! has to fight.
 //!
-//! So it is placed by projecting the point the fighter is actually pointed at
-//! back onto the screen. When facing tracks aim, which is most of the time,
-//! that lands dead centre and the crosshair sits still. When facing is locked
-//! or lagging, it slides off to the side the attack is really going, and you
-//! can see your commitment.
+//! It follows that there is nothing to compute here. `sim::aim` solves where
+//! the ability goes, `main::aim_point` hands that to the rig, and the rig
+//! points the camera at it -- so the middle of the screen is the answer by
+//! construction rather than by agreement between two pieces of code that could
+//! drift apart.
 //!
 //! Colour carries the other half: bright when you can act, dim when you are
 //! committed to something and the button will not answer.
@@ -100,30 +105,10 @@ pub fn setup(mut commands: Commands) {
         });
 }
 
-/// The world point the fighter is actually pointed at.
-///
-/// **The camera's own centre ray, turned by however far the fighter's facing
-/// lags the camera's.** Built that way rather than from a distance ahead of the
-/// fighter, because screen centre now follows the full look direction: an aim
-/// point constructed independently would have to re-derive the pitch, the eye
-/// lift and the shoulder offset, and the first time one of those changed the
-/// reticle would start lying. Turning the ray the camera is already using
-/// cannot drift from it.
-///
-/// Facing is yaw only -- pitch is renderer-local and attacks are flat -- so the
-/// difference between the two is a rotation about Y and nothing else.
-fn aim_point(eye: Vec3, forward: Vec3, facing: [f32; 3]) -> Vec3 {
-    const FAR: f32 = 64.0;
-    let camera_yaw = forward.z.atan2(forward.x);
-    let facing_yaw = facing[2].atan2(facing[0]);
-    let turn = facing_yaw - camera_yaw;
-    let (sin, cos) = turn.sin_cos();
-    let turned = Vec3::new(
-        forward.x * cos - forward.z * sin,
-        forward.y,
-        forward.x * sin + forward.z * cos,
-    );
-    eye + turned * FAR
+/// Top-left corner of the reticle box, so that its middle is the middle of a
+/// viewport this size.
+fn centred_in(width: f32, height: f32) -> (f32, f32) {
+    (width * 0.5 - SIZE * 0.5, height * 0.5 - SIZE * 0.5)
 }
 
 type CamQuery<'w, 's> =
@@ -135,31 +120,26 @@ pub fn update(
     mut cross: Query<(&mut Node, &mut Visibility), With<Crosshair>>,
     mut ink: Query<&mut BackgroundColor, With<CrosshairInk>>,
 ) {
-    let Ok((camera, cam_tf)) = cam.single() else {
+    let Ok((camera, _)) = cam.single() else {
         return;
     };
     let Ok((mut node, mut visible)) = cross.single_mut() else {
         return;
     };
 
+    // Dead centre of the viewport, whatever its size. The camera has already
+    // been pointed at the aim point, so this *is* the aim point.
+    let Some(viewport) = camera.logical_viewport_size() else {
+        *visible = Visibility::Hidden;
+        return;
+    };
+    let (left, top) = centred_in(viewport.x, viewport.y);
+    node.left = Val::Px(left);
+    node.top = Val::Px(top);
+    *visible = Visibility::Inherited;
+
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    let me = sim.local_player();
-    let p = &frame.players[me];
-
-    let target = aim_point(cam_tf.translation(), cam_tf.forward().as_vec3(), p.facing);
-
-    match camera.world_to_viewport(cam_tf, target) {
-        Ok(screen) => {
-            node.left = Val::Px(screen.x - SIZE * 0.5);
-            node.top = Val::Px(screen.y - SIZE * 0.5);
-            *visible = Visibility::Inherited;
-        }
-        // Behind the camera or otherwise unprojectable. Hiding beats drawing a
-        // mark in a place that means nothing.
-        Err(_) => *visible = Visibility::Hidden,
-    }
-
-    let want = if p.action.actionable() {
+    let want = if frame.players[sim.local_player()].action.actionable() {
         LIVE
     } else {
         COMMITTED
@@ -172,53 +152,22 @@ pub fn update(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use view::CameraRig;
-    use view::camera::RigConfig;
 
     #[test]
-    fn the_reticle_is_centred_exactly_when_facing_matches_aim() {
-        // The contract, checked against the camera itself rather than against a
-        // restatement of it. If the rig's aim point and the crosshair's ever
-        // drift apart, a still crosshair stops meaning anything.
-        let cfg = RigConfig::default();
-        for eighth in 0..8 {
-            for pitch in [-0.9f32, -0.3, 0.0, 0.5, 1.2] {
-                let yaw = eighth as f32 / 8.0 * std::f32::consts::TAU;
-                let pos = [1.5, 0.0, -2.0];
-                let facing = [yaw.cos(), 0.0, yaw.sin()];
-
-                let mut rig = CameraRig::new(cfg);
-                let framing = rig.update(0.016, pos, yaw, pitch);
-                let eye = Vec3::from_array(framing.eye);
-                let forward = (Vec3::from_array(framing.look_at) - eye).normalize();
-                let point = aim_point(eye, forward, facing);
-
-                let centre = eye + forward * 64.0;
-                assert!(
-                    point.distance(centre) < 0.05,
-                    "at yaw {yaw:.2} pitch {pitch:.2}: crosshair {point:?}, centre {centre:?}"
-                );
-            }
+    fn the_reticle_is_centred_on_the_viewport() {
+        // The contract, and the only thing this module decides any more: the
+        // mark's own middle is the middle of the screen, at every size. Where
+        // that middle *is* in the world is the camera's problem, and the camera
+        // is pointed at `sim::aim`'s answer.
+        for (w, h) in [(1280.0, 760.0), (800.0, 600.0), (3440.0, 1440.0)] {
+            let (left, top) = centred_in(w, h);
+            let middle = (left + SIZE * 0.5, top + SIZE * 0.5);
+            assert!(
+                (middle.0 - w * 0.5).abs() < 0.001 && (middle.1 - h * 0.5).abs() < 0.001,
+                "at {w}x{h} the reticle's middle is {middle:?}, not ({}, {})",
+                w * 0.5,
+                h * 0.5
+            );
         }
-    }
-
-    #[test]
-    fn a_locked_facing_moves_the_reticle_off_centre() {
-        // The case the whole thing exists for: mid-move the camera keeps
-        // turning and the fighter does not, so the reticle has to leave the
-        // middle of the screen rather than keep promising a hit it cannot land.
-        let cfg = RigConfig::default();
-        let pos = [0.0, 0.0, 0.0];
-        let mut rig = CameraRig::new(cfg);
-        // Looking a quarter turn away from where the fighter is committed.
-        let framing = rig.update(0.016, pos, std::f32::consts::FRAC_PI_2, 0.0);
-        let eye = Vec3::from_array(framing.eye);
-        let forward = (Vec3::from_array(framing.look_at) - eye).normalize();
-        let committed = aim_point(eye, forward, [1.0, 0.0, 0.0]);
-        let centre = eye + forward * 64.0;
-        assert!(
-            committed.distance(centre) > 1.0,
-            "reticle stayed put while facing and aim disagreed"
-        );
     }
 }

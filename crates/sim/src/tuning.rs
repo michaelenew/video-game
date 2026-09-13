@@ -155,6 +155,38 @@ pub fn body_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BodyHeight))
 }
 
+/// How high above the feet an ability comes out of.
+///
+/// **The single point the whole aiming scheme is hung on.** It is where a
+/// skillshot starts, it is what the range sphere is centred on, and it is the
+/// point the camera orbits -- so the line the crosshair draws in space and the
+/// line the ability travels are the same line. Move it and all three move
+/// together, which is the only way they can stay honest.
+///
+/// Chest height on a fighter who is `body_height` tall: hands, not eyes. Eye
+/// height would put the origin where the camera is and read as a first-person
+/// shot fired from a third-person body.
+pub fn cast_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CastHeight))
+}
+
+/// How far to one side of the centre line a hand is.
+///
+/// One number for the whole roster, like the body radius, and for the same
+/// reason: the simulation does not know how broad any particular fighter's
+/// shoulders are drawn -- that is a build in `view::skeleton` -- and a hit
+/// volume that changed size with the model would make the same move a different
+/// move on six characters.
+///
+/// It matters for exactly one thing, and it is worth being precise about which:
+/// **where a one-armed move leaves from.** See `crate::aim::hand_origin`. A
+/// punch that came out of the sternum would put the Dual mage's dark and light
+/// autos in the same place, and which of the two just landed is the whole of
+/// how her meter is steered.
+pub fn hand_offset() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HandOffset))
+}
+
 // ---------------------------------------------------------------------------
 // Match
 // ---------------------------------------------------------------------------
@@ -379,16 +411,136 @@ pub fn leap_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LeapRise))
 }
 
-/// How far the Reaver may stray from a placed shadow before it snaps back.
+/// How far the Reaver may stray from a shadow standing out on the field before
+/// it comes and finds her.
+///
+/// **Longer than the throw**, and it has to be: the shadow arrives at up to the
+/// send's own reach, and a leash shorter than that would have it turn round on
+/// the frame it landed. The gap between the two is how far she may walk off the
+/// line before the line comes after her.
 pub fn shadow_leash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
 }
 
-pub fn shadow_place_ahead() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShadowPlaceAhead))
+/// How far behind her the attending shadow stands.
+///
+/// Presentation with teeth: the shadow copies her swings, so where it stands is
+/// where its copy lands. Behind her rather than on her, so the two bodies can
+/// be told apart at a glance -- which is the whole reason the number exists.
+pub fn shadow_trail() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowTrail))
 }
 
-pub fn structure_ahead() -> Fx {
+/// How much of the gap the attending shadow closes each frame.
+///
+/// An ease rather than a hard follow, so it swings out behind her when she
+/// turns and drifts back in when she stops. One is welded to her back.
+pub fn shadow_follow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowFollow))
+}
+
+/// How many frames after her the shadow throws the same move.
+pub fn shadow_lag() -> u16 {
+    oven::scalar(Scalar::ShadowLag).max(0) as u16
+}
+
+/// What the shadow's copy of a move deals, as a share of hers.
+pub fn shadow_echo() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::ShadowEcho), 100)
+}
+
+/// Frames the shadow spends flying out to where it was sent.
+pub fn shadow_send_frames() -> u16 {
+    oven::scalar(Scalar::ShadowSendFrames).max(1) as u16
+}
+
+/// How fast the shadow comes home when it is recalled.
+pub fn shadow_home_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowHomeSpeed))
+}
+
+/// How much speed the recall leaves whoever it runs through.
+pub fn shadow_recall_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowRecallSlow))
+}
+
+/// How near the crosshair has to be to the shadow for a forward dodge to become
+/// a dash to it.
+///
+/// A radius around the shadow, in metres, tested against the crosshair's own
+/// ray -- see `aim::pointing_at`. Generous on purpose: the dodge is the
+/// class's movement and it must not be lost to a pixel.
+pub fn shadow_lock_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowLockCone))
+}
+
+/// How fast she crosses to her shadow on a dash.
+///
+/// Constant while the dash runs rather than a decaying shove, so the distance
+/// covered is a fact about the leash rather than about how the dodge's decay
+/// happens to be tuned this week. Fast enough to cross the **whole leash**
+/// inside one dodge, which is the property that makes the dash a reliable
+/// escape rather than a gamble on how far away she left the thing.
+pub fn shadow_dash_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
+}
+
+/// How far the Guillotine's blades travel from the shadow.
+pub fn lotus_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusRadius))
+}
+
+/// How high the blades arc on their way out.
+pub fn lotus_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusRise))
+}
+
+/// How far a blade's path bends as it goes, in turns.
+///
+/// Zero is six spokes. Anything else is what makes it a lotus: each blade
+/// leaves on its own bearing and keeps turning, so the six of them open like
+/// petals rather than a starburst.
+pub fn lotus_curl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusCurl))
+}
+
+pub fn lotus_blade_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusBladeRadius))
+}
+
+/// Frames the blades take to reach full extension.
+pub fn lotus_erupt() -> u16 {
+    oven::scalar(Scalar::LotusErupt).max(1) as u16
+}
+
+/// Frames they hang there before coming back.
+pub fn lotus_hold() -> u16 {
+    oven::scalar(Scalar::LotusHold).max(0) as u16
+}
+
+/// Frames they spend chasing the shadow home.
+pub fn lotus_return() -> u16 {
+    oven::scalar(Scalar::LotusReturn).max(1) as u16
+}
+
+/// What a blade deals on the way back, as a share of what it dealt going out.
+pub fn lotus_return_damage() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::LotusReturnDamage), 100)
+}
+
+/// How much speed a blade leaves whoever it catches.
+pub fn lotus_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusSlow))
+}
+
+/// How far from the Elementalist a stone can be raised.
+///
+/// It used to put one a fixed distance straight ahead, which meant the only way
+/// to place a stone anywhere was to walk there. It is a **reach** now: the stone
+/// comes up where the crosshair is, and this is as far as that can be. Raised
+/// from 2.5 m when the meaning changed -- a fixed 2.5 m ahead is a sensible
+/// place to stand a stone, and a 2.5 m leash is barely enough room to aim in.
+pub fn raise_reach() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StructureAhead))
 }
 
@@ -407,33 +559,169 @@ pub fn stun_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StunDecay))
 }
 
+// ---------------------------------------------------------------------------
+// Stride
+// ---------------------------------------------------------------------------
+//
+// How much ground one full cycle of a walk or a run covers. These are the
+// numbers that decide whether the feet skate, and they are shared three ways:
+// the simulation advances the stride phase with them, the renderer plays the
+// clips at that phase, and the clips themselves are authored by placing every
+// planted foot with the same arithmetic. One copy, here, or the feet slide.
+//
+// They are not free choices. A leg is 0.87 m long and a hip is 0.86 m off the
+// floor at contact, so a foot can be at most about 0.34 m ahead of the hip
+// before the leg runs out -- and stride length follows from that.
+
+/// Speed at which the walk cycle is at full weight. The guarding walk speed is
+/// two, and that is the speed a fighter spends a tense exchange at.
+pub const WALK_AT: Fx = Fx::ratio(22, 10);
+/// And where the run is. Seven metres per second is a run by any honest
+/// measure, whatever the movement knob is called.
+pub const RUN_AT: Fx = Fx::ratio(7, 1);
+
+pub const WALK_STRIDE: Fx = Fx::ratio(110, 100);
+pub const RUN_STRIDE: Fx = Fx::ratio(270, 100);
+pub const CROUCH_STRIDE: Fx = Fx::ratio(80, 100);
+/// A sidestep covers less ground per cycle than a stride forward, because a leg
+/// swung sideways runs out of hip long before one swung forward runs out of leg.
+pub const STRAFE_STRIDE: Fx = Fx::ratio(72, 100);
+
 /// What a body keeps while the round-over pause runs.
 pub fn settle_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SettleDecay))
 }
 
-/// Reach, damage and recovery multipliers for one of the Champion's forms.
-/// Three kits from one move table, so these nine numbers are most of the class.
-pub fn form_modifiers(form: crate::class::Form) -> (Fx, Fx, Fx) {
-    use crate::class::Form;
-    let raw = |s| Fx::from_raw(oven::scalar(s));
-    match form {
-        Form::Hammer => (
-            raw(Scalar::HammerReach),
-            raw(Scalar::HammerDamage),
-            raw(Scalar::HammerRecovery),
-        ),
-        Form::Sword => (
-            raw(Scalar::SwordReach),
-            raw(Scalar::SwordDamage),
-            raw(Scalar::SwordRecovery),
-        ),
-        Form::Spear => (
-            raw(Scalar::SpearReach),
-            raw(Scalar::SpearDamage),
-            raw(Scalar::SpearRecovery),
-        ),
-    }
+// ---------------------------------------------------------------------------
+// The Champion
+// ---------------------------------------------------------------------------
+//
+// The class used to be three multipliers -- reach, damage and recovery, one set
+// per weapon -- laid over one three-move table. Those nine numbers are gone.
+// Each weapon now has its own moves with their own frame data on its own mouse
+// button, which is both what the multipliers were trying to buy and something
+// a multiplier cannot buy: a hammer that is *shaped* differently from a spear
+// rather than a spear with bigger numbers. What is left here is Rush, which is
+// the part of the class that is genuinely one mechanic rather than a move.
+
+/// How fast the dash travels. Above the dodge, which is the point: Rush is the
+/// Champion's answer to every gap in the arena, and a dash you could walk
+/// alongside would not be one.
+pub fn rush_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RushSpeed))
+}
+
+/// How long the dash lasts. Speed times this is the distance it covers, which
+/// is the number that actually matters for spacing.
+pub fn rush_frames() -> u16 {
+    oven::scalar(Scalar::RushFrames) as u16
+}
+
+/// Frames after a dash ends before the charge is back.
+///
+/// One charge is the design (see `docs/design/champion.md`): Rush is the only
+/// way out of a committed tail, so spending it has to be a decision. The
+/// recharge is what makes it one.
+pub fn rush_recharge() -> u16 {
+    oven::scalar(Scalar::RushRecharge) as u16
+}
+
+/// How far below the horizon you have to be pointing for a spear thrown out of
+/// a Rush to plant in the floor and vault instead of stabbing.
+///
+/// In turns, positive, measured downward. The two moves share a button and are
+/// told apart by where you are looking, which is the only separator that does
+/// not cost another key -- and it is also the honest one: a pole vault *is* a
+/// spear aimed at the ground.
+pub fn vault_pitch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VaultPitch))
+}
+
+/// How much of the dash's speed the vault carries into the air.
+///
+/// Under one: planting the spear is what turns speed into height, and a vault
+/// that kept all of its run would be a jump with extra steps.
+pub fn vault_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VaultCarry))
+}
+
+/// Extra upward speed from pressing jump while an uppercut has hold of
+/// somebody. The "we are settling this in the air" button.
+pub fn uppercut_leap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UppercutLeap))
+}
+
+/// Knockback multiplier against a target who is already off the ground.
+///
+/// Someone airborne has nothing to brace against, which is the whole reason
+/// the air game is worth playing: the same swing that shoves a standing
+/// fighter a metre sends a falling one across the arena.
+pub fn air_hit_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirHitKnockback))
+}
+
+/// Damage per metre per second of impact when a spiked fighter hits the floor.
+///
+/// Bounded by terminal velocity rather than by this number: whatever the spike
+/// sets, the fall cap is what the ground sees, so the worst case is knowable.
+pub fn slam_damage() -> i32 {
+    oven::scalar(Scalar::SlamDamage)
+}
+
+/// How long a spiked fighter is on the floor after landing.
+pub fn slam_stagger() -> u16 {
+    oven::scalar(Scalar::SlamStagger) as u16
+}
+
+/// The shove the aerial spear's fan gives the Champion when it connects.
+///
+/// On hit rather than on throw. It is the difference between a repositioning
+/// tool and a movement option: you get the boost for *catching* somebody, so
+/// the fan is thrown at people rather than at the air.
+pub fn spear_fan_boost() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpearFanBoost))
+}
+
+/// Where a cut across the body is thrown from, as a fraction of the height
+/// everything else is cast at.
+///
+/// **A sweep is a low cut.** The hands stay near the hip and the weapon crosses
+/// the whole front, which is how the Champion's sweep has always been animated
+/// -- see `crates/anim/src/clips/champion.rs`. It is a knob rather than a
+/// constant because it decides what the sword can reach, and "what the sword
+/// can reach" turned out to be the difference between a Ridgeback hunt with a
+/// climb in it and one without: a cut thrown from the chest and dead level
+/// passes over the ridge you climbed up there to break.
+pub fn sweep_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepHeight))
+}
+
+/// And how far below level that cut travels, in turns.
+pub fn sweep_dip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepDip))
+}
+
+/// How far out the point of a thrust already is when the hitbox appears, as a
+/// fraction of the move's reach.
+///
+/// Under one, because a thrust that sprang to full extension on its first
+/// active frame would have no visible travel at all -- and the last of the
+/// extension is what a defender is reading when they decide to step back.
+pub fn thrust_extend() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrustExtend))
+}
+
+/// Where the inner edge of a wing sits, as a fraction of the move's reach.
+///
+/// A wing is a **section of a torus** lying flat around the caster (see
+/// `moves::Shape::Wing`), so it has a hole in the middle, and this is how big
+/// the hole is. The design statement is that the inner arc passes through where
+/// the punching elbow starts -- close in, tucked against the body -- which is
+/// what makes stepping *inside* the wing a bad answer to it rather than the
+/// only answer to it. `view/tests/kinematics.rs` checks it against the elbow in
+/// the baked clip, because the simulation has no idea where an elbow is.
+pub fn wing_inner() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingInner))
 }
 
 pub fn meter_max() -> i32 {
@@ -448,6 +736,71 @@ pub fn meter_burn() -> i32 {
     oven::scalar(Scalar::MeterBurn)
 }
 
+// ---------------------------------------------------------------------------
+// Stones
+// ---------------------------------------------------------------------------
+//
+// A structure stopped being a marker and became a solid, so it needs the
+// numbers a solid needs: what it does to what is in its way, and what it costs
+// to be standing on the spot when one arrives. See `crate::stones`.
+
+/// How far out of the ground a stone has to be before it counts as erupting
+/// rather than churning.
+///
+/// A fraction of the rise rather than a frame count, so it is the *curve* that
+/// decides when the telegraph ends. Reshape the rise and the warning moves with
+/// it; pick a frame instead and the two drift apart the first time anybody
+/// drags a handle.
+pub fn stone_erupt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneErupt))
+}
+
+/// Movement multiplier while a stone is churning under your feet.
+///
+/// Slight on purpose. This is the telegraph made tactile -- you feel the ground
+/// go before you see the stone -- and a telegraph that also stops you moving
+/// would make the eruption unavoidable rather than readable.
+pub fn stone_churn_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneChurnSlow))
+}
+
+/// What the eruption costs whoever stood on it. Small: the stagger is the
+/// point, and the damage is there so that ignoring a telegraph is never free.
+pub fn stone_erupt_damage() -> i32 {
+    oven::scalar(Scalar::StoneEruptDamage)
+}
+
+pub fn stone_erupt_stagger() -> u16 {
+    oven::scalar(Scalar::StoneEruptStagger) as u16
+}
+
+/// How much of a rising surface's speed whatever is riding it keeps.
+///
+/// The eruption's own climb is what throws a stone -- or a fighter -- off the
+/// top of another, so this is the knob that decides whether a stone raised
+/// underneath is a lift or a launch. One, and a rider leaves at exactly the
+/// speed the surface was climbing at.
+pub fn stone_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneLift))
+}
+
+/// Fraction of the closing speed a stone hands to whatever it runs into.
+pub fn stone_knock_handed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneKnockHanded))
+}
+
+/// What both stones keep of their speed after a knock. Below one, so the
+/// exchange costs them both and a stone cannot bowl through a row of them.
+pub fn stone_knock_damp() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneKnockDamp))
+}
+
+/// What a resting stone keeps of its speed each frame. This is what brings a
+/// knocked stone to a stop somewhere short of the far wall.
+pub fn stone_friction() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StoneFriction))
+}
+
 /// The curve a structure climbs out of the ground on.
 pub fn structure_rise_curve() -> crate::curve::Curve {
     crate::curve::Curve {
@@ -459,11 +812,533 @@ pub fn structure_rise_curve() -> crate::curve::Curve {
 }
 
 // ---------------------------------------------------------------------------
+// The Elementalist's auto, aimed through terrain
+// ---------------------------------------------------------------------------
+//
+// Bolt is a beam: a ray along the crosshair, and whatever it meets first is
+// the move. See `docs/design/kits/elementalist.md` and `crate::bolt`.
+//
+// **The beam's own length and thickness are not here.** They are the move
+// table's `reach` and `radius`, because the beam *is* the move -- a second
+// copy of its range would only be a number the frame table could disagree
+// with. What is here is everything the beam's three outcomes need.
+
+/// How fast a kicked stone leaves. The ceiling `stones::launch_decel` eases
+/// down from over the back of its travel.
+pub fn bolt_knock_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockSpeed))
+}
+
+/// How far a kicked stone travels before it is considered spent. Measured
+/// from where the kick began, not a lifetime -- a stone parked by a wall
+/// partway through still counts the same distance it would have covered.
+pub fn bolt_knock_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockRange))
+}
+
+/// Where in that travel the stone starts dying off, as a fraction of the
+/// whole. Below it the stone keeps the shot's full speed; above it, speed
+/// eases toward zero by the time the travel runs out.
+pub fn bolt_knock_decel_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockDecelStart))
+}
+
+/// Below this closing speed a kicked stone is too slow to call a hit. It
+/// still shoves like any other stone; it just does not hurt anyone.
+pub fn bolt_knock_min_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockMinSpeed))
+}
+
+/// Damage per whole metre-per-second of closing speed, so a stone kicked at
+/// someone close to the point-blank ceiling hits far harder than one that has
+/// mostly died off by the time it reaches them.
+pub fn bolt_knock_damage_per_speed() -> i32 {
+    oven::scalar(Scalar::BoltKnockDamagePerSpeed)
+}
+
+pub fn bolt_knock_stagger() -> u16 {
+    oven::scalar(Scalar::BoltKnockStagger) as u16
+}
+
+/// How much of the closing speed a caught fighter is pushed with.
+pub fn bolt_knock_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BoltKnockPush))
+}
+
+// The fire bolt: what leaves a pillar the beam was aimed through. The one
+// thing she throws that has a speed, and the only part of the auto that can
+// be dodged after it is thrown.
+
+/// How fast it flies. Fast enough that it is a poke rather than a lob -- it
+/// crosses the arena in about a second and is not meaningfully led.
+pub fn fire_bolt_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltSpeed))
+}
+
+/// How far it gets before it is spent. A distance rather than a lifetime, so
+/// retuning the speed does not silently retune the range with it.
+pub fn fire_bolt_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltRange))
+}
+
+/// How thick it is. Small: a bolt you can walk out of the way of.
+pub fn fire_bolt_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltRadius))
+}
+
+/// Low to middling -- more than the beam's own poke, far less than anything
+/// she commits frames to.
+pub fn fire_bolt_damage() -> i32 {
+    oven::scalar(Scalar::FireBoltDamage)
+}
+
+/// A little stagger, unlike the beam, which has none. The bolt is the part of
+/// the auto that had to be earned by putting a pillar down first.
+pub fn fire_bolt_stagger() -> u16 {
+    oven::scalar(Scalar::FireBoltStagger) as u16
+}
+
+pub fn fire_bolt_blockstun() -> u16 {
+    oven::scalar(Scalar::FireBoltBlockstun) as u16
+}
+
+pub fn fire_bolt_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireBoltKnockback))
+}
+
+// ---------------------------------------------------------------------------
+// The Blood mage
+//
+// Everything she throws costs blood and gives it back on the hit, and those two
+// numbers are per move -- they are in the move table beside the damage, where
+// the rest of an ability's economy lives. What is here is the *shape* of the
+// three things she puts into the world: how tall the spike stands, how far the
+// blade flies, and how wide the arms of a Grasp open before they close.
+// ---------------------------------------------------------------------------
+
+/// How tall the black spike stands out of the ground.
+///
+/// Cosmetic and gameplay at once, and the reason it is a number rather than a
+/// constant in the renderer: the spike is the tell. A field that is only a
+/// stain on the floor is one you do not see until you are standing in it, which
+/// makes a placement ability into a trap, and the class wants you to look at
+/// the thing and decide to walk around it.
+pub fn spike_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SpikeHeight))
+}
+
+/// Frames the Bloodletter takes to fly out and come all the way home.
+///
+/// The whole flight, both passes. Half of it is the way out.
+pub fn bloodletter_flight() -> u16 {
+    oven::scalar(Scalar::BloodletterFlight) as u16
+}
+
+/// How fat the blade is. Small: it is a thrown knife, not a wave.
+pub fn bloodletter_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BloodletterRadius))
+}
+
+/// Frames the Grasp's four arms take to open and converge.
+pub fn grasp_flight() -> u16 {
+    oven::scalar(Scalar::GraspFlight) as u16
+}
+
+/// How far off the centre line the arms bow at their widest.
+///
+/// The reason the ability is not just four copies of one skillshot: they leave
+/// as a cone and arrive as a point, so the volume they sweep is a lens rather
+/// than a line, and standing anywhere inside it gets you clipped by one or two.
+/// All four is a much smaller place to be, which is what makes the root a read.
+pub fn grasp_spread() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspSpread))
+}
+
+/// How fat one arm is.
+pub fn grasp_arm_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspArmRadius))
+}
+
+/// Frames you are rooted for after being caught by all four arms.
+///
+/// Brief on purpose. It is a hard stop, and the design only allows one behind a
+/// hard condition -- see `ability-spec.md`. Being in the one place all four
+/// arms pass through is that condition.
+pub fn grasp_root() -> u16 {
+    oven::scalar(Scalar::GraspRoot) as u16
+}
+
+/// What a Blood mage's damage is multiplied by against something that cannot
+/// move -- rooted, staggered, held, or a creature on its side.
+///
+/// The class's damage identity, and the reason its root is a setup rather than
+/// a small reward. See `class::Class::preys_on_the_disabled` for which classes
+/// it applies to and `state::Player::disabled` for what counts.
+pub fn disabled_damage_mul() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DisabledDamageMul))
+}
+
+/// How far below the horizon a melee swing stays level.
+///
+/// The camera sits above the shoulder, so looking *at* someone standing at your
+/// own height means looking slightly down at them. Without a dead zone a swing
+/// that followed the camera would tilt into the floor every time you fought
+/// anybody. Inside it the swing is the standard arc in front of the body;
+/// outside it, up or down by whatever is left over. Degrees, because that is
+/// how the rest of the camera's angles are written. See `crate::aim::swing_path`.
+pub fn swing_level_to() -> i32 {
+    oven::scalar(Scalar::SwingLevelTo)
+}
+
+// ---------------------------------------------------------------------------
+// The Ridgeback
+//
+// See `docs/design/monsters.md`. Three groups, and they are edited separately
+// because they answer different questions: how the animal is built, how it
+// decides, and what it takes to stay on its back.
+// ---------------------------------------------------------------------------
+
+/// Multiplies every part box. The one number you actually reach for while
+/// playing -- *how big is it* -- which is why the proportions in
+/// `monster::SHAPES` are a constant and this is not.
+pub fn monster_scale() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterScale))
+}
+
+/// Pool health. The per-part vulnerabilities below are what decide how long a
+/// fight actually takes, so this is the *second* number to reach for.
+pub fn monster_health() -> i32 {
+    oven::scalar(Scalar::MonsterHealth)
+}
+
+/// Health of a breakable limb. Breaking a foreleg costs it the turn toward
+/// that side, which is the one consequence in the fight a player can point at.
+pub fn limb_health() -> i32 {
+    oven::scalar(Scalar::LimbHealth)
+}
+
+/// How far from the arena wall it is kept. A creature nine metres long in a
+/// twenty-eight metre arena needs somewhere to stand.
+pub fn monster_margin() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterMargin))
+}
+
+/// Walking, backing off, and how quickly it changes between them. Below the
+/// player's own walk on purpose: it catches you by cornering you, not by
+/// outrunning you.
+pub fn monster_walk() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterWalk))
+}
+pub fn monster_back() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterBack))
+}
+pub fn monster_accel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterAccel))
+}
+
+/// The distance it tries to hold, and how hard it corrects toward it. Set near
+/// the middle of the move set's range band so that most of what it wants to do
+/// is available most of the time.
+pub fn prowl_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ProwlRange))
+}
+pub fn approach_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ApproachGain))
+}
+
+/// Turning, in turns per second and turns per second squared.
+///
+/// The rate cap is how fast it can come round. The acceleration cap is what
+/// gives it mass -- and it is the more interesting of the two, because it is
+/// what produces the overshoot a player cuts back across. See
+/// `monster::Monster::steer`.
+pub fn turn_rate_max() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TurnRateMax))
+}
+pub fn turn_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TurnGain))
+}
+pub fn turn_accel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TurnAccel))
+}
+/// What a broken foreleg does to the turn toward that side.
+pub fn turn_hurt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TurnHurt))
+}
+/// How a swing in progress bleeds off once a move commits. Stopping dead
+/// visibly clamps the animal mid-turn.
+pub fn turn_settle() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TurnSettle))
+}
+
+/// **The difficulty model, both halves.**
+///
+/// `glance_frames` is how stale its information is: it takes one sample of the
+/// target and works from it until the next. `lead` is how much of the
+/// extrapolation from that sample it trusts, as a fraction of the move's own
+/// startup -- so a slow lunge leads further, which is both correct and one knob
+/// instead of one per move.
+///
+/// Short glance with a long lead is frightening. Long glance with no lead is an
+/// animal you can walk around. The skill the pair rewards is specific: change
+/// direction between its glances.
+pub fn glance_frames() -> u16 {
+    oven::scalar(Scalar::GlanceFrames) as u16
+}
+pub fn lead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::Lead))
+}
+/// The horizon it leads by while merely walking toward you, in frames.
+pub fn prowl_lead() -> u16 {
+    oven::scalar(Scalar::ProwlLead) as u16
+}
+
+/// The pause between moves. Without one it is a chain gun.
+pub fn think_frames() -> u16 {
+    oven::scalar(Scalar::ThinkFrames) as u16
+}
+
+/// How close to the best a move has to score to make the draw, as a percentage.
+/// A hundred always throws the best move and is therefore a script you can
+/// memorise; zero is noise. In between, the distribution is learnable and the
+/// next move is not.
+pub fn decisiveness() -> i32 {
+    oven::scalar(Scalar::Decisiveness)
+}
+
+/// How much harder it commits as it loses health, and how much it dislikes
+/// repeating itself and for how long.
+pub fn hurt_aggression() -> i32 {
+    oven::scalar(Scalar::HurtAggression)
+}
+pub fn variety_penalty() -> i32 {
+    oven::scalar(Scalar::VarietyPenalty)
+}
+pub fn variety_frames() -> u16 {
+    oven::scalar(Scalar::VarietyFrames) as u16
+}
+
+/// Ridge damage that puts it on the ground, and how fast the pool comes back.
+/// Regeneration is what stops a topple being saved up across a whole fight.
+pub fn poise_max() -> i32 {
+    oven::scalar(Scalar::PoiseMax)
+}
+pub fn poise_regen() -> i32 {
+    oven::scalar(Scalar::PoiseRegen)
+}
+pub fn topple_frames() -> u16 {
+    oven::scalar(Scalar::ToppleFrames) as u16
+}
+/// Going down is fast and getting up is not.
+pub fn topple_fall() -> u16 {
+    oven::scalar(Scalar::ToppleFall) as u16
+}
+pub fn topple_rise() -> u16 {
+    oven::scalar(Scalar::ToppleRise) as u16
+}
+pub fn topple_pitch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TopplePitch))
+}
+pub fn topple_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ToppleDrop))
+}
+
+/// A flinch interrupts it, and only a hit that hurts causes one -- which in
+/// practice means a ridge hit, because the armour elsewhere keeps the number
+/// below the threshold. That rule is emergent rather than written down, and it
+/// is the better for it.
+pub fn flinch_frames() -> u16 {
+    oven::scalar(Scalar::FlinchFrames) as u16
+}
+pub fn flinch_pitch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FlinchPitch))
+}
+pub fn flinch_threshold() -> i32 {
+    oven::scalar(Scalar::FlinchThreshold)
+}
+
+/// What fraction of an attack's damage each part passes through. Below one is
+/// armour. The ridge is above one, and that difference is the entire reason to
+/// climb.
+pub fn vuln_head() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnHead))
+}
+pub fn vuln_neck() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnNeck))
+}
+pub fn vuln_barrel() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnBarrel))
+}
+pub fn vuln_ridge() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnRidge))
+}
+pub fn vuln_tail() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnTail))
+}
+pub fn vuln_tail_tip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnTailTip))
+}
+pub fn vuln_foreleg() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnForeleg))
+}
+pub fn vuln_hindleg() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnHindleg))
+}
+
+// The pose amplitudes. These are not decoration: the pose is what a rider is
+// standing on, so every one of them is also a number that decides whether a
+// move throws people off. See `monster::pose_of`.
+
+pub fn bite_draw() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BiteDraw))
+}
+pub fn bite_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BiteReach))
+}
+pub fn bite_rear() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BiteRear))
+}
+pub fn stomp_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StompLift))
+}
+pub fn stomp_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StompDrop))
+}
+pub fn stomp_bob() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StompBob))
+}
+pub fn sweep_wind() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepWind))
+}
+pub fn sweep_swing() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepSwing))
+}
+/// How much the body answers the tail. A tail that heavy cannot swing without
+/// the rest of the animal paying for it, and the payment is what shears anyone
+/// standing on the barrel.
+pub fn sweep_counter() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepCounter))
+}
+pub fn charge_lean() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChargeLean))
+}
+pub fn charge_gallop() -> i32 {
+    oven::scalar(Scalar::ChargeGallop)
+}
+pub fn charge_bounce() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ChargeBounce))
+}
+pub fn slam_rear() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamRear))
+}
+pub fn slam_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamRise))
+}
+pub fn slam_dip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamDip))
+}
+/// Fractional on purpose: whether the shake ends where it started decides
+/// whether it reads as a shudder or as a swerve.
+pub fn shake_cycles() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShakeCycles))
+}
+pub fn shake_yaw() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShakeYaw))
+}
+pub fn shake_pitch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShakePitch))
+}
+pub fn shake_ramp() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShakeRamp))
+}
+
+// ---------------------------------------------------------------------------
+// Riding
+// ---------------------------------------------------------------------------
+
+/// How close a falling body has to be to a mountable face to land on it.
+pub fn mount_snap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MountSnap))
+}
+
+/// How far over an edge you may stand before you are standing on nothing, as a
+/// fraction of your own width.
+pub fn edge_grace() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EdgeGrace))
+}
+
+/// **Grip: the acceleration a rider can hold on through**, in metres per second
+/// squared, and what bracing multiplies it by.
+///
+/// Every buck in the game is this one comparison. Nothing tags a move "throws
+/// riders" -- a move that moves the surface hard enough throws whoever is on
+/// it, and a move that does not, does not. Crouching braces, which is a third
+/// answer alongside dodging and leaving.
+///
+/// For scale: an ordinary walk or turn is tens, a stomp is a couple of hundred,
+/// and the slam's reversal is over a thousand.
+pub fn grip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::Grip))
+}
+pub fn brace_grip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BraceGrip))
+}
+
+/// What being thrown does: outward along the surface, upward off it, and how
+/// long you spend unable to answer for it.
+pub fn throw_kick() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrowKick))
+}
+pub fn throw_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrowLift))
+}
+pub fn throw_stun() -> u16 {
+    oven::scalar(Scalar::ThrowStun) as u16
+}
+
+/// Frames after landing before the grip test starts. You get a moment to plant
+/// your feet, and without it the first frame aboard reads as an infinite
+/// acceleration and throws you straight back off.
+pub fn mount_settle() -> u16 {
+    oven::scalar(Scalar::MountSettle) as u16
+}
+
+/// Walking speed on the creature's back, as a fraction of the ground walk.
+/// Slower, because the footing is not flat and because a back you can cross in
+/// half a second is not a place you have to hold.
+pub fn rider_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RiderSpeed))
+}
+
+/// Where the two sides start a hunt, measured out from the arena's centre.
+///
+/// Far enough apart that the opening of a fight is an approach rather than an
+/// ambush: both sides get to read the other before anything is committed.
+pub fn monster_spawn() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterSpawn))
+}
+pub fn hunter_spawn() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HunterSpawn))
+}
+
+/// How big a step up a rider can simply walk up.
+///
+/// The creature is terrain, and terrain has steps: the tail sits two thirds of
+/// a metre below the back, and without this the only way from one to the other
+/// is a jump nobody would think to try. A rider who walks into a mountable face
+/// this close above their feet is put on top of it instead of stopped by it,
+/// which is what every platformer does and what makes an animal feel like
+/// somewhere you can move around rather than a collection of ledges.
+pub fn step_up() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StepUp))
+}
+
+// ---------------------------------------------------------------------------
 // Stun
 // ---------------------------------------------------------------------------
 //
-// Every point of damage in the game stuns, shoves, and interrupts. The rules
-// live in `state::strike`; these are the numbers they read. See
+// Every point of damage in the game freezes, stuns, interrupts and shoves. The
+// rules live in `state::apply_hit`; these are the numbers they read. See
 // `docs/design/stun.md`.
 
 /// How much further you fly at death's door than at full health.
@@ -498,9 +1373,9 @@ pub fn swell_blow() -> Fx {
 /// **Deliberately far smaller than the knockback swell, and that gap is the
 /// whole design.** Both grow with damage taken, but knockback grows faster, so
 /// the distance a victim covers outruns the window their attacker has to follow
-/// them. Combos are therefore a property of the early round: the same two moves
-/// that link at full health leave a gap at the end of one. Pinned by
-/// `combos_are_an_opening-round_thing` in the feel tests.
+/// them. The combo window therefore opens in the middle of a round and has
+/// closed by the end. Pinned by `knockback_swells_faster_than_hitstun_does` in
+/// the feel tests.
 pub fn swell_hitstun() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SwellHitstun))
 }
@@ -509,9 +1384,7 @@ pub fn swell_hitstun() -> Fx {
 ///
 /// Hitlag: the crunch. It is not a balance number -- the frames are given back
 /// to both sides, so nobody gains or loses tempo by it -- it is the punctuation
-/// that makes a hit read as a hit rather than as a number changing. It also
-/// buys the victim the window in which they choose their direction; see
-/// `di_strength`.
+/// that makes a hit read as a hit rather than as a number changing.
 pub fn hitlag_base() -> u16 {
     oven::scalar(Scalar::HitlagBase) as u16
 }
@@ -519,17 +1392,6 @@ pub fn hitlag_base() -> u16 {
 /// Extra freeze per point of damage, so a heavy blow lands heavier.
 pub fn hitlag_per_damage() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HitlagPerDamage))
-}
-
-/// How far a victim may bend their own knockback, as a tangent.
-///
-/// Directional influence. 0.35 is a little under twenty degrees, which is close
-/// to what Smash allows, and the reason for a number in that region is that it
-/// has to be small enough that it cannot become an escape and large enough that
-/// aiming it changes where you land. **It never changes how far you go**, only
-/// which way -- see `state::steer_knockback`.
-pub fn di_strength() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::DiStrength))
 }
 
 /// Stun and shove from one tick of a fire pillar.

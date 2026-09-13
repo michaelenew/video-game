@@ -139,6 +139,7 @@ scalars! {
     BodyRadius,       "Body",     "Body radius",            Fixed,   fx(1,10),  fx(2,1);
     BodyHeight,       "Body",     "Body height",            Fixed,   fx(1,2),   fx(4,1);
     CrouchHeightScale,"Body",     "Crouch height (x)",      Fixed,   fx(1,10),  fx(1,1);
+    CastHeight,       "Body",     "Cast height",            Fixed,   fx(1,10),  fx(4,1);
     MaxHealth,        "Match",    "Max health",             Int,     100,       5000;
     RoundOverFrames,  "Match",    "Round-over pause",       Frames,  30,        600;
     AirStallDamp,     "Air",      "Aerial hang damping",    Fixed,   0,         fx(1,1);
@@ -157,10 +158,10 @@ scalars! {
     SpikeLife,        "Effects",  "Black spike lifetime",   Frames,  10,        600;
     SpikeSlow,        "Effects",  "Black spike slow (x)",   Fixed,   0,         fx(1,1);
     SpikeDrain,       "Effects",  "Black spike drain",      Int,     0,         200;
-    StructureRadius,  "Effects",  "Structure radius",       Fixed,   fx(1,10),  fx(4,1);
+    StructureRadius,  "Stones",   "Stone radius",           Fixed,   fx(1,10),  fx(4,1);
     SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
     PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
-    StructureRise,    "Effects",  "Structure rise",         Frames,  1,         90;
+    StructureRise,    "Stones",   "Rise",                   Frames,  1,         90;
     ShieldSpeed,      "Bulwark",  "Shield speed",               Fixed,   fx(1,1),   fx(40,1);
     ShieldRange,      "Bulwark",  "Shield range",               Fixed,   fx(1,1),   fx(30,1);
     ShieldRadius,     "Bulwark",  "Shield radius",              Fixed,   fx(1,10),  fx(3,1);
@@ -171,34 +172,158 @@ scalars! {
     LeapSpeed,        "Bulwark",  "Leap speed",                 Fixed,   fx(1,1),   fx(40,1);
     LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
     ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
-    ShadowPlaceAhead, "Reaver",   "Shadow placed ahead",        Fixed,   0,         fx(10,1);
-    StructureAhead,   "Effects",  "Structure placed ahead",     Fixed,   0,         fx(10,1);
-    StructureHeight,  "Effects",  "Structure height",           Fixed,   fx(1,10),  fx(8,1);
+    StructureAhead,   "Stones",   "Raise reach",                Fixed,   0,         fx(10,1);
+    StructureHeight,  "Stones",   "Stone height",               Fixed,   fx(1,10),  fx(8,1);
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
     StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
     SettleDecay,      "Match",    "Settle decay",               Fixed,   0,         fx(1,1);
-    HammerReach,      "Champion", "Hammer reach (x)",           Fixed,   fx(1,10),  fx(3,1);
-    HammerDamage,     "Champion", "Hammer damage (x)",          Fixed,   fx(1,10),  fx(3,1);
-    HammerRecovery,   "Champion", "Hammer recovery (x)",        Fixed,   fx(1,10),  fx(3,1);
-    SwordReach,       "Champion", "Sword reach (x)",            Fixed,   fx(1,10),  fx(3,1);
-    SwordDamage,      "Champion", "Sword damage (x)",           Fixed,   fx(1,10),  fx(3,1);
-    SwordRecovery,    "Champion", "Sword recovery (x)",         Fixed,   fx(1,10),  fx(3,1);
-    SpearReach,       "Champion", "Spear reach (x)",            Fixed,   fx(1,10),  fx(3,1);
-    SpearDamage,      "Champion", "Spear damage (x)",           Fixed,   fx(1,10),  fx(3,1);
-    SpearRecovery,    "Champion", "Spear recovery (x)",         Fixed,   fx(1,10),  fx(3,1);
     MeterMax,         "Dual mage","Meter range",                Int,     10,        400;
     MeterDeep,        "Dual mage","Meter deep threshold",       Int,     1,         400;
     MeterBurn,        "Dual mage","Burn at full depth",         Int,     0,         100;
-    RiseCurveX1,      "Effects",  "Structure rise, hold",       Fixed,   0,         fx(1,1);
-    RiseCurveY1,      "Effects",  "Structure rise, hold lift",  Fixed,   0,         fx(1,1);
-    RiseCurveX2,      "Effects",  "Structure rise, burst",      Fixed,   0,         fx(1,1);
-    RiseCurveY2,      "Effects",  "Structure rise, burst lift", Fixed,   0,         fx(1,1);
+    RiseCurveX1,      "Stones",   "Rise, hold",                 Fixed,   0,         fx(1,1);
+    RiseCurveY1,      "Stones",   "Rise, hold lift",            Fixed,   0,         fx(1,1);
+    RiseCurveX2,      "Stones",   "Rise, burst",                Fixed,   0,         fx(1,1);
+    RiseCurveY2,      "Stones",   "Rise, burst lift",           Fixed,   0,         fx(1,1);
+    StoneErupt,       "Stones",   "Eruption begins at",         Fixed,   0,         fx(1,1);
+    StoneChurnSlow,   "Stones",   "Churn slow (x)",             Fixed,   0,         fx(1,1);
+    StoneEruptDamage, "Stones",   "Eruption damage",            Int,     0,         300;
+    StoneEruptStagger,"Stones",   "Eruption stagger",           Frames,  0,         90;
+    StoneLift,        "Stones",   "Lift kept (x)",              Fixed,   0,         fx(2,1);
+    StoneKnockHanded, "Stones",   "Knock handed on (x)",        Fixed,   0,         fx(1,1);
+    StoneKnockDamp,   "Stones",   "Knock damping (x)",          Fixed,   0,         fx(1,1);
+    StoneFriction,    "Stones",   "Ground friction (x)",        Fixed,   0,         fx(1,1);
+    MonsterScale,     "Ridgeback","Size (x)",                   Fixed,   fx(1,2),   fx(2,1);
+    MonsterHealth,    "Ridgeback","Health",                     Int,     500,       30000;
+    LimbHealth,       "Ridgeback","Limb health",                Int,     100,       6000;
+    MonsterMargin,    "Ridgeback","Keep-out from the wall",     Fixed,   0,         fx(10,1);
+    MonsterWalk,      "Ridgeback","Walk speed",                 Fixed,   0,         fx(20,1);
+    MonsterBack,      "Ridgeback","Backing-off speed",          Fixed,   0,         fx(12,1);
+    MonsterAccel,     "Ridgeback","Walk acceleration",          Fixed,   fx(1,1),   fx(40,1);
+    ProwlRange,       "Ridgeback","Preferred distance",         Fixed,   fx(1,1),   fx(20,1);
+    ApproachGain,     "Ridgeback","Approach gain",              Fixed,   0,         fx(6,1);
+    TurnRateMax,      "Ridgeback","Turn rate cap (turns/s)",    Fixed,   fx(1,100), fx(2,1);
+    TurnGain,         "Ridgeback","Turn gain",                  Fixed,   fx(1,10),  fx(10,1);
+    TurnAccel,        "Ridgeback","Turn acceleration",          Fixed,   fx(1,100), fx(10,1);
+    TurnHurt,         "Ridgeback","Turn on a broken leg (x)",   Fixed,   0,         fx(1,1);
+    TurnSettle,       "Ridgeback","Turn bleed-off, committed",  Fixed,   0,         fx(1,1);
+    GlanceFrames,     "Ridgeback · mind","Frames between glances", Frames, 1,       90;
+    Lead,             "Ridgeback · mind","Lead on the target (x)", Fixed,  0,       fx(2,1);
+    ProwlLead,        "Ridgeback · mind","Lead horizon, prowling", Frames, 0,       90;
+    ThinkFrames,      "Ridgeback · mind","Pause between moves",    Frames, 0,       120;
+    Decisiveness,     "Ridgeback · mind","Decisiveness (%)",       Percent, 0,      100;
+    HurtAggression,   "Ridgeback · mind","Aggression when wounded", Int,   0,       400;
+    VarietyPenalty,   "Ridgeback · mind","Repeat penalty",         Int,    0,       2000;
+    VarietyFrames,    "Ridgeback · mind","Repeat penalty decay",   Frames, 0,       300;
+    PoiseMax,         "Ridgeback","Poise",                      Int,     50,        5000;
+    PoiseRegen,       "Ridgeback","Poise regained per frame",   Int,     0,         60;
+    ToppleFrames,     "Ridgeback","Topple length",              Frames,  30,        600;
+    ToppleFall,       "Ridgeback","Topple, going down",         Frames,  1,         120;
+    ToppleRise,       "Ridgeback","Topple, getting up",         Frames,  1,         180;
+    TopplePitch,      "Ridgeback · pose","Topple pitch",        Fixed,   fx(-1,4),  fx(1,4);
+    ToppleDrop,       "Ridgeback · pose","Topple drop",         Fixed,   0,         fx(3,1);
+    FlinchFrames,     "Ridgeback","Flinch length",              Frames,  1,         90;
+    FlinchPitch,      "Ridgeback · pose","Flinch pitch",        Fixed,   0,         fx(1,8);
+    FlinchThreshold,  "Ridgeback","Damage that flinches it",    Int,     1,         2000;
+    VulnHead,         "Ridgeback · hide","Head (x damage)",     Fixed,   0,         fx(3,1);
+    VulnNeck,         "Ridgeback · hide","Neck (x damage)",     Fixed,   0,         fx(3,1);
+    VulnBarrel,       "Ridgeback · hide","Barrel (x damage)",   Fixed,   0,         fx(3,1);
+    VulnRidge,        "Ridgeback · hide","Ridge (x damage)",    Fixed,   0,         fx(3,1);
+    VulnTail,         "Ridgeback · hide","Tail (x damage)",     Fixed,   0,         fx(3,1);
+    VulnTailTip,      "Ridgeback · hide","Tail tip (x damage)", Fixed,   0,         fx(3,1);
+    VulnForeleg,      "Ridgeback · hide","Foreleg (x damage)",  Fixed,   0,         fx(3,1);
+    VulnHindleg,      "Ridgeback · hide","Hindleg (x damage)",  Fixed,   0,         fx(3,1);
+    BiteDraw,         "Ridgeback · pose","Bite, head drawn back", Fixed, 0,         fx(3,1);
+    BiteReach,        "Ridgeback · pose","Bite, head thrown",   Fixed,   0,         fx(5,1);
+    BiteRear,         "Ridgeback · pose","Bite pitch",          Fixed,   0,         fx(1,8);
+    StompLift,        "Ridgeback · pose","Stomp, front lifted", Fixed,   0,         fx(1,8);
+    StompDrop,        "Ridgeback · pose","Stomp, front dropped",Fixed,   0,         fx(1,8);
+    StompBob,         "Ridgeback · pose","Stomp, body dropped", Fixed,   0,         fx(3,1);
+    SweepWind,        "Ridgeback · pose","Sweep windup",        Fixed,   0,         fx(1,4);
+    SweepSwing,       "Ridgeback · pose","Sweep swing",         Fixed,   0,         fx(1,4);
+    SweepCounter,     "Ridgeback · pose","Sweep counter-rotation (x)", Fixed, 0,    fx(1,1);
+    ChargeLean,       "Ridgeback · pose","Charge lean",         Fixed,   0,         fx(1,8);
+    ChargeGallop,     "Ridgeback · pose","Charge gallop cycles",Int,     1,         30;
+    ChargeBounce,     "Ridgeback · pose","Charge gallop height",Fixed,   0,         fx(2,1);
+    SlamRear,         "Ridgeback · pose","Slam, reared",        Fixed,   0,         fx(1,4);
+    SlamRise,         "Ridgeback · pose","Slam, body lifted",   Fixed,   0,         fx(4,1);
+    SlamDip,          "Ridgeback · pose","Slam, front driven down", Fixed, 0,       fx(1,8);
+    ShakeCycles,      "Ridgeback · pose","Shake cycles",        Fixed,   fx(1,2),   fx(12,1);
+    ShakeYaw,         "Ridgeback · pose","Shake yaw",           Fixed,   0,         fx(1,4);
+    ShakePitch,       "Ridgeback · pose","Shake pitch",         Fixed,   0,         fx(1,8);
+    ShakeRamp,        "Ridgeback · pose","Shake ramp (x)",      Fixed,   0,         fx(1,1);
+    MountSnap,        "Riding",   "Landing reach",              Fixed,   fx(1,20),  fx(2,1);
+    EdgeGrace,        "Riding",   "Overhang allowed (x body)",  Fixed,   0,         fx(2,1);
+    Grip,             "Riding",   "Grip (m/s2)",                Fixed,   fx(20,1),  fx(2000,1);
+    BraceGrip,        "Riding",   "Grip while bracing (x)",     Fixed,   fx(1,1),   fx(6,1);
+    ThrowKick,        "Riding",   "Thrown, outward",            Fixed,   0,         fx(30,1);
+    ThrowLift,        "Riding",   "Thrown, upward",             Fixed,   0,         fx(30,1);
+    ThrowStun,        "Riding",   "Thrown, frames helpless",    Frames,  0,         90;
+    MountSettle,      "Riding",   "Frames to plant your feet",  Frames,  1,         30;
+    RiderSpeed,       "Riding",   "Walk speed aboard (x)",      Fixed,   fx(1,10),  fx(1,1);
+    MonsterSpawn,     "Ridgeback","Spawns this far out",        Fixed,   0,         fx(14,1);
+    HunterSpawn,      "Ridgeback","Hunters start this far out", Fixed,   0,         fx(14,1);
+    StepUp,           "Riding",   "Step you can walk up",       Fixed,   0,         fx(2,1);
+    BoltKnockSpeed,    "Elementalist", "Bolt knock speed",                  Fixed,  0,        fx(60,1);
+    BoltKnockRange,    "Elementalist", "Bolt knock travel",                 Fixed,  fx(1,10), fx(20,1);
+    BoltKnockDecelStart,"Elementalist","Bolt knock decel starts (x path)",  Fixed,  0,        fx(1,1);
+    BoltKnockMinSpeed, "Elementalist", "Bolt knock min speed to hurt",      Fixed,  0,        fx(30,1);
+    BoltKnockDamagePerSpeed, "Elementalist", "Bolt knock damage per m/s",   Int,    0,        50;
+    BoltKnockStagger,  "Elementalist", "Bolt knock stagger",                Frames, 0,        90;
+    BoltKnockPush,     "Elementalist", "Bolt knock push (x)",               Fixed,  0,        fx(3,1);
+    FireBoltSpeed,     "Elementalist", "Fire bolt speed",                   Fixed,  fx(5,1),  fx(80,1);
+    FireBoltRange,     "Elementalist", "Fire bolt range",                   Fixed,  fx(1,1),  fx(40,1);
+    FireBoltRadius,    "Elementalist", "Fire bolt radius",                  Fixed,  fx(1,20), fx(2,1);
+    FireBoltDamage,    "Elementalist", "Fire bolt damage",                  Int,    0,        600;
+    FireBoltStagger,   "Elementalist", "Fire bolt stagger",                 Frames, 0,        90;
+    FireBoltBlockstun, "Elementalist", "Fire bolt blockstun",               Frames, 0,        90;
+    FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
+    SpikeHeight,       "Blood mage", "Black spike height",                  Fixed,  fx(1,2),  fx(6,1);
+    BloodletterFlight, "Blood mage", "Bloodletter, out and back",           Frames, 10,       180;
+    BloodletterRadius, "Blood mage", "Bloodletter radius",                  Fixed,  fx(1,10), fx(2,1);
+    GraspFlight,       "Blood mage", "Grasp, arms out and in",              Frames, 6,        120;
+    GraspSpread,       "Blood mage", "Grasp, how wide the cone opens",      Fixed,  fx(1,10), fx(6,1);
+    GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
+    GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
+    DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
+    RushSpeed,        "Champion", "Rush speed",                 Fixed,   fx(1,1),   fx(40,1);
+    RushFrames,       "Champion", "Rush length",                Frames,  1,         60;
+    RushRecharge,     "Champion", "Rush recharge",              Frames,  0,         240;
+    VaultPitch,       "Champion", "Vault plants below (turns)", Fixed,   0,         fx(1,4);
+    VaultCarry,       "Champion", "Vault keeps of the dash (x)",Fixed,   0,         fx(1,1);
+    UppercutLeap,     "Champion", "Uppercut leap",              Fixed,   0,         fx(25,1);
+    AirHitKnockback,  "Champion", "Knockback on an airborne target (x)", Fixed, fx(1,1), fx(4,1);
+    SlamDamage,       "Champion", "Slam damage per m/s",        Int,     0,         40;
+    SlamStagger,      "Champion", "Slam stagger",               Frames,  0,         90;
+    SpearFanBoost,    "Champion", "Air spear boost on hit",     Fixed,   0,         fx(20,1);
+    SweepHeight,      "Champion", "Sweep thrown from (x chest)",Fixed,   fx(1,10),  fx(3,2);
+    SweepDip,         "Champion", "Sweep travels below level",  Fixed,   0,         fx(1,8);
+    ThrustExtend,     "Champion", "Thrust out on the first active frame (x)", Fixed, 0, fx(1,1);
+    SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
+    HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
+    WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
+    ShadowTrail,      "Reaver",   "Shadow trails her by",       Fixed,   0,         fx(4,1);
+    ShadowFollow,     "Reaver",   "Shadow catch-up per frame",  Fixed,   fx(1,100), fx(1,1);
+    ShadowLag,        "Reaver",   "Shadow copies her this late",Frames,  0,         30;
+    ShadowEcho,       "Reaver",   "Shadow damage (%)",          Percent, 0,         100;
+    ShadowSendFrames, "Reaver",   "Shadow flight, out",         Frames,  1,         60;
+    ShadowHomeSpeed,  "Reaver",   "Shadow speed, coming home",  Fixed,   fx(1,1),   fx(60,1);
+    ShadowRecallSlow, "Reaver",   "Recall slow (x)",            Fixed,   0,         fx(1,1);
+    ShadowLockCone,   "Reaver",   "Crosshair lock on the shadow", Fixed, fx(1,10),  fx(6,1);
+    ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(40,1);
+    LotusRadius,      "Reaver",   "Lotus, how far the blades go", Fixed, fx(1,1),   fx(12,1);
+    LotusRise,        "Reaver",   "Lotus, how high they arc",   Fixed,   0,         fx(4,1);
+    LotusCurl,        "Reaver",   "Lotus, curve of the path (turns)", Fixed, 0,     fx(1,4);
+    LotusBladeRadius, "Reaver",   "Lotus, blade radius",        Fixed,   fx(1,10),  fx(2,1);
+    LotusErupt,       "Reaver",   "Lotus, out",                 Frames,  1,         60;
+    LotusHold,        "Reaver",   "Lotus, held open",           Frames,  0,         120;
+    LotusReturn,      "Reaver",   "Lotus, back to the shadow",  Frames,  1,         120;
+    LotusReturnDamage,"Reaver",   "Lotus, damage coming home (%)", Percent, 0,      200;
+    LotusSlow,        "Reaver",   "Lotus slow (x)",             Fixed,   0,         fx(1,1);
     SwellKnockback,   "Stun",     "Knockback swell at death",   Fixed,   0,         fx(8,1);
     SwellBlow,        "Stun",     "Swell per blow weight",      Fixed,   0,         fx(20,1);
     SwellHitstun,     "Stun",     "Hitstun swell at death",     Fixed,   0,         fx(3,1);
     HitlagBase,       "Stun",     "Hitlag floor",               Frames,  0,         20;
     HitlagPerDamage,  "Stun",     "Hitlag per point of damage", Fixed,   0,         fx(1,4);
-    DiStrength,       "Stun",     "Directional influence",      Fixed,   0,         fx(1,1);
     PillarHitstun,    "Effects",  "Fire pillar stun",           Frames,  0,         30;
     PillarKnockback,  "Effects",  "Fire pillar shove",          Fixed,   0,         fx(20,1);
     SpikeHitstun,     "Effects",  "Black spike stun",           Frames,  0,         30;
@@ -206,23 +331,115 @@ scalars! {
 }
 
 // ---------------------------------------------------------------------------
+// The view: numbers that decide what you see, not what happens
+// ---------------------------------------------------------------------------
+
+macro_rules! view_knobs {
+    ($($variant:ident, $label:literal, $unit:ident, $lo:expr, $hi:expr;)*) => {
+        /// A camera number.
+        ///
+        /// Separate from [`Scalar`] only as a grouping now. These **are** in
+        /// [`hash`], like everything else that decides what happens.
+        ///
+        /// They were kept out of it for a while, on the reasoning that a camera
+        /// decides what you *see* rather than what happens, so two people ought
+        /// to be able to play each other with different framing. That was true
+        /// exactly as long as aiming did not go through the camera.
+        ///
+        /// It does now: the crosshair is the aim, so the ray that decides where
+        /// an ability lands starts at the eye, and where the eye sits is these
+        /// numbers (`crate::camera`). A camera number is a gameplay number the
+        /// moment the crosshair means something.
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        pub enum ViewKnob { $($variant,)* }
+
+        impl ViewKnob {
+            pub const ALL: &'static [ViewKnob] = &[$(ViewKnob::$variant,)*];
+
+            pub const fn label(self) -> &'static str {
+                match self { $(ViewKnob::$variant => $label,)* }
+            }
+
+            pub const fn unit(self) -> Unit {
+                match self { $(ViewKnob::$variant => Unit::$unit,)* }
+            }
+
+            pub const fn range(self) -> (i32, i32) {
+                match self { $(ViewKnob::$variant => ($lo, $hi),)* }
+            }
+        }
+    };
+}
+
+// The camera is described as a set of **zones** in vertical aim angle, with the
+// waypoints between them stated as where the fighter should appear on screen.
+// The zone boundaries and the numbers inside each zone are here; the *shape* --
+// which waypoints exist and what each one means -- is in `view::camera` and is
+// not a knob, because it is the design rather than a value.
+//
+// Angles are degrees, negative being below the horizon. Screen fractions are
+// percentages measured from the bottom of the screen, so the crosshair sits at
+// 50 by definition.
+//
+// The camera is always on the surface of a sphere, looking inward past a tilt,
+// and the mouse walks it around that sphere at a steady rate. What the zones
+// change is the sphere: where it is centred, how big it is, and how far the
+// view is tilted off the line to its centre. The **radius** is the distance the
+// camera keeps and therefore how big the fighter is drawn; the **screen
+// percentages** are the tilts, written as where the point at the sphere's
+// centre should sit on screen, which is the same thing.
+//
+// The **smoothing** percentages are what stops a zone boundary reading as the
+// camera changing its mind. Each is a share of its own zone's angular span: how
+// much of that zone's ramp, at each end, is spent easing in and out. The eye
+// leaves and arrives at a standstill, so a neighbouring zone that is already
+// holding still has nothing to hand over against. Outside that window the ramp is
+// untouched, so the waypoints stay exactly as written; at the maximum the ramp is
+// eased the whole way through and its middle still lands on the waypoint, because
+// the two ends give back what each other took.
+//
+// Two of the five have nothing to ease yet. The neutral zone and first person
+// both hold their sphere still and let the mouse do all the moving, so there is
+// no ramp in them to shape -- their numbers are there for when there is.
+view_knobs! {
+    Sphere,         "Sphere radius (m)",        Fixed,   fx(1,2), fx(30,1);
+    HeadSphere,     "Sphere, at the head (m)",  Fixed,   0,       fx(3,1);
+    LookDownLimit,  "Look down limit",          Int,     10,  89;
+    LookUpLimit,    "Look up limit",            Int,     10,  89;
+    FloorZoneFrom,  "Floor zone, from",         Int,     10,  89;
+    NeutralZoneTo,  "Neutral zone, to",         Int,     1,   45;
+    HeadLockAt,     "Head lock, at",            Int,     1,   45;
+    FeetNeutral,    "Feet, neutral (%)",        Int,     0,   50;
+    FeetFloor,      "Feet, floor (%)",          Int,     0,   50;
+    HeadGapLevel,   "Head to crosshair (%)",    Int,     0,   30;
+    FadeNear,       "Body gone within (m)",     Fixed,   0,       fx(6,1);
+    FramingFov,     "Framing field of view",    Int,     30,  120;
+    SmoothFloor,    "Smooth, floor zone (%)",   Int,     0,   100;
+    SmoothNeutral,  "Smooth, neutral zone (%)", Int,     0,   100;
+    SmoothTurn,     "Smooth, the turn (%)",     Int,     0,   100;
+    SmoothHandover, "Smooth, handover (%)",     Int,     0,   100;
+    SmoothEyes,     "Smooth, first person (%)", Int,     0,   100;
+}
+
+pub const VIEW_COUNT: usize = 17;
+
+// ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data
 // ---------------------------------------------------------------------------
 
-/// Per-class flight: how a class moves through the air, and how far it goes
-/// when something hits it.
-///
-/// Weight sits here rather than in a family of its own because its only job is
-/// flight. A heavy fighter is one that does not travel when struck, which is
-/// the same quantity the jump and gravity multipliers are describing from the
-/// other direction. Appended last, so the indices the baked file was written
-/// with keep their meaning.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AirField {
     Jump,
     Gravity,
     FallCap,
     AirSpeed,
+    /// What incoming knockback is divided by. Above one is a heavy.
+    ///
+    /// Weight sits with the air stats rather than in a family of its own
+    /// because its only job is flight: a heavy fighter is one that does not
+    /// travel when struck, which is the same quantity jump and gravity describe
+    /// from the other direction. Appended last, so the indices the baked file
+    /// was written with keep their meaning.
     Weight,
 }
 
@@ -275,6 +492,19 @@ pub enum MoveField {
     SelfLift,
     Grabs,
     Effect,
+    // Appended again, for the Blood mage's economy. Health out on the press,
+    // health back on the hit -- see `moves::Move::cost` and `leech`.
+    Cost,
+    Leech,
+    // And again, for which line of effect a move uses: 0 swings out along the
+    // body, 1 lands on the ground at the crosshair, 2 flies to what the
+    // crosshair is on, 3 erupts at the class mechanic. `aim::Kind`'s own
+    // numbering. See `moves::Move::aim` and `crate::aim`.
+    Aim,
+    // And again for the Champion's rebuild: how far a swing travels, and how
+    // often a move that keeps hitting is allowed to hit again.
+    Arc,
+    Rehit,
 }
 
 impl MoveField {
@@ -297,6 +527,11 @@ impl MoveField {
         MoveField::SelfLift,
         MoveField::Grabs,
         MoveField::Effect,
+        MoveField::Cost,
+        MoveField::Leech,
+        MoveField::Aim,
+        MoveField::Arc,
+        MoveField::Rehit,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -319,6 +554,11 @@ impl MoveField {
             MoveField::SelfLift => "Self lift",
             MoveField::Grabs => "Grab hold",
             MoveField::Effect => "Leaves behind",
+            MoveField::Cost => "Health cost",
+            MoveField::Leech => "Leech (%)",
+            MoveField::Aim => "Line of effect (0-3)",
+            MoveField::Arc => "Swing arc (turns)",
+            MoveField::Rehit => "Hits again every",
         }
     }
 
@@ -335,30 +575,182 @@ impl MoveField {
             MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
                 Unit::Flag
             }
-            MoveField::Grabs => Unit::Frames,
-            MoveField::Effect => Unit::Int,
+            MoveField::Grabs | MoveField::Rehit => Unit::Frames,
+            MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
+            MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
         }
     }
 
     pub const fn range(self) -> (i32, i32) {
-        match self.unit() {
-            Unit::Frames => (0, 90),
-            Unit::Int => (0, 600),
-            Unit::Percent => (0, 100),
-            Unit::Flag => (0, 1),
-            Unit::Fixed => (0, fx(12, 1)),
+        match self {
+            // Four lines of effect, and the numbering is `aim::Kind`'s. A
+            // slider that ran to six hundred would let somebody pick a fifth.
+            MoveField::Aim => (0, 3),
+            // Signed, because a spike is a launch pointed the other way: the
+            // Champion's aerial hammer drives an airborne target into the
+            // floor with the same number that an uppercut lifts them with.
+            MoveField::Launch => (fx(-30, 1), fx(30, 1)),
+            // Signed for the same reason in the other axis: the sign is which
+            // way the weapon travels. See `moves::Move::arc`.
+            MoveField::Arc => (fx(-1, 2), fx(1, 2)),
+            // A takeoff speed, in the same units the jump is: the pole vault
+            // is meant to beat a jump, and a jump is already 17.7.
+            MoveField::SelfLift => (0, fx(30, 1)),
+            _ => match self.unit() {
+                Unit::Frames => (0, 90),
+                Unit::Int => (0, 600),
+                Unit::Percent => (0, 100),
+                Unit::Flag => (0, 1),
+                Unit::Fixed => (0, fx(12, 1)),
+            },
         }
     }
 }
 
-pub const SLOTS: usize = 3;
+// ---------------------------------------------------------------------------
+// The Ridgeback's move data
+// ---------------------------------------------------------------------------
+
+/// One tuned field of one of the creature's moves.
+///
+/// Its own family rather than a reuse of `MoveField`, because the two tables
+/// mean different things: a fighter's move is authored against a shared body
+/// and a shared control scheme, and a creature's is authored in the creature's
+/// own coordinates and carries what the control algorithm reads. Sharing the
+/// enum would have meant a dozen fields on each side that the other ignores.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MonsterField {
+    Startup,
+    Active,
+    Recovery,
+    Damage,
+    /// Where the hit volume sits, in the creature's own frame.
+    HitX,
+    HitZ,
+    HitRadius,
+    HitLow,
+    HitHigh,
+    /// Which articulation carries the volume: the tail's swing, or the head's
+    /// reach. See `monster::Shape::rides`.
+    Follows,
+    Hitstun,
+    Blockstun,
+    Knockback,
+    Launch,
+    Unblockable,
+    /// Forward speed while active. Only the charge has one.
+    Advance,
+    IdealRange,
+    RangeSpan,
+    AimCos,
+    AimSpan,
+    Weight,
+    RiderWeight,
+}
+
+impl MonsterField {
+    pub const ALL: &'static [MonsterField] = &[
+        MonsterField::Startup,
+        MonsterField::Active,
+        MonsterField::Recovery,
+        MonsterField::Damage,
+        MonsterField::HitX,
+        MonsterField::HitZ,
+        MonsterField::HitRadius,
+        MonsterField::HitLow,
+        MonsterField::HitHigh,
+        MonsterField::Follows,
+        MonsterField::Hitstun,
+        MonsterField::Blockstun,
+        MonsterField::Knockback,
+        MonsterField::Launch,
+        MonsterField::Unblockable,
+        MonsterField::Advance,
+        MonsterField::IdealRange,
+        MonsterField::RangeSpan,
+        MonsterField::AimCos,
+        MonsterField::AimSpan,
+        MonsterField::Weight,
+        MonsterField::RiderWeight,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            MonsterField::Startup => "Startup",
+            MonsterField::Active => "Active",
+            MonsterField::Recovery => "Recovery",
+            MonsterField::Damage => "Damage",
+            MonsterField::HitX => "Hit, forward",
+            MonsterField::HitZ => "Hit, sideways",
+            MonsterField::HitRadius => "Hit radius",
+            MonsterField::HitLow => "Hit, lowest",
+            MonsterField::HitHigh => "Hit, highest",
+            MonsterField::Follows => "Carried by",
+            MonsterField::Hitstun => "Hitstun",
+            MonsterField::Blockstun => "Blockstun",
+            MonsterField::Knockback => "Knockback",
+            MonsterField::Launch => "Launch",
+            MonsterField::Unblockable => "Unblockable",
+            MonsterField::Advance => "Advance while active",
+            MonsterField::IdealRange => "Ideal range",
+            MonsterField::RangeSpan => "Range tolerance",
+            MonsterField::AimCos => "Wants the target at (cos)",
+            MonsterField::AimSpan => "Bearing tolerance",
+            MonsterField::Weight => "Appetite",
+            MonsterField::RiderWeight => "Appetite per rider",
+        }
+    }
+
+    pub const fn unit(self) -> Unit {
+        match self {
+            MonsterField::Startup
+            | MonsterField::Active
+            | MonsterField::Recovery
+            | MonsterField::Hitstun
+            | MonsterField::Blockstun => Unit::Frames,
+            MonsterField::Damage
+            | MonsterField::Follows
+            | MonsterField::Weight
+            | MonsterField::RiderWeight => Unit::Int,
+            MonsterField::Unblockable => Unit::Flag,
+            _ => Unit::Fixed,
+        }
+    }
+
+    pub const fn range(self) -> (i32, i32) {
+        match self {
+            MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 120),
+            MonsterField::Hitstun | MonsterField::Blockstun => (0, 90),
+            MonsterField::Damage => (0, 900),
+            MonsterField::Follows => (0, 2),
+            MonsterField::Weight | MonsterField::RiderWeight => (0, 4000),
+            MonsterField::Unblockable => (0, 1),
+            // Body-space coordinates run behind the creature as well as ahead
+            // of it, and the sweep's preferred bearing is negative.
+            MonsterField::HitX | MonsterField::HitZ | MonsterField::AimCos => {
+                (fx(-10, 1), fx(10, 1))
+            }
+            MonsterField::AimSpan => (fx(1, 100), fx(8, 1)),
+            _ => (0, fx(40, 1)),
+        }
+    }
+}
+
+pub const MONSTER_MOVES: usize = 6;
+pub const MONSTER_FIELDS: usize = 22;
+pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
+
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 89;
+pub const SCALAR_COUNT: usize = 214;
 pub const AIR_FIELDS: usize = 5;
 pub const AIR_COUNT: usize = CLASSES * AIR_FIELDS;
-pub const MOVE_COUNT: usize = CLASSES * SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 18;
+/// Move storage is packed to each class's own slot count rather than to a
+/// single width. The Champion has ten moves, the Blood mage four and everybody
+/// else three, and a rectangular table would have meant seven empty rows per
+/// class in the palette and in the baked file.
+pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
+pub const MOVE_FIELDS: usize = 23;
 
 // ---------------------------------------------------------------------------
 // The live store
@@ -371,6 +763,18 @@ fn cells<const N: usize>(seed: &'static [i32; N]) -> [AtomicI32; N] {
 static SCALAR_CELLS: LazyLock<[AtomicI32; SCALAR_COUNT]> = LazyLock::new(|| cells(&tuned::SCALARS));
 static AIR_CELLS: LazyLock<[AtomicI32; AIR_COUNT]> = LazyLock::new(|| cells(&tuned::AIR));
 static MOVE_CELLS: LazyLock<[AtomicI32; MOVE_COUNT]> = LazyLock::new(|| cells(&tuned::MOVES));
+static VIEW_CELLS: LazyLock<[AtomicI32; VIEW_COUNT]> = LazyLock::new(|| cells(&tuned::VIEW));
+
+pub fn view(k: ViewKnob) -> i32 {
+    VIEW_CELLS[k as usize].load(Ordering::Relaxed)
+}
+
+pub fn set_view(k: ViewKnob, raw: i32) {
+    VIEW_CELLS[k as usize].store(raw, Ordering::Relaxed);
+}
+
+static MONSTER_CELLS: LazyLock<[AtomicI32; MONSTER_COUNT]> =
+    LazyLock::new(|| cells(&tuned::MONSTER));
 
 pub fn scalar(s: Scalar) -> i32 {
     SCALAR_CELLS[s as usize].load(Ordering::Relaxed)
@@ -393,7 +797,7 @@ pub fn set_air(class: Class, field: AirField, raw: i32) {
 }
 
 fn move_index(class: Class, slot: usize, field: MoveField) -> usize {
-    (class as usize * SLOTS + slot) * MOVE_FIELDS + field as usize
+    (crate::moves::base_slot(class) + slot) * MOVE_FIELDS + field as usize
 }
 
 pub fn move_field(class: Class, slot: usize, field: MoveField) -> i32 {
@@ -402,6 +806,18 @@ pub fn move_field(class: Class, slot: usize, field: MoveField) -> i32 {
 
 pub fn set_move_field(class: Class, slot: usize, field: MoveField, raw: i32) {
     MOVE_CELLS[move_index(class, slot, field)].store(raw, Ordering::Relaxed);
+}
+
+fn monster_index(slot: usize, field: MonsterField) -> usize {
+    slot * MONSTER_FIELDS + field as usize
+}
+
+pub fn monster_field(slot: usize, field: MonsterField) -> i32 {
+    MONSTER_CELLS[monster_index(slot, field)].load(Ordering::Relaxed)
+}
+
+pub fn set_monster_field(slot: usize, field: MonsterField, raw: i32) {
+    MONSTER_CELLS[monster_index(slot, field)].store(raw, Ordering::Relaxed);
 }
 
 /// Put everything back to what is committed in `tuned.rs`.
@@ -414,6 +830,12 @@ pub fn reset_to_baked() {
     }
     for (i, cell) in MOVE_CELLS.iter().enumerate() {
         cell.store(tuned::MOVES[i], Ordering::Relaxed);
+    }
+    for (i, cell) in VIEW_CELLS.iter().enumerate() {
+        cell.store(tuned::VIEW[i], Ordering::Relaxed);
+    }
+    for (i, cell) in MONSTER_CELLS.iter().enumerate() {
+        cell.store(tuned::MONSTER[i], Ordering::Relaxed);
     }
 }
 
@@ -432,6 +854,14 @@ pub fn is_dirty() -> bool {
             .iter()
             .enumerate()
             .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::MOVES[i])
+        || VIEW_CELLS
+            .iter()
+            .enumerate()
+            .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::VIEW[i])
+        || MONSTER_CELLS
+            .iter()
+            .enumerate()
+            .any(|(i, c)| c.load(Ordering::Relaxed) != tuned::MONSTER[i])
 }
 
 /// A hash of every live value.
@@ -451,6 +881,18 @@ pub fn hash() -> u64 {
     for c in MOVE_CELLS.iter() {
         h.write_i32(c.load(Ordering::Relaxed));
     }
+    for c in MONSTER_CELLS.iter() {
+        h.write_i32(c.load(Ordering::Relaxed));
+    }
+    // `VIEW_CELLS` **is** folded in, and used not to be. The camera decides
+    // where the eye is, the eye is where the aiming ray starts, and so the
+    // camera decides where abilities land -- see `crate::aim`. Two peers framing
+    // the fight differently would place a fire pillar in different spots and
+    // neither would be wrong, which is exactly what this hash exists to make
+    // loud rather than quiet.
+    for c in VIEW_CELLS.iter() {
+        h.write_i32(c.load(Ordering::Relaxed));
+    }
     h.finish()
 }
 
@@ -464,6 +906,8 @@ pub enum Knob {
     Scalar(Scalar),
     Air(Class, AirField),
     Move(Class, usize, MoveField),
+    Monster(usize, MonsterField),
+    View(ViewKnob),
 }
 
 impl Knob {
@@ -473,21 +917,30 @@ impl Knob {
     pub fn family(self) -> String {
         match self {
             Knob::Scalar(s) => s.family().to_string(),
+            Knob::View(_) => "Camera".to_string(),
             Knob::Air(c, _) => format!("Air · {}", c.name()),
+            // No "unbound slot" heading any more: storage is packed to each
+            // class's own count, so a slot a class does not have is a slot
+            // with no knobs rather than a row of zeroes needing an excuse.
             Knob::Move(c, slot, _) => format!(
                 "{} · {} [{}]",
                 c.name(),
                 crate::moves::get(c, slot as u8).name,
-                crate::moves::binding(slot)
+                crate::moves::binding(c, slot)
             ),
+            Knob::Monster(slot, _) => {
+                format!("Ridgeback · {}", crate::monster::MOVE_NAMES[slot])
+            }
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
             Knob::Scalar(s) => s.label(),
+            Knob::View(k) => k.label(),
             Knob::Air(_, f) => f.label(),
             Knob::Move(_, _, f) => f.label(),
+            Knob::Monster(_, f) => f.label(),
         }
     }
 
@@ -499,11 +952,17 @@ impl Knob {
         }
         match self {
             Knob::Scalar(s) => format!("{}.{}", slug(s.family()), slug(s.label())),
+            Knob::View(k) => format!("camera.{}", slug(k.label())),
             Knob::Air(c, f) => format!("air.{}.{}", slug(c.name()), slug(f.label())),
             Knob::Move(c, slot, f) => format!(
                 "move.{}.{}.{}",
                 slug(c.name()),
                 slug(crate::moves::get(c, slot as u8).name),
+                slug(f.label())
+            ),
+            Knob::Monster(slot, f) => format!(
+                "monster.{}.{}",
+                slug(crate::monster::MOVE_NAMES[slot]),
                 slug(f.label())
             ),
         }
@@ -512,32 +971,40 @@ impl Knob {
     pub fn unit(self) -> Unit {
         match self {
             Knob::Scalar(s) => s.unit(),
+            Knob::View(k) => k.unit(),
             Knob::Air(_, _) => Unit::Fixed,
             Knob::Move(_, _, f) => f.unit(),
+            Knob::Monster(_, f) => f.unit(),
         }
     }
 
     pub const fn range(self) -> (i32, i32) {
         match self {
             Knob::Scalar(s) => s.range(),
+            Knob::View(k) => k.range(),
             Knob::Air(_, f) => f.range(),
             Knob::Move(_, _, f) => f.range(),
+            Knob::Monster(_, f) => f.range(),
         }
     }
 
     pub fn raw(self) -> i32 {
         match self {
             Knob::Scalar(s) => scalar(s),
+            Knob::View(k) => view(k),
             Knob::Air(c, f) => air(c, f),
             Knob::Move(c, slot, f) => move_field(c, slot, f),
+            Knob::Monster(slot, f) => monster_field(slot, f),
         }
     }
 
     pub fn set_raw(self, raw: i32) {
         match self {
             Knob::Scalar(s) => set_scalar(s, raw),
+            Knob::View(k) => set_view(k, raw),
             Knob::Air(c, f) => set_air(c, f, raw),
             Knob::Move(c, slot, f) => set_move_field(c, slot, f, raw),
+            Knob::Monster(slot, f) => set_monster_field(slot, f, raw),
         }
     }
 
@@ -545,8 +1012,10 @@ impl Knob {
     pub fn baked_raw(self) -> i32 {
         match self {
             Knob::Scalar(s) => tuned::SCALARS[s as usize],
+            Knob::View(k) => tuned::VIEW[k as usize],
             Knob::Air(c, f) => tuned::AIR[air_index(c, f)],
             Knob::Move(c, slot, f) => tuned::MOVES[move_index(c, slot, f)],
+            Knob::Monster(slot, f) => tuned::MONSTER[monster_index(slot, f)],
         }
     }
 
@@ -585,11 +1054,21 @@ pub fn all_knobs() -> Vec<Knob> {
         }
     }
     for class in ALL_CLASSES {
-        for slot in 0..SLOTS {
+        for slot in 0..crate::moves::slots(class) {
             for field in MoveField::ALL {
                 out.push(Knob::Move(class, slot, *field));
             }
         }
+    }
+    // Appended last, so every index already written into `tuned.rs` keeps the
+    // meaning it was baked with. That is the rule the whole store relies on.
+    for slot in 0..MONSTER_MOVES {
+        for field in MonsterField::ALL {
+            out.push(Knob::Monster(slot, *field));
+        }
+    }
+    for k in ViewKnob::ALL {
+        out.push(Knob::View(*k));
     }
     out
 }
@@ -640,6 +1119,18 @@ pub fn emit() -> String {
     write_block(&mut out, "SCALARS", SCALAR_COUNT, 0);
     write_block(&mut out, "AIR", AIR_COUNT, SCALAR_COUNT);
     write_block(&mut out, "MOVES", MOVE_COUNT, SCALAR_COUNT + AIR_COUNT);
+    write_block(
+        &mut out,
+        "MONSTER",
+        MONSTER_COUNT,
+        SCALAR_COUNT + AIR_COUNT + MOVE_COUNT,
+    );
+    write_block(
+        &mut out,
+        "VIEW",
+        VIEW_COUNT,
+        SCALAR_COUNT + AIR_COUNT + MOVE_COUNT + MONSTER_COUNT,
+    );
     // Exactly one trailing newline: `cargo fmt` strips a blank line at the end
     // of a file, which would leave the generated file permanently one byte
     // different from its generator.

@@ -25,7 +25,7 @@ pub enum Outcome {
 ///
 /// The Oven is a development tool run from a source checkout, so this is sound
 /// in the only situation it is ever used in.
-fn repo_root() -> PathBuf {
+pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())

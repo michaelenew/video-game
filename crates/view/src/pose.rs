@@ -1,468 +1,638 @@
-//! Character posing.
+//! What a character looks like at one instant, and how a person writes one
+//! down.
 //!
-//! **The rule that everything else depends on: pose is a pure function of
-//! simulation state.** No accumulated animation time, no independently ticking
-//! player. Rollback re-simulates past frames, so anything animating on its own
-//! clock pops and slides every time a rollback happens.
+//! **The rule everything else depends on: pose is a pure function of simulation
+//! state.** No accumulated animation time, no independently ticking player.
+//! Rollback re-simulates past frames, so anything animating on its own clock
+//! pops and slides every time a rollback happens.
 //!
 //! ```text
-//! pose = f(action, frames_into_action, speed, grounded, sim_frame)
+//! pose = f(action, frames into it, speed, stride, airtime, sim_frame)
 //! ```
 //!
-//! `sim_frame` is part of the snapshot, so driving cyclic motion from it stays
-//! deterministic. Cosmetic smoothing may live in the renderer and is allowed to
-//! pop across a rollback -- one to eight frames of visual discontinuity is
-//! imperceptible. Nothing that reads as gameplay may.
+//! All of that comes out of the snapshot. Cosmetic smoothing may live in the
+//! renderer and is allowed to pop across a rollback -- one to eight frames of
+//! visual discontinuity is imperceptible. Nothing that reads as gameplay may.
 //!
-//! This module writes transforms by hand for primitive standins. Swapping in
-//! skeletal glTF later changes what `pose_for` returns, not how any of this
-//! works -- which is exactly why the standins come first.
+//! ## A pose is angles
+//!
+//! Fifty-one numbers: three for where the hips are, and three for each of the
+//! sixteen joints. No positions anywhere else -- an elbow cannot be anywhere
+//! except at the end of its upper arm, and saying so in the data structure is
+//! what makes one clip play on six differently-proportioned bodies.
+//!
+//! Authoring is in **degrees**, through named methods, because that is how a
+//! person describes a body:
+//!
+//! ```ignore
+//! // Weight back, sword arm cocked, front foot light.
+//! Pose::rest()
+//!     .hips(0.0, -0.05, -0.10)
+//!     .spine(-8.0, 0.0, -22.0)
+//!     .chest(4.0, 0.0, -18.0)
+//!     .head(0.0, 0.0, 20.0)
+//!     .shoulder_r(-40.0, 28.0, 0.0)
+//!     .elbow_r(95.0)
+//!     .hip_l(18.0, 6.0, 0.0)
+//!     .knee_l(22.0)
+//! ```
+//!
+//! Every angle means the same thing on the left as on the right: positive
+//! swing is forward, positive spread is away from the body, on both sides. The
+//! mirroring lives in the skeleton, so mirroring a clip is a swap of the two
+//! sides and nothing else.
 
-use sim::state::Action;
+use crate::ik;
+use crate::math::{self, V3};
+use crate::skeleton::{Group, JOINT_COUNT, JOINTS, Joint, Skeleton};
+use std::sync::LazyLock;
 
-/// Parts of the standin. Six is enough to read a silhouette at gameplay
-/// distance, which is the actual requirement.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Part {
-    Torso,
-    Head,
-    ArmL,
-    ArmR,
-    LegL,
-    LegR,
-}
+/// Three for the hips' offset, then swing/spread/twist for each joint.
+pub const CHANNELS: usize = 3 + JOINT_COUNT * 3;
 
-pub const PART_COUNT: usize = 6;
-pub const PARTS: [Part; PART_COUNT] = [
-    Part::Torso,
-    Part::Head,
-    Part::ArmL,
-    Part::ArmR,
-    Part::LegL,
-    Part::LegR,
-];
+/// The height an ankle sits at when its foot is flat on the floor. Foot targets
+/// for `plant_l` and `plant_r` are ankles, so this is the `y` a grounded step
+/// asks for.
+pub const ANKLE_ON_GROUND: f32 = 0.06;
 
-/// Character-local: root at the feet, +Y up, +Z forward along facing.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PartTransform {
-    pub pos: [f32; 3],
-    /// Euler XYZ in radians.
-    pub rot: [f32; 3],
+/// The body every pose is authored against: the middleweight, 1.8 m. Angles
+/// retarget to any build for free; only the hip offset is in metres, and that
+/// is scaled by the build when the skeleton is solved.
+pub fn reference() -> &'static Skeleton {
+    static REFERENCE: LazyLock<Skeleton> =
+        LazyLock::new(|| Skeleton::new(crate::skeleton::Build::REFERENCE));
+    &REFERENCE
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pose {
-    pub parts: [PartTransform; PART_COUNT],
+    /// `[0..3]` is the hip offset in reference metres; after that, three
+    /// radians per joint in `JOINTS` order.
+    pub channels: [f32; CHANNELS],
+}
+
+const RAD: f32 = std::f32::consts::PI / 180.0;
+
+impl Default for Pose {
+    fn default() -> Self {
+        Pose::rest()
+    }
 }
 
 impl Pose {
-    pub fn get(&self, part: Part) -> PartTransform {
-        self.parts[part as usize]
-    }
-}
-
-/// Which baked clip, if any, this action should play.
-///
-/// The caller picks, because it is the side that knows what move is running --
-/// whether it is an overhead, how long it lasts. `view` does not read the move
-/// tables.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Clip {
-    Poke,
-    Overhead,
-    GuardIn,
-    Roll,
-    Recoil,
-}
-
-impl Clip {
-    fn frames(self) -> &'static [Pose] {
-        match self {
-            Clip::Poke => &crate::baked::POKE,
-            Clip::Overhead => &crate::baked::OVERHEAD,
-            Clip::GuardIn => &crate::baked::GUARD_IN,
-            Clip::Roll => &crate::baked::ROLL,
-            Clip::Recoil => &crate::baked::RECOIL,
-        }
-    }
-}
-
-/// Everything posing is allowed to depend on. All of it comes from the
-/// simulation snapshot.
-#[derive(Clone, Copy, Debug)]
-pub struct PoseInput {
-    /// Which baked clip to play, and how far into it. `None` falls back to the
-    /// procedural poses, which is the toggle: baked animation can be switched
-    /// off wholesale if it ever costs more than it is worth.
-    pub clip: Option<(Clip, u16)>,
-    pub action: Action,
-    /// Frames elapsed within the current action.
-    pub frames_into: u16,
-    /// Total frames of the current phase; zero when the phase is open-ended.
-    pub frames_total: u16,
-    pub speed: f32,
-    pub grounded: bool,
-    pub crouching: bool,
-    /// Simulation frame. Deterministic, so cyclic motion driven from it is too.
-    pub sim_frame: u32,
-}
-
-const NEUTRAL: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.95, 0.0],
-            rot: [0.0, 0.0, 0.0],
-        }, // Torso
-        PartTransform {
-            pos: [0.0, 1.55, 0.0],
-            rot: [0.0, 0.0, 0.0],
-        }, // Head
-        PartTransform {
-            pos: [-0.42, 1.05, 0.0],
-            rot: [0.0, 0.0, 0.12],
-        }, // ArmL
-        PartTransform {
-            pos: [0.42, 1.05, 0.0],
-            rot: [0.0, 0.0, -0.12],
-        }, // ArmR
-        PartTransform {
-            pos: [-0.18, 0.38, 0.0],
-            rot: [0.0, 0.0, 0.0],
-        }, // LegL
-        PartTransform {
-            pos: [0.18, 0.38, 0.0],
-            rot: [0.0, 0.0, 0.0],
-        }, // LegR
-    ],
-};
-
-/// Wind up: weight back, striking arm cocked. Deliberately a large silhouette
-/// change -- the opponent has to read startup from across the arena.
-const WINDUP: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.90, -0.18],
-            rot: [0.0, -0.45, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 1.50, -0.16],
-            rot: [0.0, -0.30, 0.0],
-        },
-        PartTransform {
-            pos: [-0.40, 1.02, 0.10],
-            rot: [0.0, 0.0, 0.30],
-        },
-        PartTransform {
-            pos: [0.46, 1.22, -0.40],
-            rot: [-1.20, 0.0, -0.30],
-        },
-        PartTransform {
-            pos: [-0.20, 0.38, -0.10],
-            rot: [-0.20, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.22, 0.38, 0.14],
-            rot: [0.30, 0.0, 0.0],
-        },
-    ],
-};
-
-/// Strike: everything committed forward. Maximum contrast with WINDUP.
-const STRIKE: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.92, 0.26],
-            rot: [0.0, 0.40, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 1.50, 0.24],
-            rot: [0.0, 0.26, 0.0],
-        },
-        PartTransform {
-            pos: [-0.44, 0.98, -0.18],
-            rot: [0.0, 0.0, 0.36],
-        },
-        PartTransform {
-            pos: [0.30, 1.10, 0.72],
-            rot: [1.35, 0.0, -0.16],
-        },
-        PartTransform {
-            pos: [-0.20, 0.38, 0.20],
-            rot: [0.34, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.22, 0.38, -0.16],
-            rot: [-0.26, 0.0, 0.0],
-        },
-    ],
-};
-
-/// Guard: side-on, shield arm across. Reads as "cannot be hit from the front".
-const GUARD: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.88, 0.0],
-            rot: [0.0, 0.70, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 1.46, 0.06],
-            rot: [0.10, 0.40, 0.0],
-        },
-        PartTransform {
-            pos: [-0.16, 1.14, 0.44],
-            rot: [-0.90, 0.0, 0.55],
-        },
-        PartTransform {
-            pos: [0.40, 1.00, 0.10],
-            rot: [-0.30, 0.0, -0.25],
-        },
-        PartTransform {
-            pos: [-0.24, 0.36, 0.06],
-            rot: [0.0, 0.0, 0.10],
-        },
-        PartTransform {
-            pos: [0.24, 0.36, -0.10],
-            rot: [0.0, 0.0, -0.10],
-        },
-    ],
-};
-
-/// Dodge roll: low and tucked. Must read as clearly evasive from across the
-/// arena, because the opponent has to be able to tell a dodge from a walk.
-const ROLL: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.52, 0.10],
-            rot: [-1.05, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 0.86, 0.34],
-            rot: [-0.90, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [-0.36, 0.62, 0.26],
-            rot: [-1.30, 0.0, 0.45],
-        },
-        PartTransform {
-            pos: [0.36, 0.62, 0.26],
-            rot: [-1.30, 0.0, -0.45],
-        },
-        PartTransform {
-            pos: [-0.18, 0.30, -0.22],
-            rot: [-1.10, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.18, 0.30, -0.28],
-            rot: [-1.30, 0.0, 0.0],
-        },
-    ],
-};
-
-/// Crouch: low and compact. Has to read from across the arena, because the
-/// attacker needs to know their overhead will whiff.
-const CROUCH: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.56, 0.0],
-            rot: [0.30, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 1.00, 0.10],
-            rot: [0.20, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [-0.40, 0.66, 0.10],
-            rot: [-0.55, 0.0, 0.25],
-        },
-        PartTransform {
-            pos: [0.40, 0.66, 0.10],
-            rot: [-0.55, 0.0, -0.25],
-        },
-        PartTransform {
-            pos: [-0.20, 0.22, 0.04],
-            rot: [0.80, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.20, 0.22, 0.04],
-            rot: [0.80, 0.0, 0.0],
-        },
-    ],
-};
-
-/// Recoil: knocked off balance, arms trailing.
-const RECOIL: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.86, -0.30],
-            rot: [-0.36, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 1.42, -0.40],
-            rot: [-0.55, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [-0.52, 1.14, -0.24],
-            rot: [-0.70, 0.0, 0.60],
-        },
-        PartTransform {
-            pos: [0.52, 1.14, -0.24],
-            rot: [-0.70, 0.0, -0.60],
-        },
-        PartTransform {
-            pos: [-0.18, 0.38, 0.16],
-            rot: [0.34, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.20, 0.38, -0.06],
-            rot: [-0.14, 0.0, 0.0],
-        },
-    ],
-};
-
-/// Airborne: legs tucked.
-const AIRBORNE: Pose = Pose {
-    parts: [
-        PartTransform {
-            pos: [0.0, 0.95, 0.0],
-            rot: [0.10, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.0, 1.55, 0.0],
-            rot: [0.0, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [-0.46, 1.20, -0.06],
-            rot: [-0.50, 0.0, 0.40],
-        },
-        PartTransform {
-            pos: [0.46, 1.20, -0.06],
-            rot: [-0.50, 0.0, -0.40],
-        },
-        PartTransform {
-            pos: [-0.18, 0.50, 0.12],
-            rot: [0.60, 0.0, 0.0],
-        },
-        PartTransform {
-            pos: [0.18, 0.46, -0.06],
-            rot: [-0.30, 0.0, 0.0],
-        },
-    ],
-};
-
-/// The whole animation system.
-pub fn pose_for(input: PoseInput) -> Pose {
-    // Baked playback is a lookup by frame, so it stays a pure function of
-    // simulation state and rollback is unaffected. See `anim`.
-    if let Some((clip, elapsed)) = input.clip {
-        let frames = clip.frames();
-        if !frames.is_empty() {
-            return frames[(elapsed as usize).min(frames.len() - 1)];
+    /// Standing straight, arms at the sides, every channel zero.
+    pub const fn rest() -> Pose {
+        Pose {
+            channels: [0.0; CHANNELS],
         }
     }
 
-    let t = phase_progress(input);
+    pub const fn from_channels(channels: [f32; CHANNELS]) -> Pose {
+        Pose { channels }
+    }
 
-    match input.action {
-        Action::Startup { .. } => blend(&NEUTRAL, &WINDUP, ease_out(t)),
-        // Active frames snap to the strike immediately. The hitbox is live now;
-        // the pose must not lag it, or players learn to read the wrong thing.
-        Action::Active { .. } => STRIKE,
-        Action::Recovery { .. } => blend(&STRIKE, &NEUTRAL, ease_in_out(t)),
-        Action::Guard { held } => {
-            // The parry window gets a distinct, tighter stance so the defender
-            // can see their own timing.
-            let settle = (held as f32 / 6.0).clamp(0.0, 1.0);
-            blend(&NEUTRAL, &GUARD, ease_out(settle))
+    /// Where the hips sit, in reference metres from standing.
+    pub fn root_offset(&self) -> V3 {
+        [self.channels[0], self.channels[1], self.channels[2]]
+    }
+
+    pub fn angles(&self, j: Joint) -> [f32; 3] {
+        let i = 3 + j.index() * 3;
+        [self.channels[i], self.channels[i + 1], self.channels[i + 2]]
+    }
+
+    pub fn set_angles(&mut self, j: Joint, a: [f32; 3]) {
+        let i = 3 + j.index() * 3;
+        self.channels[i] = a[0];
+        self.channels[i + 1] = a[1];
+        self.channels[i + 2] = a[2];
+    }
+
+    /// One channel of one joint, in degrees -- what a slider edits.
+    pub fn degrees(&self, j: Joint, c: usize) -> f32 {
+        self.angles(j)[c] / RAD
+    }
+
+    pub fn set_degrees(&mut self, j: Joint, c: usize, v: f32) {
+        self.channels[3 + j.index() * 3 + c] = v * RAD;
+    }
+
+    /// Clamp every joint to what a body can actually do. The solver runs this
+    /// on its output, so overshoot can be tuned for feel without anyone having
+    /// to check it against anatomy.
+    pub fn clamped(mut self, skeleton: &Skeleton) -> Pose {
+        for j in JOINTS {
+            let a = self.angles(j);
+            let (s, p, t) = skeleton.bone(j).limits.clamp(a[0], a[1], a[2]);
+            self.set_angles(j, [s, p, t]);
         }
-        Action::BlockStun { .. } | Action::HitStun { .. } | Action::Stagger { .. } => {
-            blend(&RECOIL, &NEUTRAL, ease_in_out(t * 0.7))
-        }
-        // Held: the recoil, and it does not relax. Being grabbed should read as
-        // continuous, not as a hit you are walking off.
-        Action::Held { .. } => RECOIL,
-        Action::Dodge { .. } => {
-            // Snap into the roll and come out of it, so the invulnerable
-            // frames and the vulnerable recovery look different.
-            let out = ease_in_out((t * 1.8 - 0.8).clamp(0.0, 1.0));
-            blend(&ROLL, &NEUTRAL, out)
-        }
-        Action::Free => {
-            if !input.grounded {
-                AIRBORNE
-            } else if input.crouching {
-                CROUCH
-            } else {
-                locomotion(input)
+        self
+    }
+
+    /// Does this pose ask for anything a body cannot do? Used by a test that
+    /// holds every authored key to the same standard.
+    pub fn violations(&self, skeleton: &Skeleton) -> Vec<(Joint, usize, f32)> {
+        let mut out = Vec::new();
+        for j in JOINTS {
+            let a = self.angles(j);
+            for (c, v) in a.iter().enumerate() {
+                let (lo, hi) = skeleton.bone(j).limits.channel(c);
+                if *v < lo - 1e-4 || *v > hi + 1e-4 {
+                    out.push((j, c, v / RAD));
+                }
             }
         }
+        out
     }
-}
 
-/// Idle breathing and a walk cycle, both driven from `sim_frame` so they stay
-/// deterministic and survive rollback.
-fn locomotion(input: PoseInput) -> Pose {
-    let mut pose = NEUTRAL;
-    let phase = input.sim_frame as f32;
+    // -----------------------------------------------------------------------
+    // Authoring
+    // -----------------------------------------------------------------------
 
-    let moving = (input.speed / 7.0).clamp(0.0, 1.0);
-    if moving > 0.01 {
-        let swing = (phase * 0.42).sin() * 0.62 * moving;
-        let counter = (phase * 0.42).sin() * 0.34 * moving;
-        pose.parts[Part::LegL as usize].rot[0] = swing;
-        pose.parts[Part::LegR as usize].rot[0] = -swing;
-        pose.parts[Part::LegL as usize].pos[2] = swing * 0.22;
-        pose.parts[Part::LegR as usize].pos[2] = -swing * 0.22;
-        pose.parts[Part::ArmL as usize].rot[0] = -counter;
-        pose.parts[Part::ArmR as usize].rot[0] = counter;
-        // Bob twice per stride.
-        let bob = (phase * 0.84).sin() * 0.045 * moving;
-        pose.parts[Part::Torso as usize].pos[1] += bob;
-        pose.parts[Part::Head as usize].pos[1] += bob;
-    } else {
-        let breath = (phase * 0.06).sin() * 0.022;
-        pose.parts[Part::Torso as usize].pos[1] += breath;
-        pose.parts[Part::Head as usize].pos[1] += breath;
+    /// Move the hips, in metres. Down is where most of a pose's weight lives:
+    /// a crouch, a coil before a jump, the dip in a walk cycle.
+    pub fn hips(mut self, x: f32, y: f32, z: f32) -> Pose {
+        self.channels[0] = x;
+        self.channels[1] = y;
+        self.channels[2] = z;
+        self
     }
-    pose
-}
 
-fn phase_progress(input: PoseInput) -> f32 {
-    if input.frames_total == 0 {
-        0.0
-    } else {
-        (input.frames_into as f32 / input.frames_total as f32).clamp(0.0, 1.0)
+    /// Rotate the whole body at the hips: lean forward, tilt sideways, turn.
+    pub fn root(self, lean: f32, tilt: f32, turn: f32) -> Pose {
+        self.set(Joint::Root, lean, tilt, turn)
     }
-}
 
-fn blend(a: &Pose, b: &Pose, t: f32) -> Pose {
-    let mut out = *a;
-    for i in 0..PART_COUNT {
-        for k in 0..3 {
-            out.parts[i].pos[k] = a.parts[i].pos[k] + (b.parts[i].pos[k] - a.parts[i].pos[k]) * t;
-            out.parts[i].rot[k] = a.parts[i].rot[k] + (b.parts[i].rot[k] - a.parts[i].rot[k]) * t;
+    /// Bend at the waist, lean sideways, twist.
+    pub fn spine(self, bend: f32, side: f32, twist: f32) -> Pose {
+        self.set(Joint::Spine, bend, side, twist)
+    }
+
+    /// The upper torso, on top of the spine. Most of a swing's rotation should
+    /// be here and in the spine together -- a torso that turns as one block is
+    /// the fastest way to make a character look like a mannequin.
+    pub fn chest(self, bend: f32, side: f32, twist: f32) -> Pose {
+        self.set(Joint::Chest, bend, side, twist)
+    }
+
+    /// Nod, tilt, look left or right. Positive turn looks to the character's
+    /// own right.
+    pub fn head(self, nod: f32, tilt: f32, turn: f32) -> Pose {
+        self.set(Joint::Head, nod, tilt, turn)
+    }
+
+    /// Shoulder: forward, out from the body, rolled.
+    pub fn shoulder_l(self, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.set(Joint::ArmL, swing, spread, twist)
+    }
+
+    pub fn shoulder_r(self, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.set(Joint::ArmR, swing, spread, twist)
+    }
+
+    /// Both shoulders at once -- a symmetric guard, a two-handed grip.
+    pub fn shoulders(self, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.shoulder_l(swing, spread, twist)
+            .shoulder_r(swing, spread, twist)
+    }
+
+    /// Elbow flexion. Zero is a straight arm; 150 is folded shut.
+    pub fn elbow_l(self, bend: f32) -> Pose {
+        self.set(Joint::ForearmL, bend, 0.0, 0.0)
+    }
+
+    pub fn elbow_r(self, bend: f32) -> Pose {
+        self.set(Joint::ForearmR, bend, 0.0, 0.0)
+    }
+
+    pub fn elbows(self, bend: f32) -> Pose {
+        self.elbow_l(bend).elbow_r(bend)
+    }
+
+    /// Elbow flexion plus forearm roll, which is what turns a palm over.
+    pub fn forearm_l(self, bend: f32, twist: f32) -> Pose {
+        self.set(Joint::ForearmL, bend, 0.0, twist)
+    }
+
+    pub fn forearm_r(self, bend: f32, twist: f32) -> Pose {
+        self.set(Joint::ForearmR, bend, 0.0, twist)
+    }
+
+    pub fn wrist_l(self, bend: f32, spread: f32, twist: f32) -> Pose {
+        self.set(Joint::HandL, bend, spread, twist)
+    }
+
+    pub fn wrist_r(self, bend: f32, spread: f32, twist: f32) -> Pose {
+        self.set(Joint::HandR, bend, spread, twist)
+    }
+
+    pub fn wrists(self, bend: f32, spread: f32, twist: f32) -> Pose {
+        self.wrist_l(bend, spread, twist)
+            .wrist_r(bend, spread, twist)
+    }
+
+    /// Hip: leg forward, leg out to the side, leg rolled.
+    pub fn hip_l(self, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.set(Joint::ThighL, swing, spread, twist)
+    }
+
+    pub fn hip_r(self, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.set(Joint::ThighR, swing, spread, twist)
+    }
+
+    pub fn hips_both(self, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.hip_l(swing, spread, twist).hip_r(swing, spread, twist)
+    }
+
+    /// Knee flexion. Zero is a straight leg; positive folds the heel back.
+    pub fn knee_l(self, bend: f32) -> Pose {
+        self.set(Joint::ShinL, bend, 0.0, 0.0)
+    }
+
+    pub fn knee_r(self, bend: f32) -> Pose {
+        self.set(Joint::ShinR, bend, 0.0, 0.0)
+    }
+
+    pub fn knees(self, bend: f32) -> Pose {
+        self.knee_l(bend).knee_r(bend)
+    }
+
+    /// Ankle: positive `point` drops the toe, which is what sells a push-off.
+    pub fn ankle_l(self, point: f32, roll: f32, turn: f32) -> Pose {
+        self.set(Joint::FootL, point, roll, turn)
+    }
+
+    pub fn ankle_r(self, point: f32, roll: f32, turn: f32) -> Pose {
+        self.set(Joint::FootR, point, roll, turn)
+    }
+
+    pub fn ankles(self, point: f32, roll: f32, turn: f32) -> Pose {
+        self.ankle_l(point, roll, turn).ankle_r(point, roll, turn)
+    }
+
+    /// Any joint, by name, in degrees.
+    pub fn set(mut self, j: Joint, swing: f32, spread: f32, twist: f32) -> Pose {
+        self.set_angles(j, [swing * RAD, spread * RAD, twist * RAD]);
+        self
+    }
+
+    // -----------------------------------------------------------------------
+    // Inverse kinematics
+    // -----------------------------------------------------------------------
+
+    /// Put the left ankle at a point in character space and let the leg work
+    /// out how. `[x, y, z]` in metres: +Z is forward, +Y up, ground at zero.
+    ///
+    /// Use this for anything with a planted foot. A foot given the same target
+    /// on consecutive frames does not move, however much the hips do, which is
+    /// what makes a walk cycle stop sliding.
+    pub fn plant_l(mut self, target: V3) -> Pose {
+        ik::foot_to(&mut self, reference(), true, target);
+        self
+    }
+
+    pub fn plant_r(mut self, target: V3) -> Pose {
+        ik::foot_to(&mut self, reference(), false, target);
+        self
+    }
+
+    /// Put the left wrist at a point in character space.
+    pub fn reach_l(mut self, target: V3) -> Pose {
+        ik::hand_to(&mut self, reference(), true, target);
+        self
+    }
+
+    pub fn reach_r(mut self, target: V3) -> Pose {
+        ik::hand_to(&mut self, reference(), false, target);
+        self
+    }
+
+    /// Level a foot with the floor.
+    ///
+    /// A planted foot solved by IK inherits whatever angle the shin ended up
+    /// at, which points the sole into the ground or up at the ceiling. This
+    /// works out the ankle angle that makes the sole flat -- and if the joint
+    /// cannot reach that angle, the limits clamp it and the heel lifts, which
+    /// is what a real ankle does at the end of a stride.
+    ///
+    /// Call it *after* planting the foot.
+    pub fn level_l(self) -> Pose {
+        self.level(Joint::FootL)
+    }
+
+    pub fn level_r(self) -> Pose {
+        self.level(Joint::FootR)
+    }
+
+    pub fn level_feet(self) -> Pose {
+        self.level_l().level_r()
+    }
+
+    /// Roll the foot onto the ball of its toe, whatever height the ankle is at.
+    ///
+    /// The other half of `level_l`. At the end of a stride the ankle is already
+    /// rising while the toe is still carrying weight, and the ankle angle that
+    /// keeps the toe on the floor depends on exactly how high the ankle got --
+    /// which is not a number a person can hold in their head, and is exactly
+    /// the kind of thing the kinematics should work out.
+    ///
+    /// If the ankle is too high to reach the floor, the joint goes as far as it
+    /// can and the foot leaves the ground, which is what feet do.
+    pub fn toe_floor_l(self) -> Pose {
+        self.pivot(Joint::FootL)
+    }
+
+    pub fn toe_floor_r(self) -> Pose {
+        self.pivot(Joint::FootR)
+    }
+
+    fn pivot(mut self, foot: Joint) -> Pose {
+        let skeleton = reference();
+        let bone = skeleton.bone(foot);
+        let parent = foot.parent().expect("a foot hangs off a shin");
+        let skin = crate::skeleton::solve(skeleton, &self);
+        let shin = skin.rot[parent.index()];
+        let ankle = skin.origin[foot.index()];
+
+        // How low the sole gets for a given ankle angle. Solved against the
+        // actual corners of the box rather than against the middle of its end,
+        // because a foot pitched forty degrees puts its front-bottom corner
+        // several centimetres below where the centreline says -- and several
+        // centimetres is the whole difference between rolling onto a toe and
+        // standing in the floor.
+        let lowest = |angle: f32| {
+            let rot = shin.mul(crate::math::Quat::from_x(angle * bone.swing_sign));
+            let centre = math::add(ankle, rot.rotate(bone.box_at));
+            let h = bone.half;
+            let mut low = f32::MAX;
+            for sx in [-1.0, 1.0f32] {
+                for sz in [-1.0, 1.0f32] {
+                    let corner = rot.rotate([sx * h[0], -h[1], sz * h[2]]);
+                    low = low.min(centre[1] + corner[1]);
+                }
+            }
+            low
+        };
+
+        let (lo, hi) = bone.limits.swing;
+        // Start level and roll the toe down until the sole reaches the floor.
+        // Monotone across that range, so twenty halvings settle it.
+        let level = {
+            let p = shin.rotate([0.0, 1.0, 0.0])[1];
+            let q = shin.rotate([0.0, 0.0, 1.0])[1];
+            (q.atan2(p) / bone.swing_sign).clamp(lo, hi)
+        };
+        // A few millimetres of daylight rather than exactly touching. The
+        // solver's springs lag the keys, and a foot that is precisely on the
+        // floor at every key is under it between them.
+        const CLEARANCE: f32 = 0.008;
+        let mut low = level;
+        let mut high = hi;
+        if lowest(level) <= CLEARANCE {
+            // Already in the floor at level: the ankle is below where a flat
+            // foot would put it, and there is nothing to roll onto.
+            low = lo;
+            high = level;
         }
+        for _ in 0..20 {
+            let mid = 0.5 * (low + high);
+            if lowest(mid) > CLEARANCE {
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+
+        let mut a = self.angles(foot);
+        a[0] = low.clamp(lo, hi);
+        self.set_angles(foot, a);
+        self
+    }
+
+    /// Level the foot, then tip it: positive drops the toe, negative lifts it.
+    ///
+    /// This is the authoring unit for a stride. A heel strike is `toe_l(-12)`,
+    /// a flat plant is `toe_l(0)`, and pushing off the ball of the foot is
+    /// `toe_l(35)` -- none of which a person can express as an absolute ankle
+    /// angle, because the answer depends on what the shin is doing.
+    pub fn toe_l(self, degrees: f32) -> Pose {
+        self.tip(Joint::FootL, degrees)
+    }
+
+    pub fn toe_r(self, degrees: f32) -> Pose {
+        self.tip(Joint::FootR, degrees)
+    }
+
+    fn tip(self, foot: Joint, degrees: f32) -> Pose {
+        let mut p = self.level(foot);
+        let mut a = p.angles(foot);
+        let (lo, hi) = reference().bone(foot).limits.swing;
+        let mut want = (a[0] + degrees * RAD).clamp(lo, hi);
+        if degrees > 0.0 {
+            // Dropping the toe past where the sole meets the floor is not
+            // something a foot can do -- what it does instead is lift the heel,
+            // which is a pivot about the toe and is exactly what `toe_floor`
+            // solves. Capping here means `toe_l(30)` on a foot already flat on
+            // the ground is a no-op rather than a toe through the floorboards,
+            // and an author cannot get it wrong by not knowing how high the
+            // ankle happens to be.
+            let ceiling = self.pivot(foot).angles(foot)[0];
+            want = want.min(ceiling);
+        }
+        a[0] = want;
+        p.set_angles(foot, a);
+        p
+    }
+
+    fn level(mut self, foot: Joint) -> Pose {
+        let skeleton = reference();
+        let parent = foot.parent().expect("a foot hangs off a shin");
+        let shin = crate::skeleton::solve(skeleton, &self).rot[parent.index()];
+        // The foot points along its own +Z. Under the shin's rotation, the
+        // ankle angle that flattens it is one atan2 -- see `skeleton::solve`
+        // for why the composition is what it is.
+        let up_y = shin.rotate([0.0, 1.0, 0.0])[1];
+        let fwd_y = shin.rotate([0.0, 0.0, 1.0])[1];
+        let angle = fwd_y.atan2(up_y);
+        let mut a = self.angles(foot);
+        // Clamped, because an ankle cannot always reach flat -- a leg stretched
+        // out behind the body runs out of joint first, and what a real ankle
+        // does then is lift the heel. Levelling is derived rather than
+        // authored, so clamping it here is doing what was asked rather than
+        // overruling it.
+        let (lo, hi) = skeleton.bone(foot).limits.swing;
+        a[0] = (angle / skeleton.bone(foot).swing_sign).clamp(lo, hi);
+        self.set_angles(foot, a);
+        self
+    }
+
+    // -----------------------------------------------------------------------
+    // Combining
+    // -----------------------------------------------------------------------
+
+    /// The same pose on the other side. Left becomes right, sideways lean and
+    /// twist flip, everything else stays -- which is the whole point of naming
+    /// the channels rather than storing raw Euler angles.
+    pub fn mirrored(&self) -> Pose {
+        let mut out = *self;
+        out.channels[0] = -self.channels[0];
+        for j in JOINTS {
+            let a = self.angles(j.opposite());
+            if j.opposite() == j {
+                out.set_angles(j, [a[0], -a[1], -a[2]]);
+            } else {
+                out.set_angles(j, a);
+            }
+        }
+        out
+    }
+
+    /// The same pose thrown with the **other arm**, standing in the same place.
+    ///
+    /// [`Pose::mirrored`] swaps the legs too, which is right for a pose that
+    /// stands on its own and wrong for one frame of an attack: a clip has to
+    /// start and end on the idle's own stance, and a mirrored stance is not
+    /// that stance, so the feet would swap sides on the first frame and swap
+    /// back on the last. This mirrors everything above the hips -- the arms,
+    /// the chest, the head, the way the body turns into the blow -- and then
+    /// **puts the feet back exactly where they were**, which is what makes a
+    /// left jab and a right cross two clips off one set of poses.
+    ///
+    /// The hips turn with the punch, so the legs are re-solved rather than
+    /// copied: a leg hangs off the root, and holding its angles while the root
+    /// turns the other way drags the foot across the floor.
+    pub fn other_arm(&self) -> Pose {
+        let planted = crate::skeleton::solve(reference(), self);
+        let feet = [
+            planted.origin[Joint::FootL.index()],
+            planted.origin[Joint::FootR.index()],
+        ];
+        let mut out = self.mirrored();
+        // Where the weight is is a fact about the stance, not about the arm.
+        out.channels[0] = self.channels[0];
+        let mut out = out.plant_l(feet[0]).plant_r(feet[1]);
+        // The ankles are authored per foot -- a lifted heel, a pointed toe --
+        // and the IK above only reaches the ankle, not the angle of the sole.
+        for foot in [Joint::FootL, Joint::FootR] {
+            out.set_angles(foot, self.angles(foot));
+        }
+        out
+    }
+
+    /// Straight blend, channel by channel. Angles, so there is no shortening
+    /// artefact to worry about, and the ranges involved are far from any wrap.
+    pub fn blend(&self, other: &Pose, t: f32) -> Pose {
+        let mut out = *self;
+        for i in 0..CHANNELS {
+            out.channels[i] = self.channels[i] + (other.channels[i] - self.channels[i]) * t;
+        }
+        out
+    }
+
+    /// Add a second pose's channels on top, scaled. Used for layering: a turn's
+    /// lean on top of a walk, a hit's flinch on top of a guard.
+    pub fn layered(&self, delta: &Pose, weight: f32) -> Pose {
+        let mut out = *self;
+        for i in 0..CHANNELS {
+            out.channels[i] += delta.channels[i] * weight;
+        }
+        out
+    }
+
+    /// Difference between two poses, for layering one over another later.
+    pub fn difference(&self, base: &Pose) -> Pose {
+        let mut out = *self;
+        for i in 0..CHANNELS {
+            out.channels[i] = self.channels[i] - base.channels[i];
+        }
+        out
+    }
+
+    /// Replace one body group's channels from another pose. This is how an
+    /// upper-body attack is played over whatever the legs are already doing.
+    pub fn take_group(&self, other: &Pose, group: Group) -> Pose {
+        let mut out = *self;
+        for j in JOINTS {
+            if j.group() == group {
+                out.set_angles(j, other.angles(j));
+            }
+        }
+        out
+    }
+
+    /// How far apart two poses are, summed over every channel. A crude but
+    /// useful measure: tests use it to assert that two poses actually read
+    /// differently at gameplay distance.
+    pub fn separation(&self, other: &Pose) -> f32 {
+        (0..CHANNELS)
+            .map(|i| (self.channels[i] - other.channels[i]).abs())
+            .sum()
+    }
+
+    /// Where a joint ends up on the reference body. Convenience for tests and
+    /// for the contact sheets.
+    pub fn joint_at(&self, j: Joint) -> V3 {
+        crate::skeleton::solve(reference(), self).origin[j.index()]
+    }
+
+    /// Lowest corner of either foot, which is what a clip has to keep on the
+    /// floor unless it means not to.
+    ///
+    /// The corners, not the centre: a foot is 22 cm long, so at a 40-degree
+    /// push-off the toe is 7 cm below where the middle of the box is, and a
+    /// check that ignores that passes a clip whose toes are through the floor.
+    pub fn lowest_foot(&self, skeleton: &Skeleton) -> f32 {
+        let skin = crate::skeleton::solve(skeleton, self);
+        let mut lowest = f32::MAX;
+        for j in [Joint::FootL, Joint::FootR] {
+            let (centre, rot) = skin.box_of(skeleton, j);
+            let h = skeleton.bone(j).half;
+            for sx in [-1.0, 1.0f32] {
+                for sy in [-1.0, 1.0f32] {
+                    for sz in [-1.0, 1.0f32] {
+                        let corner = rot.rotate([sx * h[0], sy * h[1], sz * h[2]]);
+                        lowest = lowest.min(centre[1] + corner[1]);
+                    }
+                }
+            }
+        }
+        lowest
+    }
+
+    /// The two places a foot can touch the ground: the back and front of the
+    /// sole, in character space.
+    ///
+    /// Which of them is carrying the weight is the whole question when you are
+    /// asking whether a foot is sliding: flat on the floor both are, at a heel
+    /// strike it is the heel, and rolling off the end of a stride it is the toe
+    /// -- and the ankle is moving in that last case however planted the foot is.
+    ///
+    /// Taken from the actual corners of the box rather than from the ankle with
+    /// a fudge subtracted, because a foot pitched thirty degrees puts its toe
+    /// two centimetres from where the fudge says, and two centimetres is the
+    /// difference between a planted foot and one through the floor.
+    pub fn foot_contact(&self, skeleton: &Skeleton, left: bool) -> (V3, V3) {
+        let j = if left { Joint::FootL } else { Joint::FootR };
+        let skin = crate::skeleton::solve(skeleton, self);
+        let (centre, rot) = skin.box_of(skeleton, j);
+        let h = skeleton.bone(j).half;
+        let at = |z: f32| math::add(centre, rot.rotate([0.0, -h[1], z]));
+        (at(-h[2]), at(h[2]))
+    }
+}
+
+/// Every joint's box, ready for the renderer.
+pub fn boxes(skeleton: &Skeleton, pose: &Pose) -> [(V3, math::Quat); JOINT_COUNT] {
+    let skin = crate::skeleton::solve(skeleton, pose);
+    let mut out = [(math::ZERO, math::Quat::IDENTITY); JOINT_COUNT];
+    for j in JOINTS {
+        out[j.index()] = skin.box_of(skeleton, j);
     }
     out
 }
 
-fn ease_out(t: f32) -> f32 {
-    1.0 - (1.0 - t) * (1.0 - t)
-}
-
-fn ease_in_out(t: f32) -> f32 {
-    if t < 0.5 {
-        2.0 * t * t
-    } else {
-        1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
-    }
-}
-
-/// Fixed part dimensions, in metres. The renderer builds boxes from these once.
-pub fn part_size(part: Part) -> [f32; 3] {
-    match part {
-        Part::Torso => [0.62, 0.80, 0.36],
-        Part::Head => [0.34, 0.34, 0.34],
-        Part::ArmL | Part::ArmR => [0.18, 0.62, 0.18],
-        Part::LegL | Part::LegR => [0.22, 0.76, 0.22],
-    }
+/// Full box dimensions for a joint on a given build.
+pub fn part_size(skeleton: &Skeleton, j: Joint) -> [f32; 3] {
+    let h = skeleton.bone(j).half;
+    [h[0] * 2.0, h[1] * 2.0, h[2] * 2.0]
 }

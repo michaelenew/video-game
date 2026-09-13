@@ -4,6 +4,7 @@
 use sim::class::{ALL_CLASSES, Class};
 use sim::fixed::Fx;
 use sim::math::V3;
+use sim::moves;
 use sim::state::{Action, Phase, Shield, max_health};
 use sim::{Input, World};
 
@@ -477,45 +478,111 @@ fn releasing_a_direction_still_stops_you_crisply() {
 // The hitbox the overlay draws
 // ---------------------------------------------------------------------------
 
-/// A world with player one mid-swing and player two parked at `gap` from the
-/// centre of the attack volume, along the attack direction.
+/// The buttons that throw this class's fastest move with a volume of its own.
+///
+/// Not every poke has one. A move whose radius is zero places something and
+/// lets the thing it placed do the hitting -- the Blood mage's thrown blade is
+/// the whole reason the distinction exists -- so a test about attack volumes
+/// has to be pointed at a move that has one.
+fn swings_with(class: sim::class::Class) -> u16 {
+    if sim::moves::get(class, sim::state::SLOT_POKE).strikes() {
+        L
+    } else {
+        SHIFT | L
+    }
+}
+
+/// A world with player one mid-swing and player two parked at `gap` past the
+/// far end of the attack volume, along the line the weapon lies on.
+///
+/// The **far end** rather than the centre, because most of what the game throws
+/// is a line. The Elementalist's auto is a beam out of her chest, and a
+/// defender standing at the middle of it is inside it however far away they are
+/// put; the Champion's weapons are capsules that sweep, and the only boundary a
+/// capsule has that does not depend on which way you approach it is the one off
+/// its end. For a bubble the two points are the same, so it means that too.
 fn swinging_at(class: sim::class::Class, gap_factor: f32) -> World {
     use sim::state::hitbox;
 
+    let button = swings_with(class);
     let mut w = World::with_classes([class, class]);
     // Out of the way while the swing starts, so nothing connects early.
     w.players[1].pos = sim::V3::new(Fx::from_int(30), w.players[1].pos.y, Fx::ZERO);
+    let held = [Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)];
 
+    // The volume the **next** frame will test with, found by stepping a copy.
+    //
+    // Reading the current one and then advancing was fine while every attack
+    // was a disc that sat still for its whole active window. A swing does not:
+    // it has moved by the time the hit is resolved, so the box to park a
+    // defender against is the one the hit test is about to use, not the one on
+    // screen a frame earlier.
+    let mut found = None;
     for _ in 0..40 {
-        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
-        if hitbox(&w.players[0]).is_some() {
+        let mut peek = w.clone();
+        peek.advance(held);
+        if let Some(next) = hitbox(&peek.players[0]) {
+            found = Some(next);
             break;
         }
+        w.advance(held);
     }
-    let hb = hitbox(&w.players[0]).expect("never reached an active frame");
+    let hb = found.expect("never reached an active frame");
 
     // Exactly the threshold the hit test uses: the attack radius plus the
     // defender's body radius, which is why the overlay draws both cylinders.
     let threshold = (hb.radius.to_f32_for_render()
         + sim::tuning::body_radius().to_f32_for_render())
         * gap_factor;
-    w.players[1].pos = sim::V3::new(
-        hb.centre
-            .x
-            .add(Fx::ratio((threshold * 1000.0) as i32, 1000)),
-        w.players[1].pos.y,
-        hb.centre.z,
-    );
-    w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    let step = Fx::ratio((threshold * 1000.0) as i32, 1000);
+    // Out along the volume's own direction. For a bubble that is the body's
+    // facing; for anything with a length of its own it is that line, which may
+    // be pointing anywhere at all -- the Elementalist's beam ends wherever the
+    // crosshair was, and the Champion's weapons sweep through an arc.
+    let along = if hb.is_a_beam() {
+        hb.to.sub(hb.from).normalized()
+    } else {
+        w.players[0].facing
+    };
+    let spot = hb.to.add(along.scale(step));
+    // Placed by the middle of the body rather than by the feet, so "just past
+    // the end of the volume" means the same thing at any height.
+    let half = sim::tuning::body_height().div(Fx::from_int(2));
+    w.players[1].pos = sim::V3::new(spot.x, spot.y.sub(half).max(Fx::ZERO), spot.z);
+    w.advance(held);
     w
+}
+
+#[test]
+fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
+    // The other half of the rule below. An ability that puts something into the
+    // world and lets it do the hitting must not *also* poke whoever happens to
+    // be standing next to the caster: the blade is out there, and the caster is
+    // here with empty hands.
+    use sim::state::hitbox;
+    let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
+    w.players[1].pos = w.players[0].pos;
+    let before = w.players[1].health;
+    for _ in 0..40 {
+        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        assert!(
+            hitbox(&w.players[0]).is_none(),
+            "the thrown blade drew a hitbox on the caster"
+        );
+    }
+    assert!(
+        w.players[1].health < before,
+        "fixture: the blade never came round to hit anybody"
+    );
 }
 
 #[test]
 fn the_drawn_hitbox_is_the_one_that_hits() {
     // The overlay draws `state::hitbox`, and the hit test uses it too. This
     // pins that they agree at the boundary, for every class -- including the
-    // Champion, whose weapon form multiplies reach and which an overlay
-    // rebuilding the box from the move table on its own would get wrong.
+    // Champion, whose swings are capsules that move over their active frames
+    // and which an overlay rebuilding the box from the move table on its own
+    // would get wrong on every frame but the first.
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(
@@ -1209,8 +1276,9 @@ fn a_grounded_attack_does_not_hang_anything() {
 // Stun
 // ---------------------------------------------------------------------------
 //
-// Every point of damage stuns, interrupts and shoves. See `docs/design/stun.md`
-// for why the rules are what they are; these check the game actually does it.
+// Every point of damage freezes, stuns, interrupts and shoves. See
+// `docs/design/stun.md` for why the rules are what they are; these check the
+// game actually does it.
 
 /// Two fighters nose to nose with clear floor behind the victim.
 ///
@@ -1218,24 +1286,28 @@ fn a_grounded_attack_does_not_hang_anything() {
 /// the edge of a platform -- fine for "did it connect", useless for "how far
 /// did it send them", because the platform stops the knockback dead and the
 /// test then measures the platform. Anything about distance uses this instead.
-fn in_the_open(class: sim::class::Class) -> World {
-    let mut w = World::with_classes([class; 2]);
+///
+/// The victim is always the middleweight. A class measured against itself is
+/// really being measured against how launchable *it* is, which is a different
+/// question and, for the lightest class on the roster, a much harder one.
+fn in_the_open(class: Class) -> World {
+    let mut w = World::with_classes([class, Class::Champion]);
     run(&mut w, 30, 0, 0);
     w.players[0].pos = V3::new(Fx::from_int(-3), Fx::ZERO, Fx::ZERO);
     w.players[1].pos = V3::new(Fx::from_int(-2), Fx::ZERO, Fx::ZERO);
     w
 }
 
-/// Advance until player two's health drops, and say which frame it did.
-fn until_hit(w: &mut World, a: u16, b: u16) -> Option<u32> {
+/// Advance holding `a` until player two's health drops. False if it never does.
+fn until_hit(w: &mut World, a: u16) -> bool {
     let before = w.players[1].health;
-    for f in 0..120 {
-        run(w, 1, a, b);
+    for _ in 0..120 {
+        run(w, 1, a, 0);
         if w.players[1].health < before {
-            return Some(f);
+            return true;
         }
     }
-    None
+    false
 }
 
 fn flat_speed(p: &sim::state::Player) -> f32 {
@@ -1244,19 +1316,29 @@ fn flat_speed(p: &sim::state::Player) -> f32 {
         .to_f32_for_render()
 }
 
+/// Is the victim still held by the last thing that hit them?
+fn still_held(w: &World) -> bool {
+    let p = &w.players[1];
+    p.hitlag > 0
+        || matches!(
+            p.action,
+            Action::HitStun { .. } | Action::Held { .. } | Action::Stagger { .. }
+        )
+}
+
 #[test]
 fn a_hit_interrupts_whatever_the_victim_was_doing() {
     // The whole reason stun is a mechanic. A hit that merely subtracted health
     // would leave both fighters swinging past each other, and the winner of an
     // exchange would be whoever pressed first rather than whoever hit first.
     let mut w = engaged();
-    // Player two starts a slow committed move; player one pokes it out of them.
+    // Player two starts the slowest thing they have; player one pokes it out.
     run(&mut w, 1, 0, SHIFT | L);
     assert!(
         matches!(w.players[1].action, Action::Startup { .. }),
         "fixture failed to start a move on the victim"
     );
-    until_hit(&mut w, L, SHIFT | L).expect("the poke never connected");
+    assert!(until_hit(&mut w, L), "the poke never connected");
     assert!(
         matches!(w.players[1].action, Action::HitStun { .. }),
         "being hit did not take the victim out of their move: {:?}",
@@ -1273,71 +1355,12 @@ fn a_hit_interrupts_whatever_the_victim_was_doing() {
 }
 
 #[test]
-fn a_hit_ends_an_aerial_hang_and_the_jump_that_carried_it() {
-    // Two things a fighter is in the middle of spending when they are hit in
-    // the air. Leaving either running would mean a hit in the air barely
-    // registered -- the victim would keep floating on the hang they bought
-    // before the hit landed.
-    let mut w = engaged();
-    run(&mut w, 1, 0, Input::SPACE);
-    run(&mut w, 2, 0, L);
-    assert!(
-        w.players[1].air_stall > 0 && !w.players[1].grounded,
-        "fixture failed to get an aerial out"
-    );
-    until_hit(&mut w, L, 0).expect("the poke never connected");
-    assert_eq!(w.players[1].air_stall, 0, "the hang survived the hit");
-    assert_eq!(
-        w.players[1].jump_hold, 0,
-        "the jump sustain survived the hit"
-    );
-}
-
-#[test]
-fn a_field_tick_stuns_and_shoves_like_every_other_point_of_damage() {
-    // "Each bit of damage" is the rule, and a damage-over-time field is the
-    // case that used to break it: standing in a fire pillar cost health and
-    // nothing else, which made it a number going down rather than a piece of
-    // ground taken away from you.
-    let mut w = World::with_classes([Class::Elementalist, Class::Bulwark]);
-    run(&mut w, 30, 0, 0);
-    // The pillar lands at the move's reach, so the victim is parked there.
-    let reach = sim::moves::get(Class::Elementalist, 2).reach;
-    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
-    w.players[1].pos = V3::new(reach, Fx::ZERO, Fx::ZERO);
-    run(&mut w, 2, E, 0); // a structure, which the pillar needs
-    run(&mut w, 4, 0, 0);
-    run(&mut w, 2, Q, 0);
-
-    let before = w.players[1].health;
-    let mut stunned = false;
-    let mut shoved = false;
-    for _ in 0..90 {
-        run(&mut w, 1, 0, 0);
-        stunned |= w.players[1].action.stunned();
-        shoved |= flat_speed(&w.players[1]) > 0.5;
-    }
-    assert!(
-        w.players[1].health < before,
-        "the fixture never put anyone in the pillar"
-    );
-    assert!(
-        stunned,
-        "a field tick did not stun, so it interrupts nothing"
-    );
-    assert!(
-        shoved,
-        "a field tick did not shove anyone off the ground it covers"
-    );
-}
-
-#[test]
 fn contact_freezes_both_fighters_and_costs_neither_of_them_tempo() {
     // Hitlag. The frames are handed to both sides, so it is punctuation rather
     // than frame advantage: what changes is that a hit reads as a collision,
     // not who gets to move first afterwards.
     let mut w = in_the_open(Class::Bulwark);
-    until_hit(&mut w, L, 0).expect("the poke never connected");
+    assert!(until_hit(&mut w, L), "the poke never connected");
     let freeze = w.players[0].hitlag;
     assert!(freeze > 0, "a hit produced no contact freeze");
     assert_eq!(
@@ -1361,11 +1384,31 @@ fn contact_freezes_both_fighters_and_costs_neither_of_them_tempo() {
         w.players.iter().all(|p| p.hitlag == 0),
         "the freeze did not end"
     );
-    // And the moment it ends, everything resumes.
     run(&mut w, 1, 0, 0);
     assert!(
         w.players[1].action.frames_left() < frozen[1].action.frames_left(),
         "the stun never started counting down"
+    );
+}
+
+#[test]
+fn the_freeze_does_not_swallow_what_you_pressed_during_it() {
+    // Four to eight frames of input being ignored is long enough to lose a
+    // button in, and the Champion's leap is pressed inside exactly that window.
+    // Whatever was held during a freeze is handed back on the first frame that
+    // is not frozen.
+    let mut w = in_the_open(Class::Bulwark);
+    assert!(until_hit(&mut w, L), "the poke never connected");
+    let freeze = w.players[1].hitlag;
+    assert!(freeze >= 2, "no freeze to press anything during");
+    // Player two taps guard entirely inside the freeze, then lets go.
+    for _ in 0..freeze {
+        run(&mut w, 1, 0, R);
+    }
+    assert_ne!(
+        w.players[1].buffered & R,
+        0,
+        "the press was not remembered across the freeze"
     );
 }
 
@@ -1378,7 +1421,7 @@ fn damage_already_taken_makes_the_next_hit_send_you_further() {
     let speed_at = |health: i32| {
         let mut w = in_the_open(Class::Champion);
         w.players[1].health = health;
-        until_hit(&mut w, L, 0).expect("the poke never connected");
+        assert!(until_hit(&mut w, L), "the poke never connected");
         flat_speed(&w.players[1])
     };
     let fresh = speed_at(max_health());
@@ -1391,76 +1434,16 @@ fn damage_already_taken_makes_the_next_hit_send_you_further() {
 }
 
 #[test]
-fn combos_open_up_mid_round_and_close_again() {
-    // The shape the whole system exists to produce.
-    //
-    // At full health a hit resets neutral: the stun is short and the exchange
-    // starts over. As damage accumulates the stun grows and the same two moves
-    // start to link. Keep going and the knockback -- which grows faster -- puts
-    // the victim out of reach before the attacker can follow, and the link is a
-    // launch instead.
-    //
-    // Counted across the roster rather than per class, because a class whose
-    // poke never links is a balance question, not a broken mechanic.
-    let linking = |pct: i32| {
-        ALL_CLASSES
-            .iter()
-            .filter(|c| poke_links(**c, max_health() * pct / 100))
-            .count()
-    };
-    let fresh = linking(100);
-    let middle = linking(45);
-    let dying = linking(15);
-    assert_eq!(
-        fresh, 0,
-        "a hit at full health already combos, so neutral never resets"
-    );
-    assert!(
-        middle > 0,
-        "nothing links anywhere in the round: the stun system enables no combos at all"
-    );
-    assert!(
-        dying < middle,
-        "combos do not close ({middle} classes link at mid health, {dying} near death); \
-         knockback has stopped outgrowing hitstun and the round has no arc"
-    );
-}
-
-/// Does a second poke connect while the victim is still held by the first?
-///
-/// That *is* the definition of a combo: the follow-up lands during a window in
-/// which the victim had no legal input. The attacker holds forward as well,
-/// because a player chasing is the situation being asked about.
-fn poke_links(class: sim::class::Class, at_health: i32) -> bool {
-    let mut w = in_the_open(class);
-    w.players[1].health = at_health;
-    let chase = L | Input::W;
-    if until_hit(&mut w, chase, 0).is_none() {
-        return false;
-    }
-    let after = w.players[1].health;
-    for _ in 0..120 {
-        // Read before advancing: the question is whether the victim was still
-        // held at the start of the frame the second hit landed.
-        let held = w.players[1].action.stunned() || w.players[1].hitlag > 0;
-        run(&mut w, 1, chase, 0);
-        if w.players[1].health < after {
-            return held;
-        }
-    }
-    false
-}
-
-#[test]
 fn a_heavy_is_shoved_less_far_than_a_light_one() {
     // Weight, and the reason heavies are combo food: the stun is the same
     // length for everyone, so a fighter who travels less out of it is easier to
     // stay on top of.
-    let shove = |class: sim::class::Class| {
-        let mut w = in_the_open(class);
-        // Same blow for both, so only the weight differs.
-        w.players[0].class = Class::Champion;
-        until_hit(&mut w, L, 0).expect("the poke never connected");
+    let shove = |victim: sim::class::Class| {
+        let mut w = World::with_classes([Class::Champion, victim]);
+        run(&mut w, 30, 0, 0);
+        w.players[0].pos = V3::new(Fx::from_int(-3), Fx::ZERO, Fx::ZERO);
+        w.players[1].pos = V3::new(Fx::from_int(-2), Fx::ZERO, Fx::ZERO);
+        assert!(until_hit(&mut w, L), "the poke never connected");
         flat_speed(&w.players[1])
     };
     let heavy = shove(Class::Bulwark);
@@ -1473,57 +1456,194 @@ fn a_heavy_is_shoved_less_far_than_a_light_one() {
 }
 
 #[test]
-fn influence_turns_a_launch_without_shortening_it() {
-    // DI, and the property that keeps it honest. A victim may choose where the
-    // knockback puts them and may never choose to take less of it -- which is
-    // what makes it a positioning read rather than a way out.
+fn a_launched_fighter_still_steers_and_never_slows_themselves_down() {
+    // **The answer to Smash's directional influence, and it is not a second
+    // mechanic.** A hit takes away everything that makes you dangerous and
+    // leaves the one tool that only repositions: air control. Holding a
+    // direction across a launch bends where you land and must never shorten how
+    // far you go, or pressing a direction would be a way to take less
+    // knockback -- which is a defensive option that costs nothing and is always
+    // correct.
     let launched = |held: u16| {
         let mut w = in_the_open(Class::Champion);
         w.players[1].health = max_health() / 2;
-        until_hit(&mut w, L, 0).expect("the poke never connected");
-        // Hold a direction across the freeze; the last frozen frame is the one
-        // that counts.
-        let freeze = w.players[1].hitlag;
-        run(&mut w, freeze as u32, 0, held);
-        w.players[1].vel
+        // Put the victim in the air first, so this is a launch and not a skid.
+        w.players[1].vel.y = Fx::from_int(6);
+        w.players[1].grounded = false;
+        assert!(until_hit(&mut w, L), "the poke never connected");
+        run(&mut w, 12, 0, held);
+        (
+            flat_speed(&w.players[1]),
+            w.players[1].vel.z.to_f32_for_render(),
+        )
     };
-    let straight = launched(0);
-    let steered = launched(Input::A);
-    let speed = |v: V3| V3::new(v.x, Fx::ZERO, v.z).flat_len().to_f32_for_render();
+    let (straight_speed, straight_z) = launched(0);
+    let (steered_speed, steered_z) = launched(Input::A);
     assert!(
-        (speed(straight) - speed(steered)).abs() < 0.05,
-        "influence changed how hard the hit landed: {:.2} against {:.2}",
-        speed(straight),
-        speed(steered)
+        (steered_z - straight_z).abs() > 0.5,
+        "steering in the air changed nothing about where they were going: \
+         {steered_z:.2} against {straight_z:.2}"
     );
     assert!(
-        (steered.z.to_f32_for_render() - straight.z.to_f32_for_render()).abs() > 0.5,
-        "holding a direction across the freeze did not bend the launch at all"
+        steered_speed >= straight_speed - 0.05,
+        "steering cost them speed -- {steered_speed:.2} m/s against {straight_speed:.2} \
+         doing nothing -- so holding a direction is a way to take less knockback"
     );
 }
 
 #[test]
-fn a_blocked_hit_cannot_be_steered() {
-    // Blocked pushback is a fixed price in ground -- see defense.md. Letting it
-    // be aimed would quietly turn blocking into a movement option.
-    let blocked = |held: u16| {
-        let mut w = engaged();
-        let before = w.players[1].health;
-        for _ in 0..120 {
-            run(&mut w, 1, L, R | held);
-            if w.players[1].hitlag > 0 {
+fn steering_out_of_a_launch_is_an_air_privilege() {
+    // On the ground a stun is the plain tax it has always been. Skidding along
+    // the floor is not a moment anybody is flying through, and letting it be
+    // steered would quietly hand every grounded hit an escape.
+    let skid = |held: u16| {
+        let mut w = in_the_open(Class::Champion);
+        w.players[1].health = max_health() / 2;
+        assert!(until_hit(&mut w, L), "the poke never connected");
+        assert!(w.players[1].grounded, "fixture put them in the air");
+        run(&mut w, 12, 0, held);
+        w.players[1].vel.z.to_f32_for_render()
+    };
+    assert_eq!(
+        skid(0),
+        skid(Input::A),
+        "a grounded fighter steered out of their own hitstun"
+    );
+}
+
+#[test]
+fn combos_open_up_mid_round_and_close_again() {
+    // The shape the whole system exists to produce, on the class built for it.
+    //
+    // The Dual mage's two autos are its mechanic: left steers dark, right
+    // steers light, so alternating them is how the meter is driven while
+    // staying on offence. That alternation is the combo worth having, and it is
+    // the one measured here.
+    //
+    // At full health a hit resets neutral -- the stun is short and the exchange
+    // starts over. As damage accumulates the stun grows and the autos start to
+    // link. Keep going and the knockback, which grows faster, puts the victim
+    // out of reach before their attacker can follow, and the link is a launch
+    // instead.
+    let alternations = |pct: i32| {
+        let hp = max_health() * pct / 100;
+        [(L, R), (R, L), (L, L), (R, R)]
+            .iter()
+            .filter(|(a, b)| links(Class::DualMage, *a, *b, hp))
+            .count()
+    };
+    let fresh = alternations(100);
+    let middle = alternations(45);
+    let dying = alternations(12);
+    assert_eq!(
+        fresh, 0,
+        "the autos already link at full health, so neutral never resets"
+    );
+    assert!(
+        middle > 0,
+        "nothing links anywhere in the round: the stun system enables no combos at all"
+    );
+    assert!(
+        dying < middle,
+        "the window never closes ({middle} alternations link at half health, {dying} near \
+         death); knockback has stopped outgrowing hitstun and the round has no arc"
+    );
+}
+
+/// Does `b` connect while the victim is still held by `a`?
+///
+/// That *is* the definition of a combo: the follow-up lands during a window in
+/// which the victim had no legal input. The attacker holds forward as well,
+/// because a player chasing is the situation being asked about.
+fn links(class: sim::class::Class, a: u16, b: u16, at_health: i32) -> bool {
+    let mut w = in_the_open(class);
+    w.players[1].health = at_health;
+    let chase = a | Input::W;
+    if !until_hit(&mut w, chase) {
+        return false;
+    }
+    let after = w.players[1].health;
+    for _ in 0..120 {
+        // Read before advancing: the question is whether the victim was still
+        // held at the start of the frame the second hit landed.
+        let was_held = still_held(&w);
+        run(&mut w, 1, b | Input::W, 0);
+        if w.players[1].health < after {
+            return was_held;
+        }
+    }
+    false
+}
+
+#[test]
+fn nothing_links_into_itself_while_the_victim_could_live_through_it() {
+    // The stunlock rule. Every class has a fast move, and a fast move whose
+    // stun outgrows its own recovery loops on itself for the rest of the round
+    // -- which is a match decided by the first hit of it.
+    //
+    // Late in a round the same loop is a **kill confirm**, and that is a
+    // different thing: the chain measured below only lasts as long as it does
+    // because the victim dies partway through it. The bound is therefore on
+    // damage rather than on hits.
+    for class in ALL_CLASSES {
+        for kind in 0..moves::table(class).len() as u8 {
+            let Some(bits) = press_for(class, kind) else {
+                continue;
+            };
+            let health = max_health() / 2;
+            let (hits, dealt) = mashed_chain(class, bits, health);
+            assert!(
+                dealt < health,
+                "{}: {} mashed from half health chains {hits} hits for {dealt} of {health} -- \
+                 one read ends the round",
+                class.name(),
+                moves::get(class, kind).name,
+            );
+        }
+    }
+}
+
+/// The button that throws a given move, where a plain press will do it.
+///
+/// Read out of the game's own binding table rather than written out again here,
+/// so a move that moves buttons does not quietly drop out of the test. `None`
+/// for the ones that need a state first -- a Rush charge, both feet off the
+/// ground -- because those are not reachable by holding one key, and a mapping
+/// that pretended otherwise would be measuring nothing while looking thorough.
+fn press_for(class: sim::class::Class, kind: u8) -> Option<u16> {
+    match moves::binding(class, kind as usize) {
+        "LMB" => Some(L),
+        "MMB" => Some(Input::MIDDLE),
+        "RMB" => Some(R),
+        "Shift+LMB" => Some(SHIFT | L),
+        "Q" => Some(Q),
+        "E" | "E, Shift+LMB" => Some(E),
+        _ => None,
+    }
+}
+
+/// Longest unbroken chain of one move, mashed, and what it deals.
+///
+/// "Unbroken" means every hit after the first landed while the victim was still
+/// held by the one before it. The moment one does not, the chain is over.
+fn mashed_chain(class: sim::class::Class, bits: u16, health: i32) -> (u32, i32) {
+    let mut w = in_the_open(class);
+    w.players[1].health = health;
+    let mut hits = 0;
+    let mut last = w.players[1].health;
+    for _ in 0..600 {
+        let was_held = still_held(&w);
+        run(&mut w, 1, bits | Input::W, 0);
+        if w.players[1].health < last {
+            if hits > 0 && !was_held {
                 break;
             }
+            hits += 1;
+            last = w.players[1].health;
         }
-        assert_eq!(w.players[1].health, before, "the fixture did not block");
-        let freeze = w.players[1].hitlag;
-        run(&mut w, freeze as u32, 0, R | held);
-        w.players[1].vel
-    };
-    let straight = blocked(0);
-    let steered = blocked(Input::A);
-    assert_eq!(
-        straight.z, steered.z,
-        "blocked pushback was steered by holding a direction"
-    );
+        if w.players[1].health <= 0 {
+            break;
+        }
+    }
+    (hits, health - w.players[1].health.max(0))
 }

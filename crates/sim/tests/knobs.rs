@@ -37,6 +37,39 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "let knee = |u: Fx| ease.mul(u.mul(u).mul(Fx::from_int(2).sub(u)))",
+        "The cubic that leaves flat and arrives at the gradient of the line it \
+         joins. Solving for those two conditions is what produces the 2; it is \
+         the curve's definition rather than a number with a feel to it.",
+    ),
+    (
+        "V3::new(at.x, at.y.add(t::body_height().div(Fx::from_int(2))), at.z)",
+        "Halving a body, not choosing a height. The target is the middle of a \
+         fighter standing there, and the middle of anything is half of it.",
+    ),
+    (
+        ".add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))",
+        "The midpoint of a hit volume. Halving a line, not choosing a length: the middle \
+         of anything is half of it, and any other number would stop it being the middle.",
+    ),
+    (
+        "let tan_tilt = Fx::ONE.sub(ball.at.mul(Fx::from_int(2))).mul(tan_half)",
+        "Turning a screen fraction into a tangent. The 2 is that a fraction is \
+         measured from the bottom of the screen while the angle is measured from \
+         its middle, which is half of it -- geometry, not a number to tune.",
+    ),
+    (
+        "const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10)",
+        "A division guard, not a stride. Far below any value the stride constants \
+         can produce; it exists so the phase cannot be divided by nearly zero.",
+    ),
+    (
+        "pub const PARRY_FLOURISH: u16 = 14",
+        "How long the parry's celebration animation plays. It is a renderer clock kept \
+         in the snapshot so it survives a rollback; it decides nothing about combat, \
+         and tuning it would change how long a flourish lasts and nothing else.",
+    ),
+    (
         "const QUARTER_TURN: Fx = Fx::from_raw(1 << 14)",
         "An angle unit, not a quantity. A quarter of the u16 turn space, exact by construction.",
     ),
@@ -44,6 +77,13 @@ const EXEMPT: &[(&str, &str)] = &[
         "const SKIN: Fx = Fx::ratio(1, 32)",
         "Collision epsilon: how far a body is held off a surface so it does not re-collide. \
          Numerically motivated, not felt.",
+    ),
+    (
+        "const SAMPLES: i32 = 5",
+        "How finely a weapon's line is sampled when asking the creature which part it \
+         touched. A discretisation of a continuous test, not a quantity: the spacing it \
+         produces is smaller than the thinnest weapon in the game, and raising it would \
+         make the approximation slightly better rather than make anything feel different.",
     ),
     (
         "const GROUND_Y: Fx = Fx::ZERO",
@@ -64,9 +104,64 @@ const EXEMPT: &[(&str, &str)] = &[
         "Derived from the tick rate. The tick rate is a networking decision, not a feel one.",
     ),
     (
+        "const TAIL_PIVOT_X: Fx = Fx::ratio(-24, 10)",
+        "Where the tail hinges is one of the creature's proportions, and the proportions are \
+         `const` for the same reason the arena's geometry is: a shape rather than a feel number, \
+         and not part of the rollback snapshot. The number you would actually reach for -- how \
+         big the animal is -- is `monster_scale`, which multiplies all of it and is in the Oven.",
+    ),
+    (
+        "const QUARTER: Fx = Fx::from_raw(1 << 14)",
+        "An angle unit, not a quantity: it puts the shake's pitch wobble a quarter turn out of \
+         phase with its yaw. Exact by construction in the u16 turn space.",
+    ),
+    (
+        "const HALF_TURN: Fx = Fx::from_raw(1 << 15)",
+        "An angle unit, not a quantity. Half of the u16 turn space, exact by construction, used \
+         to face a spawning creature at the hunters without arithmetic.",
+    ),
+    (
         "Fx::ratio(1, 2)",
         "Half of an overlap, given to each of the two bodies. Arithmetic, not a knob: any other \
          value would move the pair's centre of mass.",
+    ),
+    (
+        "Fx::ratio(1, 10))",
+        "A division guard on the knock travel distance, not a distance itself: it only keeps a \
+         retuned range from reaching zero and dividing by it. `bolt_knock_range` is the knob.",
+    ),
+    (
+        "Fx::ratio(1, 100))",
+        "A division guard on the decel span, not a span itself: it only keeps a retuned decel \
+         start of exactly 1 from reaching zero and dividing by it.",
+    ),
+    (
+        "p.mul(Fx::from_int(2))",
+        "Out and back. The blade covers its path twice in one lifetime, so each leg is half of \
+         it and the progress through a leg is twice the progress through the throw. The 2 is \
+         the word `back`; `bloodletter_flight` is the knob that decides how long it takes.",
+    ),
+    (
+        "Fx::ONE.sub(p).mul(Fx::from_int(2))",
+        "The same 2, on the return leg. See above.",
+    ),
+    (
+        "let bulge = Fx::from_int(4).mul(p).mul(Fx::ONE.sub(p))",
+        "What normalises `p(1 - p)` so its peak is exactly one. Without it the widest the \
+         Grasp's arms reach would be a quarter of `grasp_spread`, and the knob would be lying \
+         about what it means. Tuning it would not widen the cone, it would break the knob.",
+    ),
+    (
+        "let along = if line.len().raw() > Fx::ratio(1, 10).raw() {",
+        "A degeneracy guard on the line a thrown ability travels along, not a distance: it only \
+         catches the case where the crosshair resolved onto the caster's own hand, which would \
+         leave nothing to normalise. The ability's reach is the knob.",
+    ),
+    (
+        "if flat.flat_len().raw() < Fx::ratio(1, 100).raw() {",
+        "A degeneracy guard, not a distance: straight up or down there is no horizontal \
+         'sideways' for a cone to open into, and this is how near vertical counts as vertical. \
+         Any small value does; nothing about the game feels different for a different one.",
     ),
 ];
 

@@ -18,9 +18,17 @@ use sim::tuning as t;
 
 fn every_move() -> impl Iterator<Item = (&'static str, Move)> {
     // By value: move data is live now, so there is no `'static` table to borrow.
-    ALL_CLASSES
-        .iter()
-        .flat_map(|c| moves::table(*c).into_iter().map(move |m| (c.name(), m)))
+    //
+    // Moves with no hit volume are left out. There is one -- the Champion's
+    // pole vault -- and it is not an attack that happens to miss, it is a way
+    // into the air on the attack grammar's button. Every assertion below is
+    // about what connecting with somebody is worth, and it never connects.
+    ALL_CLASSES.iter().flat_map(|c| {
+        moves::table(*c)
+            .into_iter()
+            .filter(|m| m.strikes())
+            .map(move |m| (c.name(), m))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -70,13 +78,80 @@ fn committed_moves_are_more_punishable_than_pokes() {
 fn landing_a_hit_keeps_the_initiative_or_resets_neutral() {
     // On hit you should be no worse off than the defender, or hitting someone
     // would be a mistake.
-    for (class, m) in every_move() {
+    //
+    // Two exemptions, both real rather than convenient.
+    //
+    // A move that hands out **no stun at all** is not buying the initiative and
+    // cannot be measured as though it were. The Elementalist's auto is the one
+    // of those: a beam that takes whatever the opponent was charging and gives
+    // them their frames straight back. What keeps that honest is the first test
+    // below, not this one.
+    //
+    // A move that **re-hits** breaks the arithmetic itself. `on_hit` is hitstun
+    // minus the frames you are still busy for, and it assumes the exchange is
+    // over once you connect. The Champion's Rush slash is still swinging when
+    // the next cut lands, so what it costs is the whole active window and what
+    // it pays is every cut inside it. The second test below is its guard.
+    for (class, m) in every_move().filter(|(_, m)| m.hitstun > 0 && m.rehit == 0) {
         assert!(
             m.on_hit() >= 0,
             "{class} {}: {:+} on hit — connecting leaves you at a disadvantage",
             m.name,
             m.on_hit()
         );
+    }
+}
+
+#[test]
+fn a_move_that_keeps_hitting_lands_more_than_once_inside_its_own_swing() {
+    // The guard on the second exemption. A re-hit interval longer than the
+    // active window would be a normal move with a misleading field on it, and
+    // the exemption above would be hiding a move that is simply minus on hit.
+    for class in ALL_CLASSES {
+        for m in moves::table(class).iter().filter(|m| m.rehit > 0) {
+            assert!(
+                m.active > m.rehit,
+                "{}: {} re-hits every {} frames and is only active for {}",
+                class.name(),
+                m.name,
+                m.rehit,
+                m.active
+            );
+        }
+    }
+}
+
+#[test]
+fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
+    // The price of the exception above, and the reason it is not a loophole.
+    //
+    // A move that lands without stunning gives the defender their turn back
+    // immediately, so the attacker must not also come out of it ahead -- it has
+    // to be minus on hit, or it would be a button you could simply hold down.
+    // And it has to be the smallest hit in the class: what it buys is an
+    // interrupt, not damage, and a no-stun move that also hit hard would beat
+    // the moves that pay stun for their damage at their own game.
+    for class in ALL_CLASSES {
+        let table = moves::table(class);
+        let softest = table.iter().map(|m| m.damage).min().unwrap();
+        for m in table.iter().filter(|m| m.hitstun == 0) {
+            assert!(
+                m.on_hit() < 0,
+                "{} {}: {:+} on hit with no stun at all -- free pressure",
+                class.name(),
+                m.name,
+                m.on_hit()
+            );
+            assert_eq!(
+                m.damage,
+                softest,
+                "{} {}: hits for {} without stunning, and something in the class hits \
+                 for less. A move that buys an interrupt should not also buy damage.",
+                class.name(),
+                m.name,
+                m.damage
+            );
+        }
     }
 }
 
@@ -213,18 +288,187 @@ fn the_dodge_outruns_a_walk() {
     );
 }
 
-#[test]
-fn every_class_has_the_same_number_of_exemplar_moves() {
-    // Not a design law, just a guard against a half-finished class shipping
-    // unnoticed. Relax it deliberately when a class legitimately grows.
-    let counts: Vec<_> = ALL_CLASSES
-        .iter()
-        .map(|c| (c.name(), moves::table(*c).len()))
-        .collect();
-    let first = counts[0].1;
-    for (name, n) in &counts {
-        assert_eq!(*n, first, "{name} has {n} moves, others have {first}");
+/// The most damage one cast of a move can do to one target.
+///
+/// Every ability the Blood mage has is a *several* rather than a one: the blade
+/// cuts on the way out and again on the way back, the Grasp is four arms, the
+/// spike is a field that ticks for as long as somebody is standing in it, and
+/// any move at all can be given a re-hit interval. A cost weighed against a
+/// single connection would say all four are a losing trade, and the class would
+/// be unplayable by its own numbers.
+fn best_case(m: &Move) -> i32 {
+    use sim::effects::{EffectKind, GRASP_ARMS};
+    // A move that keeps hitting connects once per interval across its active
+    // window. Zero is the normal rule -- one connection.
+    let swings = m.active.checked_div(m.rehit).map_or(1, |n| n.max(1) as i32);
+    match EffectKind::from_code(m.effect) {
+        Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
+        Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
+        // A field, for as long as it stands. The move's own hit lands too.
+        Some(
+            kind @ (EffectKind::BlackSpike | EffectKind::FirePillar | EffectKind::GuillotineLotus),
+        ) => {
+            let ticks = kind.life() / t::effect_tick_frames().max(1);
+            m.damage * swings + kind.damage(m) * ticks as i32
+        }
+        None => m.damage * swings,
     }
+}
+
+#[test]
+fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
+    // The class is its economy: health out on the press, health back on the
+    // hit. Both halves on every one of her abilities, and on nobody else's --
+    // a second class quietly acquiring a health cost would mean the mechanic
+    // had stopped being an identity and become a tax.
+    //
+    // Restored after a merge dropped it. It is the assertion that stops a
+    // tuning pass from quietly making an ability cost more than landing it
+    // perfectly can ever return, which is the one way this class breaks that
+    // looks like a balance choice rather than a bug.
+    for class in ALL_CLASSES {
+        let blood = class == sim::class::Class::BloodMage;
+        for m in moves::table(class) {
+            assert_eq!(
+                m.cost > 0,
+                blood,
+                "{} {}: health cost {} does not match the class mechanic",
+                class.name(),
+                m.name,
+                m.cost
+            );
+            if blood {
+                assert!(
+                    m.leech > 0,
+                    "{}: costs health and gives none of it back, so it is pure downside",
+                    m.name
+                );
+                let best = m.leeched(best_case(&m));
+                assert!(
+                    best > m.cost,
+                    "{}: thrown perfectly it returns {best} and cost {}, so playing well \
+                     still loses you the fight",
+                    m.name,
+                    m.cost
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_blood_mage_does_not_kill_in_two_buttons() {
+    // The other side of the same tuning pass. Her placed abilities are worth
+    // several connections each, so the per-hit damage in the table says very
+    // little about what one cast is actually worth -- which is how the spike
+    // ended up at nearly two thirds of a health bar without any single number
+    // in the table looking wrong.
+    use sim::class::Class;
+    for m in moves::table(Class::BloodMage) {
+        let cast = best_case(&m);
+        assert!(
+            cast * 3 < t::max_health(),
+            "{}: one cast is {cast} against a {} bar, so three of them is the match",
+            m.name,
+            t::max_health()
+        );
+    }
+}
+
+#[test]
+fn a_root_outlives_the_hitstun_that_delivers_it() {
+    // A root is only visible in the frames after you can act again. Deliver it
+    // with a move whose hitstun is longer and it is a no-op that reads, in the
+    // hand, as the ability simply not working.
+    use sim::state::SLOT_SPECIAL;
+    let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
+    assert!(
+        t::grasp_root() > grasp.hitstun,
+        "the Grasp roots for {} frames and stuns for {}, so the root is invisible",
+        t::grasp_root(),
+        grasp.hitstun
+    );
+}
+
+#[test]
+fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
+    // Both ends. Below about a fifth extra it is a number nobody notices and
+    // the Grasp goes back to being a root with no payoff; far above it and
+    // landing one disable is the match, which is the opposite of a game built
+    // on reads and whiff punishment.
+    let mul = t::disabled_damage_mul();
+    assert!(
+        mul.raw() > Fx::ratio(6, 5).raw(),
+        "the bonus is {}x, which nobody will feel",
+        mul.to_f32_for_render()
+    );
+    assert!(
+        mul.raw() < Fx::from_int(2).raw(),
+        "the bonus is {}x, so one read ends the round",
+        mul.to_f32_for_render()
+    );
+
+    // And the disable it is built around has to outlast the wind-up of
+    // something worth spending it on, or there is nothing to follow up with.
+    let root = t::grasp_root();
+    let fastest = moves::table(sim::class::Class::BloodMage)
+        .iter()
+        .map(|m| m.startup)
+        .min()
+        .expect("the class has moves");
+    assert!(
+        root > fastest,
+        "the root lasts {root} frames and her fastest move takes {fastest} to \
+         come out, so nothing can be landed inside it"
+    );
+}
+
+#[test]
+fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
+    // Not a design law, just a guard against a class shipping with a gap in it
+    // -- or with a table somebody appended to by accident.
+    //
+    // The three shared slots -- poke, committed, special -- mean the same thing
+    // on every class, which is what lets one control scheme drive six kits, so
+    // every class has to fill all three. What a class has **past** them is a
+    // decision about that class: the Blood mage's fourth is on `E`, because her
+    // mechanic is health and there is nothing to toggle, the Reaver's fourth is
+    // on `E` because throwing a second body across the arena and dashing it
+    // home through somebody is not an instant, the Champion's ten are three
+    // weapons by three stances plus the vault, and the Dual mage's five are
+    // those three plus Sweep on `E` -- her mechanic is a meter steered by which
+    // button attacks, so `E` is free the same way -- plus a second auto on
+    // right click, because her two forces are two different moves rather than
+    // one move with a modifier.
+    use sim::Class;
+    use sim::state::{SLOT_COMMITTED, SLOT_POKE, SLOT_SPECIAL};
+    for class in ALL_CLASSES {
+        for slot in [SLOT_POKE, SLOT_COMMITTED, SLOT_SPECIAL] {
+            assert!(
+                moves::bound(class, slot as usize),
+                "{} has nothing on {}",
+                class.name(),
+                moves::binding(class, slot as usize)
+            );
+        }
+        let n = moves::table(class).len();
+        let expected = match class {
+            Class::Champion => 10,
+            Class::BloodMage | Class::ShadowReaver => 4,
+            Class::DualMage => 5,
+            _ => 3,
+        };
+        assert_eq!(
+            n,
+            expected,
+            "{} has {n} moves and should have {expected}",
+            class.name()
+        );
+    }
+    assert!(
+        ALL_CLASSES.iter().any(|c| moves::on_e(*c).is_some()),
+        "nothing binds an ability to the mechanic key, so the slot is dead weight"
+    );
 }
 
 #[test]
@@ -395,37 +639,23 @@ fn no_source_of_damage_can_stun_for_longer_than_it_takes_to_repeat() {
     // A field ticks on a cadence. Stun it for longer than the cadence and the
     // next tick lands on someone who never got to move, which is a loop with no
     // exit -- and the fighter who laid it did not have to be there for any of
-    // it. The freeze counts, because it is time the victim also cannot act in.
+    // it. The freeze counts, because it is time the victim also cannot act in,
+    // and so does the swell, because the whole point of the swell is that these
+    // numbers are not what they say by the end of a round.
     let interval = t::effect_tick_frames();
-    for (name, stun) in [
-        ("fire pillar", (t::pillar_hitstun(), t::pillar_damage())),
-        ("black spike", (t::spike_hitstun(), t::spike_drain())),
+    let at_death = Fx::ONE.add(t::swell_hitstun());
+    for (name, frames, damage) in [
+        ("fire pillar", t::pillar_hitstun(), t::pillar_damage()),
+        ("black spike", t::spike_hitstun(), t::spike_drain()),
     ] {
-        let (frames, damage) = stun;
-        let held = frames + sim::state::hitlag_frames(damage);
+        let swelled = Fx::from_int(frames as i32).mul(at_death).to_int() as u16;
+        let held = swelled + sim::state::hitlag_frames(damage);
         assert!(
             held < interval,
-            "a {name} holds you for {held} frames and ticks every {interval}; \
-             standing in one is a loop with no exit"
+            "a {name} holds you for {held} frames at death's door and ticks every \
+             {interval}; standing in one is a loop with no exit"
         );
     }
-}
-
-#[allow(clippy::assertions_on_constants)]
-#[test]
-fn influence_can_steer_a_launch_but_never_reverse_one() {
-    // DI bends the launch by at most `atan(strength)`. At one the bend is 45
-    // degrees, which is already enough to pick a quadrant; past that a victim
-    // is choosing their own direction and knockback has stopped being something
-    // the attacker decides.
-    assert!(
-        t::di_strength().raw() < Fx::ONE.raw(),
-        "influence bends a launch by 45 degrees or more, which is not influence"
-    );
-    assert!(
-        t::di_strength().raw() > 0,
-        "there is no influence at all, so the freeze is presentation and nothing else"
-    );
 }
 
 #[test]
@@ -433,7 +663,7 @@ fn the_freeze_is_punctuation_and_not_a_pause() {
     // Hitlag has to be long enough to read as contact and short enough that the
     // fight does not become a slideshow. The upper bound is the one that bites:
     // the heaviest move in the game is the worst case, and a freeze approaching
-    // its own startup would mean two hits a second.
+    // reaction time would mean two hits a second.
     let heaviest = every_move().map(|(_, m)| m.damage).max().unwrap();
     let freeze = sim::state::hitlag_frames(heaviest);
     assert!(freeze >= 2, "a hit does not freeze long enough to be felt");
@@ -460,7 +690,7 @@ fn classes_do_not_all_weigh_the_same() {
 }
 
 #[test]
-fn the_heavy_is_the_heaviest_and_the_glass_cannon_is_the_lightest() {
+fn the_wall_is_the_heaviest_and_the_glass_cannon_is_the_lightest() {
     // Not arithmetic: this is the roster saying the same thing twice. A Bulwark
     // that flew further than a Dual mage would read as a bug to anyone who had
     // looked at either class for a minute.

@@ -72,15 +72,43 @@ pub struct Resolved {
     pub pos: V3,
     pub vel: V3,
     pub grounded: bool,
+    /// A solid stopped this body along a horizontal axis this call -- a wall,
+    /// or the side of a platform, as opposed to landing on or under one.
+    ///
+    /// Only the axis driving into the solid is zeroed below, by design (see
+    /// `resolve_sized`): a fighter walking diagonally into a wall keeps
+    /// sliding along it, which is the feel every wall in the game has always
+    /// had. A stone caller wants to know a hard contact happened at all, so it
+    /// can decide what happens to the speed that is *not* zeroed -- see
+    /// `stones::step`.
+    pub wall: bool,
 }
 
-/// Push a body out of the arena geometry.
+/// Push a fighter out of the arena geometry.
+pub fn resolve(pos: V3, vel: V3, was_grounded: bool) -> Resolved {
+    resolve_sized(pos, vel, was_grounded, t::body_radius(), t::body_height())
+}
+
+/// Push a body of any size out of the arena geometry.
 ///
 /// Resolves along the axis of least penetration, one solid at a time, in a
 /// fixed order. Order matters for determinism, which is why `SOLIDS` is a
 /// fixed-size array rather than anything with unstable iteration.
-pub fn resolve(mut pos: V3, mut vel: V3, was_grounded: bool) -> Resolved {
+///
+/// Sized rather than fixed to the fighter, because the Elementalist's stones
+/// are solids too and they have to stop at the same walls. A second copy of
+/// this with different numbers in it is a second thing to get wrong -- and the
+/// last time a body size was written twice, attacks and walls disagreed about
+/// how wide a fighter was.
+pub fn resolve_sized(
+    mut pos: V3,
+    mut vel: V3,
+    was_grounded: bool,
+    radius: Fx,
+    height: Fx,
+) -> Resolved {
     let mut grounded = false;
+    let mut wall = false;
 
     // Ground plane first.
     if pos.y.raw() <= 0 {
@@ -94,13 +122,13 @@ pub fn resolve(mut pos: V3, mut vel: V3, was_grounded: bool) -> Resolved {
     for solid in SOLIDS.iter() {
         // Expand the box by the body radius horizontally, so the body can be
         // treated as a point in X and Z.
-        let min_x = solid.min.x.sub(t::body_radius());
-        let max_x = solid.max.x.add(t::body_radius());
-        let min_z = solid.min.z.sub(t::body_radius());
-        let max_z = solid.max.z.add(t::body_radius());
+        let min_x = solid.min.x.sub(radius);
+        let max_x = solid.max.x.add(radius);
+        let min_z = solid.min.z.sub(radius);
+        let max_z = solid.max.z.add(radius);
 
         let feet = pos.y;
-        let head = pos.y.add(t::body_height());
+        let head = pos.y.add(height);
 
         let inside = pos.x.raw() > min_x.raw()
             && pos.x.raw() < max_x.raw()
@@ -130,7 +158,7 @@ pub fn resolve(mut pos: V3, mut vel: V3, was_grounded: bool) -> Resolved {
                 }
                 grounded = true;
             } else {
-                pos.y = solid.min.y.sub(t::body_height());
+                pos.y = solid.min.y.sub(height);
                 if vel.y.raw() > 0 {
                     vel.y = Fx::ZERO;
                 }
@@ -138,19 +166,26 @@ pub fn resolve(mut pos: V3, mut vel: V3, was_grounded: bool) -> Resolved {
         } else if ax.raw() <= az.raw() {
             pos.x = pos.x.add(px);
             vel.x = Fx::ZERO;
+            wall = true;
         } else {
             pos.z = pos.z.add(pz);
             vel.z = Fx::ZERO;
+            wall = true;
         }
     }
 
     // Standing exactly on a surface reads as grounded even when the resolver
     // did not have to move anything this tick.
-    if !grounded && was_grounded && vel.y.raw() <= 0 && supported(pos) {
+    if !grounded && was_grounded && vel.y.raw() <= 0 && supported(pos, radius) {
         grounded = true;
     }
 
-    Resolved { pos, vel, grounded }
+    Resolved {
+        pos,
+        vel,
+        grounded,
+        wall,
+    }
 }
 
 /// Signed push needed to leave the span by the nearer edge.
@@ -164,17 +199,23 @@ fn min_penetration(v: Fx, lo: Fx, hi: Fx) -> Fx {
     }
 }
 
+/// How far a body is held off a surface before it counts as standing on it.
+///
+/// Shared with [`crate::stones`], which needs the same tolerance: a fighter
+/// resolved exactly on to a surface has nothing left to collide with next
+/// frame, so without a skin they read as airborne every other frame.
+pub(crate) const SKIN: Fx = Fx::ratio(1, 32);
+
 /// Is there a surface directly beneath the feet?
-fn supported(pos: V3) -> bool {
-    const SKIN: Fx = Fx::ratio(1, 32);
+fn supported(pos: V3, radius: Fx) -> bool {
     if pos.y.abs().raw() <= SKIN.raw() {
         return true;
     }
     SOLIDS.iter().any(|s| {
-        pos.x.raw() > s.min.x.sub(t::body_radius()).raw()
-            && pos.x.raw() < s.max.x.add(t::body_radius()).raw()
-            && pos.z.raw() > s.min.z.sub(t::body_radius()).raw()
-            && pos.z.raw() < s.max.z.add(t::body_radius()).raw()
+        pos.x.raw() > s.min.x.sub(radius).raw()
+            && pos.x.raw() < s.max.x.add(radius).raw()
+            && pos.z.raw() > s.min.z.sub(radius).raw()
+            && pos.z.raw() < s.max.z.add(radius).raw()
             && pos.y.sub(s.max.y).abs().raw() <= SKIN.raw()
     })
 }
@@ -193,4 +234,16 @@ pub fn ground_under(pos: V3) -> Fx {
         }
     }
     best
+}
+
+/// Is this point still in the arena at all?
+///
+/// Flat bounds and a ceiling of nothing: anything below the floor or outside
+/// the walls has left, which is what a projectile needs in order to stop
+/// existing. Bodies never ask -- they are resolved against the walls instead --
+/// so this is deliberately a *bound* rather than a collision.
+pub fn inside(pos: V3) -> bool {
+    pos.y.raw() >= 0
+        && pos.x.abs().raw() <= ARENA_HALF.raw()
+        && pos.z.abs().raw() <= ARENA_HALF.raw()
 }

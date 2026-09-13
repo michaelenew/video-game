@@ -9,6 +9,7 @@
 //!   WASD move · Space jump · Shift+direction dodge (airdodge once per jump)
 //!   J bash · Shift+J slam · K guard · L shield throw/recall · Shift+L grapple
 //!   1-4 dummy mode · F1 debug overlay · P pause · ] step one frame · R reset
+//!   H hunt the Ridgeback, or fight the other player
 //!
 //! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
 //!
@@ -17,8 +18,10 @@
 //! elementalist, blood, dual.
 
 mod bake;
+mod beast;
 mod crosshair;
 mod debug;
+mod hub;
 mod hud;
 mod palette;
 mod settings;
@@ -28,8 +31,9 @@ use bevy::prelude::*;
 use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
-use view::pose::{PARTS, Part, PoseInput, part_size, pose_for};
-use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate};
+use view::play::{Crossfade, PoseInput};
+use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
+use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate, pitch_from_radians};
 
 /// How the match is being driven.
 ///
@@ -83,6 +87,14 @@ fn arg(flag: &str) -> Option<String> {
         .cloned()
 }
 
+/// Start in a hunt rather than a versus match.
+///
+/// A flag as well as a key, because the headless screenshot script takes flags
+/// and not keystrokes.
+fn hunting() -> bool {
+    std::env::args().any(|a| a == "--hunt")
+}
+
 fn chosen_classes() -> [sim::Class; 2] {
     [
         arg("--p1")
@@ -129,6 +141,10 @@ fn main() {
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
         .init_resource::<palette::Palette>()
+        .init_resource::<hub::Hub>()
+        .init_resource::<Fades>()
+        .init_resource::<ShadowFades>()
+        .init_resource::<ShieldHands>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -136,7 +152,8 @@ fn main() {
         })
         .insert_resource(settings::Settings::load())
         .init_resource::<InsideOwnHead>()
-        .add_systems(Startup, (setup, hud::setup, crosshair::setup))
+        .init_resource::<Scripted>()
+        .add_systems(Startup, (setup, beast::setup, hud::setup, crosshair::setup))
         .add_systems(
             Update,
             (
@@ -150,20 +167,39 @@ fn main() {
                 tick_sim,
                 apply_poses,
                 place_shields,
-                place_effects,
-                place_structures,
+                // Grouped because Bevy's chained tuple holds twenty systems
+                // and this is the twenty-first. They are independent of each
+                // other anyway: each puts one pool of meshes where the
+                // simulation says its things are.
+                (place_effects, place_structures, place_beams, place_bolts),
+                beast::place,
                 drive_camera,
-                hide_own_body,
+                fade_own_body,
                 hud::toggle_class_buttons,
                 hud::class_buttons,
                 hud::update,
                 hud::update_class_buttons,
                 crosshair::update,
                 debug::draw,
+                beast::overlay,
                 palette::toggle,
                 palette::draw,
             )
                 .chain(),
+        )
+        // A second tuple only because Bevy's is full: the hub draws last, over
+        // everything, and after the poses it is previewing have been placed.
+        .add_systems(
+            Update,
+            (
+                hub::toggle,
+                hub::advance,
+                hub::collect_bake,
+                hub::onion_skin,
+                hub::draw,
+            )
+                .chain()
+                .after(palette::draw),
         )
         .run();
 }
@@ -186,10 +222,33 @@ pub struct Sim {
     stop_at: Option<u32>,
     dummy: Dummy,
     driver: Driver,
-    /// Baked animation on or off. A toggle because it is new, and because
-    /// playback cost should be measurable against the procedural path.
-    baked_anim: bool,
+    /// Show the skeleton at rest instead of animating it.
+    ///
+    /// Useful rather than decorative: it is how you tell "this clip is wrong"
+    /// from "this rig is wrong" while looking at the thing, in one keypress.
+    bind_pose: bool,
 }
+
+/// Where each fighter's shield hand ended up this frame, in world space.
+///
+/// The shield is a separate object because its position is independent of the
+/// character -- that is the whole mechanic -- but while it is *in hand* it
+/// should be in a hand, and a hand is now a thing the skeleton has. Written by
+/// the posing pass and read by the one that places shields, which runs after.
+#[derive(Resource, Default)]
+struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
+
+/// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
+/// whatever it was, which is wrong by a few frames of blend weight and
+/// invisible. See `view::play::Crossfade`.
+#[derive(Resource, Default)]
+struct Fades([Crossfade; MAX_PLAYERS]);
+
+/// The same, for each fighter's shadow. Its own, because the two bodies are
+/// rarely doing the same thing: hers cuts and his copies it four frames later,
+/// and one fade shared between them would blur whichever was second.
+#[derive(Resource, Default)]
+struct ShadowFades([Crossfade; MAX_PLAYERS]);
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
 /// the second set of keys.
@@ -203,7 +262,11 @@ enum Dummy {
 
 impl Default for Sim {
     fn default() -> Self {
-        let w = World::with_classes(chosen_classes());
+        let w = if hunting() {
+            World::hunt(chosen_classes())
+        } else {
+            World::with_classes(chosen_classes())
+        };
         let driver = match parse_args() {
             Some((port, peer)) => {
                 let local: std::net::SocketAddr =
@@ -239,9 +302,9 @@ impl Default for Sim {
             step_once: false,
             dummy: Dummy::Idle,
             driver,
-            // `BAKED_ANIM=0` starts with the procedural poses instead, so the
-            // two can be captured back to back without a keypress.
-            baked_anim: std::env::var("BAKED_ANIM").as_deref() != Ok("0"),
+            // `BIND_POSE=1` starts frozen, so the proportions of a build can be
+            // captured without a keypress.
+            bind_pose: std::env::var("BIND_POSE").as_deref() == Ok("1"),
             stop_at: env_num("SHOT_FRAME"),
         }
     }
@@ -255,6 +318,21 @@ impl Sim {
             Driver::Online { handle, .. } => handle.min(1),
             Driver::Local => 0,
         }
+    }
+}
+
+/// The scripted hunter, when `DEMO=1` is driving a hunt.
+///
+/// It is the same bot `cargo run -p hunt --bin fight` measures, so what you
+/// watch here and what the fight report scores are the same play sequence.
+/// Renderer-side state: it produces *inputs*, and inputs are transmitted rather
+/// than recomputed, so nothing about it can reach a peer's simulation.
+#[derive(Resource)]
+struct Scripted(hunt::Hunter);
+
+impl Default for Scripted {
+    fn default() -> Self {
+        Scripted(hunt::Hunter::new(0))
     }
 }
 
@@ -277,12 +355,13 @@ fn env_num(key: &str) -> Option<u32> {
     std::env::var(key).ok()?.parse().ok()
 }
 
-/// Where each local player is looking. Renderer-side state: the yaw is
-/// quantised and handed to the simulation as input, but the float itself never
-/// crosses the wire and never enters a snapshot.
+/// Where each local player is looking. Renderer-side state: both angles are
+/// quantised and handed to the simulation as input, but the floats themselves
+/// never cross the wire and never enter a snapshot.
 ///
-/// Pitch is here and nowhere else. It moves the camera and changes nothing
-/// about the fight, so it has no business in the simulation.
+/// Pitch goes with the yaw now. It used to live only here, on the grounds that
+/// it moved the camera and changed nothing about the fight -- which stopped
+/// being true when abilities started landing where the crosshair is.
 #[derive(Resource)]
 struct Look {
     yaw: f32,
@@ -297,11 +376,10 @@ impl Default for Look {
     fn default() -> Self {
         Look {
             // Player one spawns at -X looking toward +X, where player two is.
-            yaw: 0.0,
+            yaw: env_f32("SHOT_YAW").unwrap_or(0.0),
             // Resting a little below the horizon, not level -- see
-            // `RigConfig::neutral_pitch`.
-            pitch: env_f32("SHOT_PITCH")
-                .unwrap_or(-view::camera::RigConfig::default().neutral_pitch),
+            // `Zones::neutral_pitch`.
+            pitch: env_f32("SHOT_PITCH").unwrap_or(view::camera::Zones::tuned().neutral_pitch()),
             yaw_two: std::f32::consts::PI,
             grabbed: false,
         }
@@ -311,6 +389,10 @@ impl Default for Look {
 impl Look {
     fn aim(&self) -> u16 {
         aim_from_radians(self.yaw)
+    }
+
+    fn tilt(&self) -> i16 {
+        pitch_from_radians(self.pitch)
     }
 
     fn aim_two(&self) -> u16 {
@@ -342,8 +424,24 @@ struct Fighter(usize);
 #[derive(Component)]
 struct BodyPart {
     owner: usize,
-    part: Part,
+    joint: Joint,
 }
+
+/// One piece of the Reaver's shadow -- the second skeleton.
+///
+/// A whole body rather than a marker on the floor. The shadow copies her
+/// swings, so it is a thing that can hit you, and a thing that can hit you has
+/// to look like one.
+#[derive(Component)]
+struct ShadowPart {
+    owner: usize,
+    joint: Joint,
+}
+
+/// The root the shadow's parts hang off, so they can be posed in body space
+/// exactly the way hers are.
+#[derive(Component)]
+struct ShadowRoot(usize);
 
 #[derive(Component)]
 struct MainCamera;
@@ -351,14 +449,24 @@ struct MainCamera;
 #[derive(Component)]
 struct ShieldMesh(usize);
 
-/// One drawable piece of a persistent effect. Two per effect, because a fire
-/// pillar is two volumes and drawing it as one would misrepresent the thing you
-/// are trying to walk around.
+/// One drawable piece of a persistent effect.
+///
+/// Four per effect, which is what the widest of them needs: a Grasp is four
+/// arms and each one is its own skillshot you have to be able to see coming. A
+/// fire pillar uses two (a base and a column, drawn apart because they are two
+/// different threats), a black spike two (the field on the floor and the spike
+/// standing in it), a thrown blade one.
 #[derive(Component)]
 struct EffectMesh {
     slot: usize,
     part: usize,
 }
+
+/// How many pieces one effect can be drawn as.
+///
+/// Six, which is the Guillotine lotus: one blade each. The Grasp's four arms
+/// were the previous widest.
+const EFFECT_PARTS: usize = 6;
 
 /// One of the Elementalist's structures.
 #[derive(Component)]
@@ -367,13 +475,40 @@ struct StructureMesh {
     index: usize,
 }
 
+/// The Elementalist's auto, drawn as the thing it is: a thin cylinder from her
+/// chest along the line she is aiming, ending where the shot stopped.
+///
+/// One per fighter, because only one shot can be out at a time. It exists at
+/// all because the move used to be invisible -- the pose put a hand out and
+/// nothing left it, so what the shot did and which way it went could only be
+/// read from the debug overlay.
+#[derive(Component)]
+struct BeamMesh(usize);
+
+/// One fire bolt in flight.
+#[derive(Component)]
+struct BoltMesh(usize);
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
 struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
+    shade: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
+    /// The beam and the bolt it lights. Brighter than the pillar and barely
+    /// opaque: it is light rather than matter, and it is on screen for two
+    /// frames, so it has to read instantly or not at all.
+    beam: Handle<StandardMaterial>,
+    /// A unit cylinder, cone and sphere, scaled per frame to whatever the
+    /// simulation says the volume is. Three meshes rather than one because the
+    /// *shape* is the tell: a spike you can see standing in a field is what
+    /// makes the field something you decide to walk around, and a flat disc on
+    /// the floor is something you notice once you are in it.
+    column: Handle<Mesh>,
+    spike: Handle<Mesh>,
+    ball: Handle<Mesh>,
 }
 
 // ---------------------------------------------------------------------------
@@ -467,13 +602,43 @@ fn setup(
         commands
             .spawn((Fighter(owner), Transform::default(), Visibility::default()))
             .with_children(|root| {
-                for part in PARTS {
-                    let s = part_size(part);
+                // Unit cubes, scaled every frame from whichever build the
+                // fighter currently has. Baking the size into the mesh would
+                // mean rebuilding sixteen meshes every time somebody presses
+                // Tab to change class.
+                for joint in JOINTS {
                     root.spawn((
-                        Mesh3d(meshes.add(Cuboid::new(s[0], s[1], s[2]))),
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
                         MeshMaterial3d(skin.clone()),
                         Transform::default(),
-                        BodyPart { owner, part },
+                        BodyPart { owner, joint },
+                    ));
+                }
+            });
+
+        // The Reaver's second body. A full skeleton's worth of parts, hidden
+        // for the five classes that have no shadow -- a pool rather than
+        // something spawned when a shadow appears, for the same reason the
+        // effects are a pool: allocating meshes on the rollback path is the
+        // most expensive thing that could happen in a tick.
+        let shade = materials.add(StandardMaterial {
+            // Grey and see-through. It is her, with everything that identifies
+            // her taken out: no team colour, because the thing a player must
+            // read in a fight is which of the two bodies is the real one.
+            base_color: Color::srgba(0.20, 0.21, 0.26, 0.45),
+            perceptual_roughness: 0.9,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        });
+        commands
+            .spawn((ShadowRoot(owner), Transform::default(), Visibility::Hidden))
+            .with_children(|root| {
+                for joint in JOINTS {
+                    root.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        MeshMaterial3d(shade.clone()),
+                        Transform::default(),
+                        ShadowPart { owner, joint },
                     ));
                 }
             });
@@ -497,11 +662,20 @@ fn setup(
     // simulation's effect array is itself fixed. Spawning and despawning meshes
     // as effects come and go would put allocation on the rollback path.
     let unit = meshes.add(Cylinder::new(0.5, 1.0));
+    let spike = meshes.add(Cone {
+        radius: 0.5,
+        height: 1.0,
+    });
+    let ball = meshes.add(Sphere::new(0.5));
     let look = EffectLook {
+        // Translucent, not solid -- it is flame, and a wall of solid orange
+        // plastic reads as a structure rather than a hazard you could
+        // arguably see an opponent through.
         fire: materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.45, 0.12),
+            base_color: Color::srgba(1.0, 0.45, 0.12, 0.55),
             emissive: LinearRgba::rgb(2.4, 0.8, 0.15),
             perceptual_roughness: 0.9,
+            alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         blood: materials.add(StandardMaterial {
@@ -510,14 +684,34 @@ fn setup(
             perceptual_roughness: 0.95,
             ..default()
         }),
+        // A blade of shadow. Dark and translucent so six of them opening at
+        // once do not black out whatever they are opening around -- the thing
+        // the player has to read is where the victim is, not the flower.
+        shade: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.10, 0.09, 0.16, 0.80),
+            emissive: LinearRgba::rgb(0.12, 0.10, 0.30),
+            perceptual_roughness: 0.85,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
         stone: materials.add(StandardMaterial {
             base_color: Color::srgb(0.52, 0.50, 0.47),
             perceptual_roughness: 0.95,
             ..default()
         }),
+        beam: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.86, 0.45, 0.75),
+            emissive: LinearRgba::rgb(6.0, 3.4, 0.9),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        }),
+        column: unit.clone(),
+        spike,
+        ball,
     };
     for slot in 0..sim::effects::MAX_EFFECTS {
-        for part in 0..2 {
+        for part in 0..EFFECT_PARTS {
             commands.spawn((
                 Mesh3d(unit.clone()),
                 MeshMaterial3d(look.fire.clone()),
@@ -542,33 +736,73 @@ fn setup(
             ));
         }
     }
+
+    // One beam per fighter and one mesh per fire bolt in flight. Both pools
+    // are fixed for the same reason every other one is: spawning meshes as
+    // shots come and go would put allocation on the rollback path.
+    for owner in 0..MAX_PLAYERS {
+        commands.spawn((
+            Mesh3d(unit.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            BeamMesh(owner),
+        ));
+    }
+    let pellet = meshes.add(Sphere::new(0.5));
+    for slot in 0..sim::bolt::MAX_BOLTS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            BoltMesh(slot),
+        ));
+    }
     commands.insert_resource(look);
 }
 
 /// Stop drawing the local fighter once the camera is inside them.
 ///
 /// Past the handover the eye is at the fighter's own eyes, so their head fills
-/// the screen and there is nothing to see but the inside of a box. Hidden
-/// rather than faded: these are untextured primitives, and a half-transparent
-/// one reads as a rendering fault rather than as your own body.
+/// the screen and there is nothing to see but the inside of a box.
+///
+/// **Faded, not hidden.** The rig comes in quickly once the aim crosses the
+/// horizon, and a body that popped out at some threshold on the way would read
+/// as a rendering fault. Fading it with the climb makes the handover one
+/// continuous motion: the fighter rises toward the middle of the screen and
+/// thins out as they get there.
 ///
 /// Only ever the fighter this client is driving. The other one is what you are
 /// trying to look at.
-fn hide_own_body(
+fn fade_own_body(
     sim: Res<Sim>,
     inside: Res<InsideOwnHead>,
-    mut parts: Query<(&BodyPart, &mut Visibility)>,
+    parts: Query<(&BodyPart, &MeshMaterial3d<StandardMaterial>)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let me = sim.local_player();
-    let gone = inside.0 > 0.5;
-    for (part, mut vis) in parts.iter_mut() {
+    // The rig has already worked out how much of the body to take away and
+    // why -- coming up on the crosshair, or the eye simply being close to it.
+    let alpha = (1.0 - inside.0).clamp(0.0, 1.0);
+    for (part, material) in parts.iter() {
         if part.owner != me {
             continue;
         }
-        *vis = if gone {
-            Visibility::Hidden
+        let Some(skin) = materials.get_mut(&material.0) else {
+            continue;
+        };
+        if (skin.base_color.alpha() - alpha).abs() < 0.001 {
+            continue;
+        }
+        skin.base_color.set_alpha(alpha);
+        // Blending only while it is actually translucent. An always-blended
+        // fighter sorts against the other one and against the arena for no
+        // reason the rest of the time.
+        skin.alpha_mode = if alpha >= 1.0 {
+            AlphaMode::Opaque
         } else {
-            Visibility::Inherited
+            AlphaMode::Blend
         };
     }
 }
@@ -579,7 +813,6 @@ fn place_structures(
     mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
 ) {
     use sim::class::Mechanic;
-    use sim::fixed::Fx;
     let radius = sim::tuning::structure_radius().to_f32_for_render();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
@@ -599,13 +832,13 @@ fn place_structures(
         // where the telegraph is readable and someone can still move -- then
         // erupts. Same duration either way; completely different to play
         // against, which is the whole argument for curves over single numbers.
-        let through = Fx::ratio(
-            raised.age as i32,
-            sim::tuning::structure_rise().max(1) as i32,
-        );
-        let rise = sim::tuning::structure_rise_curve()
-            .at(through)
-            .to_f32_for_render();
+        //
+        // The rise comes from the simulation rather than being worked out again
+        // here, because it is no longer decoration: it is where the top of the
+        // stone is, and the top of the stone is what you can stand on. A
+        // renderer that recomputed it could disagree with the surface the game
+        // is holding you up with.
+        let rise = raised.risen().to_f32_for_render();
         let height = sim::tuning::structure_height().to_f32_for_render();
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
@@ -617,12 +850,68 @@ fn place_structures(
     }
 }
 
+/// Draw whatever line-shaped volume a fighter has out this frame.
+///
+/// The Elementalist's beam is what it was written for, and the rule it follows
+/// is why it now draws more than that: **straight from `state::hitbox`**, which
+/// is also what the hit test and the debug overlay read, so the three cannot
+/// disagree about where the shot went. Anything whose volume is a line rather
+/// than a bubble gets drawn by it -- the Champion's swings, and the Dual mage's
+/// wing, which comes out of one fist and opens outward over four frames.
+///
+/// For the beam the move is two frames long, which is the point: you see a
+/// line, at the angle you aimed it, ending on whatever stopped it.
+fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let shot = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.is_a_beam());
+        let Some(hb) = shot else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let (from, to) = (fx3(hb.from), fx3(hb.to));
+        let along = to - from;
+        let length = along.length();
+        if length < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        // The unit cylinder stands along Y, so it is turned on to the shot's
+        // own direction -- which is how the drawing gets its pitch for free.
+        *vis = Visibility::Inherited;
+        tf.translation = from + along * 0.5;
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
+        // Thinner than the volume it stands for. A beam drawn at its full hit
+        // radius reads as a pillar of light and hides the fighter behind it;
+        // the volume is the overlay's job to show, and this one's job is to
+        // say *where the shot went*.
+        let width = hb.radius.to_f32_for_render();
+        tf.scale = Vec3::new(width, length, width);
+    }
+}
+
+/// Put the fire bolts where they are, pointing the way they are going.
+fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut Visibility)>) {
+    let radius = sim::tuning::fire_bolt_radius().to_f32_for_render();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(shot) = sim.cur.bolts[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(shot.pos);
+        // Stretched along its flight, so a bolt reads as travelling rather
+        // than as a bead hanging in the air.
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
+        tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+    }
+}
+
 /// Put the effect meshes where the simulation says its effects are.
 ///
-/// Shape comes from the same `pillar_volumes` the hit test uses, so what you
-/// see standing in the arena is what will actually catch you. A renderer that
-/// reconstructed the shape itself would drift from the rule, and a fire pillar
-/// that looks bigger than it hits is worse than no fire pillar.
+/// Shape comes from the same volumes the hit test uses, so what you see standing
+/// in the arena is what will actually catch you. A renderer that reconstructed
+/// the shape itself would drift from the rule, and a fire pillar that looks
+/// bigger than it hits is worse than no fire pillar.
 fn place_effects(
     sim: Res<Sim>,
     look: Res<EffectLook>,
@@ -630,53 +919,170 @@ fn place_effects(
         &EffectMesh,
         &mut Transform,
         &mut Visibility,
+        &mut Mesh3d,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
 ) {
-    use sim::effects::EffectKind;
-    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
-        let Some(effect) = sim.cur.effects[tag.slot] else {
+    for (tag, mut tf, mut vis, mut mesh, mut mat) in meshes.iter_mut() {
+        let piece = sim.cur.effects[tag.slot].and_then(|e| effect_piece(&e, tag.part));
+        let Some(piece) = piece else {
             *vis = Visibility::Hidden;
             continue;
         };
-        let at = Vec3::new(
-            effect.pos.x.to_f32_for_render(),
-            effect.pos.y.to_f32_for_render(),
-            effect.pos.z.to_f32_for_render(),
-        );
-        let (skin, shape) = match effect.kind {
-            EffectKind::FirePillar => {
-                let (base, column) = effect.pillar_volumes();
-                let it = if tag.part == 0 { base } else { column };
-                (
-                    look.fire.clone(),
-                    Some((
-                        it.radius.to_f32_for_render(),
-                        it.bottom.to_f32_for_render(),
-                        it.top.to_f32_for_render(),
-                    )),
-                )
-            }
-            // A field, drawn as the slab it is: you are in it or you are not.
-            EffectKind::BlackSpike if tag.part == 0 => (
-                look.blood.clone(),
-                Some((effect.field_radius().to_f32_for_render(), 0.0, 0.12)),
-            ),
-            _ => (look.stone.clone(), None),
-        };
-        let Some((radius, bottom, top)) = shape else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
-        let height = (top - bottom).max(0.01);
+        let (want_mesh, want_skin) = (look.mesh(piece.shape), look.material(piece.skin));
         *vis = Visibility::Inherited;
-        if mat.0 != skin {
-            mat.0 = skin;
+        if mesh.0 != want_mesh {
+            mesh.0 = want_mesh;
         }
-        tf.translation = at + Vec3::Y * (bottom + height * 0.5);
-        tf.scale = Vec3::new(radius * 2.0, height, radius * 2.0);
+        if mat.0 != want_skin {
+            mat.0 = want_skin;
+        }
+        tf.translation = piece.at;
+        tf.scale = piece.scale;
     }
 }
+
+/// One drawable piece of one effect: which shape, which material, where, and
+/// how big.
+///
+/// Shapes and skins by name rather than by asset handle, so the geometry is a
+/// pure function of simulation state that a test can check without a renderer.
+/// What it is checking is that the picture agrees with the hit test, and that
+/// is worth being able to assert: a spike drawn wider than it drains is a
+/// promise the game does not keep.
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct Piece {
+    shape: Shape,
+    skin: Skin,
+    at: Vec3,
+    scale: Vec3,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Shape {
+    /// An upright cylinder: a pillar, a stone, the floor of a drain field.
+    Column,
+    /// A cone standing on its base. The black spike, and nothing else yet.
+    Spike,
+    /// A sphere, which is exactly what the hit test for a travelling effect is.
+    Ball,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Skin {
+    Fire,
+    Blood,
+    /// The Reaver's shadow-work: near black, and lit from inside just enough to
+    /// be visible against the floor it is usually crossing.
+    Shade,
+}
+
+impl EffectLook {
+    fn mesh(&self, shape: Shape) -> Handle<Mesh> {
+        match shape {
+            Shape::Column => self.column.clone(),
+            Shape::Spike => self.spike.clone(),
+            Shape::Ball => self.ball.clone(),
+        }
+    }
+
+    fn material(&self, skin: Skin) -> Handle<StandardMaterial> {
+        match skin {
+            Skin::Fire => self.fire.clone(),
+            Skin::Blood => self.blood.clone(),
+            Skin::Shade => self.shade.clone(),
+        }
+    }
+}
+
+/// An upright shape standing on the ground at `at`, between two heights.
+fn standing(shape: Shape, skin: Skin, at: Vec3, radius: f32, bottom: f32, top: f32) -> Piece {
+    let height = (top - bottom).max(0.01);
+    Piece {
+        shape,
+        skin,
+        at: at + Vec3::Y * (bottom + height * 0.5),
+        scale: Vec3::new(radius * 2.0, height, radius * 2.0),
+    }
+}
+
+/// A ball in the air, which is exactly what the hit test for a travelling
+/// effect is -- see `World::inside`.
+fn floating(at: Vec3, radius: f32) -> Piece {
+    Piece {
+        shape: Shape::Ball,
+        skin: Skin::Blood,
+        at,
+        scale: Vec3::splat(radius * 2.0),
+    }
+}
+
+fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
+    use sim::effects::{EffectKind, GRASP_ARMS, LOTUS_BLADES};
+
+    let at = fx3(effect.pos);
+    match effect.kind {
+        EffectKind::FirePillar if part < 2 => {
+            let (base, column) = effect.pillar_volumes();
+            let it = if part == 0 { base } else { column };
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                it.radius.to_f32_for_render(),
+                it.bottom.to_f32_for_render(),
+                it.top.to_f32_for_render(),
+            ))
+        }
+        // The field it drains in, and the spike standing in the middle of it.
+        // Two pieces because they say two different things: the disc is where
+        // the drain reaches, and the spike is the thing you can see from across
+        // the arena and decide to walk around. It was drawn as the disc alone
+        // for a while, which is a hazard you find out about by standing in it.
+        EffectKind::BlackSpike if part < 2 => {
+            let volume = effect.spike_volume();
+            let radius = volume.radius.to_f32_for_render();
+            let height = volume.top.to_f32_for_render();
+            Some(if part == 0 {
+                standing(Shape::Column, Skin::Blood, at, radius, 0.0, 0.12)
+            } else {
+                standing(
+                    Shape::Spike,
+                    Skin::Blood,
+                    at,
+                    radius * SPIKE_WAIST,
+                    0.0,
+                    height,
+                )
+            })
+        }
+        EffectKind::Bloodletter if part == 0 => Some(floating(
+            fx3(effect.blade_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        EffectKind::Grasp if part < GRASP_ARMS => Some(floating(
+            fx3(effect.arm_at(part)),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // One ball per blade, drawn around the shadow's live position rather
+        // than the spot the move was thrown at -- which is what makes them
+        // visibly chase it home. Same shape as the hit test, as everywhere.
+        EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
+            shape: Shape::Ball,
+            skin: Skin::Shade,
+            at: fx3(effect.lotus_at(part, effect.pos)),
+            scale: Vec3::splat(effect.field_radius().to_f32_for_render() * 2.0),
+        }),
+        _ => None,
+    }
+}
+
+/// How fat the spike is against the field it stands in.
+///
+/// Presentation, not a rule: the field's radius is where the drain reaches, and
+/// a cone that wide would be a tent rather than a spike. The disc underneath is
+/// what tells you where the edge is.
+const SPIKE_WAIST: f32 = 0.35;
 
 /// Where the class mechanic sits in the world, if anywhere. A shield in hand
 /// rides on the character and draws nothing; a thrown one, a placed shadow or a
@@ -685,7 +1091,9 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
     use sim::class::Mechanic;
     match m {
         Mechanic::Shield(s) => s.world_pos(),
-        Mechanic::Shadow { at } => *at,
+        // The shadow is drawn as a body of its own rather than as a marker --
+        // see `place_shadows` -- so it is not one of these.
+        Mechanic::Shadow(_) => None,
         Mechanic::Structures(slots) => slots.iter().flatten().next().map(|s| s.at),
         _ => None,
     }
@@ -694,17 +1102,33 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
 /// A shield in hand rides on the character; a thrown one sits in the world.
 fn place_shields(
     sim: Res<Sim>,
+    hands: Res<ShieldHands>,
     mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in shields.iter_mut() {
+        let held = matches!(
+            sim.cur.players[tag.0].mechanic,
+            sim::Mechanic::Shield(sim::state::Shield::Held)
+        );
         match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
+            // Thrown or planted: it is somewhere in the arena on its own.
             Some(pos) => {
                 *vis = Visibility::Inherited;
+                tf.rotation = Quat::IDENTITY;
                 tf.translation = Vec3::new(
                     pos.x.to_f32_for_render(),
                     pos.y.to_f32_for_render(),
                     pos.z.to_f32_for_render(),
                 );
+            }
+            // In hand, and now that the skeleton has hands it can be in one.
+            // It follows the forearm, the way a strapped shield does, so
+            // raising the guard raises the shield without anybody animating it.
+            None if held => {
+                let (at, rot) = hands.0[tag.0];
+                *vis = Visibility::Inherited;
+                tf.rotation = rot;
+                tf.translation = at + rot * Vec3::new(0.0, -0.12, 0.06);
             }
             None => *vis = Visibility::Hidden,
         }
@@ -716,6 +1140,10 @@ fn place_shields(
 // ---------------------------------------------------------------------------
 
 /// Read real input, run whole fixed ticks, keep the previous snapshot.
+// A Bevy system's parameter list *is* its dependency declaration: every entry
+// is something the scheduler has to know this system touches. Splitting one to
+// get under a count would split the system, which is the opposite of the point.
+#[allow(clippy::too_many_arguments)]
 fn tick_sim(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -724,6 +1152,7 @@ fn tick_sim(
     focus: Res<palette::UiFocus>,
     mut sim: ResMut<Sim>,
     mut show: ResMut<debug::ShowDebug>,
+    mut scripted: ResMut<Scripted>,
 ) {
     // Typing in a text field must not also pause the match or cycle the class.
     // F7 stays live regardless, since it is the way back out.
@@ -743,18 +1172,41 @@ fn tick_sim(
         show.0 = !show.0;
     }
     if keys.just_pressed(KeyCode::F2) {
-        sim.baked_anim = !sim.baked_anim;
+        sim.bind_pose = !sim.bind_pose;
     }
     if keys.just_pressed(KeyCode::Tab) {
         // Cycle player one's class. Restarts the match, since a class change
         // mid-round would leave the mechanic in someone else's state.
         let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
-        let w = World::with_classes([ALL[next], sim.cur.players[1].class]);
+        let classes = [ALL[next], sim.cur.players[1].class];
+        let w = if sim.cur.monster.is_some() {
+            World::hunt(classes)
+        } else {
+            World::with_classes(classes)
+        };
         sim.prev = w.clone();
         sim.cur = w;
     }
     if keys.just_pressed(KeyCode::KeyR) {
-        let w = World::with_classes([sim.cur.players[0].class, sim.cur.players[1].class]);
+        let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
+        let w = if sim.cur.monster.is_some() {
+            World::hunt(classes)
+        } else {
+            World::with_classes(classes)
+        };
+        sim.prev = w.clone();
+        sim.cur = w;
+    }
+    // Swap between hunting something and fighting each other. A restart either
+    // way, because a creature appearing in the middle of a round would land on
+    // somebody.
+    if keys.just_pressed(KeyCode::KeyH) {
+        let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
+        let w = if sim.cur.monster.is_some() {
+            World::with_classes(classes)
+        } else {
+            World::hunt(classes)
+        };
         sim.prev = w.clone();
         sim.cur = w;
     }
@@ -777,13 +1229,14 @@ fn tick_sim(
     } else {
         read_input(&keys, &mouse)
     }
-    .looking(look.aim());
+    .looking(look.aim(), look.tilt());
     let held_two = if focus.keyboard {
         SimInput::default()
     } else {
         read_player_two(&keys)
     }
-    .looking(look.aim_two());
+    // Player two has no mouse, so they aim level.
+    .looking(look.aim_two(), 0);
 
     match &mut sim.driver {
         Driver::Local => {
@@ -802,11 +1255,9 @@ fn tick_sim(
                 // reusing a sample across them smears a four-frame press into
                 // whatever the frame rate happened to be -- which makes two
                 // runs of the same script diverge.
+                let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
                 let pair = [
-                    scripted_or(
-                        demo_mode().then(|| demo_input(&sim.cur, sim.cur.frame)),
-                        held,
-                    ),
+                    scripted_or(scripted, held),
                     dummy_input(sim.dummy, sim.cur.frame, held_two),
                 ];
                 sim.prev = sim.cur.clone();
@@ -816,10 +1267,8 @@ fn tick_sim(
         Driver::Online { .. } => {
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
-                let local = scripted_or(
-                    demo_mode().then(|| demo_input(&sim.cur, sim.cur.frame)),
-                    held,
-                );
+                let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
+                let local = scripted_or(scripted, held);
                 step_online(&mut sim, local);
             }
         }
@@ -913,6 +1362,19 @@ fn aim_toward(v: sim::V3) -> u16 {
     aim_from_radians(v.z.to_f32_for_render().atan2(v.x.to_f32_for_render()))
 }
 
+/// One frame of scripted play.
+///
+/// Against another fighter it is the fixed beat below, which exists to exercise
+/// posing and framing. Against a creature it is the real hunter, because a
+/// fixed beat played at a monster would be a demonstration of nothing.
+fn script(hunter: &mut hunt::Hunter, w: &sim::World) -> SimInput {
+    if w.monster.is_some() {
+        hunter.watch(w);
+        return hunter.act(w);
+    }
+    demo_input(w, w.frame)
+}
+
 fn demo_input(w: &sim::World, frame: u32) -> SimInput {
     let beat = frame % 480;
     let mut v = 0u16;
@@ -981,13 +1443,21 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     if keys.pressed(KeyCode::KeyK) || mouse.pressed(MouseButton::Right) {
         v |= SimInput::RIGHT;
     }
+    // The third attack button. It exists for the Champion, whose three mouse
+    // buttons are three weapons -- see `sim::moves::champion` -- and `U` stands
+    // in for it on a hand or a trackpad that cannot find a scroll click, which
+    // is most of them.
+    if keys.pressed(KeyCode::KeyU) || mouse.pressed(MouseButton::Middle) {
+        v |= SimInput::MIDDLE;
+    }
     // Q and E, not a chord on a click. The special and the mechanic are the
     // two things a class does that nothing else does; burying them under a
-    // modifier made them feel optional.
+    // modifier made them feel optional. E used to double as middle click, and
+    // cannot any more now that middle click means something of its own.
     if keys.pressed(KeyCode::KeyQ) {
         v |= SimInput::SPECIAL;
     }
-    if keys.pressed(KeyCode::KeyE) || mouse.pressed(MouseButton::Middle) {
+    if keys.pressed(KeyCode::KeyE) {
         v |= SimInput::MECHANIC;
     }
     if keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight) {
@@ -1014,104 +1484,154 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     SimInput::new(v)
 }
 
-/// Place every character part from the interpolated snapshot.
+/// Place every bone from the interpolated snapshot.
 ///
-/// Pose is a pure function of simulation state -- see `view::pose`. Nothing
+/// Pose is a pure function of simulation state -- see `view::play`. Nothing
 /// here accumulates animation time, which is what lets a rollback rewind the
 /// characters without them sliding.
+/// One of the four pools of transforms the posing pass writes, tagged by which
+/// pool it is.
+///
+/// Four queries in one system have to be provably disjoint or Bevy refuses to
+/// run it, and the disjointness is spelled out as "everything I am not": a
+/// fighter's root, a fighter's part, a shadow's root and a shadow's part are
+/// four different entities and never the same one. Written as an alias because
+/// saying it four times in a signature is the same sentence four times.
+type Posed<'w, 's, Tag, A, B, C> =
+    Query<'w, 's, (&'static Tag, &'static mut Transform), (Without<A>, Without<B>, Without<C>)>;
+
+// A Bevy system's parameter list *is* its dependency declaration, and this one
+// now poses two bodies per fighter. Splitting it to get under a count would
+// mean solving the same skeletons twice.
+#[allow(clippy::too_many_arguments)]
 fn apply_poses(
     sim: Res<Sim>,
-    mut roots: Query<(&Fighter, &mut Transform), Without<BodyPart>>,
-    mut parts: Query<(&BodyPart, &mut Transform), Without<Fighter>>,
+    time: Res<Time>,
+    mut fades: ResMut<Fades>,
+    mut shadow_fades: ResMut<ShadowFades>,
+    mut hands: ResMut<ShieldHands>,
+    hub: Option<Res<crate::hub::Hub>>,
+    mut roots: Posed<Fighter, BodyPart, ShadowRoot, ShadowPart>,
+    mut parts: Posed<BodyPart, Fighter, ShadowRoot, ShadowPart>,
+    mut shadow_seen: Query<(&mut Visibility, &ShadowRoot)>,
+    mut shadow_roots: Posed<ShadowRoot, Fighter, BodyPart, ShadowPart>,
+    mut shadow_parts: Posed<ShadowPart, Fighter, BodyPart, ShadowRoot>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
     for (fighter, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
         tf.translation = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
-        let yaw = p.facing[0].atan2(p.facing[2]);
-        tf.rotation = Quat::from_rotation_y(yaw);
+        tf.rotation = body_turn(p.facing);
+    }
+
+    // One solve per fighter rather than one per bone: forward kinematics is a
+    // single pass down the skeleton and there are sixteen bones hanging off it.
+    let mut skeletons: [Skeleton; MAX_PLAYERS] = [
+        skeleton_for(sim.cur.players[0].class),
+        skeleton_for(sim.cur.players[1].class),
+    ];
+    let mut skins = Vec::with_capacity(MAX_PLAYERS);
+    for (owner, skeleton) in skeletons.iter_mut().enumerate() {
+        let p = frame.players[owner];
+        let class = sim.cur.players[owner].class;
+        let mut input = PoseInput::of(&p, class, &frame);
+        input.bind_pose = sim.bind_pose;
+        let mut pose = fades.0[owner].pose(input, time.delta_secs());
+        // The hub takes over whichever fighter it is previewing, so an edit is
+        // visible on a real character in the real arena rather than in a
+        // separate viewer that flatters it.
+        if let Some(hub) = hub.as_ref() {
+            if let Some(preview) = hub.preview_for(owner) {
+                pose = preview;
+            }
+        }
+        skins.push(view::skeleton::solve(skeleton, &pose));
+    }
+
+    // The shield hand, in the arena rather than in the character's own space,
+    // so whatever is holding something can be placed against it.
+    for owner in 0..MAX_PLAYERS {
+        let p = frame.players[owner];
+        let turn = body_turn(p.facing);
+        let (at, rot) = skins[owner].box_of(&skeletons[owner], Joint::HandL);
+        hands.0[owner] = (
+            Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
+            turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
+        );
     }
 
     for (bp, mut tf) in parts.iter_mut() {
-        let p = frame.players[bp.owner];
-        let class = sim.cur.players[bp.owner].class;
-        let (into, total) = phase_frames(&p, class);
-        let pose = pose_for(PoseInput {
-            clip: if sim.baked_anim {
-                clip_for(&p, class)
-            } else {
-                None
-            },
-            action: p.action,
-            frames_into: into,
-            frames_total: total,
-            speed: p.speed,
-            grounded: p.grounded,
-            crouching: p.crouching,
-            sim_frame: frame.sim_frame,
-        });
-        let t = pose.get(bp.part);
-        tf.translation = Vec3::new(t.pos[0], t.pos[1], t.pos[2]);
-        tf.rotation = Quat::from_euler(EulerRot::XYZ, t.rot[0], t.rot[1], t.rot[2]);
+        let skeleton = &skeletons[bp.owner];
+        let (centre, rot) = skins[bp.owner].box_of(skeleton, bp.joint);
+        let size = view::pose::part_size(skeleton, bp.joint);
+        tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
+        tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
+        tf.scale = Vec3::new(size[0], size[1], size[2]);
+    }
+
+    // The second body, on the same skeleton and through the same solver. It is
+    // her, drawn somewhere else: the only thing that differs is which pose it
+    // is holding and how much of it you can see through.
+    let mut shadow_skins: [Option<view::skeleton::Skin>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    for (mut seen, root) in shadow_seen.iter_mut() {
+        let Some(ghost) = frame.shadows[root.0] else {
+            *seen = Visibility::Hidden;
+            continue;
+        };
+        *seen = Visibility::Inherited;
+        shadow_skins[root.0] = Some(view::skeleton::solve(
+            &skeletons[root.0],
+            &shadow_fades.0[root.0].shadow(
+                shadow_input(&frame, root.0, ghost, sim.bind_pose),
+                ghost.doing,
+                time.delta_secs(),
+            ),
+        ));
+    }
+    for (root, mut tf) in shadow_roots.iter_mut() {
+        let Some(ghost) = frame.shadows[root.0] else {
+            continue;
+        };
+        tf.translation = Vec3::new(ghost.pos[0], ghost.pos[1], ghost.pos[2]);
+        tf.rotation = Quat::from_rotation_y(ghost.facing[0].atan2(ghost.facing[2]));
+    }
+    for (part, mut tf) in shadow_parts.iter_mut() {
+        let Some(skin) = shadow_skins[part.owner].as_ref() else {
+            continue;
+        };
+        let skeleton = &skeletons[part.owner];
+        let (centre, rot) = skin.box_of(skeleton, part.joint);
+        let size = view::pose::part_size(skeleton, part.joint);
+        tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
+        tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
+        tf.scale = Vec3::new(size[0], size[1], size[2]);
     }
 }
 
-/// Which baked clip an action maps to, and how far into it.
+/// Everything the shadow's pose depends on.
 ///
-/// The game side picks, because it is what knows the move tables. `view` stays
-/// ignorant of what an overhead is.
-fn clip_for(p: &view::PlayerView, class: sim::Class) -> Option<(view::pose::Clip, u16)> {
-    use sim::state::Action;
-    use view::pose::Clip;
-    let elapsed = |kind: u8, phase: u8, left: u16| -> u16 {
-        let (s, a, r) = sim::moves::frames(class, kind);
-        match phase {
-            0 => s.saturating_sub(left),
-            1 => s + a.saturating_sub(left),
-            _ => s + a + r.saturating_sub(left),
-        }
-    };
-    let attack_clip = |kind: u8| {
-        if sim::moves::get(class, kind).hits_crouching {
-            Clip::Poke
-        } else {
-            Clip::Overhead
-        }
-    };
-    match p.action {
-        Action::Startup { kind, left } => Some((attack_clip(kind), elapsed(kind, 0, left))),
-        Action::Active { kind, left } => Some((attack_clip(kind), elapsed(kind, 1, left))),
-        Action::Recovery { kind, left } => Some((attack_clip(kind), elapsed(kind, 2, left))),
-        Action::Guard { held } => Some((Clip::GuardIn, held)),
-        Action::Dodge { left } => Some((Clip::Roll, 22u16.saturating_sub(left))),
-        Action::HitStun { left }
-        | Action::BlockStun { left }
-        | Action::Stagger { left }
-        | Action::Held { left } => Some((Clip::Recoil, 26u16.saturating_sub(left))),
-        Action::Free => None,
-    }
-}
-
-/// How far into the current phase, and how long that phase runs.
-fn phase_frames(p: &view::PlayerView, class: sim::Class) -> (u16, u16) {
-    use sim::state::Action;
-    let move_frames = |k: u8| sim::moves::frames(class, k);
-    match p.action {
-        Action::Startup { kind, left } => {
-            let total = move_frames(kind).0;
-            (total.saturating_sub(left), total)
-        }
-        Action::Active { kind, left } => {
-            let total = move_frames(kind).1;
-            (total.saturating_sub(left), total)
-        }
-        Action::Recovery { kind, left } => {
-            let total = move_frames(kind).2;
-            (total.saturating_sub(left), total)
-        }
-        _ => (0, 0),
-    }
+/// Hers, with the four things that are the shadow's own swapped in: what it is
+/// doing, how fast it is going and which way, and the fact that it is always on
+/// the floor. Built from her input rather than from scratch so that anything
+/// posing learns to read -- the frame counter an idle loops on, the round's own
+/// clock -- reaches both bodies without being wired up twice.
+fn shadow_input(
+    frame: &view::Frame,
+    owner: usize,
+    ghost: view::interp::ShadowView,
+    bind_pose: bool,
+) -> PoseInput {
+    let mut input = PoseInput::of(&frame.players[owner], sim::Class::ShadowReaver, frame);
+    input.action = ghost.action;
+    input.speed = ghost.speed;
+    input.travel = ghost.travel;
+    input.grounded = true;
+    input.crouching = false;
+    input.rise = 0.0;
+    input.turn_rate = 0.0;
+    input.bind_pose = bind_pose;
+    input
 }
 
 /// Mouse look, and the cursor grab that makes it usable.
@@ -1171,8 +1691,6 @@ fn mouse_look(
         (KeyCode::NumpadAdd, settings::Knob::Sensitivity, true),
         (KeyCode::F3, settings::Knob::Fov, false),
         (KeyCode::F4, settings::Knob::Fov, true),
-        (KeyCode::F5, settings::Knob::Distance, false),
-        (KeyCode::F6, settings::Knob::Distance, true),
     ] {
         if keys.just_pressed(key) {
             settings.nudge(knob, up);
@@ -1183,7 +1701,6 @@ fn mouse_look(
         settings.save();
     }
 
-    let rig_cfg = view::camera::RigConfig::default();
     if look.grabbed {
         let sensitivity = settings.radians_per_pixel();
         let (mut dx, mut dy) = (0.0, 0.0);
@@ -1192,7 +1709,8 @@ fn mouse_look(
             dy += ev.delta.y;
         }
         look.yaw += dx * sensitivity;
-        look.pitch = (look.pitch - dy * sensitivity).clamp(-rig_cfg.pitch_down, rig_cfg.pitch_up);
+        let zones = view::camera::Zones::tuned();
+        look.pitch = (look.pitch - dy * sensitivity).clamp(-zones.down_limit, zones.up_limit);
     } else {
         motion.clear();
     }
@@ -1252,16 +1770,23 @@ fn drive_camera(
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
     if settings.is_changed() {
-        rig.0.set_distance(settings.distance);
+        rig.0.set_fov(settings.fov_radians());
     }
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
     // The camera follows whichever fighter this client is driving.
     let me = sim.local_player();
     let yaw = if me == 0 { look.yaw } else { look.yaw_two };
-    let framing = rig
-        .0
-        .update(time.delta_secs(), frame.players[me].pos, yaw, look.pitch);
-    inside.0 = framing.first_person;
+    let framing = rig.0.update_around(
+        time.delta_secs(),
+        frame.players[me].pos,
+        yaw,
+        look.pitch,
+        view::Surroundings {
+            beast: sim.cur.monster.as_ref(),
+            aboard: sim.cur.players[me].aboard(),
+        },
+    );
+    inside.0 = framing.hidden;
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);
@@ -1271,6 +1796,19 @@ fn drive_camera(
             }
         }
     }
+}
+
+/// A simulation position, in the renderer's units.
+/// How a fighter's body sits in the arena, as the engine's own rotation.
+///
+/// `view::body_turn` is the definition -- character space is `+Z` along the
+/// facing with the left arm at `-X`, and that convention is shared with the
+/// simulation, which swings one-armed moves from the same side the renderer
+/// draws the arm on. This is the two-line conversion into Bevy's quaternion,
+/// and it is the only place the renderer is allowed to build that rotation.
+fn body_turn(facing: [f32; 3]) -> Quat {
+    let q = view::body_turn([facing[0], facing[2]]).0;
+    Quat::from_xyzw(q[0], q[1], q[2], q[3])
 }
 
 fn fx3(v: sim::V3) -> Vec3 {
@@ -1285,6 +1823,103 @@ fn fx3(v: sim::V3) -> Vec3 {
 mod tests {
     use super::*;
     use palette::UiFocus;
+    use sim::effects::{Effect, EffectKind, GRASP_ARMS};
+
+    fn cast(kind: EffectKind, slot: u8) -> Effect {
+        Effect::cast(
+            kind,
+            0,
+            sim::Class::BloodMage,
+            slot,
+            sim::V3::ZERO,
+            sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+        )
+    }
+
+    #[test]
+    fn a_black_spike_is_drawn_with_a_spike_in_it() {
+        // It was a twelve-centimetre stain on the floor for a while, which is a
+        // hazard you find out about by standing in it. The field is the disc;
+        // the spike is what you can see from across the arena.
+        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let field = effect_piece(&effect, 0).expect("the field is drawn");
+        let spike = effect_piece(&effect, 1).expect("the spike is drawn");
+        assert_eq!(field.shape, Shape::Column);
+        assert_eq!(spike.shape, Shape::Spike);
+        assert!(
+            spike.scale.y > field.scale.y * 4.0,
+            "the spike is no taller than the stain it stands in"
+        );
+        assert!(
+            spike.scale.x < field.scale.x,
+            "the spike is as wide as the whole field, which is a tent"
+        );
+    }
+
+    #[test]
+    fn the_drawn_spike_is_exactly_as_tall_as_the_volume_that_drains() {
+        // The rule for every effect in the game: what you see is what catches
+        // you. A field drawn shorter than it tests would be a hazard you think
+        // you jumped over.
+        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let volume = effect.spike_volume();
+        let spike = effect_piece(&effect, 1).expect("the spike is drawn");
+        assert!(
+            (spike.scale.y - volume.top.to_f32_for_render()).abs() < 0.001,
+            "drawn {} tall, drains up to {}",
+            spike.scale.y,
+            volume.top.to_f32_for_render()
+        );
+        let field = effect_piece(&effect, 0).expect("the field is drawn");
+        assert!(
+            (field.scale.x * 0.5 - volume.radius.to_f32_for_render()).abs() < 0.001,
+            "the drawn field is not the width of the drained one"
+        );
+    }
+
+    #[test]
+    fn a_thrown_blade_is_drawn_where_it_actually_is() {
+        // The blade is the whole threat -- the move leaves no hitbox on the
+        // caster -- so a picture of it anywhere but its own position would be
+        // the only thing telling the other player where the danger is, lying.
+        let mut effect = cast(EffectKind::Bloodletter, sim::state::SLOT_POKE);
+        let mut furthest = 0.0f32;
+        for _ in 0..effect.life {
+            effect.age += 1;
+            let drawn = effect_piece(&effect, 0).expect("the blade is drawn");
+            assert_eq!(drawn.at, fx3(effect.blade_at()));
+            furthest = furthest.max(drawn.at.x);
+        }
+        assert!(furthest > 1.0, "the blade never went anywhere");
+        assert!(
+            effect_piece(&effect, 1).is_none(),
+            "a blade is one object, not two"
+        );
+    }
+
+    #[test]
+    fn all_four_arms_of_a_grasp_are_drawn() {
+        // Each one is its own skillshot and each one has to be seen coming --
+        // it is being caught by *all* of them that roots you, and a player who
+        // can only see two cannot tell where the fourth is going to be.
+        let mut effect = cast(EffectKind::Grasp, sim::state::SLOT_SPECIAL);
+        effect.age = effect.life / 2;
+        let drawn: Vec<Piece> = (0..GRASP_ARMS)
+            .map(|arm| effect_piece(&effect, arm).expect("every arm is drawn"))
+            .collect();
+        for (arm, piece) in drawn.iter().enumerate() {
+            assert_eq!(piece.at, fx3(effect.arm_at(arm)));
+        }
+        // Halfway through, the cone is open: no two arms are in the same place.
+        for a in 0..GRASP_ARMS {
+            for b in a + 1..GRASP_ARMS {
+                assert!(
+                    drawn[a].at.distance(drawn[b].at) > 0.1,
+                    "arms {a} and {b} are drawn on top of each other"
+                );
+            }
+        }
+    }
 
     #[test]
     fn opening_the_oven_hands_the_cursor_back() {

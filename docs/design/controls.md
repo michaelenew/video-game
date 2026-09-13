@@ -1,7 +1,7 @@
 ---
 status: partly unsettled
 decided: 2026-09-10
-revised: 2026-09-11
+revised: 2026-09-13
 ---
 
 # Controls
@@ -28,9 +28,30 @@ Six sentences, and everything else follows:
 3. **WASD means move.**
 4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
 5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
-   class does, each on its own key.
+   class does, each on its own key. `E` is usually an instant change of state — throw the
+   shield, cycle the form, raise a structure — but it does not have to be: on two classes it
+   is a fourth ability with a wind-up and a recovery like any other, either because the
+   mechanic has no state to change or because changing it is itself a move. See
+   [Where `E` is an ability](#where-e-is-an-ability).
 6. **The mouse means *where*.** You look with it, you are pointed where you look, and
-   your attacks go where you are pointed.
+   your attacks go where you are pointed — **including up and down.** The crosshair is a
+   line in space, and an area ability lands on the first thing that line meets.
+
+### Middle click is an attack button again — settled 2026-09-12
+
+Not a reversal of the section below. The special and the mechanic stayed on `Q` and `E`;
+what changed is that **middle click is now the third click**, and the option table at the
+bottom of this document always counted it as one.
+
+Only the Champion uses it: its three mouse buttons are three weapons — sword, hammer, spear
+— so the button that was "the least reachable one" is now a weapon you swing constantly.
+That inverts the small problem below. A button nobody presses is found by aim and therefore
+badly; a button you press every second is found by use. `U` stands in for it on a hand or a
+trackpad that cannot press a scroll wheel at all, the same way `J` and `K` stand in for the
+other two.
+
+`E` no longer doubles as middle click in the keyboard bindings, because middle click means
+something of its own now.
 
 ### Why the special and the mechanic left the mouse
 
@@ -70,9 +91,11 @@ never comes out as a dodge.
 - **Airdodge**: shift plus a direction, **once per airtime**. It wipes vertical speed rather
   than adding to it, so it is a sideways commitment and never a second jump. A second one
   would turn a jump into flight.
-- Space while airborne does nothing yet.
-- Airborne attacks are currently the grounded ones. That is a placeholder, not a decision —
-  see below.
+- Space while airborne does nothing, **with one exception**: while a Champion's uppercut has
+  hold of somebody, it takes the pair of you higher, once. See
+  [kits/champion.md](kits/champion.md#uppercut--middle-click).
+- **Airborne attacks are their own moves on the class that has them.** Settled 2026-09-12
+  for the Champion and still open for everyone else — see below.
 
 ## Open since the dodge moved
 
@@ -87,9 +110,11 @@ of them is settled:
 - **Differentiating move + attack.** Directional attacks (`w`/`a`/`d`/`s` + click) still work,
   but the modifier space is tighter than it was and the option table below was written under
   the old rule.
-- **Aerials as variants.** The intended direction is that an airborne attack is a *variant of
-  its grounded counterpart* — the same move with different frame data — rather than a separate
-  move list. Nothing is implemented.
+- **Aerials as variants — settled for the Champion, 2026-09-12.** The intended direction was
+  that an airborne attack is a *variant of its grounded counterpart* — the same button,
+  different move — rather than a separate move list, and that is exactly how the Champion is
+  built: three buttons, and a row of the move grid per stance. It generalises, and nobody
+  else has been given the treatment yet.
 - **Neutral shift.** Shift with no direction and no click does nothing. A spot dodge in place
   is the obvious candidate.
 - **Double jump.** Space while airborne does nothing. The airdodge is the only air commitment
@@ -100,6 +125,69 @@ of them is settled:
 `W` is away from the camera, not along some world axis. `D` is to the camera's right.
 Aim is the camera direction. The player turns by turning the camera; there is no separate
 turn control and no auto-facing.
+
+**The camera sits directly behind the fighter.** Not a preference: the camera points at the
+aim point, so an eye slid to one shoulder would turn the whole view and `W` would stop walking
+up the screen.
+
+### The camera is prescribed, zone by zone — settled 2026-09-12
+
+**The camera is always on the surface of a sphere, looking inward past a tilt, and the mouse
+walks it around that sphere at its own rate.** What the zones change is the sphere: where it is
+centred, how big it is, and how far the view is tilted off the line to its centre. Nothing is
+solved and nothing can saturate — the eye's place on the sphere is a subtraction.
+
+The trick that makes it work is that **the sphere is centred on whatever is being framed**. The
+line from the eye to that centre is the radius the eye is standing on, whichever way round it
+has walked, so turning the view up off that line by a fixed angle puts the centre at a fixed
+place on the screen — always, for free. A tilt *is* a screen position, written as an angle.
+
+| Zone | Sphere centre | Radius | Tilt |
+| --- | --- | --- | --- |
+| **−90 to −85** | Not allowed — at the pole the fighter's vertical plane stops being defined | | |
+| **−85 to −45** | The feet | Large | From the feet on the crosshair at the bottom, up to 5% |
+| **−45 to −10** | The feet | Large | Fixed: the feet 5% up the screen |
+| **−10 to 0** | Slides from the feet to the **head** | Large | To the head riding 5% under the crosshair |
+| **0 to +10** | The head | Contracts to nearly nothing | To nothing: looking straight down the sight line |
+| **+10 to +85** | The head | Small, fixed | None — the eye is the fighter's own |
+| **+85 to +90** | Not allowed, as below | | |
+
+Because the eye is placed by the same two angles the aim is made of, **screen centre is the look
+direction** and the reticle sits exactly in the middle of the screen by construction rather than
+by correction. One degree of mouse is one degree around the sphere, in every zone.
+
+**The crosshair is the aim.** The ray that decides where an ability goes starts at the eye and
+runs through the middle of the screen, and it stops at the first of three things: the floor, an
+object that is not the floor, or the edge of that ability's own range. A grounded ability lands
+exactly there. Anything not grounded targets the middle of a fighter *standing* there when the
+ray met the floor, and the point itself when it met anything else. Then the ability is sent along
+the line from where it is cast to that point — so what you pointed at is what you get, and the
+travel is the fighter's business rather than the camera's.
+
+**The fighter's own body gets out of the way, for two separate reasons.** It goes translucent as
+it comes up on the crosshair, because a body the player is aiming past is worse than no body at
+all. And it goes fully away when the eye is simply *close* to it — measured as a distance, not
+as a zone, so that an arm pulled in by a wall behind the fighter takes the body away exactly the
+same as walking into the head on purpose does.
+
+**Zones hand over rather than swap.** A boundary left alone is continuous in position and not
+in speed — the eye arrives at it moving one way and leaves moving another, which is not seen so
+much as felt, and reads as the camera changing its mind. So each zone's ramp is **eased at both
+ends**: it leaves and arrives at a standstill, and a neighbour that is already holding still has
+nothing to hand over against. The size of that easing is a percentage of the zone's own span, so
+one number means the same thing in a band four degrees wide and one seventy-five degrees wide.
+
+Outside the easing the ramp is untouched, so **the waypoints stay exactly true**; at the maximum
+the ramp is eased all the way through and its middle still lands on the waypoint, because the two
+ends give back what each other took.
+
+**The shape is the design; the numbers are knobs.** Every boundary angle, both radii, every
+percentage and every easing is in the Oven under **Camera**.
+
+**A note on the percentages.** They are written against the framing's own field of view, not the
+player's. Set the two to the same number and the fractions are literally what you see; leave them
+apart and the fighter sits a little nearer the middle than the knob reads — a one-degree
+difference is worth about seven tenths of a percent of screen height.
 
 Two consequences are worth stating because they are design, not implementation:
 
@@ -137,16 +225,66 @@ reads.
 `cargo run -p sim --bin frametable` prints these alongside the frame data, and marks which
 moves root you.
 
-### The crosshair tells you where the attack goes, not where the camera points
+### Abilities land where the crosshair is
 
-Those two are the same most of the time, and deliberately not the same during a committed
-move or a lagging guard. The reticle is placed by projecting the point the fighter is
-actually pointed at, so it sits still in the middle of the screen while facing tracks aim
-and slides off to the side when it does not. It dims while you are committed to something
-and the button will not answer.
+**Settled 2026-09-12.** An area ability used to appear a fixed distance straight ahead, so
+the only way to place one anywhere was to walk there. It now lands where you are pointing.
 
-A reticle that says "here" when the answer is "not there" is worse than no reticle, and the
-moments it would lie are exactly the moments the answer matters.
+**The full model is [aiming.md](aiming.md)**, which is the specification and the only place
+the rule is written down — everything here is the short version.
+
+One raycast, **from the camera through the crosshair**, ignoring anything behind the
+character model. It meets terrain, structures, and the ability's own max-range sphere, and the
+first thing it reaches is what you are pointing at. **It goes straight through people** — and
+through the creature, which is the reason: up close a big animal fills the screen, so the
+reticle sits on its chest well above the thing you meant to hit. The ray picks the *place*; who
+is standing in the way of the shot is worked out along the shot's own line afterwards. Then:
+
+- **Aim at a spot inside your reach and a grounded ability goes there.** Exactly there — this
+  is the whole point, and it is what makes an area ability a placement decision rather than a
+  step-forward decision.
+- **Aim at the ground with something that flies** and it goes to that spot, at the height it
+  left your hand: level over the place you are pointing rather than into the dirt.
+- **Aim at a wall, a person, or the creature with something that flies** and it goes exactly
+  there.
+- **Aim past your reach and it goes as far along that line as it can.** Range means
+  something again.
+- **Aim at the sky with something that comes out of the ground** — a pillar of flame, a stone
+  — and it arrives at full reach flat ahead. It has to come out of *somewhere*.
+
+**Corrected 2026-09-12, twice.** The rule above used to read "follow the line the player is
+looking along, out from the point abilities come out of". That is a ray from the *chest*
+along the *look angle*, which is parallel to the crosshair's ray and never converges with it:
+the reticle sits on one spot and the ability goes to another, by more the further away it is.
+It survived because grounded abilities were separately settled onto the floor, which hid it —
+until an ability that flies was built on the same sentence.
+
+**Why a reach sphere and not just the terrain.** Trace to the terrain alone and the target
+lurches: aim a hair over the lip of a platform and the hit jumps from two metres away to the
+far wall, so a fraction of a degree of mouse movement swings the ability across the arena.
+Stopping at the reach bounds that jump to the ability's own range, which is the most it could
+ever have meant.
+
+**The target locks when the move starts**, exactly as facing does. A target you could drag
+during the startup would let an area be slid onto someone during the wind-up, and the
+telegraph is most of what the Elementalist is.
+
+**Pitch is on the wire.** It used to be renderer-local on the grounds that it moved the
+camera and nothing else. A crosshair is a line and a line needs two angles, so it is gameplay
+now and crosses the network beside the yaw.
+
+### The crosshair never moves
+
+It sits at the exact centre of the screen, always. The **camera** turns to keep the aim point
+under it.
+
+That ordering is the design. The alternative — leave the camera pointed along the raw look
+axis and slide the reticle to wherever the aim really lands — is equally honest and feels
+terrible: a reticle that wanders reads as the aim slipping out of your hands, and the reticle
+is the one thing on screen a player is deliberately holding still. The parallax goes into the
+view instead, where it is a few degrees of pitch nobody has to fight.
+
+It dims while you are committed to something and the button will not answer.
 
 ### Settings
 
@@ -215,13 +353,65 @@ same job on every class.
 | **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
 
 The prototype binds the first three of these: left click pokes, shift + left click is the
-committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` stand in for the
-clicks on keyboards where that is easier.
+committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` and `U` stand in for
+the three clicks on keyboards where that is easier.
 
-That last row does real work. The Champion's Rush and the Reaver's Shadow dash *are* their
-dodges rather than extra inputs. For the Reaver this is what makes movement and shadow
+The Champion does not read that table at all. Its three clicks are three weapons and `E` is
+Rush; shift + click and `Q` are unused on it. That is a deliberate exception rather than a
+drift — the shared grammar is what lets one control scheme drive six kits, and a class whose
+*identity* is which weapon is in its hands has to spend its clicks on the weapons.
+
+That last row does real work. The Reaver's dash to its shadow *is* its dodge rather than an
+extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
+that matters (one charge, cancels recoveries, changes what the attack buttons do), and
+putting it on shift + direction would have made the class's central decision share an input
+with the universal defensive one. For the Reaver this is what makes movement and shadow
 placement the same action, which is the fix that keeps the class from being denied its
 mobility.
+
+### Where `E` is an ability
+
+**Settled 2026-09-12.** The mechanic key is described above as the thing only that class
+does, and for most of the roster that is a state change with no frames to it. The Blood mage
+is the exception, and the reason is worth stating because it will come up again: **her
+mechanic is health**, which is spent by casting rather than by pressing a key, so `E` had
+nothing to do and sat unused for the whole of a match.
+
+It casts Black spike now — a real move with a startup you can be punished during, a reach the
+crosshair aims, and a cost. Nothing about the grammar changed: `E` still means "the thing
+only this class does".
+
+What changed is the move table, which grew a **fourth slot** for it. The other three —
+`LMB`, `Shift+LMB`, `Q` — still mean the same thing on every class, which is the property
+that lets one control scheme drive six kits. The fourth means whatever that class's mechanic
+means, and most classes leave it empty. `cargo run -p sim --bin frametable` prints the key
+beside every move.
+
+**The Dual mage is the second, added 2026-09-13**, and it is the same argument from the other
+end: her mechanic is a meter, and the meter is steered by *which button attacks* rather than by
+a key, so `E` had nothing to toggle either. It casts Sweep.
+
+**The Shadow Reaver is the third, on 2026-09-14**, and she is the one that breaks the rule the
+other two were about to establish. That rule was going to be *`E` is an ability exactly when
+the class's mechanic has no state to change* — and her mechanic is emphatically a state.
+
+Her mechanic is also not an **instant**: the shadow travels, and calling it back is an attack
+that cuts and slows everything on the way home. An instant cannot have a startup somebody
+reads, a damage number and a slow, and that one needs all three. So it became a move.
+
+Then it went on **right click** rather than on `E`, because it is aimed and the mouse is where
+aiming lives — see [Shadow Reaver](#shadow-reaver) — and `E` picked up the melee it displaced.
+Which leaves this class as the one place where `E` carries something that is not the mechanic
+at all.
+
+Two rules survive that, and they are worth keeping apart:
+
+> **A mechanic is an ability when pressing it is not free.** Where there is nothing to change
+> (health, a meter) or where changing it takes frames and does damage (a second body crossing
+> the arena), it needs a slot in the move table like anything else.
+>
+> **Which *button* it lands on is a separate question, and the crosshair answers it.** An
+> aimed mechanic wants the mouse. An unaimed one can have the key.
 
 ## Movement
 
@@ -354,23 +544,59 @@ Airborne attacks are still the grounded ones.
 
 ---
 
-## Dual mage
+## The per-class schemes
+
+> **These six sections predate the 2026-09-11 grammar** and are sketches of a twelve-ability
+> kit rather than a record of what is in the game. They put the mechanic on `M` or on `R` and
+> treat `q` and `e` as spare keys, which is exactly the arrangement the grammar above
+> replaced. Read them as intent for the *shape* of each class's full kit; read the kit
+> documents in [`kits/`](kits/) and `cargo run -p sim --bin frametable` for what is bound
+> today.
+>
+> Two rows have been brought up to date because the abilities behind them were finished and a
+> stale table beside a working implementation is worse than no table: the Elementalist's auto,
+> which is a beam now, and the whole of the Blood mage's. The rest have not.
+
+## Dual mage — built 2026-09-13
 
 The mechanic is on the primary buttons, and it is not optional.
 
 **`L` always moves you darker. `R` always moves you lighter.** Every input, not just autos.
 
+What is bound today:
+
 | Input | Result |
 | --- | --- |
-| `L` / `R` | Dark / light auto. **Changes your mode on contact** — a whiff steers nothing |
+| `L` | **Dark auto** — a punch with the left arm. Steers dark **on contact**; a whiff steers nothing |
+| `R` | **Light auto** — the same punch with the right arm. Steers light on contact |
+| `shift` + `L` | **Lance**. Steers dark on the press |
+| `shift` + `R` | The light auto again. The light *form* of the committed cast is not built |
+| `Q` | **Judgement**, the finisher. Gated on depth |
+| `E` | **Sweep**. No side, so it pushes you further along your current path |
+
+**Right click is an attack on this class**, which is the one place the shared grammar bends.
+Everywhere else `R` is guard, and guard is shield-gated — this class has no shield, so the
+button was doing nothing while half of the mechanic had no input. It is not a special case in
+the code either: which move a click asks for is one function
+(`state::clicked_move`), and the Champion's three weapons already needed it.
+
+The intended full kit, unbuilt:
+
+| Input | Not built |
+| --- | --- |
 | direction + `L`/`R` | Basic moves, in dark or light form |
 | `shift` + `L`/`R` | Abilities, in dark or light form |
 | `M` / `LR` | Gated finishers — Judgement and Eclipse |
 | `shift` + `M` / `shift` + `LR` | Ordinary abilities. Push further along your current path |
 
-`M` and `LR` are neither left nor right, so they cannot pick a direction. They push you
-further down whichever path you are already on. The grammar stays consistent: **direction
-comes from side-ness, and only left and right have it.**
+`M`, `LR`, `Q` and `E` are neither left nor right, so they cannot pick a direction. They push
+you further down whichever path you are already on, and at dead centre they do nothing at all.
+The grammar stays consistent: **direction comes from side-ness, and only left and right have
+it.**
+
+**The autos come out of the two arms** — dark from the left, light from the right — and the
+hit volume leaves from that shoulder. It is the class's readout: which arm just landed is
+which way the bar moved. See [kits/dual-mage.md](kits/dual-mage.md).
 
 **Autos have a slight range boost** — the beings inside extend your reach. This matters
 mechanically, not just as flavour: steering requires landing hits, so the class needs the
@@ -387,28 +613,39 @@ put the direction choice in a modifier the player could ignore.
 > The argument against is that a dropped payoff in a 60-second match feels terrible. If it
 > proves bad, swap the finishers onto `shift`+`L`/`R` and move the ordinary abilities out.
 
-## Champion
+## Champion — built 2026-09-12
 
-**`L` / `M` / `R` are sword / hammer / spear.** Pressing a form you are not currently in
-triggers the switch, animated from whatever the current context is.
+**`L` / `M` / `R` are sword / hammer / spear**, and there is no form to switch to: pressing
+the button *is* having that weapon in your hands. What the button means never changes. What
+changes is which of that weapon's moves comes out, and that is decided by **where your feet
+are**.
 
-**This means the mid-animation swap needs no new input.** Press a different form's button
-during active frames and you get the cross-form ending. The mechanic and the control are the
-same thing, which is the strongest argument that the mechanic is right.
+| | `L` | `M` | `R` |
+| --- | --- | --- | --- |
+| On foot | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| Airborne | Air sword | Air hammer — spikes | Air spear — a fan around the aim |
+| Rushing | Rush slash | Uppercut | Rush stab, or Pole vault aimed at the floor |
 
 | Input | Result |
 | --- | --- |
-| `L` / `M` / `R` | Auto in that form, or switch to it if you are in another |
-| `L`/`M`/`R` during active frames | The swap. Changes the move's tail |
-| `w` + any click | Charge attack |
-| `a`/`d` + any click | Lateral. Directional knockback — the combo backbone |
-| `s` + any click | Low / grounded attack |
-| `shift` + click | Abilities. Shift versus no-shift is **bigger versus smaller, and different in kind** |
-| `space` + direction | **Rush.** The class's dodge is its chargeable, bankable dash, and it still cancels recovery |
+| `E` | **Rush.** One charge. A dash, and it cancels any recovery |
+| `space`, airborne, holding somebody | The uppercut's second leap. Both of you go higher |
 
-Direction plus click carries most of the class's feel. These want varied, semi-directional
-knockback so that where you hit from determines where they go — that is what makes the
-combo game read.
+Ten moves, three buttons, one modifier key, no chords. The full kit is in
+[kits/champion.md](kits/champion.md).
+
+**The mid-animation swap still needs no new input**, and it is now easier to say what it
+means: press a different weapon's button during active frames and the move ends in that
+weapon. It is not built.
+
+The directional variants below are not built on this class and may not be wanted — the
+stance rows already do the work that `w`/`a`/`d`/`s` plus a click was meant to do, and
+three rows of three is as much as one class should ask a player to hold.
+
+| Input | Not built |
+| --- | --- |
+| `w` / `a`/`d` / `s` + click | Charge, lateral, low — directional knockback as the combo backbone |
+| `shift` + click | The six-ability kit: Drive, Sweep, Throw, Brace |
 
 ## Bulwark
 
@@ -428,19 +665,44 @@ Guard on the right button matches every game where alt-fire is the defensive opt
 
 ## Shadow Reaver
 
+Current as of 2026-09-14, and the four rows marked **bound** are what the game does.
+
 A half-caster. Click abilities should feel like real melee — strong individually rather than
 combo-dependent — and the shadow abilities should reward being close and fast.
 
 | Input | Result |
 | --- | --- |
-| `L` / `R` | Melee autos, alternating hands. First auto after reclaiming the shadow hits harder |
-| direction + click | **Shadow control** — send it, swap to it, recall it |
-| `shift` + click | Executioner, Guillotine lotus, Deadly mistake |
-| `space` + direction | **Shadow dash.** The dodge places the shadow |
+| `L` | **Slash** — the melee auto. The shadow throws it too, a beat later, for a quarter. **Bound** |
+| `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. **Bound** |
+| `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
+| `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
+| `shift` + forward, anywhere else | The ordinary dodge |
+| — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 
-Putting shadow control on the directional basics is what makes the class read as a
-half-caster: the shadow is steered with the same inputs that other classes use for basic
-attacks.
+**The mechanic is on the mouse and the melee is on the key.** That is the whole of what is
+unusual here, and it reads as an exception to the grammar when it is the opposite — it is
+sentence six of it, applied:
+
+> **The mouse means *where*.**
+
+Sending the shadow is the only thing in this kit the crosshair aims. It is a grounded cast:
+you point at a patch of floor and the second body goes and stands there, and where you put it
+is the decision the whole class is made of. That wants the hand already doing the pointing.
+
+Executioner does not care where anything is — it is a swing off the body, yaw from the facing
+and pitch from the camera — so it can live on a key, and it does. Four of the six classes get
+the ordinary arrangement for free by having a mechanic with nothing to aim; this one had to be
+told.
+
+It was the other way round for a day, with Executioner on right click and the shadow on `E`,
+and the argument against that is not on paper: placing something with the hand that is not
+holding the mouse means committing to a spot you are about to stop looking at.
+
+**The dodge is the mobility.** Shift plus a direction is the universal defensive option on
+every class, and on this one, pointed at the shadow and thrown forward, it is also the way
+to the shadow. One input, and the mouse chooses which. That is what keeps the class from
+being denied either half.
 
 ## Elementalist and Blood mage
 
@@ -452,25 +714,33 @@ differentiation.
 
 | Input | Result |
 | --- | --- |
-| `L` | Ranged bolt auto |
+| `L` | Ranged auto — a beam along the crosshair, and whatever it meets first |
 | `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
 | direction + click | Fissure, Quake, Ice blast |
 | `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |
 
 ### Blood mage
 
+Current as of 2026-09-12, and the four rows marked **bound** are what the game does.
+
 | Input | Result |
 | --- | --- |
-| `L` | Melee auto with lifesteal |
-| `R` | **Rend.** Press again to reactivate — the signature second decision |
-| direction + click | Cripple, Black spike, Affliction |
-| `shift` + click | Reaper's debt, Seal of the unforgiven |
+| `L` | **Bloodletter** — the auto. A blade out to a fixed distance and back, cutting on both passes and paying out on the catch. **Bound** |
+| `shift` + `L` | **Rend** — the committed melee rake. **Bound** |
+| `Q` | **Grasp** — four arms out in a cone that arc inward to converge; all four roots. **Bound** |
+| `E` | **Black spike** — a spike in a draining, slowing field, placed at long range. **Bound**, and the one place in the game where the mechanic key is an ability rather than a state change |
+| direction + click | Cripple, Affliction, and the reactivating projectile Rend was meant to be |
+| the seals | Unplaced. Seal of the unforgiven wants a button of its own and there is not an obvious one |
+
+Every bound ability costs health on the press and returns a share of its damage on the hit.
+That is the class mechanic, and it is the only class with a cost in the move table.
 
 ## Open questions
 
-- **`q` and `e`.** Currently unused. Twenty inputs is already more than a prototype needs, so
-  they stay free. If `M` and `LR` prove unreliable, `q` and `e` are the natural replacements
-  — they are fast, adjacent to WASD, and cost no finger travel.
+- ~~**`q` and `e`.** Currently unused.~~ **Answered 2026-09-11**: they are the class special
+  and the class mechanic, and the reasoning is in
+  [Why the special and the mechanic left the mouse](#why-the-special-and-the-mechanic-left-the-mouse).
+  `q` is free again on the Champion specifically, whose three clicks are its three weapons.
 - **Does `s` + click mean "low attack" or "defensive option"?** It should mean one thing
   across all classes. Low attack is the platform-fighter convention.
 - **Camera-relative or character-relative direction?** Determines whether `a`/`d` really do

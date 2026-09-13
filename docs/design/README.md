@@ -5,7 +5,8 @@ Everything currently decided, proposed, or parked, in one place. This supersedes
 
 **Start here:** [combat kernel](combat-kernel.md) → [controls](controls.md) →
 [ability spec](ability-spec.md) → a class kit. For implementation, see
-[architecture](architecture.md).
+[architecture](architecture.md); before touching anything that is *pointed at
+something*, see [aiming](aiming.md).
 
 ---
 
@@ -37,7 +38,13 @@ for a read.
 
 **Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Now: *click = attack, shift +
 click = the committed version, shift + direction = dodge, WASD = move, space = jump, `Q` = the
-class special, `E` = the class mechanic, mouse = where.* Was: *click = attack, shift =
+class special, `E` = the class mechanic, mouse = where.* `E` is usually an instant state
+change; on three classes the mechanic is an ability instead, because pressing it is not free —
+the Blood mage's since 2026-09-12 and the Dual mage's since 2026-09-13, both because their
+mechanic has no state to toggle, and the Reaver's because moving a second body across the
+arena takes frames and does damage. Hers then went to **right click**, because it is aimed
+and the mouse means where, which makes the Reaver the one class where `E` carries something
+that is not the mechanic. Was: *click = attack, shift =
 ability, WASD = move, space = move more, shift beats WASD.* The last two did not survive
 contact with the sandbox. **Space now always jumps** — a vertical takeoff and nothing else —
 and **shift plus a direction dodges**. Space plus a direction used to dodge, which meant
@@ -61,11 +68,11 @@ poke is a design choice in a closed arena, not a gap.
 
 | Class | Mechanic — what abilities spend | Primary buttons | State |
 | --- | --- | --- | --- |
-| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position | `L`/`R` melee autos | Strong |
-| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` bolt · `R` Raise | Strong |
-| [Blood mage](kits/blood-mage.md) | Health | `L` auto · `R` Rend | Decent |
-| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto | Reworked |
-| [Champion](kits/champion.md) | Rush charge, and which form you end in | `L`/`M`/`R` = sword/hammer/spear | Reworked |
+| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Lotus · `E` Executioner | Rebuilt |
+| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Raise | Strong |
+| [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
+| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto · `Q` Judgement · `E` Sweep | Kit built |
+| [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear · `E` Rush | Rebuilt |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
 | ~~Gatekeeper~~ | — | — | Retired |
 
@@ -81,6 +88,7 @@ few enough to balance and to read in third person.
 | [combat-kernel.md](combat-kernel.md) | No cooldowns, TTK, what that breaks | Decided |
 | [controls.md](controls.md) | Input grammar, per-class schemes | Proposed |
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
+| [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
 | [stun.md](stun.md) | What happens to whoever got hit, and why combos have a window | Decided |
 | [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
@@ -88,7 +96,9 @@ few enough to balance and to read in third person.
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
+| [monsters.md](monsters.md) | The Ridgeback: the ride, the control algorithm, measuring the fight | Proposed, built |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
+| [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -107,12 +117,12 @@ Nothing here blocks a prototype.
 | **Tumble and teching** | ⚠️ **Newly open.** [Stun](stun.md) shoves people now; past some knockback a victim should hit the ground rather than land on their feet, with a timed input to recover. Wants the arena and the aerial game settled first |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
 | **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
-| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers |
+| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. Whether the finisher stays on `Q` or moves to `M`, and what `shift` + right click should be once an ability has two forms |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush |
-| Shadow Reaver | Whether the shadow has collision |
-| Elementalist | Structure cap of three is a readability guess, not a balance one |
-| Blood mage | Health cost flat or percentage |
+| Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
+| Elementalist | Structure cap of three is a readability guess, not a balance one. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them |
+| Blood mage | Health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
 
 ## 5 · Parked — not slated for initial implementation
 
@@ -130,17 +140,21 @@ character progression.
 
 ## 6 · Implementation
 
-Rust, six crates, simulation as a pure function. See
-[architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, peer-to-peer rollback play works over real UDP, and 198 tests cover
-determinism, combat relationships, stun, camera and animation.
+Rust, eight crates, simulation as a pure function. See
+[architecture.md](architecture.md). All six classes have their mechanic and at
+least three exemplar moves -- ten on the Champion, five on the Dual mage, four
+on the Blood mage and the Shadow Reaver -- there is a monster to fight and
+climb, peer-to-peer rollback play works over real UDP, and the test suite covers
+determinism, combat relationships, stun, aiming, the ride, the camera, kinematics
+and animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
 crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
-crates/anim   Offline animation factory. Never runs in the game.
+crates/anim   Animation factory: recipes, the solver, contact sheets. See animation.md.
+crates/hunt   A scripted hunter, and the report that judges the fight it plays.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
@@ -205,7 +219,10 @@ decision, and belongs in a test.
 
 ## 8 · Next
 
-1. **Play it against a person.** Everything else is downstream of that.
+1. **Play it against a person.** Everything else is downstream of that — and the
+   Ridgeback needs it twice over: whether the climb reads as the fight or as a way
+   to skip it is not a thing the harness can answer. See
+   [monsters.md](monsters.md) §6.
 2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
    whether the 4-frame parry window is findable by a human.
 3. Fill out the kits beyond three moves per class.

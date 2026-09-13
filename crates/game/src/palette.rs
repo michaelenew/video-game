@@ -99,8 +99,15 @@ pub fn toggle(
 }
 
 /// Ask egui what it is currently claiming.
-pub fn sample_focus(mut contexts: EguiContexts, palette: Res<Palette>, mut focus: ResMut<UiFocus>) {
-    if !palette.open {
+pub fn sample_focus(
+    mut contexts: EguiContexts,
+    palette: Res<Palette>,
+    // The hub shares this window and these devices, so it shares the answer to
+    // who owns them. One place decides, or a click lands in two places at once.
+    hub: Res<crate::hub::Hub>,
+    mut focus: ResMut<UiFocus>,
+) {
+    if !palette.open && !hub.open {
         *focus = UiFocus::default();
         return;
     }

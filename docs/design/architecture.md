@@ -13,6 +13,7 @@ crates/sim    Deterministic simulation. Zero dependencies, no floating point.
 crates/net    Rollback session (GGRS) + the headless soak binary.
 crates/view   Presentation logic: interpolation, camera framing, posing. No engine.
 crates/game   Bevy app. Rendering only -- it owns no gameplay state.
+crates/hunt   A scripted player, and the report that measures the fight it plays.
 crates/web    WebAssembly build and the browser frame-data tool.
 ```
 
@@ -153,20 +154,15 @@ small STUN or relay service. Not needed now; worth not being surprised by later.
 **Pose is a pure function of simulation state.**
 
 ```text
-pose = f(action, frames_into_action, speed, grounded, sim_frame)
+pose = f(action, frames into it, distance walked, airtime, turn rate, health)
 ```
 
 No accumulated animation time, no independently ticking player. Rollback
 re-simulates past frames, so anything animating on its own clock pops and slides
-every time a rollback happens. `sim_frame` is part of the snapshot, so driving
-cyclic motion (walk cycles, idle breathing) from it stays deterministic.
-
-**This is the reason primitive standins come before glTF.** Writing transforms by
-hand forces the pure-function shape. Reaching for Bevy's `AnimationPlayer` the way
-the documentation shows -- play a clip, let it advance -- builds exactly the thing
-rollback breaks. When skeletal animation lands, the rule is that the player is
-never allowed to advance itself; its time is set explicitly from simulation state
-every frame.
+every time a rollback happens. Every input above comes out of the snapshot --
+including five fields in `Player` that exist purely for the renderer, because
+**animation state belongs in the snapshot** and a walk cycle or a landing that
+runs off the renderer's own clock slides every time a rollback happens.
 
 One nuance keeps this from being painful: **gameplay-relevant pose must be pure;
 cosmetic smoothing may be renderer-local and is allowed to pop.** A rollback is
@@ -175,44 +171,12 @@ is imperceptible. Blend state does not belong in the snapshot.
 
 A test replays a frame the way a rollback would and asserts the pose is identical.
 
-## The animation factory
-
-`crates/anim` is an **offline** tool. It never runs in the game.
-
-Hand-keyed poses read as a slideshow, because the parts that make motion look
-alive -- an arm trailing the shoulder it hangs from, a swing carrying past its
-target and settling back -- are precisely the parts that are miserable to key by
-hand. They are, however, exactly what a spring-damper produces for free.
-
-So an animation is authored as **a handful of poses and a looseness setting**,
-and the solver fills in everything between them:
-
-```text
-recipe (keys + looseness)  --[springs, offline]-->  a table of poses, one per frame
-```
-
-`cargo run -p anim --bin bake` runs the solver and writes
-`crates/view/src/baked.rs`. **Playback is then an array index by frame**, which
-is why this changes nothing about rollback: `pose = f(state)` still holds, and a
-rollback re-indexes the same table with the same frame and gets the same pose.
-
-Generated Rust source rather than a data file, on purpose: no loader, no asset
-path, no runtime parsing, and a diff shows exactly what changed when an
-animation is retuned.
-
-### Looseness is expressed in frames, not in spring frequency
-
-Each part is described by **lag** (how many frames it runs behind the keys) and
-**ring** (how far it overshoots on arrival, where `1.0` never overshoots).
-
-This is not cosmetic API taste. A damped spring chasing a moving target settles
-into a steady lag of about `2·ring/frequency`. The first pass at this file
-expressed weight as a *low frequency*, which does not mean heavy -- it means
-late. The Bulwark's slam has a 14-frame startup and its silhouette had barely
-moved by frame 5, so there was nothing on screen for the opponent to read while
-they were supposed to be deciding whether to block. **Weight must read as
-follow-through, never as delay.** Splitting lag from ring makes that mistake
-hard to repeat, and two tests pin it.
+The rest of it -- the skeleton, the sign conventions, how a clip is authored,
+what every clip is held to, and the hub -- is in
+[animation.md](animation.md). `crates/anim` generates motion offline and bakes it
+into a table the game reads by index, so playback is an array lookup and
+rollback is unaffected. The game links the crate for one reason: the hub re-runs
+the solver on every edit so a change can be seen immediately.
 
 ## Render interpolation
 
@@ -246,21 +210,29 @@ Three rules hold it together:
 the crosshair is felt immediately even when it cannot be named. Only the focus *position* is
 smoothed, so the camera glides over the character's footsteps instead of jittering with them.
 
-**The eye sits off one shoulder; the aim point does not.** At melee range an opponent stands
-directly behind your own fighter from a centred camera, and raising the camera does not fix
-it — a body is wider than a sightline. So the eye slides sideways while the point at the
-centre of the screen stays on the look axis, straight ahead of the fighter. The offset costs
-nothing in aiming precision; it only moves the character out of the way. It is folded in
-*before* the geometry check, not after — a camera slid sideways after being cleared has not
-been cleared. The test asserts
-the *aim point*, not the camera's own axis, because the two are deliberately different.
+**The eye rides a sphere and the mouse walks it around at a steady rate.** Each zone of the
+aim names a sphere — where it is centred on the fighter, how big it is, and how far the view
+is tilted off the line to its centre — and the eye sits at `tilt - pitch` around it. The
+framing comes from the tilt rather than from the position: the sphere is centred on whatever
+is being framed, so the line to that centre is the radius the eye is standing on, and turning
+the view a fixed angle off it puts that centre at a fixed place on the screen from anywhere
+on the sphere. Nothing is solved, so nothing can fail to be solvable — which three earlier
+versions of this rig all did, each ending with the eye parked against a limit where it
+stopped answering the mouse.
 
-**The camera is not in the snapshot.** Aim reaches the simulation as input, so peers agree on
-gameplay without the camera ever being rolled back.
+**The camera's geometry is in the snapshot; the camera itself is not.** Where the eye *is*
+(`sim::camera`) is simulation state, because the crosshair is the aim and the ray that
+decides where an ability lands starts at the eye. What is *drawn* — the follow smoothing, the
+floor clamp, the occlusion pull-in — stays in `view::camera` and is never rolled back. The
+two differ only when the drawn eye is shoved off the geometric one, which is what makes the
+crosshair an exact reference in the open and a close one with your back to a wall.
 
-Field of view and distance are **settings, not constants** — 58 degrees vertical from seven
-metres is a starting point, not an answer. Bevy's default projection is 45 degrees, which is
-a portrait lens pointed at an arena you are meant to be moving around inside.
+Field of view is a **setting**; the framing has its own. 58 degrees vertical is a starting
+point, not an answer — Bevy's default is 45, a portrait lens pointed at an arena you are
+meant to be moving around inside — but the *framing* is measured against a tuned field of
+view rather than the player's, so widening your view shows more of the arena without moving
+your aim. Camera distance is no longer a setting at all: it is the sphere's radius, and the
+radius decides where the eye is, and the eye decides where your abilities land.
 
 ### The floor is not an obstacle to dodge, it is a surface to rest on
 
@@ -322,30 +294,49 @@ Both blends are smoothstepped rather than linear. The blend swaps the whole rig 
 linear handover makes the camera visibly change its mind at exactly the angles where the player
 is holding the mouse still.
 
-### Why the camera is not in the Oven
+### Why the camera is in the checksum
 
-Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera is
-deliberately outside that rule, and the reason is the checksum: tuning values are folded into
-`World::checksum()` so mistuned peers desync loudly, which is right for anything that decides
-what happens and wrong for anything that decides what you see. Two people playing each other
-must be able to run different fields of view and different camera distances without the match
-falling apart. Those three already live in `settings.conf` per player; the rig's own numbers
-sit beside them in `RigConfig`.
+Every magnitude in the *simulation* is an Oven knob and a test enforces it. The camera sat
+outside that rule for a while, and then inside it but exempt from `oven::hash`, on the
+reasoning that tuning values are folded into `World::checksum()` so mistuned peers desync
+loudly — right for anything that decides what happens, wrong for anything that decides what
+you see. Two people playing each other ought to be able to frame the fight differently.
 
-### The crosshair is not painted at screen centre
+**Revised 2026-09-12, and reversed.** The camera's numbers are hashed like every other number
+that decides what happens.
 
-It is projected from the point the fighter is pointed at, one aim-length ahead — the same
-distance the camera aims at, so the two coincide exactly when facing matches aim.
+What changed is the thing that made the exemption safe. Aiming used to be solved from the
+fighter's own cast origin, so where the eye sat changed nothing about where anything landed.
+But the crosshair is the aim — a grounded ability lands *exactly* where the reticle is — and
+a reticle is the middle of the screen, which is a ray out of the eye. Tracing that ray means
+knowing where the eye is, so the camera's geometry decides where abilities land, so it is a
+gameplay number. Two peers framing the fight differently would place a fire pillar in
+different spots and neither would be wrong, which is the quiet divergence the checksum exists
+to turn into a loud one.
 
-That sounds like a long way round for "draw a cross in the middle", and it is the whole
-point. Facing locks when a move starts and lags while guarding, so for a meaningful fraction
-of every match the camera is pointed somewhere the attack will not go. A reticle nailed to
-the centre would be confidently wrong precisely when the player needs it to be right. This
-one drifts off centre instead, and dims while you are committed.
+The cost is real and worth naming: **camera distance stopped being a personal setting**. It is
+the sphere's radius now, shared and tuned. Field of view survives as a setting only because
+the framing is measured against a tuned field of view of its own, so the player's choice
+changes what is projected and never where the eye is.
 
-A test checks it against `CameraRig` itself rather than against a restatement of the same
-arithmetic: if the rig's aim point and the crosshair's ever diverge, a still crosshair stops
-meaning anything.
+### The crosshair is exactly at screen centre, and that is the aim
+
+It is drawn at the exact middle of the screen, and nothing computes its position.
+
+This section used to describe the opposite — a reticle projected from the point the fighter
+was pointed at, drifting off centre while facing lagged aim — and that was wrong for a reason
+worth keeping written down. **A reticle that moves reads as the aim slipping out of the
+player's hands.** It is the one thing on screen they are deliberately holding still; making it
+the honest indicator of a temporarily-wrong facing traded away the only fixed reference they
+had.
+
+So the middle of the screen is the look direction, by construction: the eye is placed by the
+same two angles the aim is made of, and the camera points straight down them. Everything else
+bends to keep that true. Where a move is aimed is locked when it starts (`Player::aim_at`), so
+a committed attack can travel somewhere the reticle is no longer pointing — that is the
+commitment doing its job, and it is shown by the fighter's own body and animation rather than
+by moving the mark.
+
 
 ## Aim is an input, not a camera read
 
@@ -412,9 +403,11 @@ The Elementalist's structures are a cap-of-three resource owned by her mechanic,
 They were briefly put in the effects array, which looked like reuse and was not. Two things
 came with it, and both were bugs:
 
-A **lifetime they never had.** The fire pillar is gated on having a structure out, so ten
-seconds after raising one the class's own special stopped working, silently, with no way to
-tell why.
+A **lifetime they never had.** The fire pillar used to be gated on having a structure out, so
+ten seconds after raising one the class's own special stopped working, silently, with no way
+to tell why. That gate is gone now — the pillar never needed a structure to exist, let alone
+one still standing — but the structures still have no clock, on the same reasoning: a
+cap-of-three resource is spent by raising a fourth, not by a timer nobody asked for.
 
 A **second list to disagree with.** Being in the array meant the mechanic's slots and the array
 both claimed to know what was standing, which needed a reconciliation pass every frame to keep
@@ -524,7 +517,7 @@ it is describing.
 
 ## The Oven: tuning while it runs
 
-**F7.** Every tuned number in the game — 307 of them — editable in a palette that floats over
+**F7.** Every tuned number in the game — 639 of them — editable in a palette that floats over
 the arena, with a **bake** button that writes them back to the repository and pushes.
 
 Feel work is a loop: change a number, play it, change it again. The loop is only as fast as
@@ -681,6 +674,52 @@ later is a new `Unit` and a new editor widget rather than a rewrite. Animation a
 other half the Oven is eventually meant to hold; today that lives in `crates/anim` and is baked
 offline.
 
+## The creature is a second frame of reference
+
+`sim::monster` adds one thing the simulation did not have: a **moving,
+rotating coordinate frame** that a fighter can stand in. Four decisions follow
+from rollback, and none of them are about monsters.
+
+**Parts are axis-aligned in the creature's own space, not the world's.** That
+is what makes colliding a player with a nine-metre animal the same routine as
+colliding them with the arena: transform the player into body space, resolve
+against boxes by least penetration, transform back. One collision rule, two
+frames of reference, and `arena.rs`'s own arithmetic reused rather than
+paralleled.
+
+**The pose is a pure function and therefore not in the snapshot.** Five scalars
+-- an extra yaw, a pitch, a bob, a tail swing, a head reach -- computed from
+`(action, frames into it)` every tick. This is the same rule the fighters' poses
+already follow, but here it is load-bearing rather than tidy: the pose is what
+riders are standing on, so if it drifted, riders would drift.
+
+**A rider's authoritative position is in body space; their world position is
+derived.** Unmounted it is the other way round. Keeping a world position and
+correcting it for the rotation each frame would work, and it would also
+accumulate the round trip's error into a slow crawl across the creature's back
+-- which the first version did, at about a millimetre a frame.
+
+**The control algorithm is handed a `Quarry`, not a `World`.** Positions,
+velocities, alive, aboard. No buttons, no action state, no frame counters. That
+is not an optimisation; it is the reason "the monster reads your inputs" cannot
+quietly become true later. Its randomness is a `u32` in the snapshot advanced
+only from inside the tick, so a rollback re-rolls the same choices, and GGRS
+SyncTest runs 1200 frames with the creature in the arena.
+
+### One overflow worth remembering
+
+`V3::len` squares its components, and a squared 16.16 value saturates just past
+181. That is ample for a position in a twenty-eight metre arena and useless for
+an **acceleration**: the buck runs into the hundreds of metres per second
+squared, so `len` returned 181 for every one of them, and no move in the game
+ever threw a rider. Saturation is not an error, so nothing said so. `math::big_len`
+squares in `i64` instead.
+
+The general lesson is about the choice `Fx` makes: saturating rather than
+wrapping "degrades into a stuck character instead of a teleport, which is far
+easier to notice". True for positions. For a value that is *compared against a
+threshold*, saturating degrades into a comparison that is quietly always false.
+
 ## Arena geometry
 
 `sim::arena` is a fixed array of axis-aligned boxes resolved along the axis of
@@ -723,7 +762,7 @@ Everything below builds and passes today.
 | Stun: freeze, interrupt, knockback, swell, influence | Every damage source, [stun.md](stun.md) |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 198 tests |
+| Test suites | 453 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |
@@ -735,7 +774,7 @@ Everything below builds and passes today.
 | **Mouse look** | **Third-person camera, camera-relative movement, aimed attacks** |
 | Crosshair | Projected from facing, so it is honest during a committed move |
 | Settings | `~/.config/arena/settings.conf` — sensitivity, field of view, camera distance |
-| **The Oven** | **F7** — 396 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
+| **The Oven** | **F7** — 639 live tuning knobs, searchable, with bake-and-push, each move headed by the key that throws it |
 | Help | `./scripts/help.sh` — generated, and tested against the game's own source |
 | Dev mode | `./scripts/dev.sh` — wireframes, the Oven and the class pickers |
 | Round flow | Knockout, round wins, reset |
@@ -743,9 +782,14 @@ Everything below builds and passes today.
 | Headless screenshots | `./scripts/screenshot.sh` — Xvfb + lavapipe, no GPU needed |
 | **All six classes** | **`game --p1 champion --p2 elementalist`**, or Tab to cycle |
 | Feel harness | `crates/sim/src/tuning.rs`, `tests/feel.rs`, [feel-log.md](feel-log.md) |
+| **The Ridgeback** | **`game --hunt`, or `H`** — ten parts, six moves, per-part armour, poise and a topple |
+| Riding | Mount by landing, move relative to the surface, brace, and get bucked off by acceleration |
+| Fight report | `cargo run -p hunt --bin fight` — a scripted hunter, and the dozen numbers that say whether the fight is any good |
 | Frame table | `cargo run -p sim --bin frametable` — every move, on-block and on-hit |
-| **Animation factory** | **`cargo run -p anim --bin bake`** — F2 toggles baked playback |
-| Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BAKED_ANIM=0` for procedural poses |
+| **Skeleton** | **Sixteen joints, per-class builds, joint limits, two-bone IK** — see [animation.md](animation.md) |
+| **Animation factory** | **`cargo run -p anim --bin bake`**; `--bin preview` draws a clip as a PNG |
+| **Animation hub** | **F9** — every clip, live: timeline, spline editor, joint sliders, save and bake |
+| Repeatable capture | `SHOT_FRAME=N` stops on an exact frame; `BIND_POSE=1` freezes the rig at rest |
 
 Each class has its **class mechanic** and **three exemplar moves** -- a poke, a committed
 move, and a special -- not a finished kit. Enough to find out how the classes feel against
@@ -759,8 +803,9 @@ did**, so every class implemented from here is checked from its first commit.
 1. **Play it against a person.** Everything below is downstream of that. The open
    questions in [feel-log.md](feel-log.md) are written so an answer can be recorded
    against them rather than lost.
-2. **More clips.** Five baked animations cover the shared vocabulary; per-class moves
-   still fall back to procedural poses.
+2. **Mechanic animations.** Throwing the shield, and changing form. They need a clock in
+   the simulation the way attacks have one. The two mechanics that became *moves* -- the
+   Blood mage's Black spike, the Reaver's Send shadow -- already have one, and are animated.
 3. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
 4. **NAT traversal**, when the game leaves the LAN.

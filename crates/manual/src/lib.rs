@@ -65,6 +65,10 @@ pub const SECTIONS: &[Section] = &[
                 "Pick classes. Matched loosely: bulwark, champion, reaver, elementalist, blood, dual.",
             ),
             e(
+                "cargo run -p game -- --hunt",
+                "Start against the Ridgeback instead of each other. H switches either way in game.",
+            ),
+            e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",
                 "Peer-to-peer against someone else. Rollback netcode, no server.",
             ),
@@ -110,7 +114,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword.",
                 "J poke",
             ),
             s(
@@ -120,18 +124,156 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "K or right click",
-                "Guard. The first few frames parry.",
+                "Guard. The first few frames parry. Three classes spend it instead, none of them having a shield to raise: the Champion's spear, the Dual mage's light auto, and the Shadow Reaver's shadow -- hers is the one the crosshair aims, so it goes on the hand doing the aiming.",
                 "K guard",
             ),
             s(
+                "U or middle click",
+                "The third attack button. Only the Champion has one: it is the hammer.",
+                "U third attack",
+            ),
+            s(
                 "Q",
-                "The class special. The fire pillar, the uppercut, the grapple — the move only that class has.",
+                "The class special. The fire pillar, the grapple — the move only that class has. The Champion has none: its three weapons are its three clicks.",
                 "Q special",
             ),
             s(
-                "E or middle click",
-                "The class mechanic. Different on every class: throw the shield, change form, place the shadow, raise a structure.",
+                "E",
+                "The class mechanic. Different on every class: throw the shield, Rush, raise a structure. Three classes put a real ability here instead, with a wind-up you can be punished during — and on the Shadow Reaver it is not even the mechanic, because hers went to right click.",
                 "E mechanic",
+            ),
+        ],
+    },
+    Section {
+        title: "The Champion",
+        blurb: "Three weapons on three clicks, and a dash that changes what all three of them do. The button is the weapon; where your feet are picks the move.",
+        entries: &[
+            s(
+                "Left click",
+                "Sword. Arc across the front. Most damage, least commitment — the move you combo with.",
+                "LMB sword",
+            ),
+            s(
+                "Middle click (or U)",
+                "Hammer. Arc down to the floor. Slow, short, and it staggers — the move you start with.",
+                "MMB hammer",
+            ),
+            s(
+                "Right click",
+                "Spear. A line straight ahead. Longest reach, and it goes over anyone crouching.",
+                "RMB spear",
+            ),
+            e(
+                "In the air",
+                "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
+            ),
+            s(
+                "E",
+                "Rush. A dash on one charge, and it cancels any recovery.",
+                "E rush",
+            ),
+            e(
+                "While rushing",
+                "Sword cuts as you run past without stopping the dash. Hammer is the uppercut — it launches, holds on, and space takes you both higher. Spear stabs, or vaults if you are pointing at the floor.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Dual mage",
+        blurb: "Two forces, one in each arm, and a bar between them. Which button you attack with is which way you drift, and depth is power -- but past a threshold it burns you.",
+        entries: &[
+            s(
+                "Left click",
+                "Dark auto. A punch with the left arm, and a wing that sweeps in from behind you on that side. Moves you darker -- but only if it lands.",
+                "LMB dark auto",
+            ),
+            s(
+                "Right click",
+                "Light auto. The same punch and wing mirrored onto the right arm, and it moves you lighter. There is no guard on this class.",
+                "RMB light auto",
+            ),
+            s(
+                "Shift + left click",
+                "Lance. A line at whatever the crosshair is on. Committed, and it moves you darker whether or not it connects.",
+                "Shift+LMB lance",
+            ),
+            s(
+                "E",
+                "Sweep. Both arms across the whole front. No side of its own, so it pushes you further along whichever way you were already going.",
+                "E sweep",
+            ),
+            s(
+                "Q",
+                "Judgement. The finisher, and it only comes out from deep on the bar.",
+                "Q judgement",
+            ),
+            e(
+                "Getting back",
+                "Landing an auto from the far side is the fast way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Shadow Reaver",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two.",
+        entries: &[
+            e(
+                "The shadow copies you",
+                "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
+            ),
+            s(
+                "Right click",
+                "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it.",
+                "RMB send shadow",
+            ),
+            s(
+                "Q",
+                "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow with right click drags them the length of the arena.",
+                "Q lotus",
+            ),
+            s(
+                "E",
+                "Executioner, the committed melee. Shift + left click throws the same move. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim.",
+                "E executioner",
+            ),
+            e(
+                "Shift + forward",
+                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. Pointed anywhere else it is the ordinary dodge.",
+            ),
+            e(
+                "The leash",
+                "Walk far enough from a shadow standing out on the field and it comes and finds you, cutting on the way. Straying is a decision, not a mistake.",
+            ),
+        ],
+    },
+    Section {
+        title: "Hunting the Ridgeback",
+        blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",
+        entries: &[
+            s(
+                "H",
+                "Hunt the Ridgeback, or go back to fighting each other. Restarts the match either way.",
+                "H hunt",
+            ),
+            e(
+                "Land on it",
+                "There is no mount button. Jump onto the tail, or drop onto its back from a platform, and you are on it.",
+            ),
+            e(
+                "W A S D",
+                "Aboard, these are relative to the surface under your feet. The creature turning turns you with it.",
+            ),
+            e(
+                "Ctrl or C",
+                "Aboard, crouch braces. It multiplies your grip, and it is the only defence up there -- there is no dodge on a back two metres wide.",
+            ),
+            e(
+                "Space",
+                "Leave, carrying whatever the creature was doing with you. The answer to the rear-and-slam, which nothing holds through.",
+            ),
+            e(
+                "The red strip",
+                "The ridge: unarmoured, and out of reach from the ground. Enough damage there puts the creature on its side.",
             ),
         ],
     },
@@ -184,13 +326,18 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "F2",
-                "Toggle baked animation against the procedural poses.",
-                "F2 baked anim",
+                "Freeze the skeleton at rest. Tells a bad clip from a bad rig.",
+                "F2 bind pose",
             ),
             s(
                 "F7",
                 "The Oven: every tuned number in the game, live.",
                 "F7 oven",
+            ),
+            s(
+                "F9",
+                "The animation hub: every clip, editable while it runs.",
+                "F9 animation",
             ),
         ],
     },
@@ -206,7 +353,7 @@ pub const SECTIONS: &[Section] = &[
             s("F3 and F4", "Field of view, 2 degrees a step.", "F3 F4 fov"),
             s(
                 "F5 and F6",
-                "Camera distance, 0.4 m a step.",
+                "Camera distance -- how big the fighter draws, 0.4 m a step.",
                 "F5 F6 camera distance",
             ),
         ],
@@ -235,6 +382,49 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "The animation hub",
+        blurb: "F9. Every clip in the game, editable while it runs. The kinematics are \
+                handled; what you set is poses, when they happen, and the curve between them.",
+        entries: &[
+            e(
+                "clip list",
+                "Grouped by family. A clip nobody has authored says so, and opens anyway.",
+            ),
+            e(
+                "timeline",
+                "Drag a key to move it. Click anywhere else to scrub. The coloured lines on an attack are the last startup, the first active and the first recovery frame.",
+            ),
+            e(
+                "add / delete / mirror key",
+                "Adding takes the pose that was already on screen, so inserting a key never moves anything.",
+            ),
+            e(
+                "copy / paste / paste mirrored",
+                "A walk's second step is the first one mirrored, and so is half of everything else.",
+            ),
+            e(
+                "hold key",
+                "Freeze on the selected key, for posing. Onion draws the keys either side of it.",
+            ),
+            e(
+                "timing out of this key",
+                "The curve between this pose and the next: drag the two handles, or take a preset. Below the floor pulls back before it goes; above the ceiling carries past and returns.",
+            ),
+            e(
+                "reach",
+                "Drag the end of a limb and the joints follow. Level and toe are the two things a foot does on the floor.",
+            ),
+            e(
+                "looseness",
+                "Lag is how many frames behind the keys a part runs; ring is how far it carries past. Weight should read as follow-through, never as delay.",
+            ),
+            e(
+                "save and bake",
+                "Rewrites the recipe file in the shape a person would have written, then re-bakes in a fresh process -- which is also how you find out it compiles.",
+            ),
+        ],
+    },
+    Section {
         title: "Other binaries",
         blurb: "",
         entries: &[
@@ -245,6 +435,22 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "cargo run -p anim --bin bake",
                 "Re-bake the animation clips from their recipes.",
+            ),
+            e(
+                "cargo run -p anim --bin preview -- <clip>",
+                "Draw a clip as a contact sheet PNG, into target/anim-preview. Add --feet for a per-frame table of what each foot is doing, or --all for everything.",
+            ),
+            e(
+                "cargo run -p anim --bin export -- docs/preview/anim.json",
+                "Write the skeletons and every baked frame out as JSON, for the browser bench in docs/preview.",
+            ),
+            e(
+                "cargo run -p hunt --bin fight",
+                "Play a scripted hunt and report on it: how much of what the creature throws can be answered on sight, how long the openings are, how varied its moves are, and how long anyone stays on its back.",
+            ),
+            e(
+                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n>",
+                "The same, with a different class, several seeds, or the play sequence printed move by move.",
             ),
             e(
                 "cargo run -p net --bin soak",
@@ -290,9 +496,14 @@ pub const SECTIONS: &[Section] = &[
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
+            e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(
-                "BAKED_ANIM=0",
-                "Start with procedural poses instead of baked clips.",
+                "SHOT_DIST=<metres>",
+                "Pull the camera in for a capture. The arena default of eleven metres makes a pose unreadable.",
+            ),
+            e(
+                "BIND_POSE=1",
+                "Start with the skeleton frozen at rest, for checking proportions.",
             ),
             e("OVEN=1", "Start with the Oven open."),
             e(
@@ -322,6 +533,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "docs/design/feel-log.md",
                 "What was tried, and what it felt like.",
+            ),
+            e(
+                "docs/design/monsters.md",
+                "The Ridgeback: the fight, the ride, the control algorithm, and how the fight is measured.",
             ),
         ],
     },

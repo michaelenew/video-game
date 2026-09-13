@@ -6,16 +6,22 @@
 //!
 //! See `docs/design/architecture.md` for why the boundary sits where it does.
 
+pub mod aim;
 pub mod arena;
+pub mod bolt;
+pub mod camera;
 pub mod class;
 pub mod curve;
 pub mod effects;
 pub mod fixed;
 pub mod input;
 pub mod math;
+pub mod monster;
 pub mod moves;
 pub mod oven;
+pub mod shadow;
 pub mod state;
+pub mod stones;
 pub mod tuned;
 pub mod tuning;
 
@@ -23,6 +29,7 @@ pub use class::{Class, Mechanic};
 pub use fixed::Fx;
 pub use input::Input;
 pub use math::V3;
+pub use monster::Monster;
 pub use moves::Move;
 pub use state::{PlayerId, World};
 

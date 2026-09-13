@@ -39,16 +39,19 @@ fn main() {
     // end of a match.
     let damages: Vec<i32> = ALL_CLASSES
         .iter()
-        .flat_map(|c| moves::table(*c).map(|m| m.damage))
+        .flat_map(|c| {
+            moves::table(*c)
+                .iter()
+                .map(|m| m.damage)
+                .collect::<Vec<_>>()
+        })
         .collect();
-    let freeze = |d: i32| sim::state::hitlag_frames(d);
     println!(
-        "stun: freeze {}-{}f by damage  |  at death knockback x{} and hitstun x{}  |  influence {}\n",
-        freeze(*damages.iter().min().unwrap()),
-        freeze(*damages.iter().max().unwrap()),
+        "stun: freeze {}-{}f by damage  |  at death knockback x{} and hitstun x{}\n",
+        sim::state::hitlag_frames(*damages.iter().min().unwrap_or(&0)),
+        sim::state::hitlag_frames(*damages.iter().max().unwrap_or(&0)),
         tenths(Fx::ONE.add(t::swell_knockback())),
         tenths(Fx::ONE.add(t::swell_hitstun())),
-        hundredths(t::di_strength()),
     );
 
     for class in ALL_CLASSES {
@@ -72,12 +75,61 @@ fn main() {
             tenths(mob.air_speed),
             tenths(mob.weight),
         );
+        if class.preys_on_the_disabled() {
+            println!(
+                "  x{} damage to anything rooted, staggered, held or toppled",
+                tenths(t::disabled_damage_mul())
+            );
+        }
         println!(
-            "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   notes",
-            "move", "st", "act", "rec", "damage", "on block", "on hit"
+            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} notes",
+            "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "aimed"
         );
-        for m in moves::table(class) {
+        for (slot, m) in (0..moves::slots(class)).map(|slot| (slot, moves::get(class, slot as u8)))
+        {
             let mut notes = Vec::new();
+            // A move with no volume of its own has no frame advantage worth
+            // printing: those columns are all about what connecting is worth,
+            // and this one never connects. Two kinds -- the ones that put
+            // something in the world and let it do the hitting, and the
+            // Champion's pole vault, which puts nothing anywhere.
+            if !m.strikes() {
+                // A move with no volume of its own has its hit delivered by
+                // whatever it put in the world, and not every one of those can
+                // carry a grab. Saying which is the difference between a table
+                // that is incomplete and a table that is wrong: the knob is in
+                // the palette, it can be turned, and on most of them nothing
+                // would happen.
+                let ignored = match (m.grabs > 0, sim::effects::EffectKind::from_code(m.effect)) {
+                    (false, _) => "",
+                    (true, Some(kind)) if kind.seizes() => "; grabs once every arm lands",
+                    (true, _) => "; grab ignored -- the effect delivers the hit",
+                };
+                let what = if m.shape.strikes() {
+                    format!("places something; the thing it placed hits{ignored}")
+                } else {
+                    format!("movement, no hitbox{ignored}")
+                };
+                println!(
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} {what}",
+                    moves::binding(class, slot),
+                    m.name,
+                    m.startup,
+                    m.active,
+                    m.recovery,
+                    "--",
+                    "--",
+                    "--",
+                    // Still printed, and it matters more here than anywhere:
+                    // the whole question about a move that places something is
+                    // *where*, and this column is the answer.
+                    m.aim().name(),
+                );
+                continue;
+            }
+            if m.rehit > 0 {
+                notes.push("re-hits");
+            }
             if m.unblockable {
                 notes.push("unblockable");
             }
@@ -96,15 +148,35 @@ fn main() {
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
+            // The Blood mage's whole economy, and the only class it applies to.
+            let blood = if m.cost > 0 {
+                format!("costs {} health, returns {}%", m.cost, m.leech)
+            } else {
+                String::new()
+            };
+            if !blood.is_empty() {
+                notes.push(&blood);
+            }
+            // On-hit means nothing for a move that is still swinging when it
+            // lands again, so it is left blank rather than printed wrong.
+            let on_hit = if m.rehit > 0 {
+                "--".to_string()
+            } else {
+                format!("{:+}", m.on_hit())
+            };
             println!(
-                "  {:<16}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>+8}   {}",
+                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}  {:<10} {}",
+                moves::binding(class, slot),
                 m.name,
                 m.startup,
                 m.active,
                 m.recovery,
                 m.damage,
                 m.on_block(),
-                m.on_hit(),
+                on_hit,
+                // Which line of effect it uses, so "where does this actually
+                // go" is answerable from the table rather than from the source.
+                m.aim().name(),
                 notes.join(", ")
             );
         }
@@ -113,18 +185,8 @@ fn main() {
 
     println!(
         "On block is the safety number: negative means punishable, and every move\n\
-         should be. Hitstun and knockback are what the move does to someone at full\n\
-         health; both swell as a fighter takes damage, which is what opens a combo\n\
-         window in the middle of a round and closes it again by the end. See\n\
-         docs/design/stun.md. Record what you change in docs/design/feel-log.md."
+         should be. Record what you change in docs/design/feel-log.md."
     );
-}
-
-/// Two decimal places. The stun family has numbers small enough that one place
-/// rounds them to nothing, and "influence 0.3" would be a different knob.
-fn hundredths(v: Fx) -> String {
-    let h = (v.raw() as i64 * 100 + (1 << 15)) >> 16;
-    format!("{}.{:02}", h / 100, (h % 100).abs())
 }
 
 /// One decimal place, without touching floating point.
