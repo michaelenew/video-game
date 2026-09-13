@@ -63,6 +63,11 @@ a thing the player sets deliberately and can read off her own animation.
 | Light auto (`R`) | Light, and she is now light | 5 |
 | Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 12 |
 
+All of it **on the press**, whether or not it connects — see the note under "Autos are the
+steering wheel". And she is **always carrying one of the two**, dark to begin with: a vessel
+holding two forces is holding one of them at any moment, and the version where she carried
+neither until her first auto landed meant the first key pressed in a match did nothing.
+
 Two tiers rather than a number per ability. "Stronger abilities push harder" was a formula
 over damage, which meant a knob nobody could find and a finisher that pushed about as hard as
 a poke; two numbers, both in the Oven, are legible and are what a tuning pass can actually
@@ -91,13 +96,24 @@ being asserted.
 
 ### Autos are the steering wheel
 
-The autos are dark (left) and light (right), and **they change your mode on contact**. A
-whiff steers nothing, so steering requires landing hits — and since 2026-09-13 they are the
-*only* thing that picks a side at all. See the section above.
+The autos are dark (left) and light (right), and they are the *only* thing that picks a side
+at all — see the section above.
 
-**Autos have a slight range boost**, powered by the beings inside. That is mechanical, not
-decorative: if steering depends on connecting, the class needs the reach to steer while
-under pressure.
+> **"A whiff steers nothing" is suspended, 2026-09-13.** It read well and it was unplayable.
+> With the autos steering only on contact and every cast taking its direction from the last
+> auto that *landed*, a mage with nothing in reach could press every button on the class and
+> watch the bar sit at zero — no target, no mechanic. Steering happens on the **press** now.
+>
+> **And it stays suspended — decided from play, 2026-09-13.** The obvious way to get the idea
+> back was a bonus for landing: the press moves you, connecting moves you again. Played
+> against, it turned out not to be needed. **Managing a frail character at short-to-mid range
+> while balancing the bar is already the challenge** — the pull toward melee comes from her
+> reach and her health, not from a second rule about where the resource moves. Steering is one
+> rule: throw something, the bar moves.
+
+**Autos have a slight range boost**, powered by the beings inside. That is mechanical rather
+than decorative in a different way now that steering no longer depends on connecting: the
+reach is what lets a fragile body trade at all.
 
 **Steering is not optional.** You cannot cast without moving the bar, and you cannot move the
 bar without committing to a side. An earlier draft put the direction choice on a tap-versus-

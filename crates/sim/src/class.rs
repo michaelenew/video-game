@@ -136,9 +136,12 @@ impl Class {
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
             Class::BloodMage => Mechanic::Blood,
+            // Dark to start, which is arbitrary between two symmetric forces
+            // and is not nothing: one click of the other button changes it, and
+            // the bar says which one she is in from the first frame.
             Class::DualMage => Mechanic::Meter {
                 value: 0,
-                colour: None,
+                colour: Force::Dark,
                 ascending: 0,
             },
         }
@@ -432,13 +435,19 @@ pub enum Mechanic {
     /// bar. See [`Force`] and `docs/design/dual-mage.md`.
     Meter {
         value: i32,
-        /// Which force she is carrying, set by the last auto that **landed**.
+        /// Which force she is carrying, set by the last auto she **threw**.
         ///
         /// It is not the same question as which side of the bar she is on, and
         /// that is the point: she can be deep in the dark and still light,
-        /// having just landed one light auto, and her casts are light until she
-        /// lands a dark one. `None` until the first auto connects.
-        colour: Option<Force>,
+        /// having just thrown one light auto, and her casts are light until she
+        /// throws a dark one.
+        ///
+        /// **Always one of the two, never neither.** A vessel holding two
+        /// forces is holding one of them at any moment, and the alternative --
+        /// carrying nothing until the first auto -- meant her casts had no
+        /// direction to push in and the first key a player pressed in a match
+        /// did nothing at all.
+        colour: Force,
         /// Frames of ascension left. Non-zero means the bar was driven to an
         /// end and she is burning through it on a clock.
         ascending: u16,
