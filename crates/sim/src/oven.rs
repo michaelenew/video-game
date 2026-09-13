@@ -192,11 +192,12 @@ scalars! {
     StoneKnockHanded, "Stones",   "Knock handed on (x)",        Fixed,   0,         fx(1,1);
     StoneKnockDamp,   "Stones",   "Knock damping (x)",          Fixed,   0,         fx(1,1);
     StoneFriction,    "Stones",   "Ground friction (x)",        Fixed,   0,         fx(1,1);
-    MonsterScale,     "Ridgeback","Size (x)",                   Fixed,   fx(1,2),   fx(2,1);
+    MonsterScale,     "Ridgeback","Size (x)",                   Fixed,   fx(1,2),   fx(3,1);
     MonsterHealth,    "Ridgeback","Health",                     Int,     500,       30000;
-    LimbHealth,       "Ridgeback","Limb health",                Int,     100,       6000;
-    MonsterMargin,    "Ridgeback","Keep-out from the wall",     Fixed,   0,         fx(10,1);
+    LimbHealth,       "Ridgeback","Foot health",                Int,     100,       6000;
+    MonsterMargin,    "Ridgeback","Keep-out from the wall",     Fixed,   0,         fx(12,1);
     MonsterWalk,      "Ridgeback","Walk speed",                 Fixed,   0,         fx(20,1);
+    GallopSpeed,      "Ridgeback","Gallop speed",               Fixed,   fx(1,1),   fx(30,1);
     MonsterBack,      "Ridgeback","Backing-off speed",          Fixed,   0,         fx(12,1);
     MonsterAccel,     "Ridgeback","Walk acceleration",          Fixed,   fx(1,1),   fx(40,1);
     ProwlRange,       "Ridgeback","Preferred distance",         Fixed,   fx(1,1),   fx(20,1);
@@ -204,7 +205,7 @@ scalars! {
     TurnRateMax,      "Ridgeback","Turn rate cap (turns/s)",    Fixed,   fx(1,100), fx(2,1);
     TurnGain,         "Ridgeback","Turn gain",                  Fixed,   fx(1,10),  fx(10,1);
     TurnAccel,        "Ridgeback","Turn acceleration",          Fixed,   fx(1,100), fx(10,1);
-    TurnHurt,         "Ridgeback","Turn on a broken leg (x)",   Fixed,   0,         fx(1,1);
+    TurnHurt,         "Ridgeback","Turn per broken leg (x)",    Fixed,   0,         fx(1,1);
     TurnSettle,       "Ridgeback","Turn bleed-off, committed",  Fixed,   0,         fx(1,1);
     GlanceFrames,     "Ridgeback · mind","Frames between glances", Frames, 1,       90;
     Lead,             "Ridgeback · mind","Lead on the target (x)", Fixed,  0,       fx(2,1);
@@ -217,40 +218,38 @@ scalars! {
     PoiseMax,         "Ridgeback","Poise",                      Int,     50,        5000;
     PoiseRegen,       "Ridgeback","Poise regained per frame",   Int,     0,         60;
     ToppleFrames,     "Ridgeback","Topple length",              Frames,  30,        600;
-    ToppleFall,       "Ridgeback","Topple, going down",         Frames,  1,         120;
-    ToppleRise,       "Ridgeback","Topple, getting up",         Frames,  1,         180;
-    TopplePitch,      "Ridgeback · pose","Topple pitch",        Fixed,   fx(-1,4),  fx(1,4);
-    ToppleDrop,       "Ridgeback · pose","Topple drop",         Fixed,   0,         fx(3,1);
+    StumbleFrames,    "Ridgeback","Stumble length",             Frames,  20,        300;
     FlinchFrames,     "Ridgeback","Flinch length",              Frames,  1,         90;
-    FlinchPitch,      "Ridgeback · pose","Flinch pitch",        Fixed,   0,         fx(1,8);
     FlinchThreshold,  "Ridgeback","Damage that flinches it",    Int,     1,         2000;
     VulnHead,         "Ridgeback · hide","Head (x damage)",     Fixed,   0,         fx(3,1);
     VulnNeck,         "Ridgeback · hide","Neck (x damage)",     Fixed,   0,         fx(3,1);
+    VulnNape,         "Ridgeback · hide","Nape (x damage)",     Fixed,   0,         fx(4,1);
+    VulnShoulder,     "Ridgeback · hide","Shoulders (x damage)",Fixed,   0,         fx(3,1);
     VulnBarrel,       "Ridgeback · hide","Barrel (x damage)",   Fixed,   0,         fx(3,1);
-    VulnRidge,        "Ridgeback · hide","Ridge (x damage)",    Fixed,   0,         fx(3,1);
+    VulnRidge,        "Ridgeback · hide","Ridge (x damage)",    Fixed,   0,         fx(4,1);
+    VulnHaunch,       "Ridgeback · hide","Haunch (x damage)",   Fixed,   0,         fx(3,1);
     VulnTail,         "Ridgeback · hide","Tail (x damage)",     Fixed,   0,         fx(3,1);
+    VulnTailMid,      "Ridgeback · hide","Tail, middle (x damage)", Fixed, 0,       fx(3,1);
     VulnTailTip,      "Ridgeback · hide","Tail tip (x damage)", Fixed,   0,         fx(3,1);
-    VulnForeleg,      "Ridgeback · hide","Foreleg (x damage)",  Fixed,   0,         fx(3,1);
-    VulnHindleg,      "Ridgeback · hide","Hindleg (x damage)",  Fixed,   0,         fx(3,1);
-    BiteDraw,         "Ridgeback · pose","Bite, head drawn back", Fixed, 0,         fx(3,1);
-    BiteReach,        "Ridgeback · pose","Bite, head thrown",   Fixed,   0,         fx(5,1);
-    BiteRear,         "Ridgeback · pose","Bite pitch",          Fixed,   0,         fx(1,8);
-    StompLift,        "Ridgeback · pose","Stomp, front lifted", Fixed,   0,         fx(1,8);
-    StompDrop,        "Ridgeback · pose","Stomp, front dropped",Fixed,   0,         fx(1,8);
-    StompBob,         "Ridgeback · pose","Stomp, body dropped", Fixed,   0,         fx(3,1);
-    SweepWind,        "Ridgeback · pose","Sweep windup",        Fixed,   0,         fx(1,4);
-    SweepSwing,       "Ridgeback · pose","Sweep swing",         Fixed,   0,         fx(1,4);
-    SweepCounter,     "Ridgeback · pose","Sweep counter-rotation (x)", Fixed, 0,    fx(1,1);
-    ChargeLean,       "Ridgeback · pose","Charge lean",         Fixed,   0,         fx(1,8);
-    ChargeGallop,     "Ridgeback · pose","Charge gallop cycles",Int,     1,         30;
-    ChargeBounce,     "Ridgeback · pose","Charge gallop height",Fixed,   0,         fx(2,1);
-    SlamRear,         "Ridgeback · pose","Slam, reared",        Fixed,   0,         fx(1,4);
-    SlamRise,         "Ridgeback · pose","Slam, body lifted",   Fixed,   0,         fx(4,1);
-    SlamDip,          "Ridgeback · pose","Slam, front driven down", Fixed, 0,       fx(1,8);
-    ShakeCycles,      "Ridgeback · pose","Shake cycles",        Fixed,   fx(1,2),   fx(12,1);
-    ShakeYaw,         "Ridgeback · pose","Shake yaw",           Fixed,   0,         fx(1,4);
-    ShakePitch,       "Ridgeback · pose","Shake pitch",         Fixed,   0,         fx(1,8);
-    ShakeRamp,        "Ridgeback · pose","Shake ramp (x)",      Fixed,   0,         fx(1,1);
+    VulnLeg,          "Ridgeback · hide","Upper leg (x damage)",Fixed,   0,         fx(3,1);
+    VulnFoot,         "Ridgeback · hide","Foot (x damage)",     Fixed,   0,         fx(3,1);
+    LegDrop,          "Ridgeback · legs","Corner drop per break", Fixed, 0,         fx(2,1);
+    LegPitch,         "Ridgeback · legs","Pitch per break",     Fixed,   0,         fx(1,8);
+    LegRoll,          "Ridgeback · legs","Roll per break",      Fixed,   0,         fx(1,8);
+    LegFold,          "Ridgeback · legs","Broken leg, knee fold", Fixed, 0,         fx(1,4);
+    LegBuckle,        "Ridgeback · legs","Broken leg, hip share (x)", Fixed, 0,    fx(2,1);
+    LegSpeedHurt,     "Ridgeback · legs","Speed per break (x)", Fixed,   0,         fx(1,1);
+    StrainDecay,      "Ridgeback · nerve","Strain bled per frame (%)", Percent, 1,  50;
+    CcStrain,         "Ridgeback · nerve","Strain to feel control", Int,  50,        6000;
+    InterruptStrain,  "Ridgeback · nerve","Strain to interrupt",    Int,  50,        9000;
+    StrainDesperation,"Ridgeback · nerve","Thresholds fall by (%)", Percent, 0,      95;
+    CcSlowBite,       "Ridgeback · nerve","Slow it actually feels (x)", Fixed, 0,    fx(1,1);
+    CcRoot,           "Ridgeback · nerve","Root, per grab frame (x)",  Fixed, 0,     fx(2,1);
+    CcStumble,        "Ridgeback · nerve","Stumble per launch (frames/mps)", Fixed, 0, fx(30,1);
+    ShakeForce,       "Ridgeback · pose","Shake force (x)",     Fixed,   0,         fx(3,1);
+    GaitStride,       "Ridgeback · pose","Stride length",       Fixed,   fx(1,2),   fx(12,1);
+    BreathRate,       "Ridgeback · pose","Breath per frame",    Int,     1,         2000;
+    HeadTrack,        "Ridgeback · pose","Head tracking (turns)", Fixed, 0,         fx(1,4);
     MountSnap,        "Riding",   "Landing reach",              Fixed,   fx(1,20),  fx(2,1);
     EdgeGrace,        "Riding",   "Overhang allowed (x body)",  Fixed,   0,         fx(2,1);
     Grip,             "Riding",   "Grip (m/s2)",                Fixed,   fx(20,1),  fx(2000,1);
@@ -258,8 +257,10 @@ scalars! {
     ThrowKick,        "Riding",   "Thrown, outward",            Fixed,   0,         fx(30,1);
     ThrowLift,        "Riding",   "Thrown, upward",             Fixed,   0,         fx(30,1);
     ThrowStun,        "Riding",   "Thrown, frames helpless",    Frames,  0,         90;
+    ThrowDamage,      "Riding",   "Thrown, damage taken",       Int,     0,         400;
     MountSettle,      "Riding",   "Frames to plant your feet",  Frames,  1,         30;
     RiderSpeed,       "Riding",   "Walk speed aboard (x)",      Fixed,   fx(1,10),  fx(1,1);
+    LeapCarry,        "Riding",   "Momentum a leap can carry",  Fixed,   0,         fx(40,1);
     MonsterSpawn,     "Ridgeback","Spawns this far out",        Fixed,   0,         fx(14,1);
     HunterSpawn,      "Ridgeback","Hunters start this far out", Fixed,   0,         fx(14,1);
     StepUp,           "Riding",   "Step you can walk up",       Fixed,   0,         fx(2,1);
@@ -277,14 +278,24 @@ scalars! {
     FireBoltStagger,   "Elementalist", "Fire bolt stagger",                 Frames, 0,        90;
     FireBoltBlockstun, "Elementalist", "Fire bolt blockstun",               Frames, 0,        90;
     FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
+    CataclysmConeCos,  "Elementalist", "Cataclysm blast cone (cos)",        Fixed,  fx(-1,1), fx(1,1);
+    CataclysmBlastRadius, "Elementalist", "Cataclysm blast radius",         Fixed,  fx(1,1),  fx(15,1);
+    TornadoSpeed,      "Elementalist", "Fire tornado speed",                Fixed,  fx(1,1),  fx(40,1);
+    TornadoPullRadius, "Elementalist", "Fire tornado pull radius",          Fixed,  fx(1,1),  fx(15,1);
+    TornadoPull,       "Elementalist", "Fire tornado pull (m/s2)",          Fixed,  0,        fx(100,1);
+    TornadoDamage,     "Elementalist", "Fire tornado tick damage",          Int,    0,        200;
+    TornadoStagger,    "Elementalist", "Fire tornado tick stagger",         Frames, 0,        60;
+    TornadoLife,       "Elementalist", "Fire tornado lifetime",             Frames, 1,        300;
     SpikeHeight,       "Blood mage", "Black spike height",                  Fixed,  fx(1,2),  fx(6,1);
     BloodletterFlight, "Blood mage", "Bloodletter, out and back",           Frames, 10,       180;
     BloodletterRadius, "Blood mage", "Bloodletter radius",                  Fixed,  fx(1,10), fx(2,1);
     GraspFlight,       "Blood mage", "Grasp, arms out and in",              Frames, 6,        120;
     GraspSpread,       "Blood mage", "Grasp, how wide the cone opens",      Fixed,  fx(1,10), fx(6,1);
     GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
-    GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
+    GraspBind,         "Blood mage", "Grasp, held still before the haul",   Frames, 0,        60;
     DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
+    GraspMark,         "Blood mage", "Grasp, aim marker radius",            Fixed,  fx(1,20), fx(1,1);
+    ReelSpeed,         "Defence",  "Grab haul speed",                       Fixed,  fx(1,1),  fx(80,1);
     RushSpeed,        "Champion", "Rush speed",                 Fixed,   fx(1,1),   fx(40,1);
     RushFrames,       "Champion", "Rush length",                Frames,  1,         60;
     RushRecharge,     "Champion", "Rush recharge",              Frames,  0,         240;
@@ -301,6 +312,13 @@ scalars! {
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
     WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
+    WingTip,           "Dual mage", "Wing, the tip as a share of the span",  Fixed,  0,        fx(1,1);
+    WingTipper,        "Dual mage", "Wing, tip damage (x)",                  Fixed,  fx(1,1),  fx(3,1);
+    MeterAutoPush,     "Dual mage", "Meter, an auto moves",                  Int,    0,        100;
+    MeterCastPush,     "Dual mage", "Meter, a cast moves",                   Int,    0,        100;
+    AscensionFrames,   "Dual mage", "Ascension, how long",                   Frames, 1,        600;
+    AscensionDrain,    "Dual mage", "Ascension, health a frame",             Int,    0,        100;
+    AscensionStun,     "Dual mage", "Ascension, stun on the way out",        Frames, 0,        120;
     ShadowTrail,      "Reaver",   "Shadow trails her by",       Fixed,   0,         fx(4,1);
     ShadowFollow,     "Reaver",   "Shadow catch-up per frame",  Fixed,   fx(1,100), fx(1,1);
     ShadowLag,        "Reaver",   "Shadow copies her this late",Frames,  0,         30;
@@ -319,6 +337,17 @@ scalars! {
     LotusReturn,      "Reaver",   "Lotus, back to the shadow",  Frames,  1,         120;
     LotusReturnDamage,"Reaver",   "Lotus, damage coming home (%)", Percent, 0,      200;
     LotusSlow,        "Reaver",   "Lotus slow (x)",             Fixed,   0,         fx(1,1);
+    // Appended, and they have to be: `tuned::SCALARS` is read by the enum's own
+    // discriminant, so inserting one beside its family would silently give
+    // every knob after it somebody else's baked value. The palette groups by
+    // family rather than by position, so these still show up next to the three
+    // wing knobs above.
+    WingOffside,       "Dual mage", "Wing, ring centre off the punching side (x reach)", Fixed, fx(-1,1), fx(1,1);
+    WingAhead,         "Dual mage", "Wing, ring centre ahead of her (x reach)", Fixed, fx(-1,1), fx(1,1);
+    WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
+    WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
+    MarkDepth,        "Match",    "Spawn marks, depth",         Fixed,   0,         fx(13,1);
+    ComboDecay,       "Stun",     "Swell kept per hit in a string", Fixed, 0,      fx(1,1);
     SwellKnockback,   "Stun",     "Knockback swell at death",   Fixed,   0,         fx(8,1);
     SwellBlow,        "Stun",     "Swell per blow weight",      Fixed,   0,         fx(20,1);
     SwellHitstun,     "Stun",     "Hitstun swell at death",     Fixed,   0,         fx(3,1);
@@ -505,6 +534,11 @@ pub enum MoveField {
     // often a move that keeps hitting is allowed to hit again.
     Arc,
     Rehit,
+    // Appended for the first channelled move. Both are questions the rest of
+    // the row already answers for an ordinary one -- how long it runs, how far
+    // it goes -- asked about the wind-up instead.
+    Channel,
+    ChannelFrom,
 }
 
 impl MoveField {
@@ -532,6 +566,8 @@ impl MoveField {
         MoveField::Aim,
         MoveField::Arc,
         MoveField::Rehit,
+        MoveField::Channel,
+        MoveField::ChannelFrom,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -559,6 +595,8 @@ impl MoveField {
             MoveField::Aim => "Line of effect (0-3)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
+            MoveField::Channel => "Channel, longest hold",
+            MoveField::ChannelFrom => "Channel, reach at no hold",
         }
     }
 
@@ -575,7 +613,7 @@ impl MoveField {
             MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
                 Unit::Flag
             }
-            MoveField::Grabs | MoveField::Rehit => Unit::Frames,
+            MoveField::Grabs | MoveField::Rehit | MoveField::Channel => Unit::Frames,
             MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
             MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
@@ -647,6 +685,8 @@ pub enum MonsterField {
     AimSpan,
     Weight,
     RiderWeight,
+    /// Frames before this move can come back. What makes baiting one worth it.
+    Cooldown,
 }
 
 impl MonsterField {
@@ -673,6 +713,7 @@ impl MonsterField {
         MonsterField::AimSpan,
         MonsterField::Weight,
         MonsterField::RiderWeight,
+        MonsterField::Cooldown,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -699,6 +740,7 @@ impl MonsterField {
             MonsterField::AimSpan => "Bearing tolerance",
             MonsterField::Weight => "Appetite",
             MonsterField::RiderWeight => "Appetite per rider",
+            MonsterField::Cooldown => "Lockout after use",
         }
     }
 
@@ -708,7 +750,8 @@ impl MonsterField {
             | MonsterField::Active
             | MonsterField::Recovery
             | MonsterField::Hitstun
-            | MonsterField::Blockstun => Unit::Frames,
+            | MonsterField::Blockstun
+            | MonsterField::Cooldown => Unit::Frames,
             MonsterField::Damage
             | MonsterField::Follows
             | MonsterField::Weight
@@ -721,6 +764,7 @@ impl MonsterField {
     pub const fn range(self) -> (i32, i32) {
         match self {
             MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 120),
+            MonsterField::Cooldown => (0, 600),
             MonsterField::Hitstun | MonsterField::Blockstun => (0, 90),
             MonsterField::Damage => (0, 900),
             MonsterField::Follows => (0, 2),
@@ -738,11 +782,11 @@ impl MonsterField {
 }
 
 pub const MONSTER_MOVES: usize = 6;
-pub const MONSTER_FIELDS: usize = 22;
+pub const MONSTER_FIELDS: usize = 23;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 214;
+pub const SCALAR_COUNT: usize = 238;
 pub const AIR_FIELDS: usize = 5;
 pub const AIR_COUNT: usize = CLASSES * AIR_FIELDS;
 /// Move storage is packed to each class's own slot count rather than to a
@@ -750,7 +794,7 @@ pub const AIR_COUNT: usize = CLASSES * AIR_FIELDS;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 23;
+pub const MOVE_FIELDS: usize = 25;
 
 // ---------------------------------------------------------------------------
 // The live store

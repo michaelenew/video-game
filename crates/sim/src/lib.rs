@@ -8,6 +8,8 @@
 
 pub mod aim;
 pub mod arena;
+pub mod beast;
+pub mod beast_baked;
 pub mod bolt;
 pub mod camera;
 pub mod class;
@@ -22,6 +24,7 @@ pub mod oven;
 pub mod shadow;
 pub mod state;
 pub mod stones;
+pub mod tornado;
 pub mod tuned;
 pub mod tuning;
 

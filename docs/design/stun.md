@@ -64,6 +64,14 @@ move carries, and it decays while the stun runs.
 Knockback is why a combo eventually stops working, and it is also the reason blocking costs
 space rather than health — the same shove, at a smaller number, applied to a guard.
 
+**A move that both launches and grabs cannot do the two at once.** A held fighter is pinned to
+their captor and has their velocity zeroed every frame, so a launch handed to them on contact
+is overwritten before it moves anything. It waits instead: held, you go where your captor
+goes; let go, and you are thrown. The Champion's uppercut is the move this exists for — its
+kit entry reads *"launch, and hold on"*, and until the launch was banked it did neither, since
+the pair rose on the attacker's own lift and the victim was set back down motionless at the
+top of it.
+
 ### 4 · The swell — damage makes the next hit bigger
 
 This is Smash's percent, in a game whose bar counts down instead of up.
@@ -86,6 +94,23 @@ by the same factor and a jab would become a launcher purely by being thrown late
 Damage is applied **before** the swell is read, exactly as Smash does it. The practical
 consequence is that the killing blow of a round lands with the largest swell there is, so
 the body goes a long way and both players can see the round end.
+
+### And it fades through a string
+
+**Each hit taken without getting a turn back keeps less of the swell than the
+one before it.** The move table's own number is never touched, so a hit always
+holds you for at least what it says; what a combo loses is the bonus the
+victim's accumulated damage was paying.
+
+This is the reason a combo has to end. Distance ends a melee string — the
+victim is thrown out of reach — but a ranged move re-aims at wherever they
+landed, so distance is no answer to it at all. The Elementalist's Cataclysm is
+exactly that case: a skillshot whose swelled stun outran its own fifty-two frame
+cycle, and mashing it linked into itself twice for over half a bar. With the
+swell fading, the second link is gone.
+
+The swell is there to make a round build toward something. It is not there to
+make one read pay four times over.
 
 ### It is a duel mechanic
 
@@ -225,10 +250,9 @@ that sustains through aggression should be easier to launch for it.
 
 ## What is not in yet
 
-- **Stale moves.** Smash weakens a move that has just been used, which is what stops a combo
-  being the same button four times. Worth having; it belongs to damage rather than to stun, and
-  it would be a second answer to the self-loop problem the knockback decay currently handles
-  alone.
+- **Stale moves.** Smash weakens a move that has just been used. The *hitstun* half of that
+  shipped as combo decay above; the damage half did not, so a loop still deals full damage for
+  as long as it runs. Worth having, and it belongs to damage rather than to stun.
 - **Smash directional influence.** Shifting position during the freeze itself, on top of
   steering after it. It is a mashing mechanic, and mashing is the part of Smash's stun system
   least worth copying.
@@ -241,6 +265,23 @@ that sustains through aggression should be easier to launch for it.
   connects, which is what keeps the exchange fair, but its flinch and poise are a separate
   system from hitstun and do not swell with anything. That is the reason the swell has to be
   switched off in a hunt rather than balanced there.
+
+## Where a round starts decides whether any of this can be seen
+
+Worth stating separately, because it cost a session to find and nothing in this document was
+wrong while it was true.
+
+The spawn marks sat eight metres apart on the arena's centre line, and the two platforms stand
+five to nine metres out on either side of exactly that line. So both fighters began with their
+backs flush against a platform. Every shove drove the victim into it, the arena zeroed the
+velocity, and **every move in the game moved the opponent exactly zero metres** — including the
+ones that throw people four metres in open ground.
+
+The marks are seven metres up the arena now, where the platforms are behind you rather than
+beside you and there are ten clear metres to be thrown down. `match.spawn_marks, depth` in the
+Oven, and `a_hit_moves_somebody_from_where_the_round_starts` in `crates/sim/tests/combat.rs`
+holds it: a committed hit has to move somebody more than one body width **from the mark**,
+because the mark is where every session begins and the training dummy never leaves it.
 
 ## Open numbers
 

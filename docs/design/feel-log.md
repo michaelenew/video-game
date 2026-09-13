@@ -880,6 +880,68 @@ across the board**. One name being out of place is a reason to look at all six: 
 (Bulwark, Elementalist, Blood mage, Dual mage) are descriptions and two (Shadow Reaver,
 Champion) are titles, and nobody has decided which register the game is in.
 
+### 2026-09-14 — knockback was invisible, and it was the spawn marks
+**Changed** `match.spawn_marks, depth`, a new knob: the marks move from the arena's centre line
+to seven metres up it.
+
+**Why** Reported: "I'm not getting any knockback on any moves." Measured from the marks, that
+was exactly true — **every move in the game moved the opponent 0.00 m**, the Bulwark's Slam
+included, and that one throws people 4.35 m in open ground.
+
+The marks sat eight metres apart on the centre line and the two platforms stand five to nine
+metres out on either side of it, so both fighters began with their backs flush against one.
+Every shove drove the victim into a wall and the arena zeroed the velocity. Nothing about the
+stun system was wrong; nothing about it could be seen either, which is the worse of the two,
+because the first thing anybody does is walk up to the training dummy on its mark and hit it.
+
+Two test fixtures had the same bug in miniature and had been passing on a coincidence: they
+offset the victim's **x** from the spawn but set **z** absolutely, which is the same thing only
+while the marks are on z = 0.
+
+**Verdict** kept, and pinned. `a_hit_moves_somebody_from_where_the_round_starts` measures a
+committed hit **from the mark** rather than from a convenient patch of floor, because the mark
+is the one place the feature has to work.
+
+### 2026-09-14 — the uppercut could not launch and hold at the same time
+**Changed** A grab banks its move's launch and spends it on release. The Champion's uppercut
+gets `launch` 0 → 10.
+
+**Why** Reported: "the champion uppercut isn't hitting up." Its kit entry reads *"Uppercut —
+launch, and hold on"*, and it did neither: `launch` was zero, and a positive value would not
+have helped, because a held fighter is pinned to their captor by `drag_the_held`, which zeroes
+their velocity every frame. Anything handed to them on contact was overwritten before it moved
+them. The pair went up on the attacker's own `self_lift` and the victim was then set back down
+motionless at the top of it.
+
+So the launch waits. Held, you go where your captor goes; let go, and you are thrown. The
+victim now peaks at 3.9 m against the attacker's 2.2.
+
+**Verdict** kept. Worth knowing while reading the move table: **`launch` is zero on 33 of the
+34 player moves**, the air hammer's spike being the only other one. The launcher half of the
+stun system is almost entirely unused, and that is a kit question rather than a system one.
+
+### 2026-09-14 — combo decay, and two ways of measuring a stunlock
+**Changed** `stun.swell kept per hit in a string`, a new knob at 0.3. Each hit taken without
+getting a turn back keeps less of the swell than the one before it.
+
+**Why** The Elementalist's new Cataclysm linked into itself twice for over half a bar. It is a
+**skillshot**, which is the interesting part: knockback ends a melee string by throwing the
+victim out of reach, and a ranged move simply re-aims at wherever they landed. Distance is no
+answer to it at all, so the only bound left is frames, and its swelled stun outran its own
+fifty-two frame cycle. The decay takes it from two links to one.
+
+The decay touches the swell and never the move table's own number, so a hit always holds you
+for at least what it says it does.
+
+**Verdict** kept — but the more useful half of this entry is what the measurement did. The
+first version counted damage events, which made every multi-hit ability in the game look like a
+stunlock: the Reaver's lotus is six blades from one press and read as a six hit chain. The
+second sampled "still held" when the button went down rather than when the blow connected,
+which counted a swing thrown during hitstun that *arrived* after it — a race, not a link — and
+made the Bulwark's Bash read as a nine hit touch of death it does not have. A repeat now has to
+clear both bars: the damage lands while they are still held, **and** it comes from a later
+press. Two false alarms and one real finding, and the real one was the smallest of the three.
+
 ### 2026-09-13 — stun, and where the combo window sits
 **Changed** Every point of damage now freezes both fighters, interrupts, and shoves, through
 `apply_hit`. Three to eight frames of contact freeze by damage; hitstun and knockback
@@ -2413,3 +2475,346 @@ that ignores the camera's pitch outright. Airborne it tilts with the aim, which 
 **Verdict** open. The specific worries: 151 degrees behind her may be so far back that the
 first half of every auto is wasted on empty air, and a ring with a 0.26 m hole is a shape you
 can beat by standing *on* the mage, which no other melee move in the game rewards.
+
+### 2026-09-13 — the wing opens, the tip pays, and the bar is a bar
+
+Five things on the Dual mage, from playing her.
+
+**The wing is a real section of a torus now, and it opens.** It used to be the section's
+radius sweeping round at a constant width; it is an angle that **grows from nothing to a
+hundred and thirteen degrees** over the active window, with the leading edge coming round
+toward the front. The volume is `math::Sector` — the first thing in the game that is not a
+capsule — and both the hit test and the overlay read it, because a straight line through a
+curve either misses the inside of it or claims the outside.
+
+**Why bother**: the sweeping version read as a blade. An opening one reads as a wing, which is
+the fantasy — the beings inside her extending the movement past where an arm could take it.
+The shape had been carrying that idea and not showing it.
+
+**The last frame is the tip, and it hits 1.75×.** The wing opens to most of its arc and stops
+short; the tip covers the rest and arrives straight ahead on the final frame. So the only
+thing that reaches the point directly in front of her at full extension *is* the tip. That
+makes it a spacing decision rather than a bonus on a frame number — the body of the wing is
+for somebody already on top of you, the tip is for somebody who thought they were out of
+range. The overlay draws it in its own colour, because a decision you cannot see the result of
+is not one anybody learns.
+
+Getting there took one correction worth recording. The first version had the wing reach the
+front on the frame *before* the tip, so a body standing there was caught by the wing and the
+tipper could never land on anybody standing still. Two frames of the shared `swing_progress`
+saturate at the end, which is right for a weapon arriving and wrong for a shape whose last
+frame is meant to be a distinct event; the wing counts its own frames now.
+
+**`Q` stopped being gated.** Judgement needed the bar deep before it would come out, which
+meant the class special did *nothing at all* for the opening of every match — the player
+pressing it could not tell an ability from an empty binding. A special you cannot press is not
+a special. What the gate was protecting has to come back as power rather than availability,
+and that is the next thing this class needs: **nothing scales with depth yet**, which is the
+founding idea of the whole mechanic.
+
+**The bar picks sides differently.** The autos have sides; nothing else does. Landing one sets
+which force she is *carrying*, and every other input is made of that force and pushes the bar
+that way. The old rule — the button that threw it picks the side — could not answer for `Q`
+and `E`, which have no side, and answering "further along the way you were going" made the
+keys feel like they were guessing. Autos move five, casts move twelve; the damage-scaled
+formula that was there before was a knob nobody could find.
+
+**And there is a real bar to look at.** Two-poled, filled out from the centre, deep thresholds
+marked, and its border in the colour of the force she carries — which is deliberately a
+*different* question from which side of the bar she is on. She can be deep in the dark and
+still light, having just landed one light auto, and until she lands a dark one everything she
+casts is light. The number in the mechanic line was unreadable in a fight, and the thing it
+was reporting is what the player steers with every click.
+
+**Ascension is a clock.** It had no exit at all: reaching the end of the bar burned her down
+to one health and went on burning, with no timer, no stun, no reset, and no signal that
+anything had happened. Now driving the bar to either end starts three seconds, drains about
+seventy per cent of a health bar across them, pins the meter, and ends by putting her back at
+the centre staggered. Everything else the design asks of it — the refund on hitting, the
+larger form of every ability, the graduated stun — is still unbuilt. This is the shape, not
+the feature.
+
+**Verdict** open on all five. The specific worries: a hundred and thirteen degrees opening in
+six frames may be too fast to read as an opening at all; the tip may be so much better than
+the body of the wing that spacing for it is the only correct way to throw the move; and an
+ungated finisher with no depth scaling makes centre a perfectly good place to stand, which is
+the thing the whole class is built to punish.
+
+### 2026-09-13 — the bar did not move, and the reason was a rule that reads well
+
+**Reported from play:** "still not getting any movement of the bar with my attacks on dual
+mage." Reproduced in one test — a mage standing where she spawns, eight metres from anybody,
+pressing each of her five buttons five times:
+
+```
+LMB  dark auto   -> meter 0, carrying none
+RMB  light auto  -> meter 0, carrying none
+S+L  lance       -> meter 0, carrying none
+Q    judgement   -> meter 0, carrying none
+E    sweep       -> meter 0, carrying none
+```
+
+Every button on the class, and the mechanic never moved. Two rules, each defensible alone,
+that multiply to nothing:
+
+- **The autos steered on contact only.** With nothing in reach they steered nothing, which is
+  exactly what "a whiff steers nothing" says and exactly what makes it unusable — a player
+  with no target has no way to see the mechanic exist, and neither has anybody tuning it.
+- **Casts took their direction from the force she was carrying, and she carried none** until
+  an auto *landed*. So the casts multiplied by zero as well.
+
+Either one alone would have been survivable. Together they made a class whose entire identity
+is a resource into a class with no resource.
+
+**Changed.** Steering happens on the **press**, for everything, autos included. And she is
+always carrying one of the two forces — dark to start, which is arbitrary between two
+symmetric things and is not nothing.
+
+**What that costs.** "Landing the far-side auto is the fast way back toward centre" is a real
+idea: it is what forced this class into melee exactly when it is deepest and most fragile, and
+it is gone. The obvious replacement was a **bonus for landing** — the press moves you,
+connecting moves you again — which keeps the pull toward melee and still lets a player in an
+empty arena see their own mechanic work.
+
+**The lesson worth keeping** is not about this class. It is that a rule which says *nothing
+happens unless* needs a second rule saying what happens the rest of the time, and both of
+these said "nothing". The test that now guards it does not check a number: it checks that
+**every button on the class moves the bar with nothing in range.**
+
+**Verdict** kept, and **the landing bonus is not being built.** Played against, the pull
+toward melee is already there without it: she is frail, her reach is short to middling, and
+staying in the band where she can trade while watching the bar is enough to manage at once.
+A second rule about where the resource moves would be a rule to learn rather than a decision
+to make. Steering is one sentence now — throw something, the bar moves — and the difficulty
+lives where the player already is, in her body and her spacing.
+
+Depth scaling is still the open hole, and it is a bigger one than this ever was.
+
+### 2026-09-13 — the Grasp is aimed with time, and its catch is a trip
+
+**Changed** three things about Grasp, which together turn it from a ten-metre snare into the
+class's one setup tool.
+
+```
+before   press Q -> arms fly to the move's reach -> anything all four catch is
+         teleported to the caster's arm's length, held 20f, and rooted 40f
+now      hold Q up to 30f -> a marker travels 3 m to 10 m in front of you ->
+         let go and the arms converge where it was -> anything all four catch
+         is bound 10f where it stood, hauled in at 40 m/s, and free the frame
+         the hold ends (26f in total)
+```
+
+**Why the channel.** The move had one range and it was the wrong one most of the time: at ten
+metres it sailed past anybody standing at seven, and there was no way to ask for seven. Range
+wants to be a decision, and the only input left to make it with is *how long the button is
+down* — every other axis of the control scheme is already spent. Holding a cast button is new
+grammar, so it means exactly one thing and the move table carries it: `Channel, longest hold`
+and `Channel, reach at no hold` are two more columns beside `startup` and `reach`, not a
+Blood-mage special case. A second channelled move inherits the whole mechanism.
+
+**The marker is the far end of `aim_path` and nothing else.** It is re-solved every frame of
+the wind-up by the same `sim::aim::skillshot_path` call the released move uses, with the reach
+the hold has bought so far. That is deliberate to the point of being the design: the codebase
+has three separate incidents of a reticle and an ability disagreeing because two pieces of
+arithmetic were kept in step by hand. There is one object here, the renderer reads its `to`,
+and there is nothing to keep in step. The one number that does get stored, `Player::channelled`,
+is the *solved path's length* rather than the reach that was asked for — so a wall in the way
+shortens the marker and the arms identically.
+
+**A channel resolves instead of the countdown, not before it.** The first version ran
+`step_channel` and then fell through to the ordinary input handling, which read the same
+held button, called `begin_move` again, and charged the caster for the ability once per frame
+of the wind-up. `casting_costs_the_blood_mage_health` caught it at 90 health for a 45-health
+move.
+
+**Why the haul.** The old grab put its victim at the caster's arm's length on the frame it
+landed, which reads as the game moving somebody rather than as an ability landing on them. It
+is now a bind — about a sixth of a second where nothing moves at all — and then a trip at
+forty metres a second, which crosses nine metres in fourteen frames. The bind is the part that
+sells it: a pause before the pull is what makes the pull look like a consequence.
+
+**The root came off entirely, and `Player::rooted` went with it.** The catch used to be a hold
+followed by a root, and the root was the longer half. But "the target regains the ability to
+move immediately after the grasp ends" is the trade that makes a hard stop fair, and a root on
+the end of it is the opposite. Nothing else in the game applied a root — the Bulwark's
+soft-control lattice is still unbuilt — so the field, its method, and the three movement gates
+that read it are gone. `disabled()` is now `Stagger | Held`, which is a shorter sentence for
+the same set.
+
+**The whole catch is now shorter than her most expensive cast takes to come out** (26 frames
+against Black spike's 30), and that inverts the old feel test. It used to assert the root
+outlasted her *fastest* move's startup, so there was something to land inside it. It now
+asserts the hold is shorter than her *dearest* move's startup, so there is nothing she can
+start on reaction to it. The ability is for dragging somebody into a spike that is already in
+the ground, and the punishment for a miss is that you paid forty-five health and put nobody
+anywhere.
+
+**One number is load-bearing in a way that is easy to miss.** The hold has to outlast the
+haul: `(26 − 10) frames × 40 m/s ÷ 60 = 10.7 m` against the 9 m a full-range catch has to
+cross. If that slips the other way, a long Grasp drops its victim mid-air halfway home, and it
+fails silently at short range. `a_grasp_always_finishes_hauling_before_it_lets_go` holds the
+four knobs together.
+
+**Verdict** open. The specific worries: half a second of channel may be long enough that a
+competent opponent simply walks out of the cone while watching the marker, which would make
+the move worse at every range than the fixed ten metres was at one. And the pre-commitment the
+design asks for — spike first, then Grasp — depends on the spike being worth casting at nobody
+in particular, which is a question about Black spike rather than about this.
+
+### 2026-09-13 — the wing became a blade, and the tip became a ball
+
+**Changed** the Dual mage's autos, on every axis of their shape. The band: `wing_inner` from
+0.16 of the reach to **0.75**, and `radius` from 0.45 m to **0.2 m**. The ring: reach from
+1.65 m to **2.1 m**, arc from 0.42 turns to **0.22**, and the middle of it moved off her — 0.3
+of the reach toward the *other* arm (`wing_offside`, new) and 0.1 of it forward (`wing_ahead`,
+new). Where it stops: 0.073 turns off her centre line toward the punching hand
+(`wing_finish`, new) instead of dead ahead. And the tip: a **bubble** of `wing_tip_radius`
+(new, 0.5 m) at the foremost point of the ring, instead of the last slice of the section.
+
+**Why** the shape was doing three things it was not meant to be doing, and each one had the
+same root — it was described as a blade and built as a region.
+
+*It was a filled disc.* The band ran from her own elbow (0.26 m) to full range on every frame.
+With the hit test's slack on top — the attack's 0.45 m plus a body's 0.5 m — the hole was
+gone entirely: the volume was a solid 150° wedge two metres across, and every part of it hit
+for the same amount. Nothing about that is a blade. Three quarters out, and a fifth as thick,
+leaves a band that is actually a band: it now comes to 0.91 m off her axis at its nearest,
+which is just past where the fist finishes, and a body still has to be roughly where the blade
+is rather than merely in the same quadrant as it.
+
+*It was a circle drawn round her feet.* The ring was centred on her, so every point of it was
+the same distance away and 150° of it wrapped most of the way around her. Shortening the arc
+alone does not fix that — a short arc on a ring you are standing in the middle of is still a
+piece of a halo. What fixes it is moving the middle: with it 0.63 m toward her other arm and
+0.21 m forward, the blade comes in at 1.5 m beside the punching fist and swings out to 2.1 m
+in front, so the distance from her *changes* along the sweep. Larger radius and a narrower
+angle then make it shallow rather than round. Those three go together; any one of them on its
+own does nothing much.
+
+*Both autos finished in the same place.* The section closed on straight ahead, so the dark and
+light punches — which are told apart by which arm threw them, and that is the entire mechanic
+— ended on the same point of her sternum. It now finishes in front of its own hand: 0.30 m off
+the centre line, where the hand is 0.18 m off it.
+
+*And the "tip" was the widest thing the move had.* It was the last 38° of the section, at full
+radius: metres of arc, catching the whole front of her, easier to land than the wing it was
+meant to be a reward for. It is a ball at the end of the blade now — one frame, half a metre,
+at the one point out in front that the wing deliberately stops short of. The spacing story
+comes out clean: inside about 1.8 m the body of the wing catches you in front, past that only
+the tip does.
+
+**Everything above is a knob**, which is the other half of this change. Four new ones in the
+Oven under *Dual mage* — `wing_offside`, `wing_ahead`, `wing_finish`, `wing_tip_radius` — and
+the three that place the ring (reach, arc, radius) were already per-move. Numbers this
+interdependent cannot be found by arithmetic; they have to be dragged while the move is in the
+air. The one trap is that reach, arc and radius are **two** rows each, one per auto, and
+moving one without the other silently unmirrors the class: `crates/sim/tests/dual_mage.rs`
+fails if that happens, but it fails at the test rather than in the moment.
+
+**The arena draws the band now**, not just its leading edge. That edge used to be a line from
+her elbow to full range, which was a reasonable stand-in for the volume; with the band thin it
+is a half-metre stub out at the rim, and the move went nearly invisible outside the debug
+overlay. `place_wings` lays twelve radial bars along `hitbox.sector` — the same shape the hit
+test reads — so the thing swept past you is the thing that decided whether you were hit.
+
+**Verdict** open, and the numbers above are a starting position rather than an answer. The
+specific worries, in order: 0.22 turns opening over six frames may now be too *little* travel
+to read as an opening at all; the band may be thin enough that the auto whiffs against a
+moving target often enough to make steering the meter frustrating, which would be the one
+failure this class cannot absorb; and a ball tip with a body's radius of slack on it may still
+be more forgiving than a tip should be.
+
+### 2026-09-13 — the Ridgeback, rebuilt
+
+**Changed** the creature is about a third larger and stands four and a half
+metres at the back on long legs; ten welded boxes became an eighteen-bone
+skeleton with eighteen parts, animated through the factory; a second weak point
+(the nape) and four breakable feet; a stumble between the flinch and the topple;
+recent-damage thresholds for crowd control and for interrupts; per-move
+lockouts.
+
+**Why** the fight had three problems a player would name in the first minute.
+The animal read as fifteen cubes glued together, because it *was* — its legs
+never moved. Getting on it was a free action from the tail, so the climb was not
+a decision. And the back was where the fight happened: ride share ran to 70% and
+the ground game was optional.
+
+**The height is in its legs, not its bulk, and that is the whole design.** A
+standing full hop reaches 4.14 m; the back sits at 4.57. So the back is out of
+reach, and the *only* part of the animal a fighter on the floor can touch is its
+feet. That one geometric fact is what turns the ground phase from a chore into a
+route: break a foot and it goes down on a knee for nearly two seconds with its
+shoulders at 2.35 m. Making it *longer* instead would have cost the arena more
+room than it has; making the legs longer cost nothing and produced the ground
+game for free.
+
+**What the harness caught, and what it did not.** `legs broken: 0` sat in the
+fight report through three separate changes to the hunter's station before the
+cause turned up, and the report could not tell the two possible causes apart.
+Adding `damage into feet` and `worst foot` took an afternoon of guessing down to
+one run: the bot was hitting nothing at all. **A level shot from somebody on the
+floor goes under the belly.** The creature is on stilts and the old station was
+three and a half metres out, where there is no creature at that height. A
+measurement that cannot distinguish "never tried" from "tried and failed" is
+worth about as much as no measurement.
+
+**Two animation bugs that were gameplay bugs.** Both are the same shape: the
+grip test reads *acceleration*, so anything that puts a corner in the pose
+throws people.
+
+- The baked table stores samples and reads them back with a lerp, so every join
+  between samples is a corner. At twelve samples per phase a 34-frame shake had
+  three frames between corners and threw braced riders on single frames that had
+  nothing to do with how hard the animal was moving. Thirty-two samples — about
+  one per frame of the longest phase — is now the rule, and the sample count is
+  documented as a balance number rather than a file-size one.
+- The shake's last startup key and its first whip key were both authored exactly
+  on the phase boundary. Two keys at the same instant with different poses are a
+  *step*, and a step is an arbitrarily large acceleration. It threw braced
+  riders off the hips before the shake had started. The design document had
+  already recorded this lesson once, about the old procedural pose, and it was
+  re-learned anyway.
+
+**A third that was neither.** Riders standing where two mountable parts overlap
+ping-ponged between them once a frame — each swap moves the body a few
+centimetres, which the buck reads as an enormous acceleration. The parts overlap
+on purpose (a staircase with gaps is not a staircase), so the fix was in the two
+rules that decide what you are standing on: a tread you could *step onto* is a
+floor rather than a wall, and the step-up probe looks **upward only**.
+
+**Reverted: the slam as a body slam.** Widening its hit volume to a 5.2 m ring
+around the creature so it would reach its own back made standing anywhere near
+it lethal — four slams is a dead fighter — and the scripted hunter died at 37
+seconds having dealt 900 damage. Put back to a front slam, and the rule it was
+trying to buy is now stated the other way round and pinned by a test:
+**nothing the creature throws can reach its own back.** A rider is threatened by
+the buck and by nothing else. That is a better rule than the one it replaced,
+because it is what makes riding a phase with its own vocabulary rather than the
+ground game at a different altitude.
+
+**Reverted: the tail sweep as a mount route.** The tail attaches at 3.6 m on a
+long-legged animal, so no amount of drooping it during the sweep's recovery
+brings its *base* low enough to matter — the sweep's tip goes to the floor and
+the part you stand on does not. The claim came out of the design document. The
+sweep earns its keep a different way: its hitbox is 1.6 m and jumping it needs a
+*held* jump, which is a precision test the tapped hop the bot was doing does not
+pass.
+
+**The thresholds.** `strain` is damage taken recently, decaying a couple of per
+cent a frame, so a burst fills it and a trickle does not. Above one bar the
+creature is susceptible to crowd control, weakened; above a higher one, a hit
+breaks it out of what it is doing, live hitbox included. Both bars fall by up to
+70% as its health does. The intent is the arc of a hunt — methodical while it is
+fresh, frantic once it is not — and the reason it is a threshold rather than an
+immunity is that half of every kit is otherwise dead weight in a hunt, and the
+two halves of the game stop teaching each other anything.
+
+**Verdict** open, and specifically open on three things. Ride share fell from
+around 70% to 17%, which is the change this was most meant to produce, but 17%
+may now be too *little* — the climb is expensive and the reward may not be worth
+the trip. The tail hop has twenty centimetres of margin beside an animal that is
+turning, and it is the only route up that does not have to be earned; it may be
+the only one anyone finds, or it may be too hard to find at all. And the scripted
+hunter now wins five of six where it used to win about half, which is the bot
+getting a second plan rather than the creature getting easier — but a bot that
+wins is a worse measuring instrument than one that does not.

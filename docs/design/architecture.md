@@ -762,7 +762,7 @@ Everything below builds and passes today.
 | Stun: freeze, interrupt, knockback, swell, influence | Every damage source, [stun.md](stun.md) |
 | GGRS integration + SyncTest | Passing over 1200 frames |
 | `LocalSession` readable harness | Passing against ground truth |
-| Test suites | 453 tests |
+| Test suites | 495 tests |
 | Headless soak (`cargo run -p game`) | 3600 frames, 900 rollbacks, converges exactly |
 | Browser frame-data tool | `./crates/web/build-sandbox.sh` |
 | **Bevy prototype** | **`cargo run -p game`** — 3D arena, standins, HUD, debug overlay, local 2P |

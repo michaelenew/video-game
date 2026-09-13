@@ -33,6 +33,10 @@ const GUARD: Color = Color::srgb(0.21, 0.82, 0.63);
 const PARRY: Color = Color::srgb(0.48, 1.0, 0.81);
 const FACING: Color = Color::srgb(0.85, 0.88, 0.95);
 const SHIELD: Color = Color::srgb(0.98, 0.78, 0.35);
+/// The last frame of the Dual mage's wing, which hits harder. Its own colour
+/// because landing it is a timing decision, and a decision you cannot see the
+/// result of is not one you can learn.
+const TIPPER: Color = Color::srgb(1.0, 0.94, 0.42);
 /// Persistent effects. A fire pillar and a drain field are hitboxes that
 /// outlive their move, so they are drawn in the hitbox family of colours.
 const PILLAR: Color = Color::srgb(1.0, 0.55, 0.15);
@@ -66,9 +70,22 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         // The live attack volume, straight from the simulation rather than
         // rebuilt here. Only during active frames: if you can see it, it is out.
         if let Some(hb) = sim::state::hitbox(&sim.cur.players[i]) {
-            let colour = hitbox_colour(hb.hits_crouching, hb.spent);
+            // The tip -- the last frame of a wing, which hits harder -- gets its
+            // own colour wherever it is drawn, because "did that connect on the
+            // tip" is exactly the question this overlay exists to answer. It is
+            // a bubble rather than a section, so it comes out of the capsule
+            // branch below and the colour has to be decided before the shape is.
+            let colour = if hb.tipper {
+                TIPPER
+            } else {
+                hitbox_colour(hb.hits_crouching, hb.spent)
+            };
             let radius = hb.radius.to_f32_for_render();
-            if hb.flat {
+            if let Some(ring) = hb.sector {
+                // A section of a ring, drawn as the section the hit test reads
+                // rather than as the line that stands in for it elsewhere.
+                sector(&mut gizmos, &ring, radius, colour);
+            } else if hb.flat {
                 // A cylinder, not a sphere, for the moves that still use the
                 // flat rule. Their test compares *flat* distance and says
                 // nothing about height -- you cannot duck under one of these
@@ -259,6 +276,56 @@ fn mechanic_markers(m: &Mechanic) -> Vec<Vec3> {
 /// earlier version gave "spent" its own colour, which meant the overhead signal
 /// vanished the moment a move connected -- precisely when you are stepping
 /// through frames to work out what happened.
+/// A section of a ring lying flat: the two arcs, the two ends, and the
+/// thickness the hit test allows around all of it.
+///
+/// Drawn from `math::Sector::point`, which is the same arithmetic the test uses
+/// to place the section, so the picture cannot be a reconstruction that
+/// disagrees with it.
+fn sector(gizmos: &mut Gizmos, ring: &sim::math::Sector, radius: f32, colour: Color) {
+    const STEPS: usize = 16;
+    let at = |out: f32, along: f32| {
+        v3(ring.point(
+            sim::Fx::from_raw((out * 65536.0) as i32),
+            sim::Fx::from_raw((along * 65536.0) as i32),
+        ))
+    };
+    // The two arcs, and the thickness above and below them.
+    for out in [0.0, 1.0] {
+        for lift in [-radius, 0.0, radius] {
+            let mut last: Option<Vec3> = None;
+            for s in 0..=STEPS {
+                let point = at(out, s as f32 / STEPS as f32) + Vec3::Y * lift;
+                if let Some(prev) = last {
+                    gizmos.line(prev, point, colour);
+                }
+                last = Some(point);
+            }
+        }
+    }
+    // The ends, which are what a body standing just past the leading edge is
+    // being measured against.
+    for along in [0.0, 1.0] {
+        for lift in [-radius, radius] {
+            gizmos.line(
+                at(0.0, along) + Vec3::Y * lift,
+                at(1.0, along) + Vec3::Y * lift,
+                colour,
+            );
+        }
+        gizmos.line(
+            at(0.0, along) + Vec3::Y * radius,
+            at(0.0, along) - Vec3::Y * radius,
+            colour,
+        );
+        gizmos.line(
+            at(1.0, along) + Vec3::Y * radius,
+            at(1.0, along) - Vec3::Y * radius,
+            colour,
+        );
+    }
+}
+
 fn hitbox_colour(hits_crouching: bool, spent: bool) -> Color {
     let base = if hits_crouching { HITBOX } else { OVERHEAD };
     if spent { dim(base) } else { base }

@@ -1512,6 +1512,81 @@ fn steering_out_of_a_launch_is_an_air_privilege() {
 }
 
 #[test]
+fn a_hit_moves_somebody_from_where_the_round_starts() {
+    // **The marks must not put a fighter's back against a wall.**
+    //
+    // They used to. The two platforms stand five metres out on either side and
+    // the marks sat eight metres apart on the centre line, so each fighter
+    // began flush against one: every shove drove the victim into it and the
+    // arena zeroed the velocity. Measured from the marks, *every move in the
+    // game* moved the opponent exactly zero metres -- including the ones that
+    // throw people four metres in open ground.
+    //
+    // Nothing about the stun system was wrong, and nothing about it could be
+    // seen either, which is the worse failure of the two: the first thing
+    // anybody does is hit the training dummy on its mark.
+    let mut w = World::new();
+    run(&mut w, 90, Input::W, 0);
+    let before = w.players[1].health;
+    let mut landed = false;
+    for _ in 0..120 {
+        run(&mut w, 1, SHIFT | L, 0);
+        if w.players[1].health < before {
+            landed = true;
+            break;
+        }
+    }
+    assert!(landed, "the fixture never connected");
+    let from = w.players[1].pos;
+    run(&mut w, 60, 0, 0);
+    let shoved = V3::new(
+        w.players[1].pos.x.sub(from.x),
+        Fx::ZERO,
+        w.players[1].pos.z.sub(from.z),
+    )
+    .flat_len()
+    .to_f32_for_render();
+    assert!(
+        shoved > 1.0,
+        "a committed hit moved them {shoved:.2} m from the spawn mark -- less than one body \
+         width, so knockback cannot be seen at all where every session starts"
+    );
+}
+
+#[test]
+fn a_grab_that_carries_you_up_throws_you_at_the_end_of_it() {
+    // The Champion's uppercut, whose kit entry reads "launch, and hold on".
+    // It could not do both: a held fighter is pinned to their captor by
+    // `drag_the_held`, which zeroes their velocity every frame, so the launch
+    // handed to them on contact was overwritten before it moved anything and
+    // they were set back down motionless at the top of the carry. The launch
+    // waits for the release instead.
+    let mut w = in_the_open(Class::Champion);
+    run(&mut w, 2, E, 0); // Rush
+    run(&mut w, 1, 0, 0);
+    run(&mut w, 2, Input::MIDDLE, 0); // and the uppercut off the dash
+    let (mut carried, mut thrown) = (0.0f32, 0.0f32);
+    let mut released = false;
+    for _ in 0..120 {
+        run(&mut w, 1, 0, 0);
+        let y = w.players[1].pos.y.to_f32_for_render();
+        if matches!(w.players[1].action, Action::Held { .. }) {
+            carried = carried.max(y);
+        } else if carried > 0.0 {
+            released = true;
+            thrown = thrown.max(y);
+        }
+    }
+    assert!(carried > 1.0, "the uppercut never took them off the ground");
+    assert!(released, "the hold never ended");
+    assert!(
+        thrown > carried + 0.5,
+        "they were carried to {carried:.2} m and let go at {thrown:.2} -- the grab set them \
+         down where it picked them up rather than throwing them"
+    );
+}
+
+#[test]
 fn combos_open_up_mid_round_and_close_again() {
     // The shape the whole system exists to produce, on the class built for it.
     //
@@ -1532,21 +1607,25 @@ fn combos_open_up_mid_round_and_close_again() {
             .filter(|(a, b)| links(Class::DualMage, *a, *b, hp))
             .count()
     };
+    // A band rather than a single reading. Where exactly the window sits is a
+    // tuning question that moves every time a kit is touched; that there *is*
+    // one, that it is not open at the start and not open at the end, is the
+    // design.
     let fresh = alternations(100);
-    let middle = alternations(45);
-    let dying = alternations(12);
+    let middle: usize = [70, 55, 45, 30, 25].iter().map(|p| alternations(*p)).sum();
+    let dying = alternations(8);
     assert_eq!(
         fresh, 0,
         "the autos already link at full health, so neutral never resets"
     );
     assert!(
         middle > 0,
-        "nothing links anywhere in the round: the stun system enables no combos at all"
+        "nothing links anywhere in the middle of a round: the stun system enables no combos"
     );
-    assert!(
-        dying < middle,
-        "the window never closes ({middle} alternations link at half health, {dying} near \
-         death); knockback has stopped outgrowing hitstun and the round has no arc"
+    assert_eq!(
+        dying, 0,
+        "the autos still link with the opponent nearly dead ({dying} alternations); \
+         knockback has stopped outgrowing hitstun and the round has no arc"
     );
 }
 
@@ -1582,22 +1661,32 @@ fn nothing_links_into_itself_while_the_victim_could_live_through_it() {
     // -- which is a match decided by the first hit of it.
     //
     // Late in a round the same loop is a **kill confirm**, and that is a
-    // different thing: the chain measured below only lasts as long as it does
-    // because the victim dies partway through it. The bound is therefore on
-    // damage rather than on hits.
+    // different thing: it only runs as long as it does because the victim dies
+    // partway through it. Measured from half health, where they would not.
+    //
+    // The bound is what the *loop* deals -- everything after the first press.
+    // One read landing is allowed to be worth a lot; a read that then repeats
+    // itself until they are dead is not a read, it is a match decided by one
+    // button.
     for class in ALL_CLASSES {
         for kind in 0..moves::table(class).len() as u8 {
             let Some(bits) = press_for(class, kind) else {
                 continue;
             };
             let health = max_health() / 2;
-            let (hits, dealt) = mashed_chain(class, bits, health);
+            let (repeats, looped) = mashed_chain(class, bits, health);
+            // A third of a full bar, measured against the bar rather than
+            // against the fixture's starting health: what matters is how much
+            // of the match one read decides, and the player reads the bar.
+            // Thirty-odd percent is about where a platform fighter's combos
+            // land, and a sixty-second time to kill has room for three of them.
             assert!(
-                dealt < health,
-                "{}: {} mashed from half health chains {hits} hits for {dealt} of {health} -- \
-                 one read ends the round",
+                looped * 3 < max_health(),
+                "{}: {} mashed from half health repeats {repeats} more times for {looped} \
+                 further damage, over a third of a {} bar -- one read decides the round",
                 class.name(),
                 moves::get(class, kind).name,
+                max_health(),
             );
         }
     }
@@ -1622,28 +1711,58 @@ fn press_for(class: sim::class::Class, kind: u8) -> Option<u16> {
     }
 }
 
-/// Longest unbroken chain of one move, mashed, and what it deals.
+/// How many times a mashed move **links into itself**, and what the repeats deal.
 ///
-/// "Unbroken" means every hit after the first landed while the victim was still
-/// held by the one before it. The moment one does not, the chain is over.
+/// A repeat has to clear two bars at once, and each is there for a false
+/// positive the other lets through:
+///
+/// - The damage lands while the victim is **still held** by the previous hit.
+///   Sampling that when the button goes down instead of when the blow connects
+///   counts a swing thrown during hitstun that arrives after it, which is a
+///   race rather than a link -- and it made the Bulwark's Bash read as a nine
+///   hit touch of death that it turns out not to have.
+/// - It comes from a **later press**. Half the abilities in the game land
+///   several contacts from one throw -- a lotus is six blades, a Grasp is four
+///   arms -- and counting those would flag every multi-hit move on the roster
+///   as a stunlock while missing the thing being asked, which is whether a
+///   *second throw* connects on somebody the *first* is still holding.
+///
+/// The first hit is free: one read landing is allowed to be worth a lot. What
+/// is bounded is everything after it.
 fn mashed_chain(class: sim::class::Class, bits: u16, health: i32) -> (u32, i32) {
     let mut w = in_the_open(class);
     w.players[1].health = health;
-    let mut hits = 0;
-    let mut last = w.players[1].health;
+    let (mut repeats, mut looped): (u32, i32) = (0, 0);
+    let mut last_health = w.players[1].health;
+    let (mut press, mut swinging) = (0u32, false);
+    let mut hit_on_press: Option<u32> = None;
     for _ in 0..600 {
-        let was_held = still_held(&w);
+        let held = still_held(&w);
         run(&mut w, 1, bits | Input::W, 0);
-        if w.players[1].health < last {
-            if hits > 0 && !was_held {
-                break;
+        let now_swinging = matches!(w.players[0].action, Action::Startup { .. });
+        if now_swinging && !swinging {
+            press += 1;
+        }
+        swinging = now_swinging;
+        if w.players[1].health < last_health {
+            let dealt = last_health - w.players[1].health;
+            last_health = w.players[1].health;
+            match hit_on_press {
+                // Another contact from the throw that is already counted.
+                Some(p) if p == press => {}
+                Some(_) if held => {
+                    repeats += 1;
+                    looped += dealt;
+                    hit_on_press = Some(press);
+                }
+                // They got a turn back in between, so the string is over.
+                Some(_) => break,
+                None => hit_on_press = Some(press),
             }
-            hits += 1;
-            last = w.players[1].health;
         }
         if w.players[1].health <= 0 {
             break;
         }
     }
-    (hits, health - w.players[1].health.max(0))
+    (repeats, looped)
 }

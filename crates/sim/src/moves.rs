@@ -88,6 +88,21 @@ pub struct Move {
     /// on-hit arithmetic below stops meaning anything, because the move is
     /// still in its active frames when the next cut lands.
     pub rehit: u16,
+    /// Frames this move can be wound up for while its button is held. Zero is
+    /// the normal rule: a press throws the move.
+    ///
+    /// What the hold *buys* is the move's business. The Grasp -- the only one
+    /// that channels -- buys reach with it, walking from [`channel_from`] out
+    /// to [`reach`], so a player who wants the arms to close ten metres away
+    /// has to stand still and hold the button while they do.
+    ///
+    /// [`channel_from`]: Move::channel_from
+    /// [`reach`]: Move::reach
+    pub channel: u16,
+    /// Where a channelled move reaches on a hold of nothing at all -- the near
+    /// end of the slider `reach` is the far end of. Meaningless when
+    /// [`channel`](Move::channel) is zero.
+    pub channel_from: Fx,
     /// Health the caster pays the moment the move starts.
     ///
     /// Zero on almost everything. It is the Blood mage's whole economy -- see
@@ -140,17 +155,25 @@ pub enum Shape {
     /// A thrust. The weapon is a line along the aim that extends to `reach`
     /// over the active window and does not travel sideways.
     Thrust,
-    /// A wing: **a section of a torus, lying flat around the caster.**
+    /// A wing: **a thin curved blade, swept on a ring the caster is not in the
+    /// middle of.**
     ///
     /// ```text
-    ///        .-  -  -.                 the ring is centred on the caster,
-    ///     .'          '.               in the plane of the floor
-    ///    ;    (o)   ---->  ahead       inner arc at `tuning::wing_inner`
-    ///     '.   |     .'                outer arc at `Move::reach`
-    ///        ' - , - '                 the section starts behind, on the
-    ///          start                   punching arm's own side, and sweeps
-    ///                                  round to straight ahead
+    ///        .-  -  -.                 a section of a torus, in the plane of
+    ///     .'          '.               the floor. Inner arc at
+    ///    ;      (x)     :              `tuning::wing_inner` of the reach,
+    ///     '.          .'               outer arc at `Move::reach`, and
+    ///        ' - , - '                 nothing in between
+    ///          start
+    ///                       (x) the ring's middle: `tuning::wing_offside`
+    ///   o                       toward the caster's *other* arm and
+    ///   |   the caster          `tuning::wing_ahead` in front of them
     /// ```
+    ///
+    /// It starts behind the caster on the punching arm's own side and finishes
+    /// `tuning::wing_finish` off their centre line, in front of that arm's own
+    /// hand -- not dead ahead, because which of two mirrored autos just landed
+    /// is a thing the player reads off where it landed.
     ///
     /// The volume out on any one frame is the section's own **radius** -- a
     /// line from the inner arc to the outer one. That is not an approximation
@@ -159,18 +182,20 @@ pub enum Shape {
     /// over the active window, which is the thing the player sees.
     ///
     /// Three things separate it from a [`Shape::Swing`], and they are why it is
-    /// its own shape rather than a swing with unusual numbers. It is centred on
-    /// the **body** rather than hung off a shoulder, so it wraps rather than
-    /// reaches. It has a **hole**: the inner arc passes through where the
-    /// punching elbow started, so there is no haft to stand inside. And it
-    /// **starts behind the caster** and ends in front of her fist, rather than
-    /// travelling across the front of her -- the punch throws it and it
-    /// overtakes the punch.
+    /// its own shape rather than a swing with unusual numbers. It is hung off a
+    /// **ring** rather than off a shoulder, so it curves rather than reaches. It
+    /// has a **hole**, and a big one: the band is the outer quarter of the ring
+    /// and there is no haft to stand inside. And it **starts behind the caster**
+    /// rather than travelling across the front of her -- the punch throws it and
+    /// it overtakes the punch.
     ///
     /// Which way round it sweeps comes from [`Move::hand`], so the two mirrored
     /// autos share one `arc` -- see [`crate::aim::Hand::outward`]. For this
-    /// shape `arc` is **where the section starts**, measured back from straight
-    /// ahead, rather than a span centred on the facing.
+    /// shape `arc` is **how far back the section starts**, measured from where
+    /// it finishes, rather than a span centred on the facing.
+    ///
+    /// The geometry is [`crate::moves::wing`], and the last active frame is not
+    /// a section at all: see [`Wing::tip`].
     Wing,
 }
 
@@ -257,6 +282,26 @@ impl Move {
         self.shape.strikes() && self.radius.raw() > 0
     }
 
+    /// Is this move wound up while its button is held?
+    pub const fn channels(&self) -> bool {
+        self.channel > 0
+    }
+
+    /// The reach this move has after being held for `held` frames.
+    ///
+    /// Between its near end and its own `reach`, linearly, so the two knobs are
+    /// the ends of one slider and the hold is what walks between them. A move
+    /// that does not channel is always at its full reach, which is what makes
+    /// this safe to ask of any move.
+    pub fn reach_after(&self, held: u16) -> Fx {
+        if !self.channels() {
+            return self.reach;
+        }
+        let near = self.channel_from.min(self.reach);
+        let at = Fx::ratio(held.min(self.channel) as i32, self.channel as i32);
+        near.add(self.reach.sub(near).mul(at))
+    }
+
     /// Health returned for `dealt` damage, rounded down.
     pub const fn leeched(&self, dealt: i32) -> i32 {
         if self.leech == 0 || dealt <= 0 {
@@ -333,7 +378,14 @@ const NAMES: [&[&str]; 6] = [
     //   rather than by the hitbox loop, and its hitstun and knockback are zero
     //   on purpose: it takes the charge off whoever it catches and gives them
     //   their frames straight back. See `crate::bolt`.
-    &["Bolt", "Fissure", "Fire pillar"],
+    //   Cataclysm: the heavy, on right click. A long wind-up and then the same
+    //   kind of instant line Bolt throws, resolved the same way and for the
+    //   same reason -- what it does depends on what it meets first, and none
+    //   of that fits a hitbox that lives for a few frames in front of her body.
+    //   A structure in the way is destroyed outright rather than kicked, and
+    //   goes up in a blast; a fire pillar in the way is not charged, it is
+    //   torn loose into a travelling fire tornado. See `crate::tornado`.
+    &["Bolt", "Fissure", "Fire pillar", "Cataclysm"],
     // Blood mage -- sustain through aggression. Everything costs health, and
     // every one of these has a cost in the table to prove it.
     //   Bloodletter: the auto. Out to a fixed distance and back, cutting on
@@ -427,20 +479,22 @@ pub mod champion {
 /// columns rather than as five moves:
 ///
 /// ```text
-///              darker              lighter          along your current path
+///              darker              lighter        whichever she is carrying
 ///   click      Dark auto (L)       Light auto (R)
-///   shift      Lance (shift+L)
-///   key                                             Judgement (Q), Sweep (E)
+///   shift                                         Lance (shift+L)
+///   key                                           Judgement (Q), Sweep (E)
 /// ```
 ///
 /// The two autos are the same punch mirrored: one arm each, one shared set of
 /// numbers, and the hand supplies the sign of the arc. Nothing else in the
 /// roster is built that way, and it is the reason [`crate::aim::Hand`] exists.
 ///
-/// `Q` and `E` have no side, because side-ness comes from left and right and a
-/// key has neither. They push you further along whichever way you were already
-/// going, which is the rule the design document already states for scroll click
-/// and both-click.
+/// **Only the autos have a side.** Everything else -- the committed cast, the
+/// key abilities -- is made of whichever force she is carrying, which is the
+/// last auto that landed, and pushes her further that way. Before the first
+/// auto connects she is carrying neither, and a cast pushes her further along
+/// whichever way she was already going: the rule the design document states for
+/// every input that is neither left nor right.
 pub mod dual {
     pub const DARK_AUTO: u8 = 0;
     pub const LANCE: u8 = 1;
@@ -450,18 +504,23 @@ pub mod dual {
 
     pub const COUNT: usize = 5;
 
-    /// Which way this move pushes the meter: `-1` darker, `+1` lighter, `0` for
-    /// a move with no side of its own.
+    /// Which force this move throws, if it is one of the two autos.
+    ///
+    /// **Only the autos have a force of their own.** Everything else takes the
+    /// one she is carrying, which is whichever auto landed last -- see
+    /// `class::Mechanic::Meter`. That is the mechanic in one sentence: the two
+    /// buttons you press constantly decide what everything else is made of.
     ///
     /// Read from the move rather than from the buttons held down, which is the
     /// same reason everything else here is declared: `shift + left click` has
     /// both a modifier and a side in it, and a reader of the input bits has to
     /// know which one wins. The move already knows.
-    pub const fn side(kind: u8) -> i32 {
+    pub const fn force(kind: u8) -> Option<crate::class::Force> {
+        use crate::class::Force;
         match kind {
-            DARK_AUTO | LANCE => -1,
-            LIGHT_AUTO => 1,
-            _ => 0,
+            DARK_AUTO => Some(Force::Dark),
+            LIGHT_AUTO => Some(Force::Light),
+            _ => None,
         }
     }
 
@@ -487,6 +546,10 @@ pub mod dual {
 pub const fn slots(class: Class) -> usize {
     match class {
         Class::Champion => champion::COUNT,
+        // The fourth is Cataclysm, on right click -- structures and fire are
+        // her whole kit, and right click is otherwise dead weight on a class
+        // with no shield. See `clicked_move`.
+        Class::Elementalist => SLOTS + 1,
         // The fourth is Black spike, on `E`. See `on_e`.
         Class::BloodMage => SLOTS + 1,
         // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
@@ -597,6 +660,14 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             1 => "Shift+LMB",
             2 => "Q",
             3 => "E",
+            _ => "RMB",
+        },
+        // Right click is otherwise dead weight on a class with no shield, the
+        // same argument the Reaver makes -- Cataclysm takes it instead.
+        Class::Elementalist => match slot {
+            0 => "LMB",
+            1 => "Shift+LMB",
+            2 => "Q",
             _ => "RMB",
         },
         _ => match slot {
@@ -726,6 +797,8 @@ pub fn get(class: Class, kind: u8) -> Move {
         aim_code: raw(F::Aim) as u8,
         arc: Fx::from_raw(raw(F::Arc)),
         rehit: raw(F::Rehit) as u16,
+        channel: raw(F::Channel) as u16,
+        channel_from: Fx::from_raw(raw(F::ChannelFrom)),
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
     }
@@ -785,6 +858,115 @@ pub fn swing_base(facing: V3, aim_dir: V3, plane: Plane, grounded: bool) -> V3 {
         Plane::Flat => aim_dir,
         // Down the body, in the plane the aim already lies in.
         Plane::Upright => aim_dir,
+    }
+}
+
+/// The ring a wing carves, placed in the world.
+///
+/// A wing is a section of a torus lying flat (see [`Shape::Wing`]), and this is
+/// the whole torus plus the two bearings the section lives between. Everything
+/// in it is a knob, because where this shape sits relative to the body that
+/// threw it *is* the move -- see `tuning::wing_inner` and the three beside it.
+///
+/// ```text
+///                       .-  -  -  -.
+///                   . '             ' .        outer arc at `Move::reach`
+///     starts -->  ;                     :      inner arc `wing_inner` of it
+///     behind her   \                   /       and nothing in between
+///        o          ' .     (x)   . '
+///        |              ' - , - '     <-- finishes in front of that fist
+///     the mage,                           `wing_finish` off her centre line
+///     punching                        (x) the ring's middle: pushed
+///     left-handed                         `wing_offside` toward the other
+///                                         arm and `wing_ahead` forward
+/// ```
+///
+/// The middle is pushed **off** her rather than sitting on her, which is what
+/// makes the blade pass by rather than wrap round: a ring centred on a fighter
+/// is the same distance from them at every bearing, and a piece of one reads as
+/// a halo however short it is.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Wing {
+    /// The middle of the ring, at the height the hand punches through.
+    pub at: V3,
+    pub inner: Fx,
+    pub outer: Fx,
+    /// The bearing the leading edge stops on, in front of the punching hand.
+    pub finish: Fx,
+    /// How far back from `finish` the section starts, **signed by the arm**:
+    /// positive is the way [`crate::aim::Hand::Left`] sweeps. One tuned `arc`
+    /// serves both autos because the sign lives here and nowhere else.
+    pub span: Fx,
+}
+
+/// Where a wing's ring is, given where the fighter stands and what they threw.
+///
+/// The plane of it is the floor's while her feet are on it, which is the one
+/// place this move ignores the camera's pitch. Off the ground there is no shared
+/// floor to lie parallel to, so it rides the aim -- and for a flat ring that
+/// means only its height moves, because a ring lying in the aim's plane is
+/// still a ring. The same split `swing_base` already makes for a cut thrown in
+/// the air.
+pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, m: &Move) -> Wing {
+    use crate::tuning as t;
+    let middle = crate::aim::origin(pos)
+        .add(facing.scale(m.reach.mul(t::wing_ahead())))
+        .sub(crate::aim::across(facing, m.hand).scale(m.reach.mul(t::wing_offside())));
+    let at = if grounded {
+        middle
+    } else {
+        V3::new(middle.x, middle.y.add(aim_dir.y.mul(m.reach)), middle.z)
+    };
+    let ahead = crate::math::atan2_turns(facing.z, facing.x);
+    let outward = Fx::from_int(m.hand.outward());
+    Wing {
+        at,
+        inner: m.reach.mul(t::wing_inner()),
+        outer: m.reach,
+        finish: ahead.add(t::wing_finish().mul(outward)),
+        span: m.arc.mul(outward),
+    }
+}
+
+impl Wing {
+    /// The section that is actually out, `through` of the way through the
+    /// opening.
+    ///
+    /// **It opens rather than sweeps.** The trailing edge stays where the punch
+    /// threw it and the leading edge comes round toward the front, so the shape
+    /// is a wing spreading rather than a blade travelling -- the beings inside
+    /// her extending the movement past where an arm could take it.
+    ///
+    /// It stops `tuning::wing_tip` of the span short of the finish. That last
+    /// piece belongs to the tip, which is a bubble rather than a section: see
+    /// [`Wing::tip`].
+    pub fn opened(&self, through: Fx) -> crate::math::Sector {
+        let short = self.span.mul(crate::tuning::wing_tip());
+        let leading = short.add(self.span.sub(short).mul(Fx::ONE.sub(through)));
+        crate::math::Sector {
+            at: self.at,
+            inner: self.inner,
+            outer: self.outer,
+            from: self.finish.add(self.span),
+            to: self.finish.add(leading),
+        }
+    }
+
+    /// The foremost point of the ring: the outer arc at the bearing the wing
+    /// finishes on, which is where the tip arrives on the last active frame.
+    ///
+    /// Read off a section with no width rather than worked out again here. A
+    /// second copy of the same arithmetic is how a tip ends up somewhere the
+    /// wing it belongs to never went.
+    pub fn tip(&self) -> V3 {
+        crate::math::Sector {
+            at: self.at,
+            inner: self.inner,
+            outer: self.outer,
+            from: self.finish,
+            to: self.finish,
+        }
+        .point(Fx::ONE, Fx::ONE)
     }
 }
 

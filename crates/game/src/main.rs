@@ -171,7 +171,16 @@ fn main() {
                 // and this is the twenty-first. They are independent of each
                 // other anyway: each puts one pool of meshes where the
                 // simulation says its things are.
-                (place_effects, place_structures, place_beams, place_bolts),
+                (
+                    place_effects,
+                    place_structures,
+                    place_beams,
+                    place_bolts,
+                    place_tornadoes,
+                    place_wings,
+                    place_wing_tips,
+                    place_marks,
+                ),
                 beast::place,
                 drive_camera,
                 fade_own_body,
@@ -489,6 +498,47 @@ struct BeamMesh(usize);
 #[derive(Component)]
 struct BoltMesh(usize);
 
+/// One fire tornado, lit by Cataclysm passing through a pillar.
+#[derive(Component)]
+struct TornadoMesh(usize);
+
+/// One slice of the Dual mage's wing.
+///
+/// The wing is the one attack volume in the game that is not a line, so the
+/// line-drawer above cannot show it: what it would draw is the blade's leading
+/// edge, which since the band became thin is a stub half a metre long out at
+/// the rim. A pool of radial bars laid along the section draws the band itself
+/// -- read straight off `hitbox.sector`, the same shape the hit test and the
+/// debug overlay use, so the thing you see swept past you is the thing that
+/// decided whether you were hit.
+#[derive(Component)]
+struct WingMesh {
+    owner: usize,
+    index: usize,
+}
+
+/// The last frame of the Dual mage's wing: a ball at the end of the blade.
+#[derive(Component)]
+struct WingTipMesh(usize);
+
+/// How many bars the wing is drawn with.
+///
+/// Enough that consecutive bars overlap at the arc the autos are tuned for, so
+/// the band reads as one swept ribbon rather than as a comb. Fixed, like every
+/// other mesh pool here: spawning as a move comes and goes would put allocation
+/// on the rollback path.
+const WING_SLICES: usize = 12;
+
+/// The aim marker a channelled move is wound out along.
+///
+/// One per fighter: a channel is an action, and nobody is in two at once. It is
+/// **not** a thing in the world -- nothing collides with it, nothing is hit by
+/// it, and the simulation does not know it is drawn. All it does is answer the
+/// only question a channel asks, which is *how far out is this going right
+/// now*.
+#[derive(Component)]
+struct MarkMesh(usize);
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -759,6 +809,49 @@ fn setup(
             BoltMesh(slot),
         ));
     }
+    // One per player: a second cataclysm replaces the caster's own rather than
+    // sharing the field with it, so there is never more than one to draw per
+    // owner -- see `sim::tornado::spawn`.
+    for slot in 0..sim::tornado::MAX_TORNADOES {
+        commands.spawn((
+            Mesh3d(unit.clone()),
+            MeshMaterial3d(look.fire.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            TornadoMesh(slot),
+        ));
+    }
+    // The Dual mage's wing, and the ball it finishes on. Spawned for every
+    // fighter rather than for her alone, because the class is picked at runtime
+    // and can change mid-match with Tab.
+    for owner in 0..MAX_PLAYERS {
+        for index in 0..WING_SLICES {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.beam.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                WingMesh { owner, index },
+            ));
+        }
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            WingTipMesh(owner),
+        ));
+    }
+    // The aim marker a channelled move is wound out along.
+    for owner in 0..MAX_PLAYERS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.blood.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            MarkMesh(owner),
+        ));
+    }
     commands.insert_resource(look);
 }
 
@@ -863,7 +956,11 @@ fn place_structures(
 /// line, at the angle you aimed it, ending on whatever stopped it.
 fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let shot = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.is_a_beam());
+        // Lines only. A volume that carries a section is a wing, and a straight
+        // line through a curve is exactly the drawing this rule exists to
+        // avoid -- `place_wings` has it.
+        let shot = sim::state::hitbox(&sim.cur.players[tag.0])
+            .filter(|hb| hb.is_a_beam() && hb.sector.is_none());
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -904,6 +1001,123 @@ fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
         tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
     }
+}
+
+/// Put the fire tornadoes where they are.
+///
+/// Upright rather than turned on to its heading -- a tornado is a standing
+/// funnel that happens to be translating, not a bolt lying along its flight,
+/// so what should visibly track its direction of travel is the position each
+/// frame rather than the mesh's own tilt. Scaled to the pull radius, the same
+/// rule the debug overlay lives by: the shape you see standing in the arena is
+/// the shape that is actually pulling at you.
+fn place_tornadoes(
+    sim: Res<Sim>,
+    mut meshes: Query<(&TornadoMesh, &mut Transform, &mut Visibility)>,
+) {
+    let radius = sim::tuning::tornado_pull_radius().to_f32_for_render();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(vortex) = sim.cur.tornadoes[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(vortex.pos);
+        tf.scale = Vec3::new(radius * 2.0, radius * 3.0, radius * 2.0);
+    }
+}
+
+/// Draw the Dual mage's wing as the band the hit test reads.
+///
+/// One bar per slice, laid from the section's inner arc to its outer one at
+/// evenly spaced bearings, so what is drawn is the section itself rather than a
+/// reconstruction of it. The shape comes out of `state::hitbox` like everything
+/// else here: an attack that looks bigger than it hits is a promise the game
+/// does not keep, and one that looks like a fan when it is a blade is the same
+/// promise in the other direction.
+fn place_wings(sim: Res<Sim>, mut meshes: Query<(&WingMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let out = sim::state::hitbox(&sim.cur.players[tag.owner]);
+        let Some((hb, ring)) = out.and_then(|hb| hb.sector.map(|ring| (hb, ring))) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let along = tag.index as f32 / (WING_SLICES - 1) as f32;
+        let at = |from_the_inside: f32| {
+            fx3(ring.point(
+                sim::Fx::from_raw((from_the_inside * 65536.0) as i32),
+                sim::Fx::from_raw((along * 65536.0) as i32),
+            ))
+        };
+        let (inner, outer) = (at(0.0), at(1.0));
+        let across = outer - inner;
+        let depth = across.length();
+        if depth < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        tf.translation = inner + across * 0.5;
+        // The unit cylinder stands along Y, so it is turned on to the radius it
+        // is drawing -- which is a straight line even though the band is not:
+        // a radius of an annulus is the whole of the section at that bearing.
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, across / depth);
+        let width = hb.radius.to_f32_for_render();
+        tf.scale = Vec3::new(width, depth, width);
+    }
+}
+
+/// And the ball it finishes on: the tip, out for one frame at the foremost
+/// point of the ring.
+fn place_wing_tips(
+    sim: Res<Sim>,
+    mut meshes: Query<(&WingTipMesh, &mut Transform, &mut Visibility)>,
+) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let tip = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.tipper);
+        let Some(hb) = tip else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(hb.centre());
+        // At the size it hits at, unlike the beam: the whole question the tip
+        // asks is how far out it reaches, and a drawing that shrank it would be
+        // teaching the wrong distance.
+        tf.scale = Vec3::splat(hb.radius.to_f32_for_render() * 2.0);
+    }
+}
+
+/// Put each channelling fighter's aim marker where their aim currently lands.
+///
+/// **The renderer aims nothing.** `aim_path` is already solved, every frame of
+/// the channel, by the same `sim::aim` call the finished move will use -- see
+/// `state::step_channel`. Reading its far end is the whole of this function,
+/// and it is why the marker cannot promise a depth the arms do not deliver.
+fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(piece) = mark_piece(&sim.cur.players[tag.0]) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = piece.at;
+        tf.scale = piece.scale;
+    }
+}
+
+/// Where a fighter's aim marker is, if they are channelling at all.
+///
+/// Split out so the geometry can be asserted without a renderer, the same way
+/// `effect_piece` is: what wants checking is that the marker sits on the far
+/// end of the solved path, because a marker that sits anywhere else is worse
+/// than no marker.
+fn mark_piece(p: &sim::state::Player) -> Option<Piece> {
+    p.action.channelling()?;
+    Some(floating(
+        fx3(p.aim_path.to),
+        sim::tuning::grasp_mark().to_f32_for_render(),
+    ))
 }
 
 /// Put the effect meshes where the simulation says its effects are.
@@ -1833,7 +2047,50 @@ mod tests {
             slot,
             sim::V3::ZERO,
             sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+            sim::moves::get(sim::Class::BloodMage, slot).reach,
         )
+    }
+
+    #[test]
+    fn the_aim_marker_sits_on_the_far_end_of_the_solved_path() {
+        // The marker's only job is to answer *how far out is this going*, and
+        // the only way it can answer wrongly is by being somewhere other than
+        // the end of the path the simulation has already solved. So that is the
+        // whole assertion: the same point, to the millimetre, with no
+        // arithmetic of its own on this side.
+        let mut p = sim::state::Player::new(sim::Class::BloodMage);
+        p.action = sim::state::Action::Channel {
+            kind: sim::state::SLOT_SPECIAL,
+            held: 7,
+        };
+        p.aim_path = sim::aim::Path {
+            from: sim::V3::new(sim::Fx::ZERO, sim::Fx::from_int(1), sim::Fx::ZERO),
+            to: sim::V3::new(
+                sim::Fx::from_int(6),
+                sim::Fx::from_int(1),
+                sim::Fx::from_int(2),
+            ),
+        };
+        let mark = mark_piece(&p).expect("a channelling fighter has a marker");
+        assert_eq!(mark.at, fx3(p.aim_path.to));
+        assert_eq!(mark.shape, Shape::Ball);
+        let want = sim::tuning::grasp_mark().to_f32_for_render() * 2.0;
+        assert_eq!(mark.scale, Vec3::splat(want));
+    }
+
+    #[test]
+    fn nothing_but_a_channel_draws_a_marker() {
+        // It is not a thing in the world -- no hitbox, no clock, nobody can
+        // walk into it -- so it has to be gone the frame the wind-up is. A
+        // marker left standing after the release would read as an ability that
+        // is still out.
+        let mut p = sim::state::Player::new(sim::Class::BloodMage);
+        assert!(mark_piece(&p).is_none(), "a fighter doing nothing has one");
+        p.action = sim::state::Action::Startup {
+            kind: sim::state::SLOT_SPECIAL,
+            left: 4,
+        };
+        assert!(mark_piece(&p).is_none(), "it outlived the channel");
     }
 
     #[test]

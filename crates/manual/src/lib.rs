@@ -184,12 +184,12 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             s(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that sweeps in from behind you on that side. Moves you darker -- but only if it lands.",
+                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. Moves you five darker, and makes you dark.",
                 "LMB dark auto",
             ),
             s(
                 "Right click",
-                "Light auto. The same punch and wing mirrored onto the right arm, and it moves you lighter. There is no guard on this class.",
+                "Light auto. The same punch and wing mirrored onto the right arm. Moves you five lighter, and makes you light. There is no guard on this class.",
                 "RMB light auto",
             ),
             s(
@@ -204,12 +204,24 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "Q",
-                "Judgement. The finisher, and it only comes out from deep on the bar.",
+                "Judgement. The finisher: a delayed strike where the crosshair is.",
                 "Q judgement",
             ),
             e(
+                "The tip",
+                "The last frame of either auto is the wing's tip, and it hits far harder. It is the only part that reaches straight out in front of you, so landing it is a question of standing at the edge of your range rather than on top of them.",
+            ),
+            e(
+                "Which force you are",
+                "Whichever auto you threw last. Everything else you throw is made of that force and pushes the bar twelve the same way, so the two clicks are the steering and everything else is the accelerator.",
+            ),
+            e(
                 "Getting back",
-                "Landing an auto from the far side is the fast way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+                "Throwing a far-side auto is the only way back toward centre: casts follow whichever force you are carrying, and only an auto changes that.",
+            ),
+            e(
+                "The ends of the bar",
+                "Driven all the way to either end and it takes you: three seconds of heavy drain you cannot steer or stop, and it puts you back at the centre staggered.",
             ),
         ],
     },
@@ -435,6 +447,18 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "cargo run -p anim --bin bake",
                 "Re-bake the animation clips from their recipes.",
+            ),
+            e(
+                "cargo run -p anim --bin bake_beast",
+                "Re-bake the Ridgeback's pose table from its recipes in crates/anim/src/beast/clips.rs. Its parts are simulation geometry, so this one writes into crates/sim.",
+            ),
+            e(
+                "cargo run -p anim --bin preview_beast -- <clip>",
+                "Draw the Ridgeback as a contact sheet PNG, into target/beast-preview: the creature from the side, from above, and every frame overlaid. --all for every clip, --states for the poses the simulation produces rather than the baked ones. Green is a surface you can stand on, red is a weak point, and the dashed line is how high a full hop reaches.",
+            ),
+            e(
+                "cargo run -p sim --bin beastcheck",
+                "What the creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry.",
             ),
             e(
                 "cargo run -p anim --bin preview -- <clip>",
