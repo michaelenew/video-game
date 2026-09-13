@@ -104,14 +104,16 @@ at all — see the section above.
 > auto that *landed*, a mage with nothing in reach could press every button on the class and
 > watch the bar sit at zero — no target, no mechanic. Steering happens on the **press** now.
 >
-> The idea it protected is real and should come back: landing a far-side auto being the fast
-> way home is what forces this class into melee exactly when it is most fragile. The shape to
-> bring it back in is a **bonus for landing** — the press moves you, connecting moves you
-> again — rather than contact being the only thing that moves you at all.
+> **And it stays suspended — decided from play, 2026-09-13.** The obvious way to get the idea
+> back was a bonus for landing: the press moves you, connecting moves you again. Played
+> against, it turned out not to be needed. **Managing a frail character at short-to-mid range
+> while balancing the bar is already the challenge** — the pull toward melee comes from her
+> reach and her health, not from a second rule about where the resource moves. Steering is one
+> rule: throw something, the bar moves.
 
-**Autos have a slight range boost**, powered by the beings inside. That is mechanical, not
-decorative: if steering depends on connecting, the class needs the reach to steer while
-under pressure.
+**Autos have a slight range boost**, powered by the beings inside. That is mechanical rather
+than decorative in a different way now that steering no longer depends on connecting: the
+reach is what lets a fragile body trade at all.
 
 **Steering is not optional.** You cannot cast without moving the bar, and you cannot move the
 bar without committing to a side. An earlier draft put the direction choice on a tap-versus-

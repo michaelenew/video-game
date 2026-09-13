@@ -2398,17 +2398,22 @@ is a resource into a class with no resource.
 always carrying one of the two forces — dark to start, which is arbitrary between two
 symmetric things and is not nothing.
 
-**What that costs, and how to get it back.** "Landing the far-side auto is the fast way back
-toward centre" is a real idea: it is what forces this class into melee exactly when it is
-deepest and most fragile, and it is now gone. It should come back as a **bonus for landing** —
-the press moves you, connecting moves you again — rather than as the only thing that moves you
-at all. That version keeps the pull toward melee and still lets a player in an empty arena see
-their own mechanic work.
+**What that costs.** "Landing the far-side auto is the fast way back toward centre" is a real
+idea: it is what forced this class into melee exactly when it is deepest and most fragile, and
+it is gone. The obvious replacement was a **bonus for landing** — the press moves you,
+connecting moves you again — which keeps the pull toward melee and still lets a player in an
+empty arena see their own mechanic work.
 
 **The lesson worth keeping** is not about this class. It is that a rule which says *nothing
 happens unless* needs a second rule saying what happens the rest of the time, and both of
 these said "nothing". The test that now guards it does not check a number: it checks that
 **every button on the class moves the bar with nothing in range.**
 
-**Verdict** the fix is right and the loss is real. Whether the landing bonus is worth building
-before the class has depth scaling — which is the larger hole — is the open question.
+**Verdict** kept, and **the landing bonus is not being built.** Played against, the pull
+toward melee is already there without it: she is frail, her reach is short to middling, and
+staying in the band where she can trade while watching the bar is enough to manage at once.
+A second rule about where the resource moves would be a rule to learn rather than a decision
+to make. Steering is one sentence now — throw something, the bar moves — and the difficulty
+lives where the player already is, in her body and her spacing.
+
+Depth scaling is still the open hole, and it is a bigger one than this ever was.
