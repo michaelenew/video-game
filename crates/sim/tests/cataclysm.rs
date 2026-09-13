@@ -181,6 +181,36 @@ fn cataclysm_destroys_a_structure_and_scatters_it_as_debris() {
 }
 
 #[test]
+fn the_debris_cone_stands_in_space_rather_than_lying_flat() {
+    // Aimed up and to the side. A fan that only rotated the aimed line's
+    // horizontal bearing -- the bug this pins -- hands every piece `dir`'s
+    // own pitch back unchanged; a real cone around `dir` does not.
+    let dir = V3::new(Fx::ONE, Fx::ONE, Fx::ZERO).normalized();
+    let mut shrapnel = [None; sim::debris::MAX_DEBRIS];
+    sim::debris::blast(&mut shrapnel, 0, V3::ZERO, dir);
+    let pieces: Vec<V3> = shrapnel.iter().flatten().map(|s| s.dir).collect();
+    assert_eq!(
+        pieces.len(),
+        sim::debris::PIECES_PER_BLAST,
+        "the blast did not throw every piece"
+    );
+
+    assert!(
+        pieces.iter().any(|p| p.y.raw() != dir.y.raw()),
+        "every piece came out at dir's own pitch -- the fan is flat, not a cone"
+    );
+    // Every piece stays close to the line it was aimed along, inside its own
+    // half-angle -- see `tuning::debris_spread` -- rather than scattering
+    // arbitrarily once it is allowed to leave the horizontal plane.
+    for p in &pieces {
+        assert!(
+            p.dot(dir).raw() > Fx::ratio(9, 10).raw(),
+            "a piece flew well outside the cone Cataclysm was aimed along"
+        );
+    }
+}
+
+#[test]
 fn cataclysm_never_blasts_its_own_caster() {
     let mut w = elementalist();
     tap(&mut w, E, 30);

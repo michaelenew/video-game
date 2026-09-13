@@ -210,12 +210,14 @@ turns whatever field effect it meets into something worse rather than just damag
 > along that line decides what it does, and neither answer invents a new hitbox to do it:
 > both reuse something that already exists rather than detonating an instant bubble.
 >
-> - **A structure** is destroyed outright and thrown outward as several pieces of debris,
->   fanned along the line Cataclysm was aimed rather than one blast that lands everywhere at
->   once. Each piece is its own small projectile with its own flight time, so what actually
->   connects depends on how close you were standing and whether you were in the fan -- a
->   shotgun rather than a bomb, and one you can see coming rather than one that has already
->   landed by the time you notice it. See `crate::debris`.
+> - **A structure** is destroyed outright and thrown outward as several pieces of debris, in a
+>   cone around the line Cataclysm was aimed rather than one blast that lands everywhere at
+>   once -- a real cone standing in space, square to the line of effect however it is pitched,
+>   not an arc swept flat around the world's vertical axis. Each piece is its own small
+>   projectile with its own flight time, so what actually connects depends on how close you
+>   were standing and whether you were inside the cone -- a shotgun rather than a bomb, and one
+>   you can see coming rather than one that has already landed by the time you notice it. See
+>   `crate::debris`.
 > - **A fire pillar** is not damaged -- it is transformed. The same `Effect`, the same two
 >   volumes a standing pillar already tests against, cut loose from the ground and sent
 >   racing along the direction Cataclysm was aimed, pulling in and burning anyone caught in

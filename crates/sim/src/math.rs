@@ -36,6 +36,15 @@ impl V3 {
         self.x.mul(o.x).add(self.y.mul(o.y)).add(self.z.mul(o.z))
     }
 
+    /// The vector square to both `self` and `o`, right-handed.
+    pub const fn cross(self, o: V3) -> V3 {
+        V3::new(
+            self.y.mul(o.z).sub(self.z.mul(o.y)),
+            self.z.mul(o.x).sub(self.x.mul(o.z)),
+            self.x.mul(o.y).sub(self.y.mul(o.x)),
+        )
+    }
+
     pub const fn len_sq(self) -> Fx {
         self.dot(self)
     }
@@ -436,6 +445,34 @@ pub fn atan2_turns(z: Fx, x: Fx) -> Fx {
     let sq = r.mul(r);
     let angle = base.sub(r.mul(a1.add(sq.mul(a3.add(sq.mul(a5))))));
     if z.raw() < 0 { angle.neg() } else { angle }
+}
+
+/// A sideways and an upward axis square to `dir`, spanning the plane
+/// perpendicular to it in full 3D -- not just the horizontal one.
+///
+/// Sideways is `dir` turned a quarter turn in the horizontal plane, which is
+/// defined for everything except looking exactly at your own feet; upward is
+/// whatever is left once `dir`'s own pitch is accounted for, found as the
+/// cross product of the two rather than assumed level. That distinction is
+/// the whole reason this exists rather than a plain yaw rotation: a fan built
+/// by varying only the bearing around the world's vertical axis is a shape
+/// flattened into whatever horizontal slice `dir`'s own pitch happens to
+/// pass through, not a cone around `dir` itself -- true only when `dir` is
+/// level to begin with, and visibly wrong the moment it is not.
+///
+/// Straight up or down the two are degenerate and it falls back to the world
+/// axes, which is the right answer there -- a cone fired at the floor has no
+/// "left" that means anything to the player.
+pub fn frame_about(dir: V3) -> (V3, V3) {
+    let flat = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
+    if flat.flat_len().raw() < Fx::ratio(1, 100).raw() {
+        return (
+            V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        );
+    }
+    let right = flat.normalized();
+    (right, right.cross(dir).normalized())
 }
 
 /// Length of a vector whose components are too large to square in 16.16.

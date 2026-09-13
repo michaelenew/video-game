@@ -501,7 +501,7 @@ impl Effect {
         let p = self.progress();
         let bulge = Fx::from_int(4).mul(p).mul(Fx::ONE.sub(p));
         let (side, up) = GRASP_CORNERS[arm.min(GRASP_ARMS - 1)];
-        let (right, lift) = frame_about(self.dir);
+        let (right, lift) = crate::math::frame_about(self.dir);
         let spread = t::grasp_spread().mul(bulge);
         self.pos
             .add(self.dir.scale(self.reach.mul(p)))
@@ -658,30 +658,6 @@ impl Effect {
     pub fn forget_hits(&mut self) {
         self.struck = 0;
     }
-}
-
-/// A sideways and an upward axis square to `dir`.
-///
-/// Sideways is `dir` turned a quarter turn in the horizontal plane, which is
-/// defined for everything except looking exactly at your own feet; upward is
-/// what is left. Straight up or down the two are degenerate and it falls back
-/// to the world axes, which is the right answer there — a cone fired at the
-/// floor has no "left" that means anything to the player.
-fn frame_about(dir: V3) -> (V3, V3) {
-    let flat = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
-    if flat.flat_len().raw() < Fx::ratio(1, 100).raw() {
-        return (
-            V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
-            V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
-        );
-    }
-    let right = flat.normalized();
-    let up = V3::new(
-        right.y.mul(dir.z).sub(right.z.mul(dir.y)),
-        right.z.mul(dir.x).sub(right.x.mul(dir.z)),
-        right.x.mul(dir.y).sub(right.y.mul(dir.x)),
-    );
-    (right, up.normalized())
 }
 
 /// Which part of its life a Guillotine lotus is in.

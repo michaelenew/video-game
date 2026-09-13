@@ -1,31 +1,49 @@
 //! What a structure breaks into when Cataclysm destroys it.
 //!
 //! Not one instantaneous blast -- several pieces, each with a real velocity,
-//! fanned out from where the structure stood along the line Cataclysm was
-//! aimed. A shotgun rather than a bomb: what actually connects depends on how
-//! close everyone was and where they stood relative to the spread, and it
-//! takes a moment to arrive rather than landing on the same frame the
-//! structure went down. See `crate::bolt`, which made the same call -- a real
-//! velocity, stepped frame by frame -- for the same reason: this is a thing
-//! thrown, not a place that briefly exists.
+//! fanned out from where the structure stood in a cone around the line
+//! Cataclysm was aimed. A shotgun rather than a bomb: what actually connects
+//! depends on how close everyone was and where they stood relative to the
+//! spread, and it takes a moment to arrive rather than landing on the same
+//! frame the structure went down. See `crate::bolt`, which made the same call
+//! -- a real velocity, stepped frame by frame -- for the same reason: this is
+//! a thing thrown, not a place that briefly exists.
+//!
+//! **The cone is a cone, not an arc.** An earlier version of this fanned the
+//! pieces by rotating the aimed line's own bearing -- the same angle a
+//! top-down map would show -- and left its pitch untouched. That is not a
+//! spread around the line of effect; it is a spread around the world's
+//! vertical axis, which only happens to look right when the line of effect is
+//! level. Aimed up or down it stopped meaning anything, the way a ray built
+//! from the chest along the look direction stops meaning anything once
+//! `crate::aim`'s own warning about that mistake is ignored. What this uses
+//! instead is [`crate::math::frame_about`] -- the same construction the
+//! Grasp's arms spread around their own line of effect with -- which finds
+//! sideways and up **square to `dir` itself**, however `dir` is pitched.
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
 use crate::effects::Effects;
-use crate::fixed::Fx;
-use crate::math::{V3, atan2_turns};
+use crate::fixed::{Fx, cos_turns, sin_turns};
+use crate::math::{V3, frame_about};
 use crate::monster::Monster;
 use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
 
-/// How many pieces one structure breaks into.
+/// How many pieces one structure breaks into: one straight down the line
+/// Cataclysm was aimed, and six more evenly spaced around it at the cone's
+/// own half-angle.
 ///
 /// A count, not a feel number -- the same reasoning `bolt::MAX_BOLTS` and the
-/// Grasp's four arms use. Odd, so one piece always flies straight down the
-/// line Cataclysm was aimed rather than the centre of the fan being a gap
-/// between two pieces.
+/// Grasp's four arms use. A centre piece rather than a gap in the middle of
+/// the fan is worth one slot on its own; six is the fewest that reads as a
+/// ring rather than a handful of stray points once it is spread out over a
+/// cone's whole surface, which is a lot more room to fill than an arc is.
 pub const PIECES_PER_BLAST: usize = 7;
+
+/// The ring around the centre piece.
+const RING: usize = PIECES_PER_BLAST - 1;
 
 /// Enough for one full blast per player at once. A second structure broken
 /// before the first blast's pieces have burned out is the rare case, and
@@ -47,27 +65,29 @@ pub struct Shard {
     pub travelled: Fx,
 }
 
-/// Break a structure at `at` into [`PIECES_PER_BLAST`] pieces, fanned around
-/// the line Cataclysm was aimed along.
+/// Break a structure at `at` into [`PIECES_PER_BLAST`] pieces, in a cone
+/// around the line Cataclysm was aimed along.
 ///
-/// The fan is built by rotating `dir`'s own horizontal bearing rather than by
-/// offsetting it sideways: a true angular spread reads as pieces radiating
-/// from the point of impact at every range, where a sideways nudge would read
-/// as a spread only close up and as a set of parallel lines far out. The
-/// pieces keep `dir`'s vertical angle unchanged -- the fan is a shotgun fired
-/// roughly level, not a cone in every dimension.
+/// One piece flies straight down `dir`. The rest sit on the rim of a cone at
+/// `debris_spread`'s half-angle, evenly spaced by [`frame_about`]'s own
+/// sideways and up -- true perpendiculars to `dir` in three dimensions,
+/// however `dir` is pitched, rather than a bearing swept around the world's
+/// vertical axis. That is what makes this a cone standing in space rather
+/// than a fan lying flat in whatever horizontal slice `dir` happens to pass
+/// through.
 pub fn blast(shrapnel: &mut Shrapnel, owner: u8, at: V3, dir: V3) {
-    let bearing = atan2_turns(dir.z, dir.x);
-    let flat = V3::new(dir.x, Fx::ZERO, dir.z).flat_len();
-    let half = (PIECES_PER_BLAST as i32 - 1) / 2;
-    for k in 0..PIECES_PER_BLAST as i32 {
-        let offset = if half > 0 {
-            t::debris_spread().mul(Fx::ratio(k - half, half))
-        } else {
-            Fx::ZERO
-        };
-        let level = V3::from_turns(bearing.add(offset)).scale(flat);
-        let piece_dir = V3::new(level.x, dir.y, level.z).normalized();
+    light_one(shrapnel, owner, at, dir);
+
+    let (right, up) = frame_about(dir);
+    let (axial, radial) = (cos_turns(t::debris_spread()), sin_turns(t::debris_spread()));
+    for k in 0..RING {
+        let azimuth = Fx::ratio(k as i32, RING as i32);
+        let (c, s) = (cos_turns(azimuth), sin_turns(azimuth));
+        let piece_dir = dir
+            .scale(axial)
+            .add(right.scale(radial.mul(c)))
+            .add(up.scale(radial.mul(s)))
+            .normalized();
         light_one(shrapnel, owner, at, piece_dir);
     }
 }
