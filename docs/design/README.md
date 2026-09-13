@@ -58,7 +58,7 @@ poke is a design choice in a closed arena, not a gap.
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position | `L`/`R` melee autos | Strong |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Raise | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
-| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto | Reworked |
+| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto · `Q` Judgement · `E` Sweep | Kit built |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear · `E` Rush | Rebuilt |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
 | ~~Gatekeeper~~ | — | — | Retired |
@@ -102,7 +102,7 @@ Nothing here blocks a prototype.
 | **Aerials** | ⚠️ **Newly open, and the intended direction.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. Nothing is implemented; airborne currently gives the grounded move |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
 | **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
-| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers |
+| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. Whether the finisher stays on `Q` or moves to `M`, and what `shift` + right click should be once an ability has two forms |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush |
 | Shadow Reaver | Whether the shadow has collision |
@@ -126,9 +126,10 @@ character progression.
 ## 6 · Implementation
 
 Rust, eight crates, simulation as a pure function. See
-[architecture.md](architecture.md). All six classes have their mechanic and three
-exemplar moves, there is a monster to fight and climb, peer-to-peer rollback play
-works over real UDP, and 321 tests cover determinism, combat relationships,
+[architecture.md](architecture.md). All six classes have their mechanic and at
+least three exemplar moves -- ten on the Champion, five on the Dual mage, four on
+the Blood mage -- there is a monster to fight and climb, peer-to-peer rollback
+play works over real UDP, and 406 tests cover determinism, combat relationships,
 aiming, the ride, the camera, kinematics and animation.
 
 ```

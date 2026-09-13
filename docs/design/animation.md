@@ -208,6 +208,15 @@ is the first thing to suspect.
 Two more for combining poses: `mirrored()` (the same pose on the other side) and
 `blend(&other, t)`.
 
+And one for the case `mirrored()` is *not* right for: **`other_arm()`**, the same
+pose thrown with the other arm **without switching stance**. It mirrors
+everything above the hips, then re-solves the legs so the feet stay exactly where
+they were. Use it for a one-armed attack that exists on both sides -- the Dual
+mage's two autos are one punch read twice -- because an attack clip has to start
+and end on the idle's own stance, and a mirrored stance is a *different* stance:
+mirror the whole pose and the character's footing swaps on the first frame of the
+move and swaps back on the last.
+
 ## Authoring a clip
 
 A recipe is a handful of keys, an easing per gap, and a looseness setting.

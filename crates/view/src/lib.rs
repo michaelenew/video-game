@@ -34,6 +34,28 @@ pub(crate) fn fx(v: sim::Fx) -> f32 {
     v.raw() as f32 / FX
 }
 
+/// How a fighter's body sits in the world: the rotation from character space
+/// into the arena, given which way they face.
+///
+/// **The one place the two frames meet.** Character space is `+Z` along the
+/// facing, `+Y` up, and the left arm at `-X` (see [`pose`]); the arena's frame
+/// is the engine's. Everything drawn on a fighter goes through this -- the body
+/// parts, whatever their hands are holding -- and so does the test that checks
+/// the arm the simulation swings from is the arm the renderer draws. Written
+/// once so those two cannot drift apart, which for a class with a different
+/// force in each hand is the difference between a hitbox that comes out of the
+/// visible fist and one that comes out of the other one.
+///
+/// `facing` is the simulation's, flattened and unit: `[x, z]`.
+pub fn body_turn(facing: [f32; 2]) -> math::Quat {
+    math::Quat::from_y(facing[0].atan2(facing[1]))
+}
+
+/// Where a point in character space ends up in the arena.
+pub fn into_world(local: math::V3, pos: [f32; 3], facing: [f32; 2]) -> math::V3 {
+    math::add(pos, body_turn(facing).rotate(local))
+}
+
 /// Convert a look angle in radians to the simulation's aim unit.
 ///
 /// The simulation counts angles in 1/65536 of a turn as an integer, because an

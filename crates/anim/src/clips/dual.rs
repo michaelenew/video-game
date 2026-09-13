@@ -1,4 +1,4 @@
-//! The Dual mage: Step strike, Lance, Judgement.
+//! The Dual mage: two autos, Lance, Judgement, Sweep.
 //!
 //! A melee mage holding two forces apart. The body is the longest and the
 //! slightest in the roster -- `build_for(DualMage)` is tall, thin and
@@ -8,21 +8,33 @@
 //! because it is big. Every one of these clips is authored to be read from the
 //! silhouette's extremities, not from its bulk, because there is no bulk.
 //!
-//! That gives three uses of one vocabulary:
+//! That gives four uses of one vocabulary:
 //!
-//! - **Step strike** is a step *into* a strike. The lead foot leaves the floor
+//! - **The two autos** are one punch thrown with either arm: left is dark,
+//!   right is light, and which of the two just landed is how the whole class
+//!   steers. It is a step *into* the strike -- the lead foot leaves the floor
 //!   on the frame the hand starts, so the footwork is the attack rather than a
-//!   preface to it. It is the only one of the three that keeps any movement --
-//!   sixty per cent of walking speed -- and so the only one authored knowing
-//!   its legs may be half-replaced by a walk cycle while it plays.
+//!   preface to it -- and it is the only thing here that keeps any movement,
+//!   sixty per cent of walking speed, so it is authored knowing its legs may be
+//!   half-replaced by a walk cycle while it plays.
+//!
+//!   **The light one is the dark one through `Pose::other_arm`.** Not a
+//!   convenience: the pair only works if the *only* difference a player can see
+//!   is which arm it came out of, and two hand-authored clips would not stay
+//!   that way. The stance does not mirror with it -- the feet stay where the
+//!   idle put them, or the first frame of every right-hand punch would swap the
+//!   character's footing.
+//!
+//! - **Sweep** is the one thing here thrown with both arms at once. It is on
+//!   `E`, and it is the answer to somebody already inside the punches' arc.
 //! - **Lance** is one straight thing: rear foot, hips, shoulder, point. It
 //!   coils *away* from that line first -- the point hand goes back past the hip
 //!   while the free hand stays out on the target -- so what an opponent reads
 //!   during the startup is the opposite of what arrives.
-//! - **Judgement** squares up. The other two are bladed and one-sided; the
-//!   finisher is symmetric front to back and side to side, because it is the
-//!   only thing the class does with both forces at once, and because symmetry
-//!   is what makes it read as a verdict rather than as a large swing.
+//! - **Judgement** squares up. The rest are bladed and one-sided; the finisher
+//!   is symmetric front to back and side to side, because it is the only thing
+//!   the class does with both forces *together*, and because symmetry is what
+//!   makes it read as a verdict rather than as a large swing.
 //!
 //! ## Two rules every clip in this file obeys
 //!
@@ -72,11 +84,37 @@ const GATHER: Ease = Ease::new(0.45, 0.1, 0.75, 0.82);
 const PULL_AWAY: Ease = Ease::new(0.45, -0.22, 0.3, 1.0);
 
 pub fn clips() -> Vec<Recipe> {
-    vec![step_strike(), lance(), judgement()]
+    vec![
+        punch(Clip::DualDark, Arm::Dark),
+        lance(),
+        judgement(),
+        sweep(),
+        punch(Clip::DualLight, Arm::Light),
+    ]
+}
+
+/// Which arm a punch is thrown with.
+///
+/// The two autos are the same recipe read twice. `Light` puts every key through
+/// [`Pose::other_arm`], which mirrors everything above the hips and leaves the
+/// feet where they were -- see the module header.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Arm {
+    Dark,
+    Light,
+}
+
+impl Arm {
+    fn side(self, pose: Pose) -> Pose {
+        match self {
+            Arm::Dark => pose,
+            Arm::Light => pose.other_arm(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
-// Step strike -- the poke
+// The autos -- one punch, either arm
 // ---------------------------------------------------------------------------
 
 /// Two frames in, and the lead foot is already off the floor.
@@ -128,7 +166,13 @@ fn plant() -> Pose {
         .toe_r(14.0)
 }
 
-/// The contact frame: the lead foot is down and the dark hand arrives on it.
+/// The contact frame: the lead foot is down and the fist arrives on it.
+///
+/// The arm is nearly straight here and stays out through the active frames,
+/// which matters more on this move than on any other in the file: the hit
+/// volume is a wing that *leaves* the fist and opens outward to two and a half
+/// arm lengths (`moves::Shape::Wing`), and a hand that had already begun to
+/// come back would be pulling away from the thing doing the damage.
 fn strike() -> Pose {
     stance()
         .hips(0.0, -0.10, 0.075)
@@ -194,37 +238,62 @@ fn regather() -> Pose {
         .toe_r(8.0)
 }
 
-fn step_strike() -> Recipe {
-    let clip = Clip::DualPoke;
+/// One punch, thrown with whichever arm is asked for.
+///
+/// **The two autos are this function twice.** They have to be indistinguishable
+/// apart from the side, because that is the entire information the player is
+/// reading off them -- dark landed, or light did -- and two hand-authored clips
+/// drift the moment either is touched.
+///
+/// The bookend keys are the idle's own stance, *unmirrored*, on both. Every
+/// clip in this file starts and ends there (see the module header), and a
+/// mirrored stance is a different stance: put one on frame zero and the
+/// character's feet swap sides on the first frame of every right-hand punch and
+/// swap back on the last.
+fn punch(clip: Clip, arm: Arm) -> Recipe {
     let (windup, contact, recovery) = phases(clip);
     let last = clip.length() - 1;
+    let side = |p: Pose| arm.side(p);
 
     let mut track = Track::new(clip);
     track.key(0, stance(), Ease::OUT);
     // Two frames in, whatever the Oven says the startup is. That is where the
     // opponent is looking, and a fraction of a five-frame startup would put
     // the tell on frame one, where it is a pop rather than a telegraph.
-    track.key(windup.saturating_sub(2).max(1), load(), Ease::IN);
-    track.key(windup, plant(), Ease::STRIKE);
-    track.contact(contact, strike(), Ease::OUT);
-    track.key(recovery, follow(), Ease::OUT);
-    track.key(frac(recovery, last, 0.45), regather(), Ease::SMOOTH);
+    track.key(windup.saturating_sub(2).max(1), side(load()), Ease::IN);
+    track.key(windup, side(plant()), Ease::STRIKE);
+    track.contact(contact, side(strike()), Ease::OUT);
+    track.key(recovery, side(follow()), Ease::OUT);
+    track.key(frac(recovery, last, 0.45), side(regather()), Ease::SMOOTH);
     track.key(last, stance(), Ease::SMOOTH);
 
+    let which = match arm {
+        Arm::Dark => {
+            "The dark auto, thrown with the left arm; the light one is \
+                      this clip mirrored above the hips."
+        }
+        Arm::Light => {
+            "The light auto: the dark punch through `Pose::other_arm`, \
+                       so the two differ in the arm and in nothing else."
+        }
+    };
     Recipe {
         clip,
         looseness: Looseness::CRISP,
-        notes: "A step into the strike rather than a step and then a strike: \
-                the lead foot unweights two frames in and lands on the contact \
-                frame, so the footwork and the hand are one motion. The cock is \
-                shallow on purpose -- five frames is not enough to draw a hand \
-                back and put it somewhere else -- and the read lives in the \
-                lifted lead knee and the light hand thrown back behind. Crisp, \
-                because anything that rings here arrives late and this is the \
-                move thrown constantly. The rear foot comes up during recovery \
-                and the body settles onto the idle's own stance, which is what \
-                the frame after this clip cuts to."
-            .into(),
+        notes: format!(
+            "{which} A step into the strike rather than a step and then a \
+             strike: the lead foot unweights two frames in and lands on the \
+             contact frame, so the footwork and the hand are one motion. It \
+             reads as a punch and nothing more -- the wing is the ability, not \
+             the body, and it leaves the fist rather than being swung by it. \
+             The cock is shallow on purpose -- five frames is not enough to \
+             draw a hand back and put it somewhere else -- and the read lives \
+             in the lifted lead knee and the other hand thrown back behind. \
+             Crisp, because anything that rings here arrives late and this is \
+             the move thrown constantly. The rear foot comes up during recovery \
+             and the body settles onto the idle's own stance, which is what the \
+             frame after this clip cuts to."
+        ),
         keys: track.done(),
     }
 }
@@ -663,6 +732,244 @@ fn judgement() -> Recipe {
                 frames and the body spends the first half of them at the bottom \
                 of the drop, because a finisher that pops back up to guard was \
                 never final."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sweep -- both arms, across the whole front
+// ---------------------------------------------------------------------------
+//
+// The one move here thrown with both forces at once and still moving. Its job
+// in the kit is spatial: the punches are long and thin and lose to somebody who
+// is already inside them, and this is the thing that moves that person. So it
+// is authored wide rather than deep -- the hands travel across the front at
+// hip-to-chest height and end further apart than they started, which is the
+// silhouette of a shove rather than of a strike.
+//
+// It travels **from the character's left to their right**, which is not an
+// arbitrary choice: `moves::Shape::Swing` starts a positive arc at `+arc/2` and
+// runs to `-arc/2`, and the volume that comes out of that sweeps the same way.
+// A clip that crossed the other way would be an animation disagreeing with its
+// own hitbox about which side of you it is on.
+
+/// The open: hands come up and apart, weight settling onto the lead foot.
+/// Early, and unmistakably not a punch -- both arms leave at once.
+fn spread_wide() -> Pose {
+    stance()
+        .hips(0.0, -0.07, -0.02)
+        .root(2.0, -4.0, -16.0)
+        .spine(4.0, -3.0, -2.0)
+        .chest(0.0, -2.0, -6.0)
+        .head(-2.0, 0.0, 8.0)
+        .shoulder_l(6.0, 34.0, 0.0)
+        .elbow_l(46.0)
+        .wrist_l(-10.0, 0.0, 0.0)
+        .shoulder_r(14.0, 30.0, 0.0)
+        .elbow_r(52.0)
+        .wrist_r(-10.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND, 0.18])
+        .plant_r([R + 0.02, GROUND + 0.02, -0.16])
+        .toe_l(-4.0)
+        .toe_floor_r()
+}
+
+/// The coil, and the frame an opponent decides on: everything gathered across
+/// to the character's left, both hands folded in outside the left hip, the
+/// whole torso wound the wrong way. What arrives comes from the other side.
+///
+/// Both elbows are shut. An arm wound back *straight* has to cover its own
+/// length again before it starts crossing the front, and four frames is not
+/// enough for a hand to do that without teleporting -- which is exactly what
+/// the continuity test measured when it was written that way.
+fn wind_across() -> Pose {
+    stance()
+        .hips(-0.03, -0.10, -0.03)
+        .root(4.0, -8.0, -26.0)
+        .spine(6.0, -8.0, -16.0)
+        .chest(2.0, -6.0, -24.0)
+        .head(0.0, -4.0, 20.0)
+        .shoulder_l(-6.0, 48.0, 0.0)
+        .elbow_l(64.0)
+        .wrist_l(-14.0, 0.0, 0.0)
+        .shoulder_r(44.0, 14.0, 0.0)
+        .elbow_r(78.0)
+        .wrist_r(-16.0, 0.0, 0.0)
+        .plant_l([L - 0.04, GROUND, 0.16])
+        .plant_r([R + 0.02, GROUND + 0.02, -0.17])
+        .toe_l(-2.0)
+        .toe_floor_r()
+}
+
+/// The last startup frame: the coil at its tightest, and the hips already
+/// turning under it. A sweep is driven from the floor, and this is the frame
+/// that says so.
+///
+/// Close to the coil on purpose. **The arms cross during the active frames,
+/// not before them** -- the hit volume sweeps from one side to the other over
+/// exactly those six frames (`moves::Shape::Swing`), so an animation that had
+/// already thrown the arms across by the time the hitbox appeared would be
+/// drawing the move in the wrong place for the whole of it.
+fn unwind() -> Pose {
+    stance()
+        .hips(-0.02, -0.11, -0.01)
+        .root(5.0, -6.0, -20.0)
+        .spine(7.0, -6.0, -13.0)
+        .chest(2.0, -5.0, -22.0)
+        .head(0.0, -2.0, 16.0)
+        .shoulder_l(0.0, 50.0, 0.0)
+        .elbow_l(58.0)
+        .wrist_l(-12.0, 0.0, 0.0)
+        .shoulder_r(42.0, 20.0, 0.0)
+        .elbow_r(70.0)
+        .wrist_r(-14.0, 0.0, 0.0)
+        .plant_l([L - 0.035, GROUND, 0.17])
+        .plant_r([R + 0.02, GROUND + 0.015, -0.17])
+        .toe_l(-3.0)
+        .toe_floor_r()
+}
+
+/// The contact frame: the hands have left the hip and are crossing the front on
+/// the character's left, which is where the volume starts.
+fn entering() -> Pose {
+    stance()
+        .hips(-0.005, -0.105, 0.03)
+        .root(6.0, -2.0, -6.0)
+        .spine(8.0, -2.0, -2.0)
+        .chest(2.0, -1.0, -6.0)
+        .head(0.0, 0.0, 6.0)
+        .shoulder_l(26.0, 56.0, 0.0)
+        .elbow_l(36.0)
+        .wrist_l(-8.0, 0.0, 0.0)
+        .shoulder_r(38.0, 34.0, 0.0)
+        .elbow_r(44.0)
+        .wrist_r(-10.0, 0.0, 0.0)
+        .plant_l([L - 0.025, GROUND, 0.19])
+        .plant_r([R + 0.03, GROUND + 0.01, -0.16])
+        .toe_l(-3.0)
+        .toe_floor_r()
+}
+
+/// The middle of the active window: both arms out across the front, the torso
+/// square, the hands level with the chest rather than above it.
+fn across() -> Pose {
+    stance()
+        .hips(0.015, -0.095, 0.06)
+        .root(6.0, 2.0, 10.0)
+        .spine(8.0, 3.0, 10.0)
+        .chest(2.0, 3.0, 16.0)
+        .head(0.0, 1.0, -8.0)
+        .shoulder_l(52.0, 46.0, 0.0)
+        .elbow_l(20.0)
+        .wrist_l(-6.0, 0.0, 0.0)
+        .shoulder_r(26.0, 62.0, 0.0)
+        .elbow_r(26.0)
+        .wrist_r(-6.0, 0.0, 0.0)
+        .plant_l([L - 0.01, GROUND, 0.20])
+        .plant_r([R + 0.04, GROUND, -0.14])
+        .toe_l(-2.0)
+        .toe_r(4.0)
+}
+
+/// The end of the arc. The hands have run out of front to cross and the body is
+/// still turning under them, which is what makes it read as having moved
+/// something rather than as having stopped on someone.
+fn carried_through() -> Pose {
+    stance()
+        .hips(0.025, -0.085, 0.04)
+        .root(5.0, 6.0, 28.0)
+        .spine(7.0, 5.0, 22.0)
+        .chest(2.0, 5.0, 32.0)
+        .head(0.0, 2.0, -22.0)
+        .shoulder_l(66.0, 30.0, 0.0)
+        .elbow_l(28.0)
+        .wrist_l(-8.0, 0.0, 0.0)
+        .shoulder_r(10.0, 78.0, 0.0)
+        .elbow_r(30.0)
+        .wrist_r(-8.0, 0.0, 0.0)
+        .plant_l([L, GROUND + 0.02, 0.19])
+        .plant_r([R + 0.05, GROUND, -0.12])
+        .toe_l(-2.0)
+        .toe_r(2.0)
+}
+
+/// Gathering the guard back, still turned away from where the stance wants to
+/// be. The recovery is long and this is most of it.
+fn rebuild() -> Pose {
+    stance()
+        .hips(0.01, -0.07, 0.01)
+        .root(3.0, 2.0, 8.0)
+        .spine(5.0, 2.0, 12.0)
+        .chest(2.0, 2.0, 14.0)
+        .head(-2.0, 0.0, -6.0)
+        .shoulder_l(34.0, 22.0, 0.0)
+        .elbow_l(54.0)
+        .wrist_l(-8.0, 0.0, 0.0)
+        .shoulder_r(16.0, 40.0, 0.0)
+        .elbow_r(56.0)
+        .wrist_r(-8.0, 0.0, 0.0)
+        .plant_l([L - 0.02, GROUND, 0.17])
+        .plant_r([R + 0.02, GROUND + 0.02, -0.15])
+        .toe_l(-2.0)
+        .toe_floor_r()
+}
+
+fn sweep() -> Recipe {
+    let clip = Clip::DualSweep;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, stance(), Ease::OUT);
+    track.key(frac(0, windup, 0.28), spread_wide(), Ease::SMOOTH);
+    // The coil is held rather than passed through: twelve frames of startup is
+    // long enough to be read, and the thing being read is the wind, so it has
+    // to sit still long enough to be seen sitting still.
+    track.key(frac(0, windup, 0.5), wind_across(), Ease::HOLD);
+    track.key(frac(0, windup, 0.72), wind_across(), GATHER);
+    track.key(windup, unwind(), Ease::STRIKE);
+    // The active window is the sweep. Three keys across it rather than one,
+    // because the arms and the hit volume have to be crossing the front at the
+    // same time and at the same rate -- the volume runs its whole arc over
+    // these six frames, and a body that arrived early would be swinging at
+    // nothing while the thing that hurts was still behind it.
+    track.contact(contact, entering(), Ease::LINEAR);
+    track.key(frac(contact, recovery, 0.5), across(), Ease::LINEAR);
+    track.key(recovery, carried_through(), Ease::SMOOTH);
+    track.key(frac(recovery, last, 0.5), rebuild(), Ease::SMOOTH);
+    track.key(last, stance(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            // Loose in the arms, and only there. A sweep is the one thing this
+            // class throws that is meant to look like it has weight behind it,
+            // and weight in a body this thin has to read as the hands arriving
+            // after the hips rather than as mass.
+            root: Feel::new(1.0, 0.95),
+            spine: Feel::new(1.2, 0.9),
+            chest: Feel::new(1.4, 0.85),
+            head: Feel::new(2.0, 0.6),
+            arms: Feel::new(1.5, 0.75),
+            legs: Feel::new(1.1, 0.95),
+        },
+        notes: "Both arms across the whole front, left to right, driven from \
+                the hips. The wind is the telegraph and it is held: everything \
+                gathers across to the left, both hands folded in outside the \
+                left hip, the torso wound the wrong way -- and then the hips \
+                turn under it a frame before the arms go, which is what says \
+                this is thrown from the floor rather than from the shoulders. \
+                The crossing itself happens during the active frames and not \
+                before them, keyed three times across the window, because that \
+                is exactly when the hit volume crosses: the arms and the thing \
+                that hurts have to be on the same side of the body at the same \
+                time. Left to right for the same reason -- an animation that \
+                swept the other way would be telling the opponent the wrong \
+                side to leave by. Wide rather than deep: the hands end further \
+                apart than they started and level with the chest, because what \
+                this move is for is moving somebody who is already inside the \
+                punches."
             .into(),
         keys: track.done(),
     }

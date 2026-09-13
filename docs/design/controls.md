@@ -383,6 +383,12 @@ that lets one control scheme drive six kits. The fourth means whatever that clas
 means, and most classes leave it empty. `cargo run -p sim --bin frametable` prints the key
 beside every move.
 
+**The Dual mage is the second, added 2026-09-13**, and it is the same argument from the other
+end: her mechanic is a meter, and the meter is steered by *which button attacks* rather than by
+a key, so `E` had nothing to toggle either. It casts Sweep. The rule that is emerging is worth
+stating plainly — **`E` is an ability exactly when the class's mechanic has no state to
+change**, and both classes that fit that description now use it.
+
 ## Movement
 
 Movement is the core of how the game feels, so it gets pinned down before the attack and
@@ -527,23 +533,46 @@ Airborne attacks are still the grounded ones.
 > stale table beside a working implementation is worse than no table: the Elementalist's auto,
 > which is a beam now, and the whole of the Blood mage's. The rest have not.
 
-## Dual mage
+## Dual mage — built 2026-09-13
 
 The mechanic is on the primary buttons, and it is not optional.
 
 **`L` always moves you darker. `R` always moves you lighter.** Every input, not just autos.
 
+What is bound today:
+
 | Input | Result |
 | --- | --- |
-| `L` / `R` | Dark / light auto. **Changes your mode on contact** — a whiff steers nothing |
+| `L` | **Dark auto** — a punch with the left arm. Steers dark **on contact**; a whiff steers nothing |
+| `R` | **Light auto** — the same punch with the right arm. Steers light on contact |
+| `shift` + `L` | **Lance**. Steers dark on the press |
+| `shift` + `R` | The light auto again. The light *form* of the committed cast is not built |
+| `Q` | **Judgement**, the finisher. Gated on depth |
+| `E` | **Sweep**. No side, so it pushes you further along your current path |
+
+**Right click is an attack on this class**, which is the one place the shared grammar bends.
+Everywhere else `R` is guard, and guard is shield-gated — this class has no shield, so the
+button was doing nothing while half of the mechanic had no input. It is not a special case in
+the code either: which move a click asks for is one function
+(`state::clicked_move`), and the Champion's three weapons already needed it.
+
+The intended full kit, unbuilt:
+
+| Input | Not built |
+| --- | --- |
 | direction + `L`/`R` | Basic moves, in dark or light form |
 | `shift` + `L`/`R` | Abilities, in dark or light form |
 | `M` / `LR` | Gated finishers — Judgement and Eclipse |
 | `shift` + `M` / `shift` + `LR` | Ordinary abilities. Push further along your current path |
 
-`M` and `LR` are neither left nor right, so they cannot pick a direction. They push you
-further down whichever path you are already on. The grammar stays consistent: **direction
-comes from side-ness, and only left and right have it.**
+`M`, `LR`, `Q` and `E` are neither left nor right, so they cannot pick a direction. They push
+you further down whichever path you are already on, and at dead centre they do nothing at all.
+The grammar stays consistent: **direction comes from side-ness, and only left and right have
+it.**
+
+**The autos come out of the two arms** — dark from the left, light from the right — and the
+hit volume leaves from that shoulder. It is the class's readout: which arm just landed is
+which way the bar moved. See [kits/dual-mage.md](kits/dual-mage.md).
 
 **Autos have a slight range boost** — the beings inside extend your reach. This matters
 mechanically, not just as flavour: steering requires landing hits, so the class needs the
