@@ -1048,12 +1048,6 @@ pub fn tornado_pull() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TornadoPull))
 }
 
-/// How long a loosed pillar lives before it burns out, whether or not it ever
-/// leaves the arena first.
-pub fn tornado_life() -> u16 {
-    oven::scalar(Scalar::TornadoLife) as u16
-}
-
 /// How fast each piece of a broken structure flies.
 pub fn debris_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DebrisSpeed))

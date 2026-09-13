@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 231] = [
+pub const SCALARS: [i32; 230] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -175,7 +175,6 @@ pub const SCALARS: [i32; 231] = [
           196608, // elementalist.fire_bolt_knockback = 3
           917504, // elementalist.fire_tornado_speed = 14
          2621440, // elementalist.fire_tornado_pull_(m/s2) = 40
-              90, // elementalist.fire_tornado_lifetime = 90
          1966080, // elementalist.cataclysm_debris_speed = 30
           524288, // elementalist.cataclysm_debris_range = 8
            32768, // elementalist.cataclysm_debris_radius = 0.5

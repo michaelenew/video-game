@@ -206,10 +206,17 @@ impl EffectKind {
     }
 
     /// How long one of these lives, in frames.
+    ///
+    /// **A tornado never actually asks this.** It is never cast fresh through
+    /// [`Effect::cast`] -- it only ever comes from mutating a standing
+    /// `FirePillar` in place, `age` and `life` both left exactly as they
+    /// were, so what is left of the pillar's own life is what it gets to
+    /// travel on. The arm exists because the match still has to answer for
+    /// every kind; it gives the pillar's own number, since that is the
+    /// closest thing to a true answer.
     pub fn life(self) -> u16 {
         match self {
-            EffectKind::FirePillar => t::pillar_life(),
-            EffectKind::FireTornado => t::tornado_life(),
+            EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_life(),
             EffectKind::BlackSpike => t::spike_life(),
             EffectKind::Bloodletter => t::bloodletter_flight(),
             EffectKind::Grasp => t::grasp_flight(),
@@ -307,6 +314,11 @@ pub struct Effect {
     /// Only the blade uses it. The archive is specific that the health arrives
     /// **when it returns**, which is the whole risk of the ability: the cut
     /// lands immediately and the payment has to survive the flight home.
+    ///
+    /// A fire tornado banks something else in the same field: `age` the
+    /// instant it was cut loose, so [`tornado_pos`](Self::tornado_pos) can
+    /// measure its flight from that moment on rather than from when the
+    /// pillar it came from was first planted. See `state::World::fire_the_cataclysm`.
     pub banked: i32,
 }
 
@@ -396,19 +408,14 @@ impl Effect {
     /// pillar would be either useless against a jump or unavoidable on the
     /// ground.
     ///
-    /// **A tornado is always fully grown.** It was cut loose from a pillar
-    /// that had already finished growing in the sense that matters -- it is
-    /// leaving, not arriving -- so its own `progress` (which now measures how
-    /// close it is to burning out, not how established it is) has nothing to
-    /// do with its size. Shrinking a tornado toward nothing as its life ran
-    /// out would read as it fading, and it does not fade; it moves until its
-    /// clock or the arena stops it.
+    /// **A tornado grows the same way its pillar did**, on the same curve,
+    /// against `age` reset to zero at the moment it is torn loose -- see
+    /// `state::World::fire_the_cataclysm`. Not a fully-formed thing that
+    /// simply starts moving: it erupts again where it stands and grows into
+    /// itself exactly as a planted pillar does, and only then is it the
+    /// travelling hazard.
     pub fn pillar_volumes(&self) -> (Pillar, Pillar) {
-        let grown = if self.kind == EffectKind::FireTornado {
-            Fx::ONE
-        } else {
-            self.progress()
-        };
+        let grown = self.progress();
         let base = Pillar {
             radius: lerp(
                 t::pillar_base_radius_start(),
@@ -431,16 +438,23 @@ impl Effect {
     /// Where a tornado's centre is this frame.
     ///
     /// A pure function of `age`, not a velocity: `pos` is where the pillar it
-    /// was cut loose from stood, `dir` is the line Cataclysm was aimed along,
-    /// and how far past `pos` it has arrived is `age` frames of
-    /// `tornado_speed`. A rollback re-simulating the middle of its flight
-    /// computes the same point every time it asks, rather than integrating
-    /// toward it one frame at a time and landing somewhere near. Meaningless
-    /// -- and never called -- on anything but a [`EffectKind::FireTornado`].
+    /// was cut loose from stood -- which does not move, so it is equally
+    /// where the tornado started -- `dir` is the line Cataclysm was aimed
+    /// along, and how far past `pos` it has arrived is *however many frames
+    /// have passed since it was cut loose* of `tornado_speed`. That is `age`
+    /// minus `banked`, not `age` alone: `age` keeps counting from when the
+    /// pillar was first planted, because [`pillar_volumes`](Self::pillar_volumes)
+    /// needs the growth to be continuous across the moment it starts moving,
+    /// but the flight cannot be measured against the same clock a stationary
+    /// pillar was already running -- `state::World::fire_the_cataclysm` banks
+    /// the age it had at that exact moment, and this subtracts it back off. A
+    /// rollback re-simulating the middle of its flight computes the same
+    /// point every time it asks, rather than integrating toward it one frame
+    /// at a time and landing somewhere near. Meaningless -- and never called
+    /// -- on anything but a [`EffectKind::FireTornado`].
     pub fn tornado_pos(&self) -> V3 {
-        let travelled = t::tornado_speed()
-            .mul(Fx::from_int(self.age as i32))
-            .mul(DT);
+        let flying = self.age.saturating_sub(self.banked as u16);
+        let travelled = t::tornado_speed().mul(Fx::from_int(flying as i32)).mul(DT);
         self.pos.add(self.dir.scale(travelled))
     }
 

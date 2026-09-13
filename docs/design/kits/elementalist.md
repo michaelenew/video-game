@@ -220,9 +220,18 @@ turns whatever field effect it meets into something worse rather than just damag
 >   `crate::debris`.
 > - **A fire pillar** is not damaged -- it is transformed. The same `Effect`, the same two
 >   volumes a standing pillar already tests against, cut loose from the ground and sent
->   racing along the direction Cataclysm was aimed, pulling in and burning anyone caught in
->   either volume until its own clock runs out or it leaves the arena. Nothing about its
->   hitbox is reinvented for the occasion -- a tornado is a fire pillar that moves. See
+>   racing along the direction Cataclysm was aimed. It grows on exactly the curve the pillar
+>   it came from was already growing on -- one that had barely erupted keeps widening as it
+>   goes, one that was already mature stays that size -- rather than snapping to full size or
+>   back to nothing the instant it starts moving. The first frame it reaches somebody it lands
+>   a real stagger, the same eruption a fire pillar already throws the moment it is cast, and
+>   that stagger is not a flourish: a fighter free to act sets his own velocity from the stick
+>   every frame, which would cancel the pull below before it ever moved him. Stunned, his
+>   velocity only decays, and the pull can win inside that window -- toward the tornado's own
+>   live centre, for as long as he is standing in either volume, dragging him along with it
+>   rather than merely burning him where he stands. Once the stagger runs out he is free again:
+>   walking clear means outrunning the wide base, and jumping or air-dodging clear of the
+>   narrower column above it is the faster way out. See
 >   `crate::effects::EffectKind::FireTornado`.
 > - **A fighter**, hit directly with nothing in the way, just takes a real hit -- heavier
 >   than the auto's poke, with its own stagger rather than none.
@@ -230,7 +239,10 @@ turns whatever field effect it meets into something worse rather than just damag
 > The wind-up is long enough to be read and punished; the payoff is why you would still
 > throw it. Earth plus Fire again: Raise or Fissure to seed a structure, then Cataclysm to
 > decide whether it becomes a spray of debris or, by way of a fire pillar first, a moving
-> hazard that keeps threatening the space after the swing is over.
+> hazard that keeps threatening the space after the swing is over -- the tornado in particular
+> is the class's answer to somebody standing at mid range refusing to close: catch him with it
+> and he is dragged further from you as it travels, not toward you, which is the opposite of
+> what every other catch in this kit does and is the point of it.
 
 ### Flame spitter
 **Startup** fast · **Recovery** medium · **Range** medium, channelled · **Mechanic** on a
