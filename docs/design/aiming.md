@@ -163,6 +163,27 @@ exactly, all the way down. Two reasons, and the first is the one that matters:
 `aim::swing_path` takes `grounded` for exactly that, which is the same split
 the Champion's own swing shapes already make.
 
+**Which arm it comes out of** — added 2026-09-13. A swing also takes a `hand`,
+and it moves *where the swing starts* and nothing else: a one-armed move leaves
+from that shoulder rather than from the middle of the chest, at the same height
+and along the same line. Almost every move in the game is `Hand::Centre` and is
+unaffected.
+
+It exists because one class is built on the distinction. The Dual mage holds two
+forces apart, one in each arm, and her two autos are the same punch thrown left
+and right; which of them just landed is the whole of how her meter is steered, so
+a volume that came out of the sternum both times would make the mechanic
+unreadable. The side is declared in the move table next to the shape
+(`moves::hand`), and `aim::across` is the one place that turns it into a
+direction — including for the arc of a wing, so the two mirrored autos share one
+tuned number and cannot drift a sign apart.
+
+The sides are the **skeleton's**. The body is authored with `+Z` along the facing
+and its left arm at `-X`, which is a left-handed frame in a right-handed world,
+so "the left arm" is the side a quarter turn *toward* the strafe-right axis. What
+an animation and a hitbox have to agree about is which arm the player can see
+swinging, and `view/tests/kinematics.rs` fails if they ever part company.
+
 ### At the mechanic
 
 Wherever the class mechanic is standing. One move: the Reaver's Guillotine
@@ -197,7 +218,7 @@ swing.
 | --- | --- |
 | **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
 | **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
-| **Swing** | every melee attack: Bash, Slam, Grapple, Sweep, Drive, Uppercut, Slash, Executioner, Rend, Step strike |
+| **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos |
 | **At the mechanic** | Guillotine lotus |
 
 The mechanic inputs are aimed too, through the same two functions: Raise is a

@@ -799,6 +799,15 @@ impl World {
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
                 self.players[attacker].hit_used = true;
+                // The autos are the steering wheel, and they only steer when
+                // they land: the Dual mage's fast way back toward centre is a
+                // far-side auto, which is why the class has to close distance
+                // exactly when it is strongest. See `docs/design/dual-mage.md`.
+                if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                    if steers_on_contact(snapshot[attacker].class, kind) {
+                        steer_meter(&mut self.players[attacker], kind);
+                    }
+                }
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
                 // the way you are holding, so it is a repositioning tool you
@@ -1175,7 +1184,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 // why the volume is a line from the body rather than a ball at
                 // the end of one. A fighter standing inside the arc is caught
                 // by the haft.
-                let hub = moves::swing_hub(p.pos, plane);
+                let hub = moves::swing_hub(p.pos, p.facing, plane, m.hand);
                 let base = moves::swing_base(p.facing, p.aim_dir(), plane, p.grounded);
                 let half = m.arc.mul(Fx::ratio(1, 2));
                 // Where the head of the weapon is, as a fraction of the way
@@ -1201,11 +1210,33 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 // the swing was committed to rather than along the flattened
                 // facing: a spear levelled at somebody below you is the whole
                 // reason pitch is on the wire.
-                let hub = aim::origin(p.pos);
+                let hub = aim::hand_origin(p.pos, p.facing, m.hand);
                 let (through, _) = swing_progress(&m, left);
                 let start = t::thrust_extend();
                 let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
                 (hub, hub.add(p.aim_dir().scale(out)), false)
+            }
+            // A punch that opens into a wing. Both ends move: the tip sweeps
+            // outward *and* reaches further out as it goes, and the root rides
+            // a little behind the fist the whole way. The two together are
+            // what carve the shape -- an arc alone is a swing, and an
+            // extension alone is a thrust.
+            //
+            // Outward is away from the body on whichever side the hand is, so
+            // the two mirrored autos share one arc and one set of numbers.
+            moves::Shape::Wing => {
+                let hub = moves::swing_hub(p.pos, p.facing, moves::Plane::Flat, m.hand);
+                let base = moves::swing_base(p.facing, p.aim_dir(), moves::Plane::Flat, p.grounded);
+                let (through, _) = swing_progress(&m, left);
+                let span = m.arc.mul(Fx::from_int(m.hand.outward()));
+                let out = moves::turned(base, span.mul(through), moves::Plane::Flat);
+                let open = t::wing_opens_at();
+                let tip = m.reach.mul(open.add(Fx::ONE.sub(open).mul(through)));
+                (
+                    hub.sub(out.scale(m.reach.mul(t::wing_trails()))),
+                    hub.add(out.scale(tip)),
+                    false,
+                )
             }
         },
         // At the mechanic, and *live*: the shadow can be moved while the blades
@@ -1634,33 +1665,13 @@ fn step_player(
                     }
                 }
             }
-            // The Champion's three mouse buttons are three weapons, and where
-            // its feet are decides which of that weapon's moves comes out --
-            // see `moves::champion`. After the mechanic, so that Rush can be
-            // started while a click is held down, and before the plain-click
-            // branch, because right click means spear here and guard
-            // everywhere else.
-            else if let Some(kind) = champion_move(p, input) {
+            // Which move a click asks for. After the mechanic, so that Rush
+            // can be started while a click is held down, and before the dodge,
+            // because a click is what disambiguates shift.
+            else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                // A no-op for anybody who is not the Champion; the weapon in
+                // hand and the dash underneath it are that class's alone.
                 begin_champion(p, kind);
-                begin_move(p, who, kind, input, scene, true)
-            }
-            // Right click is the Reaver's committed melee. It is free on this
-            // class -- there is no shield, so nothing to guard with -- and the
-            // kit has always described her as fighting with both hands. The
-            // same move still answers to shift + left click, which is the
-            // shared grammar; this only gives it a button of its own.
-            else if input.has(Input::RIGHT)
-                && p.class == Class::ShadowReaver
-                && p.mechanic_ready(SLOT_COMMITTED)
-            {
-                begin_move(p, who, SLOT_COMMITTED, input, scene, true)
-            } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
-                let kind = if input.has(Input::SHIFT) {
-                    SLOT_COMMITTED
-                } else {
-                    SLOT_POKE
-                };
-                steer_meter(p, input, kind);
                 begin_move(p, who, kind, input, scene, true)
             } else if input.has(Input::SHIFT)
                 && !input.any_click()
@@ -1902,6 +1913,76 @@ fn step_player(
     }
 }
 
+/// Which move a click asks for, if any.
+///
+/// **The one place a mouse button becomes a move.** Three classes' worth of
+/// grammar meet here and they are deliberately different shapes:
+///
+/// ```text
+///   most classes   left click is the poke, shift + left the committed version
+///   the Champion   three buttons are three weapons, and the row of the grid
+///                  is where your feet are -- see `moves::champion`
+///   the Dual mage  left and right are two *different* autos, one per arm,
+///                  because the button is which force you throw -- see
+///                  `moves::dual`
+///   the Reaver     right click is the committed melee, the same one shift +
+///                  left throws. A button, not a move
+/// ```
+///
+/// It is a function rather than a chain of branches in `step_player` because
+/// the answer is a property of the class's kit, and the three classes that
+/// broke the shared rule each broke it in their own way: the Champion by
+/// needing a third button, the Dual mage by needing right click to be a
+/// different attack, and the Reaver by needing it to be the same one.
+///
+/// Two of the three are the same observation from different sides: **right
+/// click is dead weight on a class with no shield**, and three of the six have
+/// no shield.
+///
+/// Right click means **guard** on every class that has a shield, and that is
+/// handled by the caller: `want_guard` asks the mechanic, not the button.
+fn clicked_move(p: &Player, input: Input) -> Option<u8> {
+    match p.class {
+        Class::Champion => champion_move(p, input),
+        Class::DualMage => dual_move(input),
+        // The Reaver breaks it a third way, and the smallest: right click is
+        // her committed melee. It is the *same* move shift + left click throws,
+        // so nothing new is added to the kit -- what is added is a button, on a
+        // class that has no shield to raise and was leaving it unused.
+        Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_COMMITTED),
+        _ => input.has(Input::LEFT).then(|| {
+            if input.has(Input::SHIFT) {
+                SLOT_COMMITTED
+            } else {
+                SLOT_POKE
+            }
+        }),
+    }
+}
+
+/// Which of the Dual mage's five a click asks for.
+///
+/// Left first, so that both buttons at once throws the dark auto rather than
+/// nothing. The design has a use for both-click -- a finisher with no side --
+/// and does not have one yet; until it does, an accidental double press should
+/// come out as an attack rather than as silence.
+///
+/// **Shift plus right click is the light auto, unmodified.** The kit wants a
+/// light *form* of the committed cast there and there is not one built, so the
+/// modifier is ignored rather than being made to mean something it does not.
+/// See `docs/design/kits/dual-mage.md`.
+fn dual_move(input: Input) -> Option<u8> {
+    use moves::dual as d;
+    if input.has(Input::LEFT) {
+        return Some(if input.has(Input::SHIFT) {
+            d::LANCE
+        } else {
+            d::DARK_AUTO
+        });
+    }
+    input.has(Input::RIGHT).then_some(d::LIGHT_AUTO)
+}
+
 // ---------------------------------------------------------------------------
 // The Champion
 // ---------------------------------------------------------------------------
@@ -2140,6 +2221,13 @@ fn begin_move(
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
     shadow::begin_echo(p, kind);
+    // Committing to a cast is committing to a side, for the one class where
+    // that is the mechanic. The autos are the exception and steer on contact
+    // instead -- a whiff steers nothing, which is what makes closing to melee
+    // the fast way back toward centre. See `steer_meter`.
+    if !steers_on_contact(p.class, kind) {
+        steer_meter(p, kind);
+    }
     if aerial {
         arm_aerial(p, kind, input);
     }
@@ -2177,7 +2265,7 @@ fn lock_aim(p: &mut Player, who: usize, kind: u8, input: Input, scene: &Scene) {
         // swing only reads the direction. The dead zone is a standing rule:
         // off the ground you are above what you are hitting, and the swing
         // follows the camera the whole way.
-        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, p.grounded, m.reach),
+        aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, p.grounded, m.reach, m.hand),
         aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
     };
 }
@@ -2433,23 +2521,40 @@ fn step_mechanic(p: &mut Player) {
     }
 }
 
-/// Attacking steers the Dual mage's meter: left darker, right lighter, and
+/// Attacking steers the Dual mage's meter: dark darker, light lighter, and
 /// stronger moves push harder. Nothing else moves it, so every step is a
 /// consequence of a decision the player made.
-fn steer_meter(p: &mut Player, input: Input, kind: u8) {
+///
+/// **Which way comes from the move, not from the buttons held down** -- see
+/// `moves::dual::side`. Reading the input bits meant asking which of `shift`
+/// and `left click` won, and a move already knows which force it is made of.
+///
+/// A move with no side pushes you **further along whichever way you were already
+/// going**, which is the rule `docs/design/dual-mage.md` states for every input
+/// that is neither left nor right: direction comes from side-ness, and a key
+/// has none. At dead centre there is no path to push along, so it does nothing
+/// -- correctly, because leaving the middle is supposed to be a decision.
+/// Does this move steer the meter when it *lands* rather than when it is
+/// thrown?
+///
+/// The Dual mage's two autos, and nothing else in the game. Everything else
+/// votes the moment you commit to it; an auto has to connect, and a whiff
+/// steers nothing.
+fn steers_on_contact(class: Class, kind: u8) -> bool {
+    class == Class::DualMage && moves::dual::is_an_auto(kind)
+}
+
+fn steer_meter(p: &mut Player, kind: u8) {
     let Mechanic::Meter { value } = p.mechanic else {
         return;
     };
     let push = 4 + (moves::get(p.class, kind).damage / 40);
-    let delta = if input.has(Input::LEFT) {
-        -push
-    } else if input.has(Input::RIGHT) {
-        push
-    } else {
-        0
+    let side = match moves::dual::side(kind) {
+        0 => value.signum(),
+        side => side,
     };
     p.mechanic = Mechanic::Meter {
-        value: (value + delta).clamp(-t::meter_max(), t::meter_max()),
+        value: (value + push * side).clamp(-t::meter_max(), t::meter_max()),
     };
 }
 
@@ -3365,17 +3470,9 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
             // the standing row of its grid. A Rush started up here goes
             // nowhere useful -- there is no ground under it to dash along --
             // but nothing needs to say so: `grounded` is true aboard, so the
-            // standing row is what `champion_move` picks anyway.
-            else if let Some(kind) = champion_move(p, input) {
+            // standing row is what `clicked_move` picks anyway.
+            else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
                 begin_champion(p, kind);
-                begin_move(p, who, kind, input, scene, false)
-            } else if input.has(Input::LEFT) && p.mechanic_ready(SLOT_POKE) {
-                let kind = if input.has(Input::SHIFT) {
-                    SLOT_COMMITTED
-                } else {
-                    SLOT_POKE
-                };
-                steer_meter(p, input, kind);
                 begin_move(p, who, kind, input, scene, false)
             } else if want_guard {
                 Action::Guard { held: 0 }

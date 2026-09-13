@@ -850,12 +850,17 @@ fn place_structures(
     }
 }
 
-/// Draw the Elementalist's beam along the line the simulation tested.
+/// Draw whatever line-shaped volume a fighter has out this frame.
 ///
-/// Straight from `state::hitbox`, which is also what the hit test and the
-/// debug overlay read, so the three cannot disagree about where the shot went.
-/// The move is two frames long, which is the point: you see a line, at the
-/// angle you aimed it, ending on whatever stopped it.
+/// The Elementalist's beam is what it was written for, and the rule it follows
+/// is why it now draws more than that: **straight from `state::hitbox`**, which
+/// is also what the hit test and the debug overlay read, so the three cannot
+/// disagree about where the shot went. Anything whose volume is a line rather
+/// than a bubble gets drawn by it -- the Champion's swings, and the Dual mage's
+/// wing, which comes out of one fist and opens outward over four frames.
+///
+/// For the beam the move is two frames long, which is the point: you see a
+/// line, at the angle you aimed it, ending on whatever stopped it.
 fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let shot = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.is_a_beam());
@@ -1517,8 +1522,7 @@ fn apply_poses(
     for (fighter, mut tf) in roots.iter_mut() {
         let p = frame.players[fighter.0];
         tf.translation = Vec3::new(p.pos[0], p.pos[1], p.pos[2]);
-        let yaw = p.facing[0].atan2(p.facing[2]);
-        tf.rotation = Quat::from_rotation_y(yaw);
+        tf.rotation = body_turn(p.facing);
     }
 
     // One solve per fighter rather than one per bone: forward kinematics is a
@@ -1549,8 +1553,7 @@ fn apply_poses(
     // so whatever is holding something can be placed against it.
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
-        let yaw = p.facing[0].atan2(p.facing[2]);
-        let turn = Quat::from_rotation_y(yaw);
+        let turn = body_turn(p.facing);
         let (at, rot) = skins[owner].box_of(&skeletons[owner], Joint::HandL);
         hands.0[owner] = (
             Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
@@ -1796,6 +1799,18 @@ fn drive_camera(
 }
 
 /// A simulation position, in the renderer's units.
+/// How a fighter's body sits in the arena, as the engine's own rotation.
+///
+/// `view::body_turn` is the definition -- character space is `+Z` along the
+/// facing with the left arm at `-X`, and that convention is shared with the
+/// simulation, which swings one-armed moves from the same side the renderer
+/// draws the arm on. This is the two-line conversion into Bevy's quaternion,
+/// and it is the only place the renderer is allowed to build that rotation.
+fn body_turn(facing: [f32; 3]) -> Quat {
+    let q = view::body_turn([facing[0], facing[2]]).0;
+    Quat::from_xyzw(q[0], q[1], q[2], q[3])
+}
+
 fn fx3(v: sim::V3) -> Vec3 {
     Vec3::new(
         v.x.to_f32_for_render(),

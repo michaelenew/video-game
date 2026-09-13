@@ -124,7 +124,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "K or right click",
-                "Guard. The first few frames parry. Two classes spend the button instead: on the Champion it is the spear, and on the Shadow Reaver it is Executioner. Neither has a shield to raise.",
+                "Guard. The first few frames parry. Three classes attack with it instead: the Champion's spear, the Dual mage's light auto and the Shadow Reaver's Executioner -- none of the three has a shield to guard with.",
                 "K guard",
             ),
             s(
@@ -175,6 +175,41 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "While rushing",
                 "Sword cuts as you run past without stopping the dash. Hammer is the uppercut — it launches, holds on, and space takes you both higher. Spear stabs, or vaults if you are pointing at the floor.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Dual mage",
+        blurb: "Two forces, one in each arm, and a bar between them. Which button you attack with is which way you drift, and depth is power -- but past a threshold it burns you.",
+        entries: &[
+            s(
+                "Left click",
+                "Dark auto. A punch with the left arm that opens into a wing. Moves you darker -- but only if it lands.",
+                "LMB dark auto",
+            ),
+            s(
+                "Right click",
+                "Light auto. The same punch with the right arm, and it moves you lighter. There is no guard on this class.",
+                "RMB light auto",
+            ),
+            s(
+                "Shift + left click",
+                "Lance. A line at whatever the crosshair is on. Committed, and it moves you darker whether or not it connects.",
+                "Shift+LMB lance",
+            ),
+            s(
+                "E",
+                "Sweep. Both arms across the whole front. No side of its own, so it pushes you further along whichever way you were already going.",
+                "E sweep",
+            ),
+            s(
+                "Q",
+                "Judgement. The finisher, and it only comes out from deep on the bar.",
+                "Q judgement",
+            ),
+            e(
+                "Getting back",
+                "Landing an auto from the far side is the fast way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
             ),
         ],
     },

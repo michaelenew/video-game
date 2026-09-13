@@ -170,6 +170,23 @@ pub fn cast_height() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::CastHeight))
 }
 
+/// How far to one side of the centre line a hand is.
+///
+/// One number for the whole roster, like the body radius, and for the same
+/// reason: the simulation does not know how broad any particular fighter's
+/// shoulders are drawn -- that is a build in `view::skeleton` -- and a hit
+/// volume that changed size with the model would make the same move a different
+/// move on six characters.
+///
+/// It matters for exactly one thing, and it is worth being precise about which:
+/// **where a one-armed move leaves from.** See `crate::aim::hand_origin`. A
+/// punch that came out of the sternum would put the Dual mage's dark and light
+/// autos in the same place, and which of the two just landed is the whole of
+/// how her meter is steered.
+pub fn hand_offset() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HandOffset))
+}
+
 /// Knockback decay per tick while stunned. Below 1.0 or a hit sends you
 /// sliding forever.
 pub fn knockback_decay() -> Fx {
@@ -698,6 +715,28 @@ pub fn sweep_dip() -> Fx {
 /// extension is what a defender is reading when they decide to step back.
 pub fn thrust_extend() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrustExtend))
+}
+
+/// How far out the wing already reaches on the first active frame, as a
+/// fraction of the move's reach.
+///
+/// The other end of the same idea as `thrust_extend`: under one, because a wing
+/// that sprang to its full span on the frame it appeared would have no travel
+/// in it, and the opening is what a defender reads. Well under one, because for
+/// this shape the travel is most of the move -- the fist arrives first and the
+/// wing follows it out.
+pub fn wing_opens_at() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingOpensAt))
+}
+
+/// How far behind the hand the wing's root sits, as a fraction of reach.
+///
+/// Small, and not zero. A volume that started exactly at the fist would leave
+/// the inside of the punch safe, and stepping *into* a wing should not be the
+/// answer to it -- the shape is meant to catch somebody already close, which is
+/// the range the class has to live at.
+pub fn wing_trails() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingTrails))
 }
 
 pub fn meter_max() -> i32 {
