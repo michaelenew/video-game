@@ -252,13 +252,18 @@ clips! {
     ShadowReady,     "shadow_ready",      Moves, "reaver", Length::Fixed(90), true,
         "The shadow arrived: a low bladed guard, weight back, both hands up. Waiting, and plainly still a threat.";
 
-    // -- The Elementalist: Bolt, Fissure, Fire pillar -----------------------
+    // -- The Elementalist: Bolt, Fissure, Fire pillar, Cataclysm ------------
+    //
+    // Four rather than three: right click is otherwise dead weight on a class
+    // with no shield, so Cataclysm takes it. See `moves::NAMES`.
     ElementalistPoke,     "elementalist_poke",      Moves, "elementalist", Length::Move(Class::Elementalist, 0), false,
         "Bolt: a flicked ranged jab. Quick, from the wrist and forearm.";
     ElementalistCommitted,"elementalist_committed", Moves, "elementalist", Length::Move(Class::Elementalist, 1), false,
         "Fissure: both hands driven into the ground. The power goes down, not out.";
     ElementalistSpecial,  "elementalist_special",   Moves, "elementalist", Length::Move(Class::Elementalist, 2), false,
         "Fire pillar: a rising two-handed gesture that pulls a column up out of the floor.";
+    ElementalistHeavy,    "elementalist_heavy",     Moves, "elementalist", Length::Move(Class::Elementalist, 3), false,
+        "Cataclysm: both hands wound up wide and thrown forward together, then let fall.";
 
     // -- The Blood mage: Bloodletter, Rend, Grasp, Black spike --------------
     //

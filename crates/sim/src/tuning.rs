@@ -1028,6 +1028,61 @@ pub fn fire_bolt_knockback() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FireBoltKnockback))
 }
 
+// Cataclysm: the heavy, on right click. What it does when it lands is
+// `crate::tornado`'s and the structure-destroying blast's own numbers; these
+// two are the ones neither the move table nor the fire bolt's own knobs cover.
+
+/// Half-angle of the blast a destroyed structure goes up in, as a cosine.
+/// Wide on purpose -- it is meant to catch whoever was standing near the
+/// structure, not to reward lining up a second shot through it.
+pub fn cataclysm_cone_cos() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CataclysmConeCos))
+}
+
+pub fn cataclysm_blast_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CataclysmBlastRadius))
+}
+
+// The fire tornado: what a fire pillar becomes when Cataclysm passes through
+// it instead of just charging it. See `crate::tornado`.
+
+/// How fast it crosses the arena. Visibly faster than a walk, so outrunning
+/// one head-on is not an option -- stepping off its line is.
+pub fn tornado_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TornadoSpeed))
+}
+
+/// How far its pull reaches from its own live centre, which moves.
+pub fn tornado_pull_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TornadoPullRadius))
+}
+
+/// Acceleration toward the centre for anyone caught inside the pull radius,
+/// in the same units gravity is -- comparable in strength, deliberately, so
+/// getting pulled in reads as a real force rather than a nudge.
+pub fn tornado_pull() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TornadoPull))
+}
+
+/// Damage on each tick to anyone it is holding, on the same cadence every
+/// other standing hazard ticks on. See `tuning::effect_tick_frames`.
+pub fn tornado_damage() -> i32 {
+    oven::scalar(Scalar::TornadoDamage)
+}
+
+/// A short stagger on each tick -- enough that holding a direction cannot
+/// simply cancel the pull the instant it starts, not long enough to be an
+/// uninterruptible lock between ticks.
+pub fn tornado_stagger() -> u16 {
+    oven::scalar(Scalar::TornadoStagger) as u16
+}
+
+/// How long it lives before it burns out, whether or not it ever leaves the
+/// arena first.
+pub fn tornado_life() -> u16 {
+    oven::scalar(Scalar::TornadoLife) as u16
+}
+
 // ---------------------------------------------------------------------------
 // The Blood mage
 //
