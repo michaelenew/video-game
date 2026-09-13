@@ -301,8 +301,7 @@ scalars! {
     ThrustExtend,     "Champion", "Thrust out on the first active frame (x)", Fixed, 0, fx(1,1);
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
-    WingOpensAt,       "Dual mage", "Wing out on the first active frame (x)", Fixed, 0,        fx(1,1);
-    WingTrails,        "Dual mage", "Wing behind the hand (x reach)",        Fixed,  0,        fx(1,1);
+    WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
     ShadowTrail,      "Reaver",   "Shadow trails her by",       Fixed,   0,         fx(4,1);
     ShadowFollow,     "Reaver",   "Shadow catch-up per frame",  Fixed,   fx(1,100), fx(1,1);
     ShadowLag,        "Reaver",   "Shadow copies her this late",Frames,  0,         30;
@@ -725,7 +724,7 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 207;
+pub const SCALAR_COUNT: usize = 206;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody

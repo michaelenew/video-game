@@ -2260,3 +2260,46 @@ It also leaves Deadly mistake with nowhere to go: right click ignores `shift`, a
 
 **Verdict** open. It is a two-line change and reversible, which is most of why it was worth
 trying rather than arguing about.
+
+### 2026-09-13 — the wing became a section of a torus
+
+**Changed** the Dual mage's autos from a line that reached out of the fist and grew, to
+**a chunk of a horizontal ring around her that sweeps from behind to in front**. The active
+window went 4 → 6 frames and the recovery 11 → 9 to pay for it, so the frame advantage is
+unchanged: +1 on hit, −6 on block.
+
+```
+before   a capsule from just behind the fist, sweeping ~50 deg outward and
+         growing from a third of its reach to all of it
+now      a ring centred on her own axis, inner arc 0.26 m and outer 1.65 m,
+         appearing 151 deg behind her on the punching arm's side and arriving
+         directly in front of the fist six frames later
+```
+
+**Why** the first version read as an arm attack with a long arm. The class is a vessel holding
+two forces, and what comes out of it should not be shaped like a limb — it should be shaped
+like something that was already circling her and got let out. A ring does that and a spoke
+does not, and the difference is where the volume *starts*: behind, where the player cannot see
+it coming, rather than at the fist where they were already looking.
+
+**The volume out on any one frame is the section's radius**, not a curved shape, and that is
+not a compromise: a radius of an annulus is straight, so the straight capsule the hit test
+already understands *is* the section at that angle. The ring is what the sweep carves. Six
+frames at 30 degrees each, with the reach threshold on top, leaves no angular gap for somebody
+to stand in.
+
+**Two of its numbers are now stated against her own body** — the inner arc passes through
+where the punching elbow starts, and the outer is two to three times further out than the fist
+gets, measured from that elbow. Neither is a thing the simulation can check, so
+`view/tests/kinematics.rs` reads them off the baked clip: 0.26 m at the elbow, 0.78 m at full
+extension, and the reach of 1.65 m is 2.7× the travel. Retiming the punch or re-authoring the
+cock moves the check with it. The two Oven knobs the growing version needed collapsed into one
+(`wing_inner`), because a section that does not grow has only an inside.
+
+**The plane is the floor's while she is standing**, which makes this the one attack in the game
+that ignores the camera's pitch outright. Airborne it tilts with the aim, which is the split
+`swing_base` already makes for a flat sweep thrown off the ground.
+
+**Verdict** open. The specific worries: 151 degrees behind her may be so far back that the
+first half of every auto is wasted on empty air, and a ring with a 0.26 m hole is a shape you
+can beat by standing *on* the mage, which no other melee move in the game rewards.

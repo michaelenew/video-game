@@ -1234,25 +1234,40 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
                 (hub, hub.add(p.aim_dir().scale(out)), false)
             }
-            // A punch that opens into a wing. Both ends move: the tip sweeps
-            // outward *and* reaches further out as it goes, and the root rides
-            // a little behind the fist the whole way. The two together are
-            // what carve the shape -- an arc alone is a swing, and an
-            // extension alone is a thrust.
+            // A section of a torus lying flat around the caster, sweeping
+            // from behind her round to straight ahead.
             //
-            // Outward is away from the body on whichever side the hand is, so
-            // the two mirrored autos share one arc and one set of numbers.
+            // The volume this frame is the section's own **radius**: a line
+            // from the inner arc out to the outer one. It is not an
+            // approximation of the shape -- a radius of an annulus is
+            // straight, and it is the whole of the section at that angle. The
+            // ring is what the sweep *carves*, over the active window.
             moves::Shape::Wing => {
-                let hub = moves::swing_hub(p.pos, p.facing, moves::Plane::Flat, m.hand);
-                let base = moves::swing_base(p.facing, p.aim_dir(), moves::Plane::Flat, p.grounded);
+                // Centred on the caster's own axis, at the height her hand
+                // punches through. The wing wraps around her rather than
+                // reaching out of a shoulder, so the two arms throw mirrored
+                // halves of one ring rather than two separate volumes.
+                let hub = aim::origin(p.pos);
+                // The plane of the torus is the floor's, while her feet are on
+                // it. In the air there is no shared floor to be parallel to
+                // and the thing under the reticle really is below her, so it
+                // tilts with the aim -- the same split `moves::swing_base`
+                // already makes for a sweep thrown off the ground.
+                let plane = if p.grounded {
+                    V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized()
+                } else {
+                    p.aim_dir()
+                };
                 let (through, _) = swing_progress(&m, left);
-                let span = m.arc.mul(Fx::from_int(m.hand.outward()));
-                let out = moves::turned(base, span.mul(through), moves::Plane::Flat);
-                let open = t::wing_opens_at();
-                let tip = m.reach.mul(open.add(Fx::ONE.sub(open).mul(through)));
+                // Behind her on the punching arm's own side when the volume
+                // appears, and directly ahead on the last active frame, which
+                // is where the fist already is. The wing overtakes the punch.
+                let behind = m.arc.mul(Fx::from_int(m.hand.outward()));
+                let out =
+                    moves::turned(plane, behind.mul(Fx::ONE.sub(through)), moves::Plane::Flat);
                 (
-                    hub.sub(out.scale(m.reach.mul(t::wing_trails()))),
-                    hub.add(out.scale(tip)),
+                    hub.add(out.scale(m.reach.mul(t::wing_inner()))),
+                    hub.add(out.scale(m.reach)),
                     false,
                 )
             }

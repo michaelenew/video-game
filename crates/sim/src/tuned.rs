@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 207] = [
+pub const SCALARS: [i32; 206] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -195,8 +195,7 @@ pub const SCALARS: [i32; 207] = [
            45875, // champion.thrust_out_on_the_first_active_frame_(x) = 0.7
               45, // aim.swing_stays_level_to_(deg_down) = 45
            11796, // body.hand_out_from_the_centre_line = 0.18
-           22938, // dual_mage.wing_out_on_the_first_active_frame_(x) = 0.35
-            7864, // dual_mage.wing_behind_the_hand_(x_reach) = 0.12
+           10486, // dual_mage.wing,_inner_edge_(x_reach) = 0.16
            58982, // reaver.shadow_trails_her_by = 0.9
            14417, // reaver.shadow_catch-up_per_frame = 0.22
                4, // reaver.shadow_copies_her_this_late = 4
@@ -800,8 +799,8 @@ pub const MOVES: [i32; 667] = [
                0, // move.blood_mage.black_spike.swing_arc_(turns) = 0
                0, // move.blood_mage.black_spike.hits_again_every = 0
                5, // move.dual_mage.dark_auto.startup = 5
-               4, // move.dual_mage.dark_auto.active = 4
-              11, // move.dual_mage.dark_auto.recovery = 11
+               6, // move.dual_mage.dark_auto.active = 6
+               9, // move.dual_mage.dark_auto.recovery = 9
               52, // move.dual_mage.dark_auto.damage = 52
           108134, // move.dual_mage.dark_auto.reach = 1.65
            29491, // move.dual_mage.dark_auto.radius = 0.45
@@ -820,7 +819,7 @@ pub const MOVES: [i32; 667] = [
                0, // move.dual_mage.dark_auto.health_cost = 0
                0, // move.dual_mage.dark_auto.leech_(%) = 0
                0, // move.dual_mage.dark_auto.line_of_effect_(0-3) = 0
-            9175, // move.dual_mage.dark_auto.swing_arc_(turns) = 0.14
+           27525, // move.dual_mage.dark_auto.swing_arc_(turns) = 0.42
                0, // move.dual_mage.dark_auto.hits_again_every = 0
               10, // move.dual_mage.lance.startup = 10
                4, // move.dual_mage.lance.active = 4
@@ -892,8 +891,8 @@ pub const MOVES: [i32; 667] = [
            19661, // move.dual_mage.sweep.swing_arc_(turns) = 0.3
                0, // move.dual_mage.sweep.hits_again_every = 0
                5, // move.dual_mage.light_auto.startup = 5
-               4, // move.dual_mage.light_auto.active = 4
-              11, // move.dual_mage.light_auto.recovery = 11
+               6, // move.dual_mage.light_auto.active = 6
+               9, // move.dual_mage.light_auto.recovery = 9
               52, // move.dual_mage.light_auto.damage = 52
           108134, // move.dual_mage.light_auto.reach = 1.65
            29491, // move.dual_mage.light_auto.radius = 0.45
@@ -912,7 +911,7 @@ pub const MOVES: [i32; 667] = [
                0, // move.dual_mage.light_auto.health_cost = 0
                0, // move.dual_mage.light_auto.leech_(%) = 0
                0, // move.dual_mage.light_auto.line_of_effect_(0-3) = 0
-            9175, // move.dual_mage.light_auto.swing_arc_(turns) = 0.14
+           27525, // move.dual_mage.light_auto.swing_arc_(turns) = 0.42
                0, // move.dual_mage.light_auto.hits_again_every = 0
 ];
 

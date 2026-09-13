@@ -75,21 +75,50 @@ mechanic unreadable. One move field says which arm (`moves::hand`), the volume s
 (`aim::hand_origin`), the animation is one punch mirrored (`Pose::other_arm`), and
 `view/tests/kinematics.rs` fails if the simulation and the renderer ever pick different arms.
 
-### The shape: a punch, and a wing behind it
+### The shape: a punch, and a wing that comes round from behind
 
 Each auto **reads as a punch** — a short step into a straight arm, five frames of startup, the
-other hand thrown back behind. What it *does* is much larger than the arm that threw it:
+other hand thrown back behind. What it *does* is a **section of a torus lying flat around
+her**:
 
-- the volume starts **a little behind the fist**, so stepping inside the punch is not the
-  answer to it;
-- it **sweeps outward** — away from the body on whichever side the arm is — while it
-  **grows**, so the tip travels a spiral rather than an arc;
-- it ends **two to three arm lengths** past the hand.
+```text
+        .-  -  -.
+     .'    ___    '.          the ring is centred on the mage, in the plane
+    ;     /   \       --->    of the floor, at the height her hand punches
+     '.   \___/    .'         through
+        ' -  ,  - '
+         starts here          the section appears behind her, on the punching
+                              arm's own side, and sweeps round to straight ahead
+```
 
-What that carves out over the active frames is a wing. It is its own hit shape
-(`moves::Shape::Wing`) rather than a swing with unusual numbers, because a swing's head stays
-at a fixed reach and this one does not, and because a swing has a haft where this has a wing
-root. Both autos share one `arc`; the arm supplies its direction, so the mirror cannot drift.
+- the **inner arc** passes through where that arm's elbow starts — tucked in against the
+  body, about a quarter of a metre out — so the ring has a hole in it and stepping *inside*
+  the punch is a bad answer rather than the only answer;
+- the **outer arc** is two to three times further out than the fist gets, measured from that
+  same elbow: about a metre and two thirds;
+- the section **appears behind her** and arrives **directly in front of the fist** on the
+  last active frame. The punch throws it and it overtakes the punch.
+
+It is its own hit shape (`moves::Shape::Wing`) rather than a swing with unusual numbers, for
+three reasons that are one reason. It is centred on the **body** rather than hung off a
+shoulder, so it wraps rather than reaches. It has a **hole**, where a swing has a haft. And it
+**starts behind her** rather than crossing her front, which is what makes it read as something
+thrown off the arm rather than as the arm itself.
+
+The volume out on any one frame is the section's own radius — a straight line from the inner
+arc to the outer one — and the ring is what the sweep carves. That is exact rather than an
+approximation: a radius of an annulus is straight.
+
+Both autos share one `arc` and one reach; the arm supplies the direction it sweeps from, so
+the mirror cannot drift. The two numbers stated against her body rather than in metres — the
+inner arc at the elbow, the outer at two to three times the punch's travel — are checked
+against the baked animation in `view/tests/kinematics.rs`, because the simulation has no idea
+where an elbow is.
+
+**The plane is the floor's while she is standing**, which is the one place this move ignores
+the camera's pitch; off the ground there is no shared floor to be parallel to and the ring
+tilts with the aim, the same split `moves::swing_base` already makes for a sweep thrown in the
+air.
 
 **Tempest** (passive, not built): abilities mark enemies on hit. Autoing a marked enemy
 consumes the mark for bonus damage and a short burst of movement speed. This is what makes
@@ -191,10 +220,10 @@ pressing, and you can read your own commitment off your own animation.
 - **What goes on `shift` + `R`?** The kit wants the light form of the committed cast; nothing
   is built, so it throws the light auto. The first class to build a two-form ability answers
   this for the whole kit.
-- **Does the wing want a dead zone below the horizon of its own?** It is a swing, so it takes
-  the shared one (`tuning::swing_level_to`) — a number chosen for a hammer and a spear. A
-  volume that opens sideways as much as forwards is a different question and nobody has
-  played it.
+- **Should the wing tilt at all?** Standing, its plane is the floor's and the camera's pitch
+  does not touch it — which is the shape as specified, and which means an auto thrown at
+  somebody on a ledge above or below misses them by geometry rather than by aim. Airborne it
+  tilts with the look. Nobody has played either.
 - Should the finishers be visibly greyed out from the wrong side, or hidden entirely?
   Greyed is friendlier and teaches the mechanic; hidden is cleaner to read.
 - Does Divide's dash-to-impact work with either form of the ability that hits it, or only

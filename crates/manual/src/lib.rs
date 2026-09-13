@@ -184,12 +184,12 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             s(
                 "Left click",
-                "Dark auto. A punch with the left arm that opens into a wing. Moves you darker -- but only if it lands.",
+                "Dark auto. A punch with the left arm, and a wing that sweeps in from behind you on that side. Moves you darker -- but only if it lands.",
                 "LMB dark auto",
             ),
             s(
                 "Right click",
-                "Light auto. The same punch with the right arm, and it moves you lighter. There is no guard on this class.",
+                "Light auto. The same punch and wing mirrored onto the right arm, and it moves you lighter. There is no guard on this class.",
                 "RMB light auto",
             ),
             s(

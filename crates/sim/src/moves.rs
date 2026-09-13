@@ -140,23 +140,37 @@ pub enum Shape {
     /// A thrust. The weapon is a line along the aim that extends to `reach`
     /// over the active window and does not travel sideways.
     Thrust,
-    /// A wing. A punch with something enormous behind it: the volume is a line
-    /// that starts a little *behind* the fist, reaches out past it, and sweeps
-    /// **outward** -- away from the body, on whichever side the hand is -- while
-    /// it grows to the move's whole reach across the active window. What it
-    /// carves out over those frames is a wing, which is the Dual mage's fantasy
-    /// rather than a shape anybody needed before.
+    /// A wing: **a section of a torus, lying flat around the caster.**
     ///
-    /// Two things separate it from a [`Shape::Swing`], and both are why it is
-    /// its own shape rather than a swing with unusual numbers. It **extends**
-    /// as it turns, so the tip travels a spiral rather than an arc -- a swing's
-    /// head is at a fixed reach. And its inner end is behind the hand rather
-    /// than at the shoulder, so standing inside it is not safe the way standing
-    /// inside a swing's haft is not safe: there is no haft, there is a wing
-    /// root.
+    /// ```text
+    ///        .-  -  -.                 the ring is centred on the caster,
+    ///     .'          '.               in the plane of the floor
+    ///    ;    (o)   ---->  ahead       inner arc at `tuning::wing_inner`
+    ///     '.   |     .'                outer arc at `Move::reach`
+    ///        ' - , - '                 the section starts behind, on the
+    ///          start                   punching arm's own side, and sweeps
+    ///                                  round to straight ahead
+    /// ```
     ///
-    /// Which way it opens comes from [`Move::hand`], so the two mirrored autos
-    /// share one `arc` -- see [`crate::aim::Hand::outward`].
+    /// The volume out on any one frame is the section's own **radius** -- a
+    /// line from the inner arc to the outer one. That is not an approximation
+    /// of a curved shape: a radius of an annulus is straight, and it is the
+    /// whole of the section at that angle. The ring is what the sweep carves
+    /// over the active window, which is the thing the player sees.
+    ///
+    /// Three things separate it from a [`Shape::Swing`], and they are why it is
+    /// its own shape rather than a swing with unusual numbers. It is centred on
+    /// the **body** rather than hung off a shoulder, so it wraps rather than
+    /// reaches. It has a **hole**: the inner arc passes through where the
+    /// punching elbow started, so there is no haft to stand inside. And it
+    /// **starts behind the caster** and ends in front of her fist, rather than
+    /// travelling across the front of her -- the punch throws it and it
+    /// overtakes the punch.
+    ///
+    /// Which way round it sweeps comes from [`Move::hand`], so the two mirrored
+    /// autos share one `arc` -- see [`crate::aim::Hand::outward`]. For this
+    /// shape `arc` is **where the section starts**, measured back from straight
+    /// ahead, rather than a span centred on the facing.
     Wing,
 }
 
