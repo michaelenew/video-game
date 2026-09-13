@@ -184,7 +184,7 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             s(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that sweeps in from behind you on that side. Moves you darker -- but only if it lands.",
+                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. Moves you darker -- but only if it lands.",
                 "LMB dark auto",
             ),
             s(
@@ -204,12 +204,24 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "Q",
-                "Judgement. The finisher, and it only comes out from deep on the bar.",
+                "Judgement. The finisher: a delayed strike where the crosshair is.",
                 "Q judgement",
             ),
             e(
+                "The tip",
+                "The last frame of either auto is the wing's tip, and it hits far harder. It is the only part that reaches straight out in front of you, so landing it is a question of standing at the edge of your range rather than on top of them.",
+            ),
+            e(
+                "Which force you are",
+                "Whichever auto landed last. Everything else you throw is made of that force and pushes the bar the same way, so the two clicks are the steering and the rest is the accelerator.",
+            ),
+            e(
                 "Getting back",
-                "Landing an auto from the far side is the fast way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+                "Landing an auto from the far side is the only way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+            ),
+            e(
+                "The ends of the bar",
+                "Driven all the way to either end and it takes you: three seconds of heavy drain you cannot steer or stop, and it puts you back at the centre staggered.",
             ),
         ],
     },

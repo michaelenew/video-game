@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 206] = [
+pub const SCALARS: [i32; 213] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -196,6 +196,13 @@ pub const SCALARS: [i32; 206] = [
               45, // aim.swing_stays_level_to_(deg_down) = 45
            11796, // body.hand_out_from_the_centre_line = 0.18
            10486, // dual_mage.wing,_inner_edge_(x_reach) = 0.16
+           16384, // dual_mage.wing,_the_tip_as_a_share_of_the_span = 0.25
+          114688, // dual_mage.wing,_tip_damage_(x) = 1.75
+               5, // dual_mage.meter,_an_auto_moves = 5
+              12, // dual_mage.meter,_a_cast_moves = 12
+             180, // dual_mage.ascension,_how_long = 180
+               4, // dual_mage.ascension,_health_a_frame = 4
+              40, // dual_mage.ascension,_stun_on_the_way_out = 40
            58982, // reaver.shadow_trails_her_by = 0.9
            14417, // reaver.shadow_catch-up_per_frame = 0.22
                4, // reaver.shadow_copies_her_this_late = 4
@@ -857,7 +864,7 @@ pub const MOVES: [i32; 667] = [
                6, // move.dual_mage.judgement.aerial_hang = 6
                0, // move.dual_mage.judgement.unblockable = off
                0, // move.dual_mage.judgement.hits_crouching = off
-               1, // move.dual_mage.judgement.needs_mechanic = on
+               0, // move.dual_mage.judgement.needs_mechanic = off
                0, // move.dual_mage.judgement.launch = 0
                0, // move.dual_mage.judgement.self_lift = 0
                0, // move.dual_mage.judgement.grab_hold = 0

@@ -2303,3 +2303,67 @@ that ignores the camera's pitch outright. Airborne it tilts with the aim, which 
 **Verdict** open. The specific worries: 151 degrees behind her may be so far back that the
 first half of every auto is wasted on empty air, and a ring with a 0.26 m hole is a shape you
 can beat by standing *on* the mage, which no other melee move in the game rewards.
+
+### 2026-09-13 — the wing opens, the tip pays, and the bar is a bar
+
+Five things on the Dual mage, from playing her.
+
+**The wing is a real section of a torus now, and it opens.** It used to be the section's
+radius sweeping round at a constant width; it is an angle that **grows from nothing to a
+hundred and thirteen degrees** over the active window, with the leading edge coming round
+toward the front. The volume is `math::Sector` — the first thing in the game that is not a
+capsule — and both the hit test and the overlay read it, because a straight line through a
+curve either misses the inside of it or claims the outside.
+
+**Why bother**: the sweeping version read as a blade. An opening one reads as a wing, which is
+the fantasy — the beings inside her extending the movement past where an arm could take it.
+The shape had been carrying that idea and not showing it.
+
+**The last frame is the tip, and it hits 1.75×.** The wing opens to most of its arc and stops
+short; the tip covers the rest and arrives straight ahead on the final frame. So the only
+thing that reaches the point directly in front of her at full extension *is* the tip. That
+makes it a spacing decision rather than a bonus on a frame number — the body of the wing is
+for somebody already on top of you, the tip is for somebody who thought they were out of
+range. The overlay draws it in its own colour, because a decision you cannot see the result of
+is not one anybody learns.
+
+Getting there took one correction worth recording. The first version had the wing reach the
+front on the frame *before* the tip, so a body standing there was caught by the wing and the
+tipper could never land on anybody standing still. Two frames of the shared `swing_progress`
+saturate at the end, which is right for a weapon arriving and wrong for a shape whose last
+frame is meant to be a distinct event; the wing counts its own frames now.
+
+**`Q` stopped being gated.** Judgement needed the bar deep before it would come out, which
+meant the class special did *nothing at all* for the opening of every match — the player
+pressing it could not tell an ability from an empty binding. A special you cannot press is not
+a special. What the gate was protecting has to come back as power rather than availability,
+and that is the next thing this class needs: **nothing scales with depth yet**, which is the
+founding idea of the whole mechanic.
+
+**The bar picks sides differently.** The autos have sides; nothing else does. Landing one sets
+which force she is *carrying*, and every other input is made of that force and pushes the bar
+that way. The old rule — the button that threw it picks the side — could not answer for `Q`
+and `E`, which have no side, and answering "further along the way you were going" made the
+keys feel like they were guessing. Autos move five, casts move twelve; the damage-scaled
+formula that was there before was a knob nobody could find.
+
+**And there is a real bar to look at.** Two-poled, filled out from the centre, deep thresholds
+marked, and its border in the colour of the force she carries — which is deliberately a
+*different* question from which side of the bar she is on. She can be deep in the dark and
+still light, having just landed one light auto, and until she lands a dark one everything she
+casts is light. The number in the mechanic line was unreadable in a fight, and the thing it
+was reporting is what the player steers with every click.
+
+**Ascension is a clock.** It had no exit at all: reaching the end of the bar burned her down
+to one health and went on burning, with no timer, no stun, no reset, and no signal that
+anything had happened. Now driving the bar to either end starts three seconds, drains about
+seventy per cent of a health bar across them, pins the meter, and ends by putting her back at
+the centre staggered. Everything else the design asks of it — the refund on hitting, the
+larger form of every ability, the graduated stun — is still unbuilt. This is the shape, not
+the feature.
+
+**Verdict** open on all five. The specific worries: a hundred and thirteen degrees opening in
+six frames may be too fast to read as an opening at all; the tip may be so much better than
+the body of the wing that spacing for it is the only correct way to throw the move; and an
+ungated finisher with no depth scaling makes centre a perfectly good place to stand, which is
+the thing the whole class is built to punish.

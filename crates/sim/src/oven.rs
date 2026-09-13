@@ -302,6 +302,13 @@ scalars! {
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
     WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
+    WingTip,           "Dual mage", "Wing, the tip as a share of the span",  Fixed,  0,        fx(1,1);
+    WingTipper,        "Dual mage", "Wing, tip damage (x)",                  Fixed,  fx(1,1),  fx(3,1);
+    MeterAutoPush,     "Dual mage", "Meter, an auto moves",                  Int,    0,        100;
+    MeterCastPush,     "Dual mage", "Meter, a cast moves",                   Int,    0,        100;
+    AscensionFrames,   "Dual mage", "Ascension, how long",                   Frames, 1,        600;
+    AscensionDrain,    "Dual mage", "Ascension, health a frame",             Int,    0,        100;
+    AscensionStun,     "Dual mage", "Ascension, stun on the way out",        Frames, 0,        120;
     ShadowTrail,      "Reaver",   "Shadow trails her by",       Fixed,   0,         fx(4,1);
     ShadowFollow,     "Reaver",   "Shadow catch-up per frame",  Fixed,   fx(1,100), fx(1,1);
     ShadowLag,        "Reaver",   "Shadow copies her this late",Frames,  0,         30;
@@ -724,7 +731,7 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 206;
+pub const SCALAR_COUNT: usize = 213;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody
