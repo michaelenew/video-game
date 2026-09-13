@@ -68,7 +68,13 @@ fn right_click_throws_cataclysm_for_the_elementalist() {
     let mut w = elementalist();
     run(&mut w, 1, R, 0);
     assert!(
-        matches!(w.players[0].action, Action::Startup { kind: SLOT_HEAVY, .. }),
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_HEAVY,
+                ..
+            }
+        ),
         "right click did not start the fourth move"
     );
 }
@@ -85,7 +91,13 @@ fn cataclysm_needs_no_structure_or_pillar_to_be_thrown() {
     );
     run(&mut w, 1, R, 0);
     assert!(
-        matches!(w.players[0].action, Action::Startup { kind: SLOT_HEAVY, .. }),
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_HEAVY,
+                ..
+            }
+        ),
         "the fixture never actually threw it"
     );
 }
@@ -104,7 +116,10 @@ fn a_direct_hit_is_a_real_hit_not_the_autos_no_stagger_poke() {
         "a fighter caught by Cataclysm took no damage"
     );
     assert!(
-        matches!(w.players[1].action, Action::HitStun { .. } | Action::BlockStun { .. }),
+        matches!(
+            w.players[1].action,
+            Action::HitStun { .. } | Action::BlockStun { .. }
+        ),
         "a fighter caught by Cataclysm was free again immediately, like the auto's poke"
     );
 }
@@ -142,7 +157,10 @@ fn cataclysm_never_blasts_its_own_caster() {
     assert!(has_structure(&w), "fixture never raised a structure");
     let before = w.players[0].health;
     tap(&mut w, R, 30);
-    assert!(!has_structure(&w), "fixture never destroyed its own structure");
+    assert!(
+        !has_structure(&w),
+        "fixture never destroyed its own structure"
+    );
     assert_eq!(
         w.players[0].health, before,
         "the Elementalist blasted herself with her own Cataclysm"
@@ -157,8 +175,16 @@ fn cataclysm_never_blasts_its_own_caster() {
 fn cataclysm_turns_a_fire_pillar_into_a_travelling_tornado() {
     let mut w = elementalist();
     tap(&mut w, Q, 50); // plant a pillar ahead, and let her fully recover
-    assert_eq!(fire_pillars(&w), 1, "fixture planted no pillar to aim through");
-    assert_eq!(tornadoes(&w), 0, "fixture started with a tornado already out");
+    assert_eq!(
+        fire_pillars(&w),
+        1,
+        "fixture planted no pillar to aim through"
+    );
+    assert_eq!(
+        tornadoes(&w),
+        0,
+        "fixture started with a tornado already out"
+    );
     assert!(
         w.players[0].action.actionable(),
         "fixture is still recovering from Fire pillar"
@@ -212,7 +238,12 @@ fn the_tornado_pulls_and_burns_whoever_it_catches() {
     // Lit right where he is standing and off sideways from there, so a good
     // stretch of its travel keeps him inside the pull radius -- what is under
     // test is the pull and the tick, not a chase across the arena.
-    sim::tornado::spawn(&mut w.tornadoes, 0, start, V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE));
+    sim::tornado::spawn(
+        &mut w.tornadoes,
+        0,
+        start,
+        V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+    );
     run(&mut w, 5, 0, 0);
     assert!(
         w.players[1].vel.z.raw() > 0,
@@ -231,9 +262,17 @@ fn the_tornado_never_catches_its_own_owner() {
     let mut w = elementalist();
     let before = w.players[0].health;
     let start = w.players[0].pos;
-    sim::tornado::spawn(&mut w.tornadoes, 0, V3::ZERO, V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
+    sim::tornado::spawn(
+        &mut w.tornadoes,
+        0,
+        V3::ZERO,
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+    );
     run(&mut w, 40, 0, 0);
-    assert_eq!(w.players[0].health, before, "the tornado burned its own owner");
+    assert_eq!(
+        w.players[0].health, before,
+        "the tornado burned its own owner"
+    );
     assert_eq!(
         w.players[0].pos, start,
         "the tornado pulled at its own owner"

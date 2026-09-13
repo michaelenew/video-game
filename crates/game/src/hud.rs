@@ -502,9 +502,8 @@ pub fn update(
             ASCENDED
         } else {
             match colour {
-                Some(sim::class::Force::Dark) => DARK,
-                Some(sim::class::Force::Light) => LIGHT,
-                None => DIM,
+                sim::class::Force::Dark => DARK,
+                sim::class::Force::Light => LIGHT,
             }
         };
     }
@@ -586,7 +585,7 @@ fn fill_of(value: i32, max: i32) -> (f32, f32) {
 /// `None` for the other five, which is what hides the bar rather than drawing
 /// an empty one -- a bar for a resource a class does not have is a thing to
 /// wonder about.
-fn meter_of(p: &sim::state::Player) -> Option<(i32, Option<sim::class::Force>, u16)> {
+fn meter_of(p: &sim::state::Player) -> Option<(i32, sim::class::Force, u16)> {
     match p.mechanic {
         sim::class::Mechanic::Meter {
             value,
@@ -642,6 +641,18 @@ fn describe(p: &sim::state::Player) -> String {
         Action::HitStun { left } => format!("hitstun {left}f"),
         Action::Stagger { left } => format!("STAGGER {left}f"),
         Action::Held { left } => format!("HELD {left}f"),
+        // The one counter that goes up: a channel is spending frames buying
+        // reach, so how long it has been held is the number worth seeing, and
+        // the reach it has bought is the number beside it.
+        Action::Channel { kind, held } => {
+            let m = sim::moves::get(p.class, kind);
+            format!(
+                "{} channel {held}/{}f   {} m",
+                m.name,
+                m.channel,
+                m.reach_after(held).to_f32_for_render()
+            )
+        }
     }
 }
 

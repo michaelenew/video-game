@@ -376,17 +376,27 @@ fn the_blood_mage_does_not_kill_in_two_buttons() {
 }
 
 #[test]
-fn a_root_outlives_the_hitstun_that_delivers_it() {
-    // A root is only visible in the frames after you can act again. Deliver it
-    // with a move whose hitstun is longer and it is a no-op that reads, in the
-    // hand, as the ability simply not working.
+fn a_grasp_always_finishes_hauling_before_it_lets_go() {
+    // The catch is a bind and then a haul (`state::drag_the_held`), and the
+    // haul covers real ground at a real speed. If the hold runs out first, a
+    // Grasp landed at full range drops its victim halfway home -- standing in
+    // mid-air, mid-drag, suddenly able to walk. The failure is invisible at
+    // short range and total at long range, which is the worst way for a number
+    // to be wrong.
     use sim::state::SLOT_SPECIAL;
     let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
+    let arm = t::body_radius().add(t::body_radius());
+    let furthest = grasp.reach.sub(arm);
+    let hauling = grasp.grabs.saturating_sub(t::grasp_bind());
+    let covered = t::reel_speed()
+        .mul(Fx::from_int(hauling as i32))
+        .div(Fx::from_int(60));
     assert!(
-        t::grasp_root() > grasp.hitstun,
-        "the Grasp roots for {} frames and stuns for {}, so the root is invisible",
-        t::grasp_root(),
-        grasp.hitstun
+        covered.raw() >= furthest.raw(),
+        "the hold leaves {hauling} frames to haul, which covers {} m of the {} m \
+         a full-range Grasp has to cross",
+        covered.to_f32_for_render(),
+        furthest.to_f32_for_render()
     );
 }
 
@@ -408,18 +418,25 @@ fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
         mul.to_f32_for_render()
     );
 
-    // And the disable it is built around has to outlast the wind-up of
-    // something worth spending it on, or there is nothing to follow up with.
-    let root = t::grasp_root();
-    let fastest = moves::table(sim::class::Class::BloodMage)
+    // And the disable it is built around is deliberately **too short to react
+    // to**. The Grasp is a way to drag somebody into something that is already
+    // happening, not a free window to start one in: a mage who waits to see the
+    // arms close and then presses her expensive button has already missed it.
+    // That is what makes the ability high risk -- the commitment is made before
+    // it is known to have landed. See `docs/design/kits/blood-mage.md`.
+    use sim::state::SLOT_SPECIAL;
+    let hold = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL).grabs;
+    let kit = moves::table(sim::class::Class::BloodMage);
+    let dearest = kit
         .iter()
-        .map(|m| m.startup)
-        .min()
+        .max_by_key(|m| m.cost)
         .expect("the class has moves");
     assert!(
-        root > fastest,
-        "the root lasts {root} frames and her fastest move takes {fastest} to \
-         come out, so nothing can be landed inside it"
+        hold < dearest.startup,
+        "the catch lasts {hold} frames and {} comes out in {}, so it can be \
+         thrown on reaction to the grab landing",
+        dearest.name,
+        dearest.startup
     );
 }
 
