@@ -7,7 +7,7 @@
 //! travelling tornado rather than merely charging the shot. These are the
 //! assertions for what a player would notice if any of that broke.
 
-use sim::class::Mechanic;
+use sim::class::{MAX_STRUCTURES, Mechanic, Structure};
 use sim::effects::{Effect, EffectKind};
 use sim::state::{Action, SLOT_HEAVY, SLOT_SPECIAL};
 use sim::{Class, Fx, Input, V3, World};
@@ -45,6 +45,31 @@ fn elementalist() -> World {
 
 fn has_structure(w: &World) -> bool {
     matches!(w.players[0].mechanic, Mechanic::Structures(slots) if slots.iter().any(|s| s.is_some()))
+}
+
+/// A fully risen structure, standing at rest on the ground -- the same
+/// fixture `crates/sim/tests/stones.rs` uses.
+fn standing_at(x: i32) -> Structure {
+    Structure {
+        at: V3::new(Fx::from_int(x), Fx::ZERO, Fx::ZERO),
+        vel: V3::ZERO,
+        age: sim::tuning::structure_rise() + 1,
+        struck: 0,
+        launched: false,
+        launch_from: V3::ZERO,
+        knock_struck: 0,
+    }
+}
+
+/// Put exactly these structures on the caster's own mechanic, bypassing
+/// Raise -- for the fixtures below that need more than one on the field at
+/// once, or one already fully grown.
+fn place(w: &mut World, stones: &[Structure]) {
+    let mut slots = [None; MAX_STRUCTURES];
+    for (slot, s) in slots.iter_mut().zip(stones) {
+        *slot = Some(*s);
+    }
+    w.players[0].mechanic = Mechanic::Structures(slots);
 }
 
 fn fire_pillars(w: &World) -> usize {
@@ -208,6 +233,34 @@ fn the_debris_cone_stands_in_space_rather_than_lying_flat() {
             "a piece flew well outside the cone Cataclysm was aimed along"
         );
     }
+}
+
+#[test]
+fn debris_shatters_on_the_first_stone_it_hits() {
+    let mut w = elementalist();
+    // Two on the same line: the near one is what Cataclysm actually breaks,
+    // the far one is what its debris should not be able to reach.
+    place(&mut w, &[standing_at(4), standing_at(8)]);
+
+    // Well past the far stone, so nothing but a piece punching through it
+    // could ever reach him.
+    w.players[1].pos = V3::new(Fx::from_int(11), Fx::ZERO, Fx::ZERO);
+    let before = w.players[1].health;
+
+    tap(&mut w, R, 90);
+
+    let far_survived = matches!(
+        w.players[0].mechanic,
+        Mechanic::Structures(slots) if slots[1].is_some()
+    );
+    assert!(
+        far_survived,
+        "the far stone was destroyed -- debris should stop at the first solid thing, not break it"
+    );
+    assert_eq!(
+        w.players[1].health, before,
+        "debris punched through the stone in its way to reach whoever was behind it"
+    );
 }
 
 #[test]

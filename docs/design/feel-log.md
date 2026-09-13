@@ -2698,3 +2698,21 @@ the only one anyone finds, or it may be too hard to find at all. And the scripte
 hunter now wins five of six where it used to win about half, which is the bot
 getting a second plan rather than the creature getting easier — but a bot that
 wins is a worse measuring instrument than one that does not.
+
+### 2026-09-13 — the debris cone starts at the middle, and stops where it should
+
+**Changed** two things about Cataclysm's debris, reported the same day the cone fix landed.
+
+`stones::destroy` used to report a stone's `at` — its base, on the floor — as the point its
+debris radiates from. A neutral, level cast throws roughly half its pieces on the downward
+side of the cone, and a piece that starts on the floor and immediately points down is inside
+the ground on the very first frame it exists rather than a moment later. It now reports the
+stone's middle instead: `at.y` plus half of `standing_height()`. Nothing about the cone itself
+changed; the point it radiates from just moved to the point that is actually inside the thing
+that broke.
+
+**Verified**, not changed: a piece already stopped dead at the first stone, fighter or the
+quarry it met, per `debris::step`'s existing match on `Contact`. That was reported back as a
+requirement worth pinning rather than a bug, so `debris_shatters_on_the_first_stone_it_hits`
+now says so directly — a second, farther stone survives a blast that breaks the near one, and
+a fighter standing behind it takes nothing.

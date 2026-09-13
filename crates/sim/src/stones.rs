@@ -460,16 +460,26 @@ pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
     scatter(players, &field);
 }
 
-/// Remove the stone at `index` outright, and say where it was.
+/// Remove the stone at `index` outright, and say where its middle was.
 ///
 /// The Elementalist's Cataclysm breaks a structure rather than moving it --
 /// see `docs/design/kits/elementalist.md`. Everything else that ever happens
 /// to a stone displaces it; the cap-of-three eviction is otherwise the only
 /// way one leaves the field, and that only ever happens to the fighter's own
 /// oldest. This is the one place combat actually destroys one.
+///
+/// **The middle, not `at`.** `at` is the stone's base, on the floor -- fine
+/// for everything else here, which tests a whole standing volume against it,
+/// but wrong for a single point a spray of debris radiates from: a piece
+/// aimed level or down would leave that point already inside the ground.
+/// Cataclysm's own blast is the one caller that wants a point rather than a
+/// volume, so it gets the point that is actually inside the thing that broke.
 pub fn destroy(players: &mut [Player; MAX_PLAYERS], index: usize) -> Option<V3> {
     let mut field = gather(players);
-    let at = field[index].take().map(|s| s.at);
+    let at = field[index].take().map(|s| {
+        let half = s.standing_height().mul(Fx::ratio(1, 2));
+        V3::new(s.at.x, s.at.y.add(half), s.at.z)
+    });
     scatter(players, &field);
     at
 }
