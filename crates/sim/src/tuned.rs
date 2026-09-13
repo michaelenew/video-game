@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 215] = [
+pub const SCALARS: [i32; 219] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -197,7 +197,7 @@ pub const SCALARS: [i32; 215] = [
            45875, // champion.thrust_out_on_the_first_active_frame_(x) = 0.7
               45, // aim.swing_stays_level_to_(deg_down) = 45
            11796, // body.hand_out_from_the_centre_line = 0.18
-           10486, // dual_mage.wing,_inner_edge_(x_reach) = 0.16
+           49152, // dual_mage.wing,_inner_edge_(x_reach) = 0.75
            16384, // dual_mage.wing,_the_tip_as_a_share_of_the_span = 0.25
           114688, // dual_mage.wing,_tip_damage_(x) = 1.75
                5, // dual_mage.meter,_an_auto_moves = 5
@@ -223,6 +223,10 @@ pub const SCALARS: [i32; 215] = [
               26, // reaver.lotus,_back_to_the_shadow = 26
               70, // reaver.lotus,_damage_coming_home_(%) = 70
            39321, // reaver.lotus_slow_(x) = 0.6
+           19661, // dual_mage.wing,_ring_centre_off_the_punching_side_(x_reach) = 0.3
+            6554, // dual_mage.wing,_ring_centre_ahead_of_her_(x_reach) = 0.1
+            4784, // dual_mage.wing,_finishes_off_centre_(turns) = 0.073
+           32768, // dual_mage.wing,_tip_radius = 0.5
 ];
 
 #[rustfmt::skip]
@@ -859,8 +863,8 @@ pub const MOVES: [i32; 725] = [
                6, // move.dual_mage.dark_auto.active = 6
                9, // move.dual_mage.dark_auto.recovery = 9
               52, // move.dual_mage.dark_auto.damage = 52
-          108134, // move.dual_mage.dark_auto.reach = 1.65
-           29491, // move.dual_mage.dark_auto.radius = 0.45
+          137626, // move.dual_mage.dark_auto.reach = 2.1
+           13107, // move.dual_mage.dark_auto.radius = 0.2
               15, // move.dual_mage.dark_auto.hitstun = 15
                8, // move.dual_mage.dark_auto.blockstun = 8
           262144, // move.dual_mage.dark_auto.knockback = 4
@@ -876,7 +880,7 @@ pub const MOVES: [i32; 725] = [
                0, // move.dual_mage.dark_auto.health_cost = 0
                0, // move.dual_mage.dark_auto.leech_(%) = 0
                0, // move.dual_mage.dark_auto.line_of_effect_(0-3) = 0
-           27525, // move.dual_mage.dark_auto.swing_arc_(turns) = 0.42
+           14418, // move.dual_mage.dark_auto.swing_arc_(turns) = 0.22
                0, // move.dual_mage.dark_auto.hits_again_every = 0
                0, // move.dual_mage.dark_auto.channel,_longest_hold = 0
                0, // move.dual_mage.dark_auto.channel,_reach_at_no_hold = 0
@@ -959,8 +963,8 @@ pub const MOVES: [i32; 725] = [
                6, // move.dual_mage.light_auto.active = 6
                9, // move.dual_mage.light_auto.recovery = 9
               52, // move.dual_mage.light_auto.damage = 52
-          108134, // move.dual_mage.light_auto.reach = 1.65
-           29491, // move.dual_mage.light_auto.radius = 0.45
+          137626, // move.dual_mage.light_auto.reach = 2.1
+           13107, // move.dual_mage.light_auto.radius = 0.2
               15, // move.dual_mage.light_auto.hitstun = 15
                8, // move.dual_mage.light_auto.blockstun = 8
           262144, // move.dual_mage.light_auto.knockback = 4
@@ -976,7 +980,7 @@ pub const MOVES: [i32; 725] = [
                0, // move.dual_mage.light_auto.health_cost = 0
                0, // move.dual_mage.light_auto.leech_(%) = 0
                0, // move.dual_mage.light_auto.line_of_effect_(0-3) = 0
-           27525, // move.dual_mage.light_auto.swing_arc_(turns) = 0.42
+           14418, // move.dual_mage.light_auto.swing_arc_(turns) = 0.22
                0, // move.dual_mage.light_auto.hits_again_every = 0
                0, // move.dual_mage.light_auto.channel,_longest_hold = 0
                0, // move.dual_mage.light_auto.channel,_reach_at_no_hold = 0

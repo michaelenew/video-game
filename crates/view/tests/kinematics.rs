@@ -424,19 +424,22 @@ fn a_hand_is_about_as_far_out_as_the_shoulder_it_hangs_from() {
 }
 
 #[test]
-fn the_wing_is_sized_off_the_arm_that_throws_it() {
-    // The Dual mage's autos are punches that throw a section of a torus around
-    // her -- the shape is `moves::Shape::Wing` and the fantasy is in
-    // `docs/design/kits/dual-mage.md`. Two numbers in it are stated against her
-    // own body rather than in metres, and this is the only place they can be
-    // checked, because the simulation has no idea where an elbow is:
+fn the_wing_starts_where_the_punch_stops() {
+    // The Dual mage's autos are punches that throw a curved blade around her --
+    // the shape is `moves::Shape::Wing` and the fantasy is in
+    // `docs/design/kits/dual-mage.md`: the beings inside her extending the
+    // movement past where an arm could take it.
     //
-    //   the inner arc passes through where the punching elbow starts
-    //   the outer arc is two to three times further out than the hand finishes,
-    //   measured from that elbow
+    // That fantasy is two numbers, both stated against her own body rather than
+    // in metres, and this is the only place they can be checked, because the
+    // simulation has no idea where a fist is:
     //
-    // Read off the baked clip, so retiming the punch or re-authoring the pose
-    // moves the check with it.
+    //   the blade's near edge passes just outside where the fist finishes
+    //   the tip reaches two to three times as far out as the fist gets
+    //
+    // Read off the baked clip and the live hit volume, so retiming the punch,
+    // re-authoring the pose or moving any of the four wing knobs moves the
+    // check with it.
     let s = skeleton::skeleton_for(sim::Class::DualMage);
     let clip = view::Clip::DualDark;
     let (last_startup, _, first_recovery) = clip.phases().expect("an attack clip");
@@ -459,20 +462,34 @@ fn the_wing_is_sized_off_the_arm_that_throws_it() {
         "the punch does not travel: elbow {elbow:.2} m, hand {hand:.2} m"
     );
 
-    let m = sim::moves::get(sim::Class::DualMage, sim::moves::dual::DARK_AUTO);
-    let inner = m.reach.to_f32_for_render() * sim::tuning::wing_inner().to_f32_for_render();
+    // The volume the simulation actually puts out, sampled off her own axis.
+    // The ring is not centred on her any more, so how close the blade comes is
+    // a thing to measure rather than a knob to read.
+    let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
+    w.advance([sim::Input::aimed(sim::Input::LEFT, 0), sim::Input::new(0)]);
+    let (mut nearest, mut tip) = (f32::MAX, 0.0f32);
+    for _ in 0..40 {
+        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
+            let far = |at: sim::V3| at.sub(w.players[0].pos).flat_len().to_f32_for_render();
+            if hb.tipper {
+                tip = far(hb.to);
+            } else {
+                nearest = nearest.min(far(hb.from));
+            }
+        }
+        w.advance([sim::Input::aimed(0, 0), sim::Input::new(0)]);
+    }
+    assert!(tip > 0.0 && nearest < f32::MAX, "the auto put nothing out");
     assert!(
-        (inner - elbow).abs() < 0.1,
-        "the inner arc is at {inner:.2} m and the elbow starts at {elbow:.2} m"
+        nearest > hand && nearest < hand + 0.4,
+        "the blade's near edge comes to {nearest:.2} m and the fist finishes at \
+         {hand:.2} m: the wing has to start where the punch stops"
     );
-
-    let travel = hand - elbow;
-    let times = (m.reach.to_f32_for_render() - elbow) / travel;
+    let times = tip / hand;
     assert!(
         (2.0..=3.0).contains(&times),
-        "the outer arc is {times:.1} times the punch's own travel past the elbow \
-         (elbow {elbow:.2} m, hand {hand:.2} m, reach {:.2} m)",
-        m.reach.to_f32_for_render()
+        "the tip lands {times:.1} times as far out as the fist gets \
+         (fist {hand:.2} m, tip {tip:.2} m)"
     );
 }
 
