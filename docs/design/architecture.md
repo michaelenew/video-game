@@ -47,6 +47,46 @@ simulation.** Anything the engine animates independently will pop when a rollbac
 Actions are frame-data state machines, not blend trees. That is how fighting games are
 built anyway, but it removes one of the main reasons to reach for a large engine.
 
+## The frame budget
+
+Requirements 2 and 3 above are performance claims, so they get numbers and tests.
+
+A rendered frame at 60 Hz is **16.7 ms**, and the simulation is the part of it that runs
+more than once. A rollback restores a snapshot and re-simulates every frame since the peer
+and this machine stopped agreeing — up to `net::MAX_ROLLBACK_FRAMES`, eight — taking a
+fresh snapshot for each, all inside one frame that still has to draw a picture at the end.
+So a cost that reads as harmless per frame arrives multiplied, and it arrives at the worst
+possible moment: mid-rollback, which is to say while the connection is already struggling.
+
+The frame is divided accordingly:
+
+| Part | Budget | Why |
+| --- | --- | --- |
+| One rollback burst | ¼ frame | Eight advances, eight saves and a restore, worst case |
+| One `World::advance` | ¹⁄₃₂ frame | The burst budget, shared across the window |
+| One frame of `view` | ⅛ frame | Interpolation, camera and posing run once per picture |
+| The renderer | The rest | It is the part that talks to the GPU |
+
+Held by `sim/tests/budget.rs`, `view/tests/budget.rs` and `net/tests/budget.rs`.
+
+**The tests that do not look at a clock are the load-bearing ones.** A wall clock on a
+shared machine can only be trusted with a wide margin — the three timing budgets currently
+run at roughly 10x, 40x and 5x the measured cost — so they are tripwires for a cost that has
+changed *kind*: an accidental quadratic, an unbounded scan, a blocking call. They will not
+notice a 50% regression, and are not meant to.
+
+What catches drift is the pair of checks that give the same answer on every machine:
+
+- **A simulation frame allocates nothing.** No dependencies, no I/O, no floating point, and
+  no allocation either — the fourth member of that family and for the same reason. An
+  allocator is shared mutable state with a lock and a tail, and it is the classic source of
+  the one frame in a thousand that takes a millisecond. The path from snapshot to screen in
+  `view` is held to the same rule.
+- **A `World` stays under 4 KiB.** Rollback copies one every frame and keeps a ring of nine,
+  so the snapshot is the one structure whose *size* is a running cost rather than a one-off.
+  The cap keeps the ring inside L2. Raising it means every frame and every rollback got
+  heavier, so it wants a reason the way an Oven exemption does.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.

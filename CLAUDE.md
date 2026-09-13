@@ -86,6 +86,26 @@ Anything that affects gameplay belongs in the `World` snapshot — **including
 animation clocks**, because a clip advancing on the renderer's own clock pops
 every time a rollback happens.
 
+## A frame costs what it is budgeted, and a frame never allocates
+
+The simulation runs **more than once per picture**: a rollback re-simulates up to
+eight frames and saves a snapshot for each, inside the same 16.7 ms that still
+has to draw. So per-frame cost arrives multiplied, exactly when the connection
+is already struggling. One rollback burst gets a quarter of the frame, one
+`advance` a thirty-second of it, one frame of `view` an eighth. Enforced by
+`crates/sim/tests/budget.rs`, `view/tests/budget.rs` and `net/tests/budget.rs`.
+
+**Add to the `no floats, no deps, no I/O` list: no allocation.** A simulation
+frame, and the whole path from snapshot to screen in `view`, must not touch the
+heap — an allocator is a lock with a tail, and it is what turns one frame in a
+thousand into a millisecond. That check and the 4 KiB cap on `World` are the
+ones that matter: they give the same answer on every machine, whereas the three
+timing budgets run at 5–40x the measured cost and will only catch a change of
+*kind* — an accidental quadratic, an unbounded scan, a blocking call.
+
+The full reasoning is [`docs/design/architecture.md`](docs/design/architecture.md)
+§"The frame budget".
+
 ## Feel is a set of properties, not a vibe
 
 `crates/sim/tests/feel.rs` holds the relationships that must survive tuning:
