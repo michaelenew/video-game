@@ -101,6 +101,10 @@ pub enum Length {
     Move(Class, u8),
     Dodge,
     AirDodge,
+    /// The Reaver's shadow, in flight. The throw is a simulation clock, so a
+    /// clip of any other length would either be cut off or hold its last frame
+    /// while the body kept travelling.
+    ShadowFlight,
 }
 
 clips! {
@@ -235,6 +239,18 @@ clips! {
         "Executioner: a two-handed descending cut with the whole body dropped behind it.";
     ReaverSpecial,   "reaver_special",    Moves, "reaver", Length::Move(Class::ShadowReaver, 2), false,
         "Guillotine: blades erupt from the placed shadow. The caster points and commits; the violence is elsewhere.";
+    ReaverMechanic,  "reaver_mechanic",   Moves, "reaver", Length::Move(Class::ShadowReaver, 3), false,
+        "Send shadow: an open-handed throw that puts the second body somewhere else. Nothing leaves her hand -- what leaves is her.";
+
+    // -- The Reaver's shadow, which is a body of its own --------------------
+    //
+    // Not moves: these two are what the *shadow* does with itself, and they
+    // play on the second skeleton rather than on hers. Everything else it does
+    // is her own animation, replayed a few frames late.
+    ShadowDash,      "shadow_dash",       Moves, "reaver", Length::ShadowFlight, false,
+        "The shadow travelling: thrown forward, right leg trailing at forty-five degrees, left knee up and folded, left elbow across the face, right arm streaming behind.";
+    ShadowReady,     "shadow_ready",      Moves, "reaver", Length::Fixed(90), true,
+        "The shadow arrived: a low bladed guard, weight back, both hands up. Waiting, and plainly still a threat.";
 
     // -- The Elementalist: Bolt, Fissure, Fire pillar -----------------------
     ElementalistPoke,     "elementalist_poke",      Moves, "elementalist", Length::Move(Class::Elementalist, 0), false,
@@ -257,13 +273,23 @@ clips! {
     BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,
         "Black spike: a downward stabbing gesture that plants something in the ground.";
 
-    // -- The Dual mage: Step strike, Lance, Judgement -----------------------
-    DualPoke,      "dual_poke",       Moves, "dual", Length::Move(Class::DualMage, 0), false,
-        "Step strike: a short step into a close strike. Light on the feet.";
+    // -- The Dual mage: two autos, Lance, Judgement, Sweep ------------------
+    //
+    // Five, and the first and last are the same punch on opposite arms: left
+    // is dark, right is light, and which one just landed is how the class
+    // steers its meter. They are two clips rather than one played twice
+    // because a mirrored pose is a mirrored *pose* -- see `Pose::mirrored` --
+    // and the bake wants a recipe per clip.
+    DualDark,      "dual_dark",       Moves, "dual", Length::Move(Class::DualMage, 0), false,
+        "Dark auto, left arm: a straight punch that opens into a wing behind the fist.";
     DualCommitted, "dual_committed",  Moves, "dual", Length::Move(Class::DualMage, 1), false,
         "Lance: a long forward thrust, arm and body extended into one line.";
     DualSpecial,   "dual_special",    Moves, "dual", Length::Move(Class::DualMage, 2), false,
         "Judgement: a finisher, only past the deep threshold. Big, slow, and final.";
+    DualSweep,     "dual_sweep",      Moves, "dual", Length::Move(Class::DualMage, 3), false,
+        "Sweep: both arms thrown across the whole front at once. Close, wide, and it moves people.";
+    DualLight,     "dual_light",      Moves, "dual", Length::Move(Class::DualMage, 4), false,
+        "Light auto, right arm: the dark punch mirrored, and it has to read as the other side.";
 }
 
 impl Clip {
@@ -278,6 +304,7 @@ impl Clip {
             }
             Length::Dodge => sim::tuning::dodge_frames().max(2),
             Length::AirDodge => sim::tuning::air_dodge_frames().max(2),
+            Length::ShadowFlight => sim::tuning::shadow_send_frames().max(2),
         }
     }
 

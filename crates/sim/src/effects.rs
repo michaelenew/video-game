@@ -64,6 +64,14 @@ pub enum EffectKind {
     /// Blood mage. Four arms thrown out in a cone that arc back inward to meet
     /// at the far end. Caught by all four and you are rooted.
     Grasp,
+    /// Shadow Reaver. Six blades that erupt from the shadow along curving
+    /// paths, hang at full extension, and then chase the shadow home -- cutting
+    /// on the way out and again on the way back.
+    ///
+    /// The one effect whose centre **moves**, and it is the point of the
+    /// ability rather than a detail: recall the shadow with the blades out and
+    /// the six of them drag across the arena after it. See [`Effect::lotus_at`].
+    GuillotineLotus,
 }
 
 /// How many arms a Grasp has, and which corner each one leaves by.
@@ -73,6 +81,15 @@ pub enum EffectKind {
 pub const GRASP_ARMS: usize = 4;
 pub const GRASP_CORNERS: [(i32, i32); GRASP_ARMS] = [(-1, 1), (-1, -1), (1, 1), (1, -1)];
 
+/// How many blades a Guillotine lotus opens with.
+///
+/// Six, and a count rather than a knob for the same reason the Grasp has four
+/// arms: it is what the ability *is*. A slider from one to twelve would be a
+/// second, worse way of writing the move list, and the bookkeeping below packs
+/// one bit per blade per victim into a `u32`, which six of them and three
+/// victims exactly fits.
+pub const LOTUS_BLADES: usize = 6;
+
 impl EffectKind {
     pub const fn name(self) -> &'static str {
         match self {
@@ -80,6 +97,7 @@ impl EffectKind {
             EffectKind::BlackSpike => "black spike",
             EffectKind::Bloodletter => "bloodletter",
             EffectKind::Grasp => "grasp",
+            EffectKind::GuillotineLotus => "guillotine lotus",
         }
     }
 
@@ -95,6 +113,10 @@ impl EffectKind {
             // player is looking, so the crosshair means a direction rather than
             // a place on the floor.
             EffectKind::Bloodletter | EffectKind::Grasp => false,
+            // Neither. It erupts at the shadow, wherever the shadow happens to
+            // be standing -- which is the fourth line of effect, and the only
+            // move in the game that uses it. See `aim::mechanic_path`.
+            EffectKind::GuillotineLotus => false,
         }
     }
 
@@ -119,6 +141,17 @@ impl EffectKind {
         matches!(self, EffectKind::Grasp)
     }
 
+    /// Does its centre move after it is cast?
+    ///
+    /// One does. The lotus is anchored to the Reaver's shadow rather than to a
+    /// patch of ground, so recalling the shadow takes the blades with it. Kept
+    /// apart from [`travels`](Self::travels), which is about how the *cast* was
+    /// aimed: what a lotus is thrown at is not a direction, and what it does
+    /// after is not standing still.
+    pub const fn follows_the_mechanic(self) -> bool {
+        matches!(self, EffectKind::GuillotineLotus)
+    }
+
     /// Which move index spawns this, for the move tables.
     pub const fn from_code(code: u8) -> Option<EffectKind> {
         match code {
@@ -126,6 +159,7 @@ impl EffectKind {
             2 => Some(EffectKind::BlackSpike),
             3 => Some(EffectKind::Bloodletter),
             4 => Some(EffectKind::Grasp),
+            5 => Some(EffectKind::GuillotineLotus),
             _ => None,
         }
     }
@@ -137,6 +171,14 @@ impl EffectKind {
             EffectKind::BlackSpike => t::spike_life(),
             EffectKind::Bloodletter => t::bloodletter_flight(),
             EffectKind::Grasp => t::grasp_flight(),
+            // Out, held open, and home again. Three knobs rather than one
+            // because they are three different decisions: how fast it opens is
+            // spectacle, how long it hangs is how much time the victim has to
+            // leave, and how long it takes to come back is how far the blades
+            // can drag a recalled shadow.
+            EffectKind::GuillotineLotus => t::lotus_erupt()
+                .saturating_add(t::lotus_hold())
+                .saturating_add(t::lotus_return()),
         }
     }
 
@@ -151,7 +193,7 @@ impl EffectKind {
         match self {
             EffectKind::FirePillar => t::pillar_damage(),
             EffectKind::BlackSpike => t::spike_drain(),
-            EffectKind::Bloodletter | EffectKind::Grasp => m.damage,
+            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::GuillotineLotus => m.damage,
         }
     }
 }
@@ -188,8 +230,12 @@ pub struct Effect {
     /// pass back — and clears the mask between them, so it can catch the same
     /// person twice. A Grasp has four, one per arm, and never clears: an arm
     /// hits you once, and how many *different* arms have is exactly the
-    /// question the root is asking.
-    pub struck: u16,
+    /// question the root is asking. A lotus has six, and clears at the turn the
+    /// way the blade does.
+    ///
+    /// A `u32` rather than a `u16`, which is what the lotus cost: six parts
+    /// against three victims is eighteen bits and a `u16` holds five parts.
+    pub struck: u32,
     /// Damage this has dealt and not yet paid back.
     ///
     /// Only the blade uses it. The archive is specific that the health arrives
@@ -300,6 +346,7 @@ impl Effect {
             EffectKind::FirePillar => self.pillar_volumes().0.radius,
             EffectKind::Bloodletter => t::bloodletter_radius(),
             EffectKind::Grasp => t::grasp_arm_radius(),
+            EffectKind::GuillotineLotus => t::lotus_blade_radius(),
         }
     }
 
@@ -366,10 +413,128 @@ impl Effect {
             .add(lift.scale(spread.mul(Fx::from_int(up))))
     }
 
+    // -- The lotus ----------------------------------------------------------
+
+    /// Which of the three parts of a lotus this frame is in, and how far
+    /// through that part it is.
+    ///
+    /// Three parts rather than one curve because they are three different
+    /// motions and a player has to be able to tell them apart: the blades
+    /// **snap** out, **hang** open, and then **slide** home decelerating. A
+    /// single ease over the whole life would blur all three into one breath.
+    pub fn lotus_phase(&self) -> LotusPhase {
+        let erupt = t::lotus_erupt().max(1);
+        let hold = t::lotus_hold();
+        let back = t::lotus_return().max(1);
+        let age = self.age;
+        if age < erupt {
+            LotusPhase::Erupting(Fx::ratio(age as i32, erupt as i32))
+        } else if age < erupt + hold {
+            LotusPhase::Held
+        } else {
+            let through = age - erupt - hold;
+            LotusPhase::Returning(Fx::ratio(through.min(back) as i32, back as i32))
+        }
+    }
+
+    /// How far out the blades are, as a fraction of `lotus_radius`.
+    ///
+    /// Out on a curve that is fastest at the start, because the eruption is
+    /// meant to be over before the victim can answer it; home on the mirror of
+    /// that, which is what "slowing" means -- the blades come off full speed
+    /// and settle into the shadow rather than snapping back into it.
+    fn lotus_extension(&self) -> Fx {
+        match self.lotus_phase() {
+            // Full speed on the first frame, arriving at rest.
+            LotusPhase::Erupting(p) => crate::math::ease_out(p),
+            LotusPhase::Held => Fx::ONE,
+            // The same curve run backwards: off the mark at speed, and
+            // decelerating into the shadow. That is the "slowing" in the
+            // ability's own description of itself.
+            LotusPhase::Returning(p) => Fx::ONE.sub(crate::math::ease_out(p)),
+        }
+    }
+
+    /// How far out the blades were on the frame before this one.
+    fn lotus_extension_before(&self) -> Fx {
+        let mut before = *self;
+        before.age = self.age.saturating_sub(1);
+        before.lotus_extension()
+    }
+
+    /// The line one blade swept this frame: where its head was, and where it is.
+    ///
+    /// **A segment rather than a point, and that is a hit test rather than a
+    /// flourish.** The eruption crosses four metres in seven frames and it is
+    /// fastest on the first of them, so a head tested as a ball starts the
+    /// frame at the shadow's feet and ends it a metre past anybody standing
+    /// there -- the one victim the ability is named for is the one it would
+    /// miss. A swept line cannot tunnel.
+    ///
+    /// Both ends are taken around the **current** centre. The shadow's own
+    /// motion is not swept, and does not need to be: it moves less than a
+    /// blade's own thickness in a frame, so a body it crosses is inside one
+    /// end or the other on every frame of the crossing.
+    pub fn lotus_span(&self, blade: usize, centre: V3) -> (V3, V3) {
+        (
+            self.lotus_head(blade, centre, self.lotus_extension_before()),
+            self.lotus_at(blade, centre),
+        )
+    }
+
+    /// Where one blade is this frame, around a centre the caller supplies.
+    ///
+    /// **The centre is passed in rather than read from `pos`** because it is
+    /// the shadow's live position, and the shadow moves: recall it with the
+    /// blades out and the six of them are dragged across the arena behind it,
+    /// which is most of what the ability is for.
+    ///
+    /// Each blade leaves on its own sixth of the circle and keeps turning as it
+    /// goes -- `lotus_curl` turns over the full extension -- so the six of them
+    /// open like petals rather than as spokes of a wheel. They rise on the way
+    /// out and come down on the way in, on the same fraction, so the arc is one
+    /// motion rather than a height bolted onto a radius.
+    pub fn lotus_at(&self, blade: usize, centre: V3) -> V3 {
+        self.lotus_head(blade, centre, self.lotus_extension())
+    }
+
+    /// One blade's head at a given extension. The shape of the flower, with the
+    /// clock taken out of it so the sweep above can ask for two frames at once.
+    fn lotus_head(&self, blade: usize, centre: V3, out: Fx) -> V3 {
+        let bearing = Fx::ratio(blade.min(LOTUS_BLADES - 1) as i32, LOTUS_BLADES as i32)
+            .add(t::lotus_curl().mul(out));
+        let along = V3::from_turns(bearing);
+        let reach = t::lotus_radius().mul(out);
+        V3::new(
+            centre.x.add(along.x.mul(reach)),
+            centre.y.add(t::lotus_rise().mul(crate::math::arch(out))),
+            centre.z.add(along.z.mul(reach)),
+        )
+    }
+
+    /// True once the blades have turned for home.
+    pub fn lotus_coming_back(&self) -> bool {
+        matches!(self.lotus_phase(), LotusPhase::Returning(_))
+    }
+
+    /// Cut the return short and send the blades home now.
+    ///
+    /// Recalling the shadow reactivates the lotus, which is the combination the
+    /// kit is built around: the blades stop hanging and start chasing. It winds
+    /// the clock forward to the first frame of the return rather than shortening
+    /// the life, so the drag home is always the full `lotus_return`.
+    pub fn lotus_send_home(&mut self) {
+        let turn = t::lotus_erupt().max(1).saturating_add(t::lotus_hold());
+        if self.age < turn {
+            self.age = turn;
+            self.forget_hits();
+        }
+    }
+
     // -- Bookkeeping --------------------------------------------------------
 
-    fn bit(part: usize, victim: usize) -> u16 {
-        1u16 << (part * VICTIMS + victim)
+    fn bit(part: usize, victim: usize) -> u32 {
+        1u32 << (part * VICTIMS + victim)
     }
 
     /// Has this part already caught this victim?
@@ -421,6 +586,17 @@ fn frame_about(dir: V3) -> (V3, V3) {
         right.x.mul(dir.y).sub(right.y.mul(dir.x)),
     );
     (right, up.normalized())
+}
+
+/// Which part of its life a Guillotine lotus is in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LotusPhase {
+    /// Blades racing outward, with the fraction of the way through the burst.
+    Erupting(Fx),
+    /// Open, and still.
+    Held,
+    /// Chasing the shadow home, with the fraction of the way through the drag.
+    Returning(Fx),
 }
 
 /// One cylindrical slab of a pillar.

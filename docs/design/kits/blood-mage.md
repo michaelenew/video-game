@@ -183,7 +183,26 @@ Three things about it are deliberate:
   *between* yourself and someone else.
 - **The return is continuous**, not a lump sum when the field expires. A Blood mage standing
   in a fight is being paid the whole time it is up, which is the difference between an
-  ability you build a fight around and one you survive a timer to collect on. This replaces
+  ability you build a fight around and one you survive a timer to collect on.
+- **At full health you will not see it.** Not a bug, and worth writing down because it has
+  been reported as one twice. Health cannot go over the bar, and the eruption's own leech
+  arrives first: cast at 1000 out of 1000, the sixty it cost comes back the instant the spike
+  lands, and every tick of the field after that is clamped away. Measured, casting on a target
+  standing in the field:
+
+  | Cast at | Eruption returns | Field returns |
+  | --- | --- | --- |
+  | 1000 / 1000 | +59 | **+1** |
+  | 700 / 1000 | +59 | +90 |
+
+  Which is the class working: she heals when she is hurt and gains nothing when she is whole,
+  so the spike is close to free at full health and a large swing when she needs it. It does
+  mean the ability reads as broken in exactly the situation you test it in — the first cast of
+  a fresh round. **If the drain's return should be felt at the top of the bar**, the eruption
+  is what is eating the headroom, and the fix is to stop the eruption leeching: the written
+  design says the spike *returns a share of everything it drains*, and the arrival damage is
+  not a drain. That would need a second leech number, since one move has one today, and it
+  would cut what the ability returns overall — so it is a decision rather than a correction. This replaces
   the archive's tether-break payout, which needed tethers nobody has built.
 - **The cast is the telegraph.** Thirty frames — twice reaction time, the longest wind-up in
   the class — because the ability is a placement, and a placement the other player cannot see

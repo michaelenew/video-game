@@ -124,7 +124,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "K or right click",
-                "Guard. The first few frames parry. On the Champion it is the spear, which has no guard.",
+                "Guard. The first few frames parry. Three classes attack with it instead: the Champion's spear, the Dual mage's light auto and the Shadow Reaver's Executioner -- none of the three has a shield to guard with.",
                 "K guard",
             ),
             s(
@@ -139,7 +139,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "E",
-                "The class mechanic. Different on every class: throw the shield, Rush, place the shadow, raise a structure — or, on the Blood mage, cast the Black spike, because her mechanic is health and there is nothing to toggle.",
+                "The class mechanic. Different on every class: throw the shield, Rush, raise a structure — or, on the Blood mage and the Shadow Reaver, a real ability with a wind-up you can be punished during.",
                 "E mechanic",
             ),
         ],
@@ -175,6 +175,74 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "While rushing",
                 "Sword cuts as you run past without stopping the dash. Hammer is the uppercut — it launches, holds on, and space takes you both higher. Spear stabs, or vaults if you are pointing at the floor.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Dual mage",
+        blurb: "Two forces, one in each arm, and a bar between them. Which button you attack with is which way you drift, and depth is power -- but past a threshold it burns you.",
+        entries: &[
+            s(
+                "Left click",
+                "Dark auto. A punch with the left arm that opens into a wing. Moves you darker -- but only if it lands.",
+                "LMB dark auto",
+            ),
+            s(
+                "Right click",
+                "Light auto. The same punch with the right arm, and it moves you lighter. There is no guard on this class.",
+                "RMB light auto",
+            ),
+            s(
+                "Shift + left click",
+                "Lance. A line at whatever the crosshair is on. Committed, and it moves you darker whether or not it connects.",
+                "Shift+LMB lance",
+            ),
+            s(
+                "E",
+                "Sweep. Both arms across the whole front. No side of its own, so it pushes you further along whichever way you were already going.",
+                "E sweep",
+            ),
+            s(
+                "Q",
+                "Judgement. The finisher, and it only comes out from deep on the bar.",
+                "Q judgement",
+            ),
+            e(
+                "Getting back",
+                "Landing an auto from the far side is the fast way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Shadow Reaver",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two.",
+        entries: &[
+            e(
+                "The shadow copies you",
+                "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
+            ),
+            s(
+                "E",
+                "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it.",
+                "E send shadow",
+            ),
+            s(
+                "Q",
+                "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow drags them the length of the arena.",
+                "Q lotus",
+            ),
+            s(
+                "Right click",
+                "Executioner, the committed melee. Shift + left click throws the same move.",
+                "RMB executioner",
+            ),
+            e(
+                "Shift + forward",
+                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. Pointed anywhere else it is the ordinary dodge.",
+            ),
+            e(
+                "The leash",
+                "Walk far enough from a shadow standing out on the field and it comes and finds you, cutting on the way. Straying is a decision, not a mistake.",
             ),
         ],
     },

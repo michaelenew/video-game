@@ -780,8 +780,9 @@ did**, so every class implemented from here is checked from its first commit.
 1. **Play it against a person.** Everything below is downstream of that. The open
    questions in [feel-log.md](feel-log.md) are written so an answer can be recorded
    against them rather than lost.
-2. **Mechanic animations.** Throwing the shield, placing the shadow, changing form. They
-   need a clock in the simulation the way attacks have one.
+2. **Mechanic animations.** Throwing the shield, and changing form. They need a clock in
+   the simulation the way attacks have one. The two mechanics that became *moves* -- the
+   Blood mage's Black spike, the Reaver's Send shadow -- already have one, and are animated.
 3. **glTF standins.** The pose function's signature does not change, only what it returns.
    Kenney and Quaternius have CC0 rigged low-poly characters.
 4. **NAT traversal**, when the game leaves the LAN.

@@ -1473,6 +1473,39 @@ failed at 35% leech and passes at 55%. None of it has been played. The costs in 
 are a guess: the class is downstream of TTK, and what fraction of a health bar a cast should
 represent is exactly the question a prototype answers and a document cannot.
 
+### 2026-09-13 — why the drain's healing is invisible, and it is not the bug
+
+**Found** the field's return being reported as missing a second time, after the bug that was
+actually causing it had been fixed. The second cause is not a bug at all, and it is worth a
+dated entry because it will be reported a third time otherwise.
+
+**Health cannot go over the bar, and the eruption gets there first.** The spike costs sixty,
+the eruption returns fifty-nine of it on the frame it lands, and every tick of the field after
+that is clamped away. Measured, with a target standing in the field for its whole life:
+
+| Cast at | Eruption returns | Field returns |
+| --- | --- | --- |
+| 1000 / 1000 | +59 | **+1** |
+| 700 / 1000 | +59 | +90 |
+
+So the ability reads as broken in exactly the situation anybody tests it in — the first cast of
+a fresh round, at full health — and works from the moment you have taken a hit.
+
+**Which is arguably the class working.** She heals when she is hurt and gains nothing when she
+is whole, so the spike is nearly free at the top of the bar and a large swing when she needs
+one. That is a good shape and nobody designed it; it fell out of the cost and the leech being
+close to equal.
+
+**If it should be felt at full health**, the eruption is what eats the headroom, and the
+written design already says what to do: the spike *returns a share of everything it drains*,
+and arrival damage is not a drain. Stopping the eruption leeching would leave the room for the
+field to fill. It needs a second leech number — one move has one today — and it cuts what the
+ability returns overall, so it is a decision rather than a correction. Left to the next tuning
+pass.
+
+**Verdict** no change. Written down, and the kit document carries the table.
+
+
 ### 2026-09-13 — a Grasp that closes pulls you in
 
 **Changed** `grab_hold` on Grasp means something now. Catch somebody with every one of the four
@@ -2053,3 +2086,141 @@ not mean:
 **Verdict** open, and one thing to watch: a fighter standing on open ground is now aimed at
 through the floor behind them, so a shot at somebody backed against a wall ends on the wall
 rather than on them. Both hit. Nobody has played it.
+
+
+### 2026-09-13 — the Dual mage got both her arms
+
+**Changed** the kit on the buttons. Left click is the **dark auto**, right click is the
+**light auto**, `shift` + left is Lance, `Q` is Judgement, and `E` casts a new move,
+**Sweep**. Five moves where there were three, and both mouse buttons are attacks.
+
+Right click was doing nothing on this class. `want_guard` asks for a shield in hand and she
+has no shield, so half of the mechanic — *right click moves you lighter* — had no input at
+all, and the meter could only be driven one way. `E` was also dead, for the same reason the
+Blood mage's was before Black spike: the mechanic is a meter steered by which button attacks,
+so there is no state for a key to toggle.
+
+**Why the autos come out of the arms.** The class holds two forces apart, one in each arm,
+and the only information the player has about which one they just threw is which arm threw it
+and which way the bar moved. Both volumes leaving from the middle of the chest would make
+that unreadable. So a move now declares a **hand** next to its shape (`moves::hand`), and
+`aim::hand_origin` steps the swing's origin out to that shoulder. Everything else in the game
+is `Hand::Centre` and is untouched.
+
+The sides are the **skeleton's**, not the world's, and that is worth writing down because it
+looks like a bug until you check: the body is authored `+Z` forward with its left arm at
+`-X`, which is a left-handed frame in a right-handed world, so the arm the renderer calls the
+left one is drawn on the side a quarter turn *toward* strafe-right. Following the skeleton is
+the only choice that matters — what an animation and a hitbox have to agree about is which
+arm the player can see swinging — and `view/tests/kinematics.rs` now fails if the two ever
+disagree. Left as it is rather than fixed: unmirroring the model means negating the sideways
+coordinate of every authored key in every clip, which is a change with no visible payoff and
+a large blast radius.
+
+**The wing.** A new hit shape, `Shape::Wing`. It starts a little behind the fist, sweeps
+outward — away from the body, on whichever side the arm is — and **grows** to the move's whole
+reach across the active window, so the tip travels a spiral rather than an arc. Two and a half
+arm lengths at full extension, which `view/tests/kinematics.rs` checks against the Dual mage's
+own build rather than against a number typed twice.
+
+It is its own shape rather than a swing with a big arc for two reasons that are the same
+reason: a swing's head is at a fixed reach and a swing's inner end is at the shoulder. Both of
+those are what make a swing *safe to step inside*, and the wing is meant to be the opposite —
+the class is long and thin and loses to anyone who has closed.
+
+Both autos share one `arc`. The **hand supplies its sign** (`aim::Hand::outward`), so the
+mirror is structural rather than two knobs somebody has to keep equal and opposite.
+
+**Steering, corrected.** The autos now steer **on contact** and everything else on the press,
+which is what the design document has always said and what the implementation did not do —
+before this, swinging a poke at thin air walked the bar. And the side comes from the *move*
+rather than from the input bits: `shift` + left click has a modifier and a side in it, and
+reading the bits meant deciding which won. `moves::dual::side` answers it once. A move with no
+side — `Q`, `E` — pushes you further along the path you are already on, and does nothing at
+dead centre, which is the rule the document states for scroll click and both-click.
+
+**The animation.** The autos are one punch read twice: `Pose::other_arm` mirrors everything
+above the hips and re-plants the feet where they were, so a left jab and a right cross come
+off one set of keys. Mirroring the *stance* as well was the first attempt and is wrong — every
+clip in that file has to start and end on the idle's own stance, so a mirrored first frame
+swaps the character's footing on the frame the punch starts and swaps it back on the frame it
+ends.
+
+Sweep took three passes to get through the continuity ceiling, and the third one is the
+correct animation rather than a concession: the arms now cross the front **during the active
+frames** rather than before them, because that is when the hit volume crosses. The first two
+versions had the body arrive early and then wait, which is both a 0.4 m per frame hand and a
+lie about where the danger is.
+
+**Verdict** open on everything with a number in it. Nobody has played it. The specific
+questions: whether the wing's outward opening reads as a wing or as a wild swing, whether 50°
+of arc is enough to feel like it wraps, whether the punch at five frames of startup is too
+fast to see which arm it was, and whether Sweep at twelve frames is a real answer to somebody
+inside the punches or just a slower one.
+### 2026-09-13 — the Shadow Reaver's second body
+
+The class's whole kit was rebuilt around one change, and the change is a deletion: **the
+shadow can no longer be absent.**
+
+**Changed**
+
+- `Mechanic::Shadow` went from `Option<V3>` to a body with four states -- attending her,
+  going out, waiting, coming home. There is no "nowhere".
+- `E` became a **move** rather than an instant, in a fourth slot in the table: *Send shadow*,
+  8/3/14, reach 9 m, damage 70 on the way home. The shadow flies out in ten frames and stops;
+  pressed again it dashes home at 34 m/s through anybody in the way, cutting once and slowing
+  them to 0.55x.
+- The leash went from 8 m to **12 m**, and had to: the throw reaches 9, so at 8 the shadow
+  turned round on the frame it landed. A leash shorter than the throw is not a tuning
+  mistake, it is the setup deleting itself.
+- **Guillotine lotus** stopped being a disc at the shadow and became six blades that erupt
+  along curved paths (4.5 m, 7 frames), hang open for 40, and chase the shadow home over 26,
+  dealing 70% of what they dealt going out. 40 damage a blade, which is deliberately small:
+  six numbers can land at once.
+- **The shadow copies her swings**, 4 frames later, at **25%** of her damage, from wherever
+  it stands.
+- The forward dodge, thrown with the crosshair on the shadow, became the dash to it: 34 m/s
+  constant, invulnerable, and arriving collects the shadow.
+- Executioner picked up **right click**, which was dead on a class with no shield.
+
+**Why** two reasons, and the second is the one that mattered.
+
+The stated one: the class read as a setup class that spends most of a match with no setup.
+`None` meant no swap, no Guillotine, no line -- and the fix the kit document had already
+reached for, *the baseline dash creates the shadow*, only papered over it.
+
+The one found while building it: **`Option` was making the code worse in the same shape it
+was making the class worse.** Every ability that read the mechanic carried a branch for the
+case where the mechanic did not exist, and every one of those branches was a design question
+nobody had answered. Deleting the case deleted the branches.
+
+**What the numbers are for.** The 25% is the class in one number: holding the shadow is a
+flat 1.25x on everything her body does, and sending it out trades that quarter for a second
+threat somewhere she is not. That is a real decision every few seconds, which is what a
+mechanic is supposed to be. The 40-per-blade is a guess bounded from above: standing exactly
+on the shadow through a whole lotus is six blades out and six back, which is 240 plus 168 of
+a thousand, and that is meant to be the execute rather than the opening.
+
+**Two implementation notes worth keeping**, because both were bugs first:
+
+- The blades are tested as **swept lines**, not as points. The eruption crosses 4.5 m in 7
+  frames and is fastest on the first of them, so a blade sampled as a ball starts the frame
+  at the shadow's feet and ends it a metre past whoever was standing there. The one victim
+  the ability is named for was the one it missed.
+- The echo is **a move index and an age**, and the shadow's own startup/active/recovery are
+  derived from the same table hers come from. A second state machine would have to agree with
+  the first, and eventually would not.
+
+**Verdict** open, and there is a lot here to play. Three specific worries:
+
+1. **The lotus dragged home may be too much.** It is two buttons, it covers the length of the
+   arena, and it hits everything twice. That is the intended fantasy; whether it is a fair
+   one is a question for a person.
+2. **The attending shadow may be hard to read.** It stands 0.9 m behind her, which from a
+   camera sitting directly behind her is exactly the direction that overlaps. It separates the
+   moment she moves or turns, and `reaver.shadow_trails_her_by` is the knob if it does not
+   separate enough.
+3. **Right click doing two things across the roster** -- guard on four classes, an attack on
+   two -- is now a real inconsistency rather than a Champion-shaped exception. It is the
+   cheapest of the three to reverse.
+

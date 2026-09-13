@@ -108,6 +108,8 @@ pub struct Move {
     pub leech: u8,
     /// The volume this move puts in the world. See [`Shape`].
     pub shape: Shape,
+    /// Which arm it comes out of. See [`crate::aim::Hand`].
+    pub hand: crate::aim::Hand,
 }
 
 /// What an attack's hit volume looks like.
@@ -138,6 +140,24 @@ pub enum Shape {
     /// A thrust. The weapon is a line along the aim that extends to `reach`
     /// over the active window and does not travel sideways.
     Thrust,
+    /// A wing. A punch with something enormous behind it: the volume is a line
+    /// that starts a little *behind* the fist, reaches out past it, and sweeps
+    /// **outward** -- away from the body, on whichever side the hand is -- while
+    /// it grows to the move's whole reach across the active window. What it
+    /// carves out over those frames is a wing, which is the Dual mage's fantasy
+    /// rather than a shape anybody needed before.
+    ///
+    /// Two things separate it from a [`Shape::Swing`], and both are why it is
+    /// its own shape rather than a swing with unusual numbers. It **extends**
+    /// as it turns, so the tip travels a spiral rather than an arc -- a swing's
+    /// head is at a fixed reach. And its inner end is behind the hand rather
+    /// than at the shoulder, so standing inside it is not safe the way standing
+    /// inside a swing's haft is not safe: there is no haft, there is a wing
+    /// root.
+    ///
+    /// Which way it opens comes from [`Move::hand`], so the two mirrored autos
+    /// share one `arc` -- see [`crate::aim::Hand::outward`].
+    Wing,
 }
 
 impl Shape {
@@ -276,9 +296,19 @@ const NAMES: [&[&str]; 6] = [
         "Rush stab",
         "Pole vault",
     ],
-    // Shadow Reaver -- two bodies. Options are a function of the line between them.
-    //   Guillotine: blades erupt from the shadow, so it needs one placed.
-    &["Slash", "Executioner", "Guillotine"],
+    // Shadow Reaver -- two bodies. Options are a function of the line between
+    // them, and the line always exists: the shadow is never nowhere.
+    //   Slash: the auto, on left click.
+    //   Executioner: the committed melee, on right click as well as shift+left.
+    //     Right click is free on this class -- there is no shield to guard with
+    //     -- and the kit doc has always wanted the Reaver's melee on both mouse
+    //     buttons.
+    //   Guillotine: six blades erupt from the shadow and come back to it, so it
+    //     is aimed at the mechanic and the mechanic does all the hitting.
+    //   Send shadow: on `E`, and a real move rather than a state flip. It
+    //     throws the second body out fast and, pressed again, dashes it home
+    //     through anybody in the way.
+    &["Slash", "Executioner", "Guillotine", "Send shadow"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
     //   Bolt: the game's one *skillshot* -- an instant line from her hand to
     //   whatever the crosshair is on, so its `reach` is the max-range sphere
@@ -296,9 +326,14 @@ const NAMES: [&[&str]; 6] = [
     //     all four and you are rooted.
     //   Black spike: on `E`, because the class has no other use for the key.
     &["Bloodletter", "Rend", "Grasp", "Black spike"],
-    // Dual mage -- melee mage riding between two forces.
+    // Dual mage -- melee mage riding between two forces, one in each arm. Five
+    // moves, and the two on the bare clicks are the class: see [`dual`].
+    //   Dark auto / Light auto: the autos, and the steering wheel. Left is
+    //     dark, right is light, and each one is a punch that opens into a wing.
+    //   Sweep: on `E`, because the meter is steered by which button attacks
+    //     rather than by a key of its own, so the mechanic key is free.
     //   Judgement: a finisher, only past the deep threshold on its own side.
-    &["Step strike", "Lance", "Judgement"],
+    &["Dark auto", "Lance", "Judgement", "Sweep", "Light auto"],
 ];
 
 /// The slots every class has: poke, committed, special. Two classes have more.
@@ -363,6 +398,67 @@ pub mod champion {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The Dual mage's five
+// ---------------------------------------------------------------------------
+
+/// The Dual mage's move list, and **which way each one pushes the meter**.
+///
+/// The class holds two forces apart, one in each arm, and the whole of its
+/// mechanic is that *which button you attacked with* decides which way you
+/// drift -- see `docs/design/dual-mage.md`. So the list is worth reading as two
+/// columns rather than as five moves:
+///
+/// ```text
+///              darker              lighter          along your current path
+///   click      Dark auto (L)       Light auto (R)
+///   shift      Lance (shift+L)
+///   key                                             Judgement (Q), Sweep (E)
+/// ```
+///
+/// The two autos are the same punch mirrored: one arm each, one shared set of
+/// numbers, and the hand supplies the sign of the arc. Nothing else in the
+/// roster is built that way, and it is the reason [`crate::aim::Hand`] exists.
+///
+/// `Q` and `E` have no side, because side-ness comes from left and right and a
+/// key has neither. They push you further along whichever way you were already
+/// going, which is the rule the design document already states for scroll click
+/// and both-click.
+pub mod dual {
+    pub const DARK_AUTO: u8 = 0;
+    pub const LANCE: u8 = 1;
+    pub const JUDGEMENT: u8 = 2;
+    pub const SWEEP: u8 = 3;
+    pub const LIGHT_AUTO: u8 = 4;
+
+    pub const COUNT: usize = 5;
+
+    /// Which way this move pushes the meter: `-1` darker, `+1` lighter, `0` for
+    /// a move with no side of its own.
+    ///
+    /// Read from the move rather than from the buttons held down, which is the
+    /// same reason everything else here is declared: `shift + left click` has
+    /// both a modifier and a side in it, and a reader of the input bits has to
+    /// know which one wins. The move already knows.
+    pub const fn side(kind: u8) -> i32 {
+        match kind {
+            DARK_AUTO | LANCE => -1,
+            LIGHT_AUTO => 1,
+            _ => 0,
+        }
+    }
+
+    /// Is this one of the two autos?
+    ///
+    /// They are the only moves that steer on **contact** rather than on the
+    /// press. Everything else votes when you commit to it; an auto has to land,
+    /// which is what forces the class into melee range exactly when it is
+    /// strongest and most fragile.
+    pub const fn is_an_auto(kind: u8) -> bool {
+        matches!(kind, DARK_AUTO | LIGHT_AUTO)
+    }
+}
+
 /// How many moves a class has.
 ///
 /// Per class rather than a single constant because the Champion legitimately
@@ -376,6 +472,16 @@ pub const fn slots(class: Class) -> usize {
         Class::Champion => champion::COUNT,
         // The fourth is Black spike, on `E`. See `on_e`.
         Class::BloodMage => SLOTS + 1,
+        // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
+        // unlike the Blood mage's -- but throwing a second body out across the
+        // arena and dashing it back through somebody is not an instant, and a
+        // move with a flight, a damage number and a slow needs the same table
+        // every other move is in.
+        Class::ShadowReaver => SLOTS + 1,
+        // Five: an auto on each click, because the two autos are two different
+        // moves rather than one move with a modifier, plus Sweep on `E`. See
+        // [`dual`].
+        Class::DualMage => dual::COUNT,
         _ => SLOTS,
     }
 }
@@ -394,7 +500,12 @@ pub const fn slots(class: Class) -> usize {
 /// fourth is its aerial sword.
 pub const fn on_e(class: Class) -> Option<u8> {
     match class {
-        Class::BloodMage => Some(SLOTS as u8),
+        Class::BloodMage | Class::ShadowReaver => Some(SLOTS as u8),
+        // The Dual mage for the same reason, arrived at from the other
+        // direction: her mechanic is a *meter*, and it is steered by which
+        // button attacks rather than by a key. There is nothing for `E` to
+        // toggle either, so it carries Sweep.
+        Class::DualMage => Some(dual::SWEEP),
         _ => None,
     }
 }
@@ -447,12 +558,32 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             8 => "RMB rush",
             _ => "RMB rush, low",
         },
+        // The Reaver's committed melee answers to right click as well, because
+        // right click is otherwise dead on a class with no shield to raise.
+        Class::ShadowReaver => match slot {
+            0 => "LMB",
+            1 => "RMB, Shift+LMB",
+            2 => "Q",
+            _ => "E",
+        },
+        // Both clicks are attacks, because the two autos are the mechanic: the
+        // button is which force you throw and therefore which way you drift.
+        // See [`dual`].
+        Class::DualMage => match slot {
+            0 => "LMB",
+            1 => "Shift+LMB",
+            2 => "Q",
+            3 => "E",
+            _ => "RMB",
+        },
         _ => match slot {
             0 => "LMB",
             1 => "Shift+LMB",
             2 => "Q",
-            // Only the Blood mage has a fourth, because only she has no use
-            // for `E` as a mechanic key -- her mechanic is health.
+            // The two classes with a fourth put an ability on the mechanic key:
+            // the Blood mage because her mechanic is health and has nothing to
+            // toggle, the Reaver because throwing her second body across the
+            // arena is not an instant.
             _ => "E",
         },
     }
@@ -487,8 +618,41 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // strictly better than the stab it shares a button with.
             _ => Shape::None,
         },
+        // The Dual mage's two autos are punches with a wing behind them, and
+        // Sweep is a cut across the whole front. Lance and Judgement are still
+        // discs: one is a skillshot, whose volume is the line it flew, and the
+        // other lands on the floor where it was aimed.
+        Class::DualMage => match kind {
+            dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Wing,
+            dual::SWEEP => Shape::Swing(Plane::Flat),
+            _ => Shape::Cylinder,
+        },
         // Every other class is still the original disc at arm's length.
         _ => Shape::Cylinder,
+    }
+}
+
+/// Which arm a move comes out of.
+///
+/// Code rather than a knob, and for the same reason [`shape`] is: which hand
+/// throws a punch is what the move **is**. A slider that moved a hitbox from one
+/// arm to the other would be a way of making the animation and the hit test
+/// disagree, which is the one thing they may never do.
+///
+/// [`crate::aim::Hand::Centre`] for all but two moves in the game, which is the
+/// body's own line and is where every volume sat before the Dual mage needed to
+/// tell her two arms apart.
+pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
+    use crate::aim::Hand;
+    match class {
+        // Left is dark, right is light. The class in one line: see
+        // `docs/design/dual-mage.md`.
+        Class::DualMage => match kind {
+            dual::DARK_AUTO => Hand::Left,
+            dual::LIGHT_AUTO => Hand::Right,
+            _ => Hand::Centre,
+        },
+        _ => Hand::Centre,
     }
 }
 
@@ -540,6 +704,7 @@ pub fn get(class: Class, kind: u8) -> Move {
         arc: Fx::from_raw(raw(F::Arc)),
         rehit: raw(F::Rehit) as u16,
         shape: shape(class, slot as u8),
+        hand: hand(class, slot as u8),
     }
 }
 
@@ -567,9 +732,13 @@ pub fn frames(class: Class, kind: u8) -> (u16, u16, u16) {
 ///
 /// A swing in the vertical plane starts from the chest, because that is where
 /// an overhead begins and where a rising cut is aimed from. A cut **across** the
-/// body starts lower -- see `tuning::sweep_height`.
-pub fn swing_hub(pos: V3, plane: Plane) -> V3 {
-    let chest = crate::aim::origin(pos);
+/// body starts lower -- see `tuning::sweep_height`. A one-armed move starts a
+/// shoulder's width to that side of both, which is `crate::aim::hand_origin`'s
+/// business rather than this function's: where along the *body* a weapon hinges
+/// is a question about the weapon, and which *side* it hinges on is a question
+/// about the fighter.
+pub fn swing_hub(pos: V3, facing: V3, plane: Plane, hand: crate::aim::Hand) -> V3 {
+    let chest = crate::aim::hand_origin(pos, facing, hand);
     match plane {
         Plane::Upright => chest,
         Plane::Flat => V3::new(

@@ -464,6 +464,10 @@ fn clips_that_are_meant_to_differ_actually_differ() {
         (Clip::WalkForward, Clip::RunForward),
         (Clip::DodgeLeft, Clip::DodgeRight),
         (Clip::HitLight, Clip::HitHeavy),
+        // The Dual mage's two autos are one punch mirrored, and the mirror is
+        // the entire information the player has about which force just landed.
+        // Two clips that came out the same would make her meter unreadable.
+        (Clip::DualDark, Clip::DualLight),
     ] {
         let (Some(x), Some(y)) = (find(a), find(b)) else {
             continue;
