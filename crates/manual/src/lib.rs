@@ -449,6 +449,18 @@ pub const SECTIONS: &[Section] = &[
                 "Re-bake the animation clips from their recipes.",
             ),
             e(
+                "cargo run -p anim --bin bake_beast",
+                "Re-bake the Ridgeback's pose table from its recipes in crates/anim/src/beast/clips.rs. Its parts are simulation geometry, so this one writes into crates/sim.",
+            ),
+            e(
+                "cargo run -p anim --bin preview_beast -- <clip>",
+                "Draw the Ridgeback as a contact sheet PNG, into target/beast-preview: the creature from the side, from above, and every frame overlaid. --all for every clip, --states for the poses the simulation produces rather than the baked ones. Green is a surface you can stand on, red is a weak point, and the dashed line is how high a full hop reaches.",
+            ),
+            e(
+                "cargo run -p sim --bin beastcheck",
+                "What the creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry.",
+            ),
+            e(
                 "cargo run -p anim --bin preview -- <clip>",
                 "Draw a clip as a contact sheet PNG, into target/anim-preview. Add --feet for a per-frame table of what each foot is doing, or --all for everything.",
             ),

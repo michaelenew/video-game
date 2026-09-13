@@ -2488,3 +2488,98 @@ competent opponent simply walks out of the cone while watching the marker, which
 the move worse at every range than the fixed ten metres was at one. And the pre-commitment the
 design asks for — spike first, then Grasp — depends on the spike being worth casting at nobody
 in particular, which is a question about Black spike rather than about this.
+
+### 2026-09-13 — the Ridgeback, rebuilt
+
+**Changed** the creature is about a third larger and stands four and a half
+metres at the back on long legs; ten welded boxes became an eighteen-bone
+skeleton with eighteen parts, animated through the factory; a second weak point
+(the nape) and four breakable feet; a stumble between the flinch and the topple;
+recent-damage thresholds for crowd control and for interrupts; per-move
+lockouts.
+
+**Why** the fight had three problems a player would name in the first minute.
+The animal read as fifteen cubes glued together, because it *was* — its legs
+never moved. Getting on it was a free action from the tail, so the climb was not
+a decision. And the back was where the fight happened: ride share ran to 70% and
+the ground game was optional.
+
+**The height is in its legs, not its bulk, and that is the whole design.** A
+standing full hop reaches 4.14 m; the back sits at 4.57. So the back is out of
+reach, and the *only* part of the animal a fighter on the floor can touch is its
+feet. That one geometric fact is what turns the ground phase from a chore into a
+route: break a foot and it goes down on a knee for nearly two seconds with its
+shoulders at 2.35 m. Making it *longer* instead would have cost the arena more
+room than it has; making the legs longer cost nothing and produced the ground
+game for free.
+
+**What the harness caught, and what it did not.** `legs broken: 0` sat in the
+fight report through three separate changes to the hunter's station before the
+cause turned up, and the report could not tell the two possible causes apart.
+Adding `damage into feet` and `worst foot` took an afternoon of guessing down to
+one run: the bot was hitting nothing at all. **A level shot from somebody on the
+floor goes under the belly.** The creature is on stilts and the old station was
+three and a half metres out, where there is no creature at that height. A
+measurement that cannot distinguish "never tried" from "tried and failed" is
+worth about as much as no measurement.
+
+**Two animation bugs that were gameplay bugs.** Both are the same shape: the
+grip test reads *acceleration*, so anything that puts a corner in the pose
+throws people.
+
+- The baked table stores samples and reads them back with a lerp, so every join
+  between samples is a corner. At twelve samples per phase a 34-frame shake had
+  three frames between corners and threw braced riders on single frames that had
+  nothing to do with how hard the animal was moving. Thirty-two samples — about
+  one per frame of the longest phase — is now the rule, and the sample count is
+  documented as a balance number rather than a file-size one.
+- The shake's last startup key and its first whip key were both authored exactly
+  on the phase boundary. Two keys at the same instant with different poses are a
+  *step*, and a step is an arbitrarily large acceleration. It threw braced
+  riders off the hips before the shake had started. The design document had
+  already recorded this lesson once, about the old procedural pose, and it was
+  re-learned anyway.
+
+**A third that was neither.** Riders standing where two mountable parts overlap
+ping-ponged between them once a frame — each swap moves the body a few
+centimetres, which the buck reads as an enormous acceleration. The parts overlap
+on purpose (a staircase with gaps is not a staircase), so the fix was in the two
+rules that decide what you are standing on: a tread you could *step onto* is a
+floor rather than a wall, and the step-up probe looks **upward only**.
+
+**Reverted: the slam as a body slam.** Widening its hit volume to a 5.2 m ring
+around the creature so it would reach its own back made standing anywhere near
+it lethal — four slams is a dead fighter — and the scripted hunter died at 37
+seconds having dealt 900 damage. Put back to a front slam, and the rule it was
+trying to buy is now stated the other way round and pinned by a test:
+**nothing the creature throws can reach its own back.** A rider is threatened by
+the buck and by nothing else. That is a better rule than the one it replaced,
+because it is what makes riding a phase with its own vocabulary rather than the
+ground game at a different altitude.
+
+**Reverted: the tail sweep as a mount route.** The tail attaches at 3.6 m on a
+long-legged animal, so no amount of drooping it during the sweep's recovery
+brings its *base* low enough to matter — the sweep's tip goes to the floor and
+the part you stand on does not. The claim came out of the design document. The
+sweep earns its keep a different way: its hitbox is 1.6 m and jumping it needs a
+*held* jump, which is a precision test the tapped hop the bot was doing does not
+pass.
+
+**The thresholds.** `strain` is damage taken recently, decaying a couple of per
+cent a frame, so a burst fills it and a trickle does not. Above one bar the
+creature is susceptible to crowd control, weakened; above a higher one, a hit
+breaks it out of what it is doing, live hitbox included. Both bars fall by up to
+70% as its health does. The intent is the arc of a hunt — methodical while it is
+fresh, frantic once it is not — and the reason it is a threshold rather than an
+immunity is that half of every kit is otherwise dead weight in a hunt, and the
+two halves of the game stop teaching each other anything.
+
+**Verdict** open, and specifically open on three things. Ride share fell from
+around 70% to 17%, which is the change this was most meant to produce, but 17%
+may now be too *little* — the climb is expensive and the reward may not be worth
+the trip. The tail hop has twenty centimetres of margin beside an animal that is
+turning, and it is the only route up that does not have to be earned; it may be
+the only one anyone finds, or it may be too hard to find at all. And the scripted
+hunter now wins five of six where it used to win about half, which is the bot
+getting a second plan rather than the creature getting easier — but a bot that
+wins is a worse measuring instrument than one that does not.

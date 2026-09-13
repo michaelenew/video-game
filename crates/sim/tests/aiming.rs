@@ -687,33 +687,52 @@ fn up_close_the_creature_does_not_drag_the_aim_onto_its_own_head() {
 }
 
 #[test]
-fn a_level_look_at_the_creature_is_a_level_shot_into_its_barrel() {
+fn a_level_look_at_the_creature_is_a_level_shot_into_its_leg() {
     // What the rule buys, stated as the thing the player wanted: reticle on the
-    // flank, shot into the flank. The barrel's sides are what somebody standing
-    // on the ground is actually hitting, and a level look now reaches them at
-    // two and a half metres instead of stopping on the head above.
-    let w = nose_to_nose();
-    let look = Input::looking_at(0, 0, 0);
+    // animal, shot into the animal, at the height they were looking. It used to
+    // stop on the head above and throw the shot at the sky.
+    //
+    // **A leg rather than the flank**, and that is the creature's shape rather
+    // than a compromise: it stands four and a half metres at the back on long
+    // legs, so a level shot from somebody on the floor goes *under* the barrel.
+    // Which is the whole of why the feet are the softest thing on it -- see
+    // `docs/design/monsters.md` §1. Aimed from beside its shoulder, where a
+    // fighter working the ground game stands.
+    let mut w = nose_to_nose();
+    let stand = w
+        .monster
+        .expect("a hunt has a creature")
+        .rig()
+        .part_to_world(sim::monster::FOREFOOT_L, V3::ZERO);
+    w.players[0].pos = V3::new(stand.x, Fx::ZERO, stand.z.sub(Fx::from_int(6)));
+    let look = Input::looking_at(0, Input::QUARTER_TURN, 0);
     let (path, hit) = with_scene(&w, |scene| {
         let path = aim::skillshot_path(0, look, Fx::from_int(14), scene);
         let hit = aim::first_along(path, Fx::ZERO, 0, scene, aim::Targets::none().quarry(true));
         (path, hit)
     });
-
     let rise = path.to.y.sub(path.from.y).to_f32_for_render();
     let flat = path.to.sub(path.from).flat_len().to_f32_for_render();
     assert!(
-        rise < flat / 2.0,
-        "a level look threw a shot that rose {rise:.2} m over {flat:.2} m of \
+        rise.abs() < flat / 2.0,
+        "a level look threw a shot that moved {rise:.2} m vertically over {flat:.2} m of \
          ground, which is not a level shot"
     );
     let Some(aim::Contact::Quarry { part, .. }) = hit else {
-        panic!("a level shot at a creature five metres away met nothing at all");
+        panic!("a level shot at a creature six metres away met nothing at all");
     };
-    assert_eq!(
-        part,
-        sim::monster::BARREL,
-        "a level look landed on `{}` rather than the flank in front of her",
+    // Which leg is the camera's business rather than the aim's -- the eye sits
+    // over one shoulder, so the ray crosses the body slightly. That it is a leg
+    // at all is the assertion.
+    assert!(
+        matches!(
+            part,
+            sim::monster::FOREFOOT_L
+                | sim::monster::FOREFOOT_R
+                | sim::monster::FORELEG_L
+                | sim::monster::FORELEG_R
+        ),
+        "a level look landed on `{}` rather than on a foreleg in front of her",
         sim::monster::PART_NAMES[part]
     );
 }

@@ -259,7 +259,10 @@ const GLYPHS: [[u8; 5]; 10] = [
 ];
 
 /// The frame number, at double size so it is legible next to the figure.
-fn digits(c: &mut Canvas, x: usize, y: usize, value: usize, colour: [u8; 3]) {
+/// A number, in the three-by-five bitmap font below. The only text either
+/// sheet draws: anything that needs a word gets one printed beside the file
+/// path instead, because a font is a lot of bytes for a caption.
+pub fn digits(c: &mut Canvas, x: usize, y: usize, value: usize, colour: [u8; 3]) {
     let text = value.to_string();
     for (n, ch) in text.bytes().enumerate() {
         let glyph = GLYPHS[(ch - b'0') as usize];
