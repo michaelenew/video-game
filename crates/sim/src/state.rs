@@ -17,13 +17,14 @@ use crate::aim::{self, Contact, Path, Scene};
 use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
 pub use crate::class::Shield;
-use crate::class::{self, Class, Form, Mechanic};
-use crate::effects::{Effect, EffectKind, GRASP_ARMS, MAX_EFFECTS, QUARRY_VICTIM};
+use crate::class::{self, Class, Form, Ghost, Mechanic};
+use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::input::Input;
 use crate::math::V3;
 use crate::monster::{self, Doing, Monster, Quarry};
 use crate::moves;
+use crate::shadow;
 use crate::stones::{self, Field};
 use crate::tuning as t;
 
@@ -390,7 +391,12 @@ impl Player {
         }
         match self.mechanic {
             Mechanic::Shield(sh) => sh.in_hand(),
-            Mechanic::Shadow { at } => at.is_some(),
+            // The shadow is never nowhere -- at her shoulder or out on the
+            // field, but always somewhere -- so a move that needs one always
+            // has one. The gate stays declared on the move (`one_aim.rs`
+            // insists a move aimed at the mechanic has it) and is simply
+            // always satisfied for this class.
+            Mechanic::Shadow(_) => true,
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
             Mechanic::Meter { value } => value.abs() >= t::meter_deep(),
             Mechanic::Forms { .. } | Mechanic::Blood => true,
@@ -409,6 +415,24 @@ impl Player {
     /// Take a root. The longest one on you wins, the same way a slow works.
     pub fn root(&mut self, frames: u16) {
         self.rooted = self.rooted.max(frames);
+    }
+
+    /// Be caught and held by somebody.
+    ///
+    /// A grab is not knockback. The victim is pinned to the grabber and goes
+    /// wherever they go -- see `drag_the_held` -- which is what makes it a
+    /// commitment for *both* of them rather than a shove with a longer stun.
+    ///
+    /// Its own method because two different things do it now: a swing that
+    /// lands, and the Blood mage's Grasp closing on somebody every one of its
+    /// arms caught. Written twice, the second one would have been the version
+    /// that forgot to zero the velocity.
+    pub fn seized(&mut self, by: u8, frames: u16) {
+        self.stun_total = frames;
+        self.action = Action::Held { left: frames };
+        self.held_by = by;
+        self.vel.x = Fx::ZERO;
+        self.vel.z = Fx::ZERO;
     }
 
     /// Pinned. Not a stun: you can still turn, guard and attack.
@@ -601,6 +625,14 @@ impl World {
                 rounds_won: wins,
                 ..Player::new(class)
             };
+            // The second body starts where it lives: at her shoulder. Built
+            // after the mark is chosen rather than in `Player::new`, which does
+            // not know where anybody is standing yet -- and a shadow that spent
+            // the first second of a round easing in from the world origin is a
+            // shadow the player watches instead of the fight.
+            if let Mechanic::Shadow(_) = p.mechanic {
+                p.mechanic = Mechanic::Shadow(class::Shadow::attending(p.pos, p.facing));
+            }
         }
         if self.monster.is_some() {
             let mut beast = Monster::new();
@@ -716,6 +748,13 @@ impl World {
             if m.self_lift.raw() > 0 {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
+            }
+            // `E` on the Reaver: the second body goes out, or comes home
+            // through whatever is in the way. On the first active frame like
+            // everything else a move does, so the startup is a window somebody
+            // can punish rather than a formality.
+            if p.class == Class::ShadowReaver && kind == SLOT_MECHANIC {
+                self.order_the_shadow(i, p.aim_at());
             }
             if let Some(leaves) = EffectKind::from_code(m.effect) {
                 // Where the move was aimed when it was thrown, already solved
@@ -844,6 +883,7 @@ impl World {
             self.trade_with_the_creature();
         }
 
+        self.step_shadows();
         self.step_effects();
         let standing = self.effects;
         bolt::step(
@@ -930,7 +970,7 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u32(e.struck as u32);
+                    h.write_u32(e.struck);
                     h.write_i32(e.banked);
                     hash_v3(&mut h, &e.pos);
                     hash_v3(&mut h, &e.dir);
@@ -1427,14 +1467,7 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
-            // A grab is not knockback. The victim is pinned to the grabber and
-            // goes wherever they go, which is what makes a grab a commitment
-            // for *both* of them rather than a shove with a longer stun.
-            defender.stun_total = hit.grabs;
-            defender.action = Action::Held { left: hit.grabs };
-            defender.held_by = hit.by;
-            defender.vel.x = Fx::ZERO;
-            defender.vel.z = Fx::ZERO;
+            defender.seized(hit.by, hit.grabs);
         } else {
             defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
@@ -1677,8 +1710,18 @@ fn step_player(
                 // now only ever a vertical takeoff.
                 let dir = move_dir(p.aim(input), ax, az);
                 if p.grounded {
-                    p.vel.x = dir.x.mul(t::dodge_speed());
-                    p.vel.z = dir.z.mul(t::dodge_speed());
+                    // The Reaver's forward dodge, thrown with the crosshair on
+                    // her shadow, is the dash to it -- the same invulnerable
+                    // commitment, pointed at the one place on the map she cares
+                    // about. It is not an extra input: the class's mobility and
+                    // the universal defensive option are deliberately the same
+                    // button, which is what keeps her from being denied either.
+                    if shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
+                        shadow::begin_dash(p);
+                    } else {
+                        p.vel.x = dir.x.mul(t::dodge_speed());
+                        p.vel.z = dir.z.mul(t::dodge_speed());
+                    }
                     Action::Dodge {
                         left: t::dodge_frames(),
                     }
@@ -1724,7 +1767,14 @@ fn step_player(
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
 
-    if matches!(p.action, Action::Dodge { .. }) {
+    if let Some(drive) = shadow::dash_drive(p) {
+        // A dash has somewhere to be, so it holds its speed rather than
+        // decaying like the dodge it rides on: a decaying shove covers whatever
+        // distance the decay happens to be tuned for, and the shadow is at a
+        // distance of its own choosing.
+        p.vel.x = drive.x;
+        p.vel.z = drive.z;
+    } else if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(t::dodge_decay());
         p.vel.z = p.vel.z.mul(t::dodge_decay());
     } else if p.action.stunned() {
@@ -1901,13 +1951,18 @@ fn step_player(
 ///   the Dual mage  left and right are two *different* autos, one per arm,
 ///                  because the button is which force you throw -- see
 ///                  `moves::dual`
+///   the Reaver     right click sends the shadow, because the shadow is the
+///                  thing the crosshair aims -- see `moves::on_e`
 /// ```
 ///
 /// It is a function rather than a chain of branches in `step_player` because
-/// the answer is a property of the class's kit, and the two classes that broke
-/// the shared rule each broke it in their own way: the Champion by needing a
-/// third button, the Dual mage by needing right click to be an attack on a
-/// class with no shield to guard with.
+/// the answer is a property of the class's kit, and the three classes that
+/// broke the shared rule each broke it in their own way: the Champion by
+/// needing a third button, the Dual mage by needing right click to be a
+/// different attack, and the Reaver by needing it to be the *aimed* one.
+///
+/// All three start from the same observation: **right click is dead weight on
+/// a class with no shield**, and three of the six have no shield.
 ///
 /// Right click means **guard** on every class that has a shield, and that is
 /// handled by the caller: `want_guard` asks the mechanic, not the button.
@@ -1915,6 +1970,12 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
     match p.class {
         Class::Champion => champion_move(p, input),
         Class::DualMage => dual_move(input),
+        // The Reaver breaks it a third way: right click sends the shadow. It is
+        // the one thing in her kit the **crosshair aims**, and the mouse is
+        // where aiming lives -- so the mechanic is on the mouse and the swing
+        // it displaced went to `E`, which is the one key that does not care
+        // where anything is pointed. See `moves::on_e`.
+        Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_MECHANIC),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
                 SLOT_COMMITTED
@@ -2182,6 +2243,10 @@ fn begin_move(
 ) -> Action {
     p.hit_used = false;
     lock_aim(p, who, kind, input, scene);
+    // The second body throws the same thing a few frames later. A no-op for
+    // every class but one, and for the two of the Reaver's four moves that are
+    // already the shadow's own -- see `shadow::begin_echo`.
+    shadow::begin_echo(p, kind);
     // Committing to a cast is committing to a side, for the one class where
     // that is the mechanic. The autos are the exception and steer on contact
     // instead -- a whiff steers nothing, which is what makes closing to melee
@@ -2371,17 +2436,11 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
             start_rush(p, input);
         }
 
-        // Place the shadow ahead, or reclaim it. Mobility and setup are the
-        // same action, which is what keeps the Reaver from being denied its
-        // movement.
-        Mechanic::Shadow { at } => {
-            p.mechanic = Mechanic::Shadow {
-                at: match at {
-                    None => Some(placed(t::shadow_reach())),
-                    Some(_) => None,
-                },
-            };
-        }
+        // `E` on the Reaver is an ability rather than an instant -- see
+        // `moves::on_e` -- so this key never reaches here for her. Throwing a
+        // second body across the arena has a startup you can be punished
+        // during, and getting it back has a damage number.
+        Mechanic::Shadow(_) => {}
 
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
         // is the resource.
@@ -2468,12 +2527,9 @@ fn step_mechanic(p: &mut Player) {
             };
         }
 
-        // Leaving the leash snaps the shadow back.
-        Mechanic::Shadow { at: Some(spot) } => {
-            if spot.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
-                p.mechanic = Mechanic::Shadow { at: None };
-            }
-        }
+        // The second body: where it is, what it is copying, and the leash.
+        // See `crate::shadow`.
+        Mechanic::Shadow(_) => shadow::step(p),
 
         // Past the deep threshold the forces burn you. Relief comes from
         // coming back inside the line, not from a reward -- see dual-mage.md.
@@ -2559,12 +2615,28 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*recharge as u32);
             hash_v3(h, rush_vel);
         }
-        Mechanic::Shadow { at } => {
+        Mechanic::Shadow(shadow) => {
             h.write_u32(4);
-            match at {
-                Some(pos) => hash_v3(h, pos),
-                None => h.write_u32(0),
+            hash_v3(h, &shadow.pos);
+            hash_v3(h, &shadow.facing);
+            match shadow.doing {
+                Ghost::Attending => h.write_u32(0),
+                Ghost::Casting { from, to, age } => {
+                    h.write_u32(1);
+                    hash_v3(h, &from);
+                    hash_v3(h, &to);
+                    h.write_u32(age as u32);
+                }
+                Ghost::Waiting => h.write_u32(2),
+                Ghost::Returning { struck } => {
+                    h.write_u32(3);
+                    h.write_u32(struck as u32);
+                }
             }
+            h.write_u32(shadow.echo as u32);
+            h.write_u32(shadow.echo_age as u32);
+            h.write_u32(shadow.echo_used as u32);
+            h.write_u32(shadow.dash as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -2746,6 +2818,179 @@ pub fn parry_window() -> u16 {
     t::parry_window()
 }
 
+// ---------------------------------------------------------------------------
+// The Reaver's second body
+// ---------------------------------------------------------------------------
+//
+// Where the shadow is and what it is copying lives in `crate::shadow`. What
+// follows is the part that needs more than one fighter: the order `E` gives it,
+// the blows its copy lands, and what its way home does to anybody standing in
+// it.
+
+impl World {
+    /// Send the shadow out, or call it home -- and take the blades with it.
+    ///
+    /// The second half is the combination the whole kit is built around.
+    /// Recalling a shadow with a Guillotine open does not cancel the lotus, it
+    /// **reactivates** it: the blades stop hanging and start chasing, and since
+    /// they track the shadow rather than the ground they drag the length of the
+    /// arena behind it. A recall through a crowd is the Reaver's biggest turn.
+    fn order_the_shadow(&mut self, who: usize, to: V3) {
+        let Some(order) = shadow::order(&mut self.players[who], to) else {
+            return;
+        };
+        if order != shadow::Order::Recalled {
+            return;
+        }
+        for slot in self.effects.iter_mut().flatten() {
+            if slot.kind == EffectKind::GuillotineLotus && slot.owner == who as u8 {
+                slot.lotus_send_home();
+            }
+        }
+    }
+
+    /// What the second body does to the other one, this frame.
+    fn step_shadows(&mut self) {
+        for owner in 0..MAX_PLAYERS {
+            self.echo_strikes(owner);
+            self.recall_cuts(owner);
+        }
+    }
+
+    /// The shadow's copy of her swing, landing a beat after hers.
+    ///
+    /// It goes through `resolve_hit` against a stand-in body, so the copy is
+    /// blocked, ducked and spaced by exactly the rules her own swing is -- and
+    /// the volume it puts in the world is `state::hitbox`'s, which is the same
+    /// one the overlay draws.
+    ///
+    /// Two differences, and both are the shadow not being a person. It deals
+    /// `shadow_echo` of what she deals, which is what makes holding the shadow
+    /// worth a quarter again on every swing. And it cannot be **parried**: a
+    /// parry is a stagger paid by the attacker, and there is nobody at this end
+    /// of the blow to stagger. Reading it perfectly still stops it dead, which
+    /// is what blocking a copy should be worth.
+    fn echo_strikes(&mut self, owner: usize) {
+        let Some(ghost) = shadow::echo_body(&self.players[owner]) else {
+            return;
+        };
+        // In a hunt the fighters cannot hurt each other, so the copy has the
+        // creature to swing at instead -- the same condition direct hits use,
+        // and for the same reason: a mechanic that only works in versus is half
+        // a mechanic.
+        let landed = match self.monster {
+            Some(_) => self.echo_gores_the_creature(&ghost),
+            None => self.echo_cuts_the_other_fighter(owner, &ghost),
+        };
+        if landed {
+            shadow::echo_landed(&mut self.players[owner]);
+        }
+    }
+
+    fn echo_cuts_the_other_fighter(&mut self, owner: usize, ghost: &Player) -> bool {
+        let target = 1 - owner;
+        let defender = self.players[target];
+        if defender.health <= 0 {
+            return false;
+        }
+        let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
+            return false;
+        };
+        hit.damage = Fx::from_int(hit.damage).mul(t::shadow_echo()).to_int();
+        hit.parried = false;
+        apply_hit(&mut self.players[target], hit);
+        true
+    }
+
+    fn echo_gores_the_creature(&mut self, ghost: &Player) -> bool {
+        let (Some(mut beast), Some(box_out), Some(kind)) =
+            (self.monster, hitbox(ghost), ghost.action.attack_kind())
+        else {
+            return false;
+        };
+        if box_out.spent || !beast.alive() {
+            return false;
+        }
+        let Some(part) = part_under(&beast, ghost, &box_out) else {
+            return false;
+        };
+        let raw = Fx::from_int(moves::get(ghost.class, kind).damage)
+            .mul(preying(ghost.class, beast.disabled()))
+            .mul(t::shadow_echo())
+            .to_int();
+        beast.take_hit(part, raw);
+        self.monster = Some(beast);
+        true
+    }
+
+    /// The way home. It cuts once and slows, which is the mechanic's own
+    /// description of itself -- and the slow is the half that matters, because
+    /// a recall is how the Reaver closes a gap she has just opened.
+    fn recall_cuts(&mut self, owner: usize) {
+        let Some(ghost) = shadow::of(&self.players[owner]) else {
+            return;
+        };
+        if !ghost.is_returning() {
+            return;
+        }
+        let m = moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+        let reach = t::body_radius().add(t::body_radius());
+
+        // The creature, in a hunt. `QUARRY_VICTIM` is the slot the effects
+        // already use for "the thing that is not a fighter", and the return
+        // cuts it once for the same reason it cuts a fighter once.
+        if let Some(mut beast) = self.monster {
+            if beast.alive() && !shadow::already_cut(ghost, QUARRY_VICTIM) {
+                if let Some(part) = beast.part_struck(ghost.pos, reach, t::body_height()) {
+                    let raw = Fx::from_int(m.damage)
+                        .mul(preying(Class::ShadowReaver, beast.disabled()))
+                        .to_int();
+                    beast.take_hit(part, raw);
+                    self.monster = Some(beast);
+                    shadow::mark_cut(&mut self.players[owner], QUARRY_VICTIM);
+                }
+            }
+            return;
+        }
+
+        let target = 1 - owner;
+        if shadow::already_cut(ghost, target) {
+            return;
+        }
+        let victim = self.players[target];
+        if victim.health <= 0 || victim.action.invulnerable() {
+            return;
+        }
+        let apart = V3::new(
+            victim.pos.x.sub(ghost.pos.x),
+            Fx::ZERO,
+            victim.pos.z.sub(ghost.pos.z),
+        );
+        if apart.flat_len().raw() > reach.raw() {
+            return;
+        }
+        let away = apart.normalized();
+        let (guarding, _) = guard_against(&victim, ghost.pos, m.unblockable);
+        apply_hit(
+            &mut self.players[target],
+            Hit {
+                damage: m.damage,
+                hitstun: m.hitstun,
+                blockstun: m.blockstun,
+                knockback: m.knockback,
+                launch: Fx::ZERO,
+                grabs: 0,
+                by: owner as u8,
+                dir: away,
+                blocked: guarding,
+                parried: false,
+            },
+        );
+        self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
+        shadow::mark_cut(&mut self.players[owner], target);
+    }
+}
+
 /// Age every effect, apply what it does, and drop the expired.
 ///
 /// Effects act *after* both fighters have stepped, so standing in a field for a
@@ -2765,12 +3010,32 @@ impl World {
                 continue;
             };
             let turning = !effect.returning();
+            let going_out = !effect.lotus_coming_back();
             effect.age += 1;
             // The frame the blade turns it forgets everyone it cut on the way
             // out, so the way back can cut them again. "Damage on both passes"
-            // is only worth saying if the same target can eat both.
+            // is only worth saying if the same target can eat both. The lotus
+            // does the same at its own turn, with six blades instead of one.
             if effect.kind == EffectKind::Bloodletter && turning && effect.returning() {
                 effect.forget_hits();
+            }
+            if effect.kind == EffectKind::GuillotineLotus && going_out && effect.lotus_coming_back()
+            {
+                effect.forget_hits();
+            }
+            // The one effect that does not stay where it was cast. Its centre
+            // is the Reaver's shadow, live, so recalling the shadow drags the
+            // blades after it -- see `crate::shadow`. Written before anything
+            // is tested against it, so what the blades hit this frame is where
+            // they actually are rather than where they were last frame.
+            if effect.kind.follows_the_mechanic() {
+                if let Some(at) = self
+                    .players
+                    .get(effect.owner as usize)
+                    .and_then(|owner| owner.mechanic.placed())
+                {
+                    effect.pos = at;
+                }
             }
             if effect.age >= effect.life {
                 self.effects[i] = None;
@@ -2834,7 +3099,7 @@ impl World {
                         self.drain(i, effect);
                     }
                 }
-                self.gore_the_creature(effect, 0, effect.pos, base.radius);
+                self.feed_the_caster(effect, 0, effect.pos, base.radius);
             }
 
             // Drain *and* slow. The slow is the part that matters: damage alone
@@ -2857,7 +3122,7 @@ impl World {
                     }
                 }
                 if ticking {
-                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
+                    self.feed_the_caster(effect, 0, effect.pos, volume.radius);
                 }
             }
 
@@ -2876,9 +3141,44 @@ impl World {
                         continue;
                     }
                     effect.take_hit(pass, i);
-                    effect.banked += self.cut(i, effect, at);
+                    effect.banked += self.cut(i, effect, at, Fx::ONE);
                 }
                 effect.banked += self.gore_the_creature(effect, pass, at, radius);
+            }
+
+            // Six blades out of the shadow and six back into it. Each is its
+            // own part, so a blade catches a given victim once per pass and the
+            // mask is cleared at the turn -- the same bookkeeping the blade
+            // uses, widened.
+            //
+            // What the return is *worth* is a share of the way out, because the
+            // two are not the same event: the eruption is the execute and the
+            // drag home is the reason to recall a shadow through a crowd. It
+            // also slows, which is what makes a lotus dragged across somebody
+            // a setup rather than a parting shot.
+            EffectKind::GuillotineLotus => {
+                let radius = effect.field_radius();
+                let coming_back = effect.lotus_coming_back();
+                for blade in 0..LOTUS_BLADES {
+                    let (was, at) = effect.lotus_span(blade, effect.pos);
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(blade, i)
+                            || !self.swept(i, was, at, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(blade, i);
+                        let share = if coming_back {
+                            t::lotus_return_damage()
+                        } else {
+                            Fx::ONE
+                        };
+                        self.cut(i, effect, at, share);
+                        self.players[i].slow(t::slow_frames(), t::lotus_slow());
+                    }
+                    self.gore_the_creature(effect, blade, at, radius);
+                }
             }
 
             // Four arms, each its own skillshot, and all four of them the price
@@ -2897,13 +3197,27 @@ impl World {
                             continue;
                         }
                         effect.take_hit(arm, i);
-                        let dealt = self.cut(i, effect, at);
+                        let dealt = self.cut(i, effect, at, Fx::ONE);
                         let owed = effect.leeched(dealt);
                         self.players[effect.owner as usize].heal(owed);
-                        // Caught by every one of them. The arms close, and for
-                        // a moment you are not going anywhere.
+                        // Caught by every one of them. The arms close, you are
+                        // hauled in, and for a moment after that you are not
+                        // going anywhere.
+                        //
+                        // **The grab waits for all four**, and that is not a
+                        // choice about flavour. A grab drags its victim to the
+                        // caster's arm's length, so one applied by the first arm
+                        // to connect would pull them out from under the other
+                        // three -- the bottom pair land a frame before the top
+                        // pair -- and the root could then never fire at all. The
+                        // two payoffs sit on the same condition because the
+                        // first one would otherwise eat the second.
                         if effect.parts_landed(i, GRASP_ARMS) == GRASP_ARMS {
                             self.players[i].root(t::grasp_root());
+                            let caught = effect.source().grabs;
+                            if caught > 0 {
+                                self.players[i].seized(effect.owner, caught);
+                            }
                         }
                     }
                     let dealt = self.gore_the_creature(effect, arm, at, radius);
@@ -2924,6 +3238,18 @@ impl World {
     /// game that could kill a team-mate.
     fn effects_reach(&self, victim: usize, owner: u8) -> bool {
         victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
+    }
+
+    /// Did a blade sweeping from `was` to `at` cross this fighter's body?
+    ///
+    /// The capsule test [`resolve_hit`] already uses for a weapon that is a
+    /// line, against the same standing body. It exists because a fast enough
+    /// point tunnels: the thing being tested here crosses a metre in a frame,
+    /// and a body is not a metre wide.
+    fn swept(&self, victim: usize, was: V3, at: V3, radius: Fx) -> bool {
+        let p = self.players[victim];
+        let spine = V3::new(p.pos.x, p.pos.y.add(p.hurt_height()), p.pos.z);
+        crate::math::segment_gap(was, at, p.pos, spine).raw() <= radius.add(t::body_radius()).raw()
     }
 
     /// Is this fighter's body inside a sphere?
@@ -2960,7 +3286,13 @@ impl World {
     /// thrown blade and a puddle of fire: the blade is an attack, and guard is
     /// an answer to attacks. Knockback runs away from the *thing that hit you*
     /// rather than from the caster, who may be twenty metres behind it.
-    fn cut(&mut self, victim: usize, effect: &Effect, from: V3) -> i32 {
+    /// `share` is what this particular contact is worth against the move's own
+    /// number. One for almost everything: an effect that hits twice usually
+    /// means the same blow twice. The lotus is the exception -- what it does
+    /// coming home is a fraction of what the eruption did, because the two are
+    /// different events and pricing them the same would make a recall through a
+    /// crowd worth double an execute.
+    fn cut(&mut self, victim: usize, effect: &Effect, from: V3, share: Fx) -> i32 {
         let m = effect.source();
         let p = self.players[victim];
         if p.action.invulnerable() || (p.crouching && !m.hits_crouching) {
@@ -2974,6 +3306,7 @@ impl World {
             && facing_it;
         let damage = Fx::from_int(m.damage)
             .mul(preying(effect.class, p.disabled()))
+            .mul(share)
             .to_int();
         let dealt = if guarding || parried {
             0
@@ -2999,6 +3332,22 @@ impl World {
             self.players[victim].parried = PARRY_FLOURISH;
         }
         dealt
+    }
+
+    /// A field ticking on the creature, and the caster's share of it straight
+    /// back -- the same payment the fighter path makes in `drain`.
+    ///
+    /// It exists because the two field effects used to call `gore_the_creature`
+    /// and **throw the answer away**, so a Blood mage draining a Ridgeback was
+    /// taking health off it and getting none of it back. Invisible in versus,
+    /// where a field never touches the creature at all, and invisible to a test
+    /// that only asked whether her health went up: the eruption's own hit pays
+    /// out on the same cast, a few frames earlier, which is enough to make a
+    /// broken field look like a working one.
+    fn feed_the_caster(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) {
+        let dealt = self.gore_the_creature(effect, part, at, radius);
+        let owed = effect.leeched(dealt);
+        self.players[effect.owner as usize].heal(owed);
     }
 
     /// Land an effect on whichever part of the creature is inside it, once per

@@ -14,6 +14,80 @@ use view::{CameraRig, camera::RigConfig};
 // Interpolation
 // ---------------------------------------------------------------------------
 
+// The Reaver's shadow is drawn as a second body on a second skeleton, so the
+// renderer has to be handed one -- and only for the class that has one. These
+// are the two ways that goes wrong silently: no shadow at all, and a shadow
+// pinned to her so the pair read as one figure with a rendering fault.
+
+fn reaver() -> World {
+    World::with_classes([sim::Class::ShadowReaver, sim::Class::Bulwark])
+}
+
+#[test]
+fn only_the_reaver_is_handed_a_second_body() {
+    let mut w = reaver();
+    for _ in 0..30 {
+        w.advance([Input::default(); 2]);
+    }
+    let frame = interpolate(&w, &w, 1.0);
+    assert!(
+        frame.shadows[0].is_some(),
+        "the Reaver has no shadow to draw"
+    );
+    assert!(
+        frame.shadows[1].is_none(),
+        "the Bulwark was handed a shadow it has no mechanic for"
+    );
+}
+
+#[test]
+fn the_shadow_is_drawn_behind_her_rather_than_on_her() {
+    // Its copy of a swing comes out of wherever it is standing, so two bodies
+    // in one place is two threats a player cannot tell apart.
+    let mut w = reaver();
+    for _ in 0..40 {
+        w.advance([Input::default(); 2]);
+    }
+    let frame = interpolate(&w, &w, 1.0);
+    let her = frame.players[0];
+    let it = frame.shadows[0].expect("the Reaver has a shadow");
+    let gap = [it.pos[0] - her.pos[0], it.pos[2] - her.pos[2]];
+    let apart = (gap[0] * gap[0] + gap[1] * gap[1]).sqrt();
+    assert!(apart > 0.3, "the shadow is drawn {apart:.2} m from her");
+    let ahead = gap[0] * her.facing[0] + gap[1] * her.facing[2];
+    assert!(ahead < 0.0, "the shadow is drawn in front of her");
+}
+
+#[test]
+fn a_travelling_shadow_holds_the_dash_and_a_standing_one_does_not() {
+    // Two clips, and the renderer's cross-fade between them is the arrival. If
+    // both states picked the same pose there would be nothing to fade.
+    use view::play::Ghosting;
+    let mut w = reaver();
+    for _ in 0..20 {
+        w.advance([Input::default(); 2]);
+    }
+    let mut seen = Vec::new();
+    for frame in 0..60 {
+        // Right click sends the shadow on this class -- see `moves::on_e`.
+        let bits = if frame == 0 { Input::RIGHT } else { 0 };
+        w.advance([Input::new(bits), Input::default()]);
+        if let Some(it) = interpolate(&w, &w, 1.0).shadows[0] {
+            if !seen.contains(&std::mem::discriminant(&it.doing)) {
+                seen.push(std::mem::discriminant(&it.doing));
+            }
+        }
+    }
+    assert!(
+        seen.contains(&std::mem::discriminant(&Ghosting::Dashing(0))),
+        "the shadow crossed the arena without ever being in the dash"
+    );
+    assert!(
+        seen.contains(&std::mem::discriminant(&Ghosting::Ready(0))),
+        "the shadow arrived without ever reaching the ready stance"
+    );
+}
+
 fn walked(frames: u32) -> World {
     let mut w = World::new();
     for _ in 0..frames {

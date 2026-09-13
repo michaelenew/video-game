@@ -11,6 +11,7 @@
 //! Record what you tried in the feel log, including the things you reverted.
 
 use sim::class::ALL_CLASSES;
+use sim::fixed::Fx;
 use sim::moves::{self, Move};
 use sim::state::{SLOT_COMMITTED, SLOT_POKE};
 use sim::tuning as t;
@@ -287,6 +288,141 @@ fn the_dodge_outruns_a_walk() {
     );
 }
 
+/// The most damage one cast of a move can do to one target.
+///
+/// Every ability the Blood mage has is a *several* rather than a one: the blade
+/// cuts on the way out and again on the way back, the Grasp is four arms, the
+/// spike is a field that ticks for as long as somebody is standing in it, and
+/// any move at all can be given a re-hit interval. A cost weighed against a
+/// single connection would say all four are a losing trade, and the class would
+/// be unplayable by its own numbers.
+fn best_case(m: &Move) -> i32 {
+    use sim::effects::{EffectKind, GRASP_ARMS};
+    // A move that keeps hitting connects once per interval across its active
+    // window. Zero is the normal rule -- one connection.
+    let swings = m.active.checked_div(m.rehit).map_or(1, |n| n.max(1) as i32);
+    match EffectKind::from_code(m.effect) {
+        Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
+        Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
+        // A field, for as long as it stands. The move's own hit lands too.
+        Some(
+            kind @ (EffectKind::BlackSpike | EffectKind::FirePillar | EffectKind::GuillotineLotus),
+        ) => {
+            let ticks = kind.life() / t::effect_tick_frames().max(1);
+            m.damage * swings + kind.damage(m) * ticks as i32
+        }
+        None => m.damage * swings,
+    }
+}
+
+#[test]
+fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
+    // The class is its economy: health out on the press, health back on the
+    // hit. Both halves on every one of her abilities, and on nobody else's --
+    // a second class quietly acquiring a health cost would mean the mechanic
+    // had stopped being an identity and become a tax.
+    //
+    // Restored after a merge dropped it. It is the assertion that stops a
+    // tuning pass from quietly making an ability cost more than landing it
+    // perfectly can ever return, which is the one way this class breaks that
+    // looks like a balance choice rather than a bug.
+    for class in ALL_CLASSES {
+        let blood = class == sim::class::Class::BloodMage;
+        for m in moves::table(class) {
+            assert_eq!(
+                m.cost > 0,
+                blood,
+                "{} {}: health cost {} does not match the class mechanic",
+                class.name(),
+                m.name,
+                m.cost
+            );
+            if blood {
+                assert!(
+                    m.leech > 0,
+                    "{}: costs health and gives none of it back, so it is pure downside",
+                    m.name
+                );
+                let best = m.leeched(best_case(&m));
+                assert!(
+                    best > m.cost,
+                    "{}: thrown perfectly it returns {best} and cost {}, so playing well \
+                     still loses you the fight",
+                    m.name,
+                    m.cost
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_blood_mage_does_not_kill_in_two_buttons() {
+    // The other side of the same tuning pass. Her placed abilities are worth
+    // several connections each, so the per-hit damage in the table says very
+    // little about what one cast is actually worth -- which is how the spike
+    // ended up at nearly two thirds of a health bar without any single number
+    // in the table looking wrong.
+    use sim::class::Class;
+    for m in moves::table(Class::BloodMage) {
+        let cast = best_case(&m);
+        assert!(
+            cast * 3 < t::max_health(),
+            "{}: one cast is {cast} against a {} bar, so three of them is the match",
+            m.name,
+            t::max_health()
+        );
+    }
+}
+
+#[test]
+fn a_root_outlives_the_hitstun_that_delivers_it() {
+    // A root is only visible in the frames after you can act again. Deliver it
+    // with a move whose hitstun is longer and it is a no-op that reads, in the
+    // hand, as the ability simply not working.
+    use sim::state::SLOT_SPECIAL;
+    let grasp = moves::get(sim::class::Class::BloodMage, SLOT_SPECIAL);
+    assert!(
+        t::grasp_root() > grasp.hitstun,
+        "the Grasp roots for {} frames and stuns for {}, so the root is invisible",
+        t::grasp_root(),
+        grasp.hitstun
+    );
+}
+
+#[test]
+fn preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution() {
+    // Both ends. Below about a fifth extra it is a number nobody notices and
+    // the Grasp goes back to being a root with no payoff; far above it and
+    // landing one disable is the match, which is the opposite of a game built
+    // on reads and whiff punishment.
+    let mul = t::disabled_damage_mul();
+    assert!(
+        mul.raw() > Fx::ratio(6, 5).raw(),
+        "the bonus is {}x, which nobody will feel",
+        mul.to_f32_for_render()
+    );
+    assert!(
+        mul.raw() < Fx::from_int(2).raw(),
+        "the bonus is {}x, so one read ends the round",
+        mul.to_f32_for_render()
+    );
+
+    // And the disable it is built around has to outlast the wind-up of
+    // something worth spending it on, or there is nothing to follow up with.
+    let root = t::grasp_root();
+    let fastest = moves::table(sim::class::Class::BloodMage)
+        .iter()
+        .map(|m| m.startup)
+        .min()
+        .expect("the class has moves");
+    assert!(
+        root > fastest,
+        "the root lasts {root} frames and her fastest move takes {fastest} to \
+         come out, so nothing can be landed inside it"
+    );
+}
+
 #[test]
 fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
     // Not a design law, just a guard against a class shipping with a gap in it
@@ -296,12 +432,14 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
     // on every class, which is what lets one control scheme drive six kits, so
     // every class has to fill all three. What a class has **past** them is a
     // decision about that class: the Blood mage's fourth is on `E`, because her
-    // mechanic is health and there is nothing to toggle, the Champion's ten are
-    // three weapons by three stances plus the vault, and the Dual mage's five
-    // are those three plus Sweep on `E` -- her mechanic is a meter steered by
-    // which button attacks, so `E` is free the same way -- plus a second auto
-    // on right click, because her two forces are two different moves rather
-    // than one move with a modifier.
+    // mechanic is health and there is nothing to toggle, the Reaver's fourth is
+    // on `E` because throwing a second body across the arena and dashing it
+    // home through somebody is not an instant, the Champion's ten are three
+    // weapons by three stances plus the vault, and the Dual mage's five are
+    // those three plus Sweep on `E` -- her mechanic is a meter steered by which
+    // button attacks, so `E` is free the same way -- plus a second auto on
+    // right click, because her two forces are two different moves rather than
+    // one move with a modifier.
     use sim::Class;
     use sim::state::{SLOT_COMMITTED, SLOT_POKE, SLOT_SPECIAL};
     for class in ALL_CLASSES {
@@ -316,7 +454,7 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 10,
-            Class::BloodMage => 4,
+            Class::BloodMage | Class::ShadowReaver => 4,
             Class::DualMage => 5,
             _ => 3,
         };

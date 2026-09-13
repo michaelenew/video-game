@@ -176,6 +176,20 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
+            // Six blades around a centre that is the shadow rather than the
+            // spot this was cast on -- `effect.pos` is rewritten every frame to
+            // follow it, so drawing from `pos` draws where the hit test is.
+            EffectKind::GuillotineLotus => {
+                for blade in 0..sim::effects::LOTUS_BLADES {
+                    let head = v3(effect.lotus_at(blade, effect.pos));
+                    gizmos.sphere(
+                        Isometry3d::from_translation(head),
+                        effect.field_radius().to_f32_for_render(),
+                        FIELD,
+                    );
+                    gizmos.line(at, head, FIELD);
+                }
+            }
         }
     }
 }
@@ -230,7 +244,9 @@ fn mechanic_markers(m: &Mechanic) -> Vec<Vec3> {
     };
     match m {
         Mechanic::Shield(s) => s.world_pos().map(v3).into_iter().collect(),
-        Mechanic::Shadow { at } => at.map(v3).into_iter().collect(),
+        // Always somewhere -- at her shoulder or out on the field -- so this
+        // is always drawn. Where the shadow is is where the Guillotine erupts.
+        Mechanic::Shadow(shadow) => vec![v3(shadow.pos)],
         Mechanic::Structures(slots) => slots.iter().flatten().map(|s| v3(s.at)).collect(),
         _ => Vec::new(),
     }

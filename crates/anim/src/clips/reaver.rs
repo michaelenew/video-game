@@ -1,4 +1,4 @@
-//! The Shadow Reaver's three moves: Slash, Executioner, Guillotine.
+//! The Shadow Reaver's four moves, and the two poses her shadow has of its own.
 //!
 //! ## What the class fights like
 //!
@@ -69,7 +69,14 @@ use view::pose::Pose;
 use view::skeleton::Joint;
 
 pub fn clips() -> Vec<Recipe> {
-    vec![poke(), committed(), special()]
+    vec![
+        poke(),
+        committed(),
+        special(),
+        mechanic(),
+        dash(),
+        ready_stance(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -810,6 +817,304 @@ fn special() -> Recipe {
             Key::eased(opening, opened, Ease::SMOOTH),
             Key::eased(square, recovering, Ease::SMOOTH),
             Key::eased(last, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Send shadow -- the mechanic
+// ---------------------------------------------------------------------------
+
+/// Eight frames of startup, three active, fourteen of recovery.
+///
+/// The odd one out in the kit twice over: it is the only thing she throws that
+/// is not a blade, and the only one where **she** is what leaves. So it is
+/// authored as a release rather than a strike -- the body gathers over the rear
+/// foot, both hands come in, and then the whole frame opens at once down the
+/// line the second body is about to travel. The right hand shows an open palm
+/// at the moment of the throw, which is the one frame in her whole vocabulary
+/// where the blade hand is not holding anything.
+///
+/// It is deliberately not the Guillotine's shape. That one compresses, holds
+/// still, and points; this one keeps moving through the release, because the
+/// thing it sends is still travelling afterwards.
+fn mechanic() -> Recipe {
+    let clip = Clip::ReaverMechanic;
+    let (_, release, follow) = phases(clip);
+    let last = clip.length() - 1;
+    let gather = release.saturating_sub(4).max(1);
+    let settle = follow + (last - follow) / 2;
+
+    // Gathered. Weight back over the rear foot, both hands drawn in across the
+    // chest, the shoulders wound away from the line -- a body about to shed
+    // something rather than about to swing at you.
+    let gathered = footing(
+        stance()
+            .hips(0.026, -0.104, -0.052)
+            .root(2.0, 3.0, 10.0)
+            .spine(6.0, -2.0, 16.0)
+            .chest(1.0, 0.0, 15.0)
+            .head(-4.0, 3.0, -18.0)
+            .shoulder_l(20.0, 26.0, -14.0)
+            .elbow_l(94.0)
+            .wrist_l(-14.0, 0.0, 0.0)
+            .shoulder_r(-18.0, 22.0, -16.0)
+            .elbow_r(88.0)
+            .wrist_r(-12.0, 0.0, -6.0),
+        -6.0,
+        16.0,
+    );
+
+    // The release, on the first active frame. Everything opens down the line at
+    // once: hips forward over the lead foot, chest square, the right arm out
+    // straight with the palm turned over and the fingers spread, the left arm
+    // thrown back as the counterweight. The rear heel is high and pushing.
+    let thrown = footing(
+        stance()
+            .hips(-0.020, -0.118, 0.072)
+            .root(11.0, -3.0, -8.0)
+            .spine(7.0, 2.0, -4.0)
+            .chest(4.0, 0.0, -6.0)
+            .head(6.0, -2.0, 2.0)
+            .shoulder_r(64.0, 8.0, 30.0)
+            .elbow_r(10.0)
+            // Palm turned over and the fingers back: the open hand is the whole
+            // gesture, and it is the one pose in the kit with nothing in it.
+            .wrist_r(-26.0, 0.0, 24.0)
+            .shoulder_l(-42.0, 20.0, -10.0)
+            .elbow_l(46.0)
+            .wrist_l(-6.0, 0.0, 0.0),
+        4.0,
+        34.0,
+    );
+
+    // Through the release rather than stopping on it -- the arm keeps going and
+    // the body follows it around, which is what says the thing that left is
+    // still going.
+    let following = footing(
+        stance()
+            .hips(-0.030, -0.098, 0.058)
+            .root(9.0, -4.0, -16.0)
+            .spine(6.0, 2.0, -10.0)
+            .chest(3.0, 0.0, -12.0)
+            .head(3.0, -2.0, 8.0)
+            .shoulder_r(50.0, 6.0, 22.0)
+            .elbow_r(30.0)
+            .wrist_r(-18.0, 0.0, 14.0)
+            .shoulder_l(-28.0, 22.0, -8.0)
+            .elbow_l(58.0)
+            .wrist_l(-8.0, 0.0, 0.0),
+        2.0,
+        26.0,
+    );
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A release, not a strike. She is the thing that leaves, so the \
+                pose has to open rather than land: gather over the rear foot, \
+                then the hips, chest, arm and head all arrive down the line on \
+                the same frame and keep going through it. The open right palm on \
+                the release frame is the tell -- it is the only frame in this \
+                class's whole vocabulary with nothing in the blade hand, so an \
+                opponent can read 'the shadow is going somewhere' at a glance \
+                and does not have to guess whether a cut is coming. MARTIAL \
+                rather than CRISP because the follow-through is wanted here: the \
+                second body is still travelling for another ten frames after the \
+                gesture ends, and an arm that stopped dead would say it had \
+                already arrived."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::SMOOTH),
+            Key::eased(gather, gathered, Ease::OUT),
+            Key::eased(release, thrown, Ease::OUT),
+            Key::eased(follow, following, Ease::SMOOTH),
+            Key::eased(settle, following, Ease::SMOOTH),
+            Key::eased(last, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The shadow's own two poses
+// ---------------------------------------------------------------------------
+//
+// Everything else the second body does is one of her clips replayed a few
+// frames late -- that is the whole idea of a shadow, and it is why there are
+// two of these rather than a second animation set. These are the two things it
+// does that she never does: cross the arena on its own, and stand somewhere
+// waiting for her.
+
+/// The shadow travelling.
+///
+/// One pose, entered fast and held. The shadow crosses in ten frames and it is
+/// a silhouette the whole way -- what the player has to read is *which way it
+/// is going*, from across the arena, at speed. So the pose is built as a
+/// diagonal: the body pitched forward over the line of travel, the right leg
+/// thrown back behind it, the left knee up and folded under the chest, the left
+/// elbow forward across the face and the right arm streaming behind. Every limb
+/// is either along the line or across it; nothing is neutral.
+///
+/// Held rather than animated. It is the only clip in the file with no second
+/// beat, and deliberately: motion on a body that is already moving at thirty
+/// metres a second reads as noise, and the *arrival* is a separate clip that
+/// the renderer cross-fades to.
+fn dash() -> Recipe {
+    let clip = Clip::ShadowDash;
+    let last = clip.length() - 1;
+    // Into it in two frames. The fade out of whatever it was doing covers the
+    // first of them.
+    let planted = 2.min(last.saturating_sub(1)).max(1);
+
+    // The launch. Still recognisably a body pushing off, with the rear leg
+    // straightening and the lead knee starting up.
+    let leaving = stance()
+        .hips(0.0, -0.150, 0.090)
+        .root(26.0, 0.0, -6.0)
+        .spine(10.0, 0.0, 4.0)
+        .chest(6.0, 0.0, 6.0)
+        .head(-16.0, 0.0, 0.0)
+        .hip_l(48.0, 8.0, 0.0)
+        .knee_l(76.0)
+        .ankle_l(16.0, 0.0, 0.0)
+        .hip_r(-30.0, 4.0, 0.0)
+        .knee_r(26.0)
+        .ankle_r(24.0, 0.0, 0.0)
+        .shoulder_l(30.0, 22.0, -20.0)
+        .elbow_l(96.0)
+        .wrist_l(-10.0, 0.0, 0.0)
+        .shoulder_r(-40.0, 14.0, -10.0)
+        .elbow_r(40.0)
+        .wrist_r(-8.0, 0.0, 0.0);
+
+    // Full flight, and the pose the whole clip is for.
+    //
+    // The forty-five degrees is the rear leg against the body's own line, not
+    // against the floor: the torso is pitched thirty-two degrees forward, so a
+    // thigh swung thirteen degrees behind vertical puts the whole leg on the
+    // diagonal that reads as forty-five from the side. The knee is left
+    // fractionally bent -- a dead straight leg reads as a mannequin.
+    let flying = stance()
+        .hips(0.0, -0.205, 0.150)
+        .root(32.0, 0.0, -4.0)
+        .spine(12.0, 0.0, 2.0)
+        .chest(7.0, 0.0, 4.0)
+        // Chin tucked behind the leading elbow, eyes up the line.
+        .head(-22.0, 0.0, 2.0)
+        // Left knee up and fully folded, tucked under the chest.
+        .hip_l(96.0, 10.0, 0.0)
+        .knee_l(132.0)
+        .ankle_l(22.0, 0.0, 0.0)
+        // Right leg thrown back and all but straight, toe pointed.
+        .hip_r(-46.0, 3.0, 0.0)
+        .knee_r(10.0)
+        .ankle_r(34.0, 0.0, 0.0)
+        // Left elbow forward, across the face. The forearm is the leading edge
+        // of the silhouette and the face is behind it.
+        .shoulder_l(78.0, 4.0, -34.0)
+        .elbow_l(122.0)
+        .wrist_l(-16.0, 0.0, 0.0)
+        // Right arm streaming behind, nearly straight, palm turned up.
+        .shoulder_r(-72.0, 10.0, 16.0)
+        .elbow_r(16.0)
+        .wrist_r(-4.0, 0.0, 10.0);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "A silhouette, held. The shadow crosses the arena in ten frames \
+                and the only thing a player can read at that speed is the \
+                outline, so every limb is placed on the diagonal of travel: body \
+                pitched forward, right leg thrown back along the line, left knee \
+                up and folded across it, left elbow leading in front of the face \
+                and the right arm streaming behind. No second beat, because a \
+                body moving that fast does not need one and any motion on top of \
+                it reads as flicker. The arrival is `shadow_ready`, and the \
+                renderer cross-fades between the two -- which is the transition, \
+                and is why neither clip has to author it. CRISP so the pose is \
+                fully arrived by frame two of ten; MARTIAL arms would still be \
+                catching up when it landed."
+            .into(),
+        keys: vec![
+            Key::eased(0, leaving, Ease::OUT),
+            Key::eased(planted, flying, Ease::SMOOTH),
+            Key::eased(last, flying, Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The shadow arrived: combat ready, and waiting.
+///
+/// It is standing somewhere she chose, and everything in her kit is about to be
+/// aimed through it, so it must not read as scenery. A low bladed guard with
+/// both hands up says "this is a body and it is still in the fight", which is
+/// exactly what the shadow is: it copies her swings from wherever it stands.
+///
+/// Loops, and breathes -- slower and shallower than hers, because it is a
+/// shadow and not a person.
+fn ready_stance() -> Recipe {
+    let clip = Clip::ShadowReady;
+    let last = clip.length() - 1;
+    let half = last / 2;
+
+    // The guard. Lower than her walking stance, weight further back, both hands
+    // up and forward with the elbows in -- and squarer to the front than she
+    // ever stands, because it has no line of its own to protect.
+    let guard = footing(
+        stance()
+            .hips(0.014, -0.132, -0.028)
+            .root(6.0, 0.0, -6.0)
+            .spine(8.0, 0.0, 4.0)
+            .chest(4.0, 0.0, 6.0)
+            .head(-6.0, 0.0, 2.0)
+            .shoulder_l(34.0, 20.0, -16.0)
+            .elbow_l(102.0)
+            .wrist_l(-12.0, 0.0, 0.0)
+            .shoulder_r(24.0, 22.0, -14.0)
+            .elbow_r(96.0)
+            .wrist_r(-12.0, 0.0, -4.0),
+        -2.0,
+        18.0,
+    );
+
+    // The breath. Three centimetres at the hips and a couple of degrees
+    // everywhere else -- enough to prove it is alive, not enough to be a motion
+    // anybody watches.
+    let breathing = footing(
+        stance()
+            .hips(0.014, -0.116, -0.026)
+            .root(5.0, 0.0, -6.0)
+            .spine(6.0, 0.0, 4.0)
+            .chest(2.0, 0.0, 6.0)
+            .head(-7.0, 0.0, 2.0)
+            .shoulder_l(32.0, 23.0, -16.0)
+            .elbow_l(99.0)
+            .wrist_l(-12.0, 0.0, 0.0)
+            .shoulder_r(22.0, 25.0, -14.0)
+            .elbow_r(93.0)
+            .wrist_r(-12.0, 0.0, -4.0),
+        -2.0,
+        18.0,
+    );
+
+    Recipe {
+        clip,
+        looseness: Looseness::STRIDE,
+        notes: "What the second body does while it waits, and it waits for most \
+                of a round. A low bladed guard rather than an idle: everything \
+                in the kit is aimed through this thing, and it copies her swings \
+                from wherever it stands, so it has to read as a fighter standing \
+                there and not as a marker on the floor. Squarer to the front \
+                than her own stance, because it has no line of its own to \
+                defend. The breath is a centimetre and a half of hips over a \
+                second and a half -- slower and shallower than hers on purpose, \
+                since the pair are usually on screen together and two bodies \
+                breathing in step read as one body with a ghost stuck to it."
+            .into(),
+        keys: vec![
+            Key::eased(0, guard, Ease::SMOOTH),
+            Key::eased(half, breathing, Ease::SMOOTH),
+            Key::eased(last, guard, Ease::SMOOTH),
         ],
     }
 }

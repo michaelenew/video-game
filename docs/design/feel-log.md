@@ -1473,6 +1473,143 @@ failed at 35% leech and passes at 55%. None of it has been played. The costs in 
 are a guess: the class is downstream of TTK, and what fraction of a health bar a cast should
 represent is exactly the question a prototype answers and a document cannot.
 
+### 2026-09-13 — why the drain's healing is invisible, and it is not the bug
+
+**Found** the field's return being reported as missing a second time, after the bug that was
+actually causing it had been fixed. The second cause is not a bug at all, and it is worth a
+dated entry because it will be reported a third time otherwise.
+
+**Health cannot go over the bar, and the eruption gets there first.** The spike costs sixty,
+the eruption returns fifty-nine of it on the frame it lands, and every tick of the field after
+that is clamped away. Measured, with a target standing in the field for its whole life:
+
+| Cast at | Eruption returns | Field returns |
+| --- | --- | --- |
+| 1000 / 1000 | +59 | **+1** |
+| 700 / 1000 | +59 | +90 |
+
+So the ability reads as broken in exactly the situation anybody tests it in — the first cast of
+a fresh round, at full health — and works from the moment you have taken a hit.
+
+**Which is arguably the class working.** She heals when she is hurt and gains nothing when she
+is whole, so the spike is nearly free at the top of the bar and a large swing when she needs
+one. That is a good shape and nobody designed it; it fell out of the cost and the leech being
+close to equal.
+
+**If it should be felt at full health**, the eruption is what eats the headroom, and the
+written design already says what to do: the spike *returns a share of everything it drains*,
+and arrival damage is not a drain. Stopping the eruption leeching would leave the room for the
+field to fill. It needs a second leech number — one move has one today — and it cuts what the
+ability returns overall, so it is a decision rather than a correction. Left to the next tuning
+pass.
+
+**Verdict** no change. Written down, and the kit document carries the table.
+
+
+### 2026-09-13 — a Grasp that closes pulls you in
+
+**Changed** `grab_hold` on Grasp means something now. Catch somebody with every one of the four
+arms and they are hauled to the caster's arm's length, held for twenty frames, and rooted for
+twenty more after the hands open.
+
+**Why** the knob had been set to 20 in a bake and was doing nothing at all: the arms are an
+effect, and the effect delivery path hard-coded `grabs: 0`. It carried damage, stun, blockstun,
+knockback and launch, and dropped the grab on the floor. A table that can be edited and is not
+read is worse than a table with a gap in it.
+
+**The thing that decided the design.** The obvious implementation — every arm grabs — does not
+work, and the reason is worth writing down because it is not a balance argument. The arms do
+not all land on the same frame:
+
+```
+f38  arms landed: [1, 3]      the bottom pair
+f39  arms landed: [0, 1, 2, 3]  the top pair, one frame later
+```
+
+A grab drags its victim to the caster. So a grab on the first contact moves them ten metres out
+from under the arms still in flight, the top pair miss, and `parts_landed == GRASP_ARMS` is
+never true — **the grab would silently delete the root**. The two payoffs go on the same
+condition because the first one eats the second otherwise.
+
+That turns out to be the better ability anyway. One or two arms is damage and you stay where you
+are; all four and the cone closes, takes you with it, and leaves you in melee range of somebody
+whose next swing is worth 1.4× against anything that cannot move. Rend is thirty-six frames end
+to end and the window is forty, so exactly one of them fits — which is the shape a read should
+pay out in.
+
+**How it is tested.** A sweep rather than a fixture. The interesting positions are a hand's
+width apart — the arms converge, so four arms and two arms are about a metre from each other —
+and a test that picked one of them would be pinned to today's cone width rather than to the
+rule. `only_a_full_grasp_catches_anybody` walks the victim across the cone and asserts the
+biconditional at every step: held exactly when all four landed, rooted exactly when all four
+landed, and it fails if the sweep never sees both cases.
+
+**Verdict** open. The reach is ten metres, which makes this the longest pull in the game by a
+distance; if it is too much, the reach is the first knob and the hold is the second.
+
+
+### 2026-09-13 — the field was draining the creature into thin air, and the kit hit twice as hard as it meant to
+
+**Changed** two things, and only one of them is tuning.
+
+**The bug.** A Blood mage's black spike, standing in a hunt, took health off the Ridgeback and
+returned her none of it. The two field effects called the creature-damage path and **discarded
+what it told them**:
+
+```rust
+self.gore_the_creature(effect, 0, effect.pos, volume.radius);   // returns the damage dealt
+```
+
+Every other way she deals damage pays her: a swing, a blade in the air, an arm of a Grasp, a
+field ticking on a *fighter*. Fields on the creature did not, so half her economy was missing
+in one of the game's two modes.
+
+Two things hid it, and both are worth naming because they will hide the next one:
+
+- **Versus never sees it.** A field only meets the creature in a hunt, and the versus tests are
+  where the drain was proved to work.
+- **The eruption pays out on the same cast.** The spike hits once when it arrives, that hit
+  leeches correctly, and it lands a few frames before the field's first tick. `assert!(health >
+  before)` over a window containing both is satisfied by the wrong one. The test now starts
+  measuring *after* the eruption is over, and it fails if the payment is removed — checked by
+  removing it.
+
+**The number the bug cost, on the way past.** `hits again every` was set to 1 on the spike
+while chasing this, on the reasonable-looking guess that it was what made a persistent drain
+persist. It is not: it is the re-hit interval for the **move's own hitbox** during its active
+frames, and the spike's window is four frames, so it turned one eruption into four or five. The
+field's clock is `effects.damage tick interval` and always was.
+
+**The tuning.** With the eruption multiplied by five and a Grasp at 95 per arm, one cast of the
+spike was 64% of a health bar and a Grasp was 38%. Halved, with the health costs halved beside
+them so that **every ratio the last pass tuned is untouched**:
+
+| | damage | cost | returned | dmg/cost | back/cost |
+| --- | --- | --- | --- | --- | --- |
+| Bloodletter | 80 → 40 | 15 → 8 | 32 → 16 | 5.33 → 5.00 | 2.13 → 2.00 |
+| Rend | 130 → 65 | 60 → 30 | 65 → 32 | 2.17 → 2.17 | 1.08 → 1.07 |
+| Grasp | 380 → 192 | 90 → 45 | 209 → 105 | 4.22 → 4.27 | 2.32 → 2.33 |
+| Black spike | 640 → 320 | 120 → 60 | 377 → 188 | 5.33 → 5.33 | 3.14 → 3.13 |
+
+The drift is integer rounding on two costs and nothing else. The spike's eruption absorbs the
+re-hit going away: forty dealt five times is one hit of a hundred, halved from two hundred, so
+reverting the accident and halving the damage are the same edit. The field's own tick went 22 →
+11 with it.
+
+**Two tests restored and one added.** A merge two days ago dropped
+`the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything`,
+`a_root_outlives_the_hitstun_that_delivers_it` and the bounds on the disabled multiplier —
+which are precisely the assertions that keep a bake like this honest, and they were gone for
+the bake that needed them. They are back, and `best_case` understands re-hit now.
+
+The new one is `the_blood_mage_does_not_kill_in_two_buttons`, and it is the one that would have
+caught this: **her per-hit numbers say very little about what a cast is worth.** Every ability
+she has connects several times — two passes, four arms, twenty ticks — so 95 in the table is
+380 in the hand. Nothing in the table looked wrong.
+
+**Verdict** open. The ratios are the ones that were played and liked; only the scale moved.
+
+
 ### 2026-09-12 — the Blood mage's root has something on the other side of it
 
 **Changed** a Blood mage's damage is multiplied by **1.4 against anything that cannot move**.
@@ -1950,6 +2087,7 @@ not mean:
 through the floor behind them, so a shot at somebody backed against a wall ends on the wall
 rather than on them. Both hit. Nobody has played it.
 
+
 ### 2026-09-13 — the Dual mage got both her arms
 
 **Changed** the kit on the buttons. Left click is the **dark auto**, right click is the
@@ -2019,6 +2157,109 @@ questions: whether the wing's outward opening reads as a wing or as a wild swing
 of arc is enough to feel like it wraps, whether the punch at five frames of startup is too
 fast to see which arm it was, and whether Sweep at twelve frames is a real answer to somebody
 inside the punches or just a slower one.
+### 2026-09-13 — the Shadow Reaver's second body
+
+The class's whole kit was rebuilt around one change, and the change is a deletion: **the
+shadow can no longer be absent.**
+
+**Changed**
+
+- `Mechanic::Shadow` went from `Option<V3>` to a body with four states -- attending her,
+  going out, waiting, coming home. There is no "nowhere".
+- The mechanic became a **move** rather than an instant, in a fourth slot in the table:
+  *Send shadow* (on `E` at first; see the entry below),
+  8/3/14, reach 9 m, damage 70 on the way home. The shadow flies out in ten frames and stops;
+  pressed again it dashes home at 34 m/s through anybody in the way, cutting once and slowing
+  them to 0.55x.
+- The leash went from 8 m to **12 m**, and had to: the throw reaches 9, so at 8 the shadow
+  turned round on the frame it landed. A leash shorter than the throw is not a tuning
+  mistake, it is the setup deleting itself.
+- **Guillotine lotus** stopped being a disc at the shadow and became six blades that erupt
+  along curved paths (4.5 m, 7 frames), hang open for 40, and chase the shadow home over 26,
+  dealing 70% of what they dealt going out. 40 damage a blade, which is deliberately small:
+  six numbers can land at once.
+- **The shadow copies her swings**, 4 frames later, at **25%** of her damage, from wherever
+  it stands.
+- The forward dodge, thrown with the crosshair on the shadow, became the dash to it: 34 m/s
+  constant, invulnerable, and arriving collects the shadow.
+- Executioner picked up **right click**, which was dead on a class with no shield. Swapped
+  back a day later; see below.
+
+**Why** two reasons, and the second is the one that mattered.
+
+The stated one: the class read as a setup class that spends most of a match with no setup.
+`None` meant no swap, no Guillotine, no line -- and the fix the kit document had already
+reached for, *the baseline dash creates the shadow*, only papered over it.
+
+The one found while building it: **`Option` was making the code worse in the same shape it
+was making the class worse.** Every ability that read the mechanic carried a branch for the
+case where the mechanic did not exist, and every one of those branches was a design question
+nobody had answered. Deleting the case deleted the branches.
+
+**What the numbers are for.** The 25% is the class in one number: holding the shadow is a
+flat 1.25x on everything her body does, and sending it out trades that quarter for a second
+threat somewhere she is not. That is a real decision every few seconds, which is what a
+mechanic is supposed to be. The 40-per-blade is a guess bounded from above: standing exactly
+on the shadow through a whole lotus is six blades out and six back, which is 240 plus 168 of
+a thousand, and that is meant to be the execute rather than the opening.
+
+**Two implementation notes worth keeping**, because both were bugs first:
+
+- The blades are tested as **swept lines**, not as points. The eruption crosses 4.5 m in 7
+  frames and is fastest on the first of them, so a blade sampled as a ball starts the frame
+  at the shadow's feet and ends it a metre past whoever was standing there. The one victim
+  the ability is named for was the one it missed.
+- The echo is **a move index and an age**, and the shadow's own startup/active/recovery are
+  derived from the same table hers come from. A second state machine would have to agree with
+  the first, and eventually would not.
+
+**Verdict** open, and there is a lot here to play. Three specific worries:
+
+1. **The lotus dragged home may be too much.** It is two buttons, it covers the length of the
+   arena, and it hits everything twice. That is the intended fantasy; whether it is a fair
+   one is a question for a person.
+2. **The attending shadow may be hard to read.** It stands 0.9 m behind her, which from a
+   camera sitting directly behind her is exactly the direction that overlaps. It separates the
+   moment she moves or turns, and `reaver.shadow_trails_her_by` is the knob if it does not
+   separate enough.
+3. **Right click doing two things across the roster** -- guard on four classes, an attack on
+   two -- is now a real inconsistency rather than a Champion-shaped exception. It is the
+   cheapest of the three to reverse.
+
+
+### 2026-09-14 — the Reaver's two buttons, swapped
+
+**Changed** right click sends the shadow, `E` throws Executioner. It was the other way round
+for a day.
+
+**Why** nothing about the moves, and everything about which hand is doing what. Sending the
+shadow is a **placement**: a grounded cast at a patch of floor the player picked, and where
+that floor is is the decision the whole class is made of. Executioner is a swing off the
+body — yaw from the facing, pitch from the camera — and reads the crosshair as an angle
+rather than as a place.
+
+Sentence six of the control grammar is *the mouse means where*. Putting the aimed half on
+the mouse and the unaimed half on the key is that sentence applied, and the first
+arrangement had it backwards for no reason beyond `E` being the mechanic key everywhere
+else.
+
+The specific thing that made the first arrangement feel wrong, and the one worth writing
+down: **placing something with the hand that is not holding the mouse means committing to a
+spot you are about to stop looking at.** You press `E`, and the pointing you did a frame ago
+is already stale, because the mouse never stopped moving. On right click the press and the
+aim are the same gesture.
+
+**What it costs.** The Reaver is now the one class where `E` carries something that is not
+the mechanic, which makes the grammar's fifth sentence slightly less true than it was. The
+honest split is two rules rather than one — *a mechanic is an ability when pressing it is
+not free*, and *which button it lands on is the crosshair's question* — and both are now in
+controls.md.
+
+It also leaves Deadly mistake with nowhere to go: right click ignores `shift`, and `shift` +
+`E` is Executioner. That was true of the previous arrangement too, in mirror image.
+
+**Verdict** open. It is a two-line change and reversible, which is most of why it was worth
+trying rather than arguing about.
 
 ### 2026-09-13 — the wing became a section of a torus
 

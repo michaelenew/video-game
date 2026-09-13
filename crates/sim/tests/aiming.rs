@@ -21,6 +21,9 @@ use sim::{Class, Fx, Input, V3, World};
 
 const E: u16 = Input::MECHANIC;
 const Q: u16 = Input::SPECIAL;
+/// Right click, which is how the Reaver sends her shadow -- the one thing in
+/// her kit the crosshair aims, on the button that means "where".
+const R: u16 = Input::RIGHT;
 
 /// Degrees below the horizon, in the wire's own unit: a signed count of
 /// 1/65536 of a turn.
@@ -875,18 +878,43 @@ fn in_the_air_a_swing_follows_the_camera_all_the_way_down() {
 // At the mechanic
 // ---------------------------------------------------------------------------
 
-/// A Reaver with the shadow placed ahead of her, and the gap it sits at.
+/// Where a Reaver's shadow is standing.
+fn shadow_of(w: &World) -> sim::class::Shadow {
+    let Mechanic::Shadow(shadow) = w.players[0].mechanic else {
+        panic!("not the class that owns a shadow");
+    };
+    shadow
+}
+
+/// A Reaver with the shadow sent out ahead of her, and the spot it stopped at.
+///
+/// Right click throws it at whatever the crosshair is on, which is a grounded
+/// cast, and then it flies. The fixture waits for the flight to finish, because
+/// what the rest of the kit is aimed at is a shadow standing still.
 fn with_a_shadow() -> (World, V3) {
     let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
     w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(8));
     w.players[1].pos = V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(-12));
-    // `E` places it where the crosshair is, which is a grounded cast.
-    run(&mut w, 2, E, down(20));
-    run(&mut w, 2, 0, down(20));
-    let Mechanic::Shadow { at: Some(spot) } = w.players[0].mechanic else {
-        panic!("the fixture never placed a shadow");
-    };
-    (w, spot)
+    let send = sim::moves::get(Class::ShadowReaver, sim::state::SLOT_MECHANIC);
+    tap(
+        &mut w,
+        R,
+        down(20),
+        (send.whiff_cost() + t::shadow_send_frames()) as u32,
+    );
+    let shadow = shadow_of(&w);
+    assert!(shadow.is_waiting(), "the fixture never got the shadow out");
+    (w, shadow.pos)
+}
+
+/// The Guillotine standing in the world, whoever threw it.
+fn lotus(w: &World) -> sim::effects::Effect {
+    w.effects
+        .iter()
+        .flatten()
+        .find(|e| e.kind == EffectKind::GuillotineLotus)
+        .copied()
+        .expect("no lotus in the world")
 }
 
 #[test]
@@ -902,23 +930,58 @@ fn the_blades_erupt_at_the_shadow_rather_than_on_the_caster() {
         "the fixture placed the shadow on top of her, so this proves nothing"
     );
 
-    let mut seen = None;
-    for _ in 0..40 {
-        run(&mut w, 1, Q, down(20));
-        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
-            seen = Some(hb);
-            break;
-        }
-    }
-    let hb = seen.expect("Guillotine never put a volume out");
+    let cast = sim::moves::get(Class::ShadowReaver, SLOT_SPECIAL);
+    tap(&mut w, Q, down(20), cast.startup as u32 + 2);
+    let flower = lotus(&w);
     assert!(
-        hb.to.sub(shadow).flat_len().raw() < Fx::ONE.raw(),
-        "the blades came out {:.1} m from the shadow",
-        hb.to.sub(shadow).flat_len().to_f32_for_render()
+        flower.pos.sub(shadow).flat_len().raw() < Fx::ONE.raw(),
+        "the lotus opened {:.1} m from the shadow",
+        flower.pos.sub(shadow).flat_len().to_f32_for_render()
+    );
+    // Every blade is around the shadow rather than around her.
+    for blade in 0..sim::effects::LOTUS_BLADES {
+        let at = flower.lotus_at(blade, flower.pos);
+        assert!(
+            at.sub(stood).flat_len().raw() > Fx::ONE.raw(),
+            "blade {blade} came out on the caster's own body"
+        );
+    }
+}
+
+#[test]
+fn the_blades_chase_a_recalled_shadow() {
+    // The combination the kit is built around: recall the shadow with a lotus
+    // open and the six blades are dragged after it, so a Reaver who has opened
+    // one across the arena can pull it back through everything in between.
+    let (mut w, opened_at) = with_a_shadow();
+    let cast = sim::moves::get(Class::ShadowReaver, SLOT_SPECIAL);
+    tap(&mut w, Q, down(20), cast.startup as u32 + 2);
+    assert!(
+        lotus(&w).pos.sub(opened_at).flat_len().raw() < Fx::ONE.raw(),
+        "the lotus did not open on the shadow"
+    );
+
+    // Recall, once she is out of the cast's recovery and can press a button
+    // again, and let the return get under way.
+    run(&mut w, cast.whiff_cost() as u32, 0, down(20));
+    assert!(
+        !lotus(&w).lotus_coming_back(),
+        "the lotus turned for home on its own before the recall could do it"
+    );
+    let send = sim::moves::get(Class::ShadowReaver, sim::state::SLOT_MECHANIC);
+    tap(&mut w, R, down(20), send.startup as u32 + 6);
+    assert!(
+        lotus(&w).lotus_coming_back(),
+        "recalling the shadow did not send the blades after it"
+    );
+    let moved = shadow_of(&w).pos;
+    assert!(
+        moved.sub(opened_at).flat_len().raw() > Fx::ONE.raw(),
+        "the shadow never left on the recall"
     );
     assert!(
-        hb.to.sub(stood).flat_len().raw() > Fx::ONE.raw(),
-        "the blades came out on the caster's own body"
+        lotus(&w).pos.sub(moved).flat_len().raw() < Fx::ONE.raw(),
+        "the blades stayed where they opened instead of following the shadow"
     );
 }
 

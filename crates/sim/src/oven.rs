@@ -173,7 +173,6 @@ scalars! {
     LeapSpeed,        "Bulwark",  "Leap speed",                 Fixed,   fx(1,1),   fx(40,1);
     LeapRise,         "Bulwark",  "Leap rise",                  Fixed,   0,         fx(25,1);
     ShadowLeash,      "Reaver",   "Shadow leash",               Fixed,   fx(1,1),   fx(30,1);
-    ShadowPlaceAhead, "Reaver",   "Shadow reach",               Fixed,   0,         fx(10,1);
     StructureAhead,   "Stones",   "Raise reach",                Fixed,   0,         fx(10,1);
     StructureHeight,  "Stones",   "Stone height",               Fixed,   fx(1,10),  fx(8,1);
     DodgeDecay,       "Defence",  "Dodge decay",                Fixed,   0,         fx(1,1);
@@ -303,6 +302,24 @@ scalars! {
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
     WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
+    ShadowTrail,      "Reaver",   "Shadow trails her by",       Fixed,   0,         fx(4,1);
+    ShadowFollow,     "Reaver",   "Shadow catch-up per frame",  Fixed,   fx(1,100), fx(1,1);
+    ShadowLag,        "Reaver",   "Shadow copies her this late",Frames,  0,         30;
+    ShadowEcho,       "Reaver",   "Shadow damage (%)",          Percent, 0,         100;
+    ShadowSendFrames, "Reaver",   "Shadow flight, out",         Frames,  1,         60;
+    ShadowHomeSpeed,  "Reaver",   "Shadow speed, coming home",  Fixed,   fx(1,1),   fx(60,1);
+    ShadowRecallSlow, "Reaver",   "Recall slow (x)",            Fixed,   0,         fx(1,1);
+    ShadowLockCone,   "Reaver",   "Crosshair lock on the shadow", Fixed, fx(1,10),  fx(6,1);
+    ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(40,1);
+    LotusRadius,      "Reaver",   "Lotus, how far the blades go", Fixed, fx(1,1),   fx(12,1);
+    LotusRise,        "Reaver",   "Lotus, how high they arc",   Fixed,   0,         fx(4,1);
+    LotusCurl,        "Reaver",   "Lotus, curve of the path (turns)", Fixed, 0,     fx(1,4);
+    LotusBladeRadius, "Reaver",   "Lotus, blade radius",        Fixed,   fx(1,10),  fx(2,1);
+    LotusErupt,       "Reaver",   "Lotus, out",                 Frames,  1,         60;
+    LotusHold,        "Reaver",   "Lotus, held open",           Frames,  0,         120;
+    LotusReturn,      "Reaver",   "Lotus, back to the shadow",  Frames,  1,         120;
+    LotusReturnDamage,"Reaver",   "Lotus, damage coming home (%)", Percent, 0,      200;
+    LotusSlow,        "Reaver",   "Lotus slow (x)",             Fixed,   0,         fx(1,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -707,7 +724,7 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 189;
+pub const SCALAR_COUNT: usize = 206;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody

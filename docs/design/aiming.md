@@ -1,6 +1,7 @@
 ---
 status: decided
 decided: 2026-09-12
+revised: 2026-09-14
 ---
 
 # Aiming
@@ -197,7 +198,16 @@ throw would quietly delete the reason shadow placement is a decision, which is
 most of the class.
 
 The volume follows the mechanic **live**, because the Reaver can recall the
-shadow while the blades are out.
+shadow while the blades are out — and doing exactly that is what the ability is
+for. The six blades take their centre from the shadow's position every frame, so
+a recall drags them the length of the arena. An effect that had been pinned to
+the patch of floor it was cast on would have made the class's biggest turn
+impossible to express.
+
+It is also the reason the shadow is **never absent** (2026-09-13): a move aimed
+at the mechanic needs the mechanic to be somewhere. `mechanic_path` still falls
+back to the caster's own feet, and on this class the fallback is now
+unreachable.
 
 ## Which move uses which
 
@@ -209,13 +219,32 @@ swing.
 
 | Line of effect | Moves |
 | --- | --- |
-| **Grounded** | Fissure, Fire pillar, Black spike, Judgement |
+| **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
 | **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
 | **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos |
 | **At the mechanic** | Guillotine lotus |
 
-The mechanic inputs are aimed too, through the same two functions: Raise and the
-shadow are grounded casts, and the Bulwark's thrown shield is a skillshot.
+The mechanic inputs are aimed too, through the same two functions: Raise is a
+grounded cast and the Bulwark's thrown shield is a skillshot. The Reaver's is no
+longer a mechanic *input* at all — Send shadow is a move in the table like any
+other, and it is a grounded cast, so a shadow lands on the floor exactly where
+the crosshair is.
+
+That is also why it sits on **right click** rather than on `E`: it is the one
+thing in her kit the crosshair aims, and the mouse is where aiming lives. The
+swing it displaced went to the key, which does not read the crosshair as a
+place. See [kits/shadow-reaver.md](kits/shadow-reaver.md).
+
+### One thing that is not a line of effect
+
+**Is the crosshair on the shadow?** `aim::pointing_at` answers it, and the
+Reaver's forward dodge reads the answer to decide whether it is a dodge or the
+dash to her second body. It is not a fifth kind of aiming — it points nothing
+anywhere — but it lives in `aim.rs` for the same reason everything else here
+does. The obvious alternative is an angle between the look direction and the
+line to the shadow, worked out beside the dodge, and that is the parallel-ray
+mistake in its usual disguise: it agrees with the crosshair at long range and is
+out by a whole body at short.
 
 **A swing still commits to a plane, and the crosshair is where the plane comes
 from.** Added 2026-09-12 with the Champion's rebuild. The yaw of a swing is the

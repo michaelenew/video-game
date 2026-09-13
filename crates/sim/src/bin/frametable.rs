@@ -73,13 +73,24 @@ fn main() {
             // something in the world and let it do the hitting, and the
             // Champion's pole vault, which puts nothing anywhere.
             if !m.strikes() {
+                // A move with no volume of its own has its hit delivered by
+                // whatever it put in the world, and not every one of those can
+                // carry a grab. Saying which is the difference between a table
+                // that is incomplete and a table that is wrong: the knob is in
+                // the palette, it can be turned, and on most of them nothing
+                // would happen.
+                let ignored = match (m.grabs > 0, sim::effects::EffectKind::from_code(m.effect)) {
+                    (false, _) => "",
+                    (true, Some(kind)) if kind.seizes() => "; grabs once every arm lands",
+                    (true, _) => "; grab ignored -- the effect delivers the hit",
+                };
                 let what = if m.shape.strikes() {
-                    "places something; the thing it placed hits"
+                    format!("places something; the thing it placed hits{ignored}")
                 } else {
-                    "movement, no hitbox"
+                    format!("movement, no hitbox{ignored}")
                 };
                 println!(
-                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   {what}",
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} {what}",
                     moves::binding(class, slot),
                     m.name,
                     m.startup,
@@ -87,7 +98,11 @@ fn main() {
                     m.recovery,
                     "--",
                     "--",
-                    "--"
+                    "--",
+                    // Still printed, and it matters more here than anywhere:
+                    // the whole question about a move that places something is
+                    // *where*, and this column is the answer.
+                    m.aim().name(),
                 );
                 continue;
             }

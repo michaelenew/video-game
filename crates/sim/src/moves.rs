@@ -310,9 +310,22 @@ const NAMES: [&[&str]; 6] = [
         "Rush stab",
         "Pole vault",
     ],
-    // Shadow Reaver -- two bodies. Options are a function of the line between them.
-    //   Guillotine: blades erupt from the shadow, so it needs one placed.
-    &["Slash", "Executioner", "Guillotine"],
+    // Shadow Reaver -- two bodies. Options are a function of the line between
+    // them, and the line always exists: the shadow is never nowhere.
+    //
+    // The two buttons are swapped against every other class, and the reason is
+    // the sixth sentence of the grammar rather than an exception to it: **the
+    // mouse means where.** Sending the shadow is the one thing in this kit the
+    // crosshair aims, so it is on the mouse; Executioner is a swing off the
+    // body and does not care, so it is on the key.
+    //   Slash: the auto, on left click.
+    //   Executioner: the committed melee, on `E` as well as shift+left.
+    //   Guillotine: six blades erupt from the shadow and come back to it, so it
+    //     is aimed at the mechanic and the mechanic does all the hitting.
+    //   Send shadow: on right click, and a real move rather than a state flip.
+    //     It throws the second body out fast and, pressed again, dashes it home
+    //     through anybody in the way.
+    &["Slash", "Executioner", "Guillotine", "Send shadow"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
     //   Bolt: the game's one *skillshot* -- an instant line from her hand to
     //   whatever the crosshair is on, so its `reach` is the max-range sphere
@@ -476,6 +489,12 @@ pub const fn slots(class: Class) -> usize {
         Class::Champion => champion::COUNT,
         // The fourth is Black spike, on `E`. See `on_e`.
         Class::BloodMage => SLOTS + 1,
+        // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
+        // unlike the Blood mage's -- but throwing a second body out across the
+        // arena and dashing it back through somebody is not an instant, and a
+        // move with a flight, a damage number and a slow needs the same table
+        // every other move is in.
+        Class::ShadowReaver => SLOTS + 1,
         // Five: an auto on each click, because the two autos are two different
         // moves rather than one move with a modifier, plus Sweep on `E`. See
         // [`dual`].
@@ -504,6 +523,12 @@ pub const fn on_e(class: Class) -> Option<u8> {
         // button attacks rather than by a key. There is nothing for `E` to
         // toggle either, so it carries Sweep.
         Class::DualMage => Some(dual::SWEEP),
+        // The Reaver is the odd one, and the only class where `E` carries a
+        // move that is **not** the mechanic. Her mechanic is on right click,
+        // because it is the half of her kit the crosshair aims; what is left
+        // for the key is the swing, which does not care where it is thrown
+        // from. See the note in [`NAMES`].
+        Class::ShadowReaver => Some(crate::state::SLOT_COMMITTED),
         _ => None,
     }
 }
@@ -556,6 +581,14 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             8 => "RMB rush",
             _ => "RMB rush, low",
         },
+        // The Reaver's committed melee answers to right click as well, because
+        // right click is otherwise dead on a class with no shield to raise.
+        Class::ShadowReaver => match slot {
+            0 => "LMB",
+            1 => "E, Shift+LMB",
+            2 => "Q",
+            _ => "RMB",
+        },
         // Both clicks are attacks, because the two autos are the mechanic: the
         // button is which force you throw and therefore which way you drift.
         // See [`dual`].
@@ -570,8 +603,10 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             0 => "LMB",
             1 => "Shift+LMB",
             2 => "Q",
-            // Only the Blood mage has a fourth, because only she has no use
-            // for `E` as a mechanic key -- her mechanic is health.
+            // The two classes with a fourth put an ability on the mechanic key:
+            // the Blood mage because her mechanic is health and has nothing to
+            // toggle, the Reaver because throwing her second body across the
+            // arena is not an instant.
             _ => "E",
         },
     }
