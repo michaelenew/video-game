@@ -129,7 +129,7 @@ Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
 least three exemplar moves -- ten on the Champion, five on the Dual mage, four on
 the Blood mage -- there is a monster to fight and climb, peer-to-peer rollback
-play works over real UDP, and 406 tests cover determinism, combat relationships,
+play works over real UDP, and 408 tests cover determinism, combat relationships,
 aiming, the ride, the camera, kinematics and animation.
 
 ```
