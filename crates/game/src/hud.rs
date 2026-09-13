@@ -17,6 +17,15 @@ const QUARRY: Color = Color::srgb(0.86, 0.32, 0.22);
 /// a different resource and it refills.
 const POISE: Color = Color::srgb(0.98, 0.78, 0.35);
 const DIM: Color = Color::srgb(0.52, 0.58, 0.67);
+/// The Dual mage's two forces. Read against each other rather than in
+/// isolation: the bar is one thing with two ends, so the two colours have to be
+/// unmistakable at a glance and at speed.
+const DARK: Color = Color::srgb(0.58, 0.36, 0.95);
+const LIGHT: Color = Color::srgb(1.0, 0.89, 0.52);
+/// Past the deep threshold, where the forces start burning her.
+const DEEP: Color = Color::srgb(0.95, 0.35, 0.35);
+/// Driven off the end. Nothing else in the HUD is this colour.
+const ASCENDED: Color = Color::srgb(1.0, 1.0, 1.0);
 
 #[derive(Component)]
 pub struct HealthBar(pub usize);
@@ -37,6 +46,26 @@ pub struct QuarryBar;
 
 #[derive(Component)]
 pub struct PoiseBar;
+
+/// The Dual mage's bar: where she sits between the two forces.
+///
+/// A real bar rather than the number the mechanic line prints, because the
+/// number is unreadable in a fight -- it is the thing the player is steering
+/// with every click, and steering something you have to read a digit to find is
+/// not steering. One per player, hidden for the five classes that have no
+/// meter.
+#[derive(Component)]
+pub struct MeterRow(pub usize);
+
+/// The track, whose border says which force she is **carrying** -- which is a
+/// different question from which side of the bar she is on, and the one that
+/// decides what her casts are made of.
+#[derive(Component)]
+pub struct MeterTrack(pub usize);
+
+/// The fill, which runs from the centre out to wherever she is.
+#[derive(Component)]
+pub struct MeterFill(pub usize);
 
 #[derive(Component)]
 pub struct RoundText;
@@ -97,6 +126,22 @@ pub fn setup(mut commands: Commands) {
                 ));
                 spawn_health(top, 1, P2);
                 spawn_class_button(top, 1, P2);
+            });
+
+            // The Dual mage's meter, under whichever fighter has one. Same
+            // row shape as the health bars above it so the two read as one
+            // stack, and hidden outright for a class with no meter.
+            root.spawn(Node {
+                width: Val::Percent(100.0),
+                column_gap: Val::Px(18.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceBetween,
+                margin: UiRect::top(Val::Px(4.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                spawn_bar(row, 0);
+                spawn_bar(row, 1);
             });
 
             // The creature's bars, under the fighters' own. Hidden entirely in
@@ -253,6 +298,61 @@ fn spawn_meter<T: Component>(
         });
 }
 
+/// One two-poled bar: a track with the centre marked, the two depths at which
+/// the forces start to burn, and a fill that runs out from the middle.
+///
+/// Everything inside is absolutely positioned, because this bar fills from the
+/// *centre* in either direction rather than from one end -- which is the whole
+/// point of it. A bar that filled from the left would say "more" and "less"
+/// where the mechanic says "which way".
+fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
+    let deep = 50.0 * sim::tuning::meter_deep() as f32 / sim::tuning::meter_max().max(1) as f32;
+    parent
+        .spawn((
+            Node {
+                width: Val::Percent(34.0),
+                height: Val::Px(11.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.09, 0.11, 0.14)),
+            BorderColor(DIM),
+            Visibility::Hidden,
+            MeterRow(who),
+            MeterTrack(who),
+        ))
+        .with_children(|track| {
+            // The fill first, so the ticks draw over it.
+            track.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Percent(50.0),
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(DIM),
+                MeterFill(who),
+            ));
+            for (at, colour) in [
+                (50.0 - deep, DEEP),
+                (50.0 + deep, DEEP),
+                (50.0, Color::srgb(0.82, 0.86, 0.93)),
+            ] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(at),
+                        width: Val::Px(2.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(colour),
+                ));
+            }
+        });
+}
+
 fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
     parent
         .spawn((
@@ -286,6 +386,17 @@ fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
 // make them disjoint; the `Without` bounds prove it. Adding a fifth means
 // adding it to the other four -- which is the cost of the pattern, and the
 // reason the compiler cannot catch a miss here.
+type MeterFillQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static MeterFill,
+        &'static mut Node,
+        &'static mut BackgroundColor,
+    ),
+    (Without<QuarryBar>, Without<PoiseBar>, Without<HealthBar>),
+>;
+
 type QuarryQuery<'w, 's> =
     Query<'w, 's, &'static mut Node, (With<QuarryBar>, Without<PoiseBar>, Without<HealthBar>)>;
 type PoiseQuery<'w, 's> =
@@ -346,7 +457,10 @@ pub fn update(
     mut bars: Query<(&HealthBar, &mut Node)>,
     mut quarry: QuarryQuery,
     mut poise: PoiseQuery,
-    mut quarry_row: Query<&mut Visibility, With<QuarryRow>>,
+    mut quarry_row: Query<&mut Visibility, (With<QuarryRow>, Without<MeterRow>)>,
+    mut meter_rows: Query<(&MeterRow, &mut Visibility), Without<QuarryRow>>,
+    mut meter_tracks: Query<(&MeterTrack, &mut BorderColor)>,
+    mut meter_fills: MeterFillQuery,
     mut states: StateQuery,
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
@@ -363,6 +477,45 @@ pub fn update(
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
         node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
+    }
+
+    // The Dual mage's bar. Three things at once, and each of them is a
+    // question the player is asking constantly: how far out am I, which force
+    // am I carrying, and am I past the line.
+    for (tag, mut visible) in meter_rows.iter_mut() {
+        let carrying = meter_of(&sim.cur.players[tag.0]);
+        *visible = if carrying.is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    for (tag, mut border) in meter_tracks.iter_mut() {
+        let Some((_, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
+            continue;
+        };
+        // The border is which force she is *carrying*, which is not the same as
+        // which side of the bar she is on: she can be deep in the dark and
+        // still light, having just landed one light auto, and every cast she
+        // throws until she lands a dark one is light.
+        border.0 = if ascending > 0 {
+            ASCENDED
+        } else {
+            match colour {
+                Some(sim::class::Force::Dark) => DARK,
+                Some(sim::class::Force::Light) => LIGHT,
+                None => DIM,
+            }
+        };
+    }
+    for (tag, mut node, mut fill) in meter_fills.iter_mut() {
+        let Some((value, _, _)) = meter_of(&sim.cur.players[tag.0]) else {
+            continue;
+        };
+        let (left, width) = fill_of(value, sim::tuning::meter_max());
+        node.left = Val::Percent(left);
+        node.width = Val::Percent(width);
+        fill.0 = if value < 0 { DARK } else { LIGHT };
     }
 
     // The creature, if there is one.
@@ -414,6 +567,33 @@ pub fn update(
             Phase::RoundOver { .. } if sim.cur.monster.is_some() => "the hunt is over".into(),
             Phase::RoundOver { winner, .. } => format!("player {} wins the round", winner + 1),
         });
+    }
+}
+
+/// Where the meter's fill sits in its track, as `(left, width)` in percent.
+///
+/// Out from the **centre**, in whichever direction she has gone, which is the
+/// one thing this bar has to say that a health bar does not: the number is
+/// signed and the middle is the interesting place to be.
+fn fill_of(value: i32, max: i32) -> (f32, f32) {
+    let share = (value as f32 / max.max(1) as f32).clamp(-1.0, 1.0);
+    let half = 50.0 * share.abs();
+    (if share < 0.0 { 50.0 - half } else { 50.0 }, half)
+}
+
+/// The Dual mage's meter, if this fighter has one.
+///
+/// `None` for the other five, which is what hides the bar rather than drawing
+/// an empty one -- a bar for a resource a class does not have is a thing to
+/// wonder about.
+fn meter_of(p: &sim::state::Player) -> Option<(i32, Option<sim::class::Force>, u16)> {
+    match p.mechanic {
+        sim::class::Mechanic::Meter {
+            value,
+            colour,
+            ascending,
+        } => Some((value, colour, ascending)),
+        _ => None,
     }
 }
 
@@ -619,5 +799,39 @@ mod tests {
         }
         classes = cycle_class(classes, 0);
         assert_eq!(classes[0], start[0], "the cycle does not wrap");
+    }
+
+    #[test]
+    fn the_meter_fills_out_from_the_middle() {
+        // The bar is read at a glance while she is being steered, so the thing
+        // that has to be true is positional: centre is centre, and an end is an
+        // end. Nobody can check that by looking at a screenshot of one frame.
+        let max = 100;
+        assert_eq!(fill_of(0, max), (50.0, 0.0));
+        assert_eq!(fill_of(-max, max), (0.0, 50.0));
+        assert_eq!(fill_of(max, max), (50.0, 50.0));
+        let (left, width) = fill_of(-max / 2, max);
+        assert!((left - 25.0).abs() < 0.01 && (width - 25.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_meter_past_its_own_end_still_fits_the_track() {
+        // Ascension pins her at the end, and a bar that drew past its own track
+        // would spill across the screen.
+        let (left, width) = fill_of(500, 100);
+        assert!(left >= 0.0 && left + width <= 100.0);
+    }
+
+    #[test]
+    fn only_the_class_with_a_meter_has_one() {
+        for class in sim::class::ALL_CLASSES {
+            let p = sim::state::Player::new(class);
+            assert_eq!(
+                meter_of(&p).is_some(),
+                class == sim::Class::DualMage,
+                "{} disagrees about having a meter",
+                class.name()
+            );
+        }
     }
 }

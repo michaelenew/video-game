@@ -40,6 +40,39 @@ The original design put human, balanced, and divine on a single axis of *how muc
 and CDR you get*, which made the middle a strictly worse version of the ends. That could
 not be fixed by tuning, because all three states were the same quantity.
 
+## The last auto is the force you are carrying — revised 2026-09-13
+
+**The autos have sides. Nothing else does.** Left click is dark and right click is light,
+and landing one sets which of the two forces the mage is *carrying*. Every other input —
+the committed cast, the key abilities — is made of that force and pushes the bar that way.
+
+This replaces "every input picks a side by which button threw it", which could not survive
+the kit growing keys: `Q` and `E` have no side, and a rule that says "left click is dark"
+has nothing to say about a key. The revision is smaller than it looks, because the thing it
+protects is the same: **you cannot cast without moving the bar, and you cannot move the bar
+without committing to a side.** What changed is that the commitment is made with the button
+you press constantly rather than restated by every other button.
+
+It also gives the colour something to *be*. Which force she is carrying is what decides which
+form her abilities take — the light/dark split every ability is written with — so it has to be
+a thing the player sets deliberately and can read off her own animation.
+
+| Input | Which way it pushes | How far |
+| --- | --- | --- |
+| Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
+| Light auto (`R`) | Light, and she is now light | 5 |
+| Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 12 |
+
+Two tiers rather than a number per ability. "Stronger abilities push harder" was a formula
+over damage, which meant a knob nobody could find and a finisher that pushed about as hard as
+a poke; two numbers, both in the Oven, are legible and are what a tuning pass can actually
+move. **The finisher's own tier — "a deep finisher nearly throws you over the edge" — is not
+built yet**; today it pushes like any other cast.
+
+Before the first auto lands she is carrying neither force, and a cast pushes her further along
+whichever way she was already going — which at dead centre is nowhere. That is the same rule
+this document already states for every input that has no side.
+
 ## Every ability has two forms, and the button picks
 
 **Left click always moves you darker. Right click always moves you lighter.** Every input —
@@ -59,7 +92,8 @@ being asserted.
 ### Autos are the steering wheel
 
 The autos are dark (left) and light (right), and **they change your mode on contact**. A
-whiff steers nothing, so steering requires landing hits.
+whiff steers nothing, so steering requires landing hits — and since 2026-09-13 they are the
+*only* thing that picks a side at all. See the section above.
 
 **Autos have a slight range boost**, powered by the beings inside. That is mechanical, not
 decorative: if steering depends on connecting, the class needs the reach to steer while
@@ -134,6 +168,20 @@ cliff if you do not execute. Numbers below need the prototype.
 Ascension happens **when you max the bar by casting**. It is not a separate input, and it is
 not free. You drove there, one cast at a time, which is what keeps it a decision without
 making it a button you mash on cooldown.
+
+**Built 2026-09-13, as a clock and nothing else.** Reaching either end starts
+`tuning::ascension_frames` — three seconds — during which `tuning::ascension_drain` a frame
+comes off her health, nothing steers the bar, and when it runs out she is put back at the
+centre and staggered for `tuning::ascension_stun`. The drain over the whole window is about
+seventy per cent of a health bar, which is inside the "half to all of it" this document asks
+for below.
+
+Everything else here is still unbuilt: no refund on casting or hitting, no larger form of each
+ability, no graduated stun. What was wrong before it was built is worth writing down, because
+it is the failure mode any resource with an edge has: **there was no exit.** Riding to the end
+of the bar burned her down to one health and then went on burning, with no clock, no stun, no
+reset, and no signal that anything had happened. A cost with no end is not a cost, it is a
+broken state you play around.
 
 ### While ascended — roughly three seconds
 
@@ -217,6 +265,10 @@ cosmetic.
 
 ## Open questions
 
+- **Does the colour want to be visible on the character rather than only in the bar?** It
+  decides what her abilities are made of, and it is currently readable from the HUD and from
+  which arm she last punched with. A caster whose *hands* say it would not need either.
+- **Should the finisher have a tier of its own?** See the table above.
 - Naming for the two forces. The existing skill lists carry a light/judgement vocabulary
   (Judgement, Eclipse, Dark pulse, Culling, Mark of the Merciful) worth mining.
 - Whether low-tier abilities need a spam check beyond frame data, given they barely move the

@@ -427,20 +427,22 @@ pub mod champion {
 /// columns rather than as five moves:
 ///
 /// ```text
-///              darker              lighter          along your current path
+///              darker              lighter        whichever she is carrying
 ///   click      Dark auto (L)       Light auto (R)
-///   shift      Lance (shift+L)
-///   key                                             Judgement (Q), Sweep (E)
+///   shift                                         Lance (shift+L)
+///   key                                           Judgement (Q), Sweep (E)
 /// ```
 ///
 /// The two autos are the same punch mirrored: one arm each, one shared set of
 /// numbers, and the hand supplies the sign of the arc. Nothing else in the
 /// roster is built that way, and it is the reason [`crate::aim::Hand`] exists.
 ///
-/// `Q` and `E` have no side, because side-ness comes from left and right and a
-/// key has neither. They push you further along whichever way you were already
-/// going, which is the rule the design document already states for scroll click
-/// and both-click.
+/// **Only the autos have a side.** Everything else -- the committed cast, the
+/// key abilities -- is made of whichever force she is carrying, which is the
+/// last auto that landed, and pushes her further that way. Before the first
+/// auto connects she is carrying neither, and a cast pushes her further along
+/// whichever way she was already going: the rule the design document states for
+/// every input that is neither left nor right.
 pub mod dual {
     pub const DARK_AUTO: u8 = 0;
     pub const LANCE: u8 = 1;
@@ -450,18 +452,23 @@ pub mod dual {
 
     pub const COUNT: usize = 5;
 
-    /// Which way this move pushes the meter: `-1` darker, `+1` lighter, `0` for
-    /// a move with no side of its own.
+    /// Which force this move throws, if it is one of the two autos.
+    ///
+    /// **Only the autos have a force of their own.** Everything else takes the
+    /// one she is carrying, which is whichever auto landed last -- see
+    /// `class::Mechanic::Meter`. That is the mechanic in one sentence: the two
+    /// buttons you press constantly decide what everything else is made of.
     ///
     /// Read from the move rather than from the buttons held down, which is the
     /// same reason everything else here is declared: `shift + left click` has
     /// both a modifier and a side in it, and a reader of the input bits has to
     /// know which one wins. The move already knows.
-    pub const fn side(kind: u8) -> i32 {
+    pub const fn force(kind: u8) -> Option<crate::class::Force> {
+        use crate::class::Force;
         match kind {
-            DARK_AUTO | LANCE => -1,
-            LIGHT_AUTO => 1,
-            _ => 0,
+            DARK_AUTO => Some(Force::Dark),
+            LIGHT_AUTO => Some(Force::Light),
+            _ => None,
         }
     }
 

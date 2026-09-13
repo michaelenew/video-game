@@ -292,6 +292,98 @@ pub fn arch(t: Fx) -> Fx {
     }
 }
 
+/// A section of a ring lying flat: a chunk of a torus, in the plane of the
+/// floor.
+///
+/// The one volume in the game that is not a capsule. It exists because a wing
+/// is not shaped like a weapon -- it wraps around the thing that threw it -- and
+/// approximating one with a straight line either misses the inside of the curve
+/// or claims the outside of it. See `moves::Shape::Wing`.
+///
+/// Angles are in turns, measured the way [`atan2_turns`] and `V3::from_turns`
+/// measure: zero looks down positive X. `from` and `to` are the two edges and
+/// the section is the shorter way between them, so which is which does not
+/// matter.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Sector {
+    /// The middle of the ring, at the height the section lies at.
+    pub at: V3,
+    pub inner: Fx,
+    pub outer: Fx,
+    pub from: Fx,
+    pub to: Fx,
+}
+
+impl Sector {
+    /// The angle halfway between the two edges.
+    pub fn mid(&self) -> Fx {
+        self.from
+            .add(wrap_turns(self.to.sub(self.from)).div(Fx::from_int(2)))
+    }
+
+    /// Half of how wide the section is, in turns. Never negative.
+    pub fn half_span(&self) -> Fx {
+        wrap_turns(self.to.sub(self.from))
+            .abs()
+            .div(Fx::from_int(2))
+    }
+
+    /// A point on the section: `out` of the way from the inner arc to the outer
+    /// one, `along` of the way from one edge to the other.
+    pub fn point(&self, out: Fx, along: Fx) -> V3 {
+        let angle = self.from.add(wrap_turns(self.to.sub(self.from)).mul(along));
+        let r = self.inner.add(self.outer.sub(self.inner).mul(out));
+        V3::new(
+            self.at.x.add(crate::fixed::cos_turns(angle).mul(r)),
+            self.at.y,
+            self.at.z.add(crate::fixed::sin_turns(angle).mul(r)),
+        )
+    }
+
+    /// Does an upright body touch it?
+    ///
+    /// `foot` is where the body stands, `height` how tall, and `slack` how far
+    /// outside the section's own surface it still reaches -- the body's radius
+    /// plus the attack's, which is the same threshold every other volume in the
+    /// game is tested with.
+    ///
+    /// Three tests, cheapest first: the height, then the radius, then the
+    /// bearing. The bearing is the only one that needs an angle, and it is
+    /// widened by however much of a turn `slack` covers at that distance --
+    /// which is what stops a body being missed by standing just off the end of
+    /// a section that plainly reaches it.
+    pub fn touches(&self, foot: V3, height: Fx, slack: Fx) -> bool {
+        if self.at.y.raw() < foot.y.sub(slack).raw()
+            || self.at.y.raw() > foot.y.add(height).add(slack).raw()
+        {
+            return false;
+        }
+        let delta = V3::new(foot.x.sub(self.at.x), Fx::ZERO, foot.z.sub(self.at.z));
+        let d = delta.flat_len();
+        if d.raw() > self.outer.add(slack).raw() || d.add(slack).raw() < self.inner.raw() {
+            return false;
+        }
+        // Standing on the middle of the ring: every bearing is within reach, so
+        // there is no angle to compare and the arithmetic below would divide by
+        // nearly nothing.
+        if d.raw() <= slack.raw() {
+            return true;
+        }
+        let bearing = atan2_turns(delta.z, delta.x);
+        // How much of a turn `slack` is worth this far out: the half-angle a
+        // tolerance of `slack` subtends at radius `d`, which is `asin(slack/d)`
+        // and not `slack/d` -- the small-angle version is half again too
+        // generous by the time the ratio is two thirds, and this volume is
+        // routinely tested against bodies standing near its own middle.
+        //
+        // `asin(x)` as `atan2(x, sqrt(1 - x*x))`, which is exact here because
+        // the early return above guarantees `x < 1`.
+        let ratio = slack.div(d);
+        let widen = atan2_turns(ratio, Fx::ONE.sub(ratio.mul(ratio)).sqrt());
+        wrap_turns(bearing.sub(self.mid())).abs().raw() <= self.half_span().add(widen).raw()
+    }
+}
+
 /// Wrap an angle in turns into the half-open range (-1/2, 1/2].
 ///
 /// Exact, and free: `Fx` is 16.16, so the fractional bits of the raw integer
