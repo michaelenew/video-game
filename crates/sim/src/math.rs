@@ -264,6 +264,22 @@ pub fn smoothstep(t: Fx) -> Fx {
     three.mul(sq).sub(two.mul(sq).mul(t))
 }
 
+/// `t(2 - t)`: leaves at full speed and arrives at rest.
+///
+/// The shape of anything thrown rather than accelerated -- a shadow shot out to
+/// the spot it was sent to, a blade erupting. Its mirror, `1 - ease_out(t)`, is
+/// `(1 - t)` squared, which is the same motion run backwards: away at speed,
+/// settling as it arrives.
+///
+/// Arithmetic rather than a knob, in the same sense [`smoothstep`] is: the 2 is
+/// what makes the gradient at zero equal to one and at one equal to zero, and
+/// any other value would stop it being this curve.
+pub fn ease_out(t: Fx) -> Fx {
+    let t = t.clamp(Fx::ZERO, Fx::ONE);
+    let two = Fx::ONE.add(Fx::ONE);
+    t.mul(two.sub(t))
+}
+
 /// A triangle that rises 0 -> 1 -> 0 across 0..1. The shape of a windup
 /// followed by a return.
 pub fn arch(t: Fx) -> Fx {

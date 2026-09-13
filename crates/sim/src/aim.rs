@@ -455,6 +455,37 @@ fn swing_tilt(look: Input, grounded: bool) -> Fx {
     pitch.max(Fx::ZERO).add(pitch.add(dead).min(Fx::ZERO))
 }
 
+/// Is the crosshair on the thing standing at `at`?
+///
+/// The same ray [`sight`] uses -- from the eye, through the crosshair -- asked
+/// a yes-or-no question about one object instead of "what is the nearest thing
+/// in the world". `slack` swells the column it is tested against, so this is
+/// "near enough", not "exactly on".
+///
+/// It exists for one input: the Reaver's forward dodge becomes a dash to her
+/// shadow when she is looking at it. That is a **decision about where an
+/// ability goes**, so it belongs in this file with the rest of them -- the
+/// alternative was an angle between the look direction and the line to the
+/// shadow, worked out beside the dodge, which is the parallel-ray mistake in
+/// its usual disguise: it agrees with the crosshair at long range and is out by
+/// a body at short.
+///
+/// Nothing occludes it. A shadow is a shadow; you can point at one through a
+/// wall, and the dash that follows is the class's mobility rather than a shot.
+pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) -> bool {
+    let eye = crate::camera::eye(scene.players[who].pos, look);
+    let column = t::body_radius().add(slack);
+    let foot = V3::new(at.x, at.y.sub(slack), at.z);
+    crate::math::ray_hits_cylinder(
+        eye,
+        look.look_dir(),
+        foot,
+        column,
+        t::body_height().add(slack.add(slack)),
+    )
+    .is_some()
+}
+
 /// Where the class mechanic is standing.
 ///
 /// One move works this way -- the Reaver's Guillotine lotus, whose blades erupt

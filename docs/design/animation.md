@@ -445,10 +445,23 @@ Two diagnostics are worth knowing about when a clip is not behaving:
 
 ## Not yet
 
-- **Mechanic animations.** Throwing the shield, placing the shadow, changing
-  form. They need a clock in the simulation the way attacks have one, and they
-  do not have one yet, so there is nothing to drive a clip from. Authoring them
-  before that exists would be authoring content that never plays.
+- **Mechanic animations.** Throwing the shield, and changing form. They need a
+  clock in the simulation the way attacks have one, and they do not have one
+  yet, so there is nothing to drive a clip from. Authoring them before that
+  exists would be authoring content that never plays.
+
+  Two classes are out of this list, and both got out the same way: their
+  mechanic **became a move**, which is to say it grew the clock. The Blood
+  mage's Black spike and the Reaver's Send shadow have a startup, an active
+  window and a recovery, so their clips take their length from the move table
+  like every other attack.
+
+  The Reaver went one further and needed two clips that belong to nothing in the
+  move table at all -- `shadow_dash` and `shadow_ready`, which are what her
+  *second body* does with itself. They play on a second skeleton, and everything
+  else that body does is one of her own clips replayed a few frames late. A
+  clock that is not a move's, on a body that is not a fighter: the first of
+  either, and the pattern to copy if another mechanic ever grows a body.
 - **Weapons.** Hands have an orientation and a length to hang something off;
   nothing hangs off them.
 - **glTF standins.** The pose function's signature does not change, only what it

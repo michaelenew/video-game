@@ -79,7 +79,7 @@ fn main() {
                     "movement, no hitbox"
                 };
                 println!(
-                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   {what}",
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} {what}",
                     moves::binding(class, slot),
                     m.name,
                     m.startup,
@@ -87,7 +87,11 @@ fn main() {
                     m.recovery,
                     "--",
                     "--",
-                    "--"
+                    "--",
+                    // Still printed, and it matters more here than anywhere:
+                    // the whole question about a move that places something is
+                    // *where*, and this column is the answer.
+                    m.aim().name(),
                 );
                 continue;
             }

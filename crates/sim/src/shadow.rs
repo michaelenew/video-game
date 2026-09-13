@@ -1,0 +1,416 @@
+//! The Reaver's second body.
+//!
+//! **The shadow is never absent.** It is attending her — a translucent copy a
+//! step behind, repeating what she does a beat late — or it is out on the
+//! field. Everything the class has is a function of the line between the two,
+//! and a line needs both ends: the old design let the shadow be *nowhere*, so
+//! half a match was spent with the class's whole vocabulary greyed out, and
+//! every ability that read the mechanic carried a branch for the case where it
+//! did not exist.
+//!
+//! ## What lives here
+//!
+//! Where the shadow is, what it is doing, and what it copies. What it *hits* is
+//! [`crate::state`]'s, because landing a blow needs both fighters and the
+//! creature — see `World::step_shadows`.
+//!
+//! ## Three rules worth knowing
+//!
+//! **The flight out is a function of age.** `Ghost::Casting` stores where it
+//! left, where it is going and how many frames ago it started, and the position
+//! is worked out from those every frame. Same rule as [`crate::effects`], same
+//! reason: a rollback landing in the middle of a flight reproduces it exactly
+//! rather than re-integrating it and finishing somewhere near.
+//!
+//! **The way home is a speed, not a curve.** The return chases her, and she
+//! moves, so there is no fixed distance to be a fraction of. It is still pure —
+//! the position it starts from is in the snapshot and every step is the same
+//! arithmetic — but it is written as a chase because that is what it is.
+//!
+//! **The echo is two numbers.** Which move she threw, and how many frames ago.
+//! The shadow's own startup, active and recovery are *derived* from those
+//! against the same move table she used, so there is no second state machine to
+//! disagree with hers and nothing to restore on a rollback beyond a `u8` and a
+//! `u16`.
+
+use crate::DT;
+use crate::aim;
+use crate::class::{Class, Ghost, Mechanic, NO_ECHO, Shadow};
+use crate::fixed::Fx;
+use crate::math::{self, V3};
+use crate::moves;
+use crate::state::{Action, Player};
+use crate::tuning as t;
+
+/// This fighter's shadow, if this fighter is the one that has one.
+pub fn of(p: &Player) -> Option<Shadow> {
+    match p.mechanic {
+        Mechanic::Shadow(shadow) => Some(shadow),
+        _ => None,
+    }
+}
+
+fn put(p: &mut Player, shadow: Shadow) {
+    p.mechanic = Mechanic::Shadow(shadow);
+}
+
+/// Where the attending shadow wants to stand: behind her, at her shoulder.
+///
+/// Behind rather than on top of her so that the two bodies can be told apart at
+/// a glance, which matters more than it sounds — the copy swings too, and a
+/// player has to be able to see which of the two threats is which.
+fn heel(p: &Player) -> V3 {
+    p.pos
+        .sub(V3::new(p.facing.x, Fx::ZERO, p.facing.z).scale(t::shadow_trail()))
+}
+
+// ---------------------------------------------------------------------------
+// The tick
+// ---------------------------------------------------------------------------
+
+/// Move the shadow, age its echo, and answer the leash.
+///
+/// Called from `state::step_mechanic`, which is the one place per-frame
+/// mechanic upkeep happens for every class.
+pub fn step(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+
+    // It turns the way she turns. It is her shadow: it does what she does, and
+    // that includes which way it is pointed, which is what makes its copy of a
+    // swing come out along the same line hers did.
+    shadow.facing = ease_to(shadow.facing, p.facing).normalized();
+
+    match shadow.doing {
+        Ghost::Attending => {
+            // Eased rather than pinned, so it swings out wide behind her when
+            // she turns and drifts back in when she stops. A shadow welded to a
+            // fixed offset reads as a decal on the floor.
+            shadow.pos = ease_to(shadow.pos, heel(p));
+        }
+        Ghost::Casting { from, to, age } => {
+            let span = t::shadow_send_frames();
+            // The frame it *will* be on, not the one it was: a flight whose
+            // first step is a no-op reads as a hitch before the throw.
+            let next = age.saturating_add(1);
+            shadow.pos = math::lerp3(
+                from,
+                to,
+                math::ease_out(Fx::ratio(next as i32, span as i32)),
+            );
+            // Out fast, and then it simply stops. The pause at the end of the
+            // throw is the whole point of the ability: what the rest of the kit
+            // is aimed at is a second body standing still somewhere useful.
+            shadow.doing = if next >= span {
+                shadow.pos = to;
+                Ghost::Waiting
+            } else {
+                Ghost::Casting {
+                    from,
+                    to,
+                    age: next,
+                }
+            };
+        }
+        Ghost::Waiting => {
+            // The leash. Walk out of it and the shadow comes and finds you,
+            // cutting whatever is between the two of you -- which is the
+            // mechanic's own description of itself, and the reason straying is
+            // a decision rather than a mistake.
+            if shadow.pos.sub(p.pos).flat_len().raw() > t::shadow_leash().raw() {
+                shadow.doing = Ghost::Returning { struck: 0 };
+            }
+        }
+        Ghost::Returning { struck } => {
+            let home = heel(p);
+            let gap = home.sub(shadow.pos);
+            let step = t::shadow_home_speed().mul(DT);
+            if gap.len().raw() <= step.raw() {
+                shadow.pos = home;
+                shadow.doing = Ghost::Attending;
+            } else {
+                shadow.pos = shadow.pos.add(gap.normalized().scale(step));
+                shadow.doing = Ghost::Returning { struck };
+            }
+        }
+    }
+
+    age_the_echo(p, &mut shadow);
+    step_her_dash(p, &mut shadow);
+    put(p, shadow);
+}
+
+/// A step of the ease every following thing here uses.
+fn ease_to(from: V3, to: V3) -> V3 {
+    from.add(to.sub(from).scale(t::shadow_follow()))
+}
+
+// ---------------------------------------------------------------------------
+// The echo
+// ---------------------------------------------------------------------------
+
+/// She threw a move; the shadow throws the same one, `shadow_lag` frames later.
+///
+/// **Swings only.** The other two things she can throw are already the
+/// shadow's: the Guillotine erupts *at* it and the mechanic move *is* it, and a
+/// copy of either would be the same ability fired twice from the same place.
+pub fn begin_echo(p: &mut Player, kind: u8) {
+    let Some(mut shadow) = of(p) else { return };
+    if moves::get(p.class, kind).aim() != aim::Kind::Swing {
+        return;
+    }
+    shadow.echo = kind;
+    shadow.echo_age = 0;
+    shadow.echo_used = false;
+    put(p, shadow);
+}
+
+/// Where the shadow is in the move it is copying, or `None` when it is copying
+/// nothing.
+///
+/// Derived rather than stored. The three phases come out of the same move table
+/// hers do, so retuning a startup in the Oven moves both bodies at once and
+/// there is no second machine to fall out of step.
+pub fn echo_action(class: Class, shadow: Shadow) -> Option<Action> {
+    if shadow.echo == NO_ECHO {
+        return None;
+    }
+    let elapsed = shadow.echo_age.checked_sub(t::shadow_lag())?;
+    let m = moves::get(class, shadow.echo);
+    let kind = shadow.echo;
+    let active_ends = m.startup + m.active;
+    if elapsed < m.startup {
+        Some(Action::Startup {
+            kind,
+            left: m.startup - elapsed,
+        })
+    } else if elapsed < active_ends {
+        Some(Action::Active {
+            kind,
+            left: active_ends - elapsed,
+        })
+    } else if elapsed < active_ends + m.recovery {
+        Some(Action::Recovery {
+            kind,
+            left: active_ends + m.recovery - elapsed,
+        })
+    } else {
+        None
+    }
+}
+
+fn age_the_echo(p: &Player, shadow: &mut Shadow) {
+    if shadow.echo == NO_ECHO {
+        return;
+    }
+    shadow.echo_age = shadow.echo_age.saturating_add(1);
+    // Still waiting to begin. `echo_action` says "nothing out" both before the
+    // copy starts and after it finishes, and only the second of those means the
+    // echo is over -- reading the first as the end cancelled every copy on the
+    // frame after it was scheduled.
+    if shadow.echo_age < t::shadow_lag() {
+        return;
+    }
+    // The copy is a swing, and a swing lands once. The flag is cleared on the
+    // frame the volume appears rather than when the move starts, so a shadow
+    // that caught somebody during a previous copy does not carry that over.
+    match echo_action(p.class, *shadow) {
+        Some(Action::Active { left, .. }) if left == moves::get(p.class, shadow.echo).active => {
+            shadow.echo_used = false;
+        }
+        None => {
+            shadow.echo = NO_ECHO;
+            shadow.echo_age = 0;
+        }
+        _ => {}
+    }
+}
+
+/// The shadow as a body, for the one frame's worth of questions that need one.
+///
+/// A whole `Player` rather than a bespoke shape, and that is the point: the hit
+/// test, the debug overlay and the renderer all ask *the same* functions about
+/// it that they ask about her — `state::hitbox` above all, which is the one
+/// description of an attack's volume. A second, smaller struct would mean a
+/// second description of the same swing, and the two would disagree the first
+/// time either was touched.
+///
+/// Her aim path is **translated** to the shadow rather than recomputed: the
+/// copy is her swing thrown from somewhere else, so it keeps her line — the
+/// pitch she committed to and the yaw her shoulders were on — and only the
+/// place it starts from changes.
+pub fn echo_body(p: &Player) -> Option<Player> {
+    let shadow = of(p)?;
+    let action = echo_action(p.class, shadow)?;
+    if p.health <= 0 {
+        return None;
+    }
+    let shift = shadow.pos.sub(p.pos);
+    Some(Player {
+        pos: shadow.pos,
+        vel: V3::ZERO,
+        facing: shadow.facing,
+        action,
+        hit_used: shadow.echo_used,
+        grounded: true,
+        crouching: false,
+        aim_path: aim::Path {
+            from: p.aim_path.from.add(shift),
+            to: p.aim_path.to.add(shift),
+        },
+        ..*p
+    })
+}
+
+/// Mark the copy as having connected, so it lands once.
+pub fn echo_landed(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.echo_used = true;
+    put(p, shadow);
+}
+
+// ---------------------------------------------------------------------------
+// Sending it, and getting it back
+// ---------------------------------------------------------------------------
+
+/// What pressing `E` does, given where the shadow already is.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Order {
+    /// It was with her, and now it is going out.
+    Sent,
+    /// It was out, and now it is coming home through anybody in the way.
+    Recalled,
+}
+
+/// Throw the shadow at `to`, or call it home if it is already out.
+///
+/// One button, two meanings, decided by where the second body is — the same
+/// shape as the Bulwark's shield, and for the same reason: the mechanic has a
+/// position, so the only thing the key can mean is "change it".
+pub fn order(p: &mut Player, to: V3) -> Option<Order> {
+    let mut shadow = of(p)?;
+    let order = match shadow.doing {
+        Ghost::Attending => {
+            shadow.doing = Ghost::Casting {
+                from: shadow.pos,
+                to,
+                age: 0,
+            };
+            Order::Sent
+        }
+        // Already on its way home. Pressing again does not hurry it, but the
+        // press is still a recall as far as everything downstream is concerned
+        // -- the lotus reads the order, not the state.
+        Ghost::Returning { .. } => Order::Recalled,
+        Ghost::Casting { .. } | Ghost::Waiting => {
+            shadow.doing = Ghost::Returning { struck: 0 };
+            Order::Recalled
+        }
+    };
+    put(p, shadow);
+    Some(order)
+}
+
+/// Has the return already caught this fighter?
+pub fn already_cut(shadow: Shadow, victim: usize) -> bool {
+    match shadow.doing {
+        Ghost::Returning { struck } => struck & (1 << victim) != 0,
+        _ => false,
+    }
+}
+
+/// Remember that the return caught this fighter, so it cuts them once.
+pub fn mark_cut(p: &mut Player, victim: usize) {
+    let Some(mut shadow) = of(p) else { return };
+    if let Ghost::Returning { struck } = shadow.doing {
+        shadow.doing = Ghost::Returning {
+            struck: struck | (1 << victim),
+        };
+        put(p, shadow);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Her dash to it
+// ---------------------------------------------------------------------------
+
+/// Should a dodge thrown *now* be a dash to the shadow instead?
+///
+/// Forward, and the crosshair on the shadow. Both halves matter: forward is
+/// what keeps the other three dodges as dodges, and the crosshair is what makes
+/// it a decision rather than something that happens to you whenever the shadow
+/// is roughly ahead. Asking [`aim::pointing_at`] rather than measuring an angle
+/// here is the standing rule about who is allowed to decide where something
+/// goes.
+pub fn dash_is_asked_for(
+    p: &Player,
+    who: usize,
+    input: crate::input::Input,
+    forward: bool,
+    scene: &aim::Scene,
+) -> bool {
+    let Some(shadow) = of(p) else { return false };
+    forward
+        && shadow.is_out()
+        && aim::pointing_at(who, input, shadow.pos, t::shadow_lock_cone(), scene)
+}
+
+/// Start the dash. It rides along with `Action::Dodge`, which is where the
+/// invulnerability comes from.
+pub fn begin_dash(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.dash = t::dodge_frames();
+    put(p, shadow);
+}
+
+/// The velocity her dash is driving this frame, or `None` if she is not on one.
+///
+/// A constant speed rather than a decaying shove, unlike every other dodge.
+/// The dash has somewhere to *be*, and a dodge that decays covers a distance
+/// that depends on the tuning of the decay -- so a dash built out of one either
+/// falls short of the shadow or overshoots it, and which of those it does
+/// changes every time somebody drags a slider.
+pub fn dash_drive(p: &Player) -> Option<V3> {
+    let shadow = of(p)?;
+    if shadow.dash == 0 {
+        return None;
+    }
+    let gap = V3::new(
+        shadow.pos.x.sub(p.pos.x),
+        Fx::ZERO,
+        shadow.pos.z.sub(p.pos.z),
+    );
+    Some(gap.normalized().scale(t::shadow_dash_speed()))
+}
+
+/// Count the dash down, and end it on arrival.
+///
+/// Arriving **collects** the shadow. Going and getting it is the other half of
+/// throwing it out: the loop the class plays is send, act off the line, dash
+/// back onto it, send again -- and a dash that left the shadow standing where
+/// she now is would leave the pair of them in the same place with the line
+/// between them gone and no way to say so.
+fn step_her_dash(p: &Player, shadow: &mut Shadow) {
+    if shadow.dash == 0 {
+        return;
+    }
+    shadow.dash -= 1;
+    let gap = V3::new(
+        shadow.pos.x.sub(p.pos.x),
+        Fx::ZERO,
+        shadow.pos.z.sub(p.pos.z),
+    );
+    // Within a body, or within one frame's worth of travel -- whichever is
+    // larger. A tolerance smaller than the step would let her cross the shadow
+    // and turn round to come back at it.
+    let close = t::body_radius().max(t::shadow_dash_speed().mul(DT));
+    let arrived = gap.flat_len().raw() <= close.raw();
+    // Ends on arrival, and ends anyway the moment the dodge does -- getting
+    // hit out of it, or simply running out of frames. The dash is the dodge; it
+    // does not outlive it.
+    if arrived || !matches!(p.action, Action::Dodge { .. }) {
+        shadow.dash = 0;
+    }
+    if arrived && shadow.is_out() {
+        shadow.doing = Ghost::Attending;
+    }
+}

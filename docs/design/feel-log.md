@@ -1949,3 +1949,71 @@ not mean:
 **Verdict** open, and one thing to watch: a fighter standing on open ground is now aimed at
 through the floor behind them, so a shot at somebody backed against a wall ends on the wall
 rather than on them. Both hit. Nobody has played it.
+
+
+### 2026-09-13 — the Shadow Reaver's second body
+
+The class's whole kit was rebuilt around one change, and the change is a deletion: **the
+shadow can no longer be absent.**
+
+**Changed**
+
+- `Mechanic::Shadow` went from `Option<V3>` to a body with four states -- attending her,
+  going out, waiting, coming home. There is no "nowhere".
+- `E` became a **move** rather than an instant, in a fourth slot in the table: *Send shadow*,
+  8/3/14, reach 9 m, damage 70 on the way home. The shadow flies out in ten frames and stops;
+  pressed again it dashes home at 34 m/s through anybody in the way, cutting once and slowing
+  them to 0.55x.
+- The leash went from 8 m to **12 m**, and had to: the throw reaches 9, so at 8 the shadow
+  turned round on the frame it landed. A leash shorter than the throw is not a tuning
+  mistake, it is the setup deleting itself.
+- **Guillotine lotus** stopped being a disc at the shadow and became six blades that erupt
+  along curved paths (4.5 m, 7 frames), hang open for 40, and chase the shadow home over 26,
+  dealing 70% of what they dealt going out. 40 damage a blade, which is deliberately small:
+  six numbers can land at once.
+- **The shadow copies her swings**, 4 frames later, at **25%** of her damage, from wherever
+  it stands.
+- The forward dodge, thrown with the crosshair on the shadow, became the dash to it: 34 m/s
+  constant, invulnerable, and arriving collects the shadow.
+- Executioner picked up **right click**, which was dead on a class with no shield.
+
+**Why** two reasons, and the second is the one that mattered.
+
+The stated one: the class read as a setup class that spends most of a match with no setup.
+`None` meant no swap, no Guillotine, no line -- and the fix the kit document had already
+reached for, *the baseline dash creates the shadow*, only papered over it.
+
+The one found while building it: **`Option` was making the code worse in the same shape it
+was making the class worse.** Every ability that read the mechanic carried a branch for the
+case where the mechanic did not exist, and every one of those branches was a design question
+nobody had answered. Deleting the case deleted the branches.
+
+**What the numbers are for.** The 25% is the class in one number: holding the shadow is a
+flat 1.25x on everything her body does, and sending it out trades that quarter for a second
+threat somewhere she is not. That is a real decision every few seconds, which is what a
+mechanic is supposed to be. The 40-per-blade is a guess bounded from above: standing exactly
+on the shadow through a whole lotus is six blades out and six back, which is 240 plus 168 of
+a thousand, and that is meant to be the execute rather than the opening.
+
+**Two implementation notes worth keeping**, because both were bugs first:
+
+- The blades are tested as **swept lines**, not as points. The eruption crosses 4.5 m in 7
+  frames and is fastest on the first of them, so a blade sampled as a ball starts the frame
+  at the shadow's feet and ends it a metre past whoever was standing there. The one victim
+  the ability is named for was the one it missed.
+- The echo is **a move index and an age**, and the shadow's own startup/active/recovery are
+  derived from the same table hers come from. A second state machine would have to agree with
+  the first, and eventually would not.
+
+**Verdict** open, and there is a lot here to play. Three specific worries:
+
+1. **The lotus dragged home may be too much.** It is two buttons, it covers the length of the
+   arena, and it hits everything twice. That is the intended fantasy; whether it is a fair
+   one is a question for a person.
+2. **The attending shadow may be hard to read.** It stands 0.9 m behind her, which from a
+   camera sitting directly behind her is exactly the direction that overlaps. It separates the
+   moment she moves or turns, and `reaver.shadow_trails_her_by` is the knob if it does not
+   separate enough.
+3. **Right click doing two things across the roster** -- guard on four classes, an attack on
+   two -- is now a real inconsistency rather than a Champion-shaped exception. It is the
+   cheapest of the three to reverse.

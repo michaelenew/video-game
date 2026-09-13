@@ -296,8 +296,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
     // on every class, which is what lets one control scheme drive six kits, so
     // every class has to fill all three. What a class has **past** them is a
     // decision about that class: the Blood mage's fourth is on `E`, because her
-    // mechanic is health and there is nothing to toggle, and the Champion's ten
-    // are three weapons by three stances plus the vault.
+    // mechanic is health and there is nothing to toggle, the Reaver's fourth is
+    // on `E` because throwing a second body across the arena and dashing it
+    // home through somebody is not an instant, and the Champion's ten are three
+    // weapons by three stances plus the vault.
     use sim::Class;
     use sim::state::{SLOT_COMMITTED, SLOT_POKE, SLOT_SPECIAL};
     for class in ALL_CLASSES {
@@ -312,7 +314,7 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 10,
-            Class::BloodMage => 4,
+            Class::BloodMage | Class::ShadowReaver => 4,
             _ => 3,
         };
         assert_eq!(

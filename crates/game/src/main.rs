@@ -143,6 +143,7 @@ fn main() {
         .init_resource::<palette::Palette>()
         .init_resource::<hub::Hub>()
         .init_resource::<Fades>()
+        .init_resource::<ShadowFades>()
         .init_resource::<ShieldHands>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
@@ -242,6 +243,12 @@ struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
 /// invisible. See `view::play::Crossfade`.
 #[derive(Resource, Default)]
 struct Fades([Crossfade; MAX_PLAYERS]);
+
+/// The same, for each fighter's shadow. Its own, because the two bodies are
+/// rarely doing the same thing: hers cuts and his copies it four frames later,
+/// and one fade shared between them would blur whichever was second.
+#[derive(Resource, Default)]
+struct ShadowFades([Crossfade; MAX_PLAYERS]);
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
 /// the second set of keys.
@@ -420,6 +427,22 @@ struct BodyPart {
     joint: Joint,
 }
 
+/// One piece of the Reaver's shadow -- the second skeleton.
+///
+/// A whole body rather than a marker on the floor. The shadow copies her
+/// swings, so it is a thing that can hit you, and a thing that can hit you has
+/// to look like one.
+#[derive(Component)]
+struct ShadowPart {
+    owner: usize,
+    joint: Joint,
+}
+
+/// The root the shadow's parts hang off, so they can be posed in body space
+/// exactly the way hers are.
+#[derive(Component)]
+struct ShadowRoot(usize);
+
 #[derive(Component)]
 struct MainCamera;
 
@@ -440,7 +463,10 @@ struct EffectMesh {
 }
 
 /// How many pieces one effect can be drawn as.
-const EFFECT_PARTS: usize = 4;
+///
+/// Six, which is the Guillotine lotus: one blade each. The Grasp's four arms
+/// were the previous widest.
+const EFFECT_PARTS: usize = 6;
 
 /// One of the Elementalist's structures.
 #[derive(Component)]
@@ -469,6 +495,7 @@ struct BoltMesh(usize);
 struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
+    shade: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
@@ -589,6 +616,33 @@ fn setup(
                 }
             });
 
+        // The Reaver's second body. A full skeleton's worth of parts, hidden
+        // for the five classes that have no shadow -- a pool rather than
+        // something spawned when a shadow appears, for the same reason the
+        // effects are a pool: allocating meshes on the rollback path is the
+        // most expensive thing that could happen in a tick.
+        let shade = materials.add(StandardMaterial {
+            // Grey and see-through. It is her, with everything that identifies
+            // her taken out: no team colour, because the thing a player must
+            // read in a fight is which of the two bodies is the real one.
+            base_color: Color::srgba(0.20, 0.21, 0.26, 0.45),
+            perceptual_roughness: 0.9,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        });
+        commands
+            .spawn((ShadowRoot(owner), Transform::default(), Visibility::Hidden))
+            .with_children(|root| {
+                for joint in JOINTS {
+                    root.spawn((
+                        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                        MeshMaterial3d(shade.clone()),
+                        Transform::default(),
+                        ShadowPart { owner, joint },
+                    ));
+                }
+            });
+
         // The shield is a separate object because its position is independent
         // of the character -- that is the whole mechanic. See bulwark.md.
         commands.spawn((
@@ -628,6 +682,16 @@ fn setup(
             base_color: Color::srgb(0.35, 0.03, 0.09),
             emissive: LinearRgba::rgb(0.5, 0.0, 0.12),
             perceptual_roughness: 0.95,
+            ..default()
+        }),
+        // A blade of shadow. Dark and translucent so six of them opening at
+        // once do not black out whatever they are opening around -- the thing
+        // the player has to read is where the victim is, not the flower.
+        shade: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.10, 0.09, 0.16, 0.80),
+            emissive: LinearRgba::rgb(0.12, 0.10, 0.30),
+            perceptual_roughness: 0.85,
+            alpha_mode: AlphaMode::Blend,
             ..default()
         }),
         stone: materials.add(StandardMaterial {
@@ -903,6 +967,9 @@ enum Shape {
 enum Skin {
     Fire,
     Blood,
+    /// The Reaver's shadow-work: near black, and lit from inside just enough to
+    /// be visible against the floor it is usually crossing.
+    Shade,
 }
 
 impl EffectLook {
@@ -918,6 +985,7 @@ impl EffectLook {
         match skin {
             Skin::Fire => self.fire.clone(),
             Skin::Blood => self.blood.clone(),
+            Skin::Shade => self.shade.clone(),
         }
     }
 }
@@ -945,7 +1013,7 @@ fn floating(at: Vec3, radius: f32) -> Piece {
 }
 
 fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
-    use sim::effects::{EffectKind, GRASP_ARMS};
+    use sim::effects::{EffectKind, GRASP_ARMS, LOTUS_BLADES};
 
     let at = fx3(effect.pos);
     match effect.kind {
@@ -991,6 +1059,15 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             fx3(effect.arm_at(part)),
             effect.field_radius().to_f32_for_render(),
         )),
+        // One ball per blade, drawn around the shadow's live position rather
+        // than the spot the move was thrown at -- which is what makes them
+        // visibly chase it home. Same shape as the hit test, as everywhere.
+        EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
+            shape: Shape::Ball,
+            skin: Skin::Shade,
+            at: fx3(effect.lotus_at(part, effect.pos)),
+            scale: Vec3::splat(effect.field_radius().to_f32_for_render() * 2.0),
+        }),
         _ => None,
     }
 }
@@ -1009,7 +1086,9 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
     use sim::class::Mechanic;
     match m {
         Mechanic::Shield(s) => s.world_pos(),
-        Mechanic::Shadow { at } => *at,
+        // The shadow is drawn as a body of its own rather than as a marker --
+        // see `place_shadows` -- so it is not one of these.
+        Mechanic::Shadow(_) => None,
         Mechanic::Structures(slots) => slots.iter().flatten().next().map(|s| s.at),
         _ => None,
     }
@@ -1405,14 +1484,33 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
 /// Pose is a pure function of simulation state -- see `view::play`. Nothing
 /// here accumulates animation time, which is what lets a rollback rewind the
 /// characters without them sliding.
+/// One of the four pools of transforms the posing pass writes, tagged by which
+/// pool it is.
+///
+/// Four queries in one system have to be provably disjoint or Bevy refuses to
+/// run it, and the disjointness is spelled out as "everything I am not": a
+/// fighter's root, a fighter's part, a shadow's root and a shadow's part are
+/// four different entities and never the same one. Written as an alias because
+/// saying it four times in a signature is the same sentence four times.
+type Posed<'w, 's, Tag, A, B, C> =
+    Query<'w, 's, (&'static Tag, &'static mut Transform), (Without<A>, Without<B>, Without<C>)>;
+
+// A Bevy system's parameter list *is* its dependency declaration, and this one
+// now poses two bodies per fighter. Splitting it to get under a count would
+// mean solving the same skeletons twice.
+#[allow(clippy::too_many_arguments)]
 fn apply_poses(
     sim: Res<Sim>,
     time: Res<Time>,
     mut fades: ResMut<Fades>,
+    mut shadow_fades: ResMut<ShadowFades>,
     mut hands: ResMut<ShieldHands>,
     hub: Option<Res<crate::hub::Hub>>,
-    mut roots: Query<(&Fighter, &mut Transform), Without<BodyPart>>,
-    mut parts: Query<(&BodyPart, &mut Transform), Without<Fighter>>,
+    mut roots: Posed<Fighter, BodyPart, ShadowRoot, ShadowPart>,
+    mut parts: Posed<BodyPart, Fighter, ShadowRoot, ShadowPart>,
+    mut shadow_seen: Query<(&mut Visibility, &ShadowRoot)>,
+    mut shadow_roots: Posed<ShadowRoot, Fighter, BodyPart, ShadowPart>,
+    mut shadow_parts: Posed<ShadowPart, Fighter, BodyPart, ShadowRoot>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
 
@@ -1468,6 +1566,69 @@ fn apply_poses(
         tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
         tf.scale = Vec3::new(size[0], size[1], size[2]);
     }
+
+    // The second body, on the same skeleton and through the same solver. It is
+    // her, drawn somewhere else: the only thing that differs is which pose it
+    // is holding and how much of it you can see through.
+    let mut shadow_skins: [Option<view::skeleton::Skin>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    for (mut seen, root) in shadow_seen.iter_mut() {
+        let Some(ghost) = frame.shadows[root.0] else {
+            *seen = Visibility::Hidden;
+            continue;
+        };
+        *seen = Visibility::Inherited;
+        shadow_skins[root.0] = Some(view::skeleton::solve(
+            &skeletons[root.0],
+            &shadow_fades.0[root.0].shadow(
+                shadow_input(&frame, root.0, ghost, sim.bind_pose),
+                ghost.doing,
+                time.delta_secs(),
+            ),
+        ));
+    }
+    for (root, mut tf) in shadow_roots.iter_mut() {
+        let Some(ghost) = frame.shadows[root.0] else {
+            continue;
+        };
+        tf.translation = Vec3::new(ghost.pos[0], ghost.pos[1], ghost.pos[2]);
+        tf.rotation = Quat::from_rotation_y(ghost.facing[0].atan2(ghost.facing[2]));
+    }
+    for (part, mut tf) in shadow_parts.iter_mut() {
+        let Some(skin) = shadow_skins[part.owner].as_ref() else {
+            continue;
+        };
+        let skeleton = &skeletons[part.owner];
+        let (centre, rot) = skin.box_of(skeleton, part.joint);
+        let size = view::pose::part_size(skeleton, part.joint);
+        tf.translation = Vec3::new(centre[0], centre[1], centre[2]);
+        tf.rotation = Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]);
+        tf.scale = Vec3::new(size[0], size[1], size[2]);
+    }
+}
+
+/// Everything the shadow's pose depends on.
+///
+/// Hers, with the four things that are the shadow's own swapped in: what it is
+/// doing, how fast it is going and which way, and the fact that it is always on
+/// the floor. Built from her input rather than from scratch so that anything
+/// posing learns to read -- the frame counter an idle loops on, the round's own
+/// clock -- reaches both bodies without being wired up twice.
+fn shadow_input(
+    frame: &view::Frame,
+    owner: usize,
+    ghost: view::interp::ShadowView,
+    bind_pose: bool,
+) -> PoseInput {
+    let mut input = PoseInput::of(&frame.players[owner], sim::Class::ShadowReaver, frame);
+    input.action = ghost.action;
+    input.speed = ghost.speed;
+    input.travel = ghost.travel;
+    input.grounded = true;
+    input.crouching = false;
+    input.rise = 0.0;
+    input.turn_rate = 0.0;
+    input.bind_pose = bind_pose;
+    input
 }
 
 /// Mouse look, and the cursor grab that makes it usable.

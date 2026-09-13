@@ -209,6 +209,47 @@ fn shape_of(input: PoseInput) -> Shape {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The Reaver's shadow
+// ---------------------------------------------------------------------------
+
+/// What the second body is doing with itself, in the terms posing needs.
+///
+/// A renderer-side reading of `sim::class::Ghost`, with the frame counts the
+/// clips are indexed by already worked out. Kept separate from the simulation's
+/// enum so the two flights -- out to the spot, and home again -- can share one
+/// animation without the simulation having to agree that they are the same
+/// thing, which they are not.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Ghosting {
+    /// At her shoulder, doing whatever she is doing a few frames late.
+    Attending,
+    /// Travelling, this many frames into it.
+    Dashing(u16),
+    /// Standing where it arrived, this many frames ago.
+    Ready(u16),
+}
+
+/// The shadow's pose, and what produced it.
+///
+/// **Her animation is the default.** The shadow is a copy of her, so almost
+/// everything it does is one of her clips played late — `input.action` is the
+/// echo, already lagged by the simulation, and everything from the walk cycle
+/// to a Slash comes straight out of [`pose_for`]. Two things are the shadow's
+/// own, and only two: crossing the arena, and standing where it landed.
+pub fn shadow_pose_and_shape(input: PoseInput, doing: Ghosting) -> (Pose, Shape) {
+    // A copy of a swing beats standing about. A shadow out on the field is
+    // still throwing her moves, and the ready stance must not eat them.
+    if input.action.attack_kind().is_some() {
+        return pose_and_shape(input);
+    }
+    match doing {
+        Ghosting::Attending => pose_and_shape(input),
+        Ghosting::Dashing(frame) => (Clip::ShadowDash.at(frame as u32), 300),
+        Ghosting::Ready(since) => (Clip::ShadowReady.at(since as u32), 301),
+    }
+}
+
 /// Renderer-local cross-fade between animations.
 ///
 /// Held outside the snapshot on purpose. A rollback rewinds the fade to
@@ -260,10 +301,33 @@ impl Default for Crossfade {
 }
 
 impl Crossfade {
+    /// The shadow's pose this frame, faded the same way hers is.
+    ///
+    /// The fade is what turns "travelling" into "arrived": the dash clip and
+    /// the ready stance are two shapes, so the moment the flight ends the
+    /// second body eases out of the lean and into a guard without anybody
+    /// authoring the transition.
+    pub fn shadow(&mut self, input: PoseInput, doing: Ghosting, dt: f32) -> Pose {
+        let input = self.eased(input, dt);
+        let (target, shape) = shadow_pose_and_shape(input, doing);
+        self.blend_into(target, shape, dt)
+    }
+
     /// Pose this frame, fading out of whatever was on screen when the animation
     /// last changed. `dt` is real seconds, so the fade is the same length at any
     /// refresh rate.
     pub fn pose(&mut self, input: PoseInput, dt: f32) -> Pose {
+        let input = self.eased(input, dt);
+        // The shape is decided by the real speed, so stopping still starts a
+        // fade at the moment it happens; only the blending is eased.
+        let shape = shape_of(input);
+        let target = pose_for(input);
+        self.blend_into(target, shape, dt)
+    }
+
+    /// Fill in the eased half of the input: how fast this body is going and
+    /// which way, both smoothed.
+    fn eased(&mut self, input: PoseInput, dt: f32) -> PoseInput {
         let mut input = input;
         // Slower coming down than going up. Starting to run is a decision and
         // should look like one; stopping is momentum running out, and blending
@@ -278,10 +342,13 @@ impl Crossfade {
         self.speed += (input.speed - self.speed) * k;
         input.eased_speed = self.speed;
         input.eased_travel = self.smooth_travel(input.travel, dt);
-        // The shape is decided by the real speed, so stopping still starts a
-        // fade at the moment it happens; only the blending is eased.
-        let shape = shape_of(input);
-        let target = pose_for(input);
+        input
+    }
+
+    /// Ease from whatever is on screen into `target`, starting a new fade when
+    /// the shape changes. Shared by her and by her shadow, because a fade is a
+    /// fade whichever body it is on.
+    fn blend_into(&mut self, target: Pose, shape: Shape, dt: f32) -> Pose {
         if shape != self.shape {
             // Fade from the picture that was actually on screen, not from the
             // old clip's idea of this frame: the point is that nothing jumps,
@@ -493,7 +560,8 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Champion, _) => Clip::ChampionVault,
         (Class::ShadowReaver, 0) => Clip::ReaverPoke,
         (Class::ShadowReaver, 1) => Clip::ReaverCommitted,
-        (Class::ShadowReaver, _) => Clip::ReaverSpecial,
+        (Class::ShadowReaver, 2) => Clip::ReaverSpecial,
+        (Class::ShadowReaver, _) => Clip::ReaverMechanic,
         (Class::Elementalist, 0) => Clip::ElementalistPoke,
         (Class::Elementalist, 1) => Clip::ElementalistCommitted,
         (Class::Elementalist, _) => Clip::ElementalistSpecial,

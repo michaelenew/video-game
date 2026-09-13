@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 187] = [
+pub const SCALARS: [i32; 204] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -66,8 +66,7 @@ pub const SCALARS: [i32; 187] = [
           458752, // bulwark.shield_knockback = 7
           983040, // bulwark.leap_speed = 15
           393216, // bulwark.leap_rise = 6
-          524288, // reaver.shadow_leash = 8
-          196608, // reaver.shadow_reach = 3
+          786432, // reaver.shadow_leash = 12
           393216, // stones.raise_reach = 6
           117964, // stones.stone_height = 1.8
            60948, // defence.dodge_decay = 0.93
@@ -195,6 +194,24 @@ pub const SCALARS: [i32; 187] = [
             1966, // champion.sweep_travels_below_level = 0.03
            45875, // champion.thrust_out_on_the_first_active_frame_(x) = 0.7
               45, // aim.swing_stays_level_to_(deg_down) = 45
+           58982, // reaver.shadow_trails_her_by = 0.9
+           14417, // reaver.shadow_catch-up_per_frame = 0.22
+               4, // reaver.shadow_copies_her_this_late = 4
+              25, // reaver.shadow_damage_(%) = 25
+              10, // reaver.shadow_flight,_out = 10
+         2228224, // reaver.shadow_speed,_coming_home = 34
+           36044, // reaver.recall_slow_(x) = 0.55
+          131072, // reaver.crosshair_lock_on_the_shadow = 2
+         2228224, // reaver.dash_to_the_shadow,_speed = 34
+          294912, // reaver.lotus,_how_far_the_blades_go = 4.5
+           78643, // reaver.lotus,_how_high_they_arc = 1.2
+            9175, // reaver.lotus,_curve_of_the_path_(turns) = 0.14
+           29491, // reaver.lotus,_blade_radius = 0.45
+               7, // reaver.lotus,_out = 7
+              40, // reaver.lotus,_held_open = 40
+              26, // reaver.lotus,_back_to_the_shadow = 26
+              70, // reaver.lotus,_damage_coming_home_(%) = 70
+           39321, // reaver.lotus_slow_(x) = 0.6
 ];
 
 #[rustfmt::skip]
@@ -226,7 +243,7 @@ pub const AIR: [i32; 24] = [
 ];
 
 #[rustfmt::skip]
-pub const MOVES: [i32; 598] = [
+pub const MOVES: [i32; 621] = [
                4, // move.bulwark.bash.startup = 4
                3, // move.bulwark.bash.active = 3
               10, // move.bulwark.bash.recovery = 10
@@ -575,9 +592,9 @@ pub const MOVES: [i32; 598] = [
                9, // move.shadow_reaver.guillotine.startup = 9
                5, // move.shadow_reaver.guillotine.active = 5
               16, // move.shadow_reaver.guillotine.recovery = 16
-             120, // move.shadow_reaver.guillotine.damage = 120
+              40, // move.shadow_reaver.guillotine.damage = 40
                0, // move.shadow_reaver.guillotine.reach = 0
-          104857, // move.shadow_reaver.guillotine.radius = 1.6
+               0, // move.shadow_reaver.guillotine.radius = 0
               22, // move.shadow_reaver.guillotine.hitstun = 22
               12, // move.shadow_reaver.guillotine.blockstun = 12
           393216, // move.shadow_reaver.guillotine.knockback = 6
@@ -589,12 +606,35 @@ pub const MOVES: [i32; 598] = [
                0, // move.shadow_reaver.guillotine.launch = 0
                0, // move.shadow_reaver.guillotine.self_lift = 0
                0, // move.shadow_reaver.guillotine.grab_hold = 0
-               0, // move.shadow_reaver.guillotine.leaves_behind = 0
+               5, // move.shadow_reaver.guillotine.leaves_behind = 5
                0, // move.shadow_reaver.guillotine.health_cost = 0
                0, // move.shadow_reaver.guillotine.leech_(%) = 0
                3, // move.shadow_reaver.guillotine.line_of_effect_(0-3) = 3
                0, // move.shadow_reaver.guillotine.swing_arc_(turns) = 0
                0, // move.shadow_reaver.guillotine.hits_again_every = 0
+               8, // move.shadow_reaver.send_shadow.startup = 8
+               3, // move.shadow_reaver.send_shadow.active = 3
+              14, // move.shadow_reaver.send_shadow.recovery = 14
+              70, // move.shadow_reaver.send_shadow.damage = 70
+          589824, // move.shadow_reaver.send_shadow.reach = 9
+               0, // move.shadow_reaver.send_shadow.radius = 0
+              16, // move.shadow_reaver.send_shadow.hitstun = 16
+               8, // move.shadow_reaver.send_shadow.blockstun = 8
+          196608, // move.shadow_reaver.send_shadow.knockback = 3
+              40, // move.shadow_reaver.send_shadow.mobility_(%) = 40
+               6, // move.shadow_reaver.send_shadow.aerial_hang = 6
+               0, // move.shadow_reaver.send_shadow.unblockable = off
+               1, // move.shadow_reaver.send_shadow.hits_crouching = on
+               0, // move.shadow_reaver.send_shadow.needs_mechanic = off
+               0, // move.shadow_reaver.send_shadow.launch = 0
+               0, // move.shadow_reaver.send_shadow.self_lift = 0
+               0, // move.shadow_reaver.send_shadow.grab_hold = 0
+               0, // move.shadow_reaver.send_shadow.leaves_behind = 0
+               0, // move.shadow_reaver.send_shadow.health_cost = 0
+               0, // move.shadow_reaver.send_shadow.leech_(%) = 0
+               1, // move.shadow_reaver.send_shadow.line_of_effect_(0-3) = 1
+               0, // move.shadow_reaver.send_shadow.swing_arc_(turns) = 0
+               0, // move.shadow_reaver.send_shadow.hits_again_every = 0
                7, // move.elementalist.bolt.startup = 7
                2, // move.elementalist.bolt.active = 2
               13, // move.elementalist.bolt.recovery = 13

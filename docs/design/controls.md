@@ -1,7 +1,7 @@
 ---
 status: partly unsettled
 decided: 2026-09-10
-revised: 2026-09-11
+revised: 2026-09-13
 ---
 
 # Controls
@@ -29,9 +29,10 @@ Six sentences, and everything else follows:
 4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
 5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
    class does, each on its own key. `E` is usually an instant change of state — throw the
-   shield, cycle the form, place the shadow, raise a structure — but it does not have to be:
-   where a class's mechanic has no state to change, `E` is a fourth ability with a wind-up
-   and a recovery like any other. See [Where `E` is an ability](#where-e-is-an-ability).
+   shield, cycle the form, raise a structure — but it does not have to be: on two classes it
+   is a fourth ability with a wind-up and a recovery like any other, either because the
+   mechanic has no state to change or because changing it is itself a move. See
+   [Where `E` is an ability](#where-e-is-an-ability).
 6. **The mouse means *where*.** You look with it, you are pointed where you look, and
    your attacks go where you are pointed — **including up and down.** The crosshair is a
    line in space, and an area ability lands on the first thing that line meets.
@@ -360,8 +361,8 @@ Rush; shift + click and `Q` are unused on it. That is a deliberate exception rat
 drift — the shared grammar is what lets one control scheme drive six kits, and a class whose
 *identity* is which weapon is in its hands has to spend its clicks on the weapons.
 
-That last row does real work. The Reaver's Shadow dash *is* its dodge rather than an extra
-input. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
+That last row does real work. The Reaver's dash to its shadow *is* its dodge rather than an
+extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
 that matters (one charge, cancels recoveries, changes what the attack buttons do), and
 putting it on shift + direction would have made the class's central decision share an input
 with the universal defensive one. For the Reaver this is what makes movement and shadow
@@ -385,6 +386,14 @@ What changed is the move table, which grew a **fourth slot** for it. The other t
 that lets one control scheme drive six kits. The fourth means whatever that class's mechanic
 means, and most classes leave it empty. `cargo run -p sim --bin frametable` prints the key
 beside every move.
+
+**The Shadow Reaver joined it on 2026-09-13**, for a different reason worth stating because
+the two are easy to confuse. Her mechanic is emphatically a state — where the second body is
+— so `E` still changes it. What it is not is an *instant*: the shadow travels, and calling it
+back is an attack that cuts and slows everything on the way home. An instant cannot have a
+startup somebody reads, a damage number or a slow, and this needs all three. So the same
+fourth slot, for the opposite reason: not "the mechanic has no state", but "changing it is a
+move".
 
 ## Movement
 
@@ -615,19 +624,39 @@ Guard on the right button matches every game where alt-fire is the defensive opt
 
 ## Shadow Reaver
 
+Current as of 2026-09-13, and the four rows marked **bound** are what the game does.
+
 A half-caster. Click abilities should feel like real melee — strong individually rather than
 combo-dependent — and the shadow abilities should reward being close and fast.
 
 | Input | Result |
 | --- | --- |
-| `L` / `R` | Melee autos, alternating hands. First auto after reclaiming the shadow hits harder |
-| direction + click | **Shadow control** — send it, swap to it, recall it |
-| `shift` + click | Executioner, Guillotine lotus, Deadly mistake |
-| `space` + direction | **Shadow dash.** The dodge places the shadow |
+| `L` | **Slash** — the melee auto. The shadow throws it too, a beat later, for a quarter. **Bound** |
+| `R`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
+| `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
+| `E` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. **Bound** |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
+| `shift` + forward, anywhere else | The ordinary dodge |
+| `shift` + `R` | Unplaced — the candidate slot for Deadly mistake |
 
-Putting shadow control on the directional basics is what makes the class read as a
-half-caster: the shadow is steered with the same inputs that other classes use for basic
-attacks.
+Two deliberate departures from the shared grammar, and both for the same reason: this class
+has nothing else to spend those inputs on.
+
+**Right click is a move, not a guard.** There is no shield on this class, so the button was
+dead. It throws the same committed melee `shift` + `L` does, which costs nothing and gives
+the Reaver the two-handed feel the kit has always described.
+
+**`E` is an ability rather than an instant.** It is still the class mechanic in every sense
+— it is the *only* thing that changes where the second body is — but throwing a body across
+the arena and dashing it back through someone is not a state flip, and it needs a startup
+you can be punished during, a damage number and a slow. That makes the Reaver the second
+class with a fourth move slot, after the Blood mage; see
+[Where `E` is an ability](#where-e-is-an-ability).
+
+**The dodge is the mobility.** Shift plus a direction is the universal defensive option on
+every class, and on this one, pointed at the shadow and thrown forward, it is also the way
+to the shadow. One input, and the mouse chooses which. That is what keeps the class from
+being denied either half.
 
 ## Elementalist and Blood mage
 
