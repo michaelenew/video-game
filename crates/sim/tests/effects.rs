@@ -469,6 +469,19 @@ fn in_the_grasp(w: &mut World) -> i16 {
     aiming_at(w, sim::state::SLOT_SPECIAL, w.players[1].pos)
 }
 
+/// Wind the Grasp all the way out and let go.
+///
+/// A channelled move is thrown by the **release**, and how long the button was
+/// held is its range -- see `state::step_channel`. Every fixture here wants the
+/// far end of that slider, because that is where `in_the_grasp` stands the
+/// other fighter. Pressing and letting go, which is how every other move in
+/// these tests is thrown, would send the arms out three metres.
+fn grasp(w: &mut World, pitch: i16) {
+    let hold = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).channel;
+    looking(w, hold as u32 + 1, Q, pitch, 0);
+    looking(w, 1, 0, pitch, 0);
+}
+
 #[test]
 fn the_black_spike_is_on_the_mechanic_key() {
     // It used to be shift + click, which is the committed-attack slot on every
@@ -697,13 +710,86 @@ fn the_bloodletter_pays_out_when_it_is_caught() {
 }
 
 #[test]
-fn a_grasp_that_closes_hauls_its_victim_in() {
-    // The arms converge, and what they converge on comes with them. Gated on
-    // catching somebody with **every** arm, for a mechanical reason as much as
-    // a design one: a grab drags its victim to the caster, so one applied by
-    // the first arm to land would pull them out from under the other three --
-    // the bottom pair connect a frame before the top pair -- and the root would
-    // then never fire at all.
+fn holding_the_grasp_longer_sends_it_further() {
+    // The channel **is** the aiming, and it is the only place in the game where
+    // the cast button chooses a range. So the property is the plain one: the
+    // arms converge further out the longer the wind-up, from the move's near
+    // knob at no hold to its own reach at the cap.
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
+    assert!(m.channel > 0, "the Grasp does not channel");
+
+    let thrown = |hold: u16| {
+        let mut w = as_class(Class::BloodMage);
+        let pitch = in_the_grasp(&mut w);
+        looking(&mut w, hold as u32 + 1, Q, pitch, 0);
+        looking(&mut w, 1, 0, pitch, 0);
+        for _ in 0..90 {
+            run(&mut w, 1, 0, 0);
+            if let Some(arms) = effects_of(&w, EffectKind::Grasp).first() {
+                return arms.reach;
+            }
+        }
+        panic!("the arms never came out");
+    };
+
+    let (near, half, far) = (thrown(0), thrown(m.channel / 2), thrown(m.channel));
+    assert!(
+        near.raw() < half.raw() && half.raw() < far.raw(),
+        "no hold reaches {} m, half {} m, full {} m -- the slider is not a slider",
+        near.to_f32_for_render(),
+        half.to_f32_for_render(),
+        far.to_f32_for_render()
+    );
+    assert!(
+        (far.sub(m.reach)).abs().raw() < sim::fixed::Fx::ratio(1, 4).raw(),
+        "a full hold reaches {} m against a move that says {} m",
+        far.to_f32_for_render(),
+        m.reach.to_f32_for_render()
+    );
+    assert!(
+        (near.sub(m.channel_from)).abs().raw() < sim::fixed::Fx::ratio(1, 4).raw(),
+        "no hold at all reaches {} m against a near end of {} m",
+        near.to_f32_for_render(),
+        m.channel_from.to_f32_for_render()
+    );
+}
+
+#[test]
+fn a_channel_that_is_never_released_throws_itself() {
+    // Holding the button is buying reach, and the reach runs out. Past the cap
+    // the move comes out on its own rather than sitting there paid for: an
+    // ability you can hold indefinitely is a threat with no clock on it, and
+    // the other player has no way to wait one out.
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    let mut out = None;
+    for f in 0..(m.channel as u32 * 3) {
+        looking(&mut w, 1, Q, pitch, 0);
+        if out.is_none() && !effects_of(&w, EffectKind::Grasp).is_empty() {
+            out = Some(f);
+        }
+    }
+    let f = out.expect("the button was held for three channels and the arms never came out");
+    assert!(
+        f <= (m.channel + m.startup + m.active) as u32,
+        "the arms came out on frame {f}, which is later than the cap plus the          move's own wind-up -- the hold is being stored somewhere"
+    );
+}
+
+#[test]
+fn a_grasp_binds_before_it_hauls_and_the_haul_covers_ground() {
+    // The shape of the catch, which is the whole of how the move reads: the
+    // arms close and for a moment **nothing happens** -- you are held where
+    // they caught you -- and only then are you dragged back, across real
+    // distance, at a speed you can watch. It used to be a teleport, and a
+    // teleport reads as the game moving somebody rather than as an ability
+    // landing on them.
+    //
+    // Gated on catching somebody with **every** arm, for a mechanical reason as
+    // much as a design one: the haul would otherwise pull its victim out from
+    // under the other three arms -- the bottom pair connect a frame before the
+    // top pair -- and the catch would cancel itself.
     let mut w = as_class(Class::BloodMage);
     let pitch = in_the_grasp(&mut w);
     let grabs = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).grabs;
@@ -711,33 +797,88 @@ fn a_grasp_that_closes_hauls_its_victim_in() {
 
     let apart = |w: &World| w.players[1].pos.sub(w.players[0].pos).flat_len();
     let before = apart(&w);
-    looking(&mut w, 2, Q, pitch, 0);
+    grasp(&mut w, pitch);
 
-    // Measured on the frame they are caught rather than at the end of the run:
-    // the hold is twenty frames and the root forty, so a check made late enough
-    // is a check made after both have run out.
-    let mut caught = None;
-    for _ in 0..90 {
+    // Every frame of the hold, in order, so the two phases can be told apart.
+    let mut gaps = Vec::new();
+    let mut disabled = false;
+    for _ in 0..120 {
         run(&mut w, 1, 0, 0);
-        if caught.is_none() && matches!(w.players[1].action, Action::Held { .. }) {
-            caught = Some((apart(&w), w.players[1].rooted, w.players[1].disabled()));
+        if matches!(w.players[1].action, Action::Held { .. }) {
+            gaps.push(apart(&w));
+            disabled |= w.players[1].disabled();
         }
     }
-    let (gap, rooted, disabled) = caught.expect("every arm landed and nobody was caught");
+    assert!(!gaps.is_empty(), "every arm landed and nobody was caught");
+    assert!(disabled, "the payoff window is not a payoff");
+
+    // The bind. Caught where they stood, not snapped to the caster.
+    let bind = sim::tuning::grasp_bind() as usize;
     assert!(
-        gap.raw() * 4 < before.raw(),
+        bind > 0,
+        "there is no bind, so the haul is a teleport again"
+    );
+    for (f, gap) in gaps.iter().take(bind).enumerate() {
+        assert!(
+            gap.raw() * 4 > before.raw() * 3,
+            "frame {f} of the bind and they have already travelled {} m of {}",
+            before.sub(*gap).to_f32_for_render(),
+            before.to_f32_for_render()
+        );
+    }
+
+    // The haul. Never a single step, and it finishes.
+    let biggest = gaps
+        .windows(2)
+        .map(|w| w[0].sub(w[1]).raw())
+        .max()
+        .expect("the hold lasted a frame");
+    assert!(
+        biggest * 3 < before.raw(),
+        "one frame of the haul covered {} m of the {} m trip, which is a blink",
+        sim::fixed::Fx::from_raw(biggest).to_f32_for_render(),
+        before.to_f32_for_render()
+    );
+    let arrived = *gaps.last().expect("the hold lasted a frame");
+    assert!(
+        arrived.raw() * 4 < before.raw(),
         "caught from {} m away and left standing {} m away",
         before.to_f32_for_render(),
-        gap.to_f32_for_render()
+        arrived.to_f32_for_render()
     );
-    // Held first, then rooted where they were put. Both count as disabled, so
-    // the class's damage bonus runs across the whole window rather than
-    // stopping when the hands let go.
+}
+
+#[test]
+fn the_grasp_gives_the_feet_back_the_frame_it_ends() {
+    // The other half of the trade. The catch is expensive and short, and what
+    // makes it fair is that it is *over* when it is over: no root left on the
+    // end of it, no recovery to sit through. A victim who is still stuck after
+    // the hands let go cannot tell where the ability stopped, which is how a
+    // brief hard stop turns into one that feels like a stunlock.
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    grasp(&mut w, pitch);
+    for _ in 0..120 {
+        run(&mut w, 1, 0, 0);
+        if matches!(w.players[1].action, Action::Held { .. }) {
+            break;
+        }
+    }
+    let Action::Held { left } = w.players[1].action else {
+        panic!("every arm landed and nobody was caught");
+    };
+    run(&mut w, left as u32 + 1, 0, 0);
     assert!(
-        rooted > grabs,
-        "the hold outlasts the root, so it is the whole window"
+        w.players[1].action.actionable(),
+        "the hold ran out and they are still in {:?}",
+        w.players[1].action
     );
-    assert!(disabled, "the payoff window is not a payoff");
+    let start = w.players[1].pos;
+    run(&mut w, 6, 0, Input::W);
+    assert!(
+        w.players[1].pos.sub(start).flat_len().raw() > 0,
+        "the feet never came back"
+    );
 }
 
 #[test]
@@ -763,14 +904,12 @@ fn only_a_full_grasp_catches_anybody() {
             w.players[1].pos.z.add(off),
         );
         let full = w.players[1].health;
-        looking(&mut w, 2, Q, pitch, 0);
+        grasp(&mut w, pitch);
 
         let mut held = false;
-        let mut rooted = false;
-        for _ in 0..90 {
+        for _ in 0..120 {
             run(&mut w, 1, 0, 0);
             held |= matches!(w.players[1].action, Action::Held { .. });
-            rooted |= w.players[1].rooted > 0;
         }
         let arms = w.players[1].health.abs_diff(full) as i32
             / sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL)
@@ -783,10 +922,6 @@ fn only_a_full_grasp_catches_anybody() {
             held, all_four,
             "{at} m off centre: {arms} arms landed, held = {held}"
         );
-        assert_eq!(
-            rooted, all_four,
-            "{at} m off centre: {arms} arms landed, rooted = {rooted}"
-        );
         seen_full |= all_four;
         seen_glancing |= arms > 0 && !all_four;
     }
@@ -798,18 +933,19 @@ fn only_a_full_grasp_catches_anybody() {
 }
 
 #[test]
-fn a_grasp_roots_only_when_every_arm_lands() {
-    // Four arms, and the root is the price of all four. One or two of them is a
-    // glancing blow; standing where the cone closes is a read, and a read is
+fn a_grasp_catches_only_when_every_arm_lands() {
+    // Four arms, and the catch is the price of all four. One or two of them is
+    // a glancing blow; standing where the cone closes is a read, and a read is
     // what the design lets a hard stop be bought with.
     let mut w = as_class(Class::BloodMage);
     let pitch = in_the_grasp(&mut w);
-    looking(&mut w, 2, Q, pitch, 0);
-    run(&mut w, 60, 0, 0);
-    assert!(
-        w.players[1].rooted > 0,
-        "caught by every arm and still walking"
-    );
+    grasp(&mut w, pitch);
+    let mut caught = false;
+    for _ in 0..90 {
+        run(&mut w, 1, 0, 0);
+        caught |= matches!(w.players[1].action, Action::Held { .. });
+    }
+    assert!(caught, "caught by every arm and still walking");
 
     // Far off to one side: the cone never reaches, so nothing lands.
     let mut w = as_class(Class::BloodMage);
@@ -819,59 +955,51 @@ fn a_grasp_roots_only_when_every_arm_lands() {
         w.players[0].pos.z.add(sim::fixed::Fx::from_int(9)),
     );
     let full = w.players[1].health;
-    tap(&mut w, Q, 60);
+    grasp(&mut w, 0);
+    run(&mut w, 60, 0, 0);
     assert_eq!(
         w.players[1].health, full,
         "the arms reached across the arena"
     );
-    assert_eq!(w.players[1].rooted, 0, "rooted by a Grasp that missed");
+    assert!(
+        !matches!(w.players[1].action, Action::Held { .. }),
+        "caught by a Grasp that missed"
+    );
 }
 
 #[test]
-fn a_rooted_fighter_cannot_walk_dodge_or_jump() {
-    // What separates a root from a very heavy slow: it takes the two buttons
-    // that would otherwise be the way out. It is not a stun -- you can still
-    // turn and swing at whoever put the arms round your legs.
+fn a_caught_fighter_cannot_walk_dodge_or_jump_out_of_it() {
+    // The hold is a hard stop, and the design allows one only behind a hard
+    // condition (`ability-spec.md`) -- here, landing every arm of a Grasp.
+    // Having paid for it, it has to actually hold: a catch you can dodge or
+    // jump out of is a very expensive way to deal one hit of damage.
     let mut w = as_class(Class::BloodMage);
     let pitch = in_the_grasp(&mut w);
-    looking(&mut w, 2, Q, pitch, 0);
-    // Past the arms and past the hitstun they came with. A root that expired
-    // inside its own hitstun would never be seen at all, which is why
-    // `a_root_outlives_the_hitstun_that_delivers_it` pins the two apart.
-    for _ in 0..200 {
+    grasp(&mut w, pitch);
+    for _ in 0..120 {
         run(&mut w, 1, 0, 0);
-        if w.players[1].action.actionable() && w.players[1].rooted > 0 {
+        if matches!(w.players[1].action, Action::Held { .. }) {
             break;
         }
     }
-    assert!(w.players[1].rooted > 0, "fixture rooted nobody");
     assert!(
-        w.players[1].action.actionable(),
-        "the root stunned instead of pinning: you can still swing while held"
+        matches!(w.players[1].action, Action::Held { .. }),
+        "fixture caught nobody"
     );
 
+    // Held still for the bind, whatever they press.
     let start = w.players[1].pos;
-    run(&mut w, 6, 0, Input::W);
-    assert_eq!(
-        w.players[1].pos.x.raw(),
-        start.x.raw(),
-        "a rooted fighter walked"
-    );
     run(&mut w, 2, 0, Input::SHIFT | Input::W);
     assert!(
         !matches!(w.players[1].action, Action::Dodge { .. }),
-        "a rooted fighter dodged out of it"
+        "a caught fighter dodged out of it"
     );
     run(&mut w, 2, 0, Input::SPACE);
-    assert!(w.players[1].grounded, "a rooted fighter jumped out of it");
-
-    // And it ends.
-    run(&mut w, sim::tuning::grasp_root() as u32 + 2, 0, 0);
-    assert_eq!(w.players[1].rooted, 0, "the root never wore off");
-    run(&mut w, 6, 0, Input::W);
-    assert!(
-        w.players[1].pos.x.raw() != start.x.raw(),
-        "the feet never came back"
+    assert!(w.players[1].grounded, "a caught fighter jumped out of it");
+    assert_eq!(
+        w.players[1].pos.sub(start).flat_len().raw(),
+        0,
+        "a caught fighter walked out of the bind"
     );
 }
 
@@ -894,23 +1022,25 @@ fn one_hit(setup: impl Fn(&mut World)) -> i32 {
 #[test]
 fn a_blood_mage_hits_harder_when_you_cannot_move() {
     // The class's damage identity, out of the archive: *naturally deals
-    // increased damage on disabled enemies*. It is what turns the Grasp's root
+    // increased damage on disabled enemies*. It is what turns the Grasp's catch
     // from a small reward into a setup -- four arms is expensive, and it is
     // only worth the cost if something is waiting on the other side of it.
     let free = one_hit(|_| {});
-    let rooted = one_hit(|w| w.players[1].root(120));
+    // Bound for the whole window rather than hauled, so the fixture measures
+    // the multiplier and not the distance the victim covered while it swung.
+    let caught = one_hit(|w| w.players[1].seized(0, 120, 120));
     assert!(free > 0, "fixture: the claw did not connect at all");
     assert!(
-        rooted > free,
-        "a rooted fighter took {rooted} where a free one took {free}"
+        caught > free,
+        "a caught fighter took {caught} where a free one took {free}"
     );
 
     let expected = sim::fixed::Fx::from_int(free)
         .mul(sim::tuning::disabled_damage_mul())
         .to_int();
     assert!(
-        (rooted - expected).abs() <= 1,
-        "the bonus is {rooted} against {free}, which is not the knob"
+        (caught - expected).abs() <= 1,
+        "the bonus is {caught} against {free}, which is not the knob"
     );
 }
 
@@ -947,16 +1077,20 @@ fn nobody_else_preys_on_the_disabled() {
 
 #[test]
 fn the_grasp_sets_up_its_own_payoff() {
-    // The two halves together, which is the point of implementing either. Root
-    // them with every arm, then hit them while they are held there.
+    // The two halves together, which is the point of implementing either.
+    // Catch them with every arm, and the window that opens is the one the
+    // class's damage bonus is waiting on.
     let mut w = as_class(Class::BloodMage);
     let pitch = in_the_grasp(&mut w);
-    looking(&mut w, 2, Q, pitch, 0);
-    run(&mut w, 60, 0, 0);
-    assert!(w.players[1].rooted > 0, "fixture rooted nobody");
+    grasp(&mut w, pitch);
+    let mut disabled = false;
+    for _ in 0..90 {
+        run(&mut w, 1, 0, 0);
+        disabled |= w.players[1].disabled();
+    }
     assert!(
-        w.players[1].disabled(),
-        "the root does not count as a disable, so the payoff never fires"
+        disabled,
+        "the catch does not count as a disable, so the payoff never fires"
     );
 }
 

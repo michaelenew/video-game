@@ -284,8 +284,10 @@ scalars! {
     GraspFlight,       "Blood mage", "Grasp, arms out and in",              Frames, 6,        120;
     GraspSpread,       "Blood mage", "Grasp, how wide the cone opens",      Fixed,  fx(1,10), fx(6,1);
     GraspArmRadius,    "Blood mage", "Grasp, arm radius",                   Fixed,  fx(1,10), fx(2,1);
-    GraspRoot,         "Blood mage", "Grasp root, caught by all four",      Frames, 0,        120;
+    GraspBind,         "Blood mage", "Grasp, held still before the haul",   Frames, 0,        60;
     DisabledDamageMul, "Blood mage", "Damage to the disabled (x)",          Fixed,  fx(1,1),  fx(3,1);
+    GraspMark,         "Blood mage", "Grasp, aim marker radius",            Fixed,  fx(1,20), fx(1,1);
+    ReelSpeed,         "Defence",  "Grab haul speed",                       Fixed,  fx(1,1),  fx(80,1);
     RushSpeed,        "Champion", "Rush speed",                 Fixed,   fx(1,1),   fx(40,1);
     RushFrames,       "Champion", "Rush length",                Frames,  1,         60;
     RushRecharge,     "Champion", "Rush recharge",              Frames,  0,         240;
@@ -503,6 +505,11 @@ pub enum MoveField {
     // often a move that keeps hitting is allowed to hit again.
     Arc,
     Rehit,
+    // Appended for the first channelled move. Both are questions the rest of
+    // the row already answers for an ordinary one -- how long it runs, how far
+    // it goes -- asked about the wind-up instead.
+    Channel,
+    ChannelFrom,
 }
 
 impl MoveField {
@@ -530,6 +537,8 @@ impl MoveField {
         MoveField::Aim,
         MoveField::Arc,
         MoveField::Rehit,
+        MoveField::Channel,
+        MoveField::ChannelFrom,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -557,6 +566,8 @@ impl MoveField {
             MoveField::Aim => "Line of effect (0-3)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
+            MoveField::Channel => "Channel, longest hold",
+            MoveField::ChannelFrom => "Channel, reach at no hold",
         }
     }
 
@@ -573,7 +584,7 @@ impl MoveField {
             MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
                 Unit::Flag
             }
-            MoveField::Grabs | MoveField::Rehit => Unit::Frames,
+            MoveField::Grabs | MoveField::Rehit | MoveField::Channel => Unit::Frames,
             MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
             MoveField::Leech => Unit::Percent,
             _ => Unit::Fixed,
@@ -740,14 +751,14 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 217;
+pub const SCALAR_COUNT: usize = 219;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 23;
+pub const MOVE_FIELDS: usize = 25;
 
 // ---------------------------------------------------------------------------
 // The live store

@@ -22,9 +22,9 @@ meaningless without it.
   push further along your current path.
 - **Power scales continuously with depth.** The same cast is weak at centre and large at
   the edge. Centre is where both forms are available and both are weak.
-- **Coming back:** land a far-side auto. Since 2026-09-13 that is the only way — casts follow
-  the force she is *carrying*, and the only thing that changes which force that is is an auto
-  connecting. Casting against the grain is not an input any more.
+- **Coming back:** throw a far-side auto. That is the only way — casts follow the force she is
+  *carrying*, and an auto is the only thing that changes which force that is. Casting against
+  the grain is not an input any more.
 - Past a depth threshold you take a burn that stops the moment you come back inside.
 
 **Ascension has no input.** It triggers when you max the bar by casting. See
@@ -38,11 +38,11 @@ Five moves, and the two on the bare clicks are the class.
 
 | Input | Move | What it is |
 | --- | --- | --- |
-| `L` | **Dark auto** | A punch with the **left** arm. Steers dark, on contact |
-| `R` | **Light auto** | The same punch with the **right** arm. Steers light, on contact |
-| `shift` + `L` | **Lance** | The committed line skillshot. Steers dark, on the press |
+| `L` | **Dark auto** | A punch with the **left** arm. Steers dark by 5, and she is now dark |
+| `R` | **Light auto** | The same punch with the **right** arm. Steers light by 5 |
+| `shift` + `L` | **Lance** | The committed line skillshot. Steers 12, in whichever force she carries |
 | `Q` | **Judgement** | The finisher. **No longer gated** — see below |
-| `E` | **Sweep** | A wide cut across the whole front. No side, so it pushes you further along the path you are on |
+| `E` | **Sweep** | A wide cut across the whole front. Steers 12, in whichever force she carries |
 
 `shift` + `R` throws the light auto unmodified: the kit wants a light *form* of the committed
 cast there and there is not one built, so the modifier is ignored rather than made to mean
@@ -61,12 +61,14 @@ recovery is a better use of it than nothing. See [../controls.md](../controls.md
 
 ## Auto attack
 
-Two autos: **left is dark, right is light**, and they **change your mode on contact** — a
-whiff steers nothing. They carry a slight range boost, powered by the beings inside, which
-matters because steering depends on connecting.
+Two autos: **left is dark, right is light**, and they **change your mode** — on the press
+since 2026-09-13, not on contact, because the contact rule left the whole mechanic immovable
+with nothing in reach. See
+[../dual-mage.md](../dual-mage.md#autos-are-the-steering-wheel), which also says what should
+come back and in what shape.
 
-The autos are the steering wheel. Landing the far-side auto is the fast way back toward
-centre, and the reason the class has to close distance exactly when it is strongest.
+They carry a slight range boost, powered by the beings inside. The autos are the steering
+wheel, and throwing the far-side one is the way back toward centre.
 
 ### They come out of the arms, and that is load-bearing
 

@@ -215,10 +215,13 @@ footer code{font-family:var(--mono); font-size:11.5px; color:var(--dim)}
 <script>
 const FX = 65536, HZ = 60;
 const IN = { L:1, R:2, M:4, SHIFT:8, W:16, A:32, S:64, D:128, SPACE:256 };
-const PHASE = ["free","startup","active","recovery","guard","blockstun","hitstun","stagger"];
+// Indexed by `Action::tag`, so it runs the whole length of it.
+const PHASE = ["free","startup","active","recovery","guard","blockstun","hitstun","stagger",
+               "dodge","held","channel"];
 const COLOR = {
   free:"#6d7a8c", startup:"#ffb400", active:"#ff3b4e", recovery:"#5b7fd4",
-  guard:"#35d0a0", blockstun:"#b06de8", hitstun:"#b06de8", stagger:"#b06de8"
+  guard:"#35d0a0", blockstun:"#b06de8", hitstun:"#b06de8", stagger:"#b06de8",
+  dodge:"#35d0a0", held:"#b06de8", channel:"#ffb400"
 };
 const P = ["#4aa8ff","#ff8a4c"];
 

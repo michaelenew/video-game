@@ -184,12 +184,12 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             s(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. Moves you darker -- but only if it lands.",
+                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. Moves you five darker, and makes you dark.",
                 "LMB dark auto",
             ),
             s(
                 "Right click",
-                "Light auto. The same punch and wing mirrored onto the right arm, and it moves you lighter. There is no guard on this class.",
+                "Light auto. The same punch and wing mirrored onto the right arm. Moves you five lighter, and makes you light. There is no guard on this class.",
                 "RMB light auto",
             ),
             s(
@@ -213,11 +213,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Which force you are",
-                "Whichever auto landed last. Everything else you throw is made of that force and pushes the bar the same way, so the two clicks are the steering and the rest is the accelerator.",
+                "Whichever auto you threw last. Everything else you throw is made of that force and pushes the bar twelve the same way, so the two clicks are the steering and everything else is the accelerator.",
             ),
             e(
                 "Getting back",
-                "Landing an auto from the far side is the only way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+                "Throwing a far-side auto is the only way back toward centre: casts follow whichever force you are carrying, and only an auto changes that.",
             ),
             e(
                 "The ends of the bar",
