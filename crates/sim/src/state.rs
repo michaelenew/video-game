@@ -417,6 +417,24 @@ impl Player {
         self.rooted = self.rooted.max(frames);
     }
 
+    /// Be caught and held by somebody.
+    ///
+    /// A grab is not knockback. The victim is pinned to the grabber and goes
+    /// wherever they go -- see `drag_the_held` -- which is what makes it a
+    /// commitment for *both* of them rather than a shove with a longer stun.
+    ///
+    /// Its own method because two different things do it now: a swing that
+    /// lands, and the Blood mage's Grasp closing on somebody every one of its
+    /// arms caught. Written twice, the second one would have been the version
+    /// that forgot to zero the velocity.
+    pub fn seized(&mut self, by: u8, frames: u16) {
+        self.stun_total = frames;
+        self.action = Action::Held { left: frames };
+        self.held_by = by;
+        self.vel.x = Fx::ZERO;
+        self.vel.z = Fx::ZERO;
+    }
+
     /// Pinned. Not a stun: you can still turn, guard and attack.
     pub const fn is_rooted(&self) -> bool {
         self.rooted > 0
@@ -1434,14 +1452,7 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
-            // A grab is not knockback. The victim is pinned to the grabber and
-            // goes wherever they go, which is what makes a grab a commitment
-            // for *both* of them rather than a shove with a longer stun.
-            defender.stun_total = hit.grabs;
-            defender.action = Action::Held { left: hit.grabs };
-            defender.held_by = hit.by;
-            defender.vel.x = Fx::ZERO;
-            defender.vel.z = Fx::ZERO;
+            defender.seized(hit.by, hit.grabs);
         } else {
             defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
@@ -3073,7 +3084,7 @@ impl World {
                         self.drain(i, effect);
                     }
                 }
-                self.gore_the_creature(effect, 0, effect.pos, base.radius);
+                self.feed_the_caster(effect, 0, effect.pos, base.radius);
             }
 
             // Drain *and* slow. The slow is the part that matters: damage alone
@@ -3096,7 +3107,7 @@ impl World {
                     }
                 }
                 if ticking {
-                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
+                    self.feed_the_caster(effect, 0, effect.pos, volume.radius);
                 }
             }
 
@@ -3174,10 +3185,24 @@ impl World {
                         let dealt = self.cut(i, effect, at, Fx::ONE);
                         let owed = effect.leeched(dealt);
                         self.players[effect.owner as usize].heal(owed);
-                        // Caught by every one of them. The arms close, and for
-                        // a moment you are not going anywhere.
+                        // Caught by every one of them. The arms close, you are
+                        // hauled in, and for a moment after that you are not
+                        // going anywhere.
+                        //
+                        // **The grab waits for all four**, and that is not a
+                        // choice about flavour. A grab drags its victim to the
+                        // caster's arm's length, so one applied by the first arm
+                        // to connect would pull them out from under the other
+                        // three -- the bottom pair land a frame before the top
+                        // pair -- and the root could then never fire at all. The
+                        // two payoffs sit on the same condition because the
+                        // first one would otherwise eat the second.
                         if effect.parts_landed(i, GRASP_ARMS) == GRASP_ARMS {
                             self.players[i].root(t::grasp_root());
+                            let caught = effect.source().grabs;
+                            if caught > 0 {
+                                self.players[i].seized(effect.owner, caught);
+                            }
                         }
                     }
                     let dealt = self.gore_the_creature(effect, arm, at, radius);
@@ -3292,6 +3317,22 @@ impl World {
             self.players[victim].parried = PARRY_FLOURISH;
         }
         dealt
+    }
+
+    /// A field ticking on the creature, and the caster's share of it straight
+    /// back -- the same payment the fighter path makes in `drain`.
+    ///
+    /// It exists because the two field effects used to call `gore_the_creature`
+    /// and **throw the answer away**, so a Blood mage draining a Ridgeback was
+    /// taking health off it and getting none of it back. Invisible in versus,
+    /// where a field never touches the creature at all, and invisible to a test
+    /// that only asked whether her health went up: the eruption's own hit pays
+    /// out on the same cast, a few frames earlier, which is enough to make a
+    /// broken field look like a working one.
+    fn feed_the_caster(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) {
+        let dealt = self.gore_the_creature(effect, part, at, radius);
+        let owed = effect.leeched(dealt);
+        self.players[effect.owner as usize].heal(owed);
     }
 
     /// Land an effect on whichever part of the creature is inside it, once per

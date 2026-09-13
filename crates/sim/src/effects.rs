@@ -129,6 +129,18 @@ impl EffectKind {
         matches!(self, EffectKind::Bloodletter | EffectKind::Grasp)
     }
 
+    /// Does a grab in the move table mean anything for this effect?
+    ///
+    /// Only the Grasp, and only as the payoff for catching somebody with every
+    /// one of its arms -- see the Grasp branch of `state::World::apply_effect`
+    /// for why it cannot be per-arm. Everything else delivered by an effect
+    /// carries damage, stun, blockstun, knockback and launch, and would drop a
+    /// grab on the floor; the frame table says so rather than showing a knob
+    /// nothing reads.
+    pub const fn seizes(self) -> bool {
+        matches!(self, EffectKind::Grasp)
+    }
+
     /// Does its centre move after it is cast?
     ///
     /// One does. The lotus is anchored to the Reaver's shadow rather than to a

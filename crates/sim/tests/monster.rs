@@ -616,21 +616,39 @@ fn a_drain_field_feeds_the_hunter_who_laid_it() {
     // The other half. The Blood mage pays health to cast, so if the return only
     // worked in versus the class would be unplayable in coop by its own
     // numbers.
+    //
+    // **It has to start measuring after the eruption**, and the first version
+    // of this test did not. The spike hits once on the frame it arrives and
+    // that hit pays out correctly; the *field* that stands there afterwards was
+    // taking health off the creature and returning none of it, for weeks,
+    // behind an assertion that only asked whether the caster's bar went up at
+    // all. It went up -- a few frames earlier, from the other thing. What is
+    // measured here is a window containing nothing but field ticks.
     let mut w = parked();
+    let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
     for _ in 0..2 {
         w.advance([Input::new(Input::MECHANIC), Input::default()]);
     }
-    // Hurt, after the cast, so there is room on the bar for the return to show.
+    for _ in 0..spike.startup + spike.active + 4 {
+        w.advance([Input::default(), Input::default()]);
+    }
+    assert!(
+        w.effects.iter().flatten().next().is_some(),
+        "fixture: the eruption is not over, or it left no field"
+    );
+
+    // Hurt, so there is room on the bar for the return to show.
     w.players[0].health = sim::tuning::max_health() / 2;
     let paid = w.players[0].health;
     let beast = beast_health(&w);
-    for _ in 0..200 {
+    for _ in 0..120 {
         w.advance([Input::default(), Input::default()]);
     }
-    assert!(beast_health(&w) < beast, "fixture: nothing was drained");
+    let drained = beast - beast_health(&w);
+    assert!(drained > 0, "fixture: the field drained nothing");
     assert!(
         w.players[0].health > paid,
-        "the field drained the creature and gave the caster none of it"
+        "the field drained {drained} off the creature and gave the caster none of it"
     );
 }
 

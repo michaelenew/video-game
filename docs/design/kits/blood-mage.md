@@ -127,22 +127,34 @@ it.
 > not implemented. What is in the game is the claw, given committed-slot weight.
 
 ### Grasp — special, `Q`
-**Startup** medium · **Recovery** long · **Range** short · **Mechanic** high cost; large
+**Startup** medium · **Recovery** long · **Range** medium · **Mechanic** high cost; large
 return if most of it lands
 
 A short-range skillshot that fires four arms — top left, bottom left, top right, bottom
 right. They leave in a cone, bow outward, and arc back inward to converge at the far end.
-Each arm damages on its own. **Anything caught by all four is rooted** for about two thirds
-of a second — and a rooted enemy takes 1.4× from everything this class has, which is what the
-root is for.
+Each arm damages on its own. **Anything caught by all four is seized**: hauled in to the
+caster's arm's length, held there for a third of a second, and rooted on the spot for a third
+of a second after the hands let go. A held or rooted enemy takes 1.4× from everything this
+class has, so the whole window is the payoff, not just the front of it.
+
+That is one ability doing the archive's two things at once — the four converging arms, and the
+tendrils that only pay out if you stay close enough to collect. It closes the range for you.
 
 The volume they sweep is a lens rather than a line, so standing anywhere near it gets you
-clipped by one or two arms. All four is a much smaller place to be, which is what makes the
-root a read rather than a tax — see the rule in [../ability-spec.md](../ability-spec.md)
-about hard stops needing hard conditions.
+clipped by one or two arms — damage, and nothing else. All four is a much smaller place to be:
+about a metre wide where the cone closes, against ten metres of reach. That is what makes the
+catch a read rather than a tax, per the rule in [../ability-spec.md](../ability-spec.md) about
+hard stops needing hard conditions.
+
+**The grab has to wait for all four, and not only for flavour.** A grab drags its victim to the
+caster, so one applied by the first arm to land would pull them out from under the other three
+— the bottom pair connect a frame before the top pair — and the root would then never fire at
+all. The two payoffs sit on the same condition because the first would otherwise eat the
+second.
 
 Rooted means your feet do not carry you and you cannot dodge or jump. It is not a stun: you
-can still turn, guard and swing at whoever put the arms round your legs. The root is
+can still turn, guard and swing at whoever put the arms round your legs — which matters, because
+by then they are standing right in front of you. The root is
 deliberately longer than the hitstun of the arms that deliver it, or it would expire before
 the victim could notice it — and longer than her fastest move's startup, or there would be
 nothing she could land inside it.
@@ -150,12 +162,19 @@ nothing she could land inside it.
 Unblockable, and the class's answer to a turtle now that Reaper's debt is gone.
 
 ### Black spike — mechanic, `E`
-**Startup** slow · **Recovery** medium · **Range** long · **Mechanic** high cost; returns 30%
+**Startup** slow · **Recovery** medium · **Range** long · **Mechanic** high cost; returns most
 of everything it drains, continuously
 
 A spike erupts at the target area after a long delay, damaging on arrival. It then stands in
-a field that drains and slows anything inside it for several seconds, and thirty per cent of
+a field that drains and slows anything inside it for several seconds, and a large share of
 what it drains goes straight back to the caster.
+
+**The eruption is one hit.** It spent a day as five, because `hits again every` — the move
+table's re-hit interval, in frames — was set to 1 while chasing a bug that turned out to be
+somewhere else entirely. That knob governs the *move's own hitbox* during its active frames;
+it has nothing to do with the field, which has its own clock in
+`effects.damage tick interval`. The spike's active window is four frames, so a re-hit of one
+made the eruption land four or five times.
 
 Three things about it are deliberate:
 
@@ -164,7 +183,26 @@ Three things about it are deliberate:
   *between* yourself and someone else.
 - **The return is continuous**, not a lump sum when the field expires. A Blood mage standing
   in a fight is being paid the whole time it is up, which is the difference between an
-  ability you build a fight around and one you survive a timer to collect on. This replaces
+  ability you build a fight around and one you survive a timer to collect on.
+- **At full health you will not see it.** Not a bug, and worth writing down because it has
+  been reported as one twice. Health cannot go over the bar, and the eruption's own leech
+  arrives first: cast at 1000 out of 1000, the sixty it cost comes back the instant the spike
+  lands, and every tick of the field after that is clamped away. Measured, casting on a target
+  standing in the field:
+
+  | Cast at | Eruption returns | Field returns |
+  | --- | --- | --- |
+  | 1000 / 1000 | +59 | **+1** |
+  | 700 / 1000 | +59 | +90 |
+
+  Which is the class working: she heals when she is hurt and gains nothing when she is whole,
+  so the spike is close to free at full health and a large swing when she needs it. It does
+  mean the ability reads as broken in exactly the situation you test it in — the first cast of
+  a fresh round. **If the drain's return should be felt at the top of the bar**, the eruption
+  is what is eating the headroom, and the fix is to stop the eruption leeching: the written
+  design says the spike *returns a share of everything it drains*, and the arrival damage is
+  not a drain. That would need a second leech number, since one move has one today, and it
+  would cut what the ability returns overall — so it is a decision rather than a correction. This replaces
   the archive's tether-break payout, which needed tethers nobody has built.
 - **The cast is the telegraph.** Thirty frames — twice reaction time, the longest wind-up in
   the class — because the ability is a placement, and a placement the other player cannot see
@@ -177,6 +215,13 @@ infinitely high cylinder, and it is drawn at exactly the size it is tested at.
 > no return of any kind, and no spike in the model — only a stain on the floor. In a hunt it
 > did nothing whatsoever, because effects were applied to fighters and the creature was not
 > one.
+>
+> **And then, once it did:** the field took health off the creature and gave the caster none
+> of it, for a fortnight, because the two field effects asked the creature-damage path what it
+> had dealt and threw the answer away. Only in a hunt — in versus a field never meets the
+> creature at all — and only in the *field*, since the eruption on the same cast paid out
+> correctly a few frames earlier, which is exactly enough to make a broken field look like a
+> working one. See the feel log for 2026-09-13.
 
 ## Not implemented
 

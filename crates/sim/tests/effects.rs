@@ -697,6 +697,107 @@ fn the_bloodletter_pays_out_when_it_is_caught() {
 }
 
 #[test]
+fn a_grasp_that_closes_hauls_its_victim_in() {
+    // The arms converge, and what they converge on comes with them. Gated on
+    // catching somebody with **every** arm, for a mechanical reason as much as
+    // a design one: a grab drags its victim to the caster, so one applied by
+    // the first arm to land would pull them out from under the other three --
+    // the bottom pair connect a frame before the top pair -- and the root would
+    // then never fire at all.
+    let mut w = as_class(Class::BloodMage);
+    let pitch = in_the_grasp(&mut w);
+    let grabs = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).grabs;
+    assert!(grabs > 0, "the table says this move does not grab");
+
+    let apart = |w: &World| w.players[1].pos.sub(w.players[0].pos).flat_len();
+    let before = apart(&w);
+    looking(&mut w, 2, Q, pitch, 0);
+
+    // Measured on the frame they are caught rather than at the end of the run:
+    // the hold is twenty frames and the root forty, so a check made late enough
+    // is a check made after both have run out.
+    let mut caught = None;
+    for _ in 0..90 {
+        run(&mut w, 1, 0, 0);
+        if caught.is_none() && matches!(w.players[1].action, Action::Held { .. }) {
+            caught = Some((apart(&w), w.players[1].rooted, w.players[1].disabled()));
+        }
+    }
+    let (gap, rooted, disabled) = caught.expect("every arm landed and nobody was caught");
+    assert!(
+        gap.raw() * 4 < before.raw(),
+        "caught from {} m away and left standing {} m away",
+        before.to_f32_for_render(),
+        gap.to_f32_for_render()
+    );
+    // Held first, then rooted where they were put. Both count as disabled, so
+    // the class's damage bonus runs across the whole window rather than
+    // stopping when the hands let go.
+    assert!(
+        rooted > grabs,
+        "the hold outlasts the root, so it is the whole window"
+    );
+    assert!(disabled, "the payoff window is not a payoff");
+}
+
+#[test]
+fn only_a_full_grasp_catches_anybody() {
+    // The rule, swept rather than staged. One or two arms is damage and nothing
+    // else: if a single arm could grab, the ability would be a ten-metre pull on
+    // any contact at all, which is not a read but a tax on being in front of a
+    // Blood mage.
+    //
+    // A sweep because the interesting positions are a hand's width apart -- the
+    // arms converge, so the difference between four and two is about a metre --
+    // and a fixture that picked one of them would be pinned to today's cone
+    // width rather than to the rule.
+    let mut seen_full = false;
+    let mut seen_glancing = false;
+    for tenth in 0..30 {
+        let mut w = as_class(Class::BloodMage);
+        let pitch = in_the_grasp(&mut w);
+        let off = sim::fixed::Fx::ratio(tenth, 10);
+        w.players[1].pos = sim::V3::new(
+            w.players[1].pos.x,
+            w.players[1].pos.y,
+            w.players[1].pos.z.add(off),
+        );
+        let full = w.players[1].health;
+        looking(&mut w, 2, Q, pitch, 0);
+
+        let mut held = false;
+        let mut rooted = false;
+        for _ in 0..90 {
+            run(&mut w, 1, 0, 0);
+            held |= matches!(w.players[1].action, Action::Held { .. });
+            rooted |= w.players[1].rooted > 0;
+        }
+        let arms = w.players[1].health.abs_diff(full) as i32
+            / sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL)
+                .damage
+                .max(1);
+        let all_four = arms >= sim::effects::GRASP_ARMS as i32;
+        let at = off.to_f32_for_render();
+
+        assert_eq!(
+            held, all_four,
+            "{at} m off centre: {arms} arms landed, held = {held}"
+        );
+        assert_eq!(
+            rooted, all_four,
+            "{at} m off centre: {arms} arms landed, rooted = {rooted}"
+        );
+        seen_full |= all_four;
+        seen_glancing |= arms > 0 && !all_four;
+    }
+    assert!(seen_full, "the sweep never caught anybody with all four");
+    assert!(
+        seen_glancing,
+        "the sweep never found a glancing hit, so it proves only one half"
+    );
+}
+
+#[test]
 fn a_grasp_roots_only_when_every_arm_lands() {
     // Four arms, and the root is the price of all four. One or two of them is a
     // glancing blow; standing where the cone closes is a read, and a read is
