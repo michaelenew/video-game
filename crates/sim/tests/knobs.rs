@@ -135,13 +135,13 @@ const EXEMPT: &[(&str, &str)] = &[
          start of exactly 1 from reaching zero and dividing by it.",
     ),
     (
-        "p.mul(Fx::from_int(2))",
+        "crate::math::lerp3(self.pos, apex, p.mul(Fx::from_int(2)))",
         "Out and back. The blade covers its path twice in one lifetime, so each leg is half of \
          it and the progress through a leg is twice the progress through the throw. The 2 is \
          the word `back`; `bloodletter_flight` is the knob that decides how long it takes.",
     ),
     (
-        "Fx::ONE.sub(p).mul(Fx::from_int(2))",
+        "crate::math::lerp3(apex, self.home, p.sub(half).mul(Fx::from_int(2)))",
         "The same 2, on the return leg. See above.",
     ),
     (

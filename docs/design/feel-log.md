@@ -2716,3 +2716,71 @@ quarry it met, per `debris::step`'s existing match on `Contact`. That was report
 requirement worth pinning rather than a bug, so `debris_shatters_on_the_first_stone_it_hits`
 now says so directly — a second, farther stone survives a blast that breaks the near one, and
 a fighter standing behind it takes nothing.
+
+### 2026-09-13 — the blade comes home to a person, and the Grasp's marker stops jumping
+
+Two fixes from playing the Blood mage, and they are the same fix twice: an ability was
+pointed at a *place* where the player was thinking about a *thing*.
+
+**The Bloodletter now returns to the mage rather than to the spot she threw it from.**
+
+```
+before   out along the aim to `reach`, then back down the same line to the
+         point it left, whether or not anybody was still standing there
+now      out along the aim, unchanged; back to `Effect::home`, which is the
+         caster's live ability origin, refreshed every frame
+```
+
+**Why** a catch is a thing that happens between two objects. The old return arrived at a patch
+of air the mage had walked out of half a second earlier and paid her anyway, which made the
+flight home a formality rather than the risk the ability is built on. The outward leg does not
+move and must not: the throw was aimed, and re-aiming an ability that is already out is the
+mistake `aiming.md` exists to prevent. Only the way back follows anybody.
+
+**The return is a fraction of the way home, not a speed**, and that was a real choice. A chase
+at a fixed speed reads more dramatically and could be *outrun* — but then the ability's
+failure case would be moving, and moving is the one thing an aggressive sustain class has to
+be able to do. The lerp arrives on the frame it is supposed to however far she has run, so the
+risk stays where the design put it: survive the flight, do not stand still for it.
+
+**The Grasp is now aimed as a swing rather than as a skillshot**, and its channel went from
+half a second to a full one, starting at melee.
+
+```
+before   skillshot, 3 m to 10 m over 30f -- marker at the far end of the
+         crosshair's ray, so it sat on whatever the ray hit
+now      swing, 1.5 m to 10 m over 60f -- a ray off the chest along the facing,
+         pitched by the camera through the standing 45-degree dead zone
+```
+
+**Why** the marker was showing the arena instead of the cast. A skillshot's far end is
+whatever the ray stops against, so looking a few degrees further down moved the marker by
+metres, and the depth the hold had bought was invisible underneath the geometry. It also
+started at three metres, which meant it *appeared* out in the middle distance rather than
+leaving the body — so the one thing the channel is for, watching the range grow, was the one
+thing you could not see.
+
+As a swing it has nothing to stop against: its length is the hold and only the hold, which is
+what `the_marker_is_as_far_out_as_the_hold_and_nothing_else` pins, sweeping the pitch from
+above the horizon to straight down. The dead zone is doing the real work. The camera sits
+above the shoulder, so a player looking at somebody at their own height is already looking
+slightly down; level through the first 45° means the marker runs flat across the floor at
+chest height through the whole range a fight happens in, and the higher neutral camera angle
+is *why* the depth reads at all. Past 45° the cast goes into the ground, which is a mistake
+the player can watch themselves make.
+
+**`one_aim.rs` had to be loosened, carefully.** It asserted that anything leaving a travelling
+effect behind must be a skillshot, on the grounds that a swing "would travel along the body's
+flat facing and quietly ignore the crosshair". That was written before swings were pitched at
+all. The real rule is that a thrown thing has to be pointed by the player, and there are two
+ways: the crosshair picks the point, or the body picks the line and a channel picks the
+distance. Swing-without-a-channel is still the bug, and is still an assertion failure.
+
+**A second of standing still is the cost**, and it is bigger than the half second was. The
+whole wind-up is a telegraph in plain view of somebody who can walk out of the cone.
+
+**Verdict** open on both. The Grasp worry from the last entry gets sharper rather than
+resolved: a full second is a long time to hold still, and if opponents learn to simply back up
+while watching the marker the move is worse at every depth than the fixed ten metres was at
+one. The blade's worry is the opposite — a return that always lands may have made an auto
+attack too safe for a class whose whole economy is supposed to be a gamble.

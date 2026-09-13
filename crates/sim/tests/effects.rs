@@ -43,7 +43,8 @@ fn looking(w: &mut World, frames: u32, a: u16, pitch: i16, b: u16) {
 /// those is a knob. A hard-coded angle is a fixture that silently stops
 /// pointing at anything the next time one of them moves.
 fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
-    let reach = sim::moves::get(w.players[0].class, slot).reach;
+    let m = sim::moves::get(w.players[0].class, slot);
+    let reach = m.reach;
     let stones = sim::stones::gather(&w.players);
     let players = w.players;
     let effects = w.effects;
@@ -75,15 +76,28 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
     // for the move's full reach -- "a blade thrown at something four metres away
     // still flies its full distance; the crosshair picked the line." So a wall
     // cutting the aiming ray short does not move the line the blade takes.
+    // Through the move's **own** kind of aiming, which is declared in the
+    // table. A fixture that always asked `skillshot_path` would be a second
+    // aiming model living in the tests, and the first move to change its
+    // column would start missing for reasons nothing in the game shares.
     let miss = |pitch: i16| {
         let look = Input::looking_at(0, LOOK_RIGHT, pitch);
-        let path = sim::aim::skillshot_path(0, look, reach, &scene);
+        let one = &players[0];
+        let path = match m.aim() {
+            sim::aim::Kind::Swing => {
+                sim::aim::swing_path(one.pos, one.facing, look, one.grounded, reach, m.hand)
+            }
+            _ => sim::aim::skillshot_path(0, look, reach, &scene),
+        };
         let dir = path.dir();
         let toward = middle.sub(path.from);
         let down = toward.dot(dir).max(sim::fixed::Fx::ZERO).min(reach);
         path.from.add(dir.scale(down)).sub(middle).len().raw()
     };
-    (0..=80)
+    // Both ways from level. A swing pitched by the dead zone is flat through
+    // the whole of the first sweep, so a target standing above the caster can
+    // only be found by looking up at it.
+    (-40..=80)
         .map(|step| -(step * 200) as i16)
         .min_by_key(|pitch| miss(*pitch))
         .expect("the scan is not empty")
@@ -671,6 +685,108 @@ fn the_bloodletter_cuts_on_the_way_out_and_on_the_way_back() {
 }
 
 #[test]
+fn the_blade_comes_back_to_the_mage_and_not_to_the_spot_she_threw_it_from() {
+    // A catch happens between two objects. A blade returning to a patch of air
+    // its caster walked out of three quarters of a second ago has not been
+    // caught by anybody, and paying for one that was not caught makes the
+    // flight home a formality rather than the risk it is meant to be.
+    //
+    // Measured as *where the blade ends up*, against where it would have ended
+    // up under the old rule: the throw point is still there to compare with.
+    let mut w = as_class(Class::BloodMage);
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
+    looking(&mut w, 2, Input::LEFT, 0, 0);
+    run(&mut w, (m.startup + m.active) as u32, 0, 0);
+    let thrown_from = effects_of(&w, EffectKind::Bloodletter)
+        .first()
+        .expect("the blade never left")
+        .pos;
+
+    // Walk sideways for the whole of the flight, so the mage is nowhere near
+    // where the blade left her hand by the time it arrives.
+    let flight = sim::tuning::bloodletter_flight();
+    let mut last = None;
+    for _ in 0..flight * 2 {
+        run(&mut w, 1, 0, 0);
+        looking(&mut w, 1, Input::D, 0, 0);
+        if let Some(blade) = effects_of(&w, EffectKind::Bloodletter).first() {
+            last = Some((blade.blade_at(), w.players[0].pos));
+        }
+    }
+    let (blade, mage) = last.expect("the blade was never in the air");
+    let walked = mage.sub(thrown_from).flat_len();
+    assert!(
+        walked.raw() > sim::fixed::Fx::from_int(2).raw(),
+        "fixture: the mage only moved {} m, which is not far enough to tell the \
+         two answers apart",
+        walked.to_f32_for_render()
+    );
+    let to_mage = blade.sub(mage).flat_len();
+    let to_throw = blade.sub(thrown_from).flat_len();
+    assert!(
+        to_mage.raw() < to_throw.raw(),
+        "the blade finished {} m from the mage and {} m from where she threw \
+         it, so it came home to the spot rather than to her",
+        to_mage.to_f32_for_render(),
+        to_throw.to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_blade_tracks_the_mage_the_whole_way_home_rather_than_snapping_to_her() {
+    // "Continually tracks" rather than "ends up in the right place". A return
+    // that flew to the old spot and then jumped the last few metres would pass
+    // the test above and read, in the hand, as a bug.
+    let mut w = as_class(Class::BloodMage);
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
+    looking(&mut w, 2, Input::LEFT, 0, 0);
+    run(&mut w, (m.startup + m.active) as u32, 0, 0);
+
+    let flight = sim::tuning::bloodletter_flight();
+    let mut gaps = Vec::new();
+    let mut steps = Vec::new();
+    let mut was: Option<sim::V3> = None;
+    for _ in 0..flight * 2 {
+        looking(&mut w, 1, Input::D, 0, 0);
+        let out = effects_of(&w, EffectKind::Bloodletter);
+        let Some(blade) = out.first() else {
+            continue;
+        };
+        let at = blade.blade_at();
+        if blade.returning() {
+            gaps.push(at.sub(w.players[0].pos).flat_len());
+        }
+        if let Some(was) = was {
+            steps.push(at.sub(was).len());
+        }
+        was = Some(at);
+    }
+    assert!(gaps.len() > 4, "fixture: the blade never came back");
+
+    // Closing on her every frame of the way in, never opening up.
+    for pair in gaps.windows(2) {
+        assert!(
+            pair[1].raw() <= pair[0].raw(),
+            "the gap went from {} m to {} m on the way home",
+            pair[0].to_f32_for_render(),
+            pair[1].to_f32_for_render()
+        );
+    }
+
+    // And no frame that is a teleport. The blade covers its reach in half its
+    // life, so a step worth more than three of those is not a blade flying.
+    let even = m.reach.div(sim::fixed::Fx::from_int(flight as i32 / 2));
+    for step in &steps {
+        assert!(
+            step.raw() < even.raw() * 3,
+            "one frame moved the blade {} m against an even {} m",
+            step.to_f32_for_render(),
+            even.to_f32_for_render()
+        );
+    }
+}
+
+#[test]
 fn the_bloodletter_pays_out_when_it_is_caught() {
     // Not on contact. The cut lands at once and the health has to survive the
     // flight home, which is what makes an auto attack a small commitment
@@ -751,6 +867,67 @@ fn holding_the_grasp_longer_sends_it_further() {
         "no hold at all reaches {} m against a near end of {} m",
         near.to_f32_for_render(),
         m.channel_from.to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_marker_is_as_far_out_as_the_hold_and_nothing_else() {
+    // What the channel is *for*. The marker has one job -- say how deep this
+    // cast is going -- and it can only do it if its distance is a function of
+    // the hold and of nothing else.
+    //
+    // It was a skillshot first, and a skillshot's far end is wherever the
+    // crosshair's ray stops: a wall, the floor, the edge of the range. Looking
+    // a few degrees further down moved the marker metres, so the thing meant to
+    // show the player a depth was mostly showing them the arena. As a swing it
+    // is a ray off the body at a dead-zoned pitch, which has nothing to stop
+    // against -- see `docs/design/aiming.md`.
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
+    // Level, inside the dead zone, past it, and straight down at the floor --
+    // the last is the case a raycast collapsed to a metre in front of the feet.
+    for pitch in [4096i16, 0, -4096, -8192, -12000, -16384] {
+        let mut w = as_class(Class::BloodMage);
+        for held in 0..=m.channel {
+            looking(&mut w, 1, Q, pitch, 0);
+            let Some((_, wound)) = w.players[0].action.channelling() else {
+                continue;
+            };
+            let want = m.reach_after(wound);
+            let got = w.players[0].aim_path.length();
+            assert!(
+                got.sub(want).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
+                "held {held} at pitch {pitch}: the marker is {} m out where the \
+                 hold says {} m",
+                got.to_f32_for_render(),
+                want.to_f32_for_render()
+            );
+        }
+    }
+}
+
+#[test]
+fn the_marker_starts_inside_melee_range() {
+    // "Start at the character and move outward." A slider whose near end is
+    // already mid-range gives the player no sense that holding is doing
+    // anything -- the marker appears out in the arena and creeps, rather than
+    // leaving the body and travelling. Inside the reach of her own melee is the
+    // test of that, because Rend is what "right in front of me" means for this
+    // class.
+    let grasp = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
+    let rend = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    assert!(
+        grasp.reach_after(0).raw() < rend.reach.raw(),
+        "a tapped Grasp reaches {} m against {} m of Rend, so it does not start \
+         at the caster",
+        grasp.reach_after(0).to_f32_for_render(),
+        rend.reach.to_f32_for_render()
+    );
+    // And the far end is still a long way past it, or the slider has no travel.
+    assert!(
+        grasp.reach.raw() > rend.reach.raw() * 3,
+        "the slider runs {} m to {} m, which is not a range worth choosing",
+        grasp.reach_after(0).to_f32_for_render(),
+        grasp.reach.to_f32_for_render()
     );
 }
 

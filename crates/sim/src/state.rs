@@ -1028,8 +1028,10 @@ impl World {
                     h.write_u32(e.life as u32);
                     h.write_u32(e.struck);
                     h.write_i32(e.banked);
+                    h.write_i32(e.reach.raw());
                     hash_v3(&mut h, &e.pos);
                     hash_v3(&mut h, &e.dir);
+                    hash_v3(&mut h, &e.home);
                 }
                 None => h.write_u32(0),
             }
@@ -3318,6 +3320,23 @@ impl World {
                     effect.pos = at;
                 }
             }
+            // And the one that comes back to a *person*. The blade's way home
+            // is drawn to wherever its caster is standing this frame, so
+            // walking while it is in the air bends its return rather than
+            // leaving it to arrive at an empty patch of arena.
+            //
+            // **Not updated once the caster is dead.** There is nobody to catch
+            // it, so it finishes its arc to the last place they stood and pays
+            // out nothing -- `Player::heal` does not reach a corpse.
+            if effect.kind.comes_home() {
+                if let Some(owner) = self
+                    .players
+                    .get(effect.owner as usize)
+                    .filter(|owner| owner.health > 0)
+                {
+                    effect.home = aim::origin(owner.pos);
+                }
+            }
             // A tornado also burns out the moment it leaves the arena, on top
             // of its own clock -- the one effect whose centre can actually
             // wander off the map, since every other one is either planted or
@@ -3348,10 +3367,16 @@ impl World {
 
     /// What an expiring effect still owes its caster.
     ///
-    /// Only the blade owes anything: everything else paid as it went. Catching
-    /// it is the payday, which is what makes the ability a small commitment
-    /// rather than a free poke -- the cut lands at once and the health has to
-    /// survive the flight home.
+    /// Only the blade owes anything: everything else paid as it went. **Being
+    /// caught is the payday**, which is what makes the ability a small
+    /// commitment rather than a free poke -- the cut lands at once and the
+    /// health has to survive the flight home.
+    ///
+    /// The blade expiring *is* it arriving, and that is a property of
+    /// `Effect::blade_at` rather than a coincidence of two clocks: the return
+    /// leg is drawn to the caster's live position and reaches it exactly as the
+    /// life runs out. The one way not to be paid is not to be there -- a dead
+    /// caster catches nothing, which `Player::heal` enforces on its own.
     fn pay_out(&mut self, effect: &Effect) {
         if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
             return;

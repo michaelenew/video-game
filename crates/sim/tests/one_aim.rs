@@ -165,17 +165,32 @@ fn every_move_says_which_line_of_effect_it_uses() {
                         m.name
                     );
                 }
-                // A thing that flies through the air is aimed through the air.
-                // One of these coming out as a swing would travel along the
-                // body's flat facing and quietly ignore the crosshair, which is
-                // the bug this whole file exists to stop coming back.
+                // A thing that flies through the air has to be pointed by the
+                // player, and there are exactly two ways to do that. The
+                // crosshair picks the point it flies to -- that is a skillshot
+                // -- or the body picks the line and a **channel** picks the
+                // distance along it, which is the Grasp. Anything else means a
+                // thrown ability that goes somewhere nobody chose, which is the
+                // bug this whole file exists to stop coming back.
                 if leaves.travels() {
-                    assert_eq!(
-                        m.aim(),
-                        Kind::Skillshot,
-                        "{} {} throws something that travels but is not aimed like it",
+                    let pointed = match m.aim() {
+                        Kind::Skillshot => true,
+                        // Swing aiming without a channel is the bug in its
+                        // original form: the flat facing, and no answer at all
+                        // to how far. With one, the hold is the answer and the
+                        // dead-zoned pitch is what makes a depth readable
+                        // against the floor -- see the Grasp in
+                        // `docs/design/kits/blood-mage.md`.
+                        Kind::Swing => m.channels(),
+                        Kind::Grounded | Kind::AtTheMechanic => false,
+                    };
+                    assert!(
+                        pointed,
+                        "{} {} throws something that travels but is aimed as {:?}, \
+                         which does not let the player say where it goes",
                         class.name(),
-                        m.name
+                        m.name,
+                        m.aim()
                     );
                 }
             }
