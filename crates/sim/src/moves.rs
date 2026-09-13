@@ -333,7 +333,14 @@ const NAMES: [&[&str]; 6] = [
     //   rather than by the hitbox loop, and its hitstun and knockback are zero
     //   on purpose: it takes the charge off whoever it catches and gives them
     //   their frames straight back. See `crate::bolt`.
-    &["Bolt", "Fissure", "Fire pillar"],
+    //   Cataclysm: the heavy, on right click. A long wind-up and then the same
+    //   kind of instant line Bolt throws, resolved the same way and for the
+    //   same reason -- what it does depends on what it meets first, and none
+    //   of that fits a hitbox that lives for a few frames in front of her body.
+    //   A structure in the way is destroyed outright rather than kicked, and
+    //   goes up in a blast; a fire pillar in the way is not charged, it is
+    //   torn loose into a travelling fire tornado. See `crate::tornado`.
+    &["Bolt", "Fissure", "Fire pillar", "Cataclysm"],
     // Blood mage -- sustain through aggression. Everything costs health, and
     // every one of these has a cost in the table to prove it.
     //   Bloodletter: the auto. Out to a fixed distance and back, cutting on
@@ -494,6 +501,10 @@ pub mod dual {
 pub const fn slots(class: Class) -> usize {
     match class {
         Class::Champion => champion::COUNT,
+        // The fourth is Cataclysm, on right click -- structures and fire are
+        // her whole kit, and right click is otherwise dead weight on a class
+        // with no shield. See `clicked_move`.
+        Class::Elementalist => SLOTS + 1,
         // The fourth is Black spike, on `E`. See `on_e`.
         Class::BloodMage => SLOTS + 1,
         // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
@@ -604,6 +615,14 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             1 => "Shift+LMB",
             2 => "Q",
             3 => "E",
+            _ => "RMB",
+        },
+        // Right click is otherwise dead weight on a class with no shield, the
+        // same argument the Reaver makes -- Cataclysm takes it instead.
+        Class::Elementalist => match slot {
+            0 => "LMB",
+            1 => "Shift+LMB",
+            2 => "Q",
             _ => "RMB",
         },
         _ => match slot {

@@ -199,6 +199,30 @@ if there happens to be one there.
 > Earth plus Fire is the loadout, not a dependency chain where Fire only works after Earth has
 > gone first.
 
+### Cataclysm
+**Startup** slow · **Recovery** slow · **Range** long, skillshot
+
+The right-click heavy. A long wind-up, thrown along the same line the auto follows, that
+turns whatever field effect it meets into something worse rather than just damaging it.
+
+> **Implemented** (right click). It reads the same beam as the auto and Fire pillar's
+> targeting, and shares their aim -- point it, don't lock onto anything. What it meets
+> along that line decides what it does:
+>
+> - **A structure** is destroyed outright and throws a cone-shaped blast out from where it
+>   stood, with knockback heavy enough to be the class's real punish rather than a poke.
+> - **A fire pillar** is not damaged -- it is transformed. The pillar itself is consumed and
+>   a fire tornado is lit in its place, racing off along the direction Cataclysm was aimed,
+>   pulling in and burning anyone it catches until its own clock runs out or it leaves the
+>   arena. See `crate::tornado`.
+> - **A fighter**, hit directly with nothing in the way, just takes a real hit -- heavier
+>   than the auto's poke, with its own stagger rather than none.
+>
+> The wind-up is long enough to be read and punished; the payoff is why you would still
+> throw it. Earth plus Fire again: Raise or Fissure to seed a structure, then Cataclysm to
+> decide whether it becomes a blast or, by way of a fire pillar first, a moving hazard that
+> keeps threatening the space after the swing is over.
+
 ### Flame spitter
 **Startup** fast · **Recovery** medium · **Range** medium, channelled · **Mechanic** on a
 structure, melts it into a lasting magma field that damages and slows

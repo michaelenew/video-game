@@ -26,6 +26,7 @@ use crate::monster::{self, Doing, Monster, Quarry};
 use crate::moves;
 use crate::shadow;
 use crate::stones::{self, Field};
+use crate::tornado;
 use crate::tuning as t;
 
 pub const MAX_PLAYERS: usize = 2;
@@ -52,6 +53,10 @@ pub const SLOT_SPECIAL: u8 = 2;
 /// `E`. An ability on some classes and a state change on the rest -- see
 /// [`moves::bound`] and [`mechanic_action`].
 pub const SLOT_MECHANIC: u8 = 3;
+/// Right click, on the one other class with nothing there: the Elementalist
+/// has no shield to guard with either, and Cataclysm takes the button instead
+/// of leaving it dead. See [`clicked_move`] and `crate::tornado`.
+pub const SLOT_HEAVY: u8 = 3;
 pub use crate::tuning::max_health;
 
 // The Bulwark's shield and the Reaver's shadow used to keep their numbers here,
@@ -562,6 +567,11 @@ pub struct World {
     /// Fire bolts in flight. The only projectile a fighter throws that is not
     /// part of somebody's mechanic -- see [`crate::bolt`].
     pub bolts: Flight,
+    /// Fire tornadoes, lit by the Elementalist's Cataclysm passing through a
+    /// pillar. The same kind of thing a fire bolt is -- a real velocity,
+    /// stepped frame by frame -- and for the same reason: see
+    /// [`crate::tornado`].
+    pub tornadoes: tornado::Swirl,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -585,6 +595,7 @@ impl World {
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
             bolts: [None; MAX_BOLTS],
+            tornadoes: [None; tornado::MAX_TORNADOES],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -611,6 +622,7 @@ impl World {
         // Nothing in the air survives a round. A bolt still flying when the
         // last one ended would land on somebody standing on their mark.
         self.bolts = [None; MAX_BOLTS];
+        self.tornadoes = [None; tornado::MAX_TORNADOES];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -783,10 +795,14 @@ impl World {
             }
         }
 
-        // The Elementalist's auto: a beam, resolved on the spot. See
-        // `crate::bolt` and `docs/design/kits/elementalist.md`.
+        // The Elementalist's auto and her heavy: two different beams, the same
+        // instant resolution, and never both at once for one fighter -- reset
+        // once, here, rather than in each, so neither can clobber the other's
+        // answer on the frame it is the one actually firing.
         for i in 0..MAX_PLAYERS {
+            self.players[i].beam_reach = Fx::ZERO;
             self.fire_the_beam(i);
+            self.fire_the_cataclysm(i);
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
@@ -893,6 +909,7 @@ impl World {
             self.monster.is_none(),
             &mut self.monster,
         );
+        tornado::step(&mut self.tornadoes, &mut self.players, self.monster.is_none());
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -957,6 +974,17 @@ impl World {
                     hash_v3(&mut h, &b.pos);
                     hash_v3(&mut h, &b.dir);
                     h.write_i32(b.travelled.raw());
+                }
+                None => h.write_u32(0),
+            }
+        }
+        for v in &self.tornadoes {
+            match v {
+                Some(v) => {
+                    h.write_u32(v.owner as u32 + 1);
+                    hash_v3(&mut h, &v.pos);
+                    hash_v3(&mut h, &v.dir);
+                    h.write_u32(v.age as u32);
                 }
                 None => h.write_u32(0),
             }
@@ -1393,10 +1421,11 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
-    // The Elementalist's auto already happened. It is a ray fired the moment
-    // the move comes out, and what it does depends on what it met first --
-    // none of which this loop can express. See `World::fire_the_beam`.
-    if bolt::throws_a_beam(attacker, kind) {
+    // The Elementalist's auto, and her heavy, already happened. Both are a ray
+    // fired the moment the move comes out, and what either does depends on
+    // what it met first -- none of which this loop can express. See
+    // `World::fire_the_beam` and `World::fire_the_cataclysm`.
+    if bolt::throws_a_beam(attacker, kind) || throws_a_cataclysm(attacker, kind) {
         return None;
     }
     let box_out = hitbox(attacker)?;
@@ -2033,6 +2062,11 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // it displaced went to `E`, which is the one key that does not care
         // where anything is pointed. See `moves::on_e`.
         Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_MECHANIC),
+        // The Elementalist breaks it the same way for the same reason: no
+        // shield, so right click is otherwise dead. Cataclysm is aimed like
+        // the auto, along the crosshair, so it belongs on the mouse and not
+        // on a key -- see `crate::tornado`.
+        Class::Elementalist if input.has(Input::RIGHT) => Some(SLOT_HEAVY),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
                 SLOT_COMMITTED
@@ -3856,7 +3890,6 @@ impl World {
     /// lights all happen on the frame the move comes out; the fire bolt is the
     /// only part with a speed, and it starts at the pillar rather than at her.
     fn fire_the_beam(&mut self, i: usize) {
-        self.players[i].beam_reach = Fx::ZERO;
         let shooter = self.players[i];
         let Action::Active { kind, .. } = shooter.action else {
             return;
@@ -3926,6 +3959,189 @@ impl World {
             None => {}
         }
     }
+
+    /// Fire Cataclysm, if this fighter has it out.
+    ///
+    /// Structurally the same trick the auto is: an instant line, resolved on
+    /// the spot rather than by the hitbox loop, because what it does depends
+    /// on what it meets first and none of the three answers is a bubble that
+    /// lives for a few frames in front of her body. What it *does* on each
+    /// answer is her heavy's own, not the auto's -- a fighter takes a real hit
+    /// instead of a poke, a structure is destroyed rather than kicked, and a
+    /// fire pillar is torn loose into a travelling tornado rather than merely
+    /// charging the shot. See `docs/design/kits/elementalist.md`.
+    fn fire_the_cataclysm(&mut self, i: usize) {
+        let shooter = self.players[i];
+        let Action::Active { kind, .. } = shooter.action else {
+            return;
+        };
+        if !throws_a_cataclysm(&shooter, kind) || shooter.health <= 0 {
+            return;
+        }
+
+        let beam = beam_of(&shooter);
+        let m = moves::get(shooter.class, kind);
+        let field = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let beast = self.monster;
+        let versus = beast.is_none();
+        let scene = Scene {
+            stones: &field,
+            players: &seen,
+            effects: &effects,
+            quarry: beast.as_ref(),
+        };
+        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
+
+        self.players[i].beam_reach = met.map_or(beam.length(), |c| c.dist());
+        if shooter.hit_used {
+            return;
+        }
+
+        match met {
+            // A real hit, not the auto's no-stagger poke: this is the class's
+            // heaviest single swing, and it costs a long wind-up to throw.
+            Some(Contact::Fighter { index, .. }) => {
+                let victim = self.players[index];
+                let (guarding, parried) = guard_against(&victim, shooter.pos, m.unblockable);
+                apply_hit(
+                    &mut self.players[index],
+                    Hit {
+                        damage: m.damage,
+                        hitstun: m.hitstun,
+                        blockstun: m.blockstun,
+                        knockback: m.knockback,
+                        launch: Fx::ZERO,
+                        grabs: 0,
+                        by: i as u8,
+                        dir: beam.dir(),
+                        blocked: guarding,
+                        parried,
+                    },
+                );
+                if parried {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[index].parried = PARRY_FLOURISH;
+                }
+                self.players[i].hit_used = true;
+            }
+            // Broken outright, and whoever was standing near it pays for that
+            // in a blast rather than in a shove -- see `blast_cone`.
+            Some(Contact::Stone { index, .. }) => {
+                if let Some(at) = stones::destroy(&mut self.players, index) {
+                    self.blast_cone(i, at, beam.dir(), &m);
+                }
+                self.players[i].hit_used = true;
+            }
+            // Not charged -- torn loose. See `crate::tornado`.
+            Some(Contact::Fire { dist }) => {
+                let at = beam.at(dist);
+                if let Some(slot) = fire_pillar_slot_at(&self.effects, at) {
+                    self.effects[slot] = None;
+                }
+                tornado::spawn(&mut self.tornadoes, i as u8, at, beam.dir());
+                self.players[i].hit_used = true;
+            }
+            Some(Contact::Quarry { part, .. }) => {
+                if let Some(mut beast) = self.monster {
+                    beast.take_hit(part, m.damage);
+                    self.monster = Some(beast);
+                    self.players[i].hit_used = true;
+                }
+            }
+            None => {}
+        }
+    }
+
+    /// Everyone caught in the cone a destroyed structure goes up in.
+    ///
+    /// A cone rather than a bubble, angled along the line Cataclysm was fired
+    /// on: the structure absorbed the shot, so the blast keeps travelling
+    /// roughly the way the shot was going rather than expanding evenly in
+    /// every direction from a point that, a moment ago, was solid ground.
+    fn blast_cone(&mut self, owner: usize, at: V3, dir: V3, m: &moves::Move) {
+        let facing = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+        let radius = t::cataclysm_blast_radius();
+        let half_cos = t::cataclysm_cone_cos();
+        for index in 0..MAX_PLAYERS {
+            if index == owner || self.players[index].health <= 0 {
+                continue;
+            }
+            let victim = self.players[index];
+            let apart = V3::new(victim.pos.x.sub(at.x), Fx::ZERO, victim.pos.z.sub(at.z));
+            let dist = apart.flat_len();
+            if dist.raw() > radius.raw() || victim.action.invulnerable() {
+                continue;
+            }
+            let toward = if dist.raw() > 0 {
+                apart.normalized()
+            } else {
+                facing
+            };
+            if dist.raw() > 0 && toward.dot(facing).raw() < half_cos.raw() {
+                continue;
+            }
+            let (guarding, parried) = guard_against(&victim, at, m.unblockable);
+            apply_hit(
+                &mut self.players[index],
+                Hit {
+                    damage: m.damage,
+                    hitstun: m.hitstun,
+                    blockstun: m.blockstun,
+                    knockback: m.knockback,
+                    launch: Fx::ZERO,
+                    grabs: 0,
+                    by: owner as u8,
+                    dir: toward,
+                    blocked: guarding,
+                    parried,
+                },
+            );
+            if parried {
+                self.players[index].parried = PARRY_FLOURISH;
+            }
+        }
+    }
+}
+
+/// Is this the Elementalist's heavy?
+///
+/// The same shape of question `bolt::throws_a_beam` asks, and for the same
+/// reason: being a skillshot decides how the move is aimed, not what it does
+/// when it lands, so the slot has to be checked too. See `moves::SLOT_HEAVY`.
+fn throws_a_cataclysm(p: &Player, kind: u8) -> bool {
+    p.class == Class::Elementalist
+        && kind == SLOT_HEAVY
+        && moves::get(p.class, kind).aim() == aim::Kind::Skillshot
+}
+
+/// Which fire pillar a point sits inside, if any.
+///
+/// `aim::Contact::Fire` says a shot met fire and how far along its path, not
+/// which of the (at most two, one per fighter) pillars on the field it was --
+/// that bookkeeping already happens once inside `aim::first_along`, and
+/// redoing the search here rather than threading an index back out of it is
+/// the smaller change against a module that fails the build if anything but
+/// `crate::aim` reaches for its own intersection arithmetic.
+///
+/// Nearest by flat distance to its own centre, rather than strict containment:
+/// the contact point is where the shot entered the pillar's radius *plus its
+/// own girth*, which sits just outside the pillar's true footprint, so a
+/// contains-test tuned to the bare radius misses the very point that found it.
+fn fire_pillar_slot_at(effects: &[Option<Effect>; MAX_EFFECTS], at: V3) -> Option<usize> {
+    effects
+        .iter()
+        .enumerate()
+        .filter_map(|(i, slot)| {
+            let e = (*slot)?;
+            (e.kind == EffectKind::FirePillar).then_some((i, e))
+        })
+        .min_by_key(|(_, e)| V3::new(at.x.sub(e.pos.x), Fx::ZERO, at.z.sub(e.pos.z)).flat_len().raw())
+        .map(|(i, _)| i)
 }
 
 // ---------------------------------------------------------------------------

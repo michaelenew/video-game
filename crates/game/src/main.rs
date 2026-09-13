@@ -171,7 +171,13 @@ fn main() {
                 // and this is the twenty-first. They are independent of each
                 // other anyway: each puts one pool of meshes where the
                 // simulation says its things are.
-                (place_effects, place_structures, place_beams, place_bolts),
+                (
+                    place_effects,
+                    place_structures,
+                    place_beams,
+                    place_bolts,
+                    place_tornadoes,
+                ),
                 beast::place,
                 drive_camera,
                 fade_own_body,
@@ -489,6 +495,10 @@ struct BeamMesh(usize);
 #[derive(Component)]
 struct BoltMesh(usize);
 
+/// One fire tornado, lit by Cataclysm passing through a pillar.
+#[derive(Component)]
+struct TornadoMesh(usize);
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -759,6 +769,18 @@ fn setup(
             BoltMesh(slot),
         ));
     }
+    // One per player: a second cataclysm replaces the caster's own rather than
+    // sharing the field with it, so there is never more than one to draw per
+    // owner -- see `sim::tornado::spawn`.
+    for slot in 0..sim::tornado::MAX_TORNADOES {
+        commands.spawn((
+            Mesh3d(unit.clone()),
+            MeshMaterial3d(look.fire.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            TornadoMesh(slot),
+        ));
+    }
     commands.insert_resource(look);
 }
 
@@ -903,6 +925,30 @@ fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut
         // than as a bead hanging in the air.
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
         tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+    }
+}
+
+/// Put the fire tornadoes where they are.
+///
+/// Upright rather than turned on to its heading -- a tornado is a standing
+/// funnel that happens to be translating, not a bolt lying along its flight,
+/// so what should visibly track its direction of travel is the position each
+/// frame rather than the mesh's own tilt. Scaled to the pull radius, the same
+/// rule the debug overlay lives by: the shape you see standing in the arena is
+/// the shape that is actually pulling at you.
+fn place_tornadoes(
+    sim: Res<Sim>,
+    mut meshes: Query<(&TornadoMesh, &mut Transform, &mut Visibility)>,
+) {
+    let radius = sim::tuning::tornado_pull_radius().to_f32_for_render();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(vortex) = sim.cur.tornadoes[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(vortex.pos);
+        tf.scale = Vec3::new(radius * 2.0, radius * 3.0, radius * 2.0);
     }
 }
 

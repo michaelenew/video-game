@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 213] = [
+pub const SCALARS: [i32; 221] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -172,6 +172,14 @@ pub const SCALARS: [i32; 213] = [
                9, // elementalist.fire_bolt_stagger = 9
                5, // elementalist.fire_bolt_blockstun = 5
           196608, // elementalist.fire_bolt_knockback = 3
+           39322, // elementalist.cataclysm_blast_cone_(cos) = 0.6
+          393216, // elementalist.cataclysm_blast_radius = 6
+          917504, // elementalist.fire_tornado_speed = 14
+          294912, // elementalist.fire_tornado_pull_radius = 4.5
+         2621440, // elementalist.fire_tornado_pull_(m/s2) = 40
+              15, // elementalist.fire_tornado_tick_damage = 15
+              10, // elementalist.fire_tornado_tick_stagger = 10
+              90, // elementalist.fire_tornado_lifetime = 90
           144179, // blood_mage.black_spike_height = 2.2
               48, // blood_mage.bloodletter,_out_and_back = 48
            29491, // blood_mage.bloodletter_radius = 0.45
@@ -252,7 +260,7 @@ pub const AIR: [i32; 24] = [
 ];
 
 #[rustfmt::skip]
-pub const MOVES: [i32; 667] = [
+pub const MOVES: [i32; 690] = [
                4, // move.bulwark.bash.startup = 4
                3, // move.bulwark.bash.active = 3
               10, // move.bulwark.bash.recovery = 10
@@ -713,6 +721,29 @@ pub const MOVES: [i32; 667] = [
                1, // move.elementalist.fire_pillar.line_of_effect_(0-3) = 1
                0, // move.elementalist.fire_pillar.swing_arc_(turns) = 0
                0, // move.elementalist.fire_pillar.hits_again_every = 0
+              24, // move.elementalist.cataclysm.startup = 24
+               4, // move.elementalist.cataclysm.active = 4
+              24, // move.elementalist.cataclysm.recovery = 24
+             190, // move.elementalist.cataclysm.damage = 190
+          786432, // move.elementalist.cataclysm.reach = 12
+           65536, // move.elementalist.cataclysm.radius = 1
+              30, // move.elementalist.cataclysm.hitstun = 30
+              16, // move.elementalist.cataclysm.blockstun = 16
+          655360, // move.elementalist.cataclysm.knockback = 10
+               0, // move.elementalist.cataclysm.mobility_(%) = 0
+               6, // move.elementalist.cataclysm.aerial_hang = 6
+               0, // move.elementalist.cataclysm.unblockable = off
+               1, // move.elementalist.cataclysm.hits_crouching = on
+               0, // move.elementalist.cataclysm.needs_mechanic = off
+               0, // move.elementalist.cataclysm.launch = 0
+               0, // move.elementalist.cataclysm.self_lift = 0
+               0, // move.elementalist.cataclysm.grab_hold = 0
+               0, // move.elementalist.cataclysm.leaves_behind = 0
+               0, // move.elementalist.cataclysm.health_cost = 0
+               0, // move.elementalist.cataclysm.leech_(%) = 0
+               2, // move.elementalist.cataclysm.line_of_effect_(0-3) = 2
+               0, // move.elementalist.cataclysm.swing_arc_(turns) = 0
+               0, // move.elementalist.cataclysm.hits_again_every = 0
                7, // move.blood_mage.bloodletter.startup = 7
                3, // move.blood_mage.bloodletter.active = 3
               14, // move.blood_mage.bloodletter.recovery = 14
