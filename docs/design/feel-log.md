@@ -1473,6 +1473,48 @@ failed at 35% leech and passes at 55%. None of it has been played. The costs in 
 are a guess: the class is downstream of TTK, and what fraction of a health bar a cast should
 represent is exactly the question a prototype answers and a document cannot.
 
+### 2026-09-13 — a Grasp that closes pulls you in
+
+**Changed** `grab_hold` on Grasp means something now. Catch somebody with every one of the four
+arms and they are hauled to the caster's arm's length, held for twenty frames, and rooted for
+twenty more after the hands open.
+
+**Why** the knob had been set to 20 in a bake and was doing nothing at all: the arms are an
+effect, and the effect delivery path hard-coded `grabs: 0`. It carried damage, stun, blockstun,
+knockback and launch, and dropped the grab on the floor. A table that can be edited and is not
+read is worse than a table with a gap in it.
+
+**The thing that decided the design.** The obvious implementation — every arm grabs — does not
+work, and the reason is worth writing down because it is not a balance argument. The arms do
+not all land on the same frame:
+
+```
+f38  arms landed: [1, 3]      the bottom pair
+f39  arms landed: [0, 1, 2, 3]  the top pair, one frame later
+```
+
+A grab drags its victim to the caster. So a grab on the first contact moves them ten metres out
+from under the arms still in flight, the top pair miss, and `parts_landed == GRASP_ARMS` is
+never true — **the grab would silently delete the root**. The two payoffs go on the same
+condition because the first one eats the second otherwise.
+
+That turns out to be the better ability anyway. One or two arms is damage and you stay where you
+are; all four and the cone closes, takes you with it, and leaves you in melee range of somebody
+whose next swing is worth 1.4× against anything that cannot move. Rend is thirty-six frames end
+to end and the window is forty, so exactly one of them fits — which is the shape a read should
+pay out in.
+
+**How it is tested.** A sweep rather than a fixture. The interesting positions are a hand's
+width apart — the arms converge, so four arms and two arms are about a metre from each other —
+and a test that picked one of them would be pinned to today's cone width rather than to the
+rule. `only_a_full_grasp_catches_anybody` walks the victim across the cone and asserts the
+biconditional at every step: held exactly when all four landed, rooted exactly when all four
+landed, and it fails if the sweep never sees both cases.
+
+**Verdict** open. The reach is ten metres, which makes this the longest pull in the game by a
+distance; if it is too much, the reach is the first knob and the hold is the second.
+
+
 ### 2026-09-13 — the field was draining the creature into thin air, and the kit hit twice as hard as it meant to
 
 **Changed** two things, and only one of them is tuning.

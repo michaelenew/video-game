@@ -74,15 +74,15 @@ fn main() {
             // Champion's pole vault, which puts nothing anywhere.
             if !m.strikes() {
                 // A move with no volume of its own has its hit delivered by
-                // whatever it put in the world, and that path carries damage,
-                // stun, blockstun, knockback and launch -- but **not** the
-                // grab. Saying so here is the difference between a table that
-                // is incomplete and a table that is wrong: the knob is in the
-                // palette, it can be turned, and nothing happens.
-                let ignored = if m.grabs > 0 {
-                    "; grab ignored -- the effect delivers the hit"
-                } else {
-                    ""
+                // whatever it put in the world, and not every one of those can
+                // carry a grab. Saying which is the difference between a table
+                // that is incomplete and a table that is wrong: the knob is in
+                // the palette, it can be turned, and on most of them nothing
+                // would happen.
+                let ignored = match (m.grabs > 0, sim::effects::EffectKind::from_code(m.effect)) {
+                    (false, _) => "",
+                    (true, Some(kind)) if kind.seizes() => "; grabs once every arm lands",
+                    (true, _) => "; grab ignored -- the effect delivers the hit",
                 };
                 let what = if m.shape.strikes() {
                     format!("places something; the thing it placed hits{ignored}")

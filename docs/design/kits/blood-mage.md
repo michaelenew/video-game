@@ -127,22 +127,34 @@ it.
 > not implemented. What is in the game is the claw, given committed-slot weight.
 
 ### Grasp — special, `Q`
-**Startup** medium · **Recovery** long · **Range** short · **Mechanic** high cost; large
+**Startup** medium · **Recovery** long · **Range** medium · **Mechanic** high cost; large
 return if most of it lands
 
 A short-range skillshot that fires four arms — top left, bottom left, top right, bottom
 right. They leave in a cone, bow outward, and arc back inward to converge at the far end.
-Each arm damages on its own. **Anything caught by all four is rooted** for about two thirds
-of a second — and a rooted enemy takes 1.4× from everything this class has, which is what the
-root is for.
+Each arm damages on its own. **Anything caught by all four is seized**: hauled in to the
+caster's arm's length, held there for a third of a second, and rooted on the spot for a third
+of a second after the hands let go. A held or rooted enemy takes 1.4× from everything this
+class has, so the whole window is the payoff, not just the front of it.
+
+That is one ability doing the archive's two things at once — the four converging arms, and the
+tendrils that only pay out if you stay close enough to collect. It closes the range for you.
 
 The volume they sweep is a lens rather than a line, so standing anywhere near it gets you
-clipped by one or two arms. All four is a much smaller place to be, which is what makes the
-root a read rather than a tax — see the rule in [../ability-spec.md](../ability-spec.md)
-about hard stops needing hard conditions.
+clipped by one or two arms — damage, and nothing else. All four is a much smaller place to be:
+about a metre wide where the cone closes, against ten metres of reach. That is what makes the
+catch a read rather than a tax, per the rule in [../ability-spec.md](../ability-spec.md) about
+hard stops needing hard conditions.
+
+**The grab has to wait for all four, and not only for flavour.** A grab drags its victim to the
+caster, so one applied by the first arm to land would pull them out from under the other three
+— the bottom pair connect a frame before the top pair — and the root would then never fire at
+all. The two payoffs sit on the same condition because the first would otherwise eat the
+second.
 
 Rooted means your feet do not carry you and you cannot dodge or jump. It is not a stun: you
-can still turn, guard and swing at whoever put the arms round your legs. The root is
+can still turn, guard and swing at whoever put the arms round your legs — which matters, because
+by then they are standing right in front of you. The root is
 deliberately longer than the hitstun of the arms that deliver it, or it would expire before
 the victim could notice it — and longer than her fastest move's startup, or there would be
 nothing she could land inside it.
