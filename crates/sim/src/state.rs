@@ -18,6 +18,7 @@ use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Ghost, Mechanic};
+use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::input::Input;
@@ -26,7 +27,6 @@ use crate::monster::{self, Doing, Monster, Quarry};
 use crate::moves;
 use crate::shadow;
 use crate::stones::{self, Field};
-use crate::tornado;
 use crate::tuning as t;
 
 pub const MAX_PLAYERS: usize = 2;
@@ -55,7 +55,8 @@ pub const SLOT_SPECIAL: u8 = 2;
 pub const SLOT_MECHANIC: u8 = 3;
 /// Right click, on the one other class with nothing there: the Elementalist
 /// has no shield to guard with either, and Cataclysm takes the button instead
-/// of leaving it dead. See [`clicked_move`] and `crate::tornado`.
+/// of leaving it dead. See [`clicked_move`],
+/// `crate::effects::EffectKind::FireTornado` and `crate::debris`.
 pub const SLOT_HEAVY: u8 = 3;
 pub use crate::tuning::max_health;
 
@@ -595,11 +596,10 @@ pub struct World {
     /// Fire bolts in flight. The only projectile a fighter throws that is not
     /// part of somebody's mechanic -- see [`crate::bolt`].
     pub bolts: Flight,
-    /// Fire tornadoes, lit by the Elementalist's Cataclysm passing through a
-    /// pillar. The same kind of thing a fire bolt is -- a real velocity,
-    /// stepped frame by frame -- and for the same reason: see
-    /// [`crate::tornado`].
-    pub tornadoes: tornado::Swirl,
+    /// Debris thrown by Cataclysm destroying a structure. The same kind of
+    /// thing a fire bolt is -- a real velocity, stepped frame by frame -- and
+    /// for the same reason: see [`crate::debris`].
+    pub debris: Shrapnel,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -623,7 +623,7 @@ impl World {
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
             bolts: [None; MAX_BOLTS],
-            tornadoes: [None; tornado::MAX_TORNADOES],
+            debris: [None; MAX_DEBRIS],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -650,7 +650,7 @@ impl World {
         // Nothing in the air survives a round. A bolt still flying when the
         // last one ended would land on somebody standing on their mark.
         self.bolts = [None; MAX_BOLTS];
-        self.tornadoes = [None; tornado::MAX_TORNADOES];
+        self.debris = [None; MAX_DEBRIS];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -931,10 +931,12 @@ impl World {
             self.monster.is_none(),
             &mut self.monster,
         );
-        tornado::step(
-            &mut self.tornadoes,
+        debris::step(
+            &mut self.debris,
             &mut self.players,
+            &standing,
             self.monster.is_none(),
+            &mut self.monster,
         );
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
@@ -1004,13 +1006,13 @@ impl World {
                 None => h.write_u32(0),
             }
         }
-        for v in &self.tornadoes {
-            match v {
-                Some(v) => {
-                    h.write_u32(v.owner as u32 + 1);
-                    hash_v3(&mut h, &v.pos);
-                    hash_v3(&mut h, &v.dir);
-                    h.write_u32(v.age as u32);
+        for d in &self.debris {
+            match d {
+                Some(d) => {
+                    h.write_u32(d.owner as u32 + 1);
+                    hash_v3(&mut h, &d.pos);
+                    hash_v3(&mut h, &d.dir);
+                    h.write_i32(d.travelled.raw());
                 }
                 None => h.write_u32(0),
             }
@@ -2088,7 +2090,8 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // The Elementalist breaks it the same way for the same reason: no
         // shield, so right click is otherwise dead. Cataclysm is aimed like
         // the auto, along the crosshair, so it belongs on the mouse and not
-        // on a key -- see `crate::tornado`.
+        // on a key -- see `crate::debris` and
+        // `crate::effects::EffectKind::FireTornado`.
         Class::Elementalist if input.has(Input::RIGHT) => Some(SLOT_HEAVY),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
@@ -3300,7 +3303,13 @@ impl World {
                     effect.pos = at;
                 }
             }
-            if effect.age >= effect.life {
+            // A tornado also burns out the moment it leaves the arena, on top
+            // of its own clock -- the one effect whose centre can actually
+            // wander off the map, since every other one is either planted or
+            // tethered to a fighter who cannot.
+            let outside_the_world =
+                effect.kind == EffectKind::FireTornado && !arena::inside(effect.tornado_pos());
+            if effect.age >= effect.life || outside_the_world {
                 self.effects[i] = None;
                 self.pay_out(&effect);
                 continue;
@@ -3345,24 +3354,43 @@ impl World {
     fn apply_effect(&mut self, effect: &mut Effect) {
         match effect.kind {
             EffectKind::FirePillar => {
-                if !effect.ticks_now() {
-                    return;
+                if effect.ticks_now() {
+                    self.burn_the_pillar(effect, effect.pos);
+                }
+            }
+
+            // The exact same burn a standing pillar gives -- same two
+            // volumes, same tick, same number -- centred on the tornado's own
+            // live position instead of the spot it was cast on. The pull is
+            // the only thing that is actually new: everyone caught in either
+            // volume is hauled toward that live centre for as long as they
+            // are standing in it, on top of whatever the burn does to them.
+            // See `crate::effects::EffectKind::FireTornado`.
+            EffectKind::FireTornado => {
+                let at = effect.tornado_pos();
+                if effect.ticks_now() {
+                    self.burn_the_pillar(effect, at);
                 }
                 let (base, column) = effect.pillar_volumes();
                 let radius = t::body_radius();
                 let height = t::body_height();
                 for i in 0..MAX_PLAYERS {
                     let p = self.players[i];
-                    if !self.effects_reach(i, effect.owner) {
+                    if !self.effects_reach(i, effect.owner)
+                        || (!base.contains(at, p.pos, radius, height)
+                            && !column.contains(at, p.pos, radius, height))
+                    {
                         continue;
                     }
-                    if base.contains(effect.pos, p.pos, radius, height)
-                        || column.contains(effect.pos, p.pos, radius, height)
-                    {
-                        self.drain(i, effect);
+                    let apart = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z));
+                    let dist = apart.flat_len();
+                    if dist.raw() > 0 {
+                        let inward = apart.normalized();
+                        let pull = t::tornado_pull().mul(DT);
+                        self.players[i].vel.x = self.players[i].vel.x.sub(inward.x.mul(pull));
+                        self.players[i].vel.z = self.players[i].vel.z.sub(inward.z.mul(pull));
                     }
                 }
-                self.feed_the_caster(effect, 0, effect.pos, base.radius);
             }
 
             // Drain *and* slow. The slow is the part that matters: damage alone
@@ -3522,6 +3550,28 @@ impl World {
         flat.raw() <= radius.add(t::body_radius()).raw()
             && p.pos.y.add(p.hurt_height()).raw() >= at.y.sub(radius).raw()
             && p.pos.y.raw() <= at.y.add(radius).raw()
+    }
+
+    /// One tick of a fire pillar's burn, centred on `at` -- the pillar's own
+    /// `pos` normally, or a tornado's live, moving one. Shared so that a
+    /// tornado's tick is not a second copy of a pillar's own numbers with a
+    /// chance to disagree with them; see `crate::effects::EffectKind::FireTornado`.
+    fn burn_the_pillar(&mut self, effect: &mut Effect, at: V3) {
+        let (base, column) = effect.pillar_volumes();
+        let radius = t::body_radius();
+        let height = t::body_height();
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if !self.effects_reach(i, effect.owner) {
+                continue;
+            }
+            if base.contains(at, p.pos, radius, height)
+                || column.contains(at, p.pos, radius, height)
+            {
+                self.drain(i, effect);
+            }
+        }
+        self.feed_the_caster(effect, 0, at, base.radius);
     }
 
     /// One tick of a field. Damage, and the caster's share of it straight back.
@@ -4171,21 +4221,28 @@ impl World {
                 }
                 self.players[i].hit_used = true;
             }
-            // Broken outright, and whoever was standing near it pays for that
-            // in a blast rather than in a shove -- see `blast_cone`.
+            // Broken outright, and thrown outward as debris rather than
+            // detonated on the spot -- see `crate::debris`.
             Some(Contact::Stone { index, .. }) => {
                 if let Some(at) = stones::destroy(&mut self.players, index) {
-                    self.blast_cone(i, at, beam.dir(), &m);
+                    debris::blast(&mut self.debris, i as u8, at, beam.dir());
                 }
                 self.players[i].hit_used = true;
             }
-            // Not charged -- torn loose. See `crate::tornado`.
+            // Not charged -- torn loose. The same `Effect`, the same two
+            // volumes, now moving. See
+            // `crate::effects::EffectKind::FireTornado`.
             Some(Contact::Fire { dist }) => {
                 let at = beam.at(dist);
                 if let Some(slot) = fire_pillar_slot_at(&self.effects, at) {
-                    self.effects[slot] = None;
+                    if let Some(effect) = self.effects[slot].as_mut() {
+                        effect.kind = EffectKind::FireTornado;
+                        effect.dir = beam.dir();
+                        effect.age = 0;
+                        effect.life = EffectKind::FireTornado.life().max(1);
+                        effect.struck = 0;
+                    }
                 }
-                tornado::spawn(&mut self.tornadoes, i as u8, at, beam.dir());
                 self.players[i].hit_used = true;
             }
             Some(Contact::Quarry { part, .. }) => {
@@ -4196,56 +4253,6 @@ impl World {
                 }
             }
             None => {}
-        }
-    }
-
-    /// Everyone caught in the cone a destroyed structure goes up in.
-    ///
-    /// A cone rather than a bubble, angled along the line Cataclysm was fired
-    /// on: the structure absorbed the shot, so the blast keeps travelling
-    /// roughly the way the shot was going rather than expanding evenly in
-    /// every direction from a point that, a moment ago, was solid ground.
-    fn blast_cone(&mut self, owner: usize, at: V3, dir: V3, m: &moves::Move) {
-        let facing = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
-        let radius = t::cataclysm_blast_radius();
-        let half_cos = t::cataclysm_cone_cos();
-        for index in 0..MAX_PLAYERS {
-            if index == owner || self.players[index].health <= 0 {
-                continue;
-            }
-            let victim = self.players[index];
-            let apart = V3::new(victim.pos.x.sub(at.x), Fx::ZERO, victim.pos.z.sub(at.z));
-            let dist = apart.flat_len();
-            if dist.raw() > radius.raw() || victim.action.invulnerable() {
-                continue;
-            }
-            let toward = if dist.raw() > 0 {
-                apart.normalized()
-            } else {
-                facing
-            };
-            if dist.raw() > 0 && toward.dot(facing).raw() < half_cos.raw() {
-                continue;
-            }
-            let (guarding, parried) = guard_against(&victim, at, m.unblockable);
-            apply_hit(
-                &mut self.players[index],
-                Hit {
-                    damage: m.damage,
-                    hitstun: m.hitstun,
-                    blockstun: m.blockstun,
-                    knockback: m.knockback,
-                    launch: Fx::ZERO,
-                    grabs: 0,
-                    by: owner as u8,
-                    dir: toward,
-                    blocked: guarding,
-                    parried,
-                },
-            );
-            if parried {
-                self.players[index].parried = PARRY_FLOURISH;
-            }
         }
     }
 }

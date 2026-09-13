@@ -176,7 +176,7 @@ fn main() {
                     place_structures,
                     place_beams,
                     place_bolts,
-                    place_tornadoes,
+                    place_debris,
                     place_wings,
                     place_wing_tips,
                     place_marks,
@@ -498,9 +498,9 @@ struct BeamMesh(usize);
 #[derive(Component)]
 struct BoltMesh(usize);
 
-/// One fire tornado, lit by Cataclysm passing through a pillar.
+/// One piece of debris, thrown when Cataclysm destroys a structure.
 #[derive(Component)]
-struct TornadoMesh(usize);
+struct DebrisMesh(usize);
 
 /// One slice of the Dual mage's wing.
 ///
@@ -809,16 +809,16 @@ fn setup(
             BoltMesh(slot),
         ));
     }
-    // One per player: a second cataclysm replaces the caster's own rather than
-    // sharing the field with it, so there is never more than one to draw per
-    // owner -- see `sim::tornado::spawn`.
-    for slot in 0..sim::tornado::MAX_TORNADOES {
+    // Debris thrown when Cataclysm destroys a structure. Stone-skinned rather
+    // than fire: it is the structure itself going out in pieces, not the
+    // blast that broke it.
+    for slot in 0..sim::debris::MAX_DEBRIS {
         commands.spawn((
-            Mesh3d(unit.clone()),
-            MeshMaterial3d(look.fire.clone()),
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.stone.clone()),
             Transform::default(),
             Visibility::Hidden,
-            TornadoMesh(slot),
+            DebrisMesh(slot),
         ));
     }
     // The Dual mage's wing, and the ball it finishes on. Spawned for every
@@ -1003,27 +1003,20 @@ fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut
     }
 }
 
-/// Put the fire tornadoes where they are.
-///
-/// Upright rather than turned on to its heading -- a tornado is a standing
-/// funnel that happens to be translating, not a bolt lying along its flight,
-/// so what should visibly track its direction of travel is the position each
-/// frame rather than the mesh's own tilt. Scaled to the pull radius, the same
-/// rule the debug overlay lives by: the shape you see standing in the arena is
-/// the shape that is actually pulling at you.
-fn place_tornadoes(
-    sim: Res<Sim>,
-    mut meshes: Query<(&TornadoMesh, &mut Transform, &mut Visibility)>,
-) {
-    let radius = sim::tuning::tornado_pull_radius().to_f32_for_render();
+/// Put the debris where it is, pointing the way it is going -- the same
+/// treatment `place_bolts` gives a fire bolt, and for the same reason: a
+/// shard is a thing in flight, not a bead hanging in the air.
+fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &mut Visibility)>) {
+    let radius = sim::tuning::debris_radius().to_f32_for_render();
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let Some(vortex) = sim.cur.tornadoes[tag.0] else {
+        let Some(shard) = sim.cur.debris[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
         };
         *vis = Visibility::Inherited;
-        tf.translation = fx3(vortex.pos);
-        tf.scale = Vec3::new(radius * 2.0, radius * 3.0, radius * 2.0);
+        tf.translation = fx3(shard.pos);
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shard.dir).normalize_or_zero());
+        tf.scale = Vec3::splat(radius * 2.0);
     }
 }
 
@@ -1237,6 +1230,23 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
     let at = fx3(effect.pos);
     match effect.kind {
         EffectKind::FirePillar if part < 2 => {
+            let (base, column) = effect.pillar_volumes();
+            let it = if part == 0 { base } else { column };
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                it.radius.to_f32_for_render(),
+                it.bottom.to_f32_for_render(),
+                it.top.to_f32_for_render(),
+            ))
+        }
+        // The exact same two volumes a fire pillar draws, at its own live,
+        // moving centre instead of `effect.pos` -- see
+        // `sim::effects::Effect::tornado_pos`. Not a shape of its own: this is
+        // the point of folding the tornado into the same `Effect` a pillar is.
+        EffectKind::FireTornado if part < 2 => {
+            let at = fx3(effect.tornado_pos());
             let (base, column) = effect.pillar_volumes();
             let it = if part == 0 { base } else { column };
             Some(standing(

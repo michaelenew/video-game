@@ -278,14 +278,17 @@ scalars! {
     FireBoltStagger,   "Elementalist", "Fire bolt stagger",                 Frames, 0,        90;
     FireBoltBlockstun, "Elementalist", "Fire bolt blockstun",               Frames, 0,        90;
     FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
-    CataclysmConeCos,  "Elementalist", "Cataclysm blast cone (cos)",        Fixed,  fx(-1,1), fx(1,1);
-    CataclysmBlastRadius, "Elementalist", "Cataclysm blast radius",         Fixed,  fx(1,1),  fx(15,1);
     TornadoSpeed,      "Elementalist", "Fire tornado speed",                Fixed,  fx(1,1),  fx(40,1);
-    TornadoPullRadius, "Elementalist", "Fire tornado pull radius",          Fixed,  fx(1,1),  fx(15,1);
     TornadoPull,       "Elementalist", "Fire tornado pull (m/s2)",          Fixed,  0,        fx(100,1);
-    TornadoDamage,     "Elementalist", "Fire tornado tick damage",          Int,    0,        200;
-    TornadoStagger,    "Elementalist", "Fire tornado tick stagger",         Frames, 0,        60;
     TornadoLife,       "Elementalist", "Fire tornado lifetime",             Frames, 1,        300;
+    DebrisSpeed,       "Elementalist", "Cataclysm debris speed",            Fixed,  fx(1,1),  fx(40,1);
+    DebrisRange,       "Elementalist", "Cataclysm debris range",            Fixed,  fx(1,1),  fx(20,1);
+    DebrisRadius,      "Elementalist", "Cataclysm debris radius",           Fixed,  fx(1,10), fx(2,1);
+    DebrisSpread,      "Elementalist", "Cataclysm debris fan (turns)",      Fixed,  0,        fx(1,4);
+    DebrisDamage,      "Elementalist", "Cataclysm debris damage, per piece",Int,    0,        200;
+    DebrisStagger,     "Elementalist", "Cataclysm debris stagger",          Frames, 0,        60;
+    DebrisBlockstun,   "Elementalist", "Cataclysm debris blockstun",        Frames, 0,        30;
+    DebrisKnockback,   "Elementalist", "Cataclysm debris knockback",        Fixed,  0,        fx(30,1);
     SpikeHeight,       "Blood mage", "Black spike height",                  Fixed,  fx(1,2),  fx(6,1);
     BloodletterFlight, "Blood mage", "Bloodletter, out and back",           Frames, 10,       180;
     BloodletterRadius, "Blood mage", "Bloodletter radius",                  Fixed,  fx(1,10), fx(2,1);
@@ -759,7 +762,7 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 227;
+pub const SCALAR_COUNT: usize = 230;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody

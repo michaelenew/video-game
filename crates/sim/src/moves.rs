@@ -383,8 +383,9 @@ const NAMES: [&[&str]; 6] = [
     //   same reason -- what it does depends on what it meets first, and none
     //   of that fits a hitbox that lives for a few frames in front of her body.
     //   A structure in the way is destroyed outright rather than kicked, and
-    //   goes up in a blast; a fire pillar in the way is not charged, it is
-    //   torn loose into a travelling fire tornado. See `crate::tornado`.
+    //   breaks into thrown debris (see `crate::debris`); a fire pillar in the
+    //   way is not charged, it is torn loose into a travelling fire tornado
+    //   (see `crate::effects::EffectKind::FireTornado`).
     &["Bolt", "Fissure", "Fire pillar", "Cataclysm"],
     // Blood mage -- sustain through aggression. Everything costs health, and
     // every one of these has a cost in the table to prove it.

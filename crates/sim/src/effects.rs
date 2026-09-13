@@ -19,13 +19,17 @@
 //!
 //! ## Movement is a function of age, never a velocity
 //!
-//! Two of the four travel — a blade thrown out and caught again, four arms that
-//! open into a cone and close to a point. Neither carries a velocity. Where
-//! they are is worked out from `age` every frame, so the whole flight is a pure
-//! function of the frame the effect was cast on plus the frame it is now, and a
-//! rollback that re-simulates the middle of a flight reproduces it exactly
-//! rather than re-integrating it and landing somewhere near.
+//! Two of the five travel — a blade thrown out and caught again, four arms that
+//! open into a cone and close to a point. A third, the fire tornado, travels in
+//! a straight line rather than a curve, and still carries no velocity: where it
+//! is is `pos` plus `dir` times `tornado_speed` times `age`, which is a formula
+//! rather than a memory. None of the three carries a velocity. Where they are
+//! is worked out from `age` every frame, so the whole flight is a pure function
+//! of the frame the effect was cast on plus the frame it is now, and a rollback
+//! that re-simulates the middle of a flight reproduces it exactly rather than
+//! re-integrating it and landing somewhere near.
 
+use crate::DT;
 use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
@@ -55,6 +59,19 @@ pub enum EffectKind {
     /// Elementalist. Narrow and short at first, then grows: a wide, punishing
     /// base and a taller column above it.
     FirePillar,
+    /// Elementalist. What a fire pillar becomes when Cataclysm passes through
+    /// it instead of just charging the shot: the same two volumes -- see
+    /// [`Effect::pillar_volumes`] -- cut loose from the ground they grew out
+    /// of and sent racing along the line Cataclysm was aimed, pulling in
+    /// anyone they pass over.
+    ///
+    /// **Not a new hitbox.** A pillar already standing is destroyed and a
+    /// tornado spawned in its place once, back when Cataclysm was first
+    /// built; this reuses the exact same `Effect` slot and the exact same
+    /// two-volume shape instead, because the pillar's own hitbox is what a
+    /// tornado wants to be, moving. See [`Effect::tornado_pos`] for the
+    /// motion.
+    FireTornado,
     /// Blood mage. A spike standing in a field that drains and slows anyone
     /// inside it, and feeds a share of what it drains back to the caster.
     BlackSpike,
@@ -94,6 +111,7 @@ impl EffectKind {
     pub const fn name(self) -> &'static str {
         match self {
             EffectKind::FirePillar => "fire pillar",
+            EffectKind::FireTornado => "fire tornado",
             EffectKind::BlackSpike => "black spike",
             EffectKind::Bloodletter => "bloodletter",
             EffectKind::Grasp => "grasp",
@@ -106,9 +124,14 @@ impl EffectKind {
     /// A property of the thing rather than of the move that made it: a pillar
     /// of flame comes out of the floor whatever you were doing when you cast
     /// it. It decides where an aimed cast lands -- see `crate::aim::target`.
+    ///
+    /// A tornado is never itself the answer to that question -- nothing casts
+    /// one this way, it only ever comes from a pillar that already stood --
+    /// but the match has to say something, so it says what the pillar it came
+    /// from would.
     pub const fn grounded(self) -> bool {
         match self {
-            EffectKind::FirePillar | EffectKind::BlackSpike => true,
+            EffectKind::FirePillar | EffectKind::FireTornado | EffectKind::BlackSpike => true,
             // Both of these are thrown *through* the air along the line the
             // player is looking, so the crosshair means a direction rather than
             // a place on the floor.
@@ -123,8 +146,14 @@ impl EffectKind {
     /// Does it stay where it was put?
     ///
     /// The two that do are places on the map and are drawn and tested where
-    /// they were cast. The two that do not work out where they are from their
+    /// they were cast. The ones that do not work out where they are from their
     /// age -- see the module header.
+    ///
+    /// **The tornado is not one of these**, even though it moves: this
+    /// question is about a one-shot pass that gets marked struck once landed
+    /// (see `state::World::gore_the_creature`), and a tornado hits over and
+    /// over on a tick the way the pillar it came from did, not once like a
+    /// thrown blade.
     pub const fn travels(self) -> bool {
         matches!(self, EffectKind::Bloodletter | EffectKind::Grasp)
     }
@@ -168,6 +197,7 @@ impl EffectKind {
     pub fn life(self) -> u16 {
         match self {
             EffectKind::FirePillar => t::pillar_life(),
+            EffectKind::FireTornado => t::tornado_life(),
             EffectKind::BlackSpike => t::spike_life(),
             EffectKind::Bloodletter => t::bloodletter_flight(),
             EffectKind::Grasp => t::grasp_flight(),
@@ -189,9 +219,13 @@ impl EffectKind {
     /// are not the same event: a fire pillar's eruption is not its burn. The
     /// two that travel take the move's, because for those the effect *is* the
     /// hit — the caster's body never touches anybody.
+    ///
+    /// The tornado takes the pillar's own number rather than a number of its
+    /// own -- it is the same fire, still burning on the same tick, now also
+    /// dragging you toward it. What is new about it is the pull, not the burn.
     pub fn damage(self, m: &Move) -> i32 {
         match self {
-            EffectKind::FirePillar => t::pillar_damage(),
+            EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_damage(),
             EffectKind::BlackSpike => t::spike_drain(),
             EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::GuillotineLotus => m.damage,
         }
@@ -317,8 +351,20 @@ impl Effect {
     /// over. A single growing cylinder would make those one decision, and the
     /// pillar would be either useless against a jump or unavoidable on the
     /// ground.
+    ///
+    /// **A tornado is always fully grown.** It was cut loose from a pillar
+    /// that had already finished growing in the sense that matters -- it is
+    /// leaving, not arriving -- so its own `progress` (which now measures how
+    /// close it is to burning out, not how established it is) has nothing to
+    /// do with its size. Shrinking a tornado toward nothing as its life ran
+    /// out would read as it fading, and it does not fade; it moves until its
+    /// clock or the arena stops it.
     pub fn pillar_volumes(&self) -> (Pillar, Pillar) {
-        let grown = self.progress();
+        let grown = if self.kind == EffectKind::FireTornado {
+            Fx::ONE
+        } else {
+            self.progress()
+        };
         let base = Pillar {
             radius: lerp(
                 t::pillar_base_radius_start(),
@@ -336,6 +382,22 @@ impl Effect {
             top: lerp(t::pillar_height_start(), t::pillar_height(), grown),
         };
         (base, column)
+    }
+
+    /// Where a tornado's centre is this frame.
+    ///
+    /// A pure function of `age`, not a velocity: `pos` is where the pillar it
+    /// was cut loose from stood, `dir` is the line Cataclysm was aimed along,
+    /// and how far past `pos` it has arrived is `age` frames of
+    /// `tornado_speed`. A rollback re-simulating the middle of its flight
+    /// computes the same point every time it asks, rather than integrating
+    /// toward it one frame at a time and landing somewhere near. Meaningless
+    /// -- and never called -- on anything but a [`EffectKind::FireTornado`].
+    pub fn tornado_pos(&self) -> V3 {
+        let travelled = t::tornado_speed()
+            .mul(Fx::from_int(self.age as i32))
+            .mul(DT);
+        self.pos.add(self.dir.scale(travelled))
     }
 
     /// The volume a black spike occupies: a disc of ground with a spike
@@ -359,7 +421,7 @@ impl Effect {
     pub fn field_radius(&self) -> Fx {
         match self.kind {
             EffectKind::BlackSpike => t::spike_radius(),
-            EffectKind::FirePillar => self.pillar_volumes().0.radius,
+            EffectKind::FirePillar | EffectKind::FireTornado => self.pillar_volumes().0.radius,
             EffectKind::Bloodletter => t::bloodletter_radius(),
             EffectKind::Grasp => t::grasp_arm_radius(),
             EffectKind::GuillotineLotus => t::lotus_blade_radius(),

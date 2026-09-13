@@ -146,12 +146,39 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         gizmos.line(at, at + v3(shot.dir) * (radius * 4.0), PILLAR);
     }
 
+    // Debris in flight, the same treatment. Each piece is its own hit test
+    // and the overlay says so, rather than drawing the blast as a single
+    // shape the way the old instant cone did.
+    for shard in sim.cur.debris.iter().flatten() {
+        let at = v3(shard.pos);
+        let radius = sim::tuning::debris_radius().to_f32_for_render();
+        gizmos.sphere(Isometry3d::from_translation(at), radius, PILLAR);
+        gizmos.line(at, at + v3(shard.dir) * (radius * 4.0), PILLAR);
+    }
+
     // Persistent effects, drawn as the volumes the simulation tests against --
     // the fire pillar's two slabs separately, because they are two threats.
     for effect in sim.cur.effects.iter().flatten() {
         let at = v3(effect.pos);
         match effect.kind {
             EffectKind::FirePillar => {
+                let (base, column) = effect.pillar_volumes();
+                for slab in [base, column] {
+                    let bottom = slab.bottom.to_f32_for_render();
+                    let top = slab.top.to_f32_for_render();
+                    cylinder(
+                        &mut gizmos,
+                        at + Vec3::Y * bottom,
+                        slab.radius.to_f32_for_render(),
+                        (top - bottom).max(0.01),
+                        PILLAR,
+                    );
+                }
+            }
+            // The same two volumes, at the tornado's own live centre rather
+            // than `effect.pos` -- see `Effect::tornado_pos`.
+            EffectKind::FireTornado => {
+                let at = v3(effect.tornado_pos());
                 let (base, column) = effect.pillar_volumes();
                 for slab in [base, column] {
                     let bottom = slab.bottom.to_f32_for_render();

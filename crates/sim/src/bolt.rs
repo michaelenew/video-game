@@ -58,8 +58,8 @@ pub type Flight = [Option<FireBolt>; MAX_BOLTS];
 /// *does* when it lands -- poke, kick a stone, light a pillar -- is this
 /// class's alone, and it is specifically the poke's: Cataclysm is a second
 /// skillshot on the same class, aimed the same way and resolved the same way
-/// structurally, but what it does when it lands is `crate::tornado`'s answer,
-/// not this one.
+/// structurally, but what it does when it lands is `crate::debris`'s and
+/// `crate::effects::EffectKind::FireTornado`'s answer, not this one.
 pub fn throws_a_beam(p: &Player, kind: u8) -> bool {
     crate::moves::get(p.class, kind).aim() == aim::Kind::Skillshot
         && p.class == Class::Elementalist

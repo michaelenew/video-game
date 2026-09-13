@@ -305,8 +305,16 @@ fn best_case(m: &Move) -> i32 {
         Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
         Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
         // A field, for as long as it stands. The move's own hit lands too.
+        //
+        // `FireTornado` never actually reaches this match: nothing casts one
+        // by code, Cataclysm only ever turns an existing fire pillar into
+        // one at runtime. It is grouped here anyway, for the day something
+        // does ask a Move for its best case against a tornado's own numbers.
         Some(
-            kind @ (EffectKind::BlackSpike | EffectKind::FirePillar | EffectKind::GuillotineLotus),
+            kind @ (EffectKind::BlackSpike
+            | EffectKind::FirePillar
+            | EffectKind::FireTornado
+            | EffectKind::GuillotineLotus),
         ) => {
             let ticks = kind.life() / t::effect_tick_frames().max(1);
             m.damage * swings + kind.damage(m) * ticks as i32
