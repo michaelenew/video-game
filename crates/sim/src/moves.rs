@@ -298,15 +298,18 @@ const NAMES: [&[&str]; 6] = [
     ],
     // Shadow Reaver -- two bodies. Options are a function of the line between
     // them, and the line always exists: the shadow is never nowhere.
+    //
+    // The two buttons are swapped against every other class, and the reason is
+    // the sixth sentence of the grammar rather than an exception to it: **the
+    // mouse means where.** Sending the shadow is the one thing in this kit the
+    // crosshair aims, so it is on the mouse; Executioner is a swing off the
+    // body and does not care, so it is on the key.
     //   Slash: the auto, on left click.
-    //   Executioner: the committed melee, on right click as well as shift+left.
-    //     Right click is free on this class -- there is no shield to guard with
-    //     -- and the kit doc has always wanted the Reaver's melee on both mouse
-    //     buttons.
+    //   Executioner: the committed melee, on `E` as well as shift+left.
     //   Guillotine: six blades erupt from the shadow and come back to it, so it
     //     is aimed at the mechanic and the mechanic does all the hitting.
-    //   Send shadow: on `E`, and a real move rather than a state flip. It
-    //     throws the second body out fast and, pressed again, dashes it home
+    //   Send shadow: on right click, and a real move rather than a state flip.
+    //     It throws the second body out fast and, pressed again, dashes it home
     //     through anybody in the way.
     &["Slash", "Executioner", "Guillotine", "Send shadow"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
@@ -500,12 +503,18 @@ pub const fn slots(class: Class) -> usize {
 /// fourth is its aerial sword.
 pub const fn on_e(class: Class) -> Option<u8> {
     match class {
-        Class::BloodMage | Class::ShadowReaver => Some(SLOTS as u8),
+        Class::BloodMage => Some(SLOTS as u8),
         // The Dual mage for the same reason, arrived at from the other
         // direction: her mechanic is a *meter*, and it is steered by which
         // button attacks rather than by a key. There is nothing for `E` to
         // toggle either, so it carries Sweep.
         Class::DualMage => Some(dual::SWEEP),
+        // The Reaver is the odd one, and the only class where `E` carries a
+        // move that is **not** the mechanic. Her mechanic is on right click,
+        // because it is the half of her kit the crosshair aims; what is left
+        // for the key is the swing, which does not care where it is thrown
+        // from. See the note in [`NAMES`].
+        Class::ShadowReaver => Some(crate::state::SLOT_COMMITTED),
         _ => None,
     }
 }
@@ -562,9 +571,9 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // right click is otherwise dead on a class with no shield to raise.
         Class::ShadowReaver => match slot {
             0 => "LMB",
-            1 => "RMB, Shift+LMB",
+            1 => "E, Shift+LMB",
             2 => "Q",
-            _ => "E",
+            _ => "RMB",
         },
         // Both clicks are attacks, because the two autos are the mechanic: the
         // button is which force you throw and therefore which way you drift.

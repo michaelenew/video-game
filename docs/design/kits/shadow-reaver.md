@@ -1,7 +1,7 @@
 ---
 status: proposed
 decided: 2026-09-09
-revised: 2026-09-13
+revised: 2026-09-14
 sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat-design/class-builds.md
 ---
 
@@ -51,8 +51,8 @@ be **parried**, because a parry is a stagger paid by the attacker and there is n
 that end of the blow to stagger; reading it perfectly still stops it dead.
 
 It copies **swings only**. The other two things you throw are already the shadow's — the
-Guillotine erupts *at* it, and the mechanic key *is* it — and a copy of either would be
-the same ability fired twice from the same place.
+Guillotine erupts *at* it, and Send shadow *is* it — and a copy of either would be the
+same ability fired twice from the same place.
 
 Input map in [../controls.md](../controls.md).
 
@@ -67,7 +67,7 @@ copies most.
 
 ## Abilities
 
-### Send shadow — `E`
+### Send shadow — right click
 **Startup** fast · **Recovery** short · **Range** the throw's own reach · **Mechanic**
 sends the shadow out, or calls it home
 
@@ -97,7 +97,7 @@ home**, cutting on the way out and again on the way back.
 **The blades track the shadow's live position every frame.** Recall the shadow with a
 lotus open and the six of them are dragged the length of the arena after it — a long
 scything smear through everything in between. That is the class's biggest turn, and it is
-two buttons: `Q`, then `E`.
+two buttons: `Q`, then right click.
 
 > **Implemented.** The move itself has no volume at all; it places the flower and the
 > flower does the hitting, which is why the frame table shows it with no damage of its
@@ -130,16 +130,15 @@ It replaces two abilities from the original list, **Shadow swap** and **Reascend
 of which were "get to the shadow" with a different verb attached. One movement option,
 aimed.
 
-### Executioner — right click, or `shift` + left click
+### Executioner — `E`, or `shift` + left click
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
 the shadow, which now always applies
 
 Blink upward, then slash down in a long arc. The big commitment, and an overhead — it is
 the class's answer to a turtle.
 
-On **right click** as well as the shared grammar's `shift` + left click, because right
-click is otherwise dead on a class with no shield to raise and the kit has always
-described the Reaver as fighting with both hands.
+On **`E`** as well as the shared grammar's `shift` + left click. See
+[Why the two buttons are swapped](#why-the-two-buttons-are-swapped).
 
 ### Deadly mistake
 **Startup** fast · **Recovery** long on whiff · **Range** self · **Mechanic** requires the
@@ -148,8 +147,35 @@ shadow for the teleport
 A brief counter stance. Passive: enemies that attack your shadow bleed. If struck during
 the stance, you appear behind the attacker and leave your shadow where you were.
 
-**Unbuilt**, and it now needs a button. `Shift` + right click is the obvious candidate and
-has not been decided.
+**Unbuilt**, and it needs a button that does not exist yet. Both obvious candidates are
+swallowed: right click ignores `shift` and sends the shadow either way, and `shift` + `E`
+throws Executioner for the same reason. Undecided, and the first thing that will have to
+give if this ability is built.
+
+## Why the two buttons are swapped
+
+This class is the only one where `E` is not the mechanic, and where right click is. It
+looks like an exception to the control grammar and it is the opposite — it is sentence six
+of that grammar taken seriously:
+
+> **The mouse means *where*.**
+
+**Sending the shadow is the only thing in this kit the crosshair aims.** It is a grounded
+cast: you point at a patch of floor and the second body goes and stands on it, and where
+you put it is the whole decision the class is made of. That belongs under the hand that is
+already doing the pointing.
+
+**Executioner does not care.** It is a swing off the body — the yaw is your facing, the
+pitch is the camera's, and nothing about it reads the crosshair as a place. It can live on
+a key, and it does.
+
+So the split is not "mechanic on a key, abilities on the mouse". It is **aimed things on
+the mouse, unaimed things on the key**, which is what the grammar said in the first place
+and what four of the six classes get for free by having a mechanic with nothing to aim.
+
+It was the other way round for a day, and the reason to prefer this one is not on paper:
+sending the shadow is a *placement*, and placing something with the hand that is not
+holding the mouse means committing to a spot you are about to stop looking at.
 
 ## Playing it
 

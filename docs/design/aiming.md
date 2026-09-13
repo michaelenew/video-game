@@ -1,7 +1,7 @@
 ---
 status: decided
 decided: 2026-09-12
-revised: 2026-09-13
+revised: 2026-09-14
 ---
 
 # Aiming
@@ -226,6 +226,11 @@ grounded cast and the Bulwark's thrown shield is a skillshot. The Reaver's is no
 longer a mechanic *input* at all — Send shadow is a move in the table like any
 other, and it is a grounded cast, so a shadow lands on the floor exactly where
 the crosshair is.
+
+That is also why it sits on **right click** rather than on `E`: it is the one
+thing in her kit the crosshair aims, and the mouse is where aiming lives. The
+swing it displaced went to the key, which does not read the crosshair as a
+place. See [kits/shadow-reaver.md](kits/shadow-reaver.md).
 
 ### One thing that is not a line of effect
 

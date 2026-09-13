@@ -69,7 +69,8 @@ fn a_travelling_shadow_holds_the_dash_and_a_standing_one_does_not() {
     }
     let mut seen = Vec::new();
     for frame in 0..60 {
-        let bits = if frame == 0 { Input::MECHANIC } else { 0 };
+        // Right click sends the shadow on this class -- see `moves::on_e`.
+        let bits = if frame == 0 { Input::RIGHT } else { 0 };
         w.advance([Input::new(bits), Input::default()]);
         if let Some(it) = interpolate(&w, &w, 1.0).shadows[0] {
             if !seen.contains(&std::mem::discriminant(&it.doing)) {

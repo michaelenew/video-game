@@ -2029,7 +2029,8 @@ shadow can no longer be absent.**
 
 - `Mechanic::Shadow` went from `Option<V3>` to a body with four states -- attending her,
   going out, waiting, coming home. There is no "nowhere".
-- `E` became a **move** rather than an instant, in a fourth slot in the table: *Send shadow*,
+- The mechanic became a **move** rather than an instant, in a fourth slot in the table:
+  *Send shadow* (on `E` at first; see the entry below),
   8/3/14, reach 9 m, damage 70 on the way home. The shadow flies out in ten frames and stops;
   pressed again it dashes home at 34 m/s through anybody in the way, cutting once and slowing
   them to 0.55x.
@@ -2044,7 +2045,8 @@ shadow can no longer be absent.**
   it stands.
 - The forward dodge, thrown with the crosshair on the shadow, became the dash to it: 34 m/s
   constant, invulnerable, and arriving collects the shadow.
-- Executioner picked up **right click**, which was dead on a class with no shield.
+- Executioner picked up **right click**, which was dead on a class with no shield. Swapped
+  back a day later; see below.
 
 **Why** two reasons, and the second is the one that mattered.
 
@@ -2087,3 +2089,37 @@ a thousand, and that is meant to be the execute rather than the opening.
    two -- is now a real inconsistency rather than a Champion-shaped exception. It is the
    cheapest of the three to reverse.
 
+
+### 2026-09-14 — the Reaver's two buttons, swapped
+
+**Changed** right click sends the shadow, `E` throws Executioner. It was the other way round
+for a day.
+
+**Why** nothing about the moves, and everything about which hand is doing what. Sending the
+shadow is a **placement**: a grounded cast at a patch of floor the player picked, and where
+that floor is is the decision the whole class is made of. Executioner is a swing off the
+body — yaw from the facing, pitch from the camera — and reads the crosshair as an angle
+rather than as a place.
+
+Sentence six of the control grammar is *the mouse means where*. Putting the aimed half on
+the mouse and the unaimed half on the key is that sentence applied, and the first
+arrangement had it backwards for no reason beyond `E` being the mechanic key everywhere
+else.
+
+The specific thing that made the first arrangement feel wrong, and the one worth writing
+down: **placing something with the hand that is not holding the mouse means committing to a
+spot you are about to stop looking at.** You press `E`, and the pointing you did a frame ago
+is already stale, because the mouse never stopped moving. On right click the press and the
+aim are the same gesture.
+
+**What it costs.** The Reaver is now the one class where `E` carries something that is not
+the mechanic, which makes the grammar's fifth sentence slightly less true than it was. The
+honest split is two rules rather than one — *a mechanic is an ability when pressing it is
+not free*, and *which button it lands on is the crosshair's question* — and both are now in
+controls.md.
+
+It also leaves Deadly mistake with nowhere to go: right click ignores `shift`, and `shift` +
+`E` is Executioner. That was true of the previous arrangement too, in mirror image.
+
+**Verdict** open. It is a two-line change and reversible, which is most of why it was worth
+trying rather than arguing about.

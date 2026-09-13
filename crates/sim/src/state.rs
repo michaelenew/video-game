@@ -1925,19 +1925,18 @@ fn step_player(
 ///   the Dual mage  left and right are two *different* autos, one per arm,
 ///                  because the button is which force you throw -- see
 ///                  `moves::dual`
-///   the Reaver     right click is the committed melee, the same one shift +
-///                  left throws. A button, not a move
+///   the Reaver     right click sends the shadow, because the shadow is the
+///                  thing the crosshair aims -- see `moves::on_e`
 /// ```
 ///
 /// It is a function rather than a chain of branches in `step_player` because
 /// the answer is a property of the class's kit, and the three classes that
 /// broke the shared rule each broke it in their own way: the Champion by
 /// needing a third button, the Dual mage by needing right click to be a
-/// different attack, and the Reaver by needing it to be the same one.
+/// different attack, and the Reaver by needing it to be the *aimed* one.
 ///
-/// Two of the three are the same observation from different sides: **right
-/// click is dead weight on a class with no shield**, and three of the six have
-/// no shield.
+/// All three start from the same observation: **right click is dead weight on
+/// a class with no shield**, and three of the six have no shield.
 ///
 /// Right click means **guard** on every class that has a shield, and that is
 /// handled by the caller: `want_guard` asks the mechanic, not the button.
@@ -1945,11 +1944,12 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
     match p.class {
         Class::Champion => champion_move(p, input),
         Class::DualMage => dual_move(input),
-        // The Reaver breaks it a third way, and the smallest: right click is
-        // her committed melee. It is the *same* move shift + left click throws,
-        // so nothing new is added to the kit -- what is added is a button, on a
-        // class that has no shield to raise and was leaving it unused.
-        Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_COMMITTED),
+        // The Reaver breaks it a third way: right click sends the shadow. It is
+        // the one thing in her kit the **crosshair aims**, and the mouse is
+        // where aiming lives -- so the mechanic is on the mouse and the swing
+        // it displaced went to `E`, which is the one key that does not care
+        // where anything is pointed. See `moves::on_e`.
+        Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_MECHANIC),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
                 SLOT_COMMITTED

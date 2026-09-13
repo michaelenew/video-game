@@ -391,22 +391,27 @@ beside every move.
 end: her mechanic is a meter, and the meter is steered by *which button attacks* rather than by
 a key, so `E` had nothing to toggle either. It casts Sweep.
 
-**The Shadow Reaver is the third, the same day**, and it is worth reading against the other
-two rather than with them, because it breaks the rule they were about to establish. That rule
-was going to be *`E` is an ability exactly when the class's mechanic has no state to change* —
-and the Reaver's mechanic is emphatically a state. Where the second body is *is* the class. So
-`E` still changes it, and `E` is still an ability.
+**The Shadow Reaver is the third, on 2026-09-14**, and she is the one that breaks the rule the
+other two were about to establish. That rule was going to be *`E` is an ability exactly when
+the class's mechanic has no state to change* — and her mechanic is emphatically a state.
 
-What her mechanic is not is an **instant**. The shadow travels; calling it back is an attack
+Her mechanic is also not an **instant**: the shadow travels, and calling it back is an attack
 that cuts and slows everything on the way home. An instant cannot have a startup somebody
-reads, a damage number and a slow, and that one needs all three.
+reads, a damage number and a slow, and that one needs all three. So it became a move.
 
-So the honest rule is one step back from where two classes made it look:
+Then it went on **right click** rather than on `E`, because it is aimed and the mouse is where
+aiming lives — see [Shadow Reaver](#shadow-reaver) — and `E` picked up the melee it displaced.
+Which leaves this class as the one place where `E` carries something that is not the mechanic
+at all.
 
-> **`E` is an ability when pressing it is not free.** Most mechanics change in no frames at
-> all, and those stay instants. Where there is nothing to change (health, a meter) or where
-> changing it takes frames and does damage (a second body crossing the arena), the key
-> carries a move — and a move needs a slot in the table like any other.
+Two rules survive that, and they are worth keeping apart:
+
+> **A mechanic is an ability when pressing it is not free.** Where there is nothing to change
+> (health, a meter) or where changing it takes frames and does damage (a second body crossing
+> the arena), it needs a slot in the move table like anything else.
+>
+> **Which *button* it lands on is a separate question, and the crosshair answers it.** An
+> aimed mechanic wants the mouse. An unaimed one can have the key.
 
 ## Movement
 
@@ -660,7 +665,7 @@ Guard on the right button matches every game where alt-fire is the defensive opt
 
 ## Shadow Reaver
 
-Current as of 2026-09-13, and the four rows marked **bound** are what the game does.
+Current as of 2026-09-14, and the four rows marked **bound** are what the game does.
 
 A half-caster. Click abilities should feel like real melee — strong individually rather than
 combo-dependent — and the shadow abilities should reward being close and fast.
@@ -668,26 +673,31 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | Input | Result |
 | --- | --- |
 | `L` | **Slash** — the melee auto. The shadow throws it too, a beat later, for a quarter. **Bound** |
-| `R`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
+| `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. **Bound** |
 | `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
-| `E` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. **Bound** |
+| `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
 | `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
 | `shift` + forward, anywhere else | The ordinary dodge |
-| `shift` + `R` | Unplaced — the candidate slot for Deadly mistake |
+| — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 
-Two deliberate departures from the shared grammar, and both for the same reason: this class
-has nothing else to spend those inputs on.
+**The mechanic is on the mouse and the melee is on the key.** That is the whole of what is
+unusual here, and it reads as an exception to the grammar when it is the opposite — it is
+sentence six of it, applied:
 
-**Right click is a move, not a guard.** There is no shield on this class, so the button was
-dead. It throws the same committed melee `shift` + `L` does, which costs nothing and gives
-the Reaver the two-handed feel the kit has always described.
+> **The mouse means *where*.**
 
-**`E` is an ability rather than an instant.** It is still the class mechanic in every sense
-— it is the *only* thing that changes where the second body is — but throwing a body across
-the arena and dashing it back through someone is not a state flip, and it needs a startup
-you can be punished during, a damage number and a slow. That makes the Reaver the second
-class with a fourth move slot, after the Blood mage; see
-[Where `E` is an ability](#where-e-is-an-ability).
+Sending the shadow is the only thing in this kit the crosshair aims. It is a grounded cast:
+you point at a patch of floor and the second body goes and stands there, and where you put it
+is the decision the whole class is made of. That wants the hand already doing the pointing.
+
+Executioner does not care where anything is — it is a swing off the body, yaw from the facing
+and pitch from the camera — so it can live on a key, and it does. Four of the six classes get
+the ordinary arrangement for free by having a mechanic with nothing to aim; this one had to be
+told.
+
+It was the other way round for a day, with Executioner on right click and the shadow on `E`,
+and the argument against that is not on paper: placing something with the hand that is not
+holding the mouse means committing to a spot you are about to stop looking at.
 
 **The dodge is the mobility.** Shift plus a direction is the universal defensive option on
 every class, and on this one, pointed at the shadow and thrown forward, it is also the way

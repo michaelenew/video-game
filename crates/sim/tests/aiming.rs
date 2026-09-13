@@ -21,6 +21,9 @@ use sim::{Class, Fx, Input, V3, World};
 
 const E: u16 = Input::MECHANIC;
 const Q: u16 = Input::SPECIAL;
+/// Right click, which is how the Reaver sends her shadow -- the one thing in
+/// her kit the crosshair aims, on the button that means "where".
+const R: u16 = Input::RIGHT;
 
 /// Degrees below the horizon, in the wire's own unit: a signed count of
 /// 1/65536 of a turn.
@@ -885,9 +888,9 @@ fn shadow_of(w: &World) -> sim::class::Shadow {
 
 /// A Reaver with the shadow sent out ahead of her, and the spot it stopped at.
 ///
-/// `E` throws it at whatever the crosshair is on, which is a grounded cast, and
-/// then it flies. The fixture waits for the flight to finish, because what the
-/// rest of the kit is aimed at is a shadow standing still.
+/// Right click throws it at whatever the crosshair is on, which is a grounded
+/// cast, and then it flies. The fixture waits for the flight to finish, because
+/// what the rest of the kit is aimed at is a shadow standing still.
 fn with_a_shadow() -> (World, V3) {
     let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
     w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(8));
@@ -895,7 +898,7 @@ fn with_a_shadow() -> (World, V3) {
     let send = sim::moves::get(Class::ShadowReaver, sim::state::SLOT_MECHANIC);
     tap(
         &mut w,
-        E,
+        R,
         down(20),
         (send.whiff_cost() + t::shadow_send_frames()) as u32,
     );
@@ -966,7 +969,7 @@ fn the_blades_chase_a_recalled_shadow() {
         "the lotus turned for home on its own before the recall could do it"
     );
     let send = sim::moves::get(Class::ShadowReaver, sim::state::SLOT_MECHANIC);
-    tap(&mut w, E, down(20), send.startup as u32 + 6);
+    tap(&mut w, R, down(20), send.startup as u32 + 6);
     assert!(
         lotus(&w).lotus_coming_back(),
         "recalling the shadow did not send the blades after it"

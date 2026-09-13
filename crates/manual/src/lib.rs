@@ -124,7 +124,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "K or right click",
-                "Guard. The first few frames parry. Three classes attack with it instead: the Champion's spear, the Dual mage's light auto and the Shadow Reaver's Executioner -- none of the three has a shield to guard with.",
+                "Guard. The first few frames parry. Three classes spend it instead, none of them having a shield to raise: the Champion's spear, the Dual mage's light auto, and the Shadow Reaver's shadow -- hers is the one the crosshair aims, so it goes on the hand doing the aiming.",
                 "K guard",
             ),
             s(
@@ -139,7 +139,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "E",
-                "The class mechanic. Different on every class: throw the shield, Rush, raise a structure — or, on the Blood mage and the Shadow Reaver, a real ability with a wind-up you can be punished during.",
+                "The class mechanic. Different on every class: throw the shield, Rush, raise a structure. Three classes put a real ability here instead, with a wind-up you can be punished during — and on the Shadow Reaver it is not even the mechanic, because hers went to right click.",
                 "E mechanic",
             ),
         ],
@@ -222,19 +222,19 @@ pub const SECTIONS: &[Section] = &[
                 "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
             ),
             s(
-                "E",
+                "Right click",
                 "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it.",
-                "E send shadow",
+                "RMB send shadow",
             ),
             s(
                 "Q",
-                "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow drags them the length of the arena.",
+                "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow with right click drags them the length of the arena.",
                 "Q lotus",
             ),
             s(
-                "Right click",
-                "Executioner, the committed melee. Shift + left click throws the same move.",
-                "RMB executioner",
+                "E",
+                "Executioner, the committed melee. Shift + left click throws the same move. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim.",
+                "E executioner",
             ),
             e(
                 "Shift + forward",
