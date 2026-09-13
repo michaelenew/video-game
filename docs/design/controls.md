@@ -233,8 +233,11 @@ the only way to place one anywhere was to walk there. It now lands where you are
 the rule is written down — everything here is the short version.
 
 One raycast, **from the camera through the crosshair**, ignoring anything behind the
-character model. It meets terrain, other players, monsters, structures, and the ability's own
-max-range sphere, and the first thing it reaches is what you are pointing at. Then:
+character model. It meets terrain, structures, and the ability's own max-range sphere, and the
+first thing it reaches is what you are pointing at. **It goes straight through people** — and
+through the creature, which is the reason: up close a big animal fills the screen, so the
+reticle sits on its chest well above the thing you meant to hit. The ray picks the *place*; who
+is standing in the way of the shot is worked out along the shot's own line afterwards. Then:
 
 - **Aim at a spot inside your reach and a grounded ability goes there.** Exactly there — this
   is the whole point, and it is what makes an area ability a placement decision rather than a

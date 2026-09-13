@@ -26,13 +26,11 @@ else in the simulation decides for itself.
 It meets, in one list:
 
 - **terrain** — the floor, the arena's walls and platforms
-- **other players**
-- **monsters**
 - **structures** — the Elementalist's stones
 - **the max-range sphere**, centred on the casting player, of the ability's own
   range
 
-Whatever it reaches first wins. A future element may add a fifth kind of thing;
+Whatever it reaches first wins. A future element may add a fourth kind of thing;
 nothing today is an exception.
 
 **Ignoring anything behind the character model** matters because the camera sits
@@ -40,17 +38,45 @@ behind the shoulder. A wall the camera happens to be looking through is scenery,
 not a target, and aiming through your own cover is not a mechanic anybody asked
 for.
 
-**Fire is deliberately not on the list.** You can see through flame, so a fire
-pillar never steals the crosshair — but a shot that *travels through* one still
-notices it. Where the ability goes and what is in the way of it are two
-different questions; see "What the path runs into" below.
+### Bodies are not on that list
+
+Neither other fighters nor the creature. Changed 2026-09-13, and it is the one
+part of the model a player would not guess, so it is worth saying exactly what
+the ray is *for*.
+
+**The ray answers "which place in the world is under the crosshair".** A body is
+not a place; it is a thing standing in one. So the ray goes through it, stops on
+the geometry behind, and the ability crosses the ground that body is standing on
+— which hits them, and is the same shot, only aimed at a point that does not
+move when they do.
+
+The creature is what proved it. It is large. Up close it fills the screen, so
+the crosshair lands on its chest or its head — several metres up and, because
+you are right next to it, barely a metre away. Measured, standing five metres
+from its centre: **its head was the first thing the ray met at every look angle
+in a sweep from 40° below the horizon to 40° above**, including aiming squarely
+at the dirt. So every skillshot came out as a stub about a metre long pointed
+three metres into the sky, at exactly the range where you cannot miss.
+
+Fighters have the same problem in miniature. Stand nose to nose, and a camera
+that sits above the shoulder puts the reticle on the top of somebody's head.
+
+Nothing is lost by the change, because *what a shot runs into* was never this
+question — see "What the path runs into" below. That test walks the ability's
+own path, not the camera's ray, and the two were never the same line: the camera
+is behind and above, so a body it could not see was always still a body the shot
+went through.
+
+**Fire is also not on the list**, for its own reason: you can see through flame,
+so a fire pillar never steals the crosshair — but a shot that *travels through*
+one still notices it.
 
 ### Ground, and everything else
 
 The one distinction the raycast draws is whether the surface it hit **faces
 upward**: the floor, the top of a platform, the top of a stone. That is "the
-ground". The side of a platform, the side of a stone, a body, the creature and
-the range sphere are not.
+ground". The side of a platform, the side of a stone and the range sphere are
+not. Bodies do not come up: they are not on the ray.
 
 ## The four lines of effect
 
@@ -86,8 +112,8 @@ a landing spot.
 - **Hit the ground** — draw a line straight up from that spot to the height of
   the character's ability origin. The shot flies level over the place the
   crosshair is on rather than diving into the dirt.
-- **Hit terrain that is not ground, a character, a monster, or the range
-  sphere** — the point of intersection, exactly.
+- **Hit terrain that is not ground, a structure, or the range sphere** — the
+  point of intersection, exactly.
 - Either way the ability follows a **straight line from the caster to that
   point**, and that line is its whole reach. There is no separate range number:
   the sphere is part of the raycast.
