@@ -2593,6 +2593,17 @@ is: a real velocity, stepped frame by frame, because a thrown thing is not a pla
 is a wall of debris, far range is a couple of stray pieces" actually feels like at the stick
 has not been tested.
 
+**Corrected the same day.** The first version of the fan rotated the beam's own horizontal
+bearing and left its pitch untouched — the same mistake `aim.rs` exists to keep out of the
+game, a ray built from a fixed axis rather than from the line of effect itself, here reappearing
+one level down from where that file already guards. Aimed level it looked right and was
+accidental; aimed up or down the pieces all kept the beam's own pitch and only fanned out
+sideways, which is a slice of a horizontal plane, not a cone. Fixed by building the fan out of
+`crate::math::frame_about` instead — sideways and up **square to the beam itself**, however it
+is pitched, the same construction the Grasp's arms already spread around their own line of
+effect with — and pinned by `the_debris_cone_stands_in_space_rather_than_lying_flat`, which
+aims up and checks that the pieces do not all share the beam's own pitch back.
+
 ### 2026-09-13 — the Ridgeback, rebuilt
 
 **Changed** the creature is about a third larger and stands four and a half

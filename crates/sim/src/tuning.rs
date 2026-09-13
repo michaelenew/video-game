@@ -1070,9 +1070,10 @@ pub fn debris_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DebrisRadius))
 }
 
-/// Half the fan's width, in turns, from the beam's own line to the outermost
-/// piece on either side. The shotgun's spread, not its damage falloff --
-/// there is none of that, a piece hits for the same either way.
+/// The cone's half-angle, in turns, from the beam's own line to the ring of
+/// outer pieces -- see `crate::debris::blast`. The shotgun's spread, not its
+/// damage falloff -- there is none of that, a piece hits for the same either
+/// way.
 pub fn debris_spread() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DebrisSpread))
 }
