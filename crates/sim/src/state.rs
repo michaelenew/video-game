@@ -3401,11 +3401,20 @@ impl World {
 
             // The exact same burn a standing pillar gives -- same two
             // volumes, same tick, same number -- centred on the tornado's own
-            // live position instead of the spot it was cast on. The pull is
-            // the only thing that is actually new: everyone caught in either
-            // volume is hauled toward that live centre for as long as they
-            // are standing in it, on top of whatever the burn does to them.
-            // See `crate::effects::EffectKind::FireTornado`.
+            // live position instead of the spot it was cast on. What is new
+            // is the catch: the first frame it reaches somebody, the same
+            // eruption a fire pillar already throws the instant it is cast
+            // (see `hitbox`, reused via `effect.source()`) lands on them once
+            // more, as a real hitstun -- not extra damage, the burn already
+            // has that. That stagger is not a flourish: `Player`'s own
+            // grounded movement *sets* velocity from the stick every frame a
+            // fighter is free to act, which would erase the pull below before
+            // it ever moved anyone. Stunned, movement instead decays whatever
+            // velocity is already there (see `step_player`'s `stunned()`
+            // branch), which is the one state the pull can actually win
+            // inside. Once the stagger runs out a fighter is free again and
+            // can walk or jump clear -- the pull keeps trying regardless, but
+            // their own legs win the moment they are allowed to use them.
             EffectKind::FireTornado => {
                 let at = effect.tornado_pos();
                 if effect.ticks_now() {
@@ -3421,6 +3430,29 @@ impl World {
                             && !column.contains(at, p.pos, radius, height))
                     {
                         continue;
+                    }
+                    if effect.take_hit(0, i) {
+                        let m = effect.source();
+                        let (guarding, parried) =
+                            guard_against(&self.players[i], at, m.unblockable);
+                        apply_hit(
+                            &mut self.players[i],
+                            Hit {
+                                damage: 0,
+                                hitstun: m.hitstun,
+                                blockstun: m.blockstun,
+                                knockback: Fx::ZERO,
+                                launch: Fx::ZERO,
+                                grabs: 0,
+                                by: effect.owner,
+                                dir: V3::ZERO,
+                                blocked: guarding,
+                                parried,
+                            },
+                        );
+                        if parried {
+                            self.players[i].parried = PARRY_FLOURISH;
+                        }
                     }
                     let apart = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z));
                     let dist = apart.flat_len();
@@ -4316,17 +4348,26 @@ impl World {
                 self.players[i].hit_used = true;
             }
             // Not charged -- torn loose. The same `Effect`, the same two
-            // volumes, now moving. See
-            // `crate::effects::EffectKind::FireTornado`.
+            // volumes, now moving. `age` and `life` are untouched: a pillar
+            // that had barely started keeps growing on the same clock it was
+            // already on, now while travelling, and one that was already
+            // fully grown stays that way rather than snapping back down to
+            // nothing and regrowing -- either would be a visible glitch at
+            // the exact moment nothing about its *size* actually changed.
+            // What is left of the original pillar's life is what the tornado
+            // gets to travel on; the arena's own edge is the other way it can
+            // run out. `banked` takes a snapshot of `age` right here, so its
+            // flight can be measured from this moment rather than from
+            // whenever the pillar was first planted -- see
+            // `Effect::tornado_pos`. See `crate::effects::EffectKind::FireTornado`.
             Some(Contact::Fire { dist }) => {
                 let at = beam.at(dist);
                 if let Some(slot) = fire_pillar_slot_at(&self.effects, at) {
                     if let Some(effect) = self.effects[slot].as_mut() {
                         effect.kind = EffectKind::FireTornado;
                         effect.dir = beam.dir();
-                        effect.age = 0;
-                        effect.life = EffectKind::FireTornado.life().max(1);
                         effect.struck = 0;
+                        effect.banked = effect.age as i32;
                     }
                 }
                 self.players[i].hit_used = true;

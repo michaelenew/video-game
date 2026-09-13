@@ -91,13 +91,22 @@ fn tornadoes(w: &World) -> usize {
 /// Light a tornado directly, bypassing a fire pillar's own startup and
 /// growth, for the tests below that are about what a tornado already out
 /// does rather than about Cataclysm finding one.
-fn light_tornado(w: &mut World, owner: u8, at: V3, dir: V3) -> usize {
+///
+/// `age` and `life` stand in for however grown the pillar it came from
+/// already was, and however much of its own life was left -- see
+/// `state::World::fire_the_cataclysm`, which never resets either. `(0,
+/// pillar_life())` is fine for a fixture that only cares about direction or
+/// ownership; one that cares about the pull or the burn wants it well grown,
+/// with plenty of life left to run the fixture on -- a freshly lit tornado is
+/// also freshly tiny, and standing exactly where it was lit is not a fair
+/// test of whether it can catch someone once it is actually out.
+fn light_tornado(w: &mut World, owner: u8, at: V3, dir: V3, age: u16, life: u16) -> usize {
     let slot = w
         .effects
         .iter()
         .position(|e| e.is_none())
         .expect("no free effect slot in the fixture");
-    w.effects[slot] = Some(Effect::cast(
+    let mut fresh = Effect::cast(
         EffectKind::FireTornado,
         owner,
         Class::Elementalist,
@@ -105,7 +114,13 @@ fn light_tornado(w: &mut World, owner: u8, at: V3, dir: V3) -> usize {
         at,
         dir,
         Fx::ZERO,
-    ));
+    );
+    fresh.age = age;
+    fresh.life = life;
+    // Lit just now: its flight starts at `at` with nothing banked against it
+    // yet -- see `Effect::tornado_pos`.
+    fresh.banked = age as i32;
+    w.effects[slot] = Some(fresh);
     slot
 }
 
@@ -318,6 +333,57 @@ fn cataclysm_turns_a_fire_pillar_into_a_travelling_tornado() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn a_tornado_grows_on_the_same_curve_its_pillar_did() {
+    let mut e = Effect::cast(
+        EffectKind::FireTornado,
+        0,
+        Class::Elementalist,
+        SLOT_SPECIAL,
+        V3::ZERO,
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        Fx::ZERO,
+    );
+    e.life = sim::tuning::pillar_life();
+    let (young, _) = e.pillar_volumes();
+    e.age = e.life;
+    let (grown, _) = e.pillar_volumes();
+    assert!(
+        young.radius.raw() < grown.radius.raw(),
+        "a tornado came out already at full size instead of growing into it"
+    );
+    assert_eq!(
+        grown.radius,
+        sim::tuning::pillar_base_radius(),
+        "a fully grown tornado was not the same size a fully grown pillar is"
+    );
+}
+
+#[test]
+fn catching_the_tornado_stuns_before_it_can_drag() {
+    // A fighter's own grounded movement sets velocity from the stick every
+    // frame he is free to act, which would erase the pull before it ever
+    // moved him -- see `state::World::apply_effect`'s `FireTornado` arm. The
+    // catch has to cost him control for a moment, or there is no window for
+    // the pull to work in at all.
+    let mut w = elementalist();
+    w.players[1].pos = V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO);
+    let start = w.players[1].pos;
+    light_tornado(
+        &mut w,
+        0,
+        start,
+        V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        900,
+        1000,
+    );
+    run(&mut w, 1, 0, 0);
+    assert!(
+        w.players[1].action.stunned(),
+        "the tornado caught him without stunning him"
+    );
+}
+
+#[test]
 fn the_tornado_travels_and_burns_out_on_its_own_clock() {
     let mut w = elementalist();
     let slot = light_tornado(
@@ -325,6 +391,8 @@ fn the_tornado_travels_and_burns_out_on_its_own_clock() {
         0,
         V3::new(Fx::from_int(-10), Fx::ZERO, Fx::ZERO),
         V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        0,
+        sim::tuning::pillar_life(),
     );
     let start = w.effects[slot].expect("fixture never lit one").pos;
     run(&mut w, 10, 0, 0);
@@ -347,15 +415,26 @@ fn the_tornado_pulls_and_burns_whoever_it_catches() {
 
     // Lit right where he is standing and off sideways from there, so a good
     // stretch of its travel keeps him inside its own volumes -- what is under
-    // test is the pull and the tick, not a chase across the arena.
-    light_tornado(&mut w, 0, start, V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE));
+    // test is the pull and the tick, not a chase across the arena. Already
+    // well grown, with plenty of life left to run the fixture on: a freshly
+    // lit tornado is also freshly tiny and travelling at full speed from its
+    // first frame, so standing exactly where it was just lit is closer to a
+    // test of whether it can outrun him than of whether it can catch him.
+    light_tornado(
+        &mut w,
+        0,
+        start,
+        V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        900,
+        1000,
+    );
     run(&mut w, 5, 0, 0);
     assert!(
         w.players[1].vel.z.raw() > 0,
         "standing where the tornado is, he was not pulled toward it"
     );
 
-    run(&mut w, 10, 0, 0); // past the first damage tick
+    run(&mut w, 60, 0, 0); // comfortably past a damage tick
     assert!(
         w.players[1].health < before,
         "standing inside the tornado cost no health"
@@ -367,7 +446,14 @@ fn the_tornado_never_catches_its_own_owner() {
     let mut w = elementalist();
     let before = w.players[0].health;
     let start = w.players[0].pos;
-    light_tornado(&mut w, 0, V3::ZERO, V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
+    light_tornado(
+        &mut w,
+        0,
+        V3::ZERO,
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        0,
+        sim::tuning::pillar_life(),
+    );
     run(&mut w, 40, 0, 0);
     assert_eq!(
         w.players[0].health, before,

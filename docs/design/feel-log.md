@@ -2814,3 +2814,49 @@ it is what carries the first-person handover, which is unchanged.
 reticle and whatever is behind the shoulder, not so much that the body stops reading as a body.
 If aiming past your own head still feels obstructed the knob goes up, and the thing to watch for
 at the top of its range is the fade starting to read as a disappearance again.
+
+### 2026-09-13 — the tornado's pull did not actually pull
+
+**Changed** two things reported the same day: the tornado came out already at full size instead
+of growing into it the way its pillar does, and standing inside it did not drag you anywhere.
+
+**The pull was real and did nothing.** `apply_effect`'s `FireTornado` arm was subtracting an
+inward acceleration from a caught fighter's velocity every frame it had him, exactly as
+described -- and a fighter free to act has his own velocity *set* from the stick every frame in
+`step_player`, not accelerated, which overwrites whatever the pull just did before the next
+frame's position update ever reads it. The fix is not in the pull, which was always correct: the
+first frame the tornado reaches somebody now lands a real stagger -- the same eruption a fire
+pillar already throws the instant it is cast, reused rather than invented -- and a stunned
+fighter's velocity only *decays* each frame (`step_player`'s `stunned()` branch), which is the
+one state the pull can actually accumulate inside. Once the stagger runs out he is free to walk
+or jump clear and the pull cannot stop him -- it was never meant to hold him forever, only to
+buy itself the window a fighter's own legs would otherwise close instantly.
+
+**The size was frozen because resetting `age` to match it broke the flight.** The first fix
+tried was forcing `pillar_volumes` to treat every tornado as fully grown, which read as an
+instant pop rather than the pillar it came from continuing to erupt. Reusing `progress()`
+instead -- the same curve a standing pillar grows on -- meant `age` had to keep counting from
+when the pillar was first planted, not reset to zero at the moment it starts moving. But
+`tornado_pos` was built on that same `age` to work out how far it had flown, so a pillar caught
+after sitting for sixty frames would report a live position sixty frames' worth of travel away
+from where it actually was -- an instant teleport the moment it converted, invisible in the one
+early test that lit a tornado at age zero and never noticed. `Effect::banked`, otherwise only
+the blade's, now takes a snapshot of `age` at the exact frame a pillar is torn loose, and flight
+is measured against `age` minus that snapshot instead of `age` alone -- growth keeps its full
+history, flight starts counting from zero.
+
+**Two of the three test fixtures were also part of the bug.** Lighting a tornado exactly where a
+fighter stood and checking it pulled him within a handful of frames happened to pass regardless,
+because the assertion read a value the very next real frame would have overwritten anyway -- it
+never ran long enough to notice the drag did not last. And a fixture that wants to test the pull
+and the tick, not a chase, cannot light the tornado freshly small either: freshly lit is also
+freshly tiny and already travelling at full speed, so standing exactly on top of one is closer
+to a test of whether it outruns you. Both fixtures now light it already well grown, with
+`Effect::banked` set so its flight starts from zero regardless of how grown it already is.
+
+**Verdict** open. This is meant to be the class's answer to somebody sitting at mid range: get
+caught and the tornado drags you further from the Elementalist as it travels, the opposite of
+every other catch in the game, rather than merely burning you in place. Whether the stagger is
+long enough to matter and short enough to still feel escapable, and whether the wide base
+actually forces the jump-or-air-dodge choice the design wants rather than being outwalked, has
+not been played against another person.
