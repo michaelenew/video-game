@@ -168,11 +168,12 @@ fn plant() -> Pose {
 
 /// The contact frame: the lead foot is down and the fist arrives on it.
 ///
-/// The arm is nearly straight here and stays out through the active frames,
-/// which matters more on this move than on any other in the file: the hit
-/// volume is a wing that *leaves* the fist and opens outward to two and a half
-/// arm lengths (`moves::Shape::Wing`), and a hand that had already begun to
-/// come back would be pulling away from the thing doing the damage.
+/// The arm is nearly straight here and stays out through most of the active
+/// frames, which matters more on this move than on any other in the file. The
+/// hit volume is a section of a torus sweeping round her from behind
+/// (`moves::Shape::Wing`), and it finishes *in front of the fist* -- so the
+/// fist has to still be out there when it arrives, or the two halves of the
+/// move are pointing at different places.
 fn strike() -> Pose {
     stance()
         .hips(0.0, -0.10, 0.075)
@@ -284,8 +285,9 @@ fn punch(clip: Clip, arm: Arm) -> Recipe {
             "{which} A step into the strike rather than a step and then a \
              strike: the lead foot unweights two frames in and lands on the \
              contact frame, so the footwork and the hand are one motion. It \
-             reads as a punch and nothing more -- the wing is the ability, not \
-             the body, and it leaves the fist rather than being swung by it. \
+             reads as a punch and nothing more -- the wing is the ability and \
+             not the body: it sweeps in from behind her, on this arm's side, \
+             and arrives in front of the fist rather than being swung by it. \
              The cock is shallow on purpose -- five frames is not enough to \
              draw a hand back and put it somewhere else -- and the read lives \
              in the lifted lead knee and the other hand thrown back behind. \

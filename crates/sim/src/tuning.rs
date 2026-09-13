@@ -608,26 +608,17 @@ pub fn thrust_extend() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrustExtend))
 }
 
-/// How far out the wing already reaches on the first active frame, as a
-/// fraction of the move's reach.
+/// Where the inner edge of a wing sits, as a fraction of the move's reach.
 ///
-/// The other end of the same idea as `thrust_extend`: under one, because a wing
-/// that sprang to its full span on the frame it appeared would have no travel
-/// in it, and the opening is what a defender reads. Well under one, because for
-/// this shape the travel is most of the move -- the fist arrives first and the
-/// wing follows it out.
-pub fn wing_opens_at() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingOpensAt))
-}
-
-/// How far behind the hand the wing's root sits, as a fraction of reach.
-///
-/// Small, and not zero. A volume that started exactly at the fist would leave
-/// the inside of the punch safe, and stepping *into* a wing should not be the
-/// answer to it -- the shape is meant to catch somebody already close, which is
-/// the range the class has to live at.
-pub fn wing_trails() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::WingTrails))
+/// A wing is a **section of a torus** lying flat around the caster (see
+/// `moves::Shape::Wing`), so it has a hole in the middle, and this is how big
+/// the hole is. The design statement is that the inner arc passes through where
+/// the punching elbow starts -- close in, tucked against the body -- which is
+/// what makes stepping *inside* the wing a bad answer to it rather than the
+/// only answer to it. `view/tests/kinematics.rs` checks it against the elbow in
+/// the baked clip, because the simulation has no idea where an elbow is.
+pub fn wing_inner() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingInner))
 }
 
 pub fn meter_max() -> i32 {

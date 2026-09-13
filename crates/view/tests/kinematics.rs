@@ -424,24 +424,66 @@ fn a_hand_is_about_as_far_out_as_the_shoulder_it_hangs_from() {
 }
 
 #[test]
-fn the_wing_reaches_two_to_three_arm_lengths_past_the_fist() {
-    // The Dual mage's autos are punches that open into something much longer
-    // than an arm -- the shape is in `moves::Shape::Wing` and the fantasy is in
-    // `docs/design/kits/dual-mage.md`. "Two to three arm lengths" is the design
-    // statement, and the only place it can be checked is here, because the
-    // simulation has no idea how long an arm is.
+fn the_wing_is_sized_off_the_arm_that_throws_it() {
+    // The Dual mage's autos are punches that throw a section of a torus around
+    // her -- the shape is `moves::Shape::Wing` and the fantasy is in
+    // `docs/design/kits/dual-mage.md`. Two numbers in it are stated against her
+    // own body rather than in metres, and this is the only place they can be
+    // checked, because the simulation has no idea where an elbow is:
+    //
+    //   the inner arc passes through where the punching elbow starts
+    //   the outer arc is two to three times further out than the hand finishes,
+    //   measured from that elbow
+    //
+    // Read off the baked clip, so retiming the punch or re-authoring the pose
+    // moves the check with it.
     let s = skeleton::skeleton_for(sim::Class::DualMage);
-    let arm = s.arm_reach();
-    for kind in [sim::moves::dual::DARK_AUTO, sim::moves::dual::LIGHT_AUTO] {
-        let m = sim::moves::get(sim::Class::DualMage, kind);
-        let reach = m.reach.to_f32_for_render();
-        let lengths = reach / arm;
-        assert!(
-            (2.0..=3.0).contains(&lengths),
-            "{}: reaches {reach:.2} m, which is {lengths:.1} arm lengths ({arm:.2} m)",
-            m.name
-        );
-    }
+    let clip = view::Clip::DualDark;
+    let (last_startup, _, first_recovery) = clip.phases().expect("an attack clip");
+    let out = |frame: u16, joint: Joint| {
+        let skin = skeleton::solve(&s, &clip.at(frame as u32));
+        let p = skin.origin[joint.index()];
+        (p[0] * p[0] + p[2] * p[2]).sqrt()
+    };
+    // The cock, and the end of the punch: where the elbow is drawn back to, and
+    // how far the fist gets. The furthest the hand reaches across the active
+    // window rather than its position on one frame -- "where their hand
+    // finishes" is the end of the extension, and which frame that lands on is
+    // the animator's business.
+    let elbow = out(1, Joint::ForearmL);
+    let hand = (last_startup..=first_recovery)
+        .map(|f| out(f, Joint::HandL))
+        .fold(0.0f32, f32::max);
+    assert!(
+        hand > elbow + 0.2,
+        "the punch does not travel: elbow {elbow:.2} m, hand {hand:.2} m"
+    );
+
+    let m = sim::moves::get(sim::Class::DualMage, sim::moves::dual::DARK_AUTO);
+    let inner = m.reach.to_f32_for_render() * sim::tuning::wing_inner().to_f32_for_render();
+    assert!(
+        (inner - elbow).abs() < 0.1,
+        "the inner arc is at {inner:.2} m and the elbow starts at {elbow:.2} m"
+    );
+
+    let travel = hand - elbow;
+    let times = (m.reach.to_f32_for_render() - elbow) / travel;
+    assert!(
+        (2.0..=3.0).contains(&times),
+        "the outer arc is {times:.1} times the punch's own travel past the elbow \
+         (elbow {elbow:.2} m, hand {hand:.2} m, reach {:.2} m)",
+        m.reach.to_f32_for_render()
+    );
+}
+
+#[test]
+fn both_autos_are_sized_the_same() {
+    // The light one is the dark one mirrored, and the check above only looks at
+    // the dark one.
+    let dark = sim::moves::get(sim::Class::DualMage, sim::moves::dual::DARK_AUTO);
+    let light = sim::moves::get(sim::Class::DualMage, sim::moves::dual::LIGHT_AUTO);
+    assert_eq!(dark.reach.raw(), light.reach.raw());
+    assert_eq!(dark.arc.raw(), light.arc.raw());
 }
 
 fn fx(v: f32) -> sim::Fx {

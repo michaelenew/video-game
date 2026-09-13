@@ -3,9 +3,9 @@
 //! Everything here is a property the class stops working without. She holds two
 //! forces apart, one in each arm, and the *only* information the player has
 //! about which one they just threw is which arm it came out of and which way
-//! the meter moved. So: the two autos must come out of opposite sides, they
-//! must open outward rather than both the same way, and the button pressed has
-//! to be the thing that decides.
+//! the meter moved. So: the two autos must sweep opposite sides of her, they
+//! must be mirror images of each other, and the button pressed has to be the
+//! thing that decides.
 //!
 //! See `docs/design/dual-mage.md` for the mechanic and
 //! `docs/design/kits/dual-mage.md` for the kit.
@@ -35,20 +35,7 @@ fn step(w: &mut World, frames: u32, bits: u16) {
     }
 }
 
-/// Throw a move and stop on its first active frame, where the volume appears.
-fn thrown(bits: u16) -> (World, Hitbox) {
-    let mut w = mage();
-    step(&mut w, 1, bits);
-    for _ in 0..90 {
-        if let Some(box_out) = sim::state::hitbox(&w.players[0]) {
-            return (w, box_out);
-        }
-        step(&mut w, 1, 0);
-    }
-    panic!("nothing came out for {bits:b}");
-}
-
-/// The same, held through the whole active window: every frame's volume.
+/// Throw a move and collect the volume it has out on every active frame.
 fn swept(bits: u16) -> Vec<Hitbox> {
     let mut w = mage();
     step(&mut w, 1, bits);
@@ -71,6 +58,11 @@ fn sideways(w: &World, at: sim::V3) -> f32 {
     let p = &w.players[0];
     let across = sim::aim::across(p.facing, Hand::Left);
     at.sub(p.pos).dot(across).to_f32_for_render()
+}
+
+/// How far from the body's own axis a point is, level.
+fn radius(w: &World, at: sim::V3) -> f32 {
+    at.sub(w.players[0].pos).flat_len().to_f32_for_render()
 }
 
 /// How far in front of the body a point is.
@@ -154,20 +146,174 @@ fn the_finisher_is_the_only_thing_depth_gates() {
 #[test]
 fn the_two_autos_come_out_of_opposite_arms() {
     // The whole class in one assertion. A player reads which force they just
-    // threw off which arm threw it, and the hit volume has to agree with the
-    // arm or the read is a lie.
-    let (dark_world, dark) = thrown(L);
-    let (light_world, light) = thrown(R);
-    let dark_side = sideways(&dark_world, dark.from);
-    let light_side = sideways(&light_world, light.from);
-    assert!(
-        dark_side > 0.1,
-        "the dark auto leaves from {dark_side:.3} m, not from the left arm"
+    // threw off which arm threw it, and the volume has to agree with the arm or
+    // the read is a lie. The wing wraps *around* her, so what says "left" is
+    // which side it sweeps through on its way to the front.
+    for (bits, hand, name) in [(L, Hand::Left, "dark"), (R, Hand::Right, "light")] {
+        let mut w = mage();
+        step(&mut w, 1, bits);
+        let frames = swept(bits);
+        let mid = frames[frames.len() / 2];
+        let side = sideways(&w, mid.to) * Fx::from_int(hand.outward()).to_f32_for_render();
+        assert!(
+            side > 0.5,
+            "halfway through, the {name} wing is {side:.2} m along its own arm's side"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The wing
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_wing_is_a_section_of_a_ring_around_her() {
+    // Not a line reaching out and not a swing across the front: a chunk of a
+    // torus lying flat around the caster. Which means both of its radii are
+    // *constant* while it sweeps -- a section that grew as it went would be a
+    // spiral, and a spiral has no inside.
+    let mut w = mage();
+    step(&mut w, 1, L);
+    let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO)
+        .reach
+        .to_f32_for_render();
+    let mut inner_seen = Vec::new();
+    for hb in swept(L) {
+        let inner = radius(&w, hb.from);
+        let outer = radius(&w, hb.to);
+        assert!(
+            (outer - reach).abs() < 0.02,
+            "the outer arc is at {outer:.2} m and the move reaches {reach:.2} m"
+        );
+        assert!(
+            inner > 0.15 && inner < outer * 0.5,
+            "the ring has no hole in it: inner {inner:.2} m against outer {outer:.2} m"
+        );
+        inner_seen.push(inner);
+    }
+    let (lo, hi) = (
+        inner_seen.iter().cloned().fold(f32::MAX, f32::min),
+        inner_seen.iter().cloned().fold(0.0, f32::max),
     );
     assert!(
-        light_side < -0.1,
-        "the light auto leaves from {light_side:.3} m, not from the right arm"
+        hi - lo < 0.02,
+        "the inner arc wanders between {lo:.2} m and {hi:.2} m, so this is a spiral rather than a ring"
     );
+}
+
+#[test]
+fn the_wing_lies_flat() {
+    // The plane of the torus is the floor's. Both ends of the section are at
+    // the height the hand punches through, so it is a ring around her rather
+    // than a cut through her.
+    let mut w = mage();
+    step(&mut w, 1, L);
+    let hand = sim::tuning::cast_height().to_f32_for_render();
+    for hb in swept(L) {
+        let (a, b) = (hb.from.y.to_f32_for_render(), hb.to.y.to_f32_for_render());
+        assert!(
+            (a - b).abs() < 0.01,
+            "the section is tilted: {a:.2} m at the inside, {b:.2} m at the outside"
+        );
+        assert!(
+            (a - hand).abs() < 0.05,
+            "the section is at {a:.2} m and the hand punches through {hand:.2} m"
+        );
+    }
+}
+
+#[test]
+fn the_wing_starts_behind_her_and_ends_directly_ahead() {
+    // The punch throws it and it overtakes the punch: it appears behind her, on
+    // the arm's own side, and arrives in front of the fist on the last active
+    // frame. A wing that started in front would just be a swing.
+    for (bits, name) in [(L, "dark"), (R, "light")] {
+        let mut w = mage();
+        step(&mut w, 1, bits);
+        let frames = swept(bits);
+        let first = ahead(&w, frames[0].to);
+        let last = frames[frames.len() - 1].to;
+        assert!(
+            first < -0.5,
+            "the {name} wing appears {first:.2} m in front of her, not behind"
+        );
+        assert!(
+            ahead(&w, last) > 0.9 * radius(&w, last),
+            "the {name} wing does not finish pointing straight ahead"
+        );
+        assert!(
+            sideways(&w, last).abs() < 0.15,
+            "the {name} wing finishes {:.2} m off her centre line",
+            sideways(&w, last)
+        );
+    }
+}
+
+#[test]
+fn the_two_wings_are_mirror_images() {
+    // One ring, two halves. If they were not mirrored, one of the two forces
+    // would be better than the other for reasons nobody chose.
+    let mut w = mage();
+    step(&mut w, 1, L);
+    let (dark, light) = (swept(L), swept(R));
+    assert_eq!(dark.len(), light.len());
+    for (a, b) in dark.iter().zip(light.iter()) {
+        assert!(
+            (ahead(&w, a.to) - ahead(&w, b.to)).abs() < 0.01,
+            "the two wings are at different distances in front of her"
+        );
+        assert!(
+            (sideways(&w, a.to) + sideways(&w, b.to)).abs() < 0.01,
+            "the two wings are not mirrored: {:.2} against {:.2}",
+            sideways(&w, a.to),
+            sideways(&w, b.to)
+        );
+    }
+}
+
+#[test]
+fn the_wing_sweeps_the_whole_way_round_without_jumping() {
+    // A hundred and fifty degrees in six frames. It has to arrive in even
+    // steps: a section that covered most of its arc in one frame would pass
+    // through anybody standing in the rest of it without touching them.
+    let mut w = mage();
+    step(&mut w, 1, L);
+    let steps: Vec<f32> = swept(L)
+        .windows(2)
+        .map(|pair| pair[1].to.sub(pair[0].to).flat_len().to_f32_for_render())
+        .filter(|d| *d > 0.001)
+        .collect();
+    assert!(steps.len() >= 4, "the sweep is only {} steps", steps.len());
+    let biggest = steps.iter().cloned().fold(0.0, f32::max);
+    let smallest = steps.iter().cloned().fold(f32::MAX, f32::min);
+    assert!(
+        biggest < smallest * 1.5,
+        "the sweep is uneven: steps from {smallest:.2} m to {biggest:.2} m"
+    );
+}
+
+#[test]
+fn the_wing_travels_with_the_body_rather_than_hanging_where_it_started() {
+    // A swing is a body moving, and the autos keep sixty per cent of walking
+    // speed. A ring anchored where the punch was thrown from would visibly
+    // detach from the caster over six active frames.
+    let mut w = mage();
+    step(&mut w, 1, L | Input::W);
+    let mut seen = Vec::new();
+    for _ in 0..24 {
+        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
+            seen.push((hb.from, w.players[0].pos));
+        }
+        step(&mut w, 1, L | Input::W);
+    }
+    assert!(seen.len() > 1, "the volume was never out for two frames");
+    for (from, pos) in &seen {
+        let offset = from.sub(*pos).flat_len().to_f32_for_render();
+        assert!(
+            offset < 0.5,
+            "the inner arc is {offset:.2} m from the body it is meant to be centred on"
+        );
+    }
 }
 
 #[test]
@@ -188,94 +334,6 @@ fn nothing_else_in_the_roster_has_a_side() {
                 m.hand.name()
             );
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The wing
-// ---------------------------------------------------------------------------
-
-#[test]
-fn the_wing_starts_behind_the_hand_and_ends_well_past_it() {
-    // "A punch, and then something much longer than an arm coming out of it."
-    // The root sits behind the fist so that stepping inside the punch is not
-    // the answer to it, and the tip ends at the move's whole reach.
-    let (w, first) = thrown(L);
-    let hand = sim::aim::hand_origin(w.players[0].pos, w.players[0].facing, Hand::Left);
-    let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO).reach;
-
-    let root = first.from.sub(hand).len().to_f32_for_render();
-    let behind = ahead(&w, first.from) < ahead(&w, hand);
-    assert!(
-        behind && root > 0.05,
-        "the volume starts {root:.3} m from the fist and {} it",
-        if behind { "behind" } else { "in front of" }
-    );
-
-    let last = swept(L).pop().expect("an active window");
-    let tip = last.to.sub(hand).len().to_f32_for_render();
-    let full = reach.to_f32_for_render();
-    assert!(
-        tip > full * 0.9,
-        "the wing only reaches {tip:.2} m of its {full:.2} m"
-    );
-}
-
-#[test]
-fn the_wing_opens_outward_and_each_arm_opens_its_own_way() {
-    // A wing that swept inward would cross the body, and the two autos would
-    // carve the same piece of air -- which is the one thing they must not do,
-    // because the player is reading the difference between them.
-    for (bits, hand, name) in [(L, Hand::Left, "dark"), (R, Hand::Right, "light")] {
-        let frames = swept(bits);
-        let mut w = mage();
-        step(&mut w, 1, bits);
-        let first = sideways(&w, frames[0].to);
-        let last = sideways(&w, frames[frames.len() - 1].to);
-        let outward = match hand {
-            Hand::Left => last - first,
-            _ => first - last,
-        };
-        assert!(
-            outward > 0.3,
-            "the {name} wing's tip travelled {outward:.2} m outward across its own swing"
-        );
-        // And it grows while it turns, which is what separates it from a swing.
-        let short = frames[0].to.sub(frames[0].from).len();
-        let long = frames[frames.len() - 1]
-            .to
-            .sub(frames[frames.len() - 1].from)
-            .len();
-        assert!(
-            long.raw() > short.raw(),
-            "the {name} wing does not extend: {} then {}",
-            short.to_f32_for_render(),
-            long.to_f32_for_render()
-        );
-    }
-}
-
-#[test]
-fn the_wing_travels_with_the_body_rather_than_hanging_where_it_started() {
-    // A swing is a body moving, and the autos keep sixty per cent of walking
-    // speed. A volume anchored where the punch was thrown from would detach
-    // from the fist over four active frames.
-    let mut w = mage();
-    step(&mut w, 1, L | Input::W);
-    let mut seen = Vec::new();
-    for _ in 0..20 {
-        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
-            seen.push((hb.from, w.players[0].pos));
-        }
-        step(&mut w, 1, L | Input::W);
-    }
-    assert!(seen.len() > 1, "the volume was never out for two frames");
-    for (from, pos) in &seen {
-        let offset = from.sub(*pos).flat_len().to_f32_for_render();
-        assert!(
-            offset < 1.0,
-            "the volume is {offset:.2} m from the body that is swinging it"
-        );
     }
 }
 

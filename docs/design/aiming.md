@@ -171,11 +171,14 @@ unaffected.
 It exists because one class is built on the distinction. The Dual mage holds two
 forces apart, one in each arm, and her two autos are the same punch thrown left
 and right; which of them just landed is the whole of how her meter is steered, so
-a volume that came out of the sternum both times would make the mechanic
-unreadable. The side is declared in the move table next to the shape
-(`moves::hand`), and `aim::across` is the one place that turns it into a
-direction — including for the arc of a wing, so the two mirrored autos share one
-tuned number and cannot drift a sign apart.
+two volumes a player could not tell apart would make the mechanic unreadable.
+
+The side is declared in the move table next to the shape (`moves::hand`), and it
+is turned into geometry in exactly two places, both here: `aim::across` for
+*where a one-armed swing starts*, and `Hand::outward` for *which way round a
+shape that sweeps goes* — which is what makes the Dual mage's two autos one ring
+read from either side, sharing a single tuned arc that cannot drift a sign
+apart.
 
 The sides are the **skeleton's**. The body is authored with `+Z` along the facing
 and its left arm at `-X`, which is a left-handed frame in a right-handed world,
