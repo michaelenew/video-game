@@ -164,11 +164,19 @@ ray met the floor, and the point itself when it met anything else. Then the abil
 the line from where it is cast to that point — so what you pointed at is what you get, and the
 travel is the fighter's business rather than the camera's.
 
-**The fighter's own body gets out of the way, for two separate reasons.** It goes translucent as
-it comes up on the crosshair, because a body the player is aiming past is worse than no body at
-all. And it goes fully away when the eye is simply *close* to it — measured as a distance, not
-as a zone, so that an arm pulled in by a wall behind the fighter takes the body away exactly the
-same as walking into the head on purpose does.
+**The fighter's own body gets out of the way, for two separate reasons, and only one of them can
+finish the job.** It **dims** as it comes up on the crosshair, because a body the player is
+aiming past is worse than no body at all — but it stays a dim, however squarely the head sits
+under the reticle. And it goes **fully away** when the eye is simply *close* to it — measured as
+a distance, not as a zone, so that an arm pulled in by a wall behind the fighter takes the body
+away exactly the same as walking into the head on purpose does.
+
+The asymmetry is deliberate and it is a spacing argument rather than a rendering one. Looking
+down puts your own body high on the screen and under the reticle with the camera still a full
+nine metres behind you; taking it away there leaves you with no idea where you are standing, and
+where you are standing is what every judgement about range is made from. When the eye really is
+inside you there was nothing to see anyway, so that is the one case that earns the whole body.
+`Body dims to (%)` is the knob.
 
 **Zones hand over rather than swap.** A boundary left alone is continuous in position and not
 in speed — the eye arrives at it moving one way and leaves moving another, which is not seen so
