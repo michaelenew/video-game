@@ -9,9 +9,17 @@
 //! > thing it meets. That point is what the player is pointing at, and the
 //! > ability goes there.**
 //!
-//! That ray meets **terrain, other players, monsters, structures, and the
-//! ability's own max-range sphere** — one list, a property of the world rather
-//! than of the ability doing the aiming. Whatever it reaches first wins.
+//! That ray meets **terrain, structures, and the ability's own max-range
+//! sphere** — one list, a property of the world rather than of the ability
+//! doing the aiming. Whatever it reaches first wins.
+//!
+//! **Bodies are not on that list.** Neither other fighters nor the creature.
+//! The ray is answering *which place is the player pointing at*, and a body is
+//! a thing standing in a place rather than a place of its own; what it is in
+//! the way of is a separate question, asked of the path afterwards by
+//! [`first_along`]. It reads as a fine distinction and is not: a creature up
+//! close fills the screen, so the crosshair sits on its chest several metres
+//! up, and an ability that went *there* sailed over it. See [`sight`].
 //!
 //! # The two kinds, and the one thing that is not one
 //!
@@ -36,9 +44,8 @@
 //! - Hit the ground, and the target is that spot raised straight up to the
 //!   height the ability leaves the caster at. The shot flies level over the
 //!   place the crosshair is on rather than diving into the dirt.
-//! - Hit anything else — terrain that is not ground, a character, a monster,
-//!   or the max-range sphere — and the target is the point of intersection
-//!   exactly.
+//! - Hit anything else — terrain that is not ground, a structure, or the
+//!   max-range sphere — and the target is the point of intersection exactly.
 //! - Either way the ability travels in a straight line from the caster to that
 //!   point, and that line is its whole reach.
 //!
@@ -192,8 +199,8 @@ pub enum Met {
     /// A surface you could stand on: the floor, the top of a platform, the top
     /// of a stone. The one case the two kinds of ability treat differently.
     Ground,
-    /// Anything else solid — a wall, the side of a platform or a stone, a
-    /// fighter, the creature.
+    /// Anything else solid — a wall, the side of a platform, the side of a
+    /// stone. Not a body: bodies are not on the ray at all.
     Solid,
     /// Nothing at all within the ability's reach, so the max-range sphere.
     Reach,
@@ -214,6 +221,33 @@ pub struct Sighted {
 /// `who` is the caster's index. Nothing between the camera and the character is
 /// a candidate — the eye sits behind the shoulder, and a wall the camera
 /// happens to be looking through is not a thing the player is aiming at.
+///
+/// # What it meets, and what it passes through
+///
+/// Terrain, structures, and the reach sphere. **Not bodies** — not other
+/// fighters and not the creature.
+///
+/// This is the one place the model says something the player would not guess,
+/// so it is worth being exact about what the ray is *for*. It answers **which
+/// place in the world is under the crosshair**, and then the ability goes to
+/// that place and hits whatever is standing there on the way. A body is not a
+/// place; it is a thing occupying one. So the ray goes through it and stops on
+/// the geometry behind it, and the ability crosses the ground the body is
+/// standing on -- which is the same thing, only pointed at properly.
+///
+/// Bodies *were* on the list, and the creature is what proved they should not
+/// be. It is large. Up close it fills the screen, so the crosshair lands on its
+/// chest or its head, several metres up and only a metre or two away. The ray
+/// stopped there, the ability was aimed at that point, and every shot went over
+/// the animal at exactly the range where you cannot miss. Fighters have the
+/// same shape of problem in miniature -- stand nose to nose and the camera,
+/// which sits above the shoulder, puts the reticle on the top of their head.
+///
+/// Nothing is lost by it. What a shot runs into is [`first_along`]'s question,
+/// asked along the path rather than along the camera's ray, and it has always
+/// been the separate question: the camera is behind and above, so the two lines
+/// were never the same line and a body the camera could not see was always
+/// still a body the shot went through.
 pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
     let caster = &scene.players[who];
     let eye = crate::camera::eye(caster.pos, look);
@@ -253,22 +287,12 @@ pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
         let hit = stone_hit(eye, dir, stone);
         keep(hit, facing(hit, eye, dir, stone.top()));
     }
-    // Bodies. Aimed at, not aimed through: a fighter standing where the
-    // crosshair is *is* what the player is pointing at.
-    for (i, p) in scene.players.iter().enumerate() {
-        if i == who || p.health <= 0 {
-            continue;
-        }
-        keep(body_hit(eye, dir, p, Fx::ZERO), Met::Solid);
-    }
-    if let Some(beast) = scene.quarry {
-        keep(
-            beast
-                .part_struck_along(eye, dir, limit, Fx::ZERO)
-                .map(|(_, d)| d),
-            Met::Solid,
-        );
-    }
+    // **Bodies are not on this list, and that is deliberate.** See the note on
+    // this function: the ray is asking which *place* the player is pointing at,
+    // and a creature is a thing standing in a place rather than the place
+    // itself. Putting it on the ray made close-quarters aim at the creature
+    // unusable, because up close it fills the screen and the crosshair sits on
+    // its chest three metres up.
 
     match (best, sphere) {
         (Some((dist, met)), _) => Sighted {
@@ -326,8 +350,8 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
             settle(origin(caster.pos).add(flat.scale(reach)), scene.stones)
         }
         // On the ground, exactly there -- `settle` is a no-op on a surface
-        // something already stands on. On a body or a wall, the floor beneath
-        // it, because that is where the thing being placed can exist.
+        // something already stands on. On a wall, the floor beneath it,
+        // because that is where the thing being placed can exist.
         Met::Ground | Met::Solid => settle(seen.at, scene.stones),
     };
     Path {
@@ -350,7 +374,7 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
         // at, so it flies level over the spot the crosshair is on instead of
         // burying itself in the ground a metre in front of her.
         Met::Ground => V3::new(seen.at.x, from.y, seen.at.z),
-        // A wall, a body, the creature, the edge of the range: the point
+        // A wall, the side of a stone, the edge of the range: the point
         // itself, because that is the thing the player is looking at.
         Met::Solid | Met::Reach => seen.at,
     };

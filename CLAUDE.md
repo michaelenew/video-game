@@ -17,9 +17,17 @@ simulation may do either.** Enforced by `crates/sim/tests/one_aim.rs`.
 The player's whole frame of reference is the crosshair, so the model is:
 
 > One raycast, from the **camera** through the crosshair, ignoring anything
-> behind the character model. It meets terrain, other players, monsters,
-> structures, and the ability's own max-range sphere. The first thing it reaches
-> is what the player is pointing at, and the ability goes there.
+> behind the character model. It meets terrain, structures, and the ability's
+> own max-range sphere. The first thing it reaches is what the player is
+> pointing at, and the ability goes there.
+
+**Bodies are not on that ray** — not other fighters, not the creature. It is
+asking which *place* is under the crosshair, and a body is a thing standing in a
+place, so the ray goes through it to the geometry behind. What a shot runs into
+is a separate question, asked along the ability's own path by
+`aim::first_along`. The creature is why: up close it fills the screen, the
+reticle lands on its chest three metres up, and with it on the ray every
+skillshot came out as a metre-long stub pointed at the sky.
 
 Two kinds of skillshot start with that ray. Two more lines of effect do not —
 they are pointed by something the player decided earlier. **Four in total, and

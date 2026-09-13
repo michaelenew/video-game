@@ -1906,3 +1906,46 @@ thrown *around* the aim rather than in front of the body — and it is what the 
 **Verdict** open, same as the entry above. 45° on the ground is still a guess, and now the
 question of whether a fighter who has just left the ground wants the zone to fade rather than
 vanish is a real one. Nobody has played it.
+
+### 2026-09-13 — bodies come off the aiming ray
+
+**The report:** "attacking a large monster is awkward because the crosshairs tend to sit high,
+so the attacks aim high if close in."
+
+Measured before changing anything, with a hunter standing five metres from the creature's
+centre — which is nose to nose, because the animal is four metres long from centre to snout.
+Its **head was the first thing the camera's ray met at every look angle in a sweep from 40°
+below the horizon to 40° above**, including aiming squarely at the dirt, at a point roughly
+1.1 m in front of her and 3 m up. So every skillshot she threw came out as a stub about a
+metre long pointed into the sky, at exactly the range where you cannot miss.
+
+Not a tuning problem. The ray answers **"which place in the world is under the crosshair"**,
+and a body is not a place — it is a thing standing in one. Putting bodies on the list made the
+aim point jump to the surface of whatever was between the player and the ground, and for a big
+animal that surface is metres above the thing they meant to hit. So other fighters and the
+creature came off the list. Terrain, structures and the ability's own max-range sphere stay.
+
+Nothing is lost, because *what a shot runs into* was always a separate question, asked along
+the ability's own path rather than along the camera's ray. The two were never the same line —
+the camera is behind and above — so a body the camera could not see was always still a body
+the shot went through. Put the reticle on somebody and the shot still reaches them; what
+changed is that the aim point is the ground behind them, so a level look is a level shot.
+
+**What it buys, measured after:** from the same spot, a level look now runs into the
+creature's barrel at 2.4 m — the flank, which is what a player standing on the ground is
+actually trying to hit. Looking up walks the shot to the neck and then the head; looking down
+past 25° puts it on the dirt in front of the animal, which is where it was pointed.
+
+Three test fixtures had quietly depended on the old rule and were saying something they did
+not mean:
+
+- `beam.rs` read "the crosshair is on them" off the raycast. It now means what a player means
+  by it — the line the reticle picks goes through them.
+- `effects.rs` aimed at *half a body height above the arena floor* rather than above the
+  target's own feet, which is a different point entirely for somebody standing on a platform.
+- The same fixture aimed at where it had just teleported the target, one frame before the
+  world dropped them onto the platform under them.
+
+**Verdict** open, and one thing to watch: a fighter standing on open ground is now aimed at
+through the floor behind them, so a shot at somebody backed against a wall ends on the wall
+rather than on them. Both hit. Nobody has played it.

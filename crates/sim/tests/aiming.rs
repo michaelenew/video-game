@@ -5,6 +5,11 @@
 //! to the first thing it meets.** These are the assertions for what that
 //! buys — the thing you are pointing at is the thing you hit, whether you are
 //! pointing at the floor, at a wall, at a person, or at the sky.
+//!
+//! **Bodies are not on the ray.** They came off it on 2026-09-13: it answers
+//! which *place* is under the crosshair, and a body is a thing standing in a
+//! place. Pointing at a person still hits them -- the shot crosses the ground
+//! they are standing on -- but the aim point is the world behind them.
 
 use sim::aim;
 use sim::class::{Mechanic, Structure};
@@ -599,28 +604,115 @@ fn nothing_between_the_camera_and_the_character_is_aimed_at() {
 }
 
 #[test]
-fn a_body_in_the_way_is_what_you_are_pointing_at() {
-    // Bodies are on the raycast's list. Putting the reticle on someone and
-    // having the shot sail past them is the same complaint as all the others.
+fn a_body_does_not_stop_the_aiming_ray() {
+    // Bodies came *off* the ray on 2026-09-13. It answers "which place is the
+    // player pointing at", and a fighter is a thing standing in a place rather
+    // than a place of its own; the shot crosses the ground they are standing on
+    // on its way past. What it runs into is `first_along`'s question, asked of
+    // the path afterwards.
     let mut w = elementalist();
     w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
     w.players[1].pos = V3::new(Fx::from_int(6), Fx::ZERO, Fx::from_int(8));
+    let theirs = w.players[1].pos.sub(w.players[0].pos).flat_len();
 
-    let mut found = false;
+    let mut crossed = false;
     for step in 0..30 {
         let look = Input::looking_at(0, 0, down(step));
-        let seen = with_scene(&w, |scene| aim::sight(0, look, Fx::from_int(12), scene));
-        let apart = seen.at.sub(w.players[1].pos).flat_len().to_f32_for_render();
-        if apart < t::body_radius().to_f32_for_render() + 0.05 && seen.at.y.raw() > 0 {
-            found = true;
-            assert_eq!(
-                seen.met,
-                aim::Met::Solid,
-                "a fighter read as ground, so a shot would fly level over their head"
-            );
+        let (seen, over) = with_scene(&w, |scene| {
+            (
+                aim::sight(0, look, Fx::from_int(12), scene),
+                aim::first_along(
+                    aim::skillshot_path(0, look, Fx::from_int(12), scene),
+                    Fx::ZERO,
+                    0,
+                    scene,
+                    aim::Targets::none().fighters(true),
+                ),
+            )
+        });
+        if !matches!(over, Some(aim::Contact::Fighter { .. })) {
+            continue;
         }
+        crossed = true;
+        let apart = seen.at.sub(w.players[0].pos).flat_len();
+        assert!(
+            apart.raw() > theirs.raw(),
+            "the aim point landed {:.2} m out with the fighter {:.2} m out, so the \
+             ray stopped short on their body instead of going through it",
+            apart.to_f32_for_render(),
+            theirs.to_f32_for_render()
+        );
     }
-    assert!(found, "the sweep never crossed the other fighter at all");
+    assert!(
+        crossed,
+        "the sweep never put a shot through the other fighter"
+    );
+}
+
+/// A hunter nose to nose with the creature: five metres from its centre, which
+/// puts its head about a metre in front of her and three metres up.
+fn nose_to_nose() -> World {
+    let mut w = World::hunt([Class::Elementalist; sim::state::MAX_PLAYERS]);
+    w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(8));
+    w.monster.as_mut().expect("a hunt has a creature").pos =
+        V3::new(Fx::from_int(-1), Fx::ZERO, Fx::from_int(8));
+    w
+}
+
+#[test]
+fn up_close_the_creature_does_not_drag_the_aim_onto_its_own_head() {
+    // The report this rule change answers: "attacking a large monster is
+    // awkward because the crosshairs tend to sit high, so the attacks aim high
+    // if close in."
+    //
+    // With the creature on the ray it was worse than awkward. At this range its
+    // head is the first thing the ray meets *at every look angle in the sweep*,
+    // including aiming forty degrees at the floor -- so every skillshot came
+    // out as a stub about a metre long pointed three metres into the air. The
+    // numbers below are what that measured.
+    let w = nose_to_nose();
+    for step in 0..=16 {
+        let look = Input::looking_at(0, 0, down(40) + up(5 * step));
+        let seen = with_scene(&w, |scene| aim::sight(0, look, Fx::from_int(14), scene));
+        let out = seen.at.sub(w.players[0].pos).flat_len().to_f32_for_render();
+        assert!(
+            out > 4.0,
+            "the crosshair read a point {out:.2} m in front of her -- the ray \
+             stopped on the animal rather than on the world behind it"
+        );
+    }
+}
+
+#[test]
+fn a_level_look_at_the_creature_is_a_level_shot_into_its_barrel() {
+    // What the rule buys, stated as the thing the player wanted: reticle on the
+    // flank, shot into the flank. The barrel's sides are what somebody standing
+    // on the ground is actually hitting, and a level look now reaches them at
+    // two and a half metres instead of stopping on the head above.
+    let w = nose_to_nose();
+    let look = Input::looking_at(0, 0, 0);
+    let (path, hit) = with_scene(&w, |scene| {
+        let path = aim::skillshot_path(0, look, Fx::from_int(14), scene);
+        let hit = aim::first_along(path, Fx::ZERO, 0, scene, aim::Targets::none().quarry(true));
+        (path, hit)
+    });
+
+    let rise = path.to.y.sub(path.from.y).to_f32_for_render();
+    let flat = path.to.sub(path.from).flat_len().to_f32_for_render();
+    assert!(
+        rise < flat / 2.0,
+        "a level look threw a shot that rose {rise:.2} m over {flat:.2} m of \
+         ground, which is not a level shot"
+    );
+    let Some(aim::Contact::Quarry { part, .. }) = hit else {
+        panic!("a level shot at a creature five metres away met nothing at all");
+    };
+    assert_eq!(
+        part,
+        sim::monster::BARREL,
+        "a level look landed on `{}` rather than the flank in front of her",
+        sim::monster::PART_NAMES[part]
+    );
 }
 
 // ---------------------------------------------------------------------------
