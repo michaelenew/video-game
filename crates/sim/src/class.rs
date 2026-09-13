@@ -133,7 +133,7 @@ impl Class {
                 recharge: 0,
                 rush_vel: V3::ZERO,
             },
-            Class::ShadowReaver => Mechanic::Shadow { at: None },
+            Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
             Class::BloodMage => Mechanic::Blood,
             Class::DualMage => Mechanic::Meter { value: 0 },
@@ -225,6 +225,113 @@ impl Form {
 }
 
 // ---------------------------------------------------------------------------
+// Shadow Reaver
+// ---------------------------------------------------------------------------
+
+/// The Reaver's second body.
+///
+/// **It is never absent.** That is the whole of the mechanic: the shadow is
+/// either attending her -- a translucent copy a step behind, repeating what she
+/// does a beat late -- or it is out on the field, which is the same body
+/// standing somewhere else. There is no third state where the class has no
+/// shadow, and there used to be: `Option<V3>` said "nowhere", the class spent
+/// half a match with nothing to swap to, cut with, or erupt from, and every
+/// ability that reads the shadow had to carry a branch for the case where the
+/// mechanic did not exist.
+///
+/// The position is carried in every state, including `Attending`, because the
+/// attending shadow is a thing on screen with a place of its own -- it trails
+/// the body rather than being welded to it -- and because the one move aimed
+/// *at the mechanic* asks where the shadow is without caring which of these it
+/// is doing.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Shadow {
+    /// Where it is standing, live.
+    pub pos: V3,
+    /// Which way it is turned. Its own, because a shadow sent out keeps facing
+    /// the way it was going while she turns to watch it.
+    pub facing: V3,
+    pub doing: Ghost,
+    /// The move it is repeating, and how many frames since *she* began it.
+    ///
+    /// A move index and an age rather than a copy of her action, so the echo is
+    /// a pure function of two numbers: rollback re-derives which phase the
+    /// shadow is in rather than replaying a state machine that has to agree
+    /// with hers. [`NO_ECHO`] when it is copying nothing.
+    pub echo: u8,
+    pub echo_age: u16,
+    /// The echo has already connected, so its swing lands once -- the same rule
+    /// `Player::hit_used` is for the body it is copying.
+    pub echo_used: bool,
+    /// Frames left of *her* dash to it.
+    ///
+    /// On the shadow rather than on the fighter, because it is the only thing
+    /// in the game that reads it and because the pair of them is one mechanic:
+    /// a dash to the shadow is a fact about where the shadow is. It rides
+    /// alongside `Action::Dodge`, which supplies the invulnerability -- the
+    /// dash is the dodge, aimed.
+    pub dash: u16,
+}
+
+/// [`Shadow::echo`] when the shadow is not repeating anything.
+pub const NO_ECHO: u8 = u8::MAX;
+
+/// What the shadow is doing with itself, as opposed to what it is copying.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Ghost {
+    /// With her. It trails the body by `shadow_trail` metres and eases toward
+    /// that mark rather than being pinned to it, which is what makes it read as
+    /// something following her rather than a decal.
+    Attending,
+    /// Racing out to the spot the crosshair picked, and nothing can stop it
+    /// short -- it is a shadow.
+    ///
+    /// Progress is `age` against `shadow_send_frames`, so the whole flight is a
+    /// function of the frame it left on, the same rule `crate::effects` follows
+    /// and for the same reason: a rollback that lands in the middle of one
+    /// reproduces it exactly instead of re-integrating it.
+    Casting { from: V3, to: V3, age: u16 },
+    /// Standing where it arrived. The state everything in the kit is set up
+    /// for.
+    Waiting,
+    /// Dashing home, cutting and slowing whatever it passes through.
+    ///
+    /// One bit per fighter it has already caught, so a fighter it runs over is
+    /// hit once by the return rather than once a frame.
+    Returning { struck: u8 },
+}
+
+impl Shadow {
+    /// The shadow of a Reaver standing at `pos`, attending her.
+    pub fn attending(pos: V3, facing: V3) -> Shadow {
+        Shadow {
+            pos,
+            facing,
+            doing: Ghost::Attending,
+            echo: NO_ECHO,
+            echo_age: 0,
+            echo_used: false,
+            dash: 0,
+        }
+    }
+
+    /// Is it out on the field rather than at her shoulder?
+    pub const fn is_out(self) -> bool {
+        !matches!(self.doing, Ghost::Attending)
+    }
+
+    /// Is it standing still out there -- the state the kit is built around?
+    pub const fn is_waiting(self) -> bool {
+        matches!(self.doing, Ghost::Waiting)
+    }
+
+    /// Is it on its way home, cutting as it comes?
+    pub const fn is_returning(self) -> bool {
+        matches!(self.doing, Ghost::Returning { .. })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Elementalist
 // ---------------------------------------------------------------------------
 
@@ -311,9 +418,8 @@ pub enum Mechanic {
         /// The horizontal velocity the dash drives, in metres per second.
         rush_vel: V3,
     },
-    Shadow {
-        at: Option<V3>,
-    },
+    /// The Reaver: a second body, always somewhere. See [`Shadow`].
+    Shadow(Shadow),
     Structures([Option<Structure>; MAX_STRUCTURES]),
     /// Health is the resource, so there is no extra state to carry.
     Blood,
@@ -334,7 +440,9 @@ impl Mechanic {
     pub fn placed(&self) -> Option<V3> {
         match self {
             Mechanic::Shield(s) => s.world_pos(),
-            Mechanic::Shadow { at } => *at,
+            // Always somewhere: at her shoulder, or out on the field. The
+            // Guillotine erupts wherever that is.
+            Mechanic::Shadow(shadow) => Some(shadow.pos),
             Mechanic::Structures(slots) => slots.iter().flatten().next().map(|s| s.at),
             Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => None,
         }
@@ -349,7 +457,7 @@ impl Mechanic {
 /// Formatting without allocating, so the simulation stays dependency-free and
 /// the HUD can render mechanic state without a String per frame.
 pub mod alloc_free {
-    use super::{Form, Mechanic, Shield};
+    use super::{Form, Ghost, Mechanic, Shield};
 
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub enum Summary {
@@ -378,8 +486,12 @@ pub mod alloc_free {
                     (Form::Spear, _, true) => "spear / rush ready",
                     (Form::Spear, _, false) => "spear",
                 }),
-                Mechanic::Shadow { at: Some(_) } => Summary::Text("shadow: out"),
-                Mechanic::Shadow { at: None } => Summary::Text("shadow: held"),
+                Mechanic::Shadow(shadow) => Summary::Text(match shadow.doing {
+                    Ghost::Attending => "shadow: with you",
+                    Ghost::Casting { .. } => "shadow: going out",
+                    Ghost::Waiting => "shadow: out",
+                    Ghost::Returning { .. } => "shadow: coming back",
+                }),
                 Mechanic::Structures(slots) => Summary::Value(
                     "structures",
                     slots.iter().filter(|s| s.is_some()).count() as i32,

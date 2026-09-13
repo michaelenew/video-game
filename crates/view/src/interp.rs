@@ -9,6 +9,7 @@
 
 use crate::fx;
 use sim::World;
+use sim::class::Ghost;
 use sim::state::{Action, MAX_PLAYERS};
 
 /// Beyond this distance in one tick, treat the movement as a teleport and snap
@@ -62,9 +63,31 @@ pub struct PlayerView {
     pub aim_pitch: f32,
 }
 
+/// The Reaver's second body, ready to draw.
+///
+/// A body rather than a marker, because that is what it is: a translucent copy
+/// of her with its own place, its own facing and its own animation. It is drawn
+/// on a second skeleton, so what the renderer needs of it is the same handful
+/// of things it needs of her.
+#[derive(Clone, Copy, Debug)]
+pub struct ShadowView {
+    pub pos: [f32; 3],
+    pub facing: [f32; 3],
+    /// The move it is repeating, already lagged by the simulation. `Free` when
+    /// it is copying nothing.
+    pub action: Action,
+    pub speed: f32,
+    pub travel: [f32; 2],
+    /// What it is doing with itself, and how many frames it has been doing it.
+    pub doing: crate::play::Ghosting,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
     pub players: [PlayerView; MAX_PLAYERS],
+    /// The Reaver's shadow, for whichever fighter is a Reaver. `None` on the
+    /// other five classes, which do not have a second body.
+    pub shadows: [Option<ShadowView>; MAX_PLAYERS],
     /// Simulation frame of the newer snapshot. Deterministic, so it is safe to
     /// drive cyclic animation from.
     pub sim_frame: u32,
@@ -87,8 +110,10 @@ pub fn interpolate(prev: &World, cur: &World, alpha: f32) -> Frame {
     {
         *slot = view_of(p, c, a);
     }
+    let shadows = std::array::from_fn(|i| shadow_of(&prev.players[i], &cur.players[i], a));
     Frame {
         players,
+        shadows,
         sim_frame: cur.frame,
         round_left: match cur.phase {
             sim::state::Phase::RoundOver { left, .. } => Some(left),
@@ -163,6 +188,72 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         rise: fx(c.vel.y),
         turn_rate,
         aim_pitch,
+    }
+}
+
+/// The shadow between two snapshots.
+///
+/// Interpolated like the body it copies, and for the same reason: it crosses
+/// the arena at thirty metres a second, so a shadow drawn on the simulation's
+/// own cadence would strobe across a fast monitor.
+///
+/// **Its clock comes out of the simulation rather than being counted here.**
+/// How far into a flight it is comes from `Ghost::Casting`'s own age, and how
+/// long it has been standing still is derived from that age running past the
+/// end of the throw -- both in the snapshot, so a rollback redraws the same
+/// frame of the same clip.
+fn shadow_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> Option<ShadowView> {
+    let (was, now) = (sim::shadow::of(p)?, sim::shadow::of(c)?);
+    let from = [fx(was.pos.x), fx(was.pos.y), fx(was.pos.z)];
+    let to = [fx(now.pos.x), fx(now.pos.y), fx(now.pos.z)];
+    let jump = dist(from, to);
+    let pos = if jump > TELEPORT_SNAP {
+        to
+    } else {
+        [
+            lerp(from[0], to[0], a),
+            lerp(from[1], to[1], a),
+            lerp(from[2], to[2], a),
+        ]
+    };
+    let facing = nlerp(
+        [fx(was.facing.x), 0.0, fx(was.facing.z)],
+        [fx(now.facing.x), 0.0, fx(now.facing.z)],
+        a,
+    );
+
+    // Speed from the step it actually took, since a shadow carries no velocity
+    // -- where it is next frame is worked out from its age, not integrated.
+    let step = [to[0] - from[0], to[2] - from[2]];
+    let speed = (step[0] * step[0] + step[1] * step[1]).sqrt() * crate::TICK_HZ;
+    let side = [facing[2], -facing[0]];
+    let travel = [
+        (step[0] * side[0] + step[1] * side[1]) * crate::TICK_HZ,
+        (step[0] * facing[0] + step[1] * facing[2]) * crate::TICK_HZ,
+    ];
+
+    Some(ShadowView {
+        pos,
+        facing,
+        action: sim::shadow::echo_action(c.class, now).unwrap_or(Action::Free),
+        speed,
+        travel,
+        doing: ghosting(now),
+    })
+}
+
+/// Which animation state the shadow is in, with the frame count the clip is
+/// indexed by.
+fn ghosting(shadow: sim::class::Shadow) -> crate::play::Ghosting {
+    use crate::play::Ghosting;
+    match shadow.doing {
+        Ghost::Attending => Ghosting::Attending,
+        Ghost::Casting { age, .. } => Ghosting::Dashing(age),
+        // Coming home has no age of its own -- it is a chase rather than a
+        // flight of a fixed length -- so it holds the last frame of the dash,
+        // which is the pose it should be in the whole way anyway.
+        Ghost::Returning { .. } => Ghosting::Dashing(u16::MAX),
+        Ghost::Waiting => Ghosting::Ready(0),
     }
 }
 

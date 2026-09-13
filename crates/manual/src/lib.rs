@@ -124,7 +124,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "K or right click",
-                "Guard. The first few frames parry. Two classes attack with it instead: the Champion's spear, and the Dual mage's light auto -- neither of them has a shield to guard with.",
+                "Guard. The first few frames parry. Three classes attack with it instead: the Champion's spear, the Dual mage's light auto and the Shadow Reaver's Executioner -- none of the three has a shield to guard with.",
                 "K guard",
             ),
             s(
@@ -139,7 +139,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "E",
-                "The class mechanic. Different on every class: throw the shield, Rush, place the shadow, raise a structure — or, on the Blood mage, cast the Black spike, because her mechanic is health and there is nothing to toggle.",
+                "The class mechanic. Different on every class: throw the shield, Rush, raise a structure — or, on the Blood mage and the Shadow Reaver, a real ability with a wind-up you can be punished during.",
                 "E mechanic",
             ),
         ],
@@ -210,6 +210,39 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "Getting back",
                 "Landing an auto from the far side is the fast way toward centre, and it is melee range only -- which is the class: you have to close exactly when you are strongest and most fragile.",
+            ),
+        ],
+    },
+    Section {
+        title: "The Shadow Reaver",
+        blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two.",
+        entries: &[
+            e(
+                "The shadow copies you",
+                "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
+            ),
+            s(
+                "E",
+                "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it.",
+                "E send shadow",
+            ),
+            s(
+                "Q",
+                "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow drags them the length of the arena.",
+                "Q lotus",
+            ),
+            s(
+                "Right click",
+                "Executioner, the committed melee. Shift + left click throws the same move.",
+                "RMB executioner",
+            ),
+            e(
+                "Shift + forward",
+                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. Pointed anywhere else it is the ordinary dodge.",
+            ),
+            e(
+                "The leash",
+                "Walk far enough from a shadow standing out on the field and it comes and finds you, cutting on the way. Straying is a decision, not a mistake.",
             ),
         ],
     },

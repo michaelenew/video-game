@@ -30,8 +30,11 @@ opening frames of block and rewards with a stagger. Special attacks are the guar
 **Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Now: *click = attack, shift +
 click = the committed version, shift + direction = dodge, WASD = move, space = jump, `Q` = the
 class special, `E` = the class mechanic, mouse = where.* `E` is usually an instant state
-change; on a class whose mechanic has no state it is a fourth ability, which is what the Blood
-mage's `E` became on 2026-09-12. Was: *click = attack, shift =
+change; on three it is an ability instead, because pressing it is not free — the Blood mage's
+since 2026-09-12 and the Dual mage's since 2026-09-13, both because their mechanic has no
+state to toggle, and the Reaver's on the same day for the opposite reason: hers is
+emphatically a state, and moving a second body across the arena takes frames and does
+damage. Was: *click = attack, shift =
 ability, WASD = move, space = move more, shift beats WASD.* The last two did not survive
 contact with the sandbox. **Space now always jumps** — a vertical takeoff and nothing else —
 and **shift plus a direction dodges**. Space plus a direction used to dodge, which meant
@@ -55,7 +58,7 @@ poke is a design choice in a closed arena, not a gap.
 
 | Class | Mechanic — what abilities spend | Primary buttons | State |
 | --- | --- | --- | --- |
-| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position | `L`/`R` melee autos | Strong |
+| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Executioner · `Q` Lotus · `E` Send shadow | Rebuilt |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Raise | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto · `Q` Judgement · `E` Sweep | Kit built |
@@ -105,7 +108,7 @@ Nothing here blocks a prototype.
 | Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. Whether the finisher stays on `Q` or moves to `M`, and what `shift` + right click should be once an ability has two forms |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush |
-| Shadow Reaver | Whether the shadow has collision |
+| Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input |
 | Elementalist | Structure cap of three is a readability guess, not a balance one. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them |
 | Blood mage | Health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
 
@@ -127,10 +130,11 @@ character progression.
 
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
-least three exemplar moves -- ten on the Champion, five on the Dual mage, four on
-the Blood mage -- there is a monster to fight and climb, peer-to-peer rollback
-play works over real UDP, and 408 tests cover determinism, combat relationships,
-aiming, the ride, the camera, kinematics and animation.
+least three exemplar moves -- ten on the Champion, five on the Dual mage, four
+on the Blood mage and the Shadow Reaver -- there is a monster to fight and
+climb, peer-to-peer rollback play works over real UDP, and the test suite covers
+determinism, combat relationships, aiming, the ride, the camera, kinematics and
+animation.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.

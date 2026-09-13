@@ -417,17 +417,126 @@ pub fn leap_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LeapRise))
 }
 
-/// How far the Reaver may stray from a placed shadow before it snaps back.
+/// How far the Reaver may stray from a shadow standing out on the field before
+/// it comes and finds her.
+///
+/// **Longer than the throw**, and it has to be: the shadow arrives at up to the
+/// send's own reach, and a leash shorter than that would have it turn round on
+/// the frame it landed. The gap between the two is how far she may walk off the
+/// line before the line comes after her.
 pub fn shadow_leash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
 }
 
-/// How far from the Reaver a shadow can be placed.
+/// How far behind her the attending shadow stands.
 ///
-/// A reach rather than a distance: the shadow goes where the crosshair is,
-/// stopping at the terrain or at this, whichever comes first.
-pub fn shadow_reach() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShadowPlaceAhead))
+/// Presentation with teeth: the shadow copies her swings, so where it stands is
+/// where its copy lands. Behind her rather than on her, so the two bodies can
+/// be told apart at a glance -- which is the whole reason the number exists.
+pub fn shadow_trail() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowTrail))
+}
+
+/// How much of the gap the attending shadow closes each frame.
+///
+/// An ease rather than a hard follow, so it swings out behind her when she
+/// turns and drifts back in when she stops. One is welded to her back.
+pub fn shadow_follow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowFollow))
+}
+
+/// How many frames after her the shadow throws the same move.
+pub fn shadow_lag() -> u16 {
+    oven::scalar(Scalar::ShadowLag).max(0) as u16
+}
+
+/// What the shadow's copy of a move deals, as a share of hers.
+pub fn shadow_echo() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::ShadowEcho), 100)
+}
+
+/// Frames the shadow spends flying out to where it was sent.
+pub fn shadow_send_frames() -> u16 {
+    oven::scalar(Scalar::ShadowSendFrames).max(1) as u16
+}
+
+/// How fast the shadow comes home when it is recalled.
+pub fn shadow_home_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowHomeSpeed))
+}
+
+/// How much speed the recall leaves whoever it runs through.
+pub fn shadow_recall_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowRecallSlow))
+}
+
+/// How near the crosshair has to be to the shadow for a forward dodge to become
+/// a dash to it.
+///
+/// A radius around the shadow, in metres, tested against the crosshair's own
+/// ray -- see `aim::pointing_at`. Generous on purpose: the dodge is the
+/// class's movement and it must not be lost to a pixel.
+pub fn shadow_lock_cone() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowLockCone))
+}
+
+/// How fast she crosses to her shadow on a dash.
+///
+/// Constant while the dash runs rather than a decaying shove, so the distance
+/// covered is a fact about the leash rather than about how the dodge's decay
+/// happens to be tuned this week. Fast enough to cross the **whole leash**
+/// inside one dodge, which is the property that makes the dash a reliable
+/// escape rather than a gamble on how far away she left the thing.
+pub fn shadow_dash_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
+}
+
+/// How far the Guillotine's blades travel from the shadow.
+pub fn lotus_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusRadius))
+}
+
+/// How high the blades arc on their way out.
+pub fn lotus_rise() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusRise))
+}
+
+/// How far a blade's path bends as it goes, in turns.
+///
+/// Zero is six spokes. Anything else is what makes it a lotus: each blade
+/// leaves on its own bearing and keeps turning, so the six of them open like
+/// petals rather than a starburst.
+pub fn lotus_curl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusCurl))
+}
+
+pub fn lotus_blade_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusBladeRadius))
+}
+
+/// Frames the blades take to reach full extension.
+pub fn lotus_erupt() -> u16 {
+    oven::scalar(Scalar::LotusErupt).max(1) as u16
+}
+
+/// Frames they hang there before coming back.
+pub fn lotus_hold() -> u16 {
+    oven::scalar(Scalar::LotusHold).max(0) as u16
+}
+
+/// Frames they spend chasing the shadow home.
+pub fn lotus_return() -> u16 {
+    oven::scalar(Scalar::LotusReturn).max(1) as u16
+}
+
+/// What a blade deals on the way back, as a share of what it dealt going out.
+pub fn lotus_return_damage() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::LotusReturnDamage), 100)
+}
+
+/// How much speed a blade leaves whoever it catches.
+pub fn lotus_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusSlow))
 }
 
 /// How far from the Elementalist a stone can be raised.
