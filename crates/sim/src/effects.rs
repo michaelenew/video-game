@@ -152,6 +152,18 @@ impl EffectKind {
         matches!(self, EffectKind::GuillotineLotus)
     }
 
+    /// Does it come back to whoever threw it, rather than to where it was
+    /// thrown from?
+    ///
+    /// One does. The Blood mage's blade is caught, and a catch is a thing that
+    /// happens between two objects: a blade returning to a patch of air the
+    /// caster has since walked out of has not been caught by anybody. Its
+    /// `home` is refreshed from the owner every frame -- see
+    /// `state::World::step_effects` -- and the return leg is drawn to it.
+    pub const fn comes_home(self) -> bool {
+        matches!(self, EffectKind::Bloodletter)
+    }
+
     /// Which move index spawns this, for the move tables.
     pub const fn from_code(code: u8) -> Option<EffectKind> {
         match code {
@@ -243,6 +255,19 @@ pub struct Effect {
     /// wherever the caster wound the aim marker to, and the marker is gone by
     /// the time the arms exist. See `state::step_channel`.
     pub reach: Fx,
+    /// Where a returning effect is heading, live.
+    ///
+    /// The caster's ability origin for anything that [`comes_home`], refreshed
+    /// every frame, and the cast position for everything else -- so an effect
+    /// nobody updates flies exactly the arc it always did.
+    ///
+    /// Separate from `pos`, which for the blade stays the point it was thrown
+    /// from: the *outward* leg is the line the crosshair picked and moving it
+    /// after the throw would be aiming an ability that is already out. Only the
+    /// way home follows anybody.
+    ///
+    /// [`comes_home`]: EffectKind::comes_home
+    pub home: V3,
     /// Damage this has dealt and not yet paid back.
     ///
     /// Only the blade uses it. The archive is specific that the health arrives
@@ -273,6 +298,7 @@ impl Effect {
             life: kind.life().max(1),
             struck: 0,
             reach,
+            home: pos,
             banked: 0,
         }
     }
@@ -378,23 +404,6 @@ impl Effect {
 
     // -- The two that travel ------------------------------------------------
 
-    /// Where the blade is, as a fraction of its throw: out to one at the turn
-    /// and back to zero at the catch.
-    ///
-    /// A triangle rather than a curve on purpose. A thrown blade that eased in
-    /// and out would hang at the far end, and hanging is what a *placed* effect
-    /// does; this one is meant to read as a single continuous throw whose only
-    /// event is the turn.
-    fn out_and_back(&self) -> Fx {
-        let p = self.progress();
-        let half = Fx::ratio(1, 2);
-        if p.raw() <= half.raw() {
-            p.mul(Fx::from_int(2))
-        } else {
-            Fx::ONE.sub(p).mul(Fx::from_int(2))
-        }
-    }
-
     /// True once the blade has turned and is on its way home.
     pub fn returning(&self) -> bool {
         self.age as u32 * 2 > self.life as u32
@@ -405,10 +414,40 @@ impl Effect {
         self.returning() as usize
     }
 
+    /// The far end of the blade's throw: where it turns round.
+    fn blade_apex(&self) -> V3 {
+        self.pos.add(self.dir.scale(self.reach))
+    }
+
     /// Where the blade is this frame.
+    ///
+    /// Two straight lines with the turn between them, and they are not the same
+    /// kind of line. **Out** is the throw: from where it left to the far end of
+    /// the reach the crosshair picked, and nothing moves it. **Back** is the
+    /// catch: from the far end to [`home`](Effect::home), which is wherever the
+    /// caster is *now*, so a mage who walks while the blade is in the air has
+    /// it curve after them and arrive in their hand anyway.
+    ///
+    /// Straight lines rather than a curve on purpose. A thrown blade that eased
+    /// in and out would hang at the far end, and hanging is what a *placed*
+    /// effect does; this one is meant to read as a single continuous throw
+    /// whose only event is the turn.
+    ///
+    /// **The return is a fraction of the way home rather than a speed**, which
+    /// is what makes it arrive on the frame it is supposed to however far the
+    /// caster has run. A chase at a fixed speed could be outrun, and then the
+    /// ability's failure case would be *moving* -- which is the one thing an
+    /// aggressive sustain class has to be able to do. The risk stays where the
+    /// design put it: you have to survive the flight, not stand still for it.
     pub fn blade_at(&self) -> V3 {
-        self.pos
-            .add(self.dir.scale(self.reach.mul(self.out_and_back())))
+        let p = self.progress();
+        let half = Fx::ratio(1, 2);
+        let apex = self.blade_apex();
+        if p.raw() <= half.raw() {
+            crate::math::lerp3(self.pos, apex, p.mul(Fx::from_int(2)))
+        } else {
+            crate::math::lerp3(apex, self.home, p.sub(half).mul(Fx::from_int(2)))
+        }
     }
 
     /// Where one arm of a Grasp is this frame.

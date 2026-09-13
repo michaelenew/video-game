@@ -106,9 +106,10 @@ them: a structure, a fire pillar.
 ### Not grounded
 
 Things that fly: the Elementalist's auto, the Bulwark's thrown shield, and the
-Blood mage's Bloodletter and Grasp — the last two throw something that then
-travels on its own, so what the crosshair gives them is the *line* rather than
-a landing spot.
+Blood mage's Bloodletter — the last throws something that then travels on its
+own, so what the crosshair gives it is the *line* rather than a landing spot.
+(Her Grasp also throws something, but it is aimed as a **swing** and picks its
+distance with a channel — see [Aiming with time](#aiming-with-time).)
 
 - **Hit the ground** — draw a line straight up from that spot to the height of
   the character's ability origin. The shot flies level over the place the
@@ -220,8 +221,8 @@ swing.
 | Line of effect | Moves |
 | --- | --- |
 | **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
-| **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
-| **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos |
+| **Skillshot** | Bolt, Bloodletter, Lance |
+| **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos — and the Blood mage's Grasp, which is the one that is not melee |
 | **At the mechanic** | Guillotine lotus |
 
 The mechanic inputs are aimed too, through the same two functions: Raise is a
@@ -278,30 +279,53 @@ Each ability states which kinds of thing its path can meet. The Elementalist's
 beam meets bodies, stones and **fire**; the fire bolt that a pillar lights meets
 bodies and stones but not fire, or it could not leave the pillar that lit it.
 
-An ability whose *effect* travels — the Blood mage's thrown blade, her Grasp —
-takes the path's direction and flies its own distance along it, rather than
-stopping where the crosshair's ray stopped. A blade thrown at something four
-metres away still flies its full distance; the crosshair picked the line.
+An ability whose *effect* travels — the Blood mage's thrown blade — takes the
+path's direction and flies its own distance along it, rather than stopping where
+the crosshair's ray stopped. A blade thrown at something four metres away still
+flies its full distance; the crosshair picked the line.
+
+**What comes back can follow a person.** The blade's return leg is drawn to
+wherever its caster is standing this frame rather than to the spot it left, so a
+mage who walks while it is in the air has it curve after her and land in her
+hand. The outward leg never moves: the throw was aimed, and re-aiming an ability
+that is already out is the thing this document is about. See `Effect::home`.
 
 ## Aiming with time
 
 One move is aimed with the *length of a button press*: hold the Blood mage's
-Grasp and the reach it is solved at walks from the near end of its slider to its
-own `reach`, over half a second. A small marker in front of the caster shows
-where that has got to.
+Grasp and the reach it is solved at walks from melee out to its own `reach` over
+a second. A small marker shows where that has got to — it leaves the caster's
+chest and travels outward, and where it stops is where the arms will converge.
 
 **The marker is not a second answer.** It is the far end of `Player::aim_path`,
-which the wind-up re-solves every frame through exactly the call above with the
+which the wind-up re-solves every frame through the move's own aiming with the
 reach the hold has bought so far. The renderer reads its `to` and draws a ball
 there. Nothing else is computed anywhere, which is the point: the failure mode
 this whole document exists to prevent is two pieces of arithmetic that agree
 today.
 
+**A channelled move is a swing, not a skillshot, and that is not a detail.** A
+skillshot's far end is wherever the crosshair's ray stops — a wall, the floor,
+the edge of the range — which is exactly right when the player is choosing a
+*point*. It is exactly wrong when they are choosing a *depth*: looking a few
+degrees further down moved the marker by metres, so the thing meant to show how
+far the cast was going mostly showed the shape of the arena, and the depth the
+hold had bought was invisible underneath it. As a swing it is a ray off the body
+along the facing, pitched by the camera through the standing dead zone, and it
+has nothing to stop against. Its length is the hold and only the hold.
+
+The dead zone is what makes that readable rather than fiddly. The camera sits
+above the shoulder, so a player looking at somebody at their own height is
+already looking slightly down; level through the first 45° below the horizon
+means the marker runs flat across the floor at chest height for the whole of the
+range a fight happens in. Past 45° it follows the camera down and the cast can
+be put into the ground, which is a mistake the player can see themselves making.
+
 The aim stays live for the whole wind-up — the body turns with the mouse — and
 **locks on the frame the button comes up**, which is the frame the move starts.
 That is where every other move locks it too; a channel does not move the rule,
 it makes the frame later. What is stored across the gap is the solved path's
-*length*, so a wall that shortens the marker shortens the ability with it.
+*length*, which for a swing is the reach exactly.
 
 ## What this rules out
 

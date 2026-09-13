@@ -727,7 +727,7 @@ Current as of 2026-09-13, and the four rows marked **bound** are what the game d
 | --- | --- |
 | `L` | **Bloodletter** — the auto. A blade out to a fixed distance and back, cutting on both passes and paying out on the catch. **Bound** |
 | `shift` + `L` | **Rend** — the committed melee rake. **Bound** |
-| hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge on a point you chose by how long you held the button; all four catch. **Bound** |
+| hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge at a depth you chose by how long you held the button, from melee to ten metres over a second; all four catch. **Bound** |
 | `E` | **Black spike** — a spike in a draining, slowing field, placed at long range. **Bound**, and the one place in the game where the mechanic key is an ability rather than a state change |
 | direction + click | Cripple, Affliction, and the reactivating projectile Rend was meant to be |
 | the seals | Unplaced. Seal of the unforgiven wants a button of its own and there is not an obvious one |
@@ -737,12 +737,19 @@ That is the class mechanic, and it is the only class with a cost in the move tab
 
 **Holding a cast button is new, and it means one thing only: range.** The Grasp is the first
 move in the game wound up by how long its button is down, and what the hold buys is how far
-out the arms converge — from three metres at a tap to ten at half a second, with a marker in
-front of the caster showing where it currently is. It is aiming, so the mouse still turns you
-through it, and the aim locks on release like every other move's does. The press is what costs
-health; there is no backing out of it. Both ends of the slider and its length are move-table
-knobs, so a second channelled move gets the grammar for free — see
-[kits/blood-mage.md](kits/blood-mage.md).
+out the arms converge — from melee at a tap to ten metres at a full second, with a marker that
+leaves the caster's chest and travels outward to show where it currently is. It is aiming, so
+the mouse still turns you through it, and the aim locks on release like every other move's
+does. The press is what costs health; there is no backing out of it. Both ends of the slider
+and its length are move-table knobs, so a second channelled move gets the grammar for free —
+see [kits/blood-mage.md](kits/blood-mage.md).
+
+**A channelled move is pointed the way a melee swing is**, not the way a skillshot is: the
+body's facing for the yaw, and the camera's pitch through the same dead zone — level through
+the first 45° below the horizon, exact above it. That is what makes the depth readable. A
+skillshot's marker sits wherever the crosshair's ray lands, so it jumps between the floor, a
+wall and the edge of the range as the camera moves, and the hold's contribution disappears
+underneath it. See [aiming.md](aiming.md).
 
 ## Open questions
 
