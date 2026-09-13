@@ -316,6 +316,24 @@ impl Effect {
         crate::moves::get(self.class, self.slot)
     }
 
+    /// What this effect does to whatever it touches, over and above damage.
+    ///
+    /// One place rather than three, because the creature is offered the same
+    /// control a fighter gets and the two should never be able to disagree
+    /// about what a Black spike does. The fighter path still applies its own
+    /// separately: a fighter takes the whole of it and a monster does not --
+    /// see `monster::Monster::take_control`.
+    pub fn control(&self) -> crate::monster::Control {
+        use crate::monster::Control;
+        use crate::tuning as t;
+        match self.kind {
+            EffectKind::BlackSpike => Control::slowing(t::slow_frames(), t::spike_slow()),
+            EffectKind::GuillotineLotus => Control::slowing(t::slow_frames(), t::lotus_slow()),
+            EffectKind::Grasp => Control::grabbing(self.source().grabs),
+            _ => Control::default(),
+        }
+    }
+
     /// What it deals each time it connects.
     pub fn damage(&self) -> i32 {
         self.kind.damage(&self.source())

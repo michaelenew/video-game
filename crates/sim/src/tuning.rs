@@ -1200,14 +1200,21 @@ pub fn swing_level_to() -> i32 {
 // ---------------------------------------------------------------------------
 // The Ridgeback
 //
-// See `docs/design/monsters.md`. Three groups, and they are edited separately
-// because they answer different questions: how the animal is built, how it
-// decides, and what it takes to stay on its back.
+// See `docs/design/monsters.md`. Five groups, edited separately because they
+// answer different questions: how the animal is built, how it decides, what its
+// hide is worth, what it takes to move it around, and what it takes to stay on
+// its back.
 // ---------------------------------------------------------------------------
 
-/// Multiplies every part box. The one number you actually reach for while
-/// playing -- *how big is it* -- which is why the proportions in
-/// `monster::SHAPES` are a constant and this is not.
+/// Multiplies every bone offset and every part box. The one number you actually
+/// reach for while playing -- *how big is it* -- which is why the proportions
+/// in `beast::REST` and `beast::SHAPES` are constants and this is not.
+///
+/// At one the creature is about thirteen metres nose to tail with its back
+/// three and a half metres up. That height is chosen against the jump: a
+/// standing full hop apexes around 2.2 m and cannot reach it, and a hop thrown
+/// from one of the arena's 1.5 m platforms can. **The climb is a positioning
+/// problem before it is a timing one**, and this is the number that decides it.
 pub fn monster_scale() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterScale))
 }
@@ -1218,13 +1225,14 @@ pub fn monster_health() -> i32 {
     oven::scalar(Scalar::MonsterHealth)
 }
 
-/// Health of a breakable limb. Breaking a foreleg costs it the turn toward
-/// that side, which is the one consequence in the fight a player can point at.
+/// Health of one foot. Breaking a foot drops that corner of the animal for
+/// good and puts it on its knee for a moment, which is the ground game's whole
+/// payout -- so this is the number that says how long the ground game is.
 pub fn limb_health() -> i32 {
     oven::scalar(Scalar::LimbHealth)
 }
 
-/// How far from the arena wall it is kept. A creature nine metres long in a
+/// How far from the arena wall it is kept. Thirteen metres of animal in a
 /// twenty-eight metre arena needs somewhere to stand.
 pub fn monster_margin() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterMargin))
@@ -1241,6 +1249,13 @@ pub fn monster_back() -> Fx {
 }
 pub fn monster_accel() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterAccel))
+}
+
+/// The speed the gait has fully changed over to a gallop at. Between this and
+/// the walk the two cycles are blended, which is what stops a creature
+/// accelerating out of a walk from planting two feet at once.
+pub fn gallop_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GallopSpeed))
 }
 
 /// The distance it tries to hold, and how hard it corrects toward it. Set near
@@ -1268,7 +1283,9 @@ pub fn turn_gain() -> Fx {
 pub fn turn_accel() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TurnAccel))
 }
-/// What a broken foreleg does to the turn toward that side.
+/// What each broken leg does to the turn toward that side. Applied once per
+/// break, so an animal with both legs gone on one side barely comes round at
+/// all -- which is a thing the player did, and can see.
 pub fn turn_hurt() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TurnHurt))
 }
@@ -1325,7 +1342,7 @@ pub fn variety_frames() -> u16 {
     oven::scalar(Scalar::VarietyFrames) as u16
 }
 
-/// Ridge damage that puts it on the ground, and how fast the pool comes back.
+/// Damage to a weak point fills the poise pool; a full pool is a topple.
 /// Regeneration is what stops a topple being saved up across a whole fight.
 pub fn poise_max() -> i32 {
     oven::scalar(Scalar::PoiseMax)
@@ -1336,42 +1353,44 @@ pub fn poise_regen() -> i32 {
 pub fn topple_frames() -> u16 {
     oven::scalar(Scalar::ToppleFrames) as u16
 }
-/// Going down is fast and getting up is not.
-pub fn topple_fall() -> u16 {
-    oven::scalar(Scalar::ToppleFall) as u16
-}
-pub fn topple_rise() -> u16 {
-    oven::scalar(Scalar::ToppleRise) as u16
-}
-pub fn topple_pitch() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::TopplePitch))
-}
-pub fn topple_drop() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ToppleDrop))
+
+/// Down on a knee: the middle rung of the ladder, and the one the ground game
+/// aims at. Long enough to cross the ground and climb on -- that is what the
+/// number is for, so it is set against the run-up rather than against a feeling.
+pub fn stumble_frames() -> u16 {
+    oven::scalar(Scalar::StumbleFrames) as u16
 }
 
-/// A flinch interrupts it, and only a hit that hurts causes one -- which in
-/// practice means a ridge hit, because the armour elsewhere keeps the number
-/// below the threshold. That rule is emergent rather than written down, and it
-/// is the better for it.
+/// The cheap reaction. It interrupts a startup or a recovery but never an
+/// active frame, and only a hit that hurts causes one -- which in practice
+/// means a committed move rather than an auto.
 pub fn flinch_frames() -> u16 {
     oven::scalar(Scalar::FlinchFrames) as u16
-}
-pub fn flinch_pitch() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::FlinchPitch))
 }
 pub fn flinch_threshold() -> i32 {
     oven::scalar(Scalar::FlinchThreshold)
 }
 
-/// What fraction of an attack's damage each part passes through. Below one is
-/// armour. The ridge is above one, and that difference is the entire reason to
-/// climb.
+/// The hide. A damage multiplier per part: below one is armour, above one is a
+/// weak point, and the spread between them is the difference between a
+/// twenty-second fight and a two-minute one.
+///
+/// Three of these are the design in miniature. The **nape** is the highest
+/// number on the animal and is reachable only from its own shoulders. The
+/// **ridge** is the other weak point and is what a rider walks to first. The
+/// **foot** is the softest thing a fighter standing on the floor can reach at
+/// all, which is what makes the ground game a route up rather than a chore.
 pub fn vuln_head() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VulnHead))
 }
 pub fn vuln_neck() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VulnNeck))
+}
+pub fn vuln_nape() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnNape))
+}
+pub fn vuln_shoulder() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnShoulder))
 }
 pub fn vuln_barrel() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VulnBarrel))
@@ -1379,84 +1398,119 @@ pub fn vuln_barrel() -> Fx {
 pub fn vuln_ridge() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VulnRidge))
 }
+pub fn vuln_haunch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnHaunch))
+}
 pub fn vuln_tail() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VulnTail))
+}
+pub fn vuln_tail_mid() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnTailMid))
 }
 pub fn vuln_tail_tip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::VulnTailTip))
 }
-pub fn vuln_foreleg() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::VulnForeleg))
+pub fn vuln_leg() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnLeg))
 }
-pub fn vuln_hindleg() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::VulnHindleg))
+pub fn vuln_foot() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::VulnFoot))
 }
 
-// The pose amplitudes. These are not decoration: the pose is what a rider is
-// standing on, so every one of them is also a number that decides whether a
-// move throws people off. See `monster::pose_of`.
+/// What a broken leg leaves behind, once the stumble is over.
+///
+/// The corner drops, the body pitches toward the missing end, rolls toward the
+/// missing side, and the useless limb folds rather than punching through the
+/// floor. The drop is the one that matters for the fight: enough of them and
+/// the back comes within reach of a standing jump.
+pub fn leg_drop() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LegDrop))
+}
+pub fn leg_pitch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LegPitch))
+}
+pub fn leg_roll() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LegRoll))
+}
+pub fn leg_fold() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LegFold))
+}
+/// How much of the fold the joint *above* the break takes. A limb that folds
+/// only at its lower joint sticks out sideways; one that folds at both tucks
+/// under the body, which is what a broken leg does.
+pub fn leg_buckle() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LegBuckle))
+}
+/// Speed lost per broken leg, as a multiplier applied once per break.
+pub fn leg_speed_hurt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LegSpeedHurt))
+}
 
-pub fn bite_draw() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::BiteDraw))
+/// **The crowd-control model.** See `docs/design/monsters.md` §4.
+///
+/// `strain` is damage taken recently: every hit adds to it and
+/// `strain_decay` per cent of it bleeds away every frame, so a burst fills it
+/// and a trickle does not. Above `cc_strain` the creature is susceptible to
+/// control at all; above `interrupt_strain` a hit breaks it out of whatever it
+/// is doing, live hitbox included.
+///
+/// `strain_desperation` is how far both bars fall by the time it is nearly
+/// dead. That one number is the arc of a hunt: methodical while the animal is
+/// fresh, frantic once it is not.
+pub fn strain_decay() -> i32 {
+    oven::scalar(Scalar::StrainDecay)
 }
-pub fn bite_reach() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::BiteReach))
+pub fn cc_strain() -> i32 {
+    oven::scalar(Scalar::CcStrain)
 }
-pub fn bite_rear() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::BiteRear))
+pub fn interrupt_strain() -> i32 {
+    oven::scalar(Scalar::InterruptStrain)
 }
-pub fn stomp_lift() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::StompLift))
+pub fn strain_desperation() -> i32 {
+    oven::scalar(Scalar::StrainDesperation)
 }
-pub fn stomp_drop() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::StompDrop))
+
+/// How much of a slow it actually feels, once it is susceptible. Zero means a
+/// slow never touches it; one means it takes the same slow a fighter does.
+pub fn cc_slow_bite() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CcSlowBite))
 }
-pub fn stomp_bob() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::StompBob))
+/// Frames rooted per frame the grab would have held a fighter.
+pub fn cc_root() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CcRoot))
 }
-pub fn sweep_wind() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SweepWind))
+/// Frames of stumble per metre per second of launch. A knock-up on something
+/// this heavy is a trip rather than a lift, and this is the exchange rate.
+pub fn cc_stumble() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CcStumble))
 }
-pub fn sweep_swing() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SweepSwing))
+
+/// How violent the shake is, as a multiplier on the baked clip.
+///
+/// The one animation number that is genuinely tuning rather than content: it
+/// decides whether a braced rider stays on, and that is a feel question you
+/// answer by playing. Everything else about the creature's motion lives in the
+/// clips -- see `crates/anim/src/beast/`.
+pub fn shake_force() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShakeForce))
 }
-/// How much the body answers the tail. A tail that heavy cannot swing without
-/// the rest of the animal paying for it, and the payment is what shears anyone
-/// standing on the barrel.
-pub fn sweep_counter() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SweepCounter))
+
+/// Metres per cycle of the gait, and how fast it breathes when standing.
+///
+/// The gait is indexed by ground covered rather than by time, so this is what
+/// decides where a footfall lands. The same rule the fighters' locomotion
+/// follows, for the same reason: a cycle on a fixed cadence skates.
+pub fn gait_stride() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaitStride))
 }
-pub fn charge_lean() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ChargeLean))
+pub fn breath_rate() -> u16 {
+    oven::scalar(Scalar::BreathRate) as u16
 }
-pub fn charge_gallop() -> i32 {
-    oven::scalar(Scalar::ChargeGallop)
-}
-pub fn charge_bounce() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ChargeBounce))
-}
-pub fn slam_rear() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SlamRear))
-}
-pub fn slam_rise() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SlamRise))
-}
-pub fn slam_dip() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SlamDip))
-}
-/// Fractional on purpose: whether the shake ends where it started decides
-/// whether it reads as a shudder or as a swerve.
-pub fn shake_cycles() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShakeCycles))
-}
-pub fn shake_yaw() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShakeYaw))
-}
-pub fn shake_pitch() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShakePitch))
-}
-pub fn shake_ramp() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::ShakeRamp))
+
+/// How far round the neck will turn to keep you in view, in turns. Split across
+/// three bones, so it curves rather than hinging.
+pub fn head_track() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HeadTrack))
 }
 
 // ---------------------------------------------------------------------------
@@ -1468,31 +1522,27 @@ pub fn mount_snap() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MountSnap))
 }
 
-/// How far over an edge you may stand before you are standing on nothing, as a
+/// How far you may overhang the edge of a part before you are off it, as a
 /// fraction of your own width.
 pub fn edge_grace() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::EdgeGrace))
 }
 
-/// **Grip: the acceleration a rider can hold on through**, in metres per second
-/// squared, and what bracing multiplies it by.
-///
-/// Every buck in the game is this one comparison. Nothing tags a move "throws
-/// riders" -- a move that moves the surface hard enough throws whoever is on
-/// it, and a move that does not, does not. Crouching braces, which is a third
-/// answer alongside dodging and leaving.
-///
-/// For scale: an ordinary walk or turn is tens, a stomp is a couple of hundred,
-/// and the slam's reversal is over a thousand.
+/// **The buck.** Acceleration of the surface under your feet, above which you
+/// come off it. Not a flag on a move: a move that whips the tail throws whoever
+/// is on the tail and does nothing to somebody on the shoulder, and nobody had
+/// to write that down.
 pub fn grip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::Grip))
 }
+/// Crouching multiplies grip. The answer to a shake that is neither "dodge" nor
+/// "leave", and a real decision because bracing costs you the attack you were
+/// about to throw.
 pub fn brace_grip() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BraceGrip))
 }
 
-/// What being thrown does: outward along the surface, upward off it, and how
-/// long you spend unable to answer for it.
+/// What being thrown off does to you.
 pub fn throw_kick() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrowKick))
 }
@@ -1503,24 +1553,51 @@ pub fn throw_stun() -> u16 {
     oven::scalar(Scalar::ThrowStun) as u16
 }
 
+/// **What a buck costs you.**
+///
+/// Nothing the creature throws can reach its own back, so a rider is safe from
+/// every hitbox it has -- which would make the back a room you sit in if losing
+/// your grip were free. It is not: you came off four and a half metres of
+/// animal, helpless, and you land.
+///
+/// It is also what makes the two answers to a buck worth knowing. Bracing and
+/// jumping both cost something -- the attack you were about to throw, or the
+/// read you have to get right -- and neither is worth paying for unless the
+/// alternative has a price.
+pub fn throw_damage() -> i32 {
+    oven::scalar(Scalar::ThrowDamage)
+}
+
 /// Frames after landing before the grip test starts. You get a moment to plant
-/// your feet, and without it the first frame aboard reads as an infinite
-/// acceleration and throws you straight back off.
+/// your feet; without it the first frame aboard looks like an enormous
+/// acceleration, because it is.
 pub fn mount_settle() -> u16 {
     oven::scalar(Scalar::MountSettle) as u16
 }
 
-/// Walking speed on the creature's back, as a fraction of the ground walk.
-/// Slower, because the footing is not flat and because a back you can cross in
-/// half a second is not a place you have to hold.
+/// Walking speed on the creature's back, as a fraction of the ordinary one.
 pub fn rider_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::RiderSpeed))
 }
 
-/// Where the two sides start a hunt, measured out from the arena's centre.
+/// **The cap on what a jump off the creature carries with it.**
 ///
-/// Far enough apart that the opening of a fight is an approach rather than an
-/// ambush: both sides get to read the other before anything is committed.
+/// A leap takes the surface's own velocity, which is what makes stepping off
+/// the back of a charging animal a real option. Uncapped, it also makes
+/// *jumping the shake* impossible: the back is whipping sideways at forty
+/// metres a second on the frame you leave it, so the answer to a buck would be
+/// to get flung slightly further away by choice.
+///
+/// You can only take with you as much momentum as you had time to push off
+/// against, so the carry is capped. That single line is what turns the shake
+/// from a thing you brace through into a thing you can read and hop -- and
+/// getting the timing wrong still throws you, because a late jump is a jump
+/// that never left the ground. See `docs/design/monsters.md` §3.
+pub fn leap_carry() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LeapCarry))
+}
+
+/// Where the creature stands when a hunt begins, and where the hunters do.
 pub fn monster_spawn() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterSpawn))
 }
@@ -1528,14 +1605,12 @@ pub fn hunter_spawn() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HunterSpawn))
 }
 
-/// How big a step up a rider can simply walk up.
+/// A step you can walk up rather than having to jump.
 ///
-/// The creature is terrain, and terrain has steps: the tail sits two thirds of
-/// a metre below the back, and without this the only way from one to the other
-/// is a jump nobody would think to try. A rider who walks into a mountable face
-/// this close above their feet is put on top of it instead of stopped by it,
-/// which is what every platformer does and what makes an animal feel like
-/// somewhere you can move around rather than a collection of ledges.
+/// The creature is terrain, not a set of ledges: a rider who walks into a
+/// mountable face this close above their feet is put on top of it instead of
+/// stopped by it, which is what every platformer does and what lets a climb
+/// that starts at the tail reach the ridge.
 pub fn step_up() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepUp))
 }

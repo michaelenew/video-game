@@ -371,7 +371,16 @@ fn hunting() -> World {
     let mut beast = w.monster.expect("a hunt has a creature");
     // Close enough that the copy, which swings from a step behind her, reaches
     // it too -- the point of the test is the second body, not her spacing.
-    beast.pos = V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO);
+    // Placed by its *head* rather than by its centre: it is thirteen metres
+    // long, so where the middle of it is says nothing about what either body
+    // can reach. Its head goes between the two of them.
+    let head = sim::monster::shape(sim::monster::HEAD);
+    let mid = head.min.x.add(head.max.x).mul(Fx::ratio(1, 2));
+    beast.pos = V3::new(
+        mid.sub(t::shadow_trail().mul(Fx::ratio(1, 2))),
+        Fx::ZERO,
+        Fx::ZERO,
+    );
     // Facing back down the arena, and not thinking about anything.
     beast.yaw = Fx::from_raw(1 << 15);
     beast.doing = sim::monster::Doing::Prowl;
