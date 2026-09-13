@@ -134,8 +134,8 @@ Rust, eight crates, simulation as a pure function. See
 least three exemplar moves -- ten on the Champion, five on the Dual mage, four
 on the Blood mage and the Shadow Reaver -- there is a monster to fight and
 climb, peer-to-peer rollback play works over real UDP, and the test suite covers
-determinism, combat relationships, aiming, the ride, the camera, kinematics and
-animation.
+determinism, combat relationships, aiming, the ride, the camera, kinematics,
+animation and the frame budget.
 
 ```
 crates/sim    Deterministic simulation. Zero deps, no floating point.
