@@ -18,6 +18,8 @@ use sim::{Class, Fx, Input, V3, World};
 
 const E: u16 = Input::MECHANIC;
 const L: u16 = Input::LEFT;
+/// Right click, which on this class sends the shadow -- it is the half of the
+/// kit the crosshair aims, and the mouse is where aiming lives.
 const R: u16 = Input::RIGHT;
 const W: u16 = Input::W;
 const SHIFT: u16 = Input::SHIFT;
@@ -78,7 +80,7 @@ fn the_shadow_is_never_nowhere() {
     let mut w = duel();
     let mut seen = Vec::new();
     for frame in 0..160 {
-        let bits = if frame == 10 || frame == 90 { E } else { 0 };
+        let bits = if frame == 10 || frame == 90 { R } else { 0 };
         run(&mut w, 1, bits, down(15));
         assert!(
             w.players[0].mechanic.placed().is_some(),
@@ -183,7 +185,7 @@ fn a_shadow_out_on_the_field_swings_from_out_there() {
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     tap(
         &mut w,
-        E,
+        R,
         down(30),
         (send.whiff_cost() + t::shadow_send_frames()) as u32,
     );
@@ -220,7 +222,7 @@ fn the_shadow_flies_out_and_then_stops() {
     // drifting.
     let mut w = duel();
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
-    run(&mut w, 2, E, down(25));
+    run(&mut w, 2, R, down(25));
     run(&mut w, send.startup as u32, 0, down(25));
 
     let mut steps = Vec::new();
@@ -269,7 +271,7 @@ fn the_recall_cuts_and_slows_what_it_comes_home_through() {
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     tap(
         &mut w,
-        E,
+        R,
         down(25),
         (send.whiff_cost() + t::shadow_send_frames()) as u32,
     );
@@ -283,7 +285,7 @@ fn the_recall_cuts_and_slows_what_it_comes_home_through() {
         out.z.add(w.players[0].pos.z).mul(Fx::ratio(1, 2)),
     );
     w.players[1].pos = midway;
-    run(&mut w, 2, E, down(25));
+    run(&mut w, 2, R, down(25));
     let mut slowed = false;
     for _ in 0..60 {
         run(&mut w, 1, 0, down(25));
@@ -311,7 +313,7 @@ fn a_forward_dodge_at_the_shadow_crosses_to_it() {
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
     tap(
         &mut w,
-        E,
+        R,
         down(25),
         (send.whiff_cost() + t::shadow_send_frames()) as u32,
     );
@@ -418,13 +420,13 @@ fn the_recall_cuts_the_creature_on_its_way_home() {
     // Out past the animal, so the way home crosses it.
     tap(
         &mut w,
-        E,
+        R,
         0,
         (send.whiff_cost() + t::shadow_send_frames()) as u32,
     );
     assert!(shadow(&w).is_waiting(), "the shadow never got out");
     let before = beast_health(&w);
-    tap(&mut w, E, 0, 60);
+    tap(&mut w, R, 0, 60);
     assert!(
         beast_health(&w) < before,
         "the shadow came home through the creature without touching it"
@@ -432,19 +434,49 @@ fn the_recall_cuts_the_creature_on_its_way_home() {
 }
 
 // ---------------------------------------------------------------------------
-// Right click
+// Which button is which
 // ---------------------------------------------------------------------------
+//
+// The two are swapped against every other class, and the swap is the point:
+// **the mouse means where.** Sending the shadow is the only thing in this kit
+// the crosshair aims, so it is on the mouse; Executioner is a swing off the
+// body and does not care, so it is on the key.
 
 #[test]
-fn right_click_throws_her_committed_melee() {
-    // Right click is dead on a class with no shield to raise, and the kit has
-    // always described the Reaver as fighting with both hands.
+fn right_click_sends_the_shadow() {
     let mut w = duel();
     run(&mut w, 2, R, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "right click did not throw Send shadow"
+    );
+}
+
+#[test]
+fn the_mechanic_key_throws_her_committed_melee() {
+    // The one class where `E` carries a move that is not the mechanic. Worth a
+    // test rather than a comment: `on_e` is the only thing that says so, and it
+    // is one word away from being the slot everybody else puts there.
+    let mut w = duel();
+    run(&mut w, 2, E, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
         Some(SLOT_COMMITTED),
-        "right click did not throw Executioner"
+        "`E` did not throw Executioner"
+    );
+}
+
+#[test]
+fn shift_and_left_click_still_throws_the_same_melee() {
+    // The shared grammar is untouched: the swap gave Executioner a second home,
+    // it did not move it out of the one every class has.
+    let mut w = duel();
+    run(&mut w, 2, SHIFT | L, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_COMMITTED),
+        "shift + left click stopped throwing the committed move"
     );
 }
 
