@@ -2860,3 +2860,84 @@ every other catch in the game, rather than merely burning you in place. Whether 
 long enough to matter and short enough to still feel escapable, and whether the wide base
 actually forces the jump-or-air-dodge choice the design wants rather than being outwalked, has
 not been played against another person.
+
+### 2026-09-14 — the Reaver's right click was at the mercy of her own kit
+
+**Changed** Send shadow now **cuts short the recovery of any move it is pressed during**, and
+the press itself is **remembered for twenty-four frames** rather than read on one frame and
+thrown away — cleared if she is hit in the meantime. New knob:
+`reaver.send_shadow,_press_stays_live`. Right click also grew a **press edge** on this class,
+which it never had.
+
+**Why** Reported: sending the shadow feels clunky to chain, because it has to be timed just
+right.
+
+It did, and the arithmetic says how badly. Right click reached the move table only on a frame
+she was `Action::Free`, and her four moves are nineteen, twenty-five, thirty and forty-six
+frames long. A press landing anywhere inside one of those was **discarded** — there was no
+buffer of any kind — so the input was live on roughly one frame in twenty. That is not a hard
+input, it is an invisible one.
+
+The fix is two rules, and they are the same rule twice. Every other button in the game is an
+attack, and an attack eaten by another move's frames is the game correctly saying *you were
+busy*. **Right click is not an attack.** It is where her second body stands, and the line
+between the two bodies is the class's escape from both the ordinary limits on where she can be
+and the ordinary limits on what she can reach. A mechanic the rest of her own kit can lock her
+out of is a mechanic behind a timing test.
+
+**The cancel is the Champion's, arrived at from the other end.** Rush ends a recovery because a
+linear class needs a way to stop being linear; this ends one because a positional class needs
+its position to be available. Recovery only — a cancel reaching into a startup would let her
+take a committed swing back after throwing it, and one reaching into a stun would make the
+mechanic an answer to being hit.
+
+**It needs no charge behind it, and that is the interesting part.** Rush costs one, which is
+what stops it being free. This costs nothing and is still not free, because Send shadow is
+twenty-five frames and the longest recovery it can cancel is Executioner's twenty-six: cutting
+one short and spending the rest on the mechanic leaves her busy for about as long either way.
+The trade is a recovery for the mechanic, not frames bought back — so a blocked Executioner is
+still a punish, and `feel.rs`'s punishability property is untouched rather than quietly dodged.
+`reaver.rs` now pins that as a relationship, because it is the thing that would break silently
+if Send shadow were ever shortened.
+
+**Twelve frames was the first value, and it was wrong in an instructive way.** With the recovery
+cancellable, the only frames left that can eat a press are the startup and active ones of
+whatever she is already throwing. Slash is the move she chains from constantly and takes ten
+frames to become cancellable, so twelve was derived from it — and the test written alongside was
+derived the same way, so it passed.
+
+It silently dropped **`Q` then right click**, which this kit's own document calls the class's
+biggest turn. The Guillotine takes sixteen frames to become cancellable, so the press expired one
+frame before the lotus could be dragged. Deriving a buffer from the *commonest* input rather
+than the *longest wait* is how you get a number that works everywhere except the combo — and
+writing the test from the same derivation is how you get one that agrees with you.
+
+Twenty-four comes from the longest wait instead: Executioner's sixteen and four put the first
+cancellable frame twenty-two after the move begins. The test that pins it now **presses the
+button** on every one of her moves rather than reasoning about phase counts, because how long a
+move takes to become cancellable is a fact about the state machine and a formula for it in a test
+is a second copy of that machine waiting to disagree. Measured: a single press is now honoured on
+**every frame of every move she has** — 23 of 23 across Slash, 34 of 34 across Guillotine, 50 of
+50 across Executioner. It was one frame per move cycle.
+
+**Being hit clears it.** That is what lets the memory be this long. The buffer exists so her own
+kit cannot eat the mechanic; a stun is not her own kit, it is the opponent's reward. Kept across
+one, a press from before the hit would send the second body away on the frame she is most likely
+to want it, on an input she gave in a situation that no longer exists.
+
+**A latent bug went with it.** Right click was level-triggered here — `clicked_move` read the
+button, not a press — so *holding* it sent the shadow, then recalled it, then sent it again,
+every twenty-six frames. That is exactly the bug the 2026-09-11 entry below fixed for `E`, and
+it came back the day this class's mechanic moved onto the mouse, because a click had no edge of
+its own. It now has one, in the snapshot beside `mechanic_held` so rollback can recompute it.
+
+**Verdict** open, and the number to drag is the buffer. Twenty-four frames is long for an input
+buffer — most games sit around a quarter of that — and the justification is that this is not a
+general input buffer but a specific claim that *her own kit may not lock her out of her own
+mechanic*. If it turns out to be too generous, the thing to watch for is a shadow moving on a
+press the player had already given up on, which is worse than dropping one, because where the
+shadow stands is the whole class.
+
+What has not been played is whether the cancel changes what she *throws*. The prediction is that
+Executioner stops being a move you only use on a read — its tail is the reason it is scary to
+commit to, and that tail now has somewhere to go.

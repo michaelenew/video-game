@@ -268,6 +268,17 @@ pub struct Player {
     /// Was the mechanic button down last frame? Part of the snapshot, so the
     /// press edge survives rollback.
     pub mechanic_held: bool,
+    /// Was right click down last frame? The press edge for the Reaver's
+    /// mechanic, which is the one class that has its mechanic on a click and so
+    /// cannot borrow `mechanic_held`. In the snapshot for the same reason that
+    /// one is.
+    pub right_held: bool,
+    /// Frames a right click stays live, waiting for a frame she can spend it on.
+    ///
+    /// Zero for everybody else. The Reaver's mechanic is the only input in the
+    /// game that is remembered past the frame it was pressed on, and
+    /// `crate::shadow` is where the argument for that lives.
+    pub shadow_queued: u16,
     /// Who is holding this fighter, or `u8::MAX`. A grab has to know its owner
     /// so the victim can be kept at arm's length rather than merely stunned.
     pub held_by: u8,
@@ -563,6 +574,8 @@ impl Default for Player {
             slow_mul: Fx::ONE,
             bound: 0,
             mechanic_held: false,
+            right_held: false,
+            shadow_queued: 0,
             held_by: NOBODY,
             space_held: false,
             leap_used: false,
@@ -1049,6 +1062,8 @@ impl World {
             h.write_i32(p.slow_mul.raw());
             h.write_u32(p.bound as u32);
             h.write_u32(p.mechanic_held as u32);
+            h.write_u32(p.right_held as u32);
+            h.write_u32(p.shadow_queued as u32);
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
             h.write_i32(p.slam.raw());
@@ -1786,6 +1801,8 @@ fn step_player(
         p.action = Action::Free;
     }
 
+    queue_the_shadow(p, input);
+
     // A channel resolves **instead of** the countdown, because it is the one
     // action whose next state depends on a button and on the scene rather than
     // on a number running down: held, it winds on and re-aims; released, it
@@ -2097,7 +2114,11 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // where aiming lives -- so the mechanic is on the mouse and the swing
         // it displaced went to `E`, which is the one key that does not care
         // where anything is pointed. See `moves::on_e`.
-        Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_MECHANIC),
+        // The remembered press rather than the button itself: hers is the one
+        // mechanic on a click, so it needs an edge of its own, and it is the
+        // one input that outlives the frame it was pressed on. See
+        // `crate::shadow` for both arguments.
+        Class::ShadowReaver if shadow::order_queued(p) => Some(SLOT_MECHANIC),
         // The Elementalist breaks it the same way for the same reason: no
         // shield, so right click is otherwise dead. Cataclysm is aimed like
         // the auto, along the crosshair, so it belongs on the mouse and not
@@ -2355,6 +2376,40 @@ fn start_rush(p: &mut Player, input: Input) -> bool {
     true
 }
 
+/// Read the Reaver's right click, and let it cut a recovery short.
+///
+/// **The second cancel in the game, and the same shape as the first.** The
+/// Champion's Rush ends a recovery it is spent from, which is that class's
+/// answer to having committed to the wrong move; this is the Reaver's, and the
+/// case for it is the class rather than the convenience. Everything she has is
+/// a function of the line between her two bodies, and that line is her way out
+/// of both the ordinary limits on where she can stand and the ordinary limits
+/// on what she can reach. A mechanic that can only be moved on the frames she
+/// happens to be idle is a mechanic the rest of her kit can lock her out of.
+///
+/// **Recovery only, and that is not a hedge.** Cancelling a startup would let
+/// her take a committed swing back after throwing it, which is whiff punishment
+/// deleted; cancelling active frames would let her un-throw one that is already
+/// out. Recovery is the part that is over -- the animation finishing, not the
+/// decision -- and it is what "lag" means when a player says a move has some.
+///
+/// **It buys her tempo, not safety.** Send shadow costs twenty-five frames and
+/// the longest recovery it can cut short is Executioner's twenty-six, so the
+/// exchange nets her one frame: she is busy for as long either way, and what
+/// changes is that the frames do something. That is why it needs no charge
+/// behind it the way Rush does, and
+/// `reaver::cutting_a_recovery_short_leaves_every_move_punishable` pins it as a
+/// relationship rather than a hope.
+///
+/// Both input paths call it -- on the ground and on the creature's back -- so
+/// the press edge is read exactly once a frame either way.
+fn queue_the_shadow(p: &mut Player, input: Input) {
+    shadow::queue_order(p, input);
+    if shadow::order_queued(p) && matches!(p.action, Action::Recovery { .. }) {
+        p.action = Action::Free;
+    }
+}
+
 /// Start a move: commit to where it is aimed, pay what it costs, and enter the
 /// startup frames.
 ///
@@ -2400,6 +2455,9 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
     shadow::begin_echo(p, kind);
+    // And the press that asked for the shadow is spent here, on the frame the
+    // move it asked for actually starts. A no-op for everything else.
+    shadow::spend_order(p, kind);
     // Throwing anything at all is committing to a side, for the one class
     // where that is the mechanic. **On the press, including the autos** -- see
     // `steer_meter` for why that stopped being on contact.
@@ -3930,6 +3988,7 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     }
 
     step_mechanic(p);
+    queue_the_shadow(p, input);
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
 
     // Resolved instead of the countdown, exactly as on the ground -- see

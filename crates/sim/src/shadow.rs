@@ -37,6 +37,7 @@ use crate::DT;
 use crate::aim;
 use crate::class::{Class, Ghost, Mechanic, NO_ECHO, Shadow};
 use crate::fixed::Fx;
+use crate::input::Input;
 use crate::math::{self, V3};
 use crate::moves;
 use crate::state::{Action, Player};
@@ -266,6 +267,79 @@ pub fn echo_landed(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.echo_used = true;
     put(p, shadow);
+}
+
+// ---------------------------------------------------------------------------
+// The press that orders it
+// ---------------------------------------------------------------------------
+//
+// Right click is the one button in this kit that is not an attack, and it is
+// read differently from the rest for that reason. Two rules, and both were
+// paid for:
+//
+// **It is a press, not a held button.** Held, it used to re-fire every time she
+// came free -- send, recall, send -- so the mechanic's position became a
+// function of how long a finger stayed down. That is the same bug `E` had on
+// every class before it grew an edge, and it came back the day the Reaver's
+// mechanic moved onto the mouse, because a click has no edge of its own here.
+//
+// **The press outlives the frame it happened on.** An attack that lands on a
+// busy frame is correctly eaten -- the game is telling you that you were busy.
+// The shadow is not an attack: it is where the second body stands, which is
+// the class's escape from both the ordinary limits on where she can be and the
+// ordinary limits on what she can reach. A press that only answers on the one
+// frame in twenty when she happens to be free is a timing test standing in
+// front of the mechanic. So it is remembered, briefly -- see
+// `tuning::shadow_buffer` -- and spent on the first frame she can take it.
+
+/// Read the right click, and remember it for a few frames if she cannot act on
+/// it yet.
+///
+/// Called once per fighter per frame, from both input paths. The edge lives on
+/// the fighter rather than in a renderer-side "just pressed" for the reason
+/// every other edge here does: rollback re-runs these frames, so an edge
+/// remembered outside the snapshot is an edge that disappears the first time a
+/// frame is replayed.
+pub fn queue_order(p: &mut Player, input: Input) {
+    let pressed = input.has(Input::RIGHT) && !p.right_held;
+    p.right_held = input.has(Input::RIGHT);
+    // **Being hit throws the press away.** The memory exists so that her own
+    // kit cannot eat the mechanic; a stun is not her own kit, it is the
+    // opponent's reward and the one thing in the game that is meant to take the
+    // controls off you. Kept, a press from before the hit would fire the moment
+    // she recovered -- sending the second body away on the frame she is most
+    // likely to want it, and doing it on an input she gave in a situation that
+    // no longer exists.
+    if p.action.stunned() {
+        p.shadow_queued = 0;
+        return;
+    }
+    // Armed only for the fighter who has a shadow to order about. The edge
+    // above is read for everybody, so that picking the class mid-match starts
+    // from a button that is down rather than from a press that never happened.
+    if pressed && of(p).is_some() {
+        p.shadow_queued = t::shadow_buffer();
+    } else {
+        p.shadow_queued = p.shadow_queued.saturating_sub(1);
+    }
+}
+
+/// Is there a right click waiting to be spent?
+pub fn order_queued(p: &Player) -> bool {
+    p.shadow_queued > 0
+}
+
+/// Spend it, on the frame Send shadow actually comes out.
+///
+/// A no-op for every other move and every other class. It has to be spent
+/// rather than left to expire: the memory is several frames long and Send
+/// shadow's own startup is shorter than that, so a press left armed would
+/// order the shadow again the moment the send could be cancelled -- which is
+/// the held-button bug with extra steps.
+pub fn spend_order(p: &mut Player, kind: u8) {
+    if kind == crate::state::SLOT_MECHANIC && of(p).is_some() {
+        p.shadow_queued = 0;
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -681,7 +681,7 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | Input | Result |
 | --- | --- |
 | `L` | **Slash** — the melee auto. The shadow throws it too, a beat later, for a quarter. **Bound** |
-| `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. **Bound** |
+| `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. Cuts any recovery short, and the press is remembered for a few frames rather than dropped. **Bound** |
 | `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
 | `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
@@ -697,6 +697,32 @@ sentence six of it, applied:
 Sending the shadow is the only thing in this kit the crosshair aims. It is a grounded cast:
 you point at a patch of floor and the second body goes and stands there, and where you put it
 is the decision the whole class is made of. That wants the hand already doing the pointing.
+
+### Right click answers whatever else she is doing — added 2026-09-14
+
+It is the second cancel in the game, and the same shape as the first: **Send shadow ends the
+recovery of any move it is pressed during**, exactly as the Champion's Rush does. And the press
+is **remembered for twenty-four frames** rather than read on one frame and thrown away, so it
+comes out on the first frame she can spend it. Being hit throws it away: the memory is there so
+her own kit cannot eat the mechanic, and a stun is not her own kit.
+
+Both come from the same place. Every other button here is an attack, and an attack eaten by
+another move's frames is the game correctly saying *you were busy*. Right click is not an
+attack — it is where her second body stands, which is her way out of both the ordinary limits
+on where she can be and the ordinary limits on what she can reach. A mechanic the rest of the
+kit can lock her out of is a mechanic behind a timing test.
+
+**Recovery only, and the press never reaches back into a startup or an active frame.** Recovery
+is the part that is over — the animation finishing, not the decision. Cancelling a wind-up
+would let her take a committed swing back after throwing it, which is whiff punishment deleted.
+Being *hit* is not cancellable either: that is the opponent's reward.
+
+**It buys tempo, not safety.** Send shadow costs twenty-five frames and the longest recovery it
+can cut short is Executioner's twenty-six, so the exchange nets her a single frame — she is busy
+for as long either way, and what changes is that the frames do something. A blocked Executioner
+goes from −12 to −11 and stays a punish. That is why the cancel needs no charge behind it the
+way Rush does, and it is pinned as a relationship in `crates/sim/tests/reaver.rs` rather than
+left as an intention.
 
 Executioner does not care where anything is — it is a swing off the body, yaw from the facing
 and pitch from the camera — so it can live on a key, and it does. Four of the six classes get

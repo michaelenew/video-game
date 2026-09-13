@@ -12,7 +12,7 @@
 //! that the forward dodge is the dash.
 
 use sim::class::{Ghost, Mechanic, Shadow};
-use sim::state::{Action, SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE};
+use sim::state::{Action, SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
@@ -21,6 +21,7 @@ const L: u16 = Input::LEFT;
 /// Right click, which on this class sends the shadow -- it is the half of the
 /// kit the crosshair aims, and the mouse is where aiming lives.
 const R: u16 = Input::RIGHT;
+const Q: u16 = Input::SPECIAL;
 const W: u16 = Input::W;
 const SHIFT: u16 = Input::SHIFT;
 
@@ -497,4 +498,338 @@ fn right_click_still_guards_for_the_class_that_has_a_shield() {
         matches!(w.players[0].action, Action::Guard { .. }),
         "the Bulwark stopped guarding when the Reaver took right click"
     );
+}
+
+// ---------------------------------------------------------------------------
+// The press is not at the mercy of what she is already doing
+// ---------------------------------------------------------------------------
+//
+// Every other button in this game is an attack, and an attack eaten by another
+// move's frames is the game correctly telling you that you were busy. Right
+// click is not an attack: it is where the second body stands, and the line
+// between the two bodies is what the class *is* -- her way out of both the
+// ordinary limits on where she can be and the ordinary limits on what she can
+// reach.
+//
+// So it gets two things nothing else gets. It **cuts a recovery short**, the
+// way the Champion's Rush does. And the press **outlives the frame it happened
+// on**, because a mechanic that answers on one frame in twenty is a timing test
+// standing in front of the class rather than the class.
+//
+// What it does not get is safety, and the last test here is the one that says
+// so.
+
+/// Run until the fighter is in `Action::Recovery`, or give up and say so.
+fn run_to_recovery(w: &mut World) -> u16 {
+    for _ in 0..120 {
+        if let Action::Recovery { left, .. } = w.players[0].action {
+            return left;
+        }
+        run(w, 1, 0, 0);
+    }
+    panic!("she never reached a recovery");
+}
+
+#[test]
+fn right_click_cuts_a_recovery_short() {
+    let mut w = duel();
+    // Executioner is the longest commitment in the kit -- sixteen frames of
+    // wind-up, four of blade, and twenty-six of standing there afterwards.
+    run(&mut w, 2, E, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_COMMITTED),
+        "`E` did not throw Executioner"
+    );
+    let left = run_to_recovery(&mut w);
+    assert!(
+        left > 12,
+        "Executioner's recovery is only {left} frames by the time this test \
+         reaches it; there is nothing left to cut short and the test proves \
+         nothing"
+    );
+
+    run(&mut w, 1, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "right click did not cut Executioner's recovery short"
+    );
+    // And it is a real send, not just a state change: the second body actually
+    // leaves.
+    run(&mut w, 30, 0, 0);
+    assert!(
+        shadow(&w).is_out(),
+        "the cancel threw the move but the shadow never went anywhere"
+    );
+}
+
+#[test]
+fn right_click_does_not_cut_a_startup_short() {
+    // The other half of the rule, and the half that keeps whiff punishment
+    // alive. Recovery is the part that is **over** -- the animation finishing,
+    // not the decision. A cancel that reached back into the startup would let
+    // her take a committed swing back after throwing it.
+    let mut w = duel();
+    run(&mut w, 2, E, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Startup { .. }),
+        "Executioner should still be winding up two frames in"
+    );
+    run(&mut w, 1, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_COMMITTED),
+        "right click took Executioner back mid-wind-up"
+    );
+}
+
+#[test]
+fn right_click_does_not_cut_a_stun_short() {
+    // Nor is it an escape from somebody else's punish. Being hit is the
+    // opponent's reward and the one thing in the game that is *supposed* to
+    // take the controls away.
+    let mut w = duel();
+    // Let the dummy hit her: she stands still, he turns round and pokes. The
+    // half turn matters -- facing follows the look every frame you are free, so
+    // a dummy left on the default aim swings at the wall behind him.
+    let at_her = Input::aimed(L, Input::QUARTER_TURN * 2);
+    for _ in 0..120 {
+        w.advance([Input::default(), at_her]);
+        if matches!(w.players[0].action, Action::HitStun { .. }) {
+            break;
+        }
+    }
+    let Action::HitStun { left } = w.players[0].action else {
+        panic!("the dummy never managed to hit her");
+    };
+    assert!(left > 2, "the hitstun is too short to test anything");
+
+    run(&mut w, 1, R, 0);
+    match w.players[0].action {
+        Action::HitStun { left: now } => assert_eq!(
+            now,
+            left - 1,
+            "right click shortened her hitstun; the mechanic is not an escape \
+             from being hit"
+        ),
+        other => panic!("right click cancelled her hitstun into {other:?}"),
+    }
+}
+
+#[test]
+fn a_right_click_thrown_during_a_swing_is_not_dropped() {
+    // The complaint this was built for. Slash is the move she chains from
+    // constantly; a right click pressed while it is still swinging used to
+    // vanish, so sending the shadow meant waiting for the swing to end and
+    // hitting a single frame.
+    let mut w = duel();
+    run(&mut w, 1, L, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_POKE),
+        "left click did not throw Slash"
+    );
+    // One frame of right click, while the swing is still winding up, and then
+    // the button is never touched again.
+    run(&mut w, 1, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_POKE),
+        "the press interrupted the swing instead of waiting for it"
+    );
+
+    // She is left alone from here. The order still comes out.
+    for _ in 0..40 {
+        run(&mut w, 1, 0, 0);
+        if w.players[0].action.attack_kind() == Some(SLOT_MECHANIC) {
+            break;
+        }
+    }
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "a right click pressed during Slash was dropped instead of remembered"
+    );
+    run(&mut w, 30, 0, 0);
+    assert!(
+        shadow(&w).is_out(),
+        "the remembered press threw the move but the shadow never went out"
+    );
+}
+
+#[test]
+fn a_press_thrown_alongside_any_of_her_moves_still_comes_out() {
+    // The number, stated as the thing it has to do, and **measured rather than
+    // derived** -- how long a move takes to become cancellable is a fact about
+    // the state machine's phase changes, and a formula for it here is a second
+    // copy of that machine waiting to disagree with the first.
+    //
+    // Twelve frames was the first value, derived from Slash because Slash is
+    // the move she throws most. It passed a test written the same way and
+    // silently dropped `Q` then right click -- the lotus drag the kit calls the
+    // class's biggest turn -- because the Guillotine takes sixteen frames to
+    // become cancellable. Hence every move, and hence pressing rather than
+    // arithmetic.
+    for (name, bits, slot) in [
+        ("Slash", L, SLOT_POKE),
+        ("Executioner", E, SLOT_COMMITTED),
+        ("Guillotine", Q, SLOT_SPECIAL),
+    ] {
+        let mut w = duel();
+        run(&mut w, 1, bits, 0);
+        assert_eq!(
+            w.players[0].action.attack_kind(),
+            Some(slot),
+            "{name} did not come out"
+        );
+        // One frame of right click at the earliest moment it could possibly be
+        // thrown -- the frame after the move started -- and then never again.
+        run(&mut w, 1, R, 0);
+        run(&mut w, 90, 0, 0);
+        assert!(
+            shadow(&w).is_out(),
+            "a right click thrown at the start of {name} was dropped. The press \
+             is remembered for {} frames, which is not long enough to reach the \
+             frame {name} becomes cancellable.",
+            t::shadow_buffer()
+        );
+    }
+}
+
+#[test]
+fn the_lotus_drag_does_not_have_to_wait_for_the_lotus() {
+    // The chain the class is named for: `Q` opens the flower wherever the
+    // shadow is standing, right click drags it home and the six blades scythe
+    // the length of the arena behind it. Two buttons, and the second one used
+    // to have to be held back until the first had finished animating.
+    let mut w = duel();
+    run(&mut w, 2, R, 0);
+    run(&mut w, 40, 0, 0);
+    assert!(
+        shadow(&w).is_out(),
+        "the shadow never went out to open a lotus on"
+    );
+
+    run(&mut w, 1, Q, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_SPECIAL),
+        "`Q` did not open the lotus"
+    );
+    // Three frames into the eruption -- deep inside a startup that is nine
+    // frames long, nowhere near a frame she is free on.
+    run(&mut w, 3, 0, 0);
+    run(&mut w, 1, R, 0);
+
+    let mut recalled = false;
+    for _ in 0..60 {
+        run(&mut w, 1, 0, 0);
+        if w.players[0].action.attack_kind() == Some(SLOT_MECHANIC) {
+            recalled = true;
+            break;
+        }
+    }
+    assert!(
+        recalled,
+        "the recall pressed inside the lotus was dropped, so the class's \
+         biggest turn is still a timing test"
+    );
+    run(&mut w, 60, 0, 0);
+    assert!(
+        !shadow(&w).is_out(),
+        "the recall came out but the shadow never came home"
+    );
+}
+
+#[test]
+fn being_hit_throws_the_remembered_press_away() {
+    // The memory exists so her own kit cannot eat the mechanic. A stun is not
+    // her own kit -- it is the opponent's reward, and the one thing in the game
+    // meant to take the controls off you. Kept across one, a press from before
+    // the hit would send the second body away on the frame she is most likely
+    // to want it, on an input she gave in a situation that no longer exists.
+    let mut w = duel();
+    let at_her = Input::aimed(L, Input::QUARTER_TURN * 2);
+    // She presses right click and is caught by the dummy's poke in the same
+    // breath. The press is live; the hit lands on top of it.
+    w.advance([Input::new(R), at_her]);
+    // She threw the send, so wait it out and put the shadow back at her heel,
+    // leaving nothing but the question of what a *second* press survives.
+    run(&mut w, 40, 0, 0);
+    let out_before = shadow(&w).is_out();
+
+    // Now the press that matters: one frame of right click, and then she is hit
+    // before it can be spent.
+    let mut hit = false;
+    for f in 0..180 {
+        let hers = if f == 0 {
+            Input::new(R)
+        } else {
+            Input::default()
+        };
+        w.advance([hers, at_her]);
+        if w.players[0].action.stunned() {
+            hit = true;
+            break;
+        }
+    }
+    assert!(hit, "the dummy never managed to hit her");
+    run(&mut w, 90, 0, 0);
+    assert_eq!(
+        shadow(&w).is_out(),
+        out_before,
+        "a right click pressed before she was hit fired anyway once the stun \
+         ran out"
+    );
+}
+
+#[test]
+fn holding_right_click_orders_the_shadow_once() {
+    // It is a press, not a held button. Held, it used to re-fire every time she
+    // came free -- send, recall, send -- so where the mechanic ended up was a
+    // function of how long a finger stayed down. That is the bug `E` had on
+    // every class before it grew an edge, and it came back the day this class's
+    // mechanic moved onto the mouse.
+    let mut w = duel();
+    let m = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    let whiff = m.whiff_cost() as u32;
+    // Long enough to have toggled several times over.
+    run(&mut w, whiff * 4, R, 0);
+    assert!(
+        shadow(&w).is_out(),
+        "holding right click sent the shadow and then called it back again"
+    );
+}
+
+#[test]
+fn cutting_a_recovery_short_leaves_every_move_punishable() {
+    // The relationship that keeps the cancel honest, and the reason it needs no
+    // charge behind it the way the Champion's does.
+    //
+    // `feel.rs` pins that every attack in the game is minus on block, which is
+    // the single property that makes blocking worth doing. A cancel is a way
+    // around a recovery, so it is a way around that property unless the thing
+    // she cancels *into* costs about what she skipped -- and this is the class
+    // whose biggest move has the longest tail in the kit.
+    //
+    // So the same arithmetic `Move::on_block` uses, with her best case
+    // substituted in: cut the recovery short on its very first frame, and spend
+    // the whole of Send shadow instead of the rest of it. Cutting Executioner's
+    // twenty-six frame tail to spend Send shadow's twenty-five buys her one
+    // frame. That is a recovery traded for the mechanic, not frames bought
+    // back, and if Send shadow were ever shortened enough to make it a discount
+    // this is what would say so.
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    for m in sim::moves::table(Class::ShadowReaver) {
+        let busy = (m.active as i32 - 1) + send.whiff_cost() as i32;
+        let on_block = m.blockstun as i32 - busy;
+        assert!(
+            on_block < 0,
+            "{}: {on_block:+} on block once its recovery is cut short into Send \
+             shadow. Cancelling is meant to trade a recovery for the mechanic, \
+             not to make a blocked move safe.",
+            m.name
+        );
+    }
 }

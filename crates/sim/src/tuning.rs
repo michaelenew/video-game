@@ -480,6 +480,44 @@ pub fn shadow_lock_cone() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLockCone))
 }
 
+/// How long a right click stays live, waiting for a frame she can spend it on.
+///
+/// Counted in frames **including the press itself**, so 1 means no memory at
+/// all -- the press is read on the frame it happens or not at all, which is how
+/// every other button in the game works.
+///
+/// It exists because the shadow is the one input in the kit that is not an
+/// attack. An attack eaten by another move's frames is the game telling you
+/// that you were busy, and that is correct. The shadow is the class's *escape*
+/// -- from where she is standing and from what she has committed to -- and an
+/// escape that only answers on one frame in twenty is not an escape, it is a
+/// timing test with the mechanic behind it.
+///
+/// **Send shadow cuts a recovery short on its own** (see
+/// `state::queue_the_shadow`), so the only frames left for this number to
+/// cover are the startup and active ones of whatever she is already throwing.
+/// That is what sets it, and it is measured rather than guessed: the longest
+/// of those is Executioner's sixteen and four, which puts the first
+/// cancellable frame twenty-two frames after the move began. Twenty-four
+/// carries a press thrown alongside it, with a frame to spare.
+///
+/// Anything shorter breaks a chain the kit is named for. Twelve was tried
+/// first, derived from Slash on the grounds that Slash is the move she throws
+/// most -- and it silently dropped `Q` then right click, the lotus drag that
+/// the kit document calls the class's biggest turn, because the Guillotine
+/// takes sixteen frames to become cancellable. Deriving a buffer from the
+/// *commonest* input rather than the *longest wait* is how you get a number
+/// that works everywhere except the combo.
+///
+/// Being hit clears it outright, so the memory never survives a change of
+/// situation -- see `shadow::queue_order`. That is what lets it be this long
+/// without the shadow ever flying out on a press the player had given up on,
+/// which would be worse than dropping one: where the shadow stands is the
+/// whole class.
+pub fn shadow_buffer() -> u16 {
+    oven::scalar(Scalar::ShadowBuffer).max(1) as u16
+}
+
 /// How fast she crosses to her shadow on a dash.
 ///
 /// Constant while the dash runs rather than a decaying shove, so the distance
