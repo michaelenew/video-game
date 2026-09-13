@@ -56,7 +56,7 @@ fn main() {
         );
         if class.preys_on_the_disabled() {
             println!(
-                "  x{} damage to anything rooted, staggered, held or toppled",
+                "  x{} damage to anything staggered, held or toppled",
                 tenths(t::disabled_damage_mul())
             );
         }
@@ -84,10 +84,22 @@ fn main() {
                     (true, Some(kind)) if kind.seizes() => "; grabs once every arm lands",
                     (true, _) => "; grab ignored -- the effect delivers the hit",
                 };
-                let what = if m.shape.strikes() {
-                    format!("places something; the thing it placed hits{ignored}")
+                // The one column the startup does not answer for a channelled
+                // move: how long the button buys, and what it buys.
+                let wound = if m.channels() {
+                    format!(
+                        "; channel up to {}f for {}-{} m",
+                        m.channel,
+                        tenths(m.channel_from),
+                        tenths(m.reach)
+                    )
                 } else {
-                    format!("movement, no hitbox{ignored}")
+                    String::new()
+                };
+                let what = if m.shape.strikes() {
+                    format!("places something; the thing it placed hits{ignored}{wound}")
+                } else {
+                    format!("movement, no hitbox{ignored}{wound}")
                 };
                 println!(
                     "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} {what}",

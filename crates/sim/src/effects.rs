@@ -236,6 +236,13 @@ pub struct Effect {
     /// A `u32` rather than a `u16`, which is what the lotus cost: six parts
     /// against three victims is eighteen bits and a `u16` holds five parts.
     pub struck: u32,
+    /// How far this one travels, which is normally the move's own `reach`.
+    ///
+    /// On the row for every effect rather than read back off the move, because
+    /// a channelled move does not have one answer: the Grasp's arms converge
+    /// wherever the caster wound the aim marker to, and the marker is gone by
+    /// the time the arms exist. See `state::step_channel`.
+    pub reach: Fx,
     /// Damage this has dealt and not yet paid back.
     ///
     /// Only the blade uses it. The archive is specific that the health arrives
@@ -246,7 +253,15 @@ pub struct Effect {
 
 impl Effect {
     /// Put one into the world.
-    pub fn cast(kind: EffectKind, owner: u8, class: Class, slot: u8, pos: V3, dir: V3) -> Effect {
+    pub fn cast(
+        kind: EffectKind,
+        owner: u8,
+        class: Class,
+        slot: u8,
+        pos: V3,
+        dir: V3,
+        reach: Fx,
+    ) -> Effect {
         Effect {
             kind,
             owner,
@@ -257,6 +272,7 @@ impl Effect {
             age: 0,
             life: kind.life().max(1),
             struck: 0,
+            reach,
             banked: 0,
         }
     }
@@ -392,7 +408,7 @@ impl Effect {
     /// Where the blade is this frame.
     pub fn blade_at(&self) -> V3 {
         self.pos
-            .add(self.dir.scale(self.source().reach.mul(self.out_and_back())))
+            .add(self.dir.scale(self.reach.mul(self.out_and_back())))
     }
 
     /// Where one arm of a Grasp is this frame.
@@ -408,7 +424,7 @@ impl Effect {
         let (right, lift) = frame_about(self.dir);
         let spread = t::grasp_spread().mul(bulge);
         self.pos
-            .add(self.dir.scale(self.source().reach.mul(p)))
+            .add(self.dir.scale(self.reach.mul(p)))
             .add(right.scale(spread.mul(Fx::from_int(side))))
             .add(lift.scale(spread.mul(Fx::from_int(up))))
     }

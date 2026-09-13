@@ -2417,3 +2417,74 @@ to make. Steering is one sentence now — throw something, the bar moves — and
 lives where the player already is, in her body and her spacing.
 
 Depth scaling is still the open hole, and it is a bigger one than this ever was.
+
+### 2026-09-13 — the Grasp is aimed with time, and its catch is a trip
+
+**Changed** three things about Grasp, which together turn it from a ten-metre snare into the
+class's one setup tool.
+
+```
+before   press Q -> arms fly to the move's reach -> anything all four catch is
+         teleported to the caster's arm's length, held 20f, and rooted 40f
+now      hold Q up to 30f -> a marker travels 3 m to 10 m in front of you ->
+         let go and the arms converge where it was -> anything all four catch
+         is bound 10f where it stood, hauled in at 40 m/s, and free the frame
+         the hold ends (26f in total)
+```
+
+**Why the channel.** The move had one range and it was the wrong one most of the time: at ten
+metres it sailed past anybody standing at seven, and there was no way to ask for seven. Range
+wants to be a decision, and the only input left to make it with is *how long the button is
+down* — every other axis of the control scheme is already spent. Holding a cast button is new
+grammar, so it means exactly one thing and the move table carries it: `Channel, longest hold`
+and `Channel, reach at no hold` are two more columns beside `startup` and `reach`, not a
+Blood-mage special case. A second channelled move inherits the whole mechanism.
+
+**The marker is the far end of `aim_path` and nothing else.** It is re-solved every frame of
+the wind-up by the same `sim::aim::skillshot_path` call the released move uses, with the reach
+the hold has bought so far. That is deliberate to the point of being the design: the codebase
+has three separate incidents of a reticle and an ability disagreeing because two pieces of
+arithmetic were kept in step by hand. There is one object here, the renderer reads its `to`,
+and there is nothing to keep in step. The one number that does get stored, `Player::channelled`,
+is the *solved path's length* rather than the reach that was asked for — so a wall in the way
+shortens the marker and the arms identically.
+
+**A channel resolves instead of the countdown, not before it.** The first version ran
+`step_channel` and then fell through to the ordinary input handling, which read the same
+held button, called `begin_move` again, and charged the caster for the ability once per frame
+of the wind-up. `casting_costs_the_blood_mage_health` caught it at 90 health for a 45-health
+move.
+
+**Why the haul.** The old grab put its victim at the caster's arm's length on the frame it
+landed, which reads as the game moving somebody rather than as an ability landing on them. It
+is now a bind — about a sixth of a second where nothing moves at all — and then a trip at
+forty metres a second, which crosses nine metres in fourteen frames. The bind is the part that
+sells it: a pause before the pull is what makes the pull look like a consequence.
+
+**The root came off entirely, and `Player::rooted` went with it.** The catch used to be a hold
+followed by a root, and the root was the longer half. But "the target regains the ability to
+move immediately after the grasp ends" is the trade that makes a hard stop fair, and a root on
+the end of it is the opposite. Nothing else in the game applied a root — the Bulwark's
+soft-control lattice is still unbuilt — so the field, its method, and the three movement gates
+that read it are gone. `disabled()` is now `Stagger | Held`, which is a shorter sentence for
+the same set.
+
+**The whole catch is now shorter than her most expensive cast takes to come out** (26 frames
+against Black spike's 30), and that inverts the old feel test. It used to assert the root
+outlasted her *fastest* move's startup, so there was something to land inside it. It now
+asserts the hold is shorter than her *dearest* move's startup, so there is nothing she can
+start on reaction to it. The ability is for dragging somebody into a spike that is already in
+the ground, and the punishment for a miss is that you paid forty-five health and put nobody
+anywhere.
+
+**One number is load-bearing in a way that is easy to miss.** The hold has to outlast the
+haul: `(26 − 10) frames × 40 m/s ÷ 60 = 10.7 m` against the 9 m a full-range catch has to
+cross. If that slips the other way, a long Grasp drops its victim mid-air halfway home, and it
+fails silently at short range. `a_grasp_always_finishes_hauling_before_it_lets_go` holds the
+four knobs together.
+
+**Verdict** open. The specific worries: half a second of channel may be long enough that a
+competent opponent simply walks out of the cone while watching the marker, which would make
+the move worse at every range than the fixed ten metres was at one. And the pre-commitment the
+design asks for — spike first, then Grasp — depends on the spike being worth casting at nobody
+in particular, which is a question about Black spike rather than about this.

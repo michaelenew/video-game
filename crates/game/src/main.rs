@@ -171,7 +171,13 @@ fn main() {
                 // and this is the twenty-first. They are independent of each
                 // other anyway: each puts one pool of meshes where the
                 // simulation says its things are.
-                (place_effects, place_structures, place_beams, place_bolts),
+                (
+                    place_effects,
+                    place_structures,
+                    place_beams,
+                    place_bolts,
+                    place_marks,
+                ),
                 beast::place,
                 drive_camera,
                 fade_own_body,
@@ -489,6 +495,16 @@ struct BeamMesh(usize);
 #[derive(Component)]
 struct BoltMesh(usize);
 
+/// The aim marker a channelled move is wound out along.
+///
+/// One per fighter: a channel is an action, and nobody is in two at once. It is
+/// **not** a thing in the world -- nothing collides with it, nothing is hit by
+/// it, and the simulation does not know it is drawn. All it does is answer the
+/// only question a channel asks, which is *how far out is this going right
+/// now*.
+#[derive(Component)]
+struct MarkMesh(usize);
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -759,6 +775,15 @@ fn setup(
             BoltMesh(slot),
         ));
     }
+    for owner in 0..MAX_PLAYERS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.blood.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            MarkMesh(owner),
+        ));
+    }
     commands.insert_resource(look);
 }
 
@@ -904,6 +929,38 @@ fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
         tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
     }
+}
+
+/// Put each channelling fighter's aim marker where their aim currently lands.
+///
+/// **The renderer aims nothing.** `aim_path` is already solved, every frame of
+/// the channel, by the same `sim::aim` call the finished move will use -- see
+/// `state::step_channel`. Reading its far end is the whole of this function,
+/// and it is why the marker cannot promise a depth the arms do not deliver.
+fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(piece) = mark_piece(&sim.cur.players[tag.0]) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = piece.at;
+        tf.scale = piece.scale;
+    }
+}
+
+/// Where a fighter's aim marker is, if they are channelling at all.
+///
+/// Split out so the geometry can be asserted without a renderer, the same way
+/// `effect_piece` is: what wants checking is that the marker sits on the far
+/// end of the solved path, because a marker that sits anywhere else is worse
+/// than no marker.
+fn mark_piece(p: &sim::state::Player) -> Option<Piece> {
+    p.action.channelling()?;
+    Some(floating(
+        fx3(p.aim_path.to),
+        sim::tuning::grasp_mark().to_f32_for_render(),
+    ))
 }
 
 /// Put the effect meshes where the simulation says its effects are.
@@ -1833,7 +1890,50 @@ mod tests {
             slot,
             sim::V3::ZERO,
             sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+            sim::moves::get(sim::Class::BloodMage, slot).reach,
         )
+    }
+
+    #[test]
+    fn the_aim_marker_sits_on_the_far_end_of_the_solved_path() {
+        // The marker's only job is to answer *how far out is this going*, and
+        // the only way it can answer wrongly is by being somewhere other than
+        // the end of the path the simulation has already solved. So that is the
+        // whole assertion: the same point, to the millimetre, with no
+        // arithmetic of its own on this side.
+        let mut p = sim::state::Player::new(sim::Class::BloodMage);
+        p.action = sim::state::Action::Channel {
+            kind: sim::state::SLOT_SPECIAL,
+            held: 7,
+        };
+        p.aim_path = sim::aim::Path {
+            from: sim::V3::new(sim::Fx::ZERO, sim::Fx::from_int(1), sim::Fx::ZERO),
+            to: sim::V3::new(
+                sim::Fx::from_int(6),
+                sim::Fx::from_int(1),
+                sim::Fx::from_int(2),
+            ),
+        };
+        let mark = mark_piece(&p).expect("a channelling fighter has a marker");
+        assert_eq!(mark.at, fx3(p.aim_path.to));
+        assert_eq!(mark.shape, Shape::Ball);
+        let want = sim::tuning::grasp_mark().to_f32_for_render() * 2.0;
+        assert_eq!(mark.scale, Vec3::splat(want));
+    }
+
+    #[test]
+    fn nothing_but_a_channel_draws_a_marker() {
+        // It is not a thing in the world -- no hitbox, no clock, nobody can
+        // walk into it -- so it has to be gone the frame the wind-up is. A
+        // marker left standing after the release would read as an ability that
+        // is still out.
+        let mut p = sim::state::Player::new(sim::Class::BloodMage);
+        assert!(mark_piece(&p).is_none(), "a fighter doing nothing has one");
+        p.action = sim::state::Action::Startup {
+            kind: sim::state::SLOT_SPECIAL,
+            left: 4,
+        };
+        assert!(mark_piece(&p).is_none(), "it outlived the channel");
     }
 
     #[test]

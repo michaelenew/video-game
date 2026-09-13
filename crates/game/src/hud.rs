@@ -641,6 +641,18 @@ fn describe(p: &sim::state::Player) -> String {
         Action::HitStun { left } => format!("hitstun {left}f"),
         Action::Stagger { left } => format!("STAGGER {left}f"),
         Action::Held { left } => format!("HELD {left}f"),
+        // The one counter that goes up: a channel is spending frames buying
+        // reach, so how long it has been held is the number worth seeing, and
+        // the reach it has bought is the number beside it.
+        Action::Channel { kind, held } => {
+            let m = sim::moves::get(p.class, kind);
+            format!(
+                "{} channel {held}/{}f   {} m",
+                m.name,
+                m.channel,
+                m.reach_after(held).to_f32_for_render()
+            )
+        }
     }
 }
 

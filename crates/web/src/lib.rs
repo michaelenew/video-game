@@ -5,7 +5,7 @@
 //! far side of the boundary so the simulation stays integer-only.
 
 use core::cell::UnsafeCell;
-use sim::state::{Action, MAX_PLAYERS, move_frames};
+use sim::state::{MAX_PLAYERS, move_frames};
 use sim::{Input, World};
 
 struct Cell(UnsafeCell<Option<World>>);
@@ -88,12 +88,7 @@ pub extern "C" fn p_left(i: u32) -> u32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn p_kind(i: u32) -> u32 {
-    match p(i).action {
-        Action::Startup { kind, .. }
-        | Action::Active { kind, .. }
-        | Action::Recovery { kind, .. } => kind as u32,
-        _ => u32::MAX,
-    }
+    p(i).action.attack_kind().map_or(u32::MAX, u32::from)
 }
 
 /// The live attack volume during active frames, in raw fixed point: a capsule
