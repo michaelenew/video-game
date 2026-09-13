@@ -283,6 +283,26 @@ takes the path's direction and flies its own distance along it, rather than
 stopping where the crosshair's ray stopped. A blade thrown at something four
 metres away still flies its full distance; the crosshair picked the line.
 
+## Aiming with time
+
+One move is aimed with the *length of a button press*: hold the Blood mage's
+Grasp and the reach it is solved at walks from the near end of its slider to its
+own `reach`, over half a second. A small marker in front of the caster shows
+where that has got to.
+
+**The marker is not a second answer.** It is the far end of `Player::aim_path`,
+which the wind-up re-solves every frame through exactly the call above with the
+reach the hold has bought so far. The renderer reads its `to` and draws a ball
+there. Nothing else is computed anywhere, which is the point: the failure mode
+this whole document exists to prevent is two pieces of arithmetic that agree
+today.
+
+The aim stays live for the whole wind-up — the body turns with the mouse — and
+**locks on the frame the button comes up**, which is the frame the move starts.
+That is where every other move locks it too; a channel does not move the rule,
+it makes the frame later. What is stored across the gap is the solved path's
+*length*, so a wall that shortens the marker shortens the ability with it.
+
 ## What this rules out
 
 **A ray from the chest along the look direction.** This is the mistake, and it

@@ -88,6 +88,21 @@ pub struct Move {
     /// on-hit arithmetic below stops meaning anything, because the move is
     /// still in its active frames when the next cut lands.
     pub rehit: u16,
+    /// Frames this move can be wound up for while its button is held. Zero is
+    /// the normal rule: a press throws the move.
+    ///
+    /// What the hold *buys* is the move's business. The Grasp -- the only one
+    /// that channels -- buys reach with it, walking from [`channel_from`] out
+    /// to [`reach`], so a player who wants the arms to close ten metres away
+    /// has to stand still and hold the button while they do.
+    ///
+    /// [`channel_from`]: Move::channel_from
+    /// [`reach`]: Move::reach
+    pub channel: u16,
+    /// Where a channelled move reaches on a hold of nothing at all -- the near
+    /// end of the slider `reach` is the far end of. Meaningless when
+    /// [`channel`](Move::channel) is zero.
+    pub channel_from: Fx,
     /// Health the caster pays the moment the move starts.
     ///
     /// Zero on almost everything. It is the Blood mage's whole economy -- see
@@ -255,6 +270,26 @@ impl Move {
     /// only one.
     pub const fn strikes(&self) -> bool {
         self.shape.strikes() && self.radius.raw() > 0
+    }
+
+    /// Is this move wound up while its button is held?
+    pub const fn channels(&self) -> bool {
+        self.channel > 0
+    }
+
+    /// The reach this move has after being held for `held` frames.
+    ///
+    /// Between its near end and its own `reach`, linearly, so the two knobs are
+    /// the ends of one slider and the hold is what walks between them. A move
+    /// that does not channel is always at its full reach, which is what makes
+    /// this safe to ask of any move.
+    pub fn reach_after(&self, held: u16) -> Fx {
+        if !self.channels() {
+            return self.reach;
+        }
+        let near = self.channel_from.min(self.reach);
+        let at = Fx::ratio(held.min(self.channel) as i32, self.channel as i32);
+        near.add(self.reach.sub(near).mul(at))
     }
 
     /// Health returned for `dealt` damage, rounded down.
@@ -726,6 +761,8 @@ pub fn get(class: Class, kind: u8) -> Move {
         aim_code: raw(F::Aim) as u8,
         arc: Fx::from_raw(raw(F::Arc)),
         rehit: raw(F::Rehit) as u16,
+        channel: raw(F::Channel) as u16,
+        channel_from: Fx::from_raw(raw(F::ChannelFrom)),
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
     }

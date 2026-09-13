@@ -16,6 +16,13 @@ it back, so the class is always spending itself forward.
 > has a health cost in the move table**, which is the first time the class's own mechanic has
 > existed in the simulation rather than only in this document. See
 > [Implemented](#implemented) for exactly what is in the game.
+>
+> **Revised 2026-09-13.** Grasp became the game's first *channelled* move: hold `Q` to choose
+> how far out the arms converge, watching a marker travel in front of you, and let go to throw
+> it. Its catch stopped being a teleport-plus-root and became a bind and then a haul you can
+> watch, with the victim's feet handed straight back at the end. `Player::rooted` went with it
+> — nothing applied a root any more, and a primitive with no ability behind it is a promise
+> the code has not earned.
 
 ## Mechanic — health as resource
 
@@ -49,13 +56,13 @@ numbers are a first pass out of the prototype rather than a derivation, and
 The class's damage identity, carried forward from the archive, and **implemented**: everything
 a Blood mage does is multiplied by 1.4 against something that cannot move.
 
-**Disabled means rooted, staggered, held, or a creature on its side.** Not hitstun, and that
+**Disabled means staggered, held, or a creature on its side.** Not hitstun, and that
 exclusion is the whole of the definition — hitstun happens on every hit anybody lands, so
 counting it would turn the trait into "increased damage from the second hit onward", which is
 a flat damage bonus in a costume. What is on the list is what
 [../ability-spec.md](../ability-spec.md) calls a hard stop, and the design only allows those
-behind a hard condition: a parry for the stagger, a grab for the hold, every arm of a Grasp
-for the root, a broken poise bar for the topple. Each one was *earned*, which is what a payoff
+behind a hard condition: a parry for the stagger, a grab that landed or every arm of a Grasp
+for the hold, a broken poise bar for the topple. Each one was *earned*, which is what a payoff
 should be waiting on. Blockstun is not on the list: they blocked, which was correct, and
 paying the attacker for it would make guarding worse than standing still.
 
@@ -63,10 +70,11 @@ It applies to every way she deals damage — a swing, a blade in the air, an arm
 field ticking, and all of the same against the creature. A trait that applied to three of a
 class's four abilities would not be a trait, it would be a bug somebody finds in a match.
 
-**This is what makes Grasp a setup.** Four arms is expensive and the root is short; without
-something waiting on the other side of it, landing all four would be a small reward for a hard
-read. With it, the root is a window you spend — and because leech is a percentage of damage
-dealt, the bonus compounds into the health you get back.
+**This is what makes Grasp a setup.** Four arms is expensive and the catch is short — too
+short to react to on purpose, see below; without something already happening on the other side
+of it, landing all four would be a small reward for a hard read. With it, the catch is a window
+you spend — and because leech is a percentage of damage dealt, the bonus compounds into the
+health you get back.
 
 The archive also makes lifesteal the class's *weapon* identity — "anything a blood mage
 reforges becomes a reaping ___ and has lifesteal" — which is the same loop one layer down and
@@ -83,7 +91,7 @@ Four abilities, and they are the four buttons the control scheme gives a class:
 | --- | --- | --- |
 | `LMB` | **Bloodletter** | The auto. A blade out and back, cutting on both passes |
 | `Shift+LMB` | **Rend** | The committed melee. A raking claw at chest range |
-| `Q` | **Grasp** | Four arms out in a cone that converge. All four roots |
+| `Q` | **Grasp** | Hold to choose a depth, then four arms converge there. All four catch |
 | `E` | **Black spike** | A spike in a draining, slowing field, placed at long range |
 
 ### Why Black spike is on `E`
@@ -127,37 +135,72 @@ it.
 > not implemented. What is in the game is the claw, given committed-slot weight.
 
 ### Grasp — special, `Q`
-**Startup** medium · **Recovery** long · **Range** medium · **Mechanic** high cost; large
-return if most of it lands
+**Startup** medium · **Recovery** long · **Range** you choose it · **Mechanic** high cost;
+large return if most of it lands
 
-A short-range skillshot that fires four arms — top left, bottom left, top right, bottom
-right. They leave in a cone, bow outward, and arc back inward to converge at the far end.
-Each arm damages on its own. **Anything caught by all four is seized**: hauled in to the
-caster's arm's length, held there for a third of a second, and rooted on the spot for a third
-of a second after the hands let go. A held or rooted enemy takes 1.4× from everything this
-class has, so the whole window is the payoff, not just the front of it.
+A skillshot that fires four arms — top left, bottom left, top right, bottom right. They leave
+in a cone, bow outward, and arc back inward to converge at one point. Each arm damages on its
+own. **Anything caught by all four is seized**: bound where it stood, then hauled back to the
+caster. A held enemy takes 1.4× from everything this class has.
 
 That is one ability doing the archive's two things at once — the four converging arms, and the
 tendrils that only pay out if you stay close enough to collect. It closes the range for you.
 
-The volume they sweep is a lens rather than a line, so standing anywhere near it gets you
-clipped by one or two arms — damage, and nothing else. All four is a much smaller place to be:
-about a metre wide where the cone closes, against ten metres of reach. That is what makes the
-catch a read rather than a tax, per the rule in [../ability-spec.md](../ability-spec.md) about
-hard stops needing hard conditions.
+#### Holding `Q` chooses the depth
 
-**The grab has to wait for all four, and not only for flavour.** A grab drags its victim to the
+The only move in the game you aim with *time*. Press and hold and a small marker appears in
+front of the caster and travels outward over half a second, from three metres to ten; let go
+and the arms converge on wherever it had got to. Hold past the end and it throws itself, so
+there is no storing a paid-for ability and waiting.
+
+**The marker is not a projectile.** Nothing collides with it, nothing is hit by it, and the
+simulation does not know it is drawn. It is the far end of `Player::aim_path`, which is solved
+every frame of the wind-up by the same `sim::aim` call the finished move uses — so it cannot
+promise a depth the arms do not deliver. That is the whole reason it is built this way: two
+pieces of arithmetic agreeing with each other is how the crosshair and the ability came to
+disagree three times before (see [../aiming.md](../aiming.md)).
+
+Aiming stays live through the wind-up — the body keeps turning with the mouse — and locks on
+the frame the button comes up, which is where every other move locks it too. The health is
+paid on the *press*, because there is no cancelling out of a channel: an ability you started
+is an ability you bought.
+
+#### The catch: bound, then hauled
+
+Two phases, and the first is why it is not a teleport:
+
+1. **Bound** — about a sixth of a second where nothing moves. You are held exactly where the
+   arms closed on you.
+2. **Hauled** — dragged back to the caster at forty metres a second, across real ground, in
+   frames you can watch. Nine metres takes about a quarter of a second.
+
+Then the hands let go and **you have your feet back the same frame**. No root on the end of
+it, no extra recovery. A victim who cannot tell where the ability stopped is a victim being
+stunlocked, which is the thing [../bulwark.md](../bulwark.md) warns about.
+
+**The whole catch is shorter than her most expensive cast takes to come out.** That is
+deliberate and it is the design of the move: you cannot see the arms close and *then* decide
+what to do about it. Whatever is supposed to meet them at the end of the trip — a Black spike
+already in the ground, a Bloodletter already in the air — has to have been committed to before
+the Grasp was known to have landed. High risk, high skill, and it backfires when the read was
+wrong: you have paid forty-five health, spent your recovery, and put nobody anywhere.
+`preying_on_the_disabled_is_worth_feeling_and_is_not_an_execution` in `feel.rs` pins it.
+
+The volume the arms sweep is a lens rather than a line, so standing anywhere near it gets you
+clipped by one or two — damage, and nothing else. All four is a much smaller place to be:
+about a metre wide where the cone closes, against up to ten metres of reach. That is what
+makes the catch a read rather than a tax, per the rule in
+[../ability-spec.md](../ability-spec.md) about hard stops needing hard conditions.
+
+**The grab has to wait for all four, and not only for flavour.** It hauls its victim toward the
 caster, so one applied by the first arm to land would pull them out from under the other three
-— the bottom pair connect a frame before the top pair — and the root would then never fire at
-all. The two payoffs sit on the same condition because the first would otherwise eat the
-second.
+— the bottom pair connect a frame before the top pair — and the catch would cancel itself.
 
-Rooted means your feet do not carry you and you cannot dodge or jump. It is not a stun: you
-can still turn, guard and swing at whoever put the arms round your legs — which matters, because
-by then they are standing right in front of you. The root is
-deliberately longer than the hitstun of the arms that deliver it, or it would expire before
-the victim could notice it — and longer than her fastest move's startup, or there would be
-nothing she could land inside it.
+**The hold has to outlast the haul.** The haul covers real distance at a real speed, so if the
+hold runs out first a Grasp landed at full range drops its victim halfway home — standing in
+mid-air, mid-drag, suddenly able to walk. Invisible up close and total at long range, which is
+the worst way for a number to be wrong, so
+`a_grasp_always_finishes_hauling_before_it_lets_go` holds the two together.
 
 Unblockable, and the class's answer to a turtle now that Reaper's debt is gone.
 
@@ -302,11 +345,15 @@ together.
 
 ## Playing it
 
-Open with Black spike to make a place the other player does not want to be, use Grasp when
-they have to cross it, commit to Rend while the root holds them — that is where the 1.4×
-lives, and Rend's fourteen frames of wind-up fit comfortably inside forty frames of root — and
-pay yourself back with Bloodletter in between. You are always a little below full health on
-purpose.
+Put Black spike in the ground **first**, then use Grasp to drag somebody into it. That is the
+order, and the catch being too short to react to is what forces it: the spike takes half a
+second to erupt and the whole hold is shorter than that, so a mage who waits to see the arms
+close has already missed the window. Hold `Q` to whatever depth they are standing at, let go,
+and if all four land they arrive in the field disabled and taking 1.4×. Pay yourself back with
+Bloodletter in between. You are always a little below full health on purpose.
+
+The other read is Rend: fourteen frames of wind-up against a hold that runs a little longer
+than that, thrown as the haul starts rather than when it finishes.
 
 In a hunt the same sentence reads differently and means the same thing: the climb breaks its
 poise, the topple is the disable, and everything you do to a Ridgeback on its side is worth
@@ -319,15 +366,22 @@ half again as much.
   fantasy.
 - Are the costs anywhere near right? They are a first pass: 15 for the auto up to 120 for the
   spike, against a thousand-point bar. Nothing has been played against them.
-- Does the root want to stop you attacking as well? It does not, on the grounds that the
-  design's default is a root you can still act in. If the class turns out to need a real
-  opening rather than a slow one, this is the knob.
+- **Is half a second the right channel?** Guessed, and it is two decisions at once: how long
+  the wind-up is, and how far the slider travels in it. Three to ten metres over thirty frames
+  means the marker moves about fourteen centimetres a frame, which is slow enough to place and
+  fast enough not to feel like waiting. Both ends are move-table knobs (`Channel, longest
+  hold` and `Channel, reach at no hold`) so the answer is a play question.
+- **Should the Grasp be cancellable?** It is not: the health is paid on the press and the only
+  way out is to throw it. A channel you could back out of would be a free look at what the
+  other player does with half a second of your commitment, which is the opposite of the
+  ability's design.
 - **Is 1.4× the right bonus against a disabled enemy?** Guessed. The feel tests bound it
-  between 1.2 and 2 — below the floor nobody notices it and Grasp goes back to being a root
+  between 1.2 and 2 — below the floor nobody notices it and Grasp goes back to being a catch
   with no payoff; above the ceiling one read ends the round, which is the opposite of a game
   built on whiff punishment. Where it sits inside that range is a play question.
 - **Should the trait be the whole answer to Grasp's cost?** Grasp is the most expensive thing
-  in the kit and the root is short. If the follow-up window turns out to be too tight to use,
-  the root's length is the first knob and the bonus is the second.
+  in the kit and the catch is short *on purpose*. If pre-committing turns out to be too hard
+  rather than merely demanding, the bind is the first knob — it is the part of the hold the
+  caster gets to spend — and the bonus is the second.
 - Only one seal is specified. The archive has three; the other two are power-level knobs and
   can wait.

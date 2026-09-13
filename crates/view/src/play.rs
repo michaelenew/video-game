@@ -176,14 +176,14 @@ fn shape_of(input: PoseInput) -> Shape {
         return 1;
     }
     match input.action {
-        Action::Startup { kind, .. }
+        // Four phases of one move, not three plus a prelude: a channel is the
+        // wind-up held open, and the frame the button comes up is the frame the
+        // clip carries on from. Fading between them would blur the contact
+        // frame, which is the one frame that must be sharp.
+        Action::Channel { kind, .. }
+        | Action::Startup { kind, .. }
         | Action::Active { kind, .. }
-        | Action::Recovery { kind, .. } => {
-            // The three phases of one move are one shape: they are consecutive
-            // frames of a single clip, and fading between them would blur the
-            // contact frame, which is the one frame that must be sharp.
-            100 + kind as u32
-        }
+        | Action::Recovery { kind, .. } => 100 + kind as u32,
         Action::Guard { .. } => 200,
         Action::BlockStun { .. } => 201,
         Action::HitStun { .. } => 202,
@@ -418,7 +418,11 @@ pub fn pose_for(input: PoseInput) -> Pose {
     }
 
     match input.action {
-        Action::Startup { kind, .. }
+        // A channel sits on the move's first frame for as long as it is held:
+        // the body is coiled, and `attack` reads an elapsed of zero for any
+        // action that is not one of the three timed phases.
+        Action::Channel { kind, .. }
+        | Action::Startup { kind, .. }
         | Action::Active { kind, .. }
         | Action::Recovery { kind, .. } => attack(input, kind),
         Action::Guard { held } => guard(input, held),

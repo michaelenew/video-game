@@ -965,13 +965,31 @@ pub fn grasp_arm_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GraspArmRadius))
 }
 
-/// Frames you are rooted for after being caught by all four arms.
+/// Frames the arms hold somebody still before they start pulling.
 ///
-/// Brief on purpose. It is a hard stop, and the design only allows one behind a
-/// hard condition -- see `ability-spec.md`. Being in the one place all four
-/// arms pass through is that condition.
-pub fn grasp_root() -> u16 {
-    oven::scalar(Scalar::GraspRoot) as u16
+/// The front of the hold rather than a separate state: you are caught, and for
+/// a moment nothing else happens. It is what stops the haul reading as a
+/// teleport, and it is the window the caster spends starting whatever is
+/// supposed to meet them.
+pub fn grasp_bind() -> u16 {
+    oven::scalar(Scalar::GraspBind) as u16
+}
+
+/// How big the aim marker is drawn. Presentation, and a knob because a marker
+/// you cannot pick out of the arena is the same as no marker.
+pub fn grasp_mark() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspMark))
+}
+
+/// How fast anything that grabs hauls its catch in, in metres per second.
+///
+/// Fast, and finite. A blink reads as the game moving somebody for you; a haul
+/// you can watch is a thing that happened to them, and it is the difference
+/// between the ability landing and the ability *looking* like it landed. One
+/// knob for every grab in the game, because it is a property of being dragged
+/// rather than of the thing doing the dragging.
+pub fn reel_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ReelSpeed))
 }
 
 /// What a Blood mage's damage is multiplied by against something that cannot
