@@ -257,13 +257,23 @@ clips! {
     BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,
         "Black spike: a downward stabbing gesture that plants something in the ground.";
 
-    // -- The Dual mage: Step strike, Lance, Judgement -----------------------
-    DualPoke,      "dual_poke",       Moves, "dual", Length::Move(Class::DualMage, 0), false,
-        "Step strike: a short step into a close strike. Light on the feet.";
+    // -- The Dual mage: two autos, Lance, Judgement, Sweep ------------------
+    //
+    // Five, and the first and last are the same punch on opposite arms: left
+    // is dark, right is light, and which one just landed is how the class
+    // steers its meter. They are two clips rather than one played twice
+    // because a mirrored pose is a mirrored *pose* -- see `Pose::mirrored` --
+    // and the bake wants a recipe per clip.
+    DualDark,      "dual_dark",       Moves, "dual", Length::Move(Class::DualMage, 0), false,
+        "Dark auto, left arm: a straight punch that opens into a wing behind the fist.";
     DualCommitted, "dual_committed",  Moves, "dual", Length::Move(Class::DualMage, 1), false,
         "Lance: a long forward thrust, arm and body extended into one line.";
     DualSpecial,   "dual_special",    Moves, "dual", Length::Move(Class::DualMage, 2), false,
         "Judgement: a finisher, only past the deep threshold. Big, slow, and final.";
+    DualSweep,     "dual_sweep",      Moves, "dual", Length::Move(Class::DualMage, 3), false,
+        "Sweep: both arms thrown across the whole front at once. Close, wide, and it moves people.";
+    DualLight,     "dual_light",      Moves, "dual", Length::Move(Class::DualMage, 4), false,
+        "Light auto, right arm: the dark punch mirrored, and it has to read as the other side.";
 }
 
 impl Clip {

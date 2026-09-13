@@ -487,6 +487,38 @@ impl Pose {
         out
     }
 
+    /// The same pose thrown with the **other arm**, standing in the same place.
+    ///
+    /// [`Pose::mirrored`] swaps the legs too, which is right for a pose that
+    /// stands on its own and wrong for one frame of an attack: a clip has to
+    /// start and end on the idle's own stance, and a mirrored stance is not
+    /// that stance, so the feet would swap sides on the first frame and swap
+    /// back on the last. This mirrors everything above the hips -- the arms,
+    /// the chest, the head, the way the body turns into the blow -- and then
+    /// **puts the feet back exactly where they were**, which is what makes a
+    /// left jab and a right cross two clips off one set of poses.
+    ///
+    /// The hips turn with the punch, so the legs are re-solved rather than
+    /// copied: a leg hangs off the root, and holding its angles while the root
+    /// turns the other way drags the foot across the floor.
+    pub fn other_arm(&self) -> Pose {
+        let planted = crate::skeleton::solve(reference(), self);
+        let feet = [
+            planted.origin[Joint::FootL.index()],
+            planted.origin[Joint::FootR.index()],
+        ];
+        let mut out = self.mirrored();
+        // Where the weight is is a fact about the stance, not about the arm.
+        out.channels[0] = self.channels[0];
+        let mut out = out.plant_l(feet[0]).plant_r(feet[1]);
+        // The ankles are authored per foot -- a lifted heel, a pointed toe --
+        // and the IK above only reaches the ankle, not the angle of the sole.
+        for foot in [Joint::FootL, Joint::FootR] {
+            out.set_angles(foot, self.angles(foot));
+        }
+        out
+    }
+
     /// Straight blend, channel by channel. Angles, so there is no shortening
     /// artefact to worry about, and the ranges involved are far from any wrap.
     pub fn blend(&self, other: &Pose, t: f32) -> Pose {

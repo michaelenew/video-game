@@ -21,13 +21,14 @@
 //! close fills the screen, so the crosshair sits on its chest several metres
 //! up, and an ability that went *there* sailed over it. See [`sight`].
 //!
-//! # The two kinds, and the one thing that is not one
+//! # The two kinds, and the two things that are not one
 //!
 //! ```text
 //!   Grounded    the thing lands on the floor       structures, fire pillar
 //!   Skillshot   the thing flies through the air    the Elementalist's auto,
 //!                                                   the Blood mage's blade
 //!   Swing       not aimed at all                   every melee attack
+//!   Mechanic    wherever the mechanic is standing  the Reaver's blades
 //! ```
 //!
 //! **Grounded** — [`grounded_path`]:
@@ -51,9 +52,11 @@
 //!
 //! **Swing** is not aimed. A sword is a body moving, and pointing the camera at
 //! the floor must not put the blade there; a swing comes out along `facing`, at
-//! the move's own reach. It is in this list so that "which of the three is
-//! this move" is a question with an answer for every move rather than a thing
-//! each caller decides for itself — see [`crate::moves::Move::aim`].
+//! the move's own reach — from one shoulder rather than from the chest if the
+//! move is thrown with one arm, which is [`Hand`]. It is in this list so that
+//! "which of the four is this move" is a question with an answer for every move
+//! rather than a thing each caller decides for itself — see
+//! [`crate::moves::Move::aim`].
 //!
 //! # Why this file exists, and why nothing else may do this
 //!
@@ -112,11 +115,12 @@ impl Path {
     }
 }
 
-/// Which of the three ways a move is pointed.
+/// Which of the four ways a move is pointed.
 ///
 /// Every move answers this, and [`crate::moves::Move::aim`] is where it is
-/// answered. Two of the three are skillshots and go through the raycast above;
-/// the third is a body moving and does not.
+/// answered. Two of the four are skillshots and go through the raycast above;
+/// the others are pointed by something the player decided earlier -- which way
+/// their body is facing, or where they put the mechanic.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
     /// Lands on the floor. [`grounded_path`].
@@ -187,6 +191,91 @@ pub struct Scene<'a> {
 /// Where a fighter standing at `pos` casts from: the height abilities leave at.
 pub fn origin(pos: V3) -> V3 {
     V3::new(pos.x, pos.y.add(t::cast_height()), pos.z)
+}
+
+/// Which arm a move comes out of.
+///
+/// Most moves have no answer worth giving -- a two-handed overhead, a gesture
+/// that plants something -- and those are [`Hand::Centre`], on the body's own
+/// line, which is where every volume in the game sat before this existed. It is
+/// here because one class is *built* on the distinction: the Dual mage holds two
+/// forces apart, one in each arm, and "left is dark, right is light" is the
+/// whole of how the meter is steered. A hitbox on the centre line cannot say
+/// which of the two just landed.
+///
+/// Declared per move in [`crate::moves::hand`], next to the shape, for the same
+/// reason the shape is: which arm throws a punch is what the move **is**, not a
+/// number to drag.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Hand {
+    Left,
+    Right,
+    /// Both, or neither. The body's centre line.
+    Centre,
+}
+
+impl Hand {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Hand::Left => "left",
+            Hand::Right => "right",
+            Hand::Centre => "centre",
+        }
+    }
+
+    /// Which way is *away from the body* for this hand, as a sign.
+    ///
+    /// One number, in one place, because everything sided reads it: where the
+    /// hand is, and which way a volume thrown from it opens. Two mirrored moves
+    /// then share one set of tuned numbers -- the arc of a wing is a magnitude
+    /// and this is its direction -- rather than being a sign apart in the Oven,
+    /// where a tuner can flip one of them and not the other.
+    pub const fn outward(self) -> i32 {
+        match self {
+            Hand::Left => 1,
+            Hand::Right => -1,
+            Hand::Centre => 0,
+        }
+    }
+}
+
+/// A quarter turn. An angle unit, not a quantity.
+const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
+
+/// The unit vector from the body's centre line out to one hand, level.
+///
+/// Zero for [`Hand::Centre`], which is what makes an unsided move come out of
+/// the middle of the chest exactly as it always has.
+///
+/// **The sides are the skeleton's, not the world's.** The body is authored with
+/// `+Z` along the facing and its left arm at `-X` (`view::pose`), which is a
+/// left-handed frame dropped into a right-handed world -- so the arm the
+/// renderer hangs on `Joint::ArmL` is drawn on the side a quarter turn *toward*
+/// the strafe-right axis. Following the skeleton rather than the world is the
+/// only choice that matters here: what an animation and a hitbox have to agree
+/// about is which arm the player can see swinging, and
+/// `view/tests/kinematics.rs` fails if the two ever part company.
+pub fn across(facing: V3, hand: Hand) -> V3 {
+    match hand.outward() {
+        0 => V3::ZERO,
+        sign => {
+            let turn = QUARTER_TURN.mul(Fx::from_int(sign));
+            let (c, s) = (cos_turns(turn), sin_turns(turn));
+            V3::new(
+                facing.x.mul(c).sub(facing.z.mul(s)),
+                Fx::ZERO,
+                facing.x.mul(s).add(facing.z.mul(c)),
+            )
+        }
+    }
+}
+
+/// Where a fighter's hand is: the cast origin, stepped out to that shoulder.
+///
+/// The height is [`origin`]'s, so a one-armed move leaves from the same level a
+/// two-armed one does and only the side changes.
+pub fn hand_origin(pos: V3, facing: V3, hand: Hand) -> V3 {
+    origin(pos).add(across(facing, hand).scale(t::hand_offset()))
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +497,12 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// degree from there, so there is no step at the boundary. `N` is
 /// [`crate::tuning::swing_level_to`].
 ///
+/// **`hand` moves where it starts, never where it points.** A punch thrown with
+/// one arm leaves from that shoulder rather than from the middle of the chest,
+/// which is the difference between a hitbox that comes out of the arm the player
+/// can see swinging and one that comes out of the sternum. The direction is the
+/// same either way: a body turns as one piece.
+///
 /// **Standing only.** The correction it makes is about two fighters sharing a
 /// floor; off the floor the thing under the reticle really is below you, so
 /// `grounded == false` follows the pitch exactly all the way down. It is also
@@ -419,11 +514,12 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// in this file is: the look direction is one of the two ingredients of the
 /// mistake this module exists to prevent, so the places that turn it into a
 /// line are all in one file where they can be compared.
-pub fn swing_path(pos: V3, facing: V3, look: Input, grounded: bool, reach: Fx) -> Path {
+pub fn swing_path(pos: V3, facing: V3, look: Input, grounded: bool, reach: Fx, hand: Hand) -> Path {
     // From the hand: an overhead begins at the chest and a rising cut is aimed
-    // from there. Where along the body a given weapon actually hinges is
-    // `moves::swing_hub`'s business.
-    let from = origin(pos);
+    // from there, and a one-armed move begins a shoulder's width to one side of
+    // both. Where along the body a given weapon actually hinges is
+    // `moves::swing_hub`'s business; which side of it is [`Hand`].
+    let from = hand_origin(pos, facing, hand);
     let tilt = swing_tilt(look, grounded);
     let flat = cos_turns(tilt);
     let dir = V3::new(facing.x.mul(flat), sin_turns(tilt), facing.z.mul(flat));

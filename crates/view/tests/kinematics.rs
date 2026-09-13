@@ -357,3 +357,93 @@ fn a_taller_build_is_taller_everywhere() {
     assert!(big.leg_reach() > small.leg_reach());
     assert!(big.arm_reach() > small.arm_reach());
 }
+
+// ---------------------------------------------------------------------------
+// The two frames, and the one thing they must agree about
+// ---------------------------------------------------------------------------
+//
+// The simulation swings a one-armed move from a hand (`sim::aim::hand_origin`)
+// and the renderer draws the arm from the skeleton. Those are two different
+// pieces of arithmetic in two different crates, and if they disagree about
+// which side "left" is on, the Dual mage's dark auto comes out of the arm the
+// player can see *not* swinging -- and since which of her two autos landed is
+// the whole of how her meter is steered, that is not a cosmetic mistake.
+//
+// Nothing forces them to agree except this.
+
+/// A fighter's hand, as the renderer puts it in the arena.
+fn drawn_hand(pose: &Pose, facing: [f32; 2], left: bool) -> math::V3 {
+    let s = reference();
+    let joint = if left { Joint::HandL } else { Joint::HandR };
+    let local = skeleton::solve(s, pose).origin[joint.index()];
+    view::into_world(local, [0.0, 0.0, 0.0], facing)
+}
+
+#[test]
+fn the_arm_the_simulation_swings_from_is_the_arm_the_renderer_draws() {
+    use sim::aim::Hand;
+    // Every facing, because the two frames are related by a rotation and a
+    // sign error would hide at exactly one angle.
+    for eighth in 0..8 {
+        let a = eighth as f32 / 8.0 * std::f32::consts::TAU;
+        let facing = [a.cos(), a.sin()];
+        let sim_facing = sim::V3::new(fx(facing[0]), sim::Fx::ZERO, fx(facing[1]));
+        for (hand, left) in [(Hand::Left, true), (Hand::Right, false)] {
+            let drawn = drawn_hand(&Pose::rest(), facing, left);
+            let swung = sim::aim::across(sim_facing, hand);
+            let across = [swung.x.to_f32_for_render(), swung.z.to_f32_for_render()];
+            // Sideways only: the simulation's hand is at the height everything
+            // is cast from, and the drawn one hangs wherever the pose put it.
+            let side = drawn[0] * across[0] + drawn[2] * across[1];
+            assert!(
+                side > 0.05,
+                "at facing {facing:?} the {} hand is drawn {side:.3} m along the side \
+                 the simulation swings it from",
+                if left { "left" } else { "right" }
+            );
+        }
+    }
+}
+
+#[test]
+fn a_hand_is_about_as_far_out_as_the_shoulder_it_hangs_from() {
+    // The simulation carries one number for every build, because a hit volume
+    // that changed size with the model would make the same move a different
+    // move on six characters. It still has to be the right *sort* of number:
+    // half a metre would put the Dual mage's two autos in different postcodes.
+    let out = sim::tuning::hand_offset().to_f32_for_render();
+    for class in sim::class::ALL_CLASSES {
+        let s = skeleton::skeleton_for(class);
+        let shoulder = skeleton::solve(&s, &Pose::rest()).origin[Joint::ArmR.index()][0];
+        assert!(
+            (shoulder - out).abs() < 0.08,
+            "{}: shoulders at {shoulder:.3} m, the simulation swings from {out:.3} m",
+            class.name()
+        );
+    }
+}
+
+#[test]
+fn the_wing_reaches_two_to_three_arm_lengths_past_the_fist() {
+    // The Dual mage's autos are punches that open into something much longer
+    // than an arm -- the shape is in `moves::Shape::Wing` and the fantasy is in
+    // `docs/design/kits/dual-mage.md`. "Two to three arm lengths" is the design
+    // statement, and the only place it can be checked is here, because the
+    // simulation has no idea how long an arm is.
+    let s = skeleton::skeleton_for(sim::Class::DualMage);
+    let arm = s.arm_reach();
+    for kind in [sim::moves::dual::DARK_AUTO, sim::moves::dual::LIGHT_AUTO] {
+        let m = sim::moves::get(sim::Class::DualMage, kind);
+        let reach = m.reach.to_f32_for_render();
+        let lengths = reach / arm;
+        assert!(
+            (2.0..=3.0).contains(&lengths),
+            "{}: reaches {reach:.2} m, which is {lengths:.1} arm lengths ({arm:.2} m)",
+            m.name
+        );
+    }
+}
+
+fn fx(v: f32) -> sim::Fx {
+    sim::Fx::from_raw((v * 65536.0).round() as i32)
+}

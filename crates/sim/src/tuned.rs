@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 187] = [
+pub const SCALARS: [i32; 190] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -195,6 +195,9 @@ pub const SCALARS: [i32; 187] = [
             1966, // champion.sweep_travels_below_level = 0.03
            45875, // champion.thrust_out_on_the_first_active_frame_(x) = 0.7
               45, // aim.swing_stays_level_to_(deg_down) = 45
+           11796, // body.hand_out_from_the_centre_line = 0.18
+           22938, // dual_mage.wing_out_on_the_first_active_frame_(x) = 0.35
+            7864, // dual_mage.wing_behind_the_hand_(x_reach) = 0.12
 ];
 
 #[rustfmt::skip]
@@ -226,7 +229,7 @@ pub const AIR: [i32; 24] = [
 ];
 
 #[rustfmt::skip]
-pub const MOVES: [i32; 598] = [
+pub const MOVES: [i32; 644] = [
                4, // move.bulwark.bash.startup = 4
                3, // move.bulwark.bash.active = 3
               10, // move.bulwark.bash.recovery = 10
@@ -756,29 +759,29 @@ pub const MOVES: [i32; 598] = [
                1, // move.blood_mage.black_spike.line_of_effect_(0-3) = 1
                0, // move.blood_mage.black_spike.swing_arc_(turns) = 0
                1, // move.blood_mage.black_spike.hits_again_every = 1
-               5, // move.dual_mage.step_strike.startup = 5
-               3, // move.dual_mage.step_strike.active = 3
-              12, // move.dual_mage.step_strike.recovery = 12
-              58, // move.dual_mage.step_strike.damage = 58
-           98304, // move.dual_mage.step_strike.reach = 1.5
-           65536, // move.dual_mage.step_strike.radius = 1
-              14, // move.dual_mage.step_strike.hitstun = 14
-               8, // move.dual_mage.step_strike.blockstun = 8
-          262144, // move.dual_mage.step_strike.knockback = 4
-              60, // move.dual_mage.step_strike.mobility_(%) = 60
-               6, // move.dual_mage.step_strike.aerial_hang = 6
-               0, // move.dual_mage.step_strike.unblockable = off
-               1, // move.dual_mage.step_strike.hits_crouching = on
-               0, // move.dual_mage.step_strike.needs_mechanic = off
-               0, // move.dual_mage.step_strike.launch = 0
-               0, // move.dual_mage.step_strike.self_lift = 0
-               0, // move.dual_mage.step_strike.grab_hold = 0
-               0, // move.dual_mage.step_strike.leaves_behind = 0
-               0, // move.dual_mage.step_strike.health_cost = 0
-               0, // move.dual_mage.step_strike.leech_(%) = 0
-               0, // move.dual_mage.step_strike.line_of_effect_(0-3) = 0
-               0, // move.dual_mage.step_strike.swing_arc_(turns) = 0
-               0, // move.dual_mage.step_strike.hits_again_every = 0
+               5, // move.dual_mage.dark_auto.startup = 5
+               4, // move.dual_mage.dark_auto.active = 4
+              11, // move.dual_mage.dark_auto.recovery = 11
+              52, // move.dual_mage.dark_auto.damage = 52
+          108134, // move.dual_mage.dark_auto.reach = 1.65
+           29491, // move.dual_mage.dark_auto.radius = 0.45
+              15, // move.dual_mage.dark_auto.hitstun = 15
+               8, // move.dual_mage.dark_auto.blockstun = 8
+          262144, // move.dual_mage.dark_auto.knockback = 4
+              60, // move.dual_mage.dark_auto.mobility_(%) = 60
+               6, // move.dual_mage.dark_auto.aerial_hang = 6
+               0, // move.dual_mage.dark_auto.unblockable = off
+               1, // move.dual_mage.dark_auto.hits_crouching = on
+               0, // move.dual_mage.dark_auto.needs_mechanic = off
+               0, // move.dual_mage.dark_auto.launch = 0
+               0, // move.dual_mage.dark_auto.self_lift = 0
+               0, // move.dual_mage.dark_auto.grab_hold = 0
+               0, // move.dual_mage.dark_auto.leaves_behind = 0
+               0, // move.dual_mage.dark_auto.health_cost = 0
+               0, // move.dual_mage.dark_auto.leech_(%) = 0
+               0, // move.dual_mage.dark_auto.line_of_effect_(0-3) = 0
+            9175, // move.dual_mage.dark_auto.swing_arc_(turns) = 0.14
+               0, // move.dual_mage.dark_auto.hits_again_every = 0
               10, // move.dual_mage.lance.startup = 10
                4, // move.dual_mage.lance.active = 4
               18, // move.dual_mage.lance.recovery = 18
@@ -825,6 +828,52 @@ pub const MOVES: [i32; 598] = [
                1, // move.dual_mage.judgement.line_of_effect_(0-3) = 1
                0, // move.dual_mage.judgement.swing_arc_(turns) = 0
                0, // move.dual_mage.judgement.hits_again_every = 0
+              12, // move.dual_mage.sweep.startup = 12
+               6, // move.dual_mage.sweep.active = 6
+              16, // move.dual_mage.sweep.recovery = 16
+              95, // move.dual_mage.sweep.damage = 95
+          144179, // move.dual_mage.sweep.reach = 2.2
+           36045, // move.dual_mage.sweep.radius = 0.55
+              21, // move.dual_mage.sweep.hitstun = 21
+              12, // move.dual_mage.sweep.blockstun = 12
+          589824, // move.dual_mage.sweep.knockback = 9
+               0, // move.dual_mage.sweep.mobility_(%) = 0
+               6, // move.dual_mage.sweep.aerial_hang = 6
+               0, // move.dual_mage.sweep.unblockable = off
+               1, // move.dual_mage.sweep.hits_crouching = on
+               0, // move.dual_mage.sweep.needs_mechanic = off
+               0, // move.dual_mage.sweep.launch = 0
+               0, // move.dual_mage.sweep.self_lift = 0
+               0, // move.dual_mage.sweep.grab_hold = 0
+               0, // move.dual_mage.sweep.leaves_behind = 0
+               0, // move.dual_mage.sweep.health_cost = 0
+               0, // move.dual_mage.sweep.leech_(%) = 0
+               0, // move.dual_mage.sweep.line_of_effect_(0-3) = 0
+           19661, // move.dual_mage.sweep.swing_arc_(turns) = 0.3
+               0, // move.dual_mage.sweep.hits_again_every = 0
+               5, // move.dual_mage.light_auto.startup = 5
+               4, // move.dual_mage.light_auto.active = 4
+              11, // move.dual_mage.light_auto.recovery = 11
+              52, // move.dual_mage.light_auto.damage = 52
+          108134, // move.dual_mage.light_auto.reach = 1.65
+           29491, // move.dual_mage.light_auto.radius = 0.45
+              15, // move.dual_mage.light_auto.hitstun = 15
+               8, // move.dual_mage.light_auto.blockstun = 8
+          262144, // move.dual_mage.light_auto.knockback = 4
+              60, // move.dual_mage.light_auto.mobility_(%) = 60
+               6, // move.dual_mage.light_auto.aerial_hang = 6
+               0, // move.dual_mage.light_auto.unblockable = off
+               1, // move.dual_mage.light_auto.hits_crouching = on
+               0, // move.dual_mage.light_auto.needs_mechanic = off
+               0, // move.dual_mage.light_auto.launch = 0
+               0, // move.dual_mage.light_auto.self_lift = 0
+               0, // move.dual_mage.light_auto.grab_hold = 0
+               0, // move.dual_mage.light_auto.leaves_behind = 0
+               0, // move.dual_mage.light_auto.health_cost = 0
+               0, // move.dual_mage.light_auto.leech_(%) = 0
+               0, // move.dual_mage.light_auto.line_of_effect_(0-3) = 0
+            9175, // move.dual_mage.light_auto.swing_arc_(turns) = 0.14
+               0, // move.dual_mage.light_auto.hits_again_every = 0
 ];
 
 #[rustfmt::skip]

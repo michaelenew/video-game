@@ -1949,3 +1949,73 @@ not mean:
 **Verdict** open, and one thing to watch: a fighter standing on open ground is now aimed at
 through the floor behind them, so a shot at somebody backed against a wall ends on the wall
 rather than on them. Both hit. Nobody has played it.
+
+### 2026-09-13 — the Dual mage got both her arms
+
+**Changed** the kit on the buttons. Left click is the **dark auto**, right click is the
+**light auto**, `shift` + left is Lance, `Q` is Judgement, and `E` casts a new move,
+**Sweep**. Five moves where there were three, and both mouse buttons are attacks.
+
+Right click was doing nothing on this class. `want_guard` asks for a shield in hand and she
+has no shield, so half of the mechanic — *right click moves you lighter* — had no input at
+all, and the meter could only be driven one way. `E` was also dead, for the same reason the
+Blood mage's was before Black spike: the mechanic is a meter steered by which button attacks,
+so there is no state for a key to toggle.
+
+**Why the autos come out of the arms.** The class holds two forces apart, one in each arm,
+and the only information the player has about which one they just threw is which arm threw it
+and which way the bar moved. Both volumes leaving from the middle of the chest would make
+that unreadable. So a move now declares a **hand** next to its shape (`moves::hand`), and
+`aim::hand_origin` steps the swing's origin out to that shoulder. Everything else in the game
+is `Hand::Centre` and is untouched.
+
+The sides are the **skeleton's**, not the world's, and that is worth writing down because it
+looks like a bug until you check: the body is authored `+Z` forward with its left arm at
+`-X`, which is a left-handed frame in a right-handed world, so the arm the renderer calls the
+left one is drawn on the side a quarter turn *toward* strafe-right. Following the skeleton is
+the only choice that matters — what an animation and a hitbox have to agree about is which
+arm the player can see swinging — and `view/tests/kinematics.rs` now fails if the two ever
+disagree. Left as it is rather than fixed: unmirroring the model means negating the sideways
+coordinate of every authored key in every clip, which is a change with no visible payoff and
+a large blast radius.
+
+**The wing.** A new hit shape, `Shape::Wing`. It starts a little behind the fist, sweeps
+outward — away from the body, on whichever side the arm is — and **grows** to the move's whole
+reach across the active window, so the tip travels a spiral rather than an arc. Two and a half
+arm lengths at full extension, which `view/tests/kinematics.rs` checks against the Dual mage's
+own build rather than against a number typed twice.
+
+It is its own shape rather than a swing with a big arc for two reasons that are the same
+reason: a swing's head is at a fixed reach and a swing's inner end is at the shoulder. Both of
+those are what make a swing *safe to step inside*, and the wing is meant to be the opposite —
+the class is long and thin and loses to anyone who has closed.
+
+Both autos share one `arc`. The **hand supplies its sign** (`aim::Hand::outward`), so the
+mirror is structural rather than two knobs somebody has to keep equal and opposite.
+
+**Steering, corrected.** The autos now steer **on contact** and everything else on the press,
+which is what the design document has always said and what the implementation did not do —
+before this, swinging a poke at thin air walked the bar. And the side comes from the *move*
+rather than from the input bits: `shift` + left click has a modifier and a side in it, and
+reading the bits meant deciding which won. `moves::dual::side` answers it once. A move with no
+side — `Q`, `E` — pushes you further along the path you are already on, and does nothing at
+dead centre, which is the rule the document states for scroll click and both-click.
+
+**The animation.** The autos are one punch read twice: `Pose::other_arm` mirrors everything
+above the hips and re-plants the feet where they were, so a left jab and a right cross come
+off one set of keys. Mirroring the *stance* as well was the first attempt and is wrong — every
+clip in that file has to start and end on the idle's own stance, so a mirrored first frame
+swaps the character's footing on the frame the punch starts and swaps it back on the frame it
+ends.
+
+Sweep took three passes to get through the continuity ceiling, and the third one is the
+correct animation rather than a concession: the arms now cross the front **during the active
+frames** rather than before them, because that is when the hit volume crosses. The first two
+versions had the body arrive early and then wait, which is both a 0.4 m per frame hand and a
+lie about where the danger is.
+
+**Verdict** open on everything with a number in it. Nobody has played it. The specific
+questions: whether the wing's outward opening reads as a wing or as a wild swing, whether 50°
+of arc is enough to feel like it wraps, whether the punch at five frames of startup is too
+fast to see which arm it was, and whether Sweep at twelve frames is a real answer to somebody
+inside the punches or just a slower one.
