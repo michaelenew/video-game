@@ -327,6 +327,15 @@ scalars! {
     LotusReturn,      "Reaver",   "Lotus, back to the shadow",  Frames,  1,         120;
     LotusReturnDamage,"Reaver",   "Lotus, damage coming home (%)", Percent, 0,      200;
     LotusSlow,        "Reaver",   "Lotus slow (x)",             Fixed,   0,         fx(1,1);
+    // Appended, and they have to be: `tuned::SCALARS` is read by the enum's own
+    // discriminant, so inserting one beside its family would silently give
+    // every knob after it somebody else's baked value. The palette groups by
+    // family rather than by position, so these still show up next to the three
+    // wing knobs above.
+    WingOffside,       "Dual mage", "Wing, ring centre off the punching side (x reach)", Fixed, fx(-1,1), fx(1,1);
+    WingAhead,         "Dual mage", "Wing, ring centre ahead of her (x reach)", Fixed, fx(-1,1), fx(1,1);
+    WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
+    WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -731,7 +740,7 @@ pub const MONSTER_FIELDS: usize = 22;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 213;
+pub const SCALAR_COUNT: usize = 217;
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody

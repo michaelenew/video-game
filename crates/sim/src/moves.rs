@@ -140,17 +140,25 @@ pub enum Shape {
     /// A thrust. The weapon is a line along the aim that extends to `reach`
     /// over the active window and does not travel sideways.
     Thrust,
-    /// A wing: **a section of a torus, lying flat around the caster.**
+    /// A wing: **a thin curved blade, swept on a ring the caster is not in the
+    /// middle of.**
     ///
     /// ```text
-    ///        .-  -  -.                 the ring is centred on the caster,
-    ///     .'          '.               in the plane of the floor
-    ///    ;    (o)   ---->  ahead       inner arc at `tuning::wing_inner`
-    ///     '.   |     .'                outer arc at `Move::reach`
-    ///        ' - , - '                 the section starts behind, on the
-    ///          start                   punching arm's own side, and sweeps
-    ///                                  round to straight ahead
+    ///        .-  -  -.                 a section of a torus, in the plane of
+    ///     .'          '.               the floor. Inner arc at
+    ///    ;      (x)     :              `tuning::wing_inner` of the reach,
+    ///     '.          .'               outer arc at `Move::reach`, and
+    ///        ' - , - '                 nothing in between
+    ///          start
+    ///                       (x) the ring's middle: `tuning::wing_offside`
+    ///   o                       toward the caster's *other* arm and
+    ///   |   the caster          `tuning::wing_ahead` in front of them
     /// ```
+    ///
+    /// It starts behind the caster on the punching arm's own side and finishes
+    /// `tuning::wing_finish` off their centre line, in front of that arm's own
+    /// hand -- not dead ahead, because which of two mirrored autos just landed
+    /// is a thing the player reads off where it landed.
     ///
     /// The volume out on any one frame is the section's own **radius** -- a
     /// line from the inner arc to the outer one. That is not an approximation
@@ -159,18 +167,20 @@ pub enum Shape {
     /// over the active window, which is the thing the player sees.
     ///
     /// Three things separate it from a [`Shape::Swing`], and they are why it is
-    /// its own shape rather than a swing with unusual numbers. It is centred on
-    /// the **body** rather than hung off a shoulder, so it wraps rather than
-    /// reaches. It has a **hole**: the inner arc passes through where the
-    /// punching elbow started, so there is no haft to stand inside. And it
-    /// **starts behind the caster** and ends in front of her fist, rather than
-    /// travelling across the front of her -- the punch throws it and it
-    /// overtakes the punch.
+    /// its own shape rather than a swing with unusual numbers. It is hung off a
+    /// **ring** rather than off a shoulder, so it curves rather than reaches. It
+    /// has a **hole**, and a big one: the band is the outer quarter of the ring
+    /// and there is no haft to stand inside. And it **starts behind the caster**
+    /// rather than travelling across the front of her -- the punch throws it and
+    /// it overtakes the punch.
     ///
     /// Which way round it sweeps comes from [`Move::hand`], so the two mirrored
     /// autos share one `arc` -- see [`crate::aim::Hand::outward`]. For this
-    /// shape `arc` is **where the section starts**, measured back from straight
-    /// ahead, rather than a span centred on the facing.
+    /// shape `arc` is **how far back the section starts**, measured from where
+    /// it finishes, rather than a span centred on the facing.
+    ///
+    /// The geometry is [`crate::moves::wing`], and the last active frame is not
+    /// a section at all: see [`Wing::tip`].
     Wing,
 }
 
@@ -792,6 +802,115 @@ pub fn swing_base(facing: V3, aim_dir: V3, plane: Plane, grounded: bool) -> V3 {
         Plane::Flat => aim_dir,
         // Down the body, in the plane the aim already lies in.
         Plane::Upright => aim_dir,
+    }
+}
+
+/// The ring a wing carves, placed in the world.
+///
+/// A wing is a section of a torus lying flat (see [`Shape::Wing`]), and this is
+/// the whole torus plus the two bearings the section lives between. Everything
+/// in it is a knob, because where this shape sits relative to the body that
+/// threw it *is* the move -- see `tuning::wing_inner` and the three beside it.
+///
+/// ```text
+///                       .-  -  -  -.
+///                   . '             ' .        outer arc at `Move::reach`
+///     starts -->  ;                     :      inner arc `wing_inner` of it
+///     behind her   \                   /       and nothing in between
+///        o          ' .     (x)   . '
+///        |              ' - , - '     <-- finishes in front of that fist
+///     the mage,                           `wing_finish` off her centre line
+///     punching                        (x) the ring's middle: pushed
+///     left-handed                         `wing_offside` toward the other
+///                                         arm and `wing_ahead` forward
+/// ```
+///
+/// The middle is pushed **off** her rather than sitting on her, which is what
+/// makes the blade pass by rather than wrap round: a ring centred on a fighter
+/// is the same distance from them at every bearing, and a piece of one reads as
+/// a halo however short it is.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Wing {
+    /// The middle of the ring, at the height the hand punches through.
+    pub at: V3,
+    pub inner: Fx,
+    pub outer: Fx,
+    /// The bearing the leading edge stops on, in front of the punching hand.
+    pub finish: Fx,
+    /// How far back from `finish` the section starts, **signed by the arm**:
+    /// positive is the way [`crate::aim::Hand::Left`] sweeps. One tuned `arc`
+    /// serves both autos because the sign lives here and nowhere else.
+    pub span: Fx,
+}
+
+/// Where a wing's ring is, given where the fighter stands and what they threw.
+///
+/// The plane of it is the floor's while her feet are on it, which is the one
+/// place this move ignores the camera's pitch. Off the ground there is no shared
+/// floor to lie parallel to, so it rides the aim -- and for a flat ring that
+/// means only its height moves, because a ring lying in the aim's plane is
+/// still a ring. The same split `swing_base` already makes for a cut thrown in
+/// the air.
+pub fn wing(pos: V3, facing: V3, aim_dir: V3, grounded: bool, m: &Move) -> Wing {
+    use crate::tuning as t;
+    let middle = crate::aim::origin(pos)
+        .add(facing.scale(m.reach.mul(t::wing_ahead())))
+        .sub(crate::aim::across(facing, m.hand).scale(m.reach.mul(t::wing_offside())));
+    let at = if grounded {
+        middle
+    } else {
+        V3::new(middle.x, middle.y.add(aim_dir.y.mul(m.reach)), middle.z)
+    };
+    let ahead = crate::math::atan2_turns(facing.z, facing.x);
+    let outward = Fx::from_int(m.hand.outward());
+    Wing {
+        at,
+        inner: m.reach.mul(t::wing_inner()),
+        outer: m.reach,
+        finish: ahead.add(t::wing_finish().mul(outward)),
+        span: m.arc.mul(outward),
+    }
+}
+
+impl Wing {
+    /// The section that is actually out, `through` of the way through the
+    /// opening.
+    ///
+    /// **It opens rather than sweeps.** The trailing edge stays where the punch
+    /// threw it and the leading edge comes round toward the front, so the shape
+    /// is a wing spreading rather than a blade travelling -- the beings inside
+    /// her extending the movement past where an arm could take it.
+    ///
+    /// It stops `tuning::wing_tip` of the span short of the finish. That last
+    /// piece belongs to the tip, which is a bubble rather than a section: see
+    /// [`Wing::tip`].
+    pub fn opened(&self, through: Fx) -> crate::math::Sector {
+        let short = self.span.mul(crate::tuning::wing_tip());
+        let leading = short.add(self.span.sub(short).mul(Fx::ONE.sub(through)));
+        crate::math::Sector {
+            at: self.at,
+            inner: self.inner,
+            outer: self.outer,
+            from: self.finish.add(self.span),
+            to: self.finish.add(leading),
+        }
+    }
+
+    /// The foremost point of the ring: the outer arc at the bearing the wing
+    /// finishes on, which is where the tip arrives on the last active frame.
+    ///
+    /// Read off a section with no width rather than worked out again here. A
+    /// second copy of the same arithmetic is how a tip ends up somewhere the
+    /// wing it belongs to never went.
+    pub fn tip(&self) -> V3 {
+        crate::math::Sector {
+            at: self.at,
+            inner: self.inner,
+            outer: self.outer,
+            from: self.finish,
+            to: self.finish,
+        }
+        .point(Fx::ONE, Fx::ONE)
     }
 }
 

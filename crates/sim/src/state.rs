@@ -1247,62 +1247,54 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
                 (hub, hub.add(p.aim_dir().scale(out)), false)
             }
-            // A section of a torus lying flat around the caster: it opens
+            // A section of a torus lying flat: a thin curved blade that opens
             // from nothing to its whole span over the active window, with its
-            // leading edge arriving straight ahead. See `moves::Shape::Wing`.
+            // leading edge arriving in front of the punching fist. See
+            // `moves::Shape::Wing`.
             //
             // The volume is the section itself rather than a line standing in
             // for one -- `math::Sector` is the shape, and the hit test and the
-            // overlay both read it. A wing wraps around the thing that threw
+            // overlay both read it. A wing curves around the thing that threw
             // it, and a straight line through that either misses the inside of
             // the curve or claims the outside of it.
             moves::Shape::Wing => {
-                // Centred on the caster's own axis, at the height her hand
-                // punches through, so the two arms throw mirrored halves of one
-                // ring rather than two separate volumes.
-                let at = aim::origin(p.pos);
-                // The plane of the torus is the floor's, while her feet are on
-                // it. In the air the section tilts with the aim -- which for a
-                // flat ring means only its height moves, because a ring lying
-                // in the aim's plane is still a ring.
-                let at = if p.grounded {
-                    at
-                } else {
-                    let climb = p.aim_dir().y.mul(m.reach);
-                    V3::new(at.x, at.y.add(climb), at.z)
-                };
-                let ahead = crate::math::atan2_turns(p.facing.z, p.facing.x);
-                // Signed by the arm: the section grows out of the side the
-                // punch was thrown with, and closes on straight ahead.
-                let span = m.arc.mul(Fx::from_int(m.hand.outward()));
+                let ring = moves::wing(p.pos, p.facing, p.aim_dir(), p.grounded, &m);
                 // Its own progression rather than `swing_progress`, and for a
                 // reason that matters: that one saturates a frame early, so a
-                // wing would reach straight ahead on the frame *before* its
-                // last one and a body standing there would be caught by the
-                // body of the section rather than by the tip. The tip has to be
-                // the first thing to arrive in front of her or it is not a tip.
+                // wing would reach the front on the frame *before* its last one
+                // and a body standing there would be caught by the body of the
+                // section rather than by the tip. The tip has to be the first
+                // thing to arrive in front of her or it is not a tip.
                 let elapsed = m.active.saturating_sub(left);
                 let through = Fx::ratio(elapsed as i32, m.active.max(2) as i32 - 1);
-                // **The last frame is the tip**, and it is the only thing that
-                // reaches straight ahead: the wing opens behind it and stops
-                // short, so a body standing in front of her is caught by the
-                // tip or by nothing. That is what makes it a tip rather than a
-                // damage bonus on a frame number -- landing it is a decision
-                // about distance, taken a sixth of a second earlier.
-                let tipper = left == 0;
-                let edge = span.mul(t::wing_tip());
-                let (back, front) = if tipper {
-                    (edge, Fx::ZERO)
-                } else {
-                    (span, edge.add(span.sub(edge).mul(Fx::ONE.sub(through))))
-                };
-                let sector = crate::math::Sector {
-                    at,
-                    inner: m.reach.mul(t::wing_inner()),
-                    outer: m.reach,
-                    from: ahead.add(back),
-                    to: ahead.add(front),
-                };
+                // **The last frame is the tip**: a bubble at the foremost point
+                // of the ring, and the only thing the whole move ever puts
+                // there. The wing opens behind it and stops short, so a body
+                // standing in front of her is caught by the tip or by nothing
+                // -- which is what makes landing it a decision about distance,
+                // taken a sixth of a second earlier, rather than a damage bonus
+                // attached to a frame number.
+                //
+                // A bubble rather than the last slice of the section, because a
+                // slice of a ring is metres of arc: it caught everything across
+                // the whole front of her and the "tip" was the widest part of
+                // the move. A point at the end of the blade is the thing the
+                // design has always described.
+                if left == 0 {
+                    let tip = ring.tip();
+                    return Some(Hitbox {
+                        from: tip,
+                        to: tip,
+                        radius: t::wing_tip_radius(),
+                        flat: false,
+                        hits_crouching: m.hits_crouching,
+                        unblockable: m.unblockable,
+                        spent: p.hit_used,
+                        sector: None,
+                        tipper: true,
+                    });
+                }
+                let sector = ring.opened(through);
                 // The leading edge, for everything that can only draw a line.
                 return Some(Hitbox {
                     from: sector.point(Fx::ZERO, Fx::ONE),
@@ -1313,7 +1305,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                     unblockable: m.unblockable,
                     spent: p.hit_used,
                     sector: Some(sector),
-                    tipper,
+                    tipper: false,
                 });
             }
         },

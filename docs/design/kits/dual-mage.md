@@ -78,40 +78,64 @@ mechanic unreadable. One move field says which arm (`moves::hand`), the volume s
 (`aim::hand_origin`), the animation is one punch mirrored (`Pose::other_arm`), and
 `view/tests/kinematics.rs` fails if the simulation and the renderer ever pick different arms.
 
-### The shape: a punch, and a wing that comes round from behind
+### The shape: a punch, and a blade that comes round from behind
 
 Each auto **reads as a punch** — a short step into a straight arm, five frames of startup, the
-other hand thrown back behind. What it *does* is a **section of a torus lying flat around
-her**:
+other hand thrown back behind. What it *does* is a **thin curved blade**, swept through the
+air on a ring that she is not standing in the middle of:
 
 ```text
-        .-  -  -.
-     .'    ___    '.          the ring is centred on the mage, in the plane
-    ;     /   \       --->    of the floor, at the height her hand punches
-     '.   \___/    .'         through
-        ' -  ,  - '
-         starts here          the section appears behind her, on the punching
-                              arm's own side, and sweeps round to straight ahead
+                  .-  -  -.
+              . '           ' .        the band is only the outer quarter of
+   starts   ;                    :     the ring: the near edge passes just
+   behind    \                  /      outside where her fist finishes, and
+   her        ' .    (x)    . '        the far edge is the move's reach
+                  ' - , - '
+      o                        ^
+      |                        '-- finishes in front of that fist,
+   the mage,                       a little off her centre line
+   punching
+   left-handed              (x) the ring's middle: pushed toward the
+                                other arm, and forward
 ```
 
-- the **inner arc** passes through where that arm's elbow starts — tucked in against the
-  body, about a quarter of a metre out — so the ring has a hole in it and stepping *inside*
-  the punch is a bad answer rather than the only answer;
-- the **outer arc** is two to three times further out than the fist gets, measured from that
-  same elbow: about a metre and two thirds;
-- it **opens** rather than sweeps: the section starts closed behind her, on the punching arm's
-  side, and widens every frame as its leading edge comes round toward the front. That is the
-  wing — the beings inside her extending the movement past where an arm could take it — and it
-  is why the shape is an opening angle rather than a blade travelling.
+- the **band** runs from `tuning::wing_inner` of the reach out to the reach — three quarters
+  of the way out and no further in. It is a blade travelling, not a slice of pie: the version
+  that reached from her own elbow to full range was a filled disc with a pinhole in it, and
+  caught anyone standing anywhere in the quadrant;
+- the **ring's middle is not her**. It sits `tuning::wing_offside` toward the *other* arm and
+  `tuning::wing_ahead` in front of her. A ring centred on a fighter is the same distance from
+  them at every bearing, so a piece of one reads as a halo however short you make it. Pushed
+  off her, the blade comes in close beside the punching fist and swings wide in front — a
+  swipe passing by rather than a circle drawn around her;
+- it **finishes in front of its own hand**, `tuning::wing_finish` off her centre line toward
+  the punching side, rather than dead ahead. Which of the two just landed is the whole of how
+  the meter is steered, and two autos that both ended on the sternum put the answer in the
+  same place twice;
+- it **opens** rather than travels: the section starts closed behind her, on the punching
+  arm's side, and its leading edge comes round toward the front while its trailing edge stays
+  where the punch threw it. So the blade is one that *grows* along the ring rather than one
+  that slides along it — that is the wing, the beings inside her extending the movement past
+  where an arm could take it.
+
+The arc is a **shallow** one, and deliberately: a long arc on a short radius is a circle round
+her feet whatever else is true of it. Wide radius, narrow angle, middle pushed off her — those
+three together are what make it read as a cut through the air in front of her.
 
 ### The tip
 
 **The last frame is the tip alone, and it hits `tuning::wing_tipper` times as hard.**
 
-The wing opens to most of its arc and stops short; the tip covers the rest, arriving straight
-ahead on the final active frame. So the only thing that ever reaches the point directly in
-front of her at full extension is the tip, and everything the wing already opened over has
-already been swept.
+The tip is a **ball at the end of the blade** — `tuning::wing_tip_radius` across, out for one
+frame, at the foremost point of the ring. The wing opens to most of its arc and stops
+`tuning::wing_tip` of the span short; the tip arrives at the end of that gap on the final
+active frame. So the only thing that ever reaches the point out in front of her at full
+extension is the tip, and everything the wing already opened over has already been swept.
+
+A ball rather than the last slice of the section, which is what it used to be. A slice of a
+ring is metres of arc: the "tip" was the widest thing the move ever put in the world, caught
+the whole front of her at once, and was the easiest part of the attack to land rather than the
+hardest.
 
 That makes it a **spacing decision** rather than a damage bonus attached to a frame number:
 the body of the wing is what catches somebody who is already on top of you, and the tip is
@@ -120,20 +144,22 @@ a move that is otherwise thrown constantly, and the debug overlay draws it in it
 so it can be learned.
 
 It is its own hit shape (`moves::Shape::Wing`) rather than a swing with unusual numbers, for
-three reasons that are one reason. It is centred on the **body** rather than hung off a
-shoulder, so it wraps rather than reaches. It has a **hole**, where a swing has a haft. And it
-**starts behind her** rather than crossing her front, which is what makes it read as something
-thrown off the arm rather than as the arm itself.
+three reasons that are one reason. It is hung off a **ring** rather than off a shoulder, so it
+curves rather than reaches. It has a **hole**, where a swing has a haft. And it **starts
+behind her** rather than crossing her front, which is what makes it read as something thrown
+off the arm rather than as the arm itself.
 
 The volume is the section itself — `math::Sector`, the one thing in the game that is not a
-capsule — and the hit test and the debug overlay both read it. A straight line through a
-curve either misses the inside of it or claims the outside.
+capsule — and the hit test, the debug overlay and the arena's own drawing all read it. A
+straight line through a curve either misses the inside of it or claims the outside.
 
-Both autos share one `arc` and one reach; the arm supplies the direction it sweeps from, so
-the mirror cannot drift. The two numbers stated against her body rather than in metres — the
-inner arc at the elbow, the outer at two to three times the punch's travel — are checked
+Both autos share one `arc` and one reach and are mirrored by `Hand::outward`, so there is one
+set of numbers rather than two that can drift — but they are two rows in the Oven, and
+`crates/sim/tests/dual_mage.rs` is what fails if a tuning session moves one and not the other.
+The two statements made against her body rather than in metres — the band starting where the
+fist stops, and the tip landing two to three times as far out as the fist gets — are checked
 against the baked animation in `view/tests/kinematics.rs`, because the simulation has no idea
-where an elbow is.
+where a fist is.
 
 **The plane is the floor's while she is standing**, which is the one place this move ignores
 the camera's pitch; off the ground there is no shared floor to be parallel to and the ring

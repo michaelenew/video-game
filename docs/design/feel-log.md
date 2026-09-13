@@ -2367,3 +2367,66 @@ six frames may be too fast to read as an opening at all; the tip may be so much 
 the body of the wing that spacing for it is the only correct way to throw the move; and an
 ungated finisher with no depth scaling makes centre a perfectly good place to stand, which is
 the thing the whole class is built to punish.
+
+### 2026-09-13 — the wing became a blade, and the tip became a ball
+
+**Changed** the Dual mage's autos, on every axis of their shape. The band: `wing_inner` from
+0.16 of the reach to **0.75**, and `radius` from 0.45 m to **0.2 m**. The ring: reach from
+1.65 m to **2.1 m**, arc from 0.42 turns to **0.22**, and the middle of it moved off her — 0.3
+of the reach toward the *other* arm (`wing_offside`, new) and 0.1 of it forward (`wing_ahead`,
+new). Where it stops: 0.073 turns off her centre line toward the punching hand
+(`wing_finish`, new) instead of dead ahead. And the tip: a **bubble** of `wing_tip_radius`
+(new, 0.5 m) at the foremost point of the ring, instead of the last slice of the section.
+
+**Why** the shape was doing three things it was not meant to be doing, and each one had the
+same root — it was described as a blade and built as a region.
+
+*It was a filled disc.* The band ran from her own elbow (0.26 m) to full range on every frame.
+With the hit test's slack on top — the attack's 0.45 m plus a body's 0.5 m — the hole was
+gone entirely: the volume was a solid 150° wedge two metres across, and every part of it hit
+for the same amount. Nothing about that is a blade. Three quarters out, and a fifth as thick,
+leaves a band that is actually a band: it now comes to 0.91 m off her axis at its nearest,
+which is just past where the fist finishes, and a body still has to be roughly where the blade
+is rather than merely in the same quadrant as it.
+
+*It was a circle drawn round her feet.* The ring was centred on her, so every point of it was
+the same distance away and 150° of it wrapped most of the way around her. Shortening the arc
+alone does not fix that — a short arc on a ring you are standing in the middle of is still a
+piece of a halo. What fixes it is moving the middle: with it 0.63 m toward her other arm and
+0.21 m forward, the blade comes in at 1.5 m beside the punching fist and swings out to 2.1 m
+in front, so the distance from her *changes* along the sweep. Larger radius and a narrower
+angle then make it shallow rather than round. Those three go together; any one of them on its
+own does nothing much.
+
+*Both autos finished in the same place.* The section closed on straight ahead, so the dark and
+light punches — which are told apart by which arm threw them, and that is the entire mechanic
+— ended on the same point of her sternum. It now finishes in front of its own hand: 0.30 m off
+the centre line, where the hand is 0.18 m off it.
+
+*And the "tip" was the widest thing the move had.* It was the last 38° of the section, at full
+radius: metres of arc, catching the whole front of her, easier to land than the wing it was
+meant to be a reward for. It is a ball at the end of the blade now — one frame, half a metre,
+at the one point out in front that the wing deliberately stops short of. The spacing story
+comes out clean: inside about 1.8 m the body of the wing catches you in front, past that only
+the tip does.
+
+**Everything above is a knob**, which is the other half of this change. Four new ones in the
+Oven under *Dual mage* — `wing_offside`, `wing_ahead`, `wing_finish`, `wing_tip_radius` — and
+the three that place the ring (reach, arc, radius) were already per-move. Numbers this
+interdependent cannot be found by arithmetic; they have to be dragged while the move is in the
+air. The one trap is that reach, arc and radius are **two** rows each, one per auto, and
+moving one without the other silently unmirrors the class: `crates/sim/tests/dual_mage.rs`
+fails if that happens, but it fails at the test rather than in the moment.
+
+**The arena draws the band now**, not just its leading edge. That edge used to be a line from
+her elbow to full range, which was a reasonable stand-in for the volume; with the band thin it
+is a half-metre stub out at the rim, and the move went nearly invisible outside the debug
+overlay. `place_wings` lays twelve radial bars along `hitbox.sector` — the same shape the hit
+test reads — so the thing swept past you is the thing that decided whether you were hit.
+
+**Verdict** open, and the numbers above are a starting position rather than an answer. The
+specific worries, in order: 0.22 turns opening over six frames may now be too *little* travel
+to read as an opening at all; the band may be thin enough that the auto whiffs against a
+moving target often enough to make steering the meter frustrating, which would be the one
+failure this class cannot absorb; and a ball tip with a body's radius of slack on it may still
+be more forgiving than a tip should be.
