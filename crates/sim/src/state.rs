@@ -431,7 +431,7 @@ impl Player {
             // always satisfied for this class.
             Mechanic::Shadow(_) => true,
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
-            Mechanic::Meter { value } => value.abs() >= t::meter_deep(),
+            Mechanic::Meter { value, .. } => value.abs() >= t::meter_deep(),
             Mechanic::Forms { .. } | Mechanic::Blood => true,
         }
     }
@@ -848,15 +848,6 @@ impl World {
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
                 self.players[attacker].hit_used = true;
-                // The autos are the steering wheel, and they only steer when
-                // they land: the Dual mage's fast way back toward centre is a
-                // far-side auto, which is why the class has to close distance
-                // exactly when it is strongest. See `docs/design/dual-mage.md`.
-                if let Some(kind) = snapshot[attacker].action.attack_kind() {
-                    if steers_on_contact(snapshot[attacker].class, kind) {
-                        steer_meter(&mut self.players[attacker], kind);
-                    }
-                }
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
                 // the way you are holding, so it is a repositioning tool you
@@ -1162,6 +1153,17 @@ pub struct Hitbox {
     /// The move has already connected this swing and cannot connect again.
     /// Still drawn, because it is still visibly out.
     pub spent: bool,
+    /// Present when the volume is a **section of a ring** rather than a
+    /// capsule, which is one shape in the game: the Dual mage's wing.
+    ///
+    /// When it is here it is what the hit test uses and what the overlay draws;
+    /// `from` and `to` are then the section's **leading edge**, the line its tip
+    /// is on, so that everything which only understands a line still has a true
+    /// one to draw rather than a reconstruction of its own.
+    pub sector: Option<crate::math::Sector>,
+    /// The last frame of a wing: its edge alone, and it hits harder. See
+    /// `tuning::wing_tipper`.
+    pub tipper: bool,
 }
 
 impl Hitbox {
@@ -1209,6 +1211,8 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
+        sector: None,
+        tipper: false,
     };
     let (from, to, flat) = match m.aim() {
         // A line from her hand to the point the crosshair was on, ending
@@ -1266,42 +1270,74 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
                 (hub, hub.add(p.aim_dir().scale(out)), false)
             }
-            // A section of a torus lying flat around the caster, sweeping
-            // from behind her round to straight ahead.
+            // A section of a torus lying flat around the caster: it opens
+            // from nothing to its whole span over the active window, with its
+            // leading edge arriving straight ahead. See `moves::Shape::Wing`.
             //
-            // The volume this frame is the section's own **radius**: a line
-            // from the inner arc out to the outer one. It is not an
-            // approximation of the shape -- a radius of an annulus is
-            // straight, and it is the whole of the section at that angle. The
-            // ring is what the sweep *carves*, over the active window.
+            // The volume is the section itself rather than a line standing in
+            // for one -- `math::Sector` is the shape, and the hit test and the
+            // overlay both read it. A wing wraps around the thing that threw
+            // it, and a straight line through that either misses the inside of
+            // the curve or claims the outside of it.
             moves::Shape::Wing => {
                 // Centred on the caster's own axis, at the height her hand
-                // punches through. The wing wraps around her rather than
-                // reaching out of a shoulder, so the two arms throw mirrored
-                // halves of one ring rather than two separate volumes.
-                let hub = aim::origin(p.pos);
+                // punches through, so the two arms throw mirrored halves of one
+                // ring rather than two separate volumes.
+                let at = aim::origin(p.pos);
                 // The plane of the torus is the floor's, while her feet are on
-                // it. In the air there is no shared floor to be parallel to
-                // and the thing under the reticle really is below her, so it
-                // tilts with the aim -- the same split `moves::swing_base`
-                // already makes for a sweep thrown off the ground.
-                let plane = if p.grounded {
-                    V3::new(p.facing.x, Fx::ZERO, p.facing.z).normalized()
+                // it. In the air the section tilts with the aim -- which for a
+                // flat ring means only its height moves, because a ring lying
+                // in the aim's plane is still a ring.
+                let at = if p.grounded {
+                    at
                 } else {
-                    p.aim_dir()
+                    let climb = p.aim_dir().y.mul(m.reach);
+                    V3::new(at.x, at.y.add(climb), at.z)
                 };
-                let (through, _) = swing_progress(&m, left);
-                // Behind her on the punching arm's own side when the volume
-                // appears, and directly ahead on the last active frame, which
-                // is where the fist already is. The wing overtakes the punch.
-                let behind = m.arc.mul(Fx::from_int(m.hand.outward()));
-                let out =
-                    moves::turned(plane, behind.mul(Fx::ONE.sub(through)), moves::Plane::Flat);
-                (
-                    hub.add(out.scale(m.reach.mul(t::wing_inner()))),
-                    hub.add(out.scale(m.reach)),
-                    false,
-                )
+                let ahead = crate::math::atan2_turns(p.facing.z, p.facing.x);
+                // Signed by the arm: the section grows out of the side the
+                // punch was thrown with, and closes on straight ahead.
+                let span = m.arc.mul(Fx::from_int(m.hand.outward()));
+                // Its own progression rather than `swing_progress`, and for a
+                // reason that matters: that one saturates a frame early, so a
+                // wing would reach straight ahead on the frame *before* its
+                // last one and a body standing there would be caught by the
+                // body of the section rather than by the tip. The tip has to be
+                // the first thing to arrive in front of her or it is not a tip.
+                let elapsed = m.active.saturating_sub(left);
+                let through = Fx::ratio(elapsed as i32, m.active.max(2) as i32 - 1);
+                // **The last frame is the tip**, and it is the only thing that
+                // reaches straight ahead: the wing opens behind it and stops
+                // short, so a body standing in front of her is caught by the
+                // tip or by nothing. That is what makes it a tip rather than a
+                // damage bonus on a frame number -- landing it is a decision
+                // about distance, taken a sixth of a second earlier.
+                let tipper = left == 0;
+                let edge = span.mul(t::wing_tip());
+                let (back, front) = if tipper {
+                    (edge, Fx::ZERO)
+                } else {
+                    (span, edge.add(span.sub(edge).mul(Fx::ONE.sub(through))))
+                };
+                let sector = crate::math::Sector {
+                    at,
+                    inner: m.reach.mul(t::wing_inner()),
+                    outer: m.reach,
+                    from: ahead.add(back),
+                    to: ahead.add(front),
+                };
+                // The leading edge, for everything that can only draw a line.
+                return Some(Hitbox {
+                    from: sector.point(Fx::ZERO, Fx::ONE),
+                    to: sector.point(Fx::ONE, Fx::ONE),
+                    radius: m.radius,
+                    flat: false,
+                    hits_crouching: m.hits_crouching,
+                    unblockable: m.unblockable,
+                    spent: p.hit_used,
+                    sector: Some(sector),
+                    tipper,
+                });
             }
         },
         // At the mechanic, and *live*: the shadow can be moved while the blades
@@ -1317,6 +1353,8 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         hits_crouching: m.hits_crouching,
         unblockable: m.unblockable,
         spent: p.hit_used,
+        sector: None,
+        tipper: false,
     })
 }
 
@@ -1397,10 +1435,20 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         return None;
     }
 
-    let damage_mul = preying(attacker.class, defender.disabled());
+    // The tip of a wing, on the last frame it is out. Timing it is the one
+    // piece of execution in an attack that is otherwise thrown constantly.
+    let damage_mul = preying(attacker.class, defender.disabled()).mul(if box_out.tipper {
+        t::wing_tipper()
+    } else {
+        Fx::ONE
+    });
 
     let reach = box_out.radius.add(t::body_radius());
-    let hit_at_all = if box_out.flat {
+    let hit_at_all = if let Some(ring) = box_out.sector {
+        // A section of a ring. Its own test, because a body inside the curve is
+        // not inside the volume and a straight line cannot say so.
+        ring.touches(defender.pos, defender.hurt_height(), reach)
+    } else if box_out.flat {
         // The original rule, kept for every move that has not been given a
         // shape: flat distance from the middle of the disc, with no top and no
         // bottom. You cannot duck under one of these or jump over it.
@@ -2308,13 +2356,10 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
     shadow::begin_echo(p, kind);
-    // Committing to a cast is committing to a side, for the one class where
-    // that is the mechanic. The autos are the exception and steer on contact
-    // instead -- a whiff steers nothing, which is what makes closing to melee
-    // the fast way back toward centre. See `steer_meter`.
-    if !steers_on_contact(p.class, kind) {
-        steer_meter(p, kind);
-    }
+    // Throwing anything at all is committing to a side, for the one class
+    // where that is the mechanic. **On the press, including the autos** -- see
+    // `steer_meter` for why that stopped being on contact.
+    steer_meter(p, kind);
     if aerial {
         arm_aerial(p, kind, input);
     }
@@ -2655,9 +2700,45 @@ fn step_mechanic(p: &mut Player) {
         // See `crate::shadow`.
         Mechanic::Shadow(_) => shadow::step(p),
 
-        // Past the deep threshold the forces burn you. Relief comes from
-        // coming back inside the line, not from a reward -- see dual-mage.md.
-        Mechanic::Meter { value } => {
+        // Two different things happen at depth, and they are different on
+        // purpose. Inside the bar, past the deep threshold, the forces **burn**
+        // you and you stop it by coming back inside the line -- relief from
+        // stopping rather than from a reward, which is the containment story.
+        // Driven all the way to an end, that becomes **ascension**, which you
+        // cannot stop: it runs its clock, it costs far more, and it puts you
+        // back at the centre staggered. See `docs/design/dual-mage.md`.
+        Mechanic::Meter {
+            value,
+            colour,
+            ascending,
+        } => {
+            if ascending > 0 {
+                p.health = (p.health - t::ascension_drain().max(1)).max(1);
+                let left = ascending - 1;
+                p.mechanic = Mechanic::Meter {
+                    // Pinned while it runs: the meter is not the operative
+                    // resource during ascension, so nothing steers it.
+                    value,
+                    colour,
+                    ascending: left,
+                };
+                if left == 0 {
+                    // Spat back out at the centre. The stun is what makes
+                    // reaching the end a decision rather than a free ride --
+                    // flat for now, where the design wants it graduated by how
+                    // much damage was dealt.
+                    p.mechanic = Mechanic::Meter {
+                        value: 0,
+                        colour,
+                        ascending: 0,
+                    };
+                    p.stun_total = t::ascension_stun();
+                    p.action = Action::Stagger {
+                        left: t::ascension_stun(),
+                    };
+                }
+                return;
+            }
             let depth = value.abs();
             if depth > t::meter_deep() {
                 let over = depth - t::meter_deep();
@@ -2671,40 +2752,62 @@ fn step_mechanic(p: &mut Player) {
     }
 }
 
-/// Attacking steers the Dual mage's meter: dark darker, light lighter, and
-/// stronger moves push harder. Nothing else moves it, so every step is a
+/// Attacking steers the Dual mage's meter: dark darker, light lighter, an auto
+/// a little and a cast more. Nothing else moves it, so every step is a
 /// consequence of a decision the player made.
 ///
-/// **Which way comes from the move, not from the buttons held down** -- see
-/// `moves::dual::side`. Reading the input bits meant asking which of `shift`
-/// and `left click` won, and a move already knows which force it is made of.
+/// **On the press, every time, including the autos.** They used to steer on
+/// *contact* -- the design's own rule, and the reason for it is good: landing a
+/// far-side auto is the fast way back toward centre, which is what forces this
+/// class into melee exactly when it is most fragile. It was still wrong, and
+/// obviously so the moment anybody played it: with nothing in reach, **no
+/// button on the class moved the bar at all.** The autos hit nothing, the casts
+/// took their direction from an auto that had never landed, and the whole
+/// mechanic sat at zero. A resource you cannot move without a target is a
+/// resource you cannot learn, cannot tune, and cannot see working.
 ///
-/// A move with no side pushes you **further along whichever way you were already
-/// going**, which is the rule `docs/design/dual-mage.md` states for every input
-/// that is neither left nor right: direction comes from side-ness, and a key
-/// has none. At dead centre there is no path to push along, so it does nothing
-/// -- correctly, because leaving the middle is supposed to be a decision.
-/// Does this move steer the meter when it *lands* rather than when it is
-/// thrown?
+/// If the melee pull is wanted back it should return as a **bonus for
+/// landing** rather than as the only way to move -- see the feel log entry for
+/// 2026-09-13.
 ///
-/// The Dual mage's two autos, and nothing else in the game. Everything else
-/// votes the moment you commit to it; an auto has to connect, and a whiff
-/// steers nothing.
-fn steers_on_contact(class: Class, kind: u8) -> bool {
-    class == Class::DualMage && moves::dual::is_an_auto(kind)
-}
-
+/// **Which way comes from the force she is carrying, not from the buttons held
+/// down.** Only the autos have a side of their own, and throwing one is what
+/// sets which force she carries; everything else is made of that force. Reading
+/// the input bits instead meant asking which of `shift` and `left click` won,
+/// and a move already knows what it is made of.
 fn steer_meter(p: &mut Player, kind: u8) {
-    let Mechanic::Meter { value } = p.mechanic else {
+    let Mechanic::Meter {
+        value,
+        colour,
+        ascending,
+    } = p.mechanic
+    else {
         return;
     };
-    let push = 4 + (moves::get(p.class, kind).damage / 40);
-    let side = match moves::dual::side(kind) {
-        0 => value.signum(),
-        side => side,
+    // Nothing steers during ascension. The bar is not the resource then; the
+    // clock is.
+    if ascending > 0 {
+        return;
+    }
+    // An auto is the unit the bar is measured in, and it also *sets* which
+    // force she is carrying. Everything else moves her further, in whichever
+    // direction the last auto left her facing.
+    let (push, colour) = match moves::dual::force(kind) {
+        Some(thrown) => (t::meter_auto_push(), thrown),
+        None => (t::meter_cast_push(), colour),
+    };
+    let value = (value + push * colour.along()).clamp(-t::meter_max(), t::meter_max());
+    // Driven all the way to an end, and it takes her. There is no input for it
+    // and there never was -- you got there one cast at a time.
+    let ascending = if value.abs() >= t::meter_max() {
+        t::ascension_frames()
+    } else {
+        0
     };
     p.mechanic = Mechanic::Meter {
-        value: (value + push * side).clamp(-t::meter_max(), t::meter_max()),
+        value,
+        colour,
+        ascending,
     };
 }
 
@@ -2780,9 +2883,15 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             }
         }
         Mechanic::Blood => h.write_u32(6),
-        Mechanic::Meter { value } => {
+        Mechanic::Meter {
+            value,
+            colour,
+            ascending,
+        } => {
             h.write_u32(7);
             h.write_i32(*value);
+            h.write_i32(colour.along());
+            h.write_u32(*ascending as u32);
         }
     }
 }

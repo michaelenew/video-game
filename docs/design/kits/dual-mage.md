@@ -22,8 +22,9 @@ meaningless without it.
   push further along your current path.
 - **Power scales continuously with depth.** The same cast is weak at centre and large at
   the edge. Centre is where both forms are available and both are weak.
-- **Coming back:** cast toward the far side (slow, weak — casting against the grain) or land
-  a far-side auto (fast, but melee range only).
+- **Coming back:** throw a far-side auto. That is the only way — casts follow the force she is
+  *carrying*, and an auto is the only thing that changes which force that is. Casting against
+  the grain is not an input any more.
 - Past a depth threshold you take a burn that stops the moment you come back inside.
 
 **Ascension has no input.** It triggers when you max the bar by casting. See
@@ -37,17 +38,19 @@ Five moves, and the two on the bare clicks are the class.
 
 | Input | Move | What it is |
 | --- | --- | --- |
-| `L` | **Dark auto** | A punch with the **left** arm. Steers dark, on contact |
-| `R` | **Light auto** | The same punch with the **right** arm. Steers light, on contact |
-| `shift` + `L` | **Lance** | The committed line skillshot. Steers dark, on the press |
-| `Q` | **Judgement** | The Light finisher. Gated past the deep threshold |
-| `E` | **Sweep** | A wide cut across the whole front. No side, so it pushes you further along the path you are on |
+| `L` | **Dark auto** | A punch with the **left** arm. Steers dark by 5, and she is now dark |
+| `R` | **Light auto** | The same punch with the **right** arm. Steers light by 5 |
+| `shift` + `L` | **Lance** | The committed line skillshot. Steers 12, in whichever force she carries |
+| `Q` | **Judgement** | The finisher. **No longer gated** — see below |
+| `E` | **Sweep** | A wide cut across the whole front. Steers 12, in whichever force she carries |
 
 `shift` + `R` throws the light auto unmodified: the kit wants a light *form* of the committed
 cast there and there is not one built, so the modifier is ignored rather than made to mean
 something it does not.
 
-`cargo run -p sim --bin frametable` prints the live numbers.
+`cargo run -p sim --bin frametable` prints the live numbers, and the HUD draws the bar under
+her health: a two-poled track, filled out from the centre toward whichever end she is on, with
+the deep thresholds marked and its border in the colour of the force she is carrying.
 
 ### Why `E` carries an ability
 
@@ -58,12 +61,14 @@ recovery is a better use of it than nothing. See [../controls.md](../controls.md
 
 ## Auto attack
 
-Two autos: **left is dark, right is light**, and they **change your mode on contact** — a
-whiff steers nothing. They carry a slight range boost, powered by the beings inside, which
-matters because steering depends on connecting.
+Two autos: **left is dark, right is light**, and they **change your mode** — on the press
+since 2026-09-13, not on contact, because the contact rule left the whole mechanic immovable
+with nothing in reach. See
+[../dual-mage.md](../dual-mage.md#autos-are-the-steering-wheel), which also says what should
+come back and in what shape.
 
-The autos are the steering wheel. Landing the far-side auto is the fast way back toward
-centre, and the reason the class has to close distance exactly when it is strongest.
+They carry a slight range boost, powered by the beings inside. The autos are the steering
+wheel, and throwing the far-side one is the way back toward centre.
 
 ### They come out of the arms, and that is load-bearing
 
@@ -96,8 +101,25 @@ her**:
   the punch is a bad answer rather than the only answer;
 - the **outer arc** is two to three times further out than the fist gets, measured from that
   same elbow: about a metre and two thirds;
-- the section **appears behind her** and arrives **directly in front of the fist** on the
-  last active frame. The punch throws it and it overtakes the punch.
+- it **opens** rather than sweeps: the section starts closed behind her, on the punching arm's
+  side, and widens every frame as its leading edge comes round toward the front. That is the
+  wing — the beings inside her extending the movement past where an arm could take it — and it
+  is why the shape is an opening angle rather than a blade travelling.
+
+### The tip
+
+**The last frame is the tip alone, and it hits `tuning::wing_tipper` times as hard.**
+
+The wing opens to most of its arc and stops short; the tip covers the rest, arriving straight
+ahead on the final active frame. So the only thing that ever reaches the point directly in
+front of her at full extension is the tip, and everything the wing already opened over has
+already been swept.
+
+That makes it a **spacing decision** rather than a damage bonus attached to a frame number:
+the body of the wing is what catches somebody who is already on top of you, and the tip is
+what catches somebody who thought they were out of range. It is the one piece of execution in
+a move that is otherwise thrown constantly, and the debug overlay draws it in its own colour
+so it can be learned.
 
 It is its own hit shape (`moves::Shape::Wing`) rather than a swing with unusual numbers, for
 three reasons that are one reason. It is centred on the **body** rather than hung off a
@@ -105,9 +127,9 @@ shoulder, so it wraps rather than reaches. It has a **hole**, where a swing has 
 **starts behind her** rather than crossing her front, which is what makes it read as something
 thrown off the arm rather than as the arm itself.
 
-The volume out on any one frame is the section's own radius — a straight line from the inner
-arc to the outer one — and the ring is what the sweep carves. That is exact rather than an
-approximation: a radius of an annulus is straight.
+The volume is the section itself — `math::Sector`, the one thing in the game that is not a
+capsule — and the hit test and the debug overlay both read it. A straight line through a
+curve either misses the inside of it or claims the outside.
 
 Both autos share one `arc` and one reach; the arm supplies the direction it sweeps from, so
 the mirror cannot drift. The two numbers stated against her body rather than in metres — the
@@ -171,17 +193,23 @@ Hitting it with any other ability dashes you to the impact point, keeping moment
 | **Light** | Damages on the way up; larger with depth |
 | **Dark** | Drains everything caught inside it |
 
-## Finishers — gated by depth
+## Finishers
 
-One form each, available only past a depth threshold. They are the reason to leave centre.
+One form each. They are meant to be the reason to leave centre.
 
-**Judgement is on `Q` today**, not on `M`: `Q` is the class special on every class, the
-finisher is what this class's special *is*, and the reservation below about `M` and `LR`
-carrying the payoff moves has not been answered. Eclipse is unbuilt, and `M` and `LR` are
-still where the design intends the pair of them to live if the reservation resolves the other
-way. The gate is on **depth** rather than on depth *on Judgement's own side*, which is a
-simplification the implementation should lose when Eclipse arrives and the two need telling
-apart.
+**Judgement is on `Q`, and the depth gate is gone** — removed 2026-09-13. `Q` is the class
+special on every class and the finisher is what this class's special *is*, so gating it on
+depth meant the key did **nothing at all** for the opening of every match: a player pressing
+it had no way to tell an ability from an empty binding. A special you cannot press is not a
+special.
+
+What is lost with the gate is the finisher's status as a payoff, and that has to come back as
+*power* rather than as availability — the class's own principle is that depth scales strength
+continuously, so a Judgement thrown from the centre should be a weak one rather than a refused
+one. Nothing scales with depth yet; that is the next thing this class needs.
+
+Eclipse is unbuilt, and `M` and `LR` are still where the design intends the pair of them to
+live if the reservation below resolves that way.
 
 ### Judgement — Light
 **Startup** slow, delayed · **Recovery** committed · **Range** medium · **Mechanic** pushes
@@ -220,6 +248,9 @@ pressing, and you can read your own commitment off your own animation.
 - **What goes on `shift` + `R`?** The kit wants the light form of the committed cast; nothing
   is built, so it throws the light auto. The first class to build a two-form ability answers
   this for the whole kit.
+- **Nothing scales with depth yet.** Power scaling continuously with distance from centre is
+  the class's founding idea and none of it is built: a cast at the edge is the same cast as one
+  at the middle. With the finisher's gate gone this is the largest hole in the class.
 - **Should the wing tilt at all?** Standing, its plane is the floor's and the camera's pitch
   does not touch it — which is the shape as specified, and which means an auto thrown at
   somebody on a ledge above or below misses them by geometry rather than by aim. Airborne it

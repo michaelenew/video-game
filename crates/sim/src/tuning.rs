@@ -730,6 +730,68 @@ pub fn wing_inner() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::WingInner))
 }
 
+/// How much of a wing's span its **tip** is, on the last frame it is out.
+///
+/// The tip is the part that has just arrived, and it is the only part live on
+/// that frame -- everything behind it has already been swept. Small, because
+/// the whole point of it is that landing it is a timing decision rather than
+/// something that happens to you.
+pub fn wing_tip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingTip))
+}
+
+/// What the tip multiplies damage by.
+///
+/// The one piece of execution in an attack that is otherwise thrown constantly:
+/// a punch you can throw all day, with one frame in it that is worth waiting
+/// for.
+pub fn wing_tipper() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingTipper))
+}
+
+/// How far along the bar landing an auto moves the Dual mage.
+///
+/// The small unit. Everything else on the class is measured against it: an auto
+/// is the thing you throw constantly, so it is the thing the bar is calibrated
+/// in.
+pub fn meter_auto_push() -> i32 {
+    oven::scalar(Scalar::MeterAutoPush)
+}
+
+/// And how far a cast moves her. More than an auto, because committing to a
+/// move is committing harder to a side than poking is.
+pub fn meter_cast_push() -> i32 {
+    oven::scalar(Scalar::MeterCastPush)
+}
+
+/// How long ascension lasts, once the bar is driven all the way to an end.
+///
+/// **A clock rather than a state you have to escape.** The first version had no
+/// exit at all: reaching the end burned you until you were nearly dead and then
+/// went on burning, with nothing to do about it. The design's own answer is
+/// that the drain *is* the clock (see `docs/design/dual-mage.md`); this is that
+/// clock made literal while the rest of it is unbuilt.
+pub fn ascension_frames() -> u16 {
+    oven::scalar(Scalar::AscensionFrames) as u16
+}
+
+/// Health it costs per frame while it runs. It can never be the thing that
+/// kills you -- the same clamp the burn already had.
+pub fn ascension_drain() -> i32 {
+    oven::scalar(Scalar::AscensionDrain)
+}
+
+/// How long she is staggered when it ends.
+///
+/// The design wants this **graduated** -- shorter the closer you got to the
+/// damage threshold, so a near miss reads as a near miss. That needs a
+/// threshold to measure against and there is not one yet, so it is flat, and
+/// the flat version is still the thing that makes ascension a decision rather
+/// than a free three seconds.
+pub fn ascension_stun() -> u16 {
+    oven::scalar(Scalar::AscensionStun) as u16
+}
+
 pub fn meter_max() -> i32 {
     oven::scalar(Scalar::MeterMax)
 }
