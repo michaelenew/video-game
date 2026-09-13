@@ -349,6 +349,7 @@ scalars! {
     WingAhead,         "Dual mage", "Wing, ring centre ahead of her (x reach)", Fixed, fx(-1,1), fx(1,1);
     WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
     WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
+    ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
 }
 
 // ---------------------------------------------------------------------------
@@ -769,7 +770,11 @@ pub const MONSTER_FIELDS: usize = 23;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;
-pub const SCALAR_COUNT: usize = 230;
+/// Counted from the table rather than written down. A literal here is a second
+/// statement of how many knobs there are, and the two disagree the first time
+/// somebody appends one -- which shows up as a type error on the baked array
+/// rather than as anything that names the cause.
+pub const SCALAR_COUNT: usize = Scalar::ALL.len();
 pub const AIR_COUNT: usize = CLASSES * 4;
 /// Move storage is packed to each class's own slot count rather than to a
 /// single width. The Champion has ten moves, the Blood mage four and everybody

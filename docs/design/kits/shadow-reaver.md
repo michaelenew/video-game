@@ -80,6 +80,39 @@ which is what it used to be, and what made the class's whole setup free.
 and slowing it. **And it takes an open Guillotine lotus with it**, which is the
 combination the kit is built around — see below.
 
+#### The press answers whatever else she is doing — added 2026-09-14
+
+Two rules, and they are the same rule twice:
+
+- **It cuts a recovery short.** Press it during the tail of any move and that tail ends.
+  This is the Champion's Rush cancel, arrived at independently, and it is the second one
+  in the game.
+- **The press is remembered** for twenty-four frames, so one thrown early comes out on the
+  first frame she can spend it instead of vanishing. Being hit throws it away — the memory
+  is there so her own kit cannot eat the mechanic, and a stun is not her own kit.
+
+Every other button in this kit is an attack, and an attack eaten by another move's frames
+is the game correctly telling you that you were busy. **This one is not an attack.** It is
+where the second body stands — and the line between the two bodies is the class's escape
+from both the ordinary limits on where she can be and the ordinary limits on what she can
+reach. A mechanic the rest of her own kit can lock her out of is a mechanic sitting behind
+a timing test. It was one: sending the shadow meant waiting out a swing and then hitting a
+single frame, and chaining anything into it was a matter of luck.
+
+**What it does not do** is reach back into a startup or an active frame, or out of a stun.
+Recovery is the part that is *over* — the animation finishing, not the decision. A cancel
+that reached into the wind-up would let her take a committed swing back after throwing it,
+and one that reached into a stun would make the mechanic an escape from being hit, which
+is the opponent's reward and the only thing in the game that is meant to take the controls
+away.
+
+**And it buys tempo rather than safety**, which is why it needs no charge behind it the way
+Rush does. Send shadow costs twenty-five frames and the longest recovery it can cut short
+is Executioner's twenty-six, so the exchange nets her a single frame: she is busy for as
+long either way, and what changes is that the frames do something. The trade is a recovery
+for the mechanic, not frames bought back — a blocked Executioner goes from −12 to −11 and
+is still a punish.
+
 ### Guillotine lotus — `Q`
 **Startup** fast · **Recovery** short · **Range** at the shadow · **Mechanic** requires
 the shadow; keeps it
@@ -184,8 +217,11 @@ somewhere that gives you an escape *and* a threat at once, which are usually dif
 places — and knowing when the quarter-damage copy at your own shoulder is worth more than
 either.
 
-The two-button turn: `Q` opens the lotus wherever the shadow is standing, `E` drags it
-home through everything in between.
+The two-button turn: `Q` opens the lotus wherever the shadow is standing, right click drags
+it home through everything in between. Since right click cuts a recovery short, the turn
+does not have to wait for the lotus to finish coming out — the drag is a decision made
+inside the animation rather than after it, which is the same kind of decision the Champion
+makes with Rush.
 
 ## Open questions
 
