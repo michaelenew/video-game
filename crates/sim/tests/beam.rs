@@ -87,14 +87,31 @@ fn crosshair_onto(w: &World, want: impl Fn(&aim::Sighted) -> bool) -> Option<i16
     })
 }
 
-/// Is the crosshair on the other fighter's body?
-fn on_the_other_fighter(w: &World, seen: &aim::Sighted) -> bool {
-    let them = w.players[1].pos;
-    let girth = t::body_radius().add(metres(0.2));
-    seen.met == aim::Met::Solid
-        && seen.at.sub(them).flat_len().raw() <= girth.raw()
-        && seen.at.y.raw() > them.y.raw()
-        && seen.at.y.raw() < them.y.add(t::body_height()).raw()
+/// The pitch that puts the crosshair on the other fighter.
+///
+/// Bodies are not on the aiming ray -- they came off it on 2026-09-13, because
+/// a creature up close fills the screen and the reticle ends up on its chest
+/// three metres above the thing you meant to hit. So "the crosshair is on them"
+/// cannot be read off [`aim::Sighted`] any more, and the honest reading is the
+/// one the player would give: **the line the reticle picks goes through them.**
+///
+/// Which is what the reticle looked like it promised all along. The ray stopping
+/// on a body was only ever a way of guessing at this.
+fn crosshair_onto_the_other_fighter(w: &World) -> Option<i16> {
+    (-700..800).find_map(|step| {
+        let pitch = tenths(step);
+        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+        let met = with_scene(w, |scene| {
+            aim::first_along(
+                aim::skillshot_path(0, look, beam_reach(), scene),
+                Fx::ZERO,
+                0,
+                scene,
+                aim::Targets::none().fighters(true),
+            )
+        });
+        matches!(met, Some(aim::Contact::Fighter { index: 1, .. })).then_some(pitch)
+    })
 }
 
 /// Is it on a stone standing at `stone`?
@@ -119,7 +136,7 @@ fn the_shot_hits_whoever_the_crosshair_is_on() {
     // The headline, and the one property a player can actually check: put the
     // reticle on somebody and the shot reaches them.
     let mut w = elementalist();
-    let pitch = crosshair_onto(&w, |seen| on_the_other_fighter(&w, seen))
+    let pitch = crosshair_onto_the_other_fighter(&w)
         .expect("no angle put the crosshair on the other fighter at all");
     shoot(&mut w, pitch);
     assert!(
@@ -133,7 +150,7 @@ fn aiming_over_someone_shoots_over_them() {
     // The other half. The shot is a line at the angle it was fired, so lifting
     // the reticle off somebody lifts the shot off them too.
     let base = elementalist();
-    let pitch = crosshair_onto(&base, |seen| on_the_other_fighter(&base, seen))
+    let pitch = crosshair_onto_the_other_fighter(&base)
         .expect("no angle put the crosshair on the other fighter at all");
 
     let mut high = elementalist();
@@ -155,7 +172,7 @@ fn aiming_up_reaches_someone_standing_above_her() {
     // On the raised platform at the far end, which is a body's height up.
     w.players[1].pos = at(6.0, 1.5, 0.0);
 
-    let pitch = crosshair_onto(&w, |seen| on_the_other_fighter(&w, seen))
+    let pitch = crosshair_onto_the_other_fighter(&w)
         .expect("no angle put the crosshair on a fighter standing on the platform");
     shoot(&mut w, pitch);
     assert!(
@@ -229,7 +246,7 @@ fn the_shot_takes_the_charge_and_gives_the_frames_straight_back() {
     // hitstun, no stagger, no shove -- being poked by the auto costs you the
     // move you were holding and not your turn.
     let mut w = elementalist();
-    let pitch = crosshair_onto(&w, |seen| on_the_other_fighter(&w, seen))
+    let pitch = crosshair_onto_the_other_fighter(&w)
         .expect("no angle put the crosshair on the other fighter at all");
 
     let mut caught = None;

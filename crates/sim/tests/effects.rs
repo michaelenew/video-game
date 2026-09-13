@@ -53,21 +53,39 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
         effects: &effects,
         quarry: w.monster.as_ref(),
     };
+    // Their middle, measured from *their* feet. Not from the world's floor: a
+    // fighter standing on a platform is a metre and a half up, and aiming at
+    // half a body height above the arena floor is aiming into the platform
+    // they are standing on.
     let middle = sim::V3::new(
         target.x,
-        sim::tuning::body_height().div(sim::fixed::Fx::from_int(2)),
+        target
+            .y
+            .add(sim::tuning::body_height().div(sim::fixed::Fx::from_int(2))),
         target.z,
     );
+    // How close the *line* passes to them, rather than how close its far end
+    // lands. Bodies came off the aiming ray on 2026-09-13 -- a creature up
+    // close fills the screen and the reticle ends up on its chest, metres above
+    // the thing you meant to hit -- so a shot aimed at somebody now ends on the
+    // floor behind them and passes through them on the way. Nearest approach is
+    // what "the reticle is on them" has always meant to the player; it used to
+    // be possible to spell it as "the ray stopped there".
+    // Measured along the move's *own* flight, which is the crosshair's direction
+    // for the move's full reach -- "a blade thrown at something four metres away
+    // still flies its full distance; the crosshair picked the line." So a wall
+    // cutting the aiming ray short does not move the line the blade takes.
+    let miss = |pitch: i16| {
+        let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+        let path = sim::aim::skillshot_path(0, look, reach, &scene);
+        let dir = path.dir();
+        let toward = middle.sub(path.from);
+        let down = toward.dot(dir).max(sim::fixed::Fx::ZERO).min(reach);
+        path.from.add(dir.scale(down)).sub(middle).len().raw()
+    };
     (0..=80)
         .map(|step| -(step * 200) as i16)
-        .min_by_key(|pitch| {
-            let look = Input::looking_at(0, LOOK_RIGHT, *pitch);
-            sim::aim::skillshot_path(0, look, reach, &scene)
-                .to
-                .sub(middle)
-                .len()
-                .raw()
-        })
+        .min_by_key(|pitch| miss(*pitch))
         .expect("the scan is not empty")
 }
 
@@ -442,6 +460,12 @@ fn in_the_grasp(w: &mut World) -> i16 {
         w.players[1].pos.y,
         w.players[0].pos.z,
     );
+    // Let the world catch up before aiming. A full grasp's reach from the spawn
+    // mark lands on top of one of the raised platforms, so a fighter put there
+    // is standing a metre and a half up by the next frame -- and aiming at
+    // where they were placed rather than where they end up is aiming at the
+    // platform's flank.
+    looking(w, 2, 0, 0, 0);
     aiming_at(w, sim::state::SLOT_SPECIAL, w.players[1].pos)
 }
 
