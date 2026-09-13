@@ -176,6 +176,9 @@ fn main() {
                     place_structures,
                     place_beams,
                     place_bolts,
+                    place_debris,
+                    place_wings,
+                    place_wing_tips,
                     place_marks,
                 ),
                 beast::place,
@@ -495,6 +498,37 @@ struct BeamMesh(usize);
 #[derive(Component)]
 struct BoltMesh(usize);
 
+/// One piece of debris, thrown when Cataclysm destroys a structure.
+#[derive(Component)]
+struct DebrisMesh(usize);
+
+/// One slice of the Dual mage's wing.
+///
+/// The wing is the one attack volume in the game that is not a line, so the
+/// line-drawer above cannot show it: what it would draw is the blade's leading
+/// edge, which since the band became thin is a stub half a metre long out at
+/// the rim. A pool of radial bars laid along the section draws the band itself
+/// -- read straight off `hitbox.sector`, the same shape the hit test and the
+/// debug overlay use, so the thing you see swept past you is the thing that
+/// decided whether you were hit.
+#[derive(Component)]
+struct WingMesh {
+    owner: usize,
+    index: usize,
+}
+
+/// The last frame of the Dual mage's wing: a ball at the end of the blade.
+#[derive(Component)]
+struct WingTipMesh(usize);
+
+/// How many bars the wing is drawn with.
+///
+/// Enough that consecutive bars overlap at the arc the autos are tuned for, so
+/// the band reads as one swept ribbon rather than as a comb. Fixed, like every
+/// other mesh pool here: spawning as a move comes and goes would put allocation
+/// on the rollback path.
+const WING_SLICES: usize = 12;
+
 /// The aim marker a channelled move is wound out along.
 ///
 /// One per fighter: a channel is an action, and nobody is in two at once. It is
@@ -775,6 +809,40 @@ fn setup(
             BoltMesh(slot),
         ));
     }
+    // Debris thrown when Cataclysm destroys a structure. Stone-skinned rather
+    // than fire: it is the structure itself going out in pieces, not the
+    // blast that broke it.
+    for slot in 0..sim::debris::MAX_DEBRIS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.stone.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            DebrisMesh(slot),
+        ));
+    }
+    // The Dual mage's wing, and the ball it finishes on. Spawned for every
+    // fighter rather than for her alone, because the class is picked at runtime
+    // and can change mid-match with Tab.
+    for owner in 0..MAX_PLAYERS {
+        for index in 0..WING_SLICES {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.beam.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                WingMesh { owner, index },
+            ));
+        }
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            WingTipMesh(owner),
+        ));
+    }
+    // The aim marker a channelled move is wound out along.
     for owner in 0..MAX_PLAYERS {
         commands.spawn((
             Mesh3d(pellet.clone()),
@@ -888,7 +956,11 @@ fn place_structures(
 /// line, at the angle you aimed it, ending on whatever stopped it.
 fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut Visibility)>) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let shot = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.is_a_beam());
+        // Lines only. A volume that carries a section is a wing, and a straight
+        // line through a curve is exactly the drawing this rule exists to
+        // avoid -- `place_wings` has it.
+        let shot = sim::state::hitbox(&sim.cur.players[tag.0])
+            .filter(|hb| hb.is_a_beam() && hb.sector.is_none());
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -928,6 +1000,84 @@ fn place_bolts(sim: Res<Sim>, mut meshes: Query<(&BoltMesh, &mut Transform, &mut
         // than as a bead hanging in the air.
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
         tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+    }
+}
+
+/// Put the debris where it is, pointing the way it is going -- the same
+/// treatment `place_bolts` gives a fire bolt, and for the same reason: a
+/// shard is a thing in flight, not a bead hanging in the air.
+fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &mut Visibility)>) {
+    let radius = sim::tuning::debris_radius().to_f32_for_render();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(shard) = sim.cur.debris[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(shard.pos);
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shard.dir).normalize_or_zero());
+        tf.scale = Vec3::splat(radius * 2.0);
+    }
+}
+
+/// Draw the Dual mage's wing as the band the hit test reads.
+///
+/// One bar per slice, laid from the section's inner arc to its outer one at
+/// evenly spaced bearings, so what is drawn is the section itself rather than a
+/// reconstruction of it. The shape comes out of `state::hitbox` like everything
+/// else here: an attack that looks bigger than it hits is a promise the game
+/// does not keep, and one that looks like a fan when it is a blade is the same
+/// promise in the other direction.
+fn place_wings(sim: Res<Sim>, mut meshes: Query<(&WingMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let out = sim::state::hitbox(&sim.cur.players[tag.owner]);
+        let Some((hb, ring)) = out.and_then(|hb| hb.sector.map(|ring| (hb, ring))) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let along = tag.index as f32 / (WING_SLICES - 1) as f32;
+        let at = |from_the_inside: f32| {
+            fx3(ring.point(
+                sim::Fx::from_raw((from_the_inside * 65536.0) as i32),
+                sim::Fx::from_raw((along * 65536.0) as i32),
+            ))
+        };
+        let (inner, outer) = (at(0.0), at(1.0));
+        let across = outer - inner;
+        let depth = across.length();
+        if depth < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        tf.translation = inner + across * 0.5;
+        // The unit cylinder stands along Y, so it is turned on to the radius it
+        // is drawing -- which is a straight line even though the band is not:
+        // a radius of an annulus is the whole of the section at that bearing.
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, across / depth);
+        let width = hb.radius.to_f32_for_render();
+        tf.scale = Vec3::new(width, depth, width);
+    }
+}
+
+/// And the ball it finishes on: the tip, out for one frame at the foremost
+/// point of the ring.
+fn place_wing_tips(
+    sim: Res<Sim>,
+    mut meshes: Query<(&WingTipMesh, &mut Transform, &mut Visibility)>,
+) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let tip = sim::state::hitbox(&sim.cur.players[tag.0]).filter(|hb| hb.tipper);
+        let Some(hb) = tip else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = fx3(hb.centre());
+        // At the size it hits at, unlike the beam: the whole question the tip
+        // asks is how far out it reaches, and a drawing that shrank it would be
+        // teaching the wrong distance.
+        tf.scale = Vec3::splat(hb.radius.to_f32_for_render() * 2.0);
     }
 }
 
@@ -1080,6 +1230,23 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
     let at = fx3(effect.pos);
     match effect.kind {
         EffectKind::FirePillar if part < 2 => {
+            let (base, column) = effect.pillar_volumes();
+            let it = if part == 0 { base } else { column };
+            Some(standing(
+                Shape::Column,
+                Skin::Fire,
+                at,
+                it.radius.to_f32_for_render(),
+                it.bottom.to_f32_for_render(),
+                it.top.to_f32_for_render(),
+            ))
+        }
+        // The exact same two volumes a fire pillar draws, at its own live,
+        // moving centre instead of `effect.pos` -- see
+        // `sim::effects::Effect::tornado_pos`. Not a shape of its own: this is
+        // the point of folding the tornado into the same `Effect` a pillar is.
+        EffectKind::FireTornado if part < 2 => {
+            let at = fx3(effect.tornado_pos());
             let (base, column) = effect.pillar_volumes();
             let it = if part == 0 { base } else { column };
             Some(standing(

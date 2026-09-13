@@ -18,6 +18,7 @@ use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Ghost, Mechanic};
+use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::input::Input;
@@ -52,6 +53,11 @@ pub const SLOT_SPECIAL: u8 = 2;
 /// `E`. An ability on some classes and a state change on the rest -- see
 /// [`moves::bound`] and [`mechanic_action`].
 pub const SLOT_MECHANIC: u8 = 3;
+/// Right click, on the one other class with nothing there: the Elementalist
+/// has no shield to guard with either, and Cataclysm takes the button instead
+/// of leaving it dead. See [`clicked_move`],
+/// `crate::effects::EffectKind::FireTornado` and `crate::debris`.
+pub const SLOT_HEAVY: u8 = 3;
 pub use crate::tuning::max_health;
 
 // The Bulwark's shield and the Reaver's shadow used to keep their numbers here,
@@ -590,6 +596,10 @@ pub struct World {
     /// Fire bolts in flight. The only projectile a fighter throws that is not
     /// part of somebody's mechanic -- see [`crate::bolt`].
     pub bolts: Flight,
+    /// Debris thrown by Cataclysm destroying a structure. The same kind of
+    /// thing a fire bolt is -- a real velocity, stepped frame by frame -- and
+    /// for the same reason: see [`crate::debris`].
+    pub debris: Shrapnel,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -613,6 +623,7 @@ impl World {
             phase: Phase::Fighting,
             effects: [None; MAX_EFFECTS],
             bolts: [None; MAX_BOLTS],
+            debris: [None; MAX_DEBRIS],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -639,6 +650,7 @@ impl World {
         // Nothing in the air survives a round. A bolt still flying when the
         // last one ended would land on somebody standing on their mark.
         self.bolts = [None; MAX_BOLTS];
+        self.debris = [None; MAX_DEBRIS];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -814,10 +826,14 @@ impl World {
             }
         }
 
-        // The Elementalist's auto: a beam, resolved on the spot. See
-        // `crate::bolt` and `docs/design/kits/elementalist.md`.
+        // The Elementalist's auto and her heavy: two different beams, the same
+        // instant resolution, and never both at once for one fighter -- reset
+        // once, here, rather than in each, so neither can clobber the other's
+        // answer on the frame it is the one actually firing.
         for i in 0..MAX_PLAYERS {
+            self.players[i].beam_reach = Fx::ZERO;
             self.fire_the_beam(i);
+            self.fire_the_cataclysm(i);
         }
 
         // Hit resolution after both have stepped, so neither ordering wins.
@@ -915,6 +931,13 @@ impl World {
             self.monster.is_none(),
             &mut self.monster,
         );
+        debris::step(
+            &mut self.debris,
+            &mut self.players,
+            &standing,
+            self.monster.is_none(),
+            &mut self.monster,
+        );
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -979,6 +1002,17 @@ impl World {
                     hash_v3(&mut h, &b.pos);
                     hash_v3(&mut h, &b.dir);
                     h.write_i32(b.travelled.raw());
+                }
+                None => h.write_u32(0),
+            }
+        }
+        for d in &self.debris {
+            match d {
+                Some(d) => {
+                    h.write_u32(d.owner as u32 + 1);
+                    hash_v3(&mut h, &d.pos);
+                    hash_v3(&mut h, &d.dir);
+                    h.write_i32(d.travelled.raw());
                 }
                 None => h.write_u32(0),
             }
@@ -1059,6 +1093,12 @@ impl World {
                 h.write_i32(m.speed.raw());
                 h.write_i32(m.health);
                 h.write_i32(m.poise);
+                h.write_i32(m.strain);
+                h.write_u32(m.stride as u32);
+                h.write_u32(m.beat as u32);
+                h.write_u32(m.slowed as u32);
+                h.write_i32(m.slow_mul.raw());
+                h.write_u32(m.rooted as u32);
                 for limb in &m.part_health {
                     h.write_i32(*limb);
                 }
@@ -1073,6 +1113,9 @@ impl World {
                 h.write_u32(m.brain.think_left as u32);
                 h.write_u32(m.brain.last_move as u32);
                 h.write_u32(m.brain.repeat_left as u32);
+                for slot in &m.brain.cooldown {
+                    h.write_u32(*slot as u32);
+                }
                 h.write_u32(m.brain.rng);
             }
         }
@@ -1272,62 +1315,54 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                 let out = m.reach.mul(start.add(Fx::ONE.sub(start).mul(through)));
                 (hub, hub.add(p.aim_dir().scale(out)), false)
             }
-            // A section of a torus lying flat around the caster: it opens
+            // A section of a torus lying flat: a thin curved blade that opens
             // from nothing to its whole span over the active window, with its
-            // leading edge arriving straight ahead. See `moves::Shape::Wing`.
+            // leading edge arriving in front of the punching fist. See
+            // `moves::Shape::Wing`.
             //
             // The volume is the section itself rather than a line standing in
             // for one -- `math::Sector` is the shape, and the hit test and the
-            // overlay both read it. A wing wraps around the thing that threw
+            // overlay both read it. A wing curves around the thing that threw
             // it, and a straight line through that either misses the inside of
             // the curve or claims the outside of it.
             moves::Shape::Wing => {
-                // Centred on the caster's own axis, at the height her hand
-                // punches through, so the two arms throw mirrored halves of one
-                // ring rather than two separate volumes.
-                let at = aim::origin(p.pos);
-                // The plane of the torus is the floor's, while her feet are on
-                // it. In the air the section tilts with the aim -- which for a
-                // flat ring means only its height moves, because a ring lying
-                // in the aim's plane is still a ring.
-                let at = if p.grounded {
-                    at
-                } else {
-                    let climb = p.aim_dir().y.mul(m.reach);
-                    V3::new(at.x, at.y.add(climb), at.z)
-                };
-                let ahead = crate::math::atan2_turns(p.facing.z, p.facing.x);
-                // Signed by the arm: the section grows out of the side the
-                // punch was thrown with, and closes on straight ahead.
-                let span = m.arc.mul(Fx::from_int(m.hand.outward()));
+                let ring = moves::wing(p.pos, p.facing, p.aim_dir(), p.grounded, &m);
                 // Its own progression rather than `swing_progress`, and for a
                 // reason that matters: that one saturates a frame early, so a
-                // wing would reach straight ahead on the frame *before* its
-                // last one and a body standing there would be caught by the
-                // body of the section rather than by the tip. The tip has to be
-                // the first thing to arrive in front of her or it is not a tip.
+                // wing would reach the front on the frame *before* its last one
+                // and a body standing there would be caught by the body of the
+                // section rather than by the tip. The tip has to be the first
+                // thing to arrive in front of her or it is not a tip.
                 let elapsed = m.active.saturating_sub(left);
                 let through = Fx::ratio(elapsed as i32, m.active.max(2) as i32 - 1);
-                // **The last frame is the tip**, and it is the only thing that
-                // reaches straight ahead: the wing opens behind it and stops
-                // short, so a body standing in front of her is caught by the
-                // tip or by nothing. That is what makes it a tip rather than a
-                // damage bonus on a frame number -- landing it is a decision
-                // about distance, taken a sixth of a second earlier.
-                let tipper = left == 0;
-                let edge = span.mul(t::wing_tip());
-                let (back, front) = if tipper {
-                    (edge, Fx::ZERO)
-                } else {
-                    (span, edge.add(span.sub(edge).mul(Fx::ONE.sub(through))))
-                };
-                let sector = crate::math::Sector {
-                    at,
-                    inner: m.reach.mul(t::wing_inner()),
-                    outer: m.reach,
-                    from: ahead.add(back),
-                    to: ahead.add(front),
-                };
+                // **The last frame is the tip**: a bubble at the foremost point
+                // of the ring, and the only thing the whole move ever puts
+                // there. The wing opens behind it and stops short, so a body
+                // standing in front of her is caught by the tip or by nothing
+                // -- which is what makes landing it a decision about distance,
+                // taken a sixth of a second earlier, rather than a damage bonus
+                // attached to a frame number.
+                //
+                // A bubble rather than the last slice of the section, because a
+                // slice of a ring is metres of arc: it caught everything across
+                // the whole front of her and the "tip" was the widest part of
+                // the move. A point at the end of the blade is the thing the
+                // design has always described.
+                if left == 0 {
+                    let tip = ring.tip();
+                    return Some(Hitbox {
+                        from: tip,
+                        to: tip,
+                        radius: t::wing_tip_radius(),
+                        flat: false,
+                        hits_crouching: m.hits_crouching,
+                        unblockable: m.unblockable,
+                        spent: p.hit_used,
+                        sector: None,
+                        tipper: true,
+                    });
+                }
+                let sector = ring.opened(through);
                 // The leading edge, for everything that can only draw a line.
                 return Some(Hitbox {
                     from: sector.point(Fx::ZERO, Fx::ONE),
@@ -1338,7 +1373,7 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
                     unblockable: m.unblockable,
                     spent: p.hit_used,
                     sector: Some(sector),
-                    tipper,
+                    tipper: false,
                 });
             }
         },
@@ -1418,10 +1453,11 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     let Action::Active { kind, .. } = attacker.action else {
         return None;
     };
-    // The Elementalist's auto already happened. It is a ray fired the moment
-    // the move comes out, and what it does depends on what it met first --
-    // none of which this loop can express. See `World::fire_the_beam`.
-    if bolt::throws_a_beam(attacker, kind) {
+    // The Elementalist's auto, and her heavy, already happened. Both are a ray
+    // fired the moment the move comes out, and what either does depends on
+    // what it met first -- none of which this loop can express. See
+    // `World::fire_the_beam` and `World::fire_the_cataclysm`.
+    if bolt::throws_a_beam(attacker, kind) || throws_a_cataclysm(attacker, kind) {
         return None;
     }
     let box_out = hitbox(attacker)?;
@@ -2062,6 +2098,12 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // it displaced went to `E`, which is the one key that does not care
         // where anything is pointed. See `moves::on_e`.
         Class::ShadowReaver if input.has(Input::RIGHT) => Some(SLOT_MECHANIC),
+        // The Elementalist breaks it the same way for the same reason: no
+        // shield, so right click is otherwise dead. Cataclysm is aimed like
+        // the auto, along the crosshair, so it belongs on the mouse and not
+        // on a key -- see `crate::debris` and
+        // `crate::effects::EffectKind::FireTornado`.
+        Class::Elementalist if input.has(Input::RIGHT) => Some(SLOT_HEAVY),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
                 SLOT_COMMITTED
@@ -3181,6 +3223,12 @@ impl World {
                         .mul(preying(Class::ShadowReaver, beast.disabled()))
                         .to_int();
                     beast.take_hit(part, raw);
+                    // The recall's slow, offered the same way everything else
+                    // is. It is half the reason to recall through something.
+                    beast.take_control(monster::Control::slowing(
+                        t::slow_frames(),
+                        t::shadow_recall_slow(),
+                    ));
                     self.monster = Some(beast);
                     shadow::mark_cut(&mut self.players[owner], QUARRY_VICTIM);
                 }
@@ -3289,7 +3337,13 @@ impl World {
                     effect.home = aim::origin(owner.pos);
                 }
             }
-            if effect.age >= effect.life {
+            // A tornado also burns out the moment it leaves the arena, on top
+            // of its own clock -- the one effect whose centre can actually
+            // wander off the map, since every other one is either planted or
+            // tethered to a fighter who cannot.
+            let outside_the_world =
+                effect.kind == EffectKind::FireTornado && !arena::inside(effect.tornado_pos());
+            if effect.age >= effect.life || outside_the_world {
                 self.effects[i] = None;
                 self.pay_out(&effect);
                 continue;
@@ -3340,24 +3394,43 @@ impl World {
     fn apply_effect(&mut self, effect: &mut Effect) {
         match effect.kind {
             EffectKind::FirePillar => {
-                if !effect.ticks_now() {
-                    return;
+                if effect.ticks_now() {
+                    self.burn_the_pillar(effect, effect.pos);
+                }
+            }
+
+            // The exact same burn a standing pillar gives -- same two
+            // volumes, same tick, same number -- centred on the tornado's own
+            // live position instead of the spot it was cast on. The pull is
+            // the only thing that is actually new: everyone caught in either
+            // volume is hauled toward that live centre for as long as they
+            // are standing in it, on top of whatever the burn does to them.
+            // See `crate::effects::EffectKind::FireTornado`.
+            EffectKind::FireTornado => {
+                let at = effect.tornado_pos();
+                if effect.ticks_now() {
+                    self.burn_the_pillar(effect, at);
                 }
                 let (base, column) = effect.pillar_volumes();
                 let radius = t::body_radius();
                 let height = t::body_height();
                 for i in 0..MAX_PLAYERS {
                     let p = self.players[i];
-                    if !self.effects_reach(i, effect.owner) {
+                    if !self.effects_reach(i, effect.owner)
+                        || (!base.contains(at, p.pos, radius, height)
+                            && !column.contains(at, p.pos, radius, height))
+                    {
                         continue;
                     }
-                    if base.contains(effect.pos, p.pos, radius, height)
-                        || column.contains(effect.pos, p.pos, radius, height)
-                    {
-                        self.drain(i, effect);
+                    let apart = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z));
+                    let dist = apart.flat_len();
+                    if dist.raw() > 0 {
+                        let inward = apart.normalized();
+                        let pull = t::tornado_pull().mul(DT);
+                        self.players[i].vel.x = self.players[i].vel.x.sub(inward.x.mul(pull));
+                        self.players[i].vel.z = self.players[i].vel.z.sub(inward.z.mul(pull));
                     }
                 }
-                self.feed_the_caster(effect, 0, effect.pos, base.radius);
             }
 
             // Drain *and* slow. The slow is the part that matters: damage alone
@@ -3519,6 +3592,28 @@ impl World {
             && p.pos.y.raw() <= at.y.add(radius).raw()
     }
 
+    /// One tick of a fire pillar's burn, centred on `at` -- the pillar's own
+    /// `pos` normally, or a tornado's live, moving one. Shared so that a
+    /// tornado's tick is not a second copy of a pillar's own numbers with a
+    /// chance to disagree with them; see `crate::effects::EffectKind::FireTornado`.
+    fn burn_the_pillar(&mut self, effect: &mut Effect, at: V3) {
+        let (base, column) = effect.pillar_volumes();
+        let radius = t::body_radius();
+        let height = t::body_height();
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if !self.effects_reach(i, effect.owner) {
+                continue;
+            }
+            if base.contains(at, p.pos, radius, height)
+                || column.contains(at, p.pos, radius, height)
+            {
+                self.drain(i, effect);
+            }
+        }
+        self.feed_the_caster(effect, 0, at, base.radius);
+    }
+
     /// One tick of a field. Damage, and the caster's share of it straight back.
     ///
     /// Paid on the tick rather than banked to the end, which is the whole
@@ -3624,6 +3719,10 @@ impl World {
             .mul(preying(effect.class, beast.disabled()))
             .to_int();
         let dealt = beast.take_hit(struck, raw);
+        // The same control a fighter would have taken, offered rather than
+        // applied: the creature decides how much of it it is currently in a
+        // state to feel. See `monster::Monster::take_control`.
+        beast.take_control(effect.control());
         self.monster = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
@@ -3770,11 +3869,17 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     }
     p.crouching = input.has(Input::CROUCH) && p.action.actionable();
 
-    // The buck. Acceleration is read in body space, where the surface normal is
-    // simply `+y`, and the part of it pressing the rider *into* the surface does
-    // not count -- being shoved down onto something is not being thrown off it.
-    let stance = beast.stance();
-    let felt = stance.dir_to_body(accel);
+    // The buck. Acceleration is read in the frame of **the part underfoot**,
+    // where that surface's normal is simply `+y`, and the part of it pressing
+    // the rider *into* the surface does not count -- being shoved down onto
+    // something is not being thrown off it.
+    //
+    // The part's frame rather than the body's, because the creature is a
+    // skeleton: a tail that whips throws whoever is on the tail and does
+    // nothing to somebody standing on the shoulder, and reading both in one
+    // shared frame is how that distinction gets lost.
+    let rig = beast.rig();
+    let felt = rig.dir_to_part(part, accel);
     // `big_len`, not `len`: these are accelerations in the hundreds, and a
     // squared 16.16 value saturates just past 181. The first version of this
     // used `len` and reported 181 for every buck in the game, so nothing ever
@@ -3788,7 +3893,7 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     if p.grip_settle > 0 {
         p.grip_settle -= 1;
     } else if throw.raw() > grip.raw() {
-        thrown_off(p, &stance, surface);
+        thrown_off(p, &rig, part, surface);
         return;
     }
 
@@ -3840,20 +3945,28 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     if input.has(Input::SPACE) && p.action.actionable() {
         let mob = p.class.mobility();
         p.mount = monster::NO_PART;
-        p.vel = surface.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
+        // **What the leap carries is capped.** You take the surface's own
+        // velocity with you -- that is what makes stepping off a charging
+        // animal work -- but only as much of it as you had time to push off
+        // against. Without the cap, jumping during a shake means being flung by
+        // a back that is whipping sideways at forty metres a second, and the
+        // one answer to the buck that is neither bracing nor leaving would not
+        // exist. See `tuning::leap_carry`.
+        let carried = carry_off(surface);
+        p.vel = carried.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
         p.grounded = false;
         p.air_dodged = false;
         p.jump_hold = t::jump_hold_frames();
         return;
     }
 
-    // Movement, in the creature's frame. The wish direction arrives
+    // Movement, in the frame of the part underfoot. The wish direction arrives
     // camera-relative as it always does; `carry_yaw` has already turned the
     // camera with the animal, so "forward" still means the same part of its
     // back that it did before it turned.
     let (ax, az) = input.move_axis();
     let speed = rider_speed(p);
-    let wish = stance.dir_to_body(move_dir(p.aim(input), ax, az));
+    let wish = rig.dir_to_part(part, move_dir(p.aim(input), ax, az));
     let mut next = held;
     next.x = next.x.add(wish.x.mul(speed).mul(DT));
     next.z = next.z.add(wish.z.mul(speed).mul(DT));
@@ -3869,21 +3982,29 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
         .stride
         .wrapping_add(walked.div(stride_length(p)).raw().clamp(0, 65535) as u16);
 
-    // A step you can walk up. The creature is terrain, and the tail sits two
-    // thirds of a metre below the back: without this the only way between them
-    // is a jump nobody would think to try.
-    let mut probe = next;
-    probe.y = probe.y.add(t::step_up());
-    if let Some((up, top)) = beast.surface_under(beast.world_of(part, probe), radius) {
-        if up != part {
-            let mut rest = beast.rest_frame(up, beast.world_of(part, probe));
-            rest.y = top;
-            p.mount = up as u8;
-            p.local = rest;
-            p.pos = beast.world_of(up, rest);
-            p.grip_settle = t::mount_settle() as u8;
-            return;
-        }
+    // A step you can walk up. The creature is terrain rather than a set of
+    // ledges, and the climb from the tail to the nape crosses five parts: a
+    // rider who had to jump every seam would never make it past the first one.
+    //
+    // Asked as a band that reaches **upward only**: from the feet to a full
+    // step above them. Letting it reach downward as well made a rider standing
+    // where two treads overlap step onto the lower one, then onto the higher
+    // one, then back, once a frame -- and every swap moves them a few
+    // centimetres, which the buck reads as an enormous acceleration and throws
+    // them for. Descending is the ordinary landing test's job, a few lines
+    // below. See `Rig::surface_within`.
+    let stepped = beast
+        .rig()
+        .surface_within(beast.world_of(part, next), radius, Fx::ZERO, t::step_up())
+        .filter(|(up, _)| *up != part);
+    if let Some((up, top)) = stepped {
+        let mut rest = beast.rest_frame(up, beast.world_of(part, next));
+        rest.y = top;
+        p.mount = up as u8;
+        p.local = rest;
+        p.pos = beast.world_of(up, rest);
+        p.grip_settle = t::mount_settle() as u8;
+        return;
     }
 
     let moved = beast.resolve(beast.world_of(part, next), radius, t::body_height());
@@ -3910,10 +4031,10 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
         None => {
             // Walked off the edge. You leave with whatever the surface was
             // doing, which is why stepping off a turning animal throws you
-            // wide.
+            // wide -- capped the same way a jump is, and for the same reason.
             p.mount = monster::NO_PART;
             p.pos = moved.pos;
-            p.vel = surface;
+            p.vel = carry_off(surface);
             p.grounded = false;
         }
     }
@@ -3975,15 +4096,32 @@ fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
     p.grip_settle = t::mount_settle() as u8;
 }
 
+/// How much of the surface's momentum you take with you when you leave it.
+///
+/// See `tuning::leap_carry` for why this is capped at all. The direction is
+/// kept and only the magnitude is clipped, so a leap off a charging animal
+/// still goes the way the animal was going.
+fn carry_off(surface: V3) -> V3 {
+    let speed = crate::math::big_len(surface);
+    let cap = t::leap_carry();
+    if speed.raw() <= cap.raw() || speed.raw() <= 0 {
+        return surface;
+    }
+    surface.scale(cap.div(speed))
+}
+
 /// Lose your footing.
 ///
 /// You leave with the velocity the surface had, capped, plus a push along the
 /// creature's own up axis. The cap is what keeps a shake from firing someone
 /// over the arena wall.
-fn thrown_off(p: &mut Player, stance: &monster::Stance, surface: V3) {
+fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
     let flat = V3::new(surface.x, Fx::ZERO, surface.z);
     let speed = flat.flat_len().min(t::throw_kick());
-    let up = stance.dir_to_world(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    // Up off the patch of animal you were standing on, not up off the animal.
+    // On a skeleton those differ, and being thrown off a tail that is pointing
+    // at the floor should not fire you into the ceiling.
+    let up = rig.of(part).rot.apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
     p.mount = monster::NO_PART;
     p.vel = flat
         .normalized()
@@ -3995,6 +4133,9 @@ fn thrown_off(p: &mut Player, stance: &monster::Stance, surface: V3) {
     p.action = Action::HitStun {
         left: t::throw_stun(),
     };
+    // The fall. See `tuning::throw_damage`: the back is safe from everything
+    // the creature swings, so the buck has to be what the ride costs.
+    p.health = (p.health - t::throw_damage()).max(0);
 }
 
 /// Come off because something else decided it, rather than because you lost
@@ -4027,7 +4168,6 @@ impl World {
     /// lights all happen on the frame the move comes out; the fire bolt is the
     /// only part with a speed, and it starts at the pillar rather than at her.
     fn fire_the_beam(&mut self, i: usize) {
-        self.players[i].beam_reach = Fx::ZERO;
         let shooter = self.players[i];
         let Action::Active { kind, .. } = shooter.action else {
             return;
@@ -4097,6 +4237,150 @@ impl World {
             None => {}
         }
     }
+
+    /// Fire Cataclysm, if this fighter has it out.
+    ///
+    /// Structurally the same trick the auto is: an instant line, resolved on
+    /// the spot rather than by the hitbox loop, because what it does depends
+    /// on what it meets first and none of the three answers is a bubble that
+    /// lives for a few frames in front of her body. What it *does* on each
+    /// answer is her heavy's own, not the auto's -- a fighter takes a real hit
+    /// instead of a poke, a structure is destroyed rather than kicked, and a
+    /// fire pillar is torn loose into a travelling tornado rather than merely
+    /// charging the shot. See `docs/design/kits/elementalist.md`.
+    fn fire_the_cataclysm(&mut self, i: usize) {
+        let shooter = self.players[i];
+        let Action::Active { kind, .. } = shooter.action else {
+            return;
+        };
+        if !throws_a_cataclysm(&shooter, kind) || shooter.health <= 0 {
+            return;
+        }
+
+        let beam = beam_of(&shooter);
+        let m = moves::get(shooter.class, kind);
+        let field = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let beast = self.monster;
+        let versus = beast.is_none();
+        let scene = Scene {
+            stones: &field,
+            players: &seen,
+            effects: &effects,
+            quarry: beast.as_ref(),
+        };
+        let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
+
+        self.players[i].beam_reach = met.map_or(beam.length(), |c| c.dist());
+        if shooter.hit_used {
+            return;
+        }
+
+        match met {
+            // A real hit, not the auto's no-stagger poke: this is the class's
+            // heaviest single swing, and it costs a long wind-up to throw.
+            Some(Contact::Fighter { index, .. }) => {
+                let victim = self.players[index];
+                let (guarding, parried) = guard_against(&victim, shooter.pos, m.unblockable);
+                apply_hit(
+                    &mut self.players[index],
+                    Hit {
+                        damage: m.damage,
+                        hitstun: m.hitstun,
+                        blockstun: m.blockstun,
+                        knockback: m.knockback,
+                        launch: Fx::ZERO,
+                        grabs: 0,
+                        by: i as u8,
+                        dir: beam.dir(),
+                        blocked: guarding,
+                        parried,
+                    },
+                );
+                if parried {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[index].parried = PARRY_FLOURISH;
+                }
+                self.players[i].hit_used = true;
+            }
+            // Broken outright, and thrown outward as debris rather than
+            // detonated on the spot -- see `crate::debris`.
+            Some(Contact::Stone { index, .. }) => {
+                if let Some(at) = stones::destroy(&mut self.players, index) {
+                    debris::blast(&mut self.debris, i as u8, at, beam.dir());
+                }
+                self.players[i].hit_used = true;
+            }
+            // Not charged -- torn loose. The same `Effect`, the same two
+            // volumes, now moving. See
+            // `crate::effects::EffectKind::FireTornado`.
+            Some(Contact::Fire { dist }) => {
+                let at = beam.at(dist);
+                if let Some(slot) = fire_pillar_slot_at(&self.effects, at) {
+                    if let Some(effect) = self.effects[slot].as_mut() {
+                        effect.kind = EffectKind::FireTornado;
+                        effect.dir = beam.dir();
+                        effect.age = 0;
+                        effect.life = EffectKind::FireTornado.life().max(1);
+                        effect.struck = 0;
+                    }
+                }
+                self.players[i].hit_used = true;
+            }
+            Some(Contact::Quarry { part, .. }) => {
+                if let Some(mut beast) = self.monster {
+                    beast.take_hit(part, m.damage);
+                    self.monster = Some(beast);
+                    self.players[i].hit_used = true;
+                }
+            }
+            None => {}
+        }
+    }
+}
+
+/// Is this the Elementalist's heavy?
+///
+/// The same shape of question `bolt::throws_a_beam` asks, and for the same
+/// reason: being a skillshot decides how the move is aimed, not what it does
+/// when it lands, so the slot has to be checked too. See `moves::SLOT_HEAVY`.
+fn throws_a_cataclysm(p: &Player, kind: u8) -> bool {
+    p.class == Class::Elementalist
+        && kind == SLOT_HEAVY
+        && moves::get(p.class, kind).aim() == aim::Kind::Skillshot
+}
+
+/// Which fire pillar a point sits inside, if any.
+///
+/// `aim::Contact::Fire` says a shot met fire and how far along its path, not
+/// which of the (at most two, one per fighter) pillars on the field it was --
+/// that bookkeeping already happens once inside `aim::first_along`, and
+/// redoing the search here rather than threading an index back out of it is
+/// the smaller change against a module that fails the build if anything but
+/// `crate::aim` reaches for its own intersection arithmetic.
+///
+/// Nearest by flat distance to its own centre, rather than strict containment:
+/// the contact point is where the shot entered the pillar's radius *plus its
+/// own girth*, which sits just outside the pillar's true footprint, so a
+/// contains-test tuned to the bare radius misses the very point that found it.
+fn fire_pillar_slot_at(effects: &[Option<Effect>; MAX_EFFECTS], at: V3) -> Option<usize> {
+    effects
+        .iter()
+        .enumerate()
+        .filter_map(|(i, slot)| {
+            let e = (*slot)?;
+            (e.kind == EffectKind::FirePillar).then_some((i, e))
+        })
+        .min_by_key(|(_, e)| {
+            V3::new(at.x.sub(e.pos.x), Fx::ZERO, at.z.sub(e.pos.z))
+                .flat_len()
+                .raw()
+        })
+        .map(|(i, _)| i)
 }
 
 // ---------------------------------------------------------------------------
@@ -4117,7 +4401,7 @@ impl World {
             let m = monster::attack(kind);
             let anchor = beast
                 .hit_volume()
-                .map(|(a, _, _, _)| beast.stance().to_world(a))
+                .map(|(a, _, _, _)| a)
                 .unwrap_or(beast.pos);
             let mut landed = false;
             for i in 0..MAX_PLAYERS {
@@ -4192,11 +4476,22 @@ impl World {
             let Some(part) = part_under(&beast, &attacker, &box_out) else {
                 continue;
             };
-            let raw = Fx::from_int(moves::get(attacker.class, kind).damage)
+            let m = moves::get(attacker.class, kind);
+            let raw = Fx::from_int(m.damage)
                 .mul(preying(attacker.class, beast.disabled()))
                 .to_int();
             let dealt = beast.take_hit(part, raw);
-            self.players[i].heal(moves::get(attacker.class, kind).leeched(dealt));
+            // An uppercut does not put thirteen metres of animal in the air and
+            // a grab does not drag it anywhere, but throwing one at a creature
+            // that is already reeling should still be a decision -- so the move
+            // offers what it would have done to a fighter and the creature
+            // takes what it can. Nothing at all, unless it is susceptible.
+            beast.take_control(monster::Control {
+                launch: m.launch,
+                grabs: m.grabs,
+                ..monster::Control::default()
+            });
+            self.players[i].heal(m.leeched(dealt));
             self.players[i].hit_used = true;
         }
 

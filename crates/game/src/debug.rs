@@ -70,20 +70,21 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         // The live attack volume, straight from the simulation rather than
         // rebuilt here. Only during active frames: if you can see it, it is out.
         if let Some(hb) = sim::state::hitbox(&sim.cur.players[i]) {
-            let colour = hitbox_colour(hb.hits_crouching, hb.spent);
+            // The tip -- the last frame of a wing, which hits harder -- gets its
+            // own colour wherever it is drawn, because "did that connect on the
+            // tip" is exactly the question this overlay exists to answer. It is
+            // a bubble rather than a section, so it comes out of the capsule
+            // branch below and the colour has to be decided before the shape is.
+            let colour = if hb.tipper {
+                TIPPER
+            } else {
+                hitbox_colour(hb.hits_crouching, hb.spent)
+            };
             let radius = hb.radius.to_f32_for_render();
             if let Some(ring) = hb.sector {
                 // A section of a ring, drawn as the section the hit test reads
-                // rather than as the line that stands in for it elsewhere. The
-                // tip -- the last frame of a wing, which hits harder -- is
-                // drawn in its own colour, because "did that connect on the
-                // tip" is exactly the question this overlay exists to answer.
-                sector(
-                    &mut gizmos,
-                    &ring,
-                    radius,
-                    if hb.tipper { TIPPER } else { colour },
-                );
+                // rather than as the line that stands in for it elsewhere.
+                sector(&mut gizmos, &ring, radius, colour);
             } else if hb.flat {
                 // A cylinder, not a sphere, for the moves that still use the
                 // flat rule. Their test compares *flat* distance and says
@@ -145,12 +146,39 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
         gizmos.line(at, at + v3(shot.dir) * (radius * 4.0), PILLAR);
     }
 
+    // Debris in flight, the same treatment. Each piece is its own hit test
+    // and the overlay says so, rather than drawing the blast as a single
+    // shape the way the old instant cone did.
+    for shard in sim.cur.debris.iter().flatten() {
+        let at = v3(shard.pos);
+        let radius = sim::tuning::debris_radius().to_f32_for_render();
+        gizmos.sphere(Isometry3d::from_translation(at), radius, PILLAR);
+        gizmos.line(at, at + v3(shard.dir) * (radius * 4.0), PILLAR);
+    }
+
     // Persistent effects, drawn as the volumes the simulation tests against --
     // the fire pillar's two slabs separately, because they are two threats.
     for effect in sim.cur.effects.iter().flatten() {
         let at = v3(effect.pos);
         match effect.kind {
             EffectKind::FirePillar => {
+                let (base, column) = effect.pillar_volumes();
+                for slab in [base, column] {
+                    let bottom = slab.bottom.to_f32_for_render();
+                    let top = slab.top.to_f32_for_render();
+                    cylinder(
+                        &mut gizmos,
+                        at + Vec3::Y * bottom,
+                        slab.radius.to_f32_for_render(),
+                        (top - bottom).max(0.01),
+                        PILLAR,
+                    );
+                }
+            }
+            // The same two volumes, at the tornado's own live centre rather
+            // than `effect.pos` -- see `Effect::tornado_pos`.
+            EffectKind::FireTornado => {
+                let at = v3(effect.tornado_pos());
                 let (base, column) = effect.pillar_volumes();
                 for slab in [base, column] {
                     let bottom = slab.bottom.to_f32_for_render();

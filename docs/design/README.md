@@ -86,7 +86,7 @@ few enough to balance and to read in third person.
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
-| [monsters.md](monsters.md) | The Ridgeback: the ride, the control algorithm, measuring the fight | Proposed, built |
+| [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
@@ -185,8 +185,15 @@ family and searchable, adjusting live. The bake button writes them to `crates/si
 and pushes on the current branch, so a tuning session ends as a reviewable diff.
 `cargo run -p sim --bin bake_tuning` does the same without launching the game.
 
-**Animation:** `cargo run -p anim --bin bake` regenerates the baked clips from the recipes
-in `crates/anim/src/bin/bake.rs`. F2 toggles baked playback in-game.
+**Animation:** `cargo run -p anim --bin bake` regenerates the fighters' baked clips from the
+recipes in `crates/anim/src/clips/`. F2 toggles baked playback in-game. The Ridgeback has its
+own rig and its own bake -- `cargo run -p anim --bin bake_beast`, recipes in
+`crates/anim/src/beast/` -- because its parts are simulation geometry rather than
+presentation. See [animation.md](animation.md) §"The creature has its own rig".
+
+**The creature's geometry:** `cargo run -p sim --bin beastcheck` prints how high everything you
+can stand on is, in every state that lowers one, against how high a fighter can actually jump.
+The climb is a geometry problem and this is the geometry.
 
 ## 7 · The feel harness
 
@@ -208,9 +215,10 @@ decision, and belongs in a test.
 ## 8 · Next
 
 1. **Play it against a person.** Everything else is downstream of that — and the
-   Ridgeback needs it twice over: whether the climb reads as the fight or as a way
-   to skip it is not a thing the harness can answer. See
-   [monsters.md](monsters.md) §6.
+   Ridgeback needs it twice over. The climb now costs something to reach, and
+   whether the reward is worth the trip, whether anyone finds the tail hop, and
+   whether the ground game reads as a phase or as a toll are not things the
+   harness can answer. See [monsters.md](monsters.md) §9.
 2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
    whether the 4-frame parry window is findable by a human.
 3. Fill out the kits beyond three moves per class.

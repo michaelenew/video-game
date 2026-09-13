@@ -52,14 +52,18 @@ pub type Flight = [Option<FireBolt>; MAX_BOLTS];
 
 /// Is this the Elementalist's auto?
 ///
-/// Two conditions rather than one, and the second is not redundant. Being a
-/// skillshot is what decides how the move is *aimed* and is a property of the
-/// move table, so another class could be given one tomorrow. What the shot
-/// *does* when it lands -- poke, kick a stone, light a pillar -- is this class's
-/// alone. A second skillshot wants its own answer here, not this one by
-/// default.
+/// Three conditions rather than one, and the last two are not redundant. Being
+/// a skillshot is what decides how the move is *aimed* and is a property of
+/// the move table, so another class could be given one tomorrow. What the shot
+/// *does* when it lands -- poke, kick a stone, light a pillar -- is this
+/// class's alone, and it is specifically the poke's: Cataclysm is a second
+/// skillshot on the same class, aimed the same way and resolved the same way
+/// structurally, but what it does when it lands is `crate::debris`'s and
+/// `crate::effects::EffectKind::FireTornado`'s answer, not this one.
 pub fn throws_a_beam(p: &Player, kind: u8) -> bool {
-    crate::moves::get(p.class, kind).aim() == aim::Kind::Skillshot && p.class == Class::Elementalist
+    crate::moves::get(p.class, kind).aim() == aim::Kind::Skillshot
+        && p.class == Class::Elementalist
+        && kind == crate::state::SLOT_POKE
 }
 
 /// What the beam can run into: bodies, stones, and fire.

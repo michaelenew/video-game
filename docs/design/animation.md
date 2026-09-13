@@ -452,6 +452,64 @@ Two diagnostics are worth knowing about when a clip is not behaving:
   thing a body does. Six or seven per cent means a grip or a foot target wants
   moving a few centimetres closer.
 
+## The creature has its own rig
+
+The Ridgeback goes through the same factory and almost none of the same code,
+and the difference is worth stating because it decides where everything lives.
+
+```
+crates/sim/src/beast.rs          The frame: eighteen bones, eighteen part boxes
+crates/anim/src/beast/mod.rs     The factory, pointed at that frame
+crates/anim/src/beast/clips.rs   The content
+crates/sim/src/beast_baked.rs    GENERATED -- the table the game reads
+cargo run -p anim --bin bake_beast
+```
+
+**Its skeleton is in `sim`, not in `view`.** A fighter's hitboxes are described
+separately from their skeleton (`state::hitbox`), so the skeleton is pure
+presentation and belongs in the renderer. The creature is the other way round:
+its parts *are* its geometry -- what you collide with, what you can stand on,
+what your attacks land on -- so the boxes must be where the simulation can see
+them, and so must the bones that move them. That also means the table is fixed
+point, and that the renderer draws the boxes the simulation places rather than
+rebuilding them.
+
+**Its table is indexed by phase rather than by frame.** An attack bakes as three
+runs of thirty-two samples -- startup, active, recovery -- read independently at
+runtime, so retuning a move in the Oven stretches its animation with it. The
+fighters' clips take their length from the move table at bake time instead,
+which is the same goal reached from the other end; the creature needs the
+runtime version because its frame data is the thing most often dragged.
+
+**Its sample count is a gameplay number.** Samples are read back with a straight
+lerp, so every join is a corner in position and therefore a spike in
+*acceleration* -- and acceleration is precisely what the creature's grip test
+measures to decide whether a rider stays on. At twelve samples a thirty-four
+frame shake put three frames between corners and threw braced riders on single
+frames that had nothing to do with how hard the animal was moving. This is the
+one place in the project where "how densely is the animation stored" is a
+balance question.
+
+The same lesson in a second place: **two keys at the same instant with different
+poses are a step rather than a motion**, and a step is an arbitrarily large
+acceleration. The shake had its last startup key and its first whip key both
+sitting exactly on the phase boundary.
+
+Three things about authoring a quadruped that were not obvious:
+
+- **The legs are a phase function, not keys.** Four legs times two joints times
+  eight keys is sixty-four numbers nobody can hold in their head, and what makes
+  a gait read is the *relationship* between them -- which a function states and
+  a table of numbers only implies. `stride` in `beast/clips.rs`.
+- **A walk and a gallop are different cycles**, not one cycle at two speeds. A
+  walk is a four-beat lateral sequence with three feet down at all times; a
+  gallop is a gather and a throw with real suspension. Using the same footfall
+  order faster is what makes a horse in a bad game look like a table sliding.
+- **The tail's sign is flipped in the helper.** It extends *backwards* from its
+  bones, so nose-up on a tail bone points the tail at the sky. `Pose::tail`
+  takes a `lift` where positive is up, and the flip lives there -- the same way
+  the left-right mirror lives in the skeleton rather than in every pose.
+
 ## Not yet
 
 - **Mechanic animations.** Throwing the shield, and changing form. They need a

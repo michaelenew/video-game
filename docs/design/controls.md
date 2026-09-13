@@ -716,6 +716,7 @@ differentiation.
 | --- | --- |
 | `L` | Ranged auto — a beam along the crosshair, and whatever it meets first |
 | `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
+| right click | **Cataclysm.** A slow, long-range heavy along the same beam: breaks a structure into thrown debris, turns a fire pillar into a travelling tornado, or lands a real hit on a fighter |
 | direction + click | Fissure, Quake, Ice blast |
 | `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |
 

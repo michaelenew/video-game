@@ -24,6 +24,7 @@
 //! shipped frame calls it.
 
 pub mod bake;
+pub mod beast;
 pub mod chain;
 pub mod clips;
 pub mod ease;

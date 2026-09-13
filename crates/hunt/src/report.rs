@@ -81,6 +81,16 @@ pub struct Report {
     pub ridge_hits: u32,
     pub topples: u32,
     pub legs_broken: u32,
+    /// Damage put into the four feet, and into the worst-hit one of them.
+    ///
+    /// It exists because "legs broken: 0" is two completely different findings
+    /// -- the hunter never swung at a leg, or it swung at them constantly and
+    /// they are too tough -- and nothing else in the report tells them apart.
+    /// The ground game is the only way onto the animal that does not need a
+    /// platform or a piece of luck, so a hunt that never touches a foot is a
+    /// hunt playing half the fight.
+    pub foot_damage: i32,
+    pub worst_foot: i32,
 
     /// How much of the arena the fight used.
     lo: V3,
@@ -132,6 +142,8 @@ impl Report {
             ridge_hits: 0,
             topples: 0,
             legs_broken: 0,
+            foot_damage: 0,
+            worst_foot: 0,
             lo: V3::ZERO,
             hi: V3::ZERO,
             spread: Fx::ZERO,
@@ -221,6 +233,13 @@ impl Report {
         for part in 0..monster::PARTS {
             if was.part_health[part] > 0 && now.part_health[part] <= 0 {
                 self.legs_broken += 1;
+            }
+            let into = (was.part_health[part] - now.part_health[part]).max(0);
+            self.foot_damage += into;
+            if now.part_health[part] < was.part_health[part] {
+                self.worst_foot = self
+                    .worst_foot
+                    .max(sim::tuning::limb_health() - now.part_health[part]);
             }
         }
         if now.poise > was.poise {
@@ -555,6 +574,18 @@ impl Report {
             "poise broken",
         );
         line(&mut out, "legs broken", format!("{}", self.legs_broken), "");
+        line(
+            &mut out,
+            "damage into feet",
+            format!("{}", self.foot_damage),
+            "the ground game",
+        );
+        line(
+            &mut out,
+            "worst foot",
+            format!("{} of {}", self.worst_foot, sim::tuning::limb_health()),
+            "how close one came to going",
+        );
 
         out.push_str("\nWAS IT FAIR\n");
         line(

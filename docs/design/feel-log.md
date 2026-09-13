@@ -2489,6 +2489,234 @@ the move worse at every range than the fixed ten metres was at one. And the pre-
 design asks for — spike first, then Grasp — depends on the spike being worth casting at nobody
 in particular, which is a question about Black spike rather than about this.
 
+### 2026-09-13 — the wing became a blade, and the tip became a ball
+
+**Changed** the Dual mage's autos, on every axis of their shape. The band: `wing_inner` from
+0.16 of the reach to **0.75**, and `radius` from 0.45 m to **0.2 m**. The ring: reach from
+1.65 m to **2.1 m**, arc from 0.42 turns to **0.22**, and the middle of it moved off her — 0.3
+of the reach toward the *other* arm (`wing_offside`, new) and 0.1 of it forward (`wing_ahead`,
+new). Where it stops: 0.073 turns off her centre line toward the punching hand
+(`wing_finish`, new) instead of dead ahead. And the tip: a **bubble** of `wing_tip_radius`
+(new, 0.5 m) at the foremost point of the ring, instead of the last slice of the section.
+
+**Why** the shape was doing three things it was not meant to be doing, and each one had the
+same root — it was described as a blade and built as a region.
+
+*It was a filled disc.* The band ran from her own elbow (0.26 m) to full range on every frame.
+With the hit test's slack on top — the attack's 0.45 m plus a body's 0.5 m — the hole was
+gone entirely: the volume was a solid 150° wedge two metres across, and every part of it hit
+for the same amount. Nothing about that is a blade. Three quarters out, and a fifth as thick,
+leaves a band that is actually a band: it now comes to 0.91 m off her axis at its nearest,
+which is just past where the fist finishes, and a body still has to be roughly where the blade
+is rather than merely in the same quadrant as it.
+
+*It was a circle drawn round her feet.* The ring was centred on her, so every point of it was
+the same distance away and 150° of it wrapped most of the way around her. Shortening the arc
+alone does not fix that — a short arc on a ring you are standing in the middle of is still a
+piece of a halo. What fixes it is moving the middle: with it 0.63 m toward her other arm and
+0.21 m forward, the blade comes in at 1.5 m beside the punching fist and swings out to 2.1 m
+in front, so the distance from her *changes* along the sweep. Larger radius and a narrower
+angle then make it shallow rather than round. Those three go together; any one of them on its
+own does nothing much.
+
+*Both autos finished in the same place.* The section closed on straight ahead, so the dark and
+light punches — which are told apart by which arm threw them, and that is the entire mechanic
+— ended on the same point of her sternum. It now finishes in front of its own hand: 0.30 m off
+the centre line, where the hand is 0.18 m off it.
+
+*And the "tip" was the widest thing the move had.* It was the last 38° of the section, at full
+radius: metres of arc, catching the whole front of her, easier to land than the wing it was
+meant to be a reward for. It is a ball at the end of the blade now — one frame, half a metre,
+at the one point out in front that the wing deliberately stops short of. The spacing story
+comes out clean: inside about 1.8 m the body of the wing catches you in front, past that only
+the tip does.
+
+**Everything above is a knob**, which is the other half of this change. Four new ones in the
+Oven under *Dual mage* — `wing_offside`, `wing_ahead`, `wing_finish`, `wing_tip_radius` — and
+the three that place the ring (reach, arc, radius) were already per-move. Numbers this
+interdependent cannot be found by arithmetic; they have to be dragged while the move is in the
+air. The one trap is that reach, arc and radius are **two** rows each, one per auto, and
+moving one without the other silently unmirrors the class: `crates/sim/tests/dual_mage.rs`
+fails if that happens, but it fails at the test rather than in the moment.
+
+**The arena draws the band now**, not just its leading edge. That edge used to be a line from
+her elbow to full range, which was a reasonable stand-in for the volume; with the band thin it
+is a half-metre stub out at the rim, and the move went nearly invisible outside the debug
+overlay. `place_wings` lays twelve radial bars along `hitbox.sector` — the same shape the hit
+test reads — so the thing swept past you is the thing that decided whether you were hit.
+
+**Verdict** open, and the numbers above are a starting position rather than an answer. The
+specific worries, in order: 0.22 turns opening over six frames may now be too *little* travel
+to read as an opening at all; the band may be thin enough that the auto whiffs against a
+moving target often enough to make steering the meter frustrating, which would be the one
+failure this class cannot absorb; and a ball tip with a body's radius of slack on it may still
+be more forgiving than a tip should be.
+
+### 2026-09-13 — Cataclysm stopped inventing hitboxes
+
+**Changed** what Cataclysm does to a structure and to a fire pillar, without touching what
+decides *whether* it hits either one.
+
+A destroyed structure used to go up in `blast_cone`: an instant cone test of its own, with two
+knobs of its own (`cataclysm_cone_cos`, `cataclysm_blast_radius`) that answered a question
+none of the game's other attacks needed answered the same way. It is `crate::debris` now — the
+structure breaks into seven pieces, fanned along the beam's own line with `debris_spread`, each
+a small thrown projectile with a real flight time. What connects depends on range and on
+standing inside the fan, the way a real spray does, rather than on standing inside a bubble
+that already existed by the time anyone saw it.
+
+A fire pillar torn loose used to become a `FireTornado` struct in its own array
+(`crate::tornado`), with its own pull radius, its own damage, and its own stagger — a second,
+nearly-identical description of a fire pillar's hitbox sitting a few files away from the real
+one. It is `EffectKind::FireTornado` now, the same `Effect` slot the pillar already occupied,
+reusing `pillar_volumes()` and the pillar's own `pillar_damage` tick outright (see
+`state::burn_the_pillar`, shared by both). The only new number is `tornado_pull`; the pull
+radius is just `pillar_volumes().0.radius`, because asking "how far does its pull reach" and
+"how far does its burn reach" as two different knobs was answering the same question twice and
+risking two different answers to it.
+
+**Why** — reported after playing it: the tornado felt like a new hazard bolted onto the pillar
+rather than the pillar itself let loose, and the blast's instantaneous cone gave a destroyed
+structure no visible moment between "there" and "everyone around it is already hit." Both were
+symptoms of the same thing, a hitbox invented for the occasion instead of reused from one that
+already existed and was already trusted.
+
+**Removed** five scalars (`CataclysmConeCos`, `CataclysmBlastRadius`, `TornadoPullRadius`,
+`TornadoDamage`, `TornadoStagger`) and the whole `crate::tornado` module. **Added** eight —
+`DebrisSpeed`, `DebrisRange`, `DebrisRadius`, `DebrisSpread`, `DebrisDamage`, `DebrisStagger`,
+`DebrisBlockstun`, `DebrisKnockback` — and `crate::debris`, built the same way `crate::bolt`
+is: a real velocity, stepped frame by frame, because a thrown thing is not a placed one and
+`crate::effects`' rule against a velocity was never about this.
+
+**Verdict** not yet played against another person. The shotgun's spread (`debris_spread`,
+1/16 turn either side of the beam) and per-piece damage are first guesses — what "close range
+is a wall of debris, far range is a couple of stray pieces" actually feels like at the stick
+has not been tested.
+
+**Corrected the same day.** The first version of the fan rotated the beam's own horizontal
+bearing and left its pitch untouched — the same mistake `aim.rs` exists to keep out of the
+game, a ray built from a fixed axis rather than from the line of effect itself, here reappearing
+one level down from where that file already guards. Aimed level it looked right and was
+accidental; aimed up or down the pieces all kept the beam's own pitch and only fanned out
+sideways, which is a slice of a horizontal plane, not a cone. Fixed by building the fan out of
+`crate::math::frame_about` instead — sideways and up **square to the beam itself**, however it
+is pitched, the same construction the Grasp's arms already spread around their own line of
+effect with — and pinned by `the_debris_cone_stands_in_space_rather_than_lying_flat`, which
+aims up and checks that the pieces do not all share the beam's own pitch back.
+
+### 2026-09-13 — the Ridgeback, rebuilt
+
+**Changed** the creature is about a third larger and stands four and a half
+metres at the back on long legs; ten welded boxes became an eighteen-bone
+skeleton with eighteen parts, animated through the factory; a second weak point
+(the nape) and four breakable feet; a stumble between the flinch and the topple;
+recent-damage thresholds for crowd control and for interrupts; per-move
+lockouts.
+
+**Why** the fight had three problems a player would name in the first minute.
+The animal read as fifteen cubes glued together, because it *was* — its legs
+never moved. Getting on it was a free action from the tail, so the climb was not
+a decision. And the back was where the fight happened: ride share ran to 70% and
+the ground game was optional.
+
+**The height is in its legs, not its bulk, and that is the whole design.** A
+standing full hop reaches 4.14 m; the back sits at 4.57. So the back is out of
+reach, and the *only* part of the animal a fighter on the floor can touch is its
+feet. That one geometric fact is what turns the ground phase from a chore into a
+route: break a foot and it goes down on a knee for nearly two seconds with its
+shoulders at 2.35 m. Making it *longer* instead would have cost the arena more
+room than it has; making the legs longer cost nothing and produced the ground
+game for free.
+
+**What the harness caught, and what it did not.** `legs broken: 0` sat in the
+fight report through three separate changes to the hunter's station before the
+cause turned up, and the report could not tell the two possible causes apart.
+Adding `damage into feet` and `worst foot` took an afternoon of guessing down to
+one run: the bot was hitting nothing at all. **A level shot from somebody on the
+floor goes under the belly.** The creature is on stilts and the old station was
+three and a half metres out, where there is no creature at that height. A
+measurement that cannot distinguish "never tried" from "tried and failed" is
+worth about as much as no measurement.
+
+**Two animation bugs that were gameplay bugs.** Both are the same shape: the
+grip test reads *acceleration*, so anything that puts a corner in the pose
+throws people.
+
+- The baked table stores samples and reads them back with a lerp, so every join
+  between samples is a corner. At twelve samples per phase a 34-frame shake had
+  three frames between corners and threw braced riders on single frames that had
+  nothing to do with how hard the animal was moving. Thirty-two samples — about
+  one per frame of the longest phase — is now the rule, and the sample count is
+  documented as a balance number rather than a file-size one.
+- The shake's last startup key and its first whip key were both authored exactly
+  on the phase boundary. Two keys at the same instant with different poses are a
+  *step*, and a step is an arbitrarily large acceleration. It threw braced
+  riders off the hips before the shake had started. The design document had
+  already recorded this lesson once, about the old procedural pose, and it was
+  re-learned anyway.
+
+**A third that was neither.** Riders standing where two mountable parts overlap
+ping-ponged between them once a frame — each swap moves the body a few
+centimetres, which the buck reads as an enormous acceleration. The parts overlap
+on purpose (a staircase with gaps is not a staircase), so the fix was in the two
+rules that decide what you are standing on: a tread you could *step onto* is a
+floor rather than a wall, and the step-up probe looks **upward only**.
+
+**Reverted: the slam as a body slam.** Widening its hit volume to a 5.2 m ring
+around the creature so it would reach its own back made standing anywhere near
+it lethal — four slams is a dead fighter — and the scripted hunter died at 37
+seconds having dealt 900 damage. Put back to a front slam, and the rule it was
+trying to buy is now stated the other way round and pinned by a test:
+**nothing the creature throws can reach its own back.** A rider is threatened by
+the buck and by nothing else. That is a better rule than the one it replaced,
+because it is what makes riding a phase with its own vocabulary rather than the
+ground game at a different altitude.
+
+**Reverted: the tail sweep as a mount route.** The tail attaches at 3.6 m on a
+long-legged animal, so no amount of drooping it during the sweep's recovery
+brings its *base* low enough to matter — the sweep's tip goes to the floor and
+the part you stand on does not. The claim came out of the design document. The
+sweep earns its keep a different way: its hitbox is 1.6 m and jumping it needs a
+*held* jump, which is a precision test the tapped hop the bot was doing does not
+pass.
+
+**The thresholds.** `strain` is damage taken recently, decaying a couple of per
+cent a frame, so a burst fills it and a trickle does not. Above one bar the
+creature is susceptible to crowd control, weakened; above a higher one, a hit
+breaks it out of what it is doing, live hitbox included. Both bars fall by up to
+70% as its health does. The intent is the arc of a hunt — methodical while it is
+fresh, frantic once it is not — and the reason it is a threshold rather than an
+immunity is that half of every kit is otherwise dead weight in a hunt, and the
+two halves of the game stop teaching each other anything.
+
+**Verdict** open, and specifically open on three things. Ride share fell from
+around 70% to 17%, which is the change this was most meant to produce, but 17%
+may now be too *little* — the climb is expensive and the reward may not be worth
+the trip. The tail hop has twenty centimetres of margin beside an animal that is
+turning, and it is the only route up that does not have to be earned; it may be
+the only one anyone finds, or it may be too hard to find at all. And the scripted
+hunter now wins five of six where it used to win about half, which is the bot
+getting a second plan rather than the creature getting easier — but a bot that
+wins is a worse measuring instrument than one that does not.
+
+### 2026-09-13 — the debris cone starts at the middle, and stops where it should
+
+**Changed** two things about Cataclysm's debris, reported the same day the cone fix landed.
+
+`stones::destroy` used to report a stone's `at` — its base, on the floor — as the point its
+debris radiates from. A neutral, level cast throws roughly half its pieces on the downward
+side of the cone, and a piece that starts on the floor and immediately points down is inside
+the ground on the very first frame it exists rather than a moment later. It now reports the
+stone's middle instead: `at.y` plus half of `standing_height()`. Nothing about the cone itself
+changed; the point it radiates from just moved to the point that is actually inside the thing
+that broke.
+
+**Verified**, not changed: a piece already stopped dead at the first stone, fighter or the
+quarry it met, per `debris::step`'s existing match on `Contact`. That was reported back as a
+requirement worth pinning rather than a bug, so `debris_shatters_on_the_first_stone_it_hits`
+now says so directly — a second, farther stone survives a blast that breaks the near one, and
+a fighter standing behind it takes nothing.
+
 ### 2026-09-13 — the blade comes home to a person, and the Grasp's marker stops jumping
 
 Two fixes from playing the Blood mage, and they are the same fix twice: an ability was

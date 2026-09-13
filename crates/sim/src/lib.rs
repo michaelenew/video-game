@@ -8,10 +8,13 @@
 
 pub mod aim;
 pub mod arena;
+pub mod beast;
+pub mod beast_baked;
 pub mod bolt;
 pub mod camera;
 pub mod class;
 pub mod curve;
+pub mod debris;
 pub mod effects;
 pub mod fixed;
 pub mod input;

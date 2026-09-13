@@ -36,6 +36,15 @@ impl V3 {
         self.x.mul(o.x).add(self.y.mul(o.y)).add(self.z.mul(o.z))
     }
 
+    /// The vector square to both `self` and `o`, right-handed.
+    pub const fn cross(self, o: V3) -> V3 {
+        V3::new(
+            self.y.mul(o.z).sub(self.z.mul(o.y)),
+            self.z.mul(o.x).sub(self.x.mul(o.z)),
+            self.x.mul(o.y).sub(self.y.mul(o.x)),
+        )
+    }
+
     pub const fn len_sq(self) -> Fx {
         self.dot(self)
     }
@@ -438,6 +447,34 @@ pub fn atan2_turns(z: Fx, x: Fx) -> Fx {
     if z.raw() < 0 { angle.neg() } else { angle }
 }
 
+/// A sideways and an upward axis square to `dir`, spanning the plane
+/// perpendicular to it in full 3D -- not just the horizontal one.
+///
+/// Sideways is `dir` turned a quarter turn in the horizontal plane, which is
+/// defined for everything except looking exactly at your own feet; upward is
+/// whatever is left once `dir`'s own pitch is accounted for, found as the
+/// cross product of the two rather than assumed level. That distinction is
+/// the whole reason this exists rather than a plain yaw rotation: a fan built
+/// by varying only the bearing around the world's vertical axis is a shape
+/// flattened into whatever horizontal slice `dir`'s own pitch happens to
+/// pass through, not a cone around `dir` itself -- true only when `dir` is
+/// level to begin with, and visibly wrong the moment it is not.
+///
+/// Straight up or down the two are degenerate and it falls back to the world
+/// axes, which is the right answer there -- a cone fired at the floor has no
+/// "left" that means anything to the player.
+pub fn frame_about(dir: V3) -> (V3, V3) {
+    let flat = V3::new(dir.z.neg(), Fx::ZERO, dir.x);
+    if flat.flat_len().raw() < Fx::ratio(1, 100).raw() {
+        return (
+            V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        );
+    }
+    let right = flat.normalized();
+    (right, right.cross(dir).normalized())
+}
+
 /// Length of a vector whose components are too large to square in 16.16.
 ///
 /// `V3::len` squares its components first, and a squared 16.16 value saturates
@@ -474,4 +511,117 @@ fn isqrt(n: i64) -> i32 {
     } else {
         guess as i32
     }
+}
+
+// ---------------------------------------------------------------------------
+// Rotations
+// ---------------------------------------------------------------------------
+
+/// A 3x3 rotation, in fixed point.
+///
+/// The creature is a skeleton now rather than one rigid box with a yaw and a
+/// pitch, and a chain of bones cannot be composed out of two angles: a neck
+/// that is bent *and* turned is a rotation whose axis is neither. So the
+/// creature's bones carry a matrix, built from the same sine table everything
+/// else uses.
+///
+/// Rows are the rotated basis vectors, so `apply` is three dot products and
+/// `inverse` is the transpose. Composition accumulates a little error down a
+/// chain -- a 16.16 product loses half a bit -- but it accumulates *identically*
+/// on every machine, which is the only property determinism asks for. Over the
+/// six bones of the longest chain here it is well under a millimetre.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Mat3 {
+    /// `r[i]` is the image of body axis `i`.
+    pub r: [V3; 3],
+}
+
+impl Mat3 {
+    pub const IDENTITY: Mat3 = Mat3 {
+        r: [
+            V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO),
+            V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        ],
+    };
+
+    /// The rotation a joint angle triple names.
+    ///
+    /// **Order is pitch, then yaw, then roll**, each about the *parent's* axes,
+    /// which is the order a limb reads in: swing it forward, carry it out to
+    /// the side, then roll along its own length. Written out rather than
+    /// composed from three matrices because the zeros are most of it.
+    ///
+    /// `pitch` is nose-up about `+z`, `yaw` is toward `+z` about `+y`, `roll`
+    /// is about `+x`. All three in turns.
+    pub fn from_angles(pitch: Fx, yaw: Fx, roll: Fx) -> Mat3 {
+        let (cp, sp) = (cos_turns(pitch), sin_turns(pitch));
+        let (cy, sy) = (cos_turns(yaw), sin_turns(yaw));
+        let (cr, sr) = (cos_turns(roll), sin_turns(roll));
+
+        // Pitch about z: x -> (cp, sp, 0), y -> (-sp, cp, 0), z -> z.
+        // Yaw about y:   x -> (cy, 0, sy), z -> (-sy, 0, cy), y -> y.
+        // Roll about x:  y -> (0, cr, sr), z -> (0, -sr, cr), x -> x.
+        let x = V3::new(cp.mul(cy), sp, cp.mul(sy));
+        let y0 = V3::new(sp.neg().mul(cy), cp, sp.neg().mul(sy));
+        let z0 = V3::new(sy.neg(), Fx::ZERO, cy);
+        Mat3 {
+            r: [
+                x,
+                y0.scale(cr).add(z0.scale(sr)),
+                y0.scale(sr.neg()).add(z0.scale(cr)),
+            ],
+        }
+    }
+
+    /// Yaw alone, which is what a creature standing on flat ground is doing.
+    pub fn from_yaw(yaw: Fx) -> Mat3 {
+        Mat3::from_angles(Fx::ZERO, yaw, Fx::ZERO)
+    }
+
+    /// A local vector, in the parent's frame.
+    pub const fn apply(&self, v: V3) -> V3 {
+        V3::new(
+            self.r[0]
+                .x
+                .mul(v.x)
+                .add(self.r[1].x.mul(v.y))
+                .add(self.r[2].x.mul(v.z)),
+            self.r[0]
+                .y
+                .mul(v.x)
+                .add(self.r[1].y.mul(v.y))
+                .add(self.r[2].y.mul(v.z)),
+            self.r[0]
+                .z
+                .mul(v.x)
+                .add(self.r[1].z.mul(v.y))
+                .add(self.r[2].z.mul(v.z)),
+        )
+    }
+
+    /// The inverse, which for a rotation is the transpose -- so a world vector
+    /// comes back into the bone's own frame as three dot products.
+    pub const fn unapply(&self, v: V3) -> V3 {
+        V3::new(self.r[0].dot(v), self.r[1].dot(v), self.r[2].dot(v))
+    }
+
+    /// `self` then `child`: the child's local rotation carried by this one.
+    pub const fn then(&self, child: Mat3) -> Mat3 {
+        Mat3 {
+            r: [
+                self.apply(child.r[0]),
+                self.apply(child.r[1]),
+                self.apply(child.r[2]),
+            ],
+        }
+    }
+}
+
+/// Wrap a fraction into `0..1`. What a looping clip's phase needs: the wheel
+/// has no ends, so an index past the last sample comes back round to the first.
+pub fn wrap_unit(v: Fx) -> Fx {
+    let raw = v.raw();
+    let one = Fx::ONE.raw();
+    Fx::from_raw(raw.rem_euclid(one))
 }

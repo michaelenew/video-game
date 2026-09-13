@@ -14,7 +14,7 @@ use sim::aim::Hand;
 use sim::class::{Class, Force, Mechanic};
 use sim::moves::dual;
 use sim::state::{Action, Hitbox};
-use sim::{Fx, Input, World};
+use sim::{Fx, Input, V3, World};
 
 const L: u16 = Input::LEFT;
 const R: u16 = Input::RIGHT;
@@ -58,11 +58,6 @@ fn sideways(w: &World, at: sim::V3) -> f32 {
     let p = &w.players[0];
     let across = sim::aim::across(p.facing, Hand::Left);
     at.sub(p.pos).dot(across).to_f32_for_render()
-}
-
-/// How far from the body's own axis a point is, level.
-fn radius(w: &World, at: sim::V3) -> f32 {
-    at.sub(w.players[0].pos).flat_len().to_f32_for_render()
 }
 
 /// How far in front of the body a point is.
@@ -165,38 +160,110 @@ fn the_two_autos_come_out_of_opposite_arms() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn the_wing_is_a_section_of_a_ring_around_her() {
+fn the_wing_is_a_thin_band_rather_than_a_filled_section() {
     // Not a line reaching out and not a swing across the front: a chunk of a
-    // torus lying flat around the caster. Which means both of its radii are
-    // *constant* while it sweeps -- a section that grew as it went would be a
-    // spiral, and a spiral has no inside.
-    let mut w = mage();
-    step(&mut w, 1, L);
+    // torus lying flat, and a **thin** one. The hole in it is most of the ring.
+    //
+    // It used to reach from her own elbow out to full range on every frame,
+    // which is a filled disc with a pinhole in it -- an attack with no inside,
+    // catching anybody standing anywhere in the quadrant. What the shape is
+    // meant to be is a curved blade travelling through the air, and a blade has
+    // a near edge as well as a far one.
+    //
+    // Both radii are constant while it sweeps, measured from the ring's own
+    // middle. A section that grew as it went would be a spiral, and a spiral
+    // has no inside either.
     let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO)
         .reach
         .to_f32_for_render();
-    let mut inner_seen = Vec::new();
+    let mut seen = Vec::new();
     for hb in swept(L) {
-        let inner = radius(&w, hb.from);
-        let outer = radius(&w, hb.to);
+        // The last active frame is the tip, which is a bubble rather than a
+        // section -- see `the_last_frame_is_the_tip_and_it_is_a_bubble`.
+        let Some(ring) = hb.sector else { continue };
+        let (inner, outer) = (
+            ring.inner.to_f32_for_render(),
+            ring.outer.to_f32_for_render(),
+        );
         assert!(
             (outer - reach).abs() < 0.02,
             "the outer arc is at {outer:.2} m and the move reaches {reach:.2} m"
         );
         assert!(
-            inner > 0.15 && inner < outer * 0.5,
-            "the ring has no hole in it: inner {inner:.2} m against outer {outer:.2} m"
+            inner > outer * 0.6,
+            "the band runs {inner:.2} m to {outer:.2} m, which is a pie slice rather than a blade"
         );
-        inner_seen.push(inner);
+        seen.push((inner, outer));
     }
-    let (lo, hi) = (
-        inner_seen.iter().cloned().fold(f32::MAX, f32::min),
-        inner_seen.iter().cloned().fold(0.0, f32::max),
+    assert!(seen.len() >= 5, "only {} frames of section", seen.len());
+    let first = seen[0];
+    for (inner, outer) in &seen {
+        assert!(
+            (inner - first.0).abs() < 0.02 && (outer - first.1).abs() < 0.02,
+            "the band wanders from {:.2}-{:.2} m to {inner:.2}-{outer:.2} m, \
+             so this is a spiral rather than a ring",
+            first.0,
+            first.1
+        );
+    }
+}
+
+#[test]
+fn she_is_not_the_middle_of_the_ring_and_the_middle_travels_with_her() {
+    // Two properties of one number, and they pull opposite ways.
+    //
+    // A ring centred on a fighter is the same distance from them at every
+    // bearing, so however short you make the section it reads as a piece of a
+    // halo rather than as something thrown. The middle is pushed off her --
+    // toward the other arm and forward -- which is what makes the blade come in
+    // close beside the punching fist and swing wide in front of her.
+    //
+    // But it is pushed off *her*, live. The autos keep sixty per cent of
+    // walking speed, and a ring anchored where the punch was thrown from would
+    // visibly detach from the caster over six active frames.
+    let mut w = mage();
+    let mut seen = Vec::new();
+    for _ in 0..24 {
+        if let Some(ring) = sim::state::hitbox(&w.players[0]).and_then(|hb| hb.sector) {
+            let off = ring.at.sub(w.players[0].pos);
+            seen.push((
+                ahead(&w, ring.at),
+                sideways(&w, ring.at),
+                V3::new(off.x, Fx::ZERO, off.z)
+                    .flat_len()
+                    .to_f32_for_render(),
+            ));
+        }
+        // Held down and walking the whole time: she throws the auto, keeps
+        // walking through it, and throws it again.
+        step(&mut w, 1, L | Input::W);
+    }
+    assert!(
+        seen.len() >= 5,
+        "the section was out for {} frames",
+        seen.len()
+    );
+    let (ahead_of_her, beside_her, _) = seen[0];
+    assert!(
+        beside_her < -0.2,
+        "the ring's middle is {beside_her:.2} m toward the punching arm, so the \
+         blade wraps her rather than passing her"
     );
     assert!(
-        hi - lo < 0.02,
-        "the inner arc wanders between {lo:.2} m and {hi:.2} m, so this is a spiral rather than a ring"
+        ahead_of_her > 0.0,
+        "the ring's middle is {ahead_of_her:.2} m in front of her"
     );
+    for (a, b, gap) in &seen {
+        assert!(
+            (a - ahead_of_her).abs() < 0.02 && (b - beside_her).abs() < 0.02,
+            "the ring's middle slid to {a:.2} m ahead and {b:.2} m across, from \
+             {ahead_of_her:.2} and {beside_her:.2}"
+        );
+        assert!(
+            *gap < 1.0,
+            "the ring's middle is {gap:.2} m from the body it hangs off"
+        );
+    }
 }
 
 #[test]
@@ -221,28 +288,46 @@ fn the_wing_lies_flat() {
 }
 
 #[test]
-fn the_wing_starts_behind_her_and_ends_directly_ahead() {
+fn the_wing_starts_behind_her_and_finishes_in_front_of_its_own_fist() {
     // The punch throws it and it overtakes the punch: it appears behind her, on
-    // the arm's own side, and arrives in front of the fist on the last active
-    // frame. A wing that started in front would just be a swing.
-    for (bits, name) in [(L, "dark"), (R, "light")] {
+    // the arm's own side, and arrives in front of that arm's hand on the last
+    // active frame. A wing that started in front would just be a swing.
+    //
+    // **In front of the hand, not the sternum.** The two autos are told apart by
+    // which arm threw them -- that is the entire mechanic -- and one that
+    // finished on her centre line put both of them in the same place at the
+    // moment the player is reading which one landed.
+    let hand = sim::tuning::hand_offset().to_f32_for_render();
+    let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO)
+        .reach
+        .to_f32_for_render();
+    for (bits, side, name) in [(L, Hand::Left, "dark"), (R, Hand::Right, "light")] {
         let mut w = mage();
         step(&mut w, 1, bits);
         let frames = swept(bits);
+        let out = Fx::from_int(side.outward()).to_f32_for_render();
         let first = ahead(&w, frames[0].to);
-        let last = frames[frames.len() - 1].to;
         assert!(
-            first < -0.5,
+            first < 0.0,
             "the {name} wing appears {first:.2} m in front of her, not behind"
         );
+        let from_the_arm = sideways(&w, frames[0].to) * out;
         assert!(
-            ahead(&w, last) > 0.9 * radius(&w, last),
-            "the {name} wing does not finish pointing straight ahead"
+            from_the_arm > 0.5,
+            "the {name} wing appears {from_the_arm:.2} m along its own arm's side"
         );
+        let last = frames[frames.len() - 1];
+        assert!(last.tipper, "the {name} wing does not end on its tip");
         assert!(
-            sideways(&w, last).abs() < 0.15,
-            "the {name} wing finishes {:.2} m off her centre line",
-            sideways(&w, last)
+            ahead(&w, last.to) > reach * 0.8,
+            "the {name} wing finishes {:.2} m in front of her, of a {reach:.2} m reach",
+            ahead(&w, last.to)
+        );
+        let finish = sideways(&w, last.to) * out;
+        assert!(
+            finish > hand * 0.5 && finish < hand + 0.5,
+            "the {name} wing finishes {finish:.2} m off her centre line and her \
+             hand is {hand:.2} m off it"
         );
     }
 }
@@ -291,30 +376,6 @@ fn the_wing_sweeps_the_whole_way_round_without_jumping() {
         biggest < smallest * 1.5,
         "the sweep is uneven: steps from {smallest:.2} m to {biggest:.2} m"
     );
-}
-
-#[test]
-fn the_wing_travels_with_the_body_rather_than_hanging_where_it_started() {
-    // A swing is a body moving, and the autos keep sixty per cent of walking
-    // speed. A ring anchored where the punch was thrown from would visibly
-    // detach from the caster over six active frames.
-    let mut w = mage();
-    step(&mut w, 1, L | Input::W);
-    let mut seen = Vec::new();
-    for _ in 0..24 {
-        if let Some(hb) = sim::state::hitbox(&w.players[0]) {
-            seen.push((hb.from, w.players[0].pos));
-        }
-        step(&mut w, 1, L | Input::W);
-    }
-    assert!(seen.len() > 1, "the volume was never out for two frames");
-    for (from, pos) in &seen {
-        let offset = from.sub(*pos).flat_len().to_f32_for_render();
-        assert!(
-            offset < 0.5,
-            "the inner arc is {offset:.2} m from the body it is meant to be centred on"
-        );
-    }
 }
 
 #[test]
@@ -660,14 +721,15 @@ fn the_autos_reach_further_than_the_body_they_are_thrown_from() {
 // The wing opens, and its tip is worth waiting for
 // ---------------------------------------------------------------------------
 
-/// How wide the section is on each active frame, in degrees.
+/// How wide the section is on each frame it is a section, in degrees.
+///
+/// The last active frame is not one: it is the tip, which is a bubble at the
+/// end of the blade. See `the_last_frame_is_the_tip_and_it_is_a_bubble`.
 fn spans(bits: u16) -> Vec<f32> {
     swept(bits)
         .iter()
-        .map(|hb| {
-            let ring = hb.sector.expect("a wing is a section of a ring");
-            ring.half_span().to_f32_for_render() * 720.0
-        })
+        .filter_map(|hb| hb.sector)
+        .map(|ring| ring.half_span().to_f32_for_render() * 720.0)
         .collect()
 }
 
@@ -675,7 +737,7 @@ fn spans(bits: u16) -> Vec<f32> {
 fn the_wing_opens_from_nothing_to_its_whole_span() {
     // The shape *is* the opening: a wing spreading, rather than a blade
     // sweeping. It starts closed, widens every frame, and reaches the arc the
-    // move is tuned for.
+    // move is tuned for less the share the tip takes.
     let arc = sim::moves::get(Class::DualMage, dual::DARK_AUTO)
         .arc
         .to_f32_for_render()
@@ -687,8 +749,7 @@ fn the_wing_opens_from_nothing_to_its_whole_span() {
         "the wing is already {:.0} degrees wide on the frame it appears",
         wide[0]
     );
-    // Every frame but the last is wider than the one before it.
-    for pair in wide[..wide.len() - 1].windows(2) {
+    for pair in wide.windows(2) {
         assert!(
             pair[1] > pair[0] + 1.0,
             "the wing stopped opening: {:.0} then {:.0} degrees",
@@ -696,29 +757,57 @@ fn the_wing_opens_from_nothing_to_its_whole_span() {
             pair[1]
         );
     }
-    // The wing stops short of straight ahead and the tip covers the rest, so
+    // The wing stops short of where it finishes and the tip covers the rest, so
     // what it opens to is the arc less the tip's own share of it.
     let tip = sim::tuning::wing_tip().to_f32_for_render();
-    let widest = wide[wide.len() - 2];
+    let widest = wide[wide.len() - 1];
     assert!(
         (widest - arc * (1.0 - tip)).abs() < 2.0,
         "the wing opens to {widest:.0} degrees of a {arc:.0} degree arc, \
          leaving {:.0} for the tip",
         arc - widest
     );
+}
+
+#[test]
+fn the_wing_stops_the_tip_s_own_share_of_the_arc_short_of_the_tip() {
+    // The gap is the whole reason the tip is a decision. The blade stops with
+    // the last slice of the arc unswept and the bubble arrives at the end of it
+    // a frame later, so the ground between the two is covered once, late, and
+    // only by the part that hits for `tuning::wing_tipper`.
+    let arc = sim::moves::get(Class::DualMage, dual::DARK_AUTO)
+        .arc
+        .to_f32_for_render();
+    let share = sim::tuning::wing_tip().to_f32_for_render();
+    let frames = swept(L);
+    let ring = frames[frames.len() - 2]
+        .sector
+        .expect("the frame before the tip is a section");
+    let tip = frames[frames.len() - 1].to;
+    let bearing = |at: sim::V3| {
+        sim::math::atan2_turns(at.z.sub(ring.at.z), at.x.sub(ring.at.x)).to_f32_for_render()
+    };
+    let stopped = ring.to.to_f32_for_render();
+    let gap = sim::Fx::from_raw(((bearing(tip) - stopped) * 65536.0) as i32);
+    let gap = sim::math::wrap_turns(gap).to_f32_for_render().abs();
     assert!(
-        (widest + wide[wide.len() - 1] - arc).abs() < 2.0,
-        "the wing and its tip do not add up to the arc"
+        (gap - arc * share).abs() < 0.01,
+        "the wing stops {:.0} degrees short of the tip, of a {:.0} degree arc",
+        gap * 360.0,
+        arc * 360.0
     );
 }
 
 #[test]
-fn the_last_frame_is_the_tip_and_nothing_else() {
-    // Everything behind the leading edge has already been swept. What is live
-    // on the final frame is the part that has just arrived, which is the part
-    // worth timing -- and it is much narrower than the wing that preceded it.
+fn the_last_frame_is_the_tip_and_it_is_a_bubble() {
+    // Everything behind the leading edge has already been swept, so what is
+    // live on the final frame is the part that has just arrived -- and it is a
+    // **ball at the end of the blade**, not the last slice of the ring.
+    //
+    // A slice of a ring is metres of arc. The "tip" used to be the widest thing
+    // the move ever put in the world, catching the whole front of her at once,
+    // which is the opposite of what a tip is for.
     let frames = swept(L);
-    let wide = spans(L);
     let last = frames.len() - 1;
     for (i, hb) in frames.iter().enumerate() {
         assert_eq!(
@@ -726,33 +815,51 @@ fn the_last_frame_is_the_tip_and_nothing_else() {
             i == last,
             "frame {i} of {last} disagrees about being the tip"
         );
+        assert_eq!(
+            hb.sector.is_none(),
+            i == last,
+            "frame {i} of {last} disagrees about being a section"
+        );
     }
+    let tip = frames[last];
     assert!(
-        wide[last] < wide[last - 1] * 0.5,
-        "the tip is {:.0} degrees against the wing's {:.0}",
-        wide[last],
-        wide[last - 1]
+        !tip.is_a_beam(),
+        "the tip is a line from {:?} to {:?} rather than a point",
+        tip.from,
+        tip.to
+    );
+    assert_eq!(
+        tip.radius.raw(),
+        sim::tuning::wing_tip_radius().raw(),
+        "the tip is not the size the tip knob says"
     );
 }
 
 #[test]
-fn the_tip_is_the_only_part_that_reaches_straight_ahead() {
-    // Which is what makes it landable at all: a body standing in front of her
-    // is caught by the tip on the last frame, not by the body of the wing on
-    // the frame before it.
+fn a_body_in_front_of_her_is_caught_by_the_tip_and_by_nothing_else() {
+    // Which is what makes the tip landable at all. The wing opens behind it and
+    // stops short, so the point out in front of her at full extension is the
+    // one place only the tip ever goes -- and standing there is the thing the
+    // player is being asked to judge.
     let mut w = mage();
-    step(&mut w, 1, L);
-    let frames = swept(L);
-    for (i, hb) in frames.iter().enumerate() {
-        let ring = hb.sector.expect("a section");
-        let reaches_ahead = sideways(&w, hb.to).abs() < 0.2 && ahead(&w, hb.to) > 0.0;
-        assert_eq!(
-            reaches_ahead,
-            i == frames.len() - 1,
-            "frame {i}: the leading edge is at {:.2} m sideways",
-            sideways(&w, ring.point(Fx::ONE, Fx::ONE))
-        );
+    w.players[0].pos = sim::V3::ZERO;
+    w.players[1].pos = sim::V3::new(fx(2.3), Fx::ZERO, Fx::ZERO);
+    let mut caught_on = None;
+    for frame in 0..30 {
+        let health = w.players[1].health;
+        step(&mut w, 1, if frame == 0 { L } else { 0 });
+        // Read *after* the step: a frame advances the action and then resolves
+        // hits against it, so the volume that connected is the one standing
+        // when `advance` returns.
+        if w.players[1].health < health {
+            caught_on = Some(sim::state::hitbox(&w.players[0]).map(|hb| hb.tipper));
+        }
     }
+    assert_eq!(
+        caught_on,
+        Some(Some(true)),
+        "a body standing in front of her was caught by the body of the wing"
+    );
 }
 
 #[test]

@@ -199,6 +199,39 @@ if there happens to be one there.
 > Earth plus Fire is the loadout, not a dependency chain where Fire only works after Earth has
 > gone first.
 
+### Cataclysm
+**Startup** slow · **Recovery** slow · **Range** long, skillshot
+
+The right-click heavy. A long wind-up, thrown along the same line the auto follows, that
+turns whatever field effect it meets into something worse rather than just damaging it.
+
+> **Implemented** (right click). It reads the same beam as the auto and Fire pillar's
+> targeting, and shares their aim -- point it, don't lock onto anything. What it meets
+> along that line decides what it does, and neither answer invents a new hitbox to do it:
+> both reuse something that already exists rather than detonating an instant bubble.
+>
+> - **A structure** is destroyed outright and thrown outward as several pieces of debris, in a
+>   cone around the line Cataclysm was aimed rather than one blast that lands everywhere at
+>   once -- a real cone standing in space, square to the line of effect however it is pitched,
+>   not an arc swept flat around the world's vertical axis. Each piece is its own small
+>   projectile with its own flight time, so what actually connects depends on how close you
+>   were standing and whether you were inside the cone -- a shotgun rather than a bomb, and one
+>   you can see coming rather than one that has already landed by the time you notice it. See
+>   `crate::debris`.
+> - **A fire pillar** is not damaged -- it is transformed. The same `Effect`, the same two
+>   volumes a standing pillar already tests against, cut loose from the ground and sent
+>   racing along the direction Cataclysm was aimed, pulling in and burning anyone caught in
+>   either volume until its own clock runs out or it leaves the arena. Nothing about its
+>   hitbox is reinvented for the occasion -- a tornado is a fire pillar that moves. See
+>   `crate::effects::EffectKind::FireTornado`.
+> - **A fighter**, hit directly with nothing in the way, just takes a real hit -- heavier
+>   than the auto's poke, with its own stagger rather than none.
+>
+> The wind-up is long enough to be read and punished; the payoff is why you would still
+> throw it. Earth plus Fire again: Raise or Fissure to seed a structure, then Cataclysm to
+> decide whether it becomes a spray of debris or, by way of a fire pillar first, a moving
+> hazard that keeps threatening the space after the swing is over.
+
 ### Flame spitter
 **Startup** fast · **Recovery** medium · **Range** medium, channelled · **Mechanic** on a
 structure, melts it into a lasting magma field that damages and slows

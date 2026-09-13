@@ -697,3 +697,24 @@ fn stones_are_stepped_for_both_fighters() {
         );
     }
 }
+
+#[test]
+fn destroying_a_stone_reports_its_middle_rather_than_its_base() {
+    // Cataclysm's debris radiates outward from this point in every direction
+    // its cone allows, including down -- see `crate::debris::blast`. A point
+    // on the floor, which is what `at` is, puts a piece aimed level or down
+    // there already inside the ground on the very first frame it exists.
+    let mut w = World::with_classes([sim::Class::Elementalist; MAX_PLAYERS]);
+    let s = standing_at(4, 0);
+    place(&mut w, &[s]);
+    let at = sim::stones::destroy(&mut w.players, 0).expect("nothing to destroy");
+    assert_eq!(
+        at,
+        V3::new(
+            s.at.x,
+            s.at.y.add(s.standing_height().mul(Fx::ratio(1, 2))),
+            s.at.z
+        ),
+        "destroy() reported the stone's base instead of its middle"
+    );
+}

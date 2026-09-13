@@ -104,11 +104,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "Derived from the tick rate. The tick rate is a networking decision, not a feel one.",
     ),
     (
-        "const TAIL_PIVOT_X: Fx = Fx::ratio(-24, 10)",
-        "Where the tail hinges is one of the creature's proportions, and the proportions are \
-         `const` for the same reason the arena's geometry is: a shape rather than a feel number, \
-         and not part of the rollback snapshot. The number you would actually reach for -- how \
-         big the animal is -- is `monster_scale`, which multiplies all of it and is in the Oven.",
+        "const SMALLEST: Fx = Fx::from_raw(1)",
+        "The smallest number 16.16 can hold. It guards two divisions from a retuned speed of \
+         exactly zero; it is not a speed, and no value other than the representation's own floor \
+         would be correct.",
     ),
     (
         "const QUARTER: Fx = Fx::from_raw(1 << 14)",
