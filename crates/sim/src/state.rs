@@ -2714,7 +2714,7 @@ impl World {
                         self.drain(i, effect);
                     }
                 }
-                self.gore_the_creature(effect, 0, effect.pos, base.radius);
+                self.feed_the_caster(effect, 0, effect.pos, base.radius);
             }
 
             // Drain *and* slow. The slow is the part that matters: damage alone
@@ -2737,7 +2737,7 @@ impl World {
                     }
                 }
                 if ticking {
-                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
+                    self.feed_the_caster(effect, 0, effect.pos, volume.radius);
                 }
             }
 
@@ -2879,6 +2879,22 @@ impl World {
             self.players[victim].parried = PARRY_FLOURISH;
         }
         dealt
+    }
+
+    /// A field ticking on the creature, and the caster's share of it straight
+    /// back -- the same payment the fighter path makes in `drain`.
+    ///
+    /// It exists because the two field effects used to call `gore_the_creature`
+    /// and **throw the answer away**, so a Blood mage draining a Ridgeback was
+    /// taking health off it and getting none of it back. Invisible in versus,
+    /// where a field never touches the creature at all, and invisible to a test
+    /// that only asked whether her health went up: the eruption's own hit pays
+    /// out on the same cast, a few frames earlier, which is enough to make a
+    /// broken field look like a working one.
+    fn feed_the_caster(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) {
+        let dealt = self.gore_the_creature(effect, part, at, radius);
+        let owed = effect.leeched(dealt);
+        self.players[effect.owner as usize].heal(owed);
     }
 
     /// Land an effect on whichever part of the creature is inside it, once per

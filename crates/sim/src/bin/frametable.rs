@@ -73,10 +73,21 @@ fn main() {
             // something in the world and let it do the hitting, and the
             // Champion's pole vault, which puts nothing anywhere.
             if !m.strikes() {
-                let what = if m.shape.strikes() {
-                    "places something; the thing it placed hits"
+                // A move with no volume of its own has its hit delivered by
+                // whatever it put in the world, and that path carries damage,
+                // stun, blockstun, knockback and launch -- but **not** the
+                // grab. Saying so here is the difference between a table that
+                // is incomplete and a table that is wrong: the knob is in the
+                // palette, it can be turned, and nothing happens.
+                let ignored = if m.grabs > 0 {
+                    "; grab ignored -- the effect delivers the hit"
                 } else {
-                    "movement, no hitbox"
+                    ""
+                };
+                let what = if m.shape.strikes() {
+                    format!("places something; the thing it placed hits{ignored}")
+                } else {
+                    format!("movement, no hitbox{ignored}")
                 };
                 println!(
                     "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}   {what}",

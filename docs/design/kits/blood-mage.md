@@ -150,12 +150,19 @@ nothing she could land inside it.
 Unblockable, and the class's answer to a turtle now that Reaper's debt is gone.
 
 ### Black spike — mechanic, `E`
-**Startup** slow · **Recovery** medium · **Range** long · **Mechanic** high cost; returns 30%
+**Startup** slow · **Recovery** medium · **Range** long · **Mechanic** high cost; returns most
 of everything it drains, continuously
 
 A spike erupts at the target area after a long delay, damaging on arrival. It then stands in
-a field that drains and slows anything inside it for several seconds, and thirty per cent of
+a field that drains and slows anything inside it for several seconds, and a large share of
 what it drains goes straight back to the caster.
+
+**The eruption is one hit.** It spent a day as five, because `hits again every` — the move
+table's re-hit interval, in frames — was set to 1 while chasing a bug that turned out to be
+somewhere else entirely. That knob governs the *move's own hitbox* during its active frames;
+it has nothing to do with the field, which has its own clock in
+`effects.damage tick interval`. The spike's active window is four frames, so a re-hit of one
+made the eruption land four or five times.
 
 Three things about it are deliberate:
 
@@ -177,6 +184,13 @@ infinitely high cylinder, and it is drawn at exactly the size it is tested at.
 > no return of any kind, and no spike in the model — only a stain on the floor. In a hunt it
 > did nothing whatsoever, because effects were applied to fighters and the creature was not
 > one.
+>
+> **And then, once it did:** the field took health off the creature and gave the caster none
+> of it, for a fortnight, because the two field effects asked the creature-damage path what it
+> had dealt and threw the answer away. Only in a hunt — in versus a field never meets the
+> creature at all — and only in the *field*, since the eruption on the same cast paid out
+> correctly a few frames earlier, which is exactly enough to make a broken field look like a
+> working one. See the feel log for 2026-09-13.
 
 ## Not implemented
 

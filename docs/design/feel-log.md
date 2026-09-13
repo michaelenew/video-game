@@ -1473,6 +1473,68 @@ failed at 35% leech and passes at 55%. None of it has been played. The costs in 
 are a guess: the class is downstream of TTK, and what fraction of a health bar a cast should
 represent is exactly the question a prototype answers and a document cannot.
 
+### 2026-09-13 — the field was draining the creature into thin air, and the kit hit twice as hard as it meant to
+
+**Changed** two things, and only one of them is tuning.
+
+**The bug.** A Blood mage's black spike, standing in a hunt, took health off the Ridgeback and
+returned her none of it. The two field effects called the creature-damage path and **discarded
+what it told them**:
+
+```rust
+self.gore_the_creature(effect, 0, effect.pos, volume.radius);   // returns the damage dealt
+```
+
+Every other way she deals damage pays her: a swing, a blade in the air, an arm of a Grasp, a
+field ticking on a *fighter*. Fields on the creature did not, so half her economy was missing
+in one of the game's two modes.
+
+Two things hid it, and both are worth naming because they will hide the next one:
+
+- **Versus never sees it.** A field only meets the creature in a hunt, and the versus tests are
+  where the drain was proved to work.
+- **The eruption pays out on the same cast.** The spike hits once when it arrives, that hit
+  leeches correctly, and it lands a few frames before the field's first tick. `assert!(health >
+  before)` over a window containing both is satisfied by the wrong one. The test now starts
+  measuring *after* the eruption is over, and it fails if the payment is removed — checked by
+  removing it.
+
+**The number the bug cost, on the way past.** `hits again every` was set to 1 on the spike
+while chasing this, on the reasonable-looking guess that it was what made a persistent drain
+persist. It is not: it is the re-hit interval for the **move's own hitbox** during its active
+frames, and the spike's window is four frames, so it turned one eruption into four or five. The
+field's clock is `effects.damage tick interval` and always was.
+
+**The tuning.** With the eruption multiplied by five and a Grasp at 95 per arm, one cast of the
+spike was 64% of a health bar and a Grasp was 38%. Halved, with the health costs halved beside
+them so that **every ratio the last pass tuned is untouched**:
+
+| | damage | cost | returned | dmg/cost | back/cost |
+| --- | --- | --- | --- | --- | --- |
+| Bloodletter | 80 → 40 | 15 → 8 | 32 → 16 | 5.33 → 5.00 | 2.13 → 2.00 |
+| Rend | 130 → 65 | 60 → 30 | 65 → 32 | 2.17 → 2.17 | 1.08 → 1.07 |
+| Grasp | 380 → 192 | 90 → 45 | 209 → 105 | 4.22 → 4.27 | 2.32 → 2.33 |
+| Black spike | 640 → 320 | 120 → 60 | 377 → 188 | 5.33 → 5.33 | 3.14 → 3.13 |
+
+The drift is integer rounding on two costs and nothing else. The spike's eruption absorbs the
+re-hit going away: forty dealt five times is one hit of a hundred, halved from two hundred, so
+reverting the accident and halving the damage are the same edit. The field's own tick went 22 →
+11 with it.
+
+**Two tests restored and one added.** A merge two days ago dropped
+`the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything`,
+`a_root_outlives_the_hitstun_that_delivers_it` and the bounds on the disabled multiplier —
+which are precisely the assertions that keep a bake like this honest, and they were gone for
+the bake that needed them. They are back, and `best_case` understands re-hit now.
+
+The new one is `the_blood_mage_does_not_kill_in_two_buttons`, and it is the one that would have
+caught this: **her per-hit numbers say very little about what a cast is worth.** Every ability
+she has connects several times — two passes, four arms, twenty ticks — so 95 in the table is
+380 in the hand. Nothing in the table looked wrong.
+
+**Verdict** open. The ratios are the ones that were played and liked; only the scale moved.
+
+
 ### 2026-09-12 — the Blood mage's root has something on the other side of it
 
 **Changed** a Blood mage's damage is multiplied by **1.4 against anything that cannot move**.
