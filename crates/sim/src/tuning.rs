@@ -1028,59 +1028,71 @@ pub fn fire_bolt_knockback() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::FireBoltKnockback))
 }
 
-// Cataclysm: the heavy, on right click. What it does when it lands is
-// `crate::tornado`'s and the structure-destroying blast's own numbers; these
-// two are the ones neither the move table nor the fire bolt's own knobs cover.
+// Cataclysm: the heavy, on right click. See `crate::effects::EffectKind::FireTornado`
+// for what a fire pillar becomes, and `crate::debris` for what a structure
+// scatters into. Neither invents a hitbox of its own where an existing one
+// already answers the question -- the tornado ticks and is stood in exactly
+// like the pillar it was, and the debris is thrown along the beam's own line.
 
-/// Half-angle of the blast a destroyed structure goes up in, as a cosine.
-/// Wide on purpose -- it is meant to catch whoever was standing near the
-/// structure, not to reward lining up a second shot through it.
-pub fn cataclysm_cone_cos() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CataclysmConeCos))
-}
-
-pub fn cataclysm_blast_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::CataclysmBlastRadius))
-}
-
-// The fire tornado: what a fire pillar becomes when Cataclysm passes through
-// it instead of just charging it. See `crate::tornado`.
-
-/// How fast it crosses the arena. Visibly faster than a walk, so outrunning
-/// one head-on is not an option -- stepping off its line is.
+/// How fast a loosed pillar crosses the arena. Visibly faster than a walk, so
+/// outrunning one head-on is not an option -- stepping off its line is.
 pub fn tornado_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TornadoSpeed))
 }
 
-/// How far its pull reaches from its own live centre, which moves.
-pub fn tornado_pull_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::TornadoPullRadius))
-}
-
-/// Acceleration toward the centre for anyone caught inside the pull radius,
-/// in the same units gravity is -- comparable in strength, deliberately, so
-/// getting pulled in reads as a real force rather than a nudge.
+/// Acceleration toward the tornado's own live centre for anyone caught inside
+/// its pillar volumes, in the same units gravity is -- comparable in
+/// strength, deliberately, so getting pulled in reads as a real force rather
+/// than a nudge.
 pub fn tornado_pull() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TornadoPull))
 }
 
-/// Damage on each tick to anyone it is holding, on the same cadence every
-/// other standing hazard ticks on. See `tuning::effect_tick_frames`.
-pub fn tornado_damage() -> i32 {
-    oven::scalar(Scalar::TornadoDamage)
-}
-
-/// A short stagger on each tick -- enough that holding a direction cannot
-/// simply cancel the pull the instant it starts, not long enough to be an
-/// uninterruptible lock between ticks.
-pub fn tornado_stagger() -> u16 {
-    oven::scalar(Scalar::TornadoStagger) as u16
-}
-
-/// How long it lives before it burns out, whether or not it ever leaves the
-/// arena first.
+/// How long a loosed pillar lives before it burns out, whether or not it ever
+/// leaves the arena first.
 pub fn tornado_life() -> u16 {
     oven::scalar(Scalar::TornadoLife) as u16
+}
+
+/// How fast each piece of a broken structure flies.
+pub fn debris_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DebrisSpeed))
+}
+
+/// How far a piece travels before it burns out unspent -- a shotgun has a
+/// falloff range, not an infinite one.
+pub fn debris_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DebrisRange))
+}
+
+/// How fat a piece is for its own hit test.
+pub fn debris_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DebrisRadius))
+}
+
+/// Half the fan's width, in turns, from the beam's own line to the outermost
+/// piece on either side. The shotgun's spread, not its damage falloff --
+/// there is none of that, a piece hits for the same either way.
+pub fn debris_spread() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DebrisSpread))
+}
+
+/// Damage a single piece deals -- this, times however many pieces actually
+/// connect, is what a close-range blast is worth over a far one.
+pub fn debris_damage() -> i32 {
+    oven::scalar(Scalar::DebrisDamage)
+}
+
+pub fn debris_stagger() -> u16 {
+    oven::scalar(Scalar::DebrisStagger) as u16
+}
+
+pub fn debris_blockstun() -> u16 {
+    oven::scalar(Scalar::DebrisBlockstun) as u16
+}
+
+pub fn debris_knockback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DebrisKnockback))
 }
 
 // ---------------------------------------------------------------------------

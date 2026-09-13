@@ -2,14 +2,14 @@
 //!
 //! Structurally the same trick her auto is -- an instant line, resolved on the
 //! spot rather than by the hitbox loop -- but heavier, and with the opposite
-//! answer to what it is aimed through: a structure is destroyed rather than
-//! kicked, and a fire pillar is torn loose into a travelling tornado rather
-//! than merely charging the shot. These are the assertions for what a player
-//! would notice if any of that broke.
+//! answer to what it is aimed through: a structure breaks into thrown debris
+//! rather than being kicked, and a fire pillar is torn loose into a
+//! travelling tornado rather than merely charging the shot. These are the
+//! assertions for what a player would notice if any of that broke.
 
 use sim::class::Mechanic;
-use sim::effects::EffectKind;
-use sim::state::{Action, SLOT_HEAVY};
+use sim::effects::{Effect, EffectKind};
+use sim::state::{Action, SLOT_HEAVY, SLOT_SPECIAL};
 use sim::{Class, Fx, Input, V3, World};
 
 const R: u16 = Input::RIGHT;
@@ -56,7 +56,32 @@ fn fire_pillars(w: &World) -> usize {
 }
 
 fn tornadoes(w: &World) -> usize {
-    w.tornadoes.iter().flatten().count()
+    w.effects
+        .iter()
+        .flatten()
+        .filter(|e| e.kind == EffectKind::FireTornado)
+        .count()
+}
+
+/// Light a tornado directly, bypassing a fire pillar's own startup and
+/// growth, for the tests below that are about what a tornado already out
+/// does rather than about Cataclysm finding one.
+fn light_tornado(w: &mut World, owner: u8, at: V3, dir: V3) -> usize {
+    let slot = w
+        .effects
+        .iter()
+        .position(|e| e.is_none())
+        .expect("no free effect slot in the fixture");
+    w.effects[slot] = Some(Effect::cast(
+        EffectKind::FireTornado,
+        owner,
+        Class::Elementalist,
+        SLOT_SPECIAL,
+        at,
+        dir,
+        Fx::ZERO,
+    ));
+    slot
 }
 
 // ---------------------------------------------------------------------------
@@ -129,24 +154,29 @@ fn a_direct_hit_is_a_real_hit_not_the_autos_no_stagger_poke() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn cataclysm_destroys_a_structure_and_blasts_the_area_around_it() {
+fn cataclysm_destroys_a_structure_and_scatters_it_as_debris() {
     let mut w = elementalist();
     tap(&mut w, E, 30); // raise one ahead, and let it finish rising
     assert!(has_structure(&w), "fixture never raised a structure");
 
-    // Stand just past where the structure lands, so the blast has to reach
-    // past the stone to catch him -- the beam itself should not, since a
-    // structure in the way is exactly what stops the auto's own shot dead.
+    // Stand just past where the structure lands, on the same line Cataclysm
+    // is aimed along -- the centre piece of the fan flies straight down that
+    // line, so this is the one spot a shotgun spread is guaranteed to reach.
+    // The beam itself should not reach this far: a structure in the way is
+    // exactly what stops the auto's own shot dead.
     let past = sim::tuning::raise_reach().add(Fx::from_int(2));
     w.players[1].pos = V3::new(past, Fx::ZERO, Fx::ZERO);
     let before = w.players[1].health;
 
-    tap(&mut w, R, 30);
+    // Longer than the other fixtures wait: destroying the structure is not
+    // the hit, only the moment the debris is thrown, and it still has to fly
+    // the distance.
+    tap(&mut w, R, 60);
 
     assert!(!has_structure(&w), "the structure survived Cataclysm");
     assert!(
         w.players[1].health < before,
-        "nobody standing near the broken structure was caught in the blast"
+        "nobody standing near the broken structure was caught by its debris"
     );
 }
 
@@ -207,25 +237,22 @@ fn cataclysm_turns_a_fire_pillar_into_a_travelling_tornado() {
 #[test]
 fn the_tornado_travels_and_burns_out_on_its_own_clock() {
     let mut w = elementalist();
-    sim::tornado::spawn(
-        &mut w.tornadoes,
+    let slot = light_tornado(
+        &mut w,
         0,
         V3::new(Fx::from_int(-10), Fx::ZERO, Fx::ZERO),
         V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
     );
-    let start = w.tornadoes[0].expect("fixture never spawned one").pos;
+    let start = w.effects[slot].expect("fixture never lit one").pos;
     run(&mut w, 10, 0, 0);
-    let moved = w.tornadoes[0].expect("it vanished early").pos;
+    let moved = w.effects[slot].expect("it vanished early").tornado_pos();
     assert!(
         moved.x.raw() > start.x.raw(),
         "the tornado did not move along the direction it was lit on"
     );
 
     run(&mut w, 300, 0, 0);
-    assert!(
-        w.tornadoes.iter().all(|t| t.is_none()),
-        "the tornado outlived its own lifetime"
-    );
+    assert!(tornadoes(&w) == 0, "the tornado outlived its own lifetime");
 }
 
 #[test]
@@ -236,14 +263,9 @@ fn the_tornado_pulls_and_burns_whoever_it_catches() {
     let before = w.players[1].health;
 
     // Lit right where he is standing and off sideways from there, so a good
-    // stretch of its travel keeps him inside the pull radius -- what is under
+    // stretch of its travel keeps him inside its own volumes -- what is under
     // test is the pull and the tick, not a chase across the arena.
-    sim::tornado::spawn(
-        &mut w.tornadoes,
-        0,
-        start,
-        V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
-    );
+    light_tornado(&mut w, 0, start, V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE));
     run(&mut w, 5, 0, 0);
     assert!(
         w.players[1].vel.z.raw() > 0,
@@ -262,12 +284,7 @@ fn the_tornado_never_catches_its_own_owner() {
     let mut w = elementalist();
     let before = w.players[0].health;
     let start = w.players[0].pos;
-    sim::tornado::spawn(
-        &mut w.tornadoes,
-        0,
-        V3::ZERO,
-        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
-    );
+    light_tornado(&mut w, 0, V3::ZERO, V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
     run(&mut w, 40, 0, 0);
     assert_eq!(
         w.players[0].health, before,

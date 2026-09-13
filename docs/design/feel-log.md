@@ -2552,6 +2552,47 @@ moving target often enough to make steering the meter frustrating, which would b
 failure this class cannot absorb; and a ball tip with a body's radius of slack on it may still
 be more forgiving than a tip should be.
 
+### 2026-09-13 — Cataclysm stopped inventing hitboxes
+
+**Changed** what Cataclysm does to a structure and to a fire pillar, without touching what
+decides *whether* it hits either one.
+
+A destroyed structure used to go up in `blast_cone`: an instant cone test of its own, with two
+knobs of its own (`cataclysm_cone_cos`, `cataclysm_blast_radius`) that answered a question
+none of the game's other attacks needed answered the same way. It is `crate::debris` now — the
+structure breaks into seven pieces, fanned along the beam's own line with `debris_spread`, each
+a small thrown projectile with a real flight time. What connects depends on range and on
+standing inside the fan, the way a real spray does, rather than on standing inside a bubble
+that already existed by the time anyone saw it.
+
+A fire pillar torn loose used to become a `FireTornado` struct in its own array
+(`crate::tornado`), with its own pull radius, its own damage, and its own stagger — a second,
+nearly-identical description of a fire pillar's hitbox sitting a few files away from the real
+one. It is `EffectKind::FireTornado` now, the same `Effect` slot the pillar already occupied,
+reusing `pillar_volumes()` and the pillar's own `pillar_damage` tick outright (see
+`state::burn_the_pillar`, shared by both). The only new number is `tornado_pull`; the pull
+radius is just `pillar_volumes().0.radius`, because asking "how far does its pull reach" and
+"how far does its burn reach" as two different knobs was answering the same question twice and
+risking two different answers to it.
+
+**Why** — reported after playing it: the tornado felt like a new hazard bolted onto the pillar
+rather than the pillar itself let loose, and the blast's instantaneous cone gave a destroyed
+structure no visible moment between "there" and "everyone around it is already hit." Both were
+symptoms of the same thing, a hitbox invented for the occasion instead of reused from one that
+already existed and was already trusted.
+
+**Removed** five scalars (`CataclysmConeCos`, `CataclysmBlastRadius`, `TornadoPullRadius`,
+`TornadoDamage`, `TornadoStagger`) and the whole `crate::tornado` module. **Added** eight —
+`DebrisSpeed`, `DebrisRange`, `DebrisRadius`, `DebrisSpread`, `DebrisDamage`, `DebrisStagger`,
+`DebrisBlockstun`, `DebrisKnockback` — and `crate::debris`, built the same way `crate::bolt`
+is: a real velocity, stepped frame by frame, because a thrown thing is not a placed one and
+`crate::effects`' rule against a velocity was never about this.
+
+**Verdict** not yet played against another person. The shotgun's spread (`debris_spread`,
+1/16 turn either side of the beam) and per-piece damage are first guesses — what "close range
+is a wall of debris, far range is a couple of stray pieces" actually feels like at the stick
+has not been tested.
+
 ### 2026-09-13 — the Ridgeback, rebuilt
 
 **Changed** the creature is about a third larger and stands four and a half

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 228] = [
+pub const SCALARS: [i32; 231] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -173,14 +173,17 @@ pub const SCALARS: [i32; 228] = [
                9, // elementalist.fire_bolt_stagger = 9
                5, // elementalist.fire_bolt_blockstun = 5
           196608, // elementalist.fire_bolt_knockback = 3
-           39322, // elementalist.cataclysm_blast_cone_(cos) = 0.6
-          393216, // elementalist.cataclysm_blast_radius = 6
           917504, // elementalist.fire_tornado_speed = 14
-          294912, // elementalist.fire_tornado_pull_radius = 4.5
          2621440, // elementalist.fire_tornado_pull_(m/s2) = 40
-              15, // elementalist.fire_tornado_tick_damage = 15
-              10, // elementalist.fire_tornado_tick_stagger = 10
               90, // elementalist.fire_tornado_lifetime = 90
+         1966080, // elementalist.cataclysm_debris_speed = 30
+          524288, // elementalist.cataclysm_debris_range = 8
+           32768, // elementalist.cataclysm_debris_radius = 0.5
+            4096, // elementalist.cataclysm_debris_fan_(turns) = 0.063
+              12, // elementalist.cataclysm_debris_damage,_per_piece = 12
+               8, // elementalist.cataclysm_debris_stagger = 8
+               4, // elementalist.cataclysm_debris_blockstun = 4
+          393216, // elementalist.cataclysm_debris_knockback = 6
           144179, // blood_mage.black_spike_height = 2.2
               48, // blood_mage.bloodletter,_out_and_back = 48
            29491, // blood_mage.bloodletter_radius = 0.45

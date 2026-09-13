@@ -14,6 +14,7 @@ pub mod bolt;
 pub mod camera;
 pub mod class;
 pub mod curve;
+pub mod debris;
 pub mod effects;
 pub mod fixed;
 pub mod input;
@@ -24,7 +25,6 @@ pub mod oven;
 pub mod shadow;
 pub mod state;
 pub mod stones;
-pub mod tornado;
 pub mod tuned;
 pub mod tuning;
 
