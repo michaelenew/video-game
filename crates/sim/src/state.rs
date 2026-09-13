@@ -1089,6 +1089,12 @@ impl World {
                 h.write_i32(m.speed.raw());
                 h.write_i32(m.health);
                 h.write_i32(m.poise);
+                h.write_i32(m.strain);
+                h.write_u32(m.stride as u32);
+                h.write_u32(m.beat as u32);
+                h.write_u32(m.slowed as u32);
+                h.write_i32(m.slow_mul.raw());
+                h.write_u32(m.rooted as u32);
                 for limb in &m.part_health {
                     h.write_i32(*limb);
                 }
@@ -1103,6 +1109,9 @@ impl World {
                 h.write_u32(m.brain.think_left as u32);
                 h.write_u32(m.brain.last_move as u32);
                 h.write_u32(m.brain.repeat_left as u32);
+                for slot in &m.brain.cooldown {
+                    h.write_u32(*slot as u32);
+                }
                 h.write_u32(m.brain.rng);
             }
         }
@@ -3209,6 +3218,12 @@ impl World {
                         .mul(preying(Class::ShadowReaver, beast.disabled()))
                         .to_int();
                     beast.take_hit(part, raw);
+                    // The recall's slow, offered the same way everything else
+                    // is. It is half the reason to recall through something.
+                    beast.take_control(monster::Control::slowing(
+                        t::slow_frames(),
+                        t::shadow_recall_slow(),
+                    ));
                     self.monster = Some(beast);
                     shadow::mark_cut(&mut self.players[owner], QUARRY_VICTIM);
                 }
@@ -3629,6 +3644,10 @@ impl World {
             .mul(preying(effect.class, beast.disabled()))
             .to_int();
         let dealt = beast.take_hit(struck, raw);
+        // The same control a fighter would have taken, offered rather than
+        // applied: the creature decides how much of it it is currently in a
+        // state to feel. See `monster::Monster::take_control`.
+        beast.take_control(effect.control());
         self.monster = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
@@ -3775,11 +3794,17 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     }
     p.crouching = input.has(Input::CROUCH) && p.action.actionable();
 
-    // The buck. Acceleration is read in body space, where the surface normal is
-    // simply `+y`, and the part of it pressing the rider *into* the surface does
-    // not count -- being shoved down onto something is not being thrown off it.
-    let stance = beast.stance();
-    let felt = stance.dir_to_body(accel);
+    // The buck. Acceleration is read in the frame of **the part underfoot**,
+    // where that surface's normal is simply `+y`, and the part of it pressing
+    // the rider *into* the surface does not count -- being shoved down onto
+    // something is not being thrown off it.
+    //
+    // The part's frame rather than the body's, because the creature is a
+    // skeleton: a tail that whips throws whoever is on the tail and does
+    // nothing to somebody standing on the shoulder, and reading both in one
+    // shared frame is how that distinction gets lost.
+    let rig = beast.rig();
+    let felt = rig.dir_to_part(part, accel);
     // `big_len`, not `len`: these are accelerations in the hundreds, and a
     // squared 16.16 value saturates just past 181. The first version of this
     // used `len` and reported 181 for every buck in the game, so nothing ever
@@ -3793,7 +3818,7 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     if p.grip_settle > 0 {
         p.grip_settle -= 1;
     } else if throw.raw() > grip.raw() {
-        thrown_off(p, &stance, surface);
+        thrown_off(p, &rig, part, surface);
         return;
     }
 
@@ -3845,20 +3870,28 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     if input.has(Input::SPACE) && p.action.actionable() {
         let mob = p.class.mobility();
         p.mount = monster::NO_PART;
-        p.vel = surface.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
+        // **What the leap carries is capped.** You take the surface's own
+        // velocity with you -- that is what makes stepping off a charging
+        // animal work -- but only as much of it as you had time to push off
+        // against. Without the cap, jumping during a shake means being flung by
+        // a back that is whipping sideways at forty metres a second, and the
+        // one answer to the buck that is neither bracing nor leaving would not
+        // exist. See `tuning::leap_carry`.
+        let carried = carry_off(surface);
+        p.vel = carried.add(V3::new(Fx::ZERO, t::jump_speed().mul(mob.jump), Fx::ZERO));
         p.grounded = false;
         p.air_dodged = false;
         p.jump_hold = t::jump_hold_frames();
         return;
     }
 
-    // Movement, in the creature's frame. The wish direction arrives
+    // Movement, in the frame of the part underfoot. The wish direction arrives
     // camera-relative as it always does; `carry_yaw` has already turned the
     // camera with the animal, so "forward" still means the same part of its
     // back that it did before it turned.
     let (ax, az) = input.move_axis();
     let speed = rider_speed(p);
-    let wish = stance.dir_to_body(move_dir(p.aim(input), ax, az));
+    let wish = rig.dir_to_part(part, move_dir(p.aim(input), ax, az));
     let mut next = held;
     next.x = next.x.add(wish.x.mul(speed).mul(DT));
     next.z = next.z.add(wish.z.mul(speed).mul(DT));
@@ -3874,21 +3907,29 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
         .stride
         .wrapping_add(walked.div(stride_length(p)).raw().clamp(0, 65535) as u16);
 
-    // A step you can walk up. The creature is terrain, and the tail sits two
-    // thirds of a metre below the back: without this the only way between them
-    // is a jump nobody would think to try.
-    let mut probe = next;
-    probe.y = probe.y.add(t::step_up());
-    if let Some((up, top)) = beast.surface_under(beast.world_of(part, probe), radius) {
-        if up != part {
-            let mut rest = beast.rest_frame(up, beast.world_of(part, probe));
-            rest.y = top;
-            p.mount = up as u8;
-            p.local = rest;
-            p.pos = beast.world_of(up, rest);
-            p.grip_settle = t::mount_settle() as u8;
-            return;
-        }
+    // A step you can walk up. The creature is terrain rather than a set of
+    // ledges, and the climb from the tail to the nape crosses five parts: a
+    // rider who had to jump every seam would never make it past the first one.
+    //
+    // Asked as a band that reaches **upward only**: from the feet to a full
+    // step above them. Letting it reach downward as well made a rider standing
+    // where two treads overlap step onto the lower one, then onto the higher
+    // one, then back, once a frame -- and every swap moves them a few
+    // centimetres, which the buck reads as an enormous acceleration and throws
+    // them for. Descending is the ordinary landing test's job, a few lines
+    // below. See `Rig::surface_within`.
+    let stepped = beast
+        .rig()
+        .surface_within(beast.world_of(part, next), radius, Fx::ZERO, t::step_up())
+        .filter(|(up, _)| *up != part);
+    if let Some((up, top)) = stepped {
+        let mut rest = beast.rest_frame(up, beast.world_of(part, next));
+        rest.y = top;
+        p.mount = up as u8;
+        p.local = rest;
+        p.pos = beast.world_of(up, rest);
+        p.grip_settle = t::mount_settle() as u8;
+        return;
     }
 
     let moved = beast.resolve(beast.world_of(part, next), radius, t::body_height());
@@ -3915,10 +3956,10 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
         None => {
             // Walked off the edge. You leave with whatever the surface was
             // doing, which is why stepping off a turning animal throws you
-            // wide.
+            // wide -- capped the same way a jump is, and for the same reason.
             p.mount = monster::NO_PART;
             p.pos = moved.pos;
-            p.vel = surface;
+            p.vel = carry_off(surface);
             p.grounded = false;
         }
     }
@@ -3980,15 +4021,32 @@ fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
     p.grip_settle = t::mount_settle() as u8;
 }
 
+/// How much of the surface's momentum you take with you when you leave it.
+///
+/// See `tuning::leap_carry` for why this is capped at all. The direction is
+/// kept and only the magnitude is clipped, so a leap off a charging animal
+/// still goes the way the animal was going.
+fn carry_off(surface: V3) -> V3 {
+    let speed = crate::math::big_len(surface);
+    let cap = t::leap_carry();
+    if speed.raw() <= cap.raw() || speed.raw() <= 0 {
+        return surface;
+    }
+    surface.scale(cap.div(speed))
+}
+
 /// Lose your footing.
 ///
 /// You leave with the velocity the surface had, capped, plus a push along the
 /// creature's own up axis. The cap is what keeps a shake from firing someone
 /// over the arena wall.
-fn thrown_off(p: &mut Player, stance: &monster::Stance, surface: V3) {
+fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
     let flat = V3::new(surface.x, Fx::ZERO, surface.z);
     let speed = flat.flat_len().min(t::throw_kick());
-    let up = stance.dir_to_world(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    // Up off the patch of animal you were standing on, not up off the animal.
+    // On a skeleton those differ, and being thrown off a tail that is pointing
+    // at the floor should not fire you into the ceiling.
+    let up = rig.of(part).rot.apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
     p.mount = monster::NO_PART;
     p.vel = flat
         .normalized()
@@ -4000,6 +4058,9 @@ fn thrown_off(p: &mut Player, stance: &monster::Stance, surface: V3) {
     p.action = Action::HitStun {
         left: t::throw_stun(),
     };
+    // The fall. See `tuning::throw_damage`: the back is safe from everything
+    // the creature swings, so the buck has to be what the ride costs.
+    p.health = (p.health - t::throw_damage()).max(0);
 }
 
 /// Come off because something else decided it, rather than because you lost
@@ -4308,7 +4369,7 @@ impl World {
             let m = monster::attack(kind);
             let anchor = beast
                 .hit_volume()
-                .map(|(a, _, _, _)| beast.stance().to_world(a))
+                .map(|(a, _, _, _)| a)
                 .unwrap_or(beast.pos);
             let mut landed = false;
             for i in 0..MAX_PLAYERS {
@@ -4383,11 +4444,22 @@ impl World {
             let Some(part) = part_under(&beast, &attacker, &box_out) else {
                 continue;
             };
-            let raw = Fx::from_int(moves::get(attacker.class, kind).damage)
+            let m = moves::get(attacker.class, kind);
+            let raw = Fx::from_int(m.damage)
                 .mul(preying(attacker.class, beast.disabled()))
                 .to_int();
             let dealt = beast.take_hit(part, raw);
-            self.players[i].heal(moves::get(attacker.class, kind).leeched(dealt));
+            // An uppercut does not put thirteen metres of animal in the air and
+            // a grab does not drag it anywhere, but throwing one at a creature
+            // that is already reeling should still be a decision -- so the move
+            // offers what it would have done to a fighter and the creature
+            // takes what it can. Nothing at all, unless it is susceptible.
+            beast.take_control(monster::Control {
+                launch: m.launch,
+                grabs: m.grabs,
+                ..monster::Control::default()
+            });
+            self.players[i].heal(m.leeched(dealt));
             self.players[i].hit_used = true;
         }
 

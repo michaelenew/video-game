@@ -1,15 +1,23 @@
 //! Drawing the Ridgeback.
 //!
-//! One box per part, placed from the same `stance` and `shape` the simulation
-//! collides against. Nothing here rebuilds the creature's geometry: if you can
-//! see a box, that box is what stops you walking through it and what your
-//! attacks are hitting.
+//! One box per part, placed from the same rig and the same boxes the
+//! simulation collides against. Nothing here rebuilds the creature's geometry:
+//! if you can see a box, that box is what stops you walking through it and what
+//! your attacks are hitting.
 //!
-//! The ridge is a different colour from everything else on purpose. It is the
-//! one place on the animal worth hitting, and a player should be able to see
-//! that from across the arena without being told.
+//! The parts are boxes and the creature is a skeleton, so consecutive segments
+//! of a limb open a wedge between them whenever the joint bends. A **sphere at
+//! each joint** closes it -- the classic capsule silhouette, built out of the
+//! shapes that were already there. It is the one thing drawn that the
+//! simulation does not collide against, and it is deliberately *inside* the
+//! parts it joins, so it can never make the animal look bigger than it is.
+//!
+//! The two weak points are a different colour from everything else on purpose.
+//! They are the only places on the animal worth hitting, and a player should be
+//! able to see that from across the arena without being told.
 
 use bevy::prelude::*;
+use sim::beast;
 use sim::monster::{self, Doing, Monster};
 
 /// One drawable part. A fixed pool, spawned once: the creature comes and goes
@@ -18,11 +26,15 @@ use sim::monster::{self, Doing, Monster};
 #[derive(Component)]
 pub struct Limb(pub usize);
 
-/// Materials, made once. Which one a limb wears changes when it breaks.
+/// One drawable joint filler.
+#[derive(Component)]
+pub struct Knuckle(pub usize);
+
+/// Materials, made once. Which one a part wears changes when it breaks.
 #[derive(Resource)]
 pub struct Hide {
     armour: Handle<StandardMaterial>,
-    ridge: Handle<StandardMaterial>,
+    weak: Handle<StandardMaterial>,
     limb: Handle<StandardMaterial>,
     broken: Handle<StandardMaterial>,
 }
@@ -38,8 +50,8 @@ pub fn setup(
             perceptual_roughness: 0.92,
             ..default()
         }),
-        // The weak point, and it says so.
-        ridge: materials.add(StandardMaterial {
+        // The weak points, and they say so.
+        weak: materials.add(StandardMaterial {
             base_color: Color::srgb(0.86, 0.32, 0.22),
             emissive: LinearRgba::rgb(0.55, 0.08, 0.04),
             perceptual_roughness: 0.7,
@@ -56,8 +68,8 @@ pub fn setup(
             ..default()
         }),
     };
-    // A unit cube, scaled per part. The part boxes are axis-aligned in the
-    // creature's own frame, so one mesh covers all of them.
+    // A unit cube, scaled per part. The part boxes are axis-aligned in their
+    // own bone's frame, so one mesh covers all of them.
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     for index in 0..monster::PARTS {
         commands.spawn((
@@ -68,6 +80,16 @@ pub fn setup(
             Limb(index),
         ));
     }
+    let ball = meshes.add(Sphere::new(0.5).mesh().ico(2).unwrap());
+    for bone in 0..beast::BONES {
+        commands.spawn((
+            Mesh3d(ball.clone()),
+            MeshMaterial3d(hide.armour.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            Knuckle(bone),
+        ));
+    }
     commands.insert_resource(hide);
 }
 
@@ -75,33 +97,47 @@ pub fn setup(
 pub fn place(
     sim: Res<crate::Sim>,
     hide: Res<Hide>,
-    mut limbs: Query<(
-        &Limb,
-        &mut Transform,
-        &mut Visibility,
-        &mut MeshMaterial3d<StandardMaterial>,
-    )>,
+    mut limbs: Query<
+        (
+            &Limb,
+            &mut Transform,
+            &mut Visibility,
+            &mut MeshMaterial3d<StandardMaterial>,
+        ),
+        Without<Knuckle>,
+    >,
+    mut knuckles: Query<
+        (
+            &Knuckle,
+            &mut Transform,
+            &mut Visibility,
+            &mut MeshMaterial3d<StandardMaterial>,
+        ),
+        Without<Limb>,
+    >,
 ) {
     let Some(beast) = sim.cur.monster else {
         for (_, _, mut visible, _) in limbs.iter_mut() {
             *visible = Visibility::Hidden;
         }
+        for (_, _, mut visible, _) in knuckles.iter_mut() {
+            *visible = Visibility::Hidden;
+        }
         return;
     };
-    let stance = beast.stance();
+    let rig = beast.rig();
+
     for (limb, mut transform, mut visible, mut material) in limbs.iter_mut() {
         let index = limb.0;
         let shape = monster::shape(index);
-        let rides = monster::SHAPES[index].rides;
         let mid = shape.min.add(shape.max).scale(sim::Fx::ratio(1, 2));
         let size = shape.max.sub(shape.min);
+        let frame = rig.of(index);
 
-        // The part's frame, read off the transform itself rather than
-        // reconstructed from angles. The articulation is affine, so stepping
-        // one unit along each body axis and subtracting gives the basis --
-        // which means the tail's swing comes out for free and there is no
-        // handedness convention here to get wrong.
-        let at = |offset: sim::V3| fx3(stance.to_world(stance.articulate(rides, mid.add(offset))));
+        // The bone's frame, read off the transform itself rather than
+        // reconstructed from angles: step one unit along each axis and
+        // subtract. There is no handedness convention here to get wrong.
+        let at = |offset: sim::V3| fx3(frame.local_to_world(mid.add(offset)));
         let origin = at(sim::V3::ZERO);
         let x = at(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)) - origin;
         let y = at(sim::V3::new(sim::Fx::ZERO, sim::Fx::ONE, sim::Fx::ZERO)) - origin;
@@ -113,18 +149,68 @@ pub fn place(
         };
         *visible = Visibility::Inherited;
 
-        let wanted = if index == monster::RIDGE {
-            &hide.ridge
-        } else if beast.broken(index) {
-            &hide.broken
-        } else if monster::SHAPES[index].breakable {
-            &hide.limb
-        } else {
-            &hide.armour
-        };
+        let wanted = skin(&hide, &beast, index);
         if material.0 != *wanted {
             material.0 = wanted.clone();
         }
+    }
+
+    // The joints. Each is sized to the thinner of the parts meeting there, so
+    // it disappears inside them and only shows in the wedge a bend opens up.
+    for (knuckle, mut transform, mut visible, mut material) in knuckles.iter_mut() {
+        let bone = knuckle.0;
+        let Some(width) = joint_width(bone) else {
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        *transform = Transform {
+            translation: fx3(rig.bone[bone].at),
+            rotation: Quat::IDENTITY,
+            scale: Vec3::splat(width),
+        };
+        *visible = Visibility::Inherited;
+        let wanted = &hide.armour;
+        if material.0 != *wanted {
+            material.0 = wanted.clone();
+        }
+    }
+}
+
+/// How wide a filler at this bone should be, or `None` where nothing meets.
+///
+/// The narrower of the two parts hanging off the joint: a sphere the size of
+/// the *wider* one would bulge out of the slimmer segment and read as a bead on
+/// a string rather than as an elbow.
+fn joint_width(bone: usize) -> Option<f32> {
+    let mut narrowest: Option<sim::Fx> = None;
+    for index in 0..monster::PARTS {
+        let shape = monster::shape(index);
+        if beast::SHAPES[index].bone != bone || !beast::SHAPES[index].solid {
+            continue;
+        }
+        let size = shape.max.sub(shape.min);
+        let thin = size.y.min(size.z);
+        if narrowest.is_none_or(|seen| thin.raw() < seen.raw()) {
+            narrowest = Some(thin);
+        }
+    }
+    // The root and the chest carry the barrel; a ball there would sit inside a
+    // box two and a half metres wide and cost a draw call for nothing.
+    if matches!(bone, beast::ROOT | beast::SPINE | beast::CHEST) {
+        return None;
+    }
+    narrowest.map(|w| w.to_f32_for_render() * 0.95)
+}
+
+fn skin<'a>(hide: &'a Hide, beast: &Monster, index: usize) -> &'a Handle<StandardMaterial> {
+    if monster::is_weak_point(index) {
+        &hide.weak
+    } else if beast.broken(index) {
+        &hide.broken
+    } else if beast::SHAPES[index].breakable {
+        &hide.limb
+    } else {
+        &hide.armour
     }
 }
 
@@ -166,39 +252,29 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
     let Some(beast) = sim.cur.monster else {
         return;
     };
-    let stance = beast.stance();
+    let rig = beast.rig();
 
-    // Mountable tops, in the creature's frame, so it is obvious where the
-    // climb goes and where it dead-ends.
+    // Mountable tops, so it is obvious where the climb goes and where it dead
+    // ends. Straight off the rig's own top-face corners.
     for index in 0..monster::PARTS {
-        if !monster::SHAPES[index].mountable {
+        if !sim::beast::SHAPES[index].mountable {
             continue;
         }
-        let shape = monster::shape(index);
-        let rides = monster::SHAPES[index].rides;
-        let corner = |x: sim::Fx, z: sim::Fx| {
-            fx3(stance.to_world(stance.articulate(rides, sim::V3::new(x, shape.max.y, z))))
-        };
-        let quad = [
-            corner(shape.min.x, shape.min.z),
-            corner(shape.max.x, shape.min.z),
-            corner(shape.max.x, shape.max.z),
-            corner(shape.min.x, shape.max.z),
-        ];
+        let quad = rig.top_face(index).map(fx3);
         for i in 0..4 {
             gizmos.line(quad[i], quad[(i + 1) % 4], MOUNTABLE);
         }
     }
 
-    // The attack out this frame -- a vertical cylinder in body space, which is
-    // what the hit test compares against. Drawn as two rings and a spine, so
-    // the height band is visible: unlike the fighters' own attacks, this one
-    // genuinely cares how high you are standing.
+    // The attack out this frame -- a vertical cylinder, which is what the hit
+    // test compares against. Drawn as two rings and a spine, so the height band
+    // is visible: unlike the fighters' own attacks, this one genuinely cares
+    // how high you are standing.
     if let Some((anchor, radius, low, high)) = beast.hit_volume() {
         let spent = beast.hit_used;
         let colour = if spent { HIT_SPENT } else { HIT };
         let ring = |gizmos: &mut Gizmos, y: sim::Fx| {
-            let centre = fx3(stance.to_world(sim::V3::new(anchor.x, y, anchor.z)));
+            let centre = fx3(sim::V3::new(anchor.x, y, anchor.z));
             gizmos.circle(
                 Isometry3d::new(centre, Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
                 radius.to_f32_for_render(),
@@ -213,12 +289,12 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
 
     // What it is doing, as a line off the nose: long for a committed move,
     // short while it is only looking.
-    let nose = fx3(stance.to_world(sim::V3::new(
-        monster::shape(monster::HEAD).max.x,
-        monster::shape(monster::HEAD).max.y,
-        sim::Fx::ZERO,
-    )));
-    let ahead = fx3(stance.dir_to_world(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)));
+    let head = monster::shape(monster::HEAD);
+    let nose = fx3(rig.part_to_world(
+        monster::HEAD,
+        sim::V3::new(head.max.x, head.max.y, sim::Fx::ZERO),
+    ));
+    let ahead = fx3(rig.dir_to_world(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)));
     let length = match beast.doing {
         Doing::Startup { .. } => 2.5,
         Doing::Active { .. } => 4.0,
@@ -238,7 +314,7 @@ fn intent_colour(beast: &Monster) -> Color {
     match beast.doing {
         Doing::Startup { .. } => WINDUP,
         Doing::Active { .. } => HIT,
-        Doing::Toppled { .. } | Doing::Flinch { .. } => DOWN,
+        Doing::Toppled { .. } | Doing::Flinch { .. } | Doing::Stumble { .. } => DOWN,
         _ => CALM,
     }
 }

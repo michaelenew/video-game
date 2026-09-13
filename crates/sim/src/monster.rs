@@ -1,23 +1,27 @@
 //! The Ridgeback: a creature you fight, and stand on.
 //!
 //! See `docs/design/monsters.md` for what the fight is and why. The short
-//! version: its head, flanks and tail are armoured, its back is not, and the
-//! only way to reach the soft strip along its spine for more than one swing is
-//! to be standing on the animal.
+//! version: it is thirteen metres of armoured animal with two soft places on
+//! it, both on top, and the fight is about earning your way up there and
+//! staying up there.
 //!
-//! Three pieces live here.
+//! Four pieces live here. The fifth -- the body itself -- moved out to
+//! [`crate::beast`] when the creature stopped being ten welded boxes and grew a
+//! skeleton.
 //!
-//! **A body made of boxes in the creature's own frame.** Parts are axis-aligned
-//! in *body space*, so colliding a player with the creature is the same routine
-//! as colliding them with the arena: transform into body space, resolve against
-//! boxes, transform back. One collision rule, two frames of reference.
+//! **Moves**, read live from the Oven, each with its own frame data, hit
+//! volume, the bearing and range it wants its target on, and a lockout so that
+//! a move you have just baited cannot come straight back.
 //!
-//! **A pose that is five numbers.** A move moves the body and the body carries
-//! whoever is on it, so the articulation has to be real -- but it does not have
-//! to be a skeleton. Five scalars, each a pure function of `(action, frame)`,
-//! are enough to make every move read from across the arena and enough to
-//! generate honest shear under a rider. Being a pure function is what keeps
-//! rollback exact: there is no pose to snapshot.
+//! **A pose that is a lookup.** Every frame, what the creature looks like is
+//! sampled out of a baked clip table by *phase*, layered with a gait indexed by
+//! ground covered and whatever its broken legs are doing to it. All of it a
+//! pure function of the snapshot, which is what keeps rollback exact.
+//!
+//! **A ladder of ways to be in trouble.** A flinch is cheap and short. A
+//! stumble is a knee on the ground -- what a broken leg and a landed piece of
+//! crowd control both produce, and the only way onto its back from the floor.
+//! A topple is the long one the climb is for.
 //!
 //! **A control algorithm that glances rather than watching.** It samples the
 //! player every few frames and extrapolates from that sample until the next
@@ -25,215 +29,73 @@
 //! a real thing to get good at.
 
 use crate::DT;
-use crate::fixed::{Fx, cos_turns, sin_turns};
+pub use crate::beast::Rig;
+
+use crate::beast::{self, Clip, Pose};
+use crate::fixed::Fx;
 use crate::math::V3;
 use crate::tuning as t;
 
 // ---------------------------------------------------------------------------
 // The body
+//
+// Part indices and boxes live in `crate::beast`. They are re-exported here
+// because "which part did that hit" is a question about the creature and every
+// caller already asks the creature.
 // ---------------------------------------------------------------------------
 
-/// Part indices. Named consts rather than an enum because every per-part fact
-/// in here is an array, and an array index is what an array wants.
-pub const HEAD: usize = 0;
-pub const NECK: usize = 1;
-pub const BARREL: usize = 2;
-pub const RIDGE: usize = 3;
-pub const TAIL_BASE: usize = 4;
-pub const TAIL_TIP: usize = 5;
-pub const FORELEG_L: usize = 6;
-pub const FORELEG_R: usize = 7;
-pub const HINDLEG_L: usize = 8;
-pub const HINDLEG_R: usize = 9;
+pub use crate::beast::{
+    P_BARREL as BARREL, P_CHEST as SHOULDERS, P_FOREFOOT_L as FOREFOOT_L,
+    P_FOREFOOT_R as FOREFOOT_R, P_FORELEG_L as FORELEG_L, P_FORELEG_R as FORELEG_R,
+    P_HAUNCH as HAUNCH, P_HEAD as HEAD, P_HINDFOOT_L as HINDFOOT_L, P_HINDFOOT_R as HINDFOOT_R,
+    P_HINDLEG_L as HINDLEG_L, P_HINDLEG_R as HINDLEG_R, P_NAPE as NAPE, P_NECK as NECK,
+    P_RIDGE as RIDGE, P_TAIL_BASE as TAIL_BASE, P_TAIL_MID as TAIL_MID, P_TAIL_TIP as TAIL_TIP,
+    PART_NAMES, PARTS, SHAPES, Shape, shape,
+};
 
-pub const PARTS: usize = 10;
+/// The bones the head's tracking is spread across, base to tip.
+const NECK_CHAIN: [usize; 3] = [beast::NECK, beast::NECK2, beast::HEAD];
+
+/// The smallest positive value 16.16 can hold. A guard against dividing by a
+/// zero, not a magnitude anybody picked.
+const SMALLEST: Fx = Fx::from_raw(1);
 
 /// Not standing on anything. Shares the sentinel with `state::NOBODY` on
 /// purpose: both mean "this index refers to nothing".
 pub const NO_PART: u8 = u8::MAX;
 
-pub const PART_NAMES: [&str; PARTS] = [
-    "head",
-    "neck",
-    "barrel",
-    "ridge",
-    "tail",
-    "tail tip",
-    "left foreleg",
-    "right foreleg",
-    "left hindleg",
-    "right hindleg",
-];
-
-/// One box of the creature, in body space: `+x` forward toward the head, `+y`
-/// up, `+z` to the creature's right.
-#[derive(Clone, Copy, Debug)]
-pub struct Shape {
-    pub min: V3,
-    pub max: V3,
-    /// You can stand on its top face.
-    pub mountable: bool,
-    /// You collide with it. The ridge is neither solid nor mountable: it is a
-    /// soft strip of the back, not a wall, so you walk over it freely and that
-    /// is the point.
-    pub solid: bool,
-    /// Follows the tail swing (1) or the head's reach (2), or neither (0).
-    pub rides: u8,
-    /// Broken by damage, and being broken costs the creature something.
-    pub breakable: bool,
-}
-
-const fn v(x: (i32, i32), y: (i32, i32), z: (i32, i32)) -> V3 {
-    V3::new(
-        Fx::ratio(x.0, x.1),
-        Fx::ratio(y.0, y.1),
-        Fx::ratio(z.0, z.1),
-    )
-}
-
-const fn part(min: V3, max: V3, mountable: bool, solid: bool, rides: u8, breakable: bool) -> Shape {
-    Shape {
-        min,
-        max,
-        mountable,
-        solid,
-        rides,
-        breakable,
-    }
-}
-
-/// Nothing follows anything; the tail parts; the head and neck.
-const STILL: u8 = 0;
-const WITH_TAIL: u8 = 1;
-const WITH_HEAD: u8 = 2;
-
-/// The creature's proportions, at scale one.
-///
-/// A constant for the same reason `arena::SOLIDS` is: it is a shape rather than
-/// a feel number, it never changes during a fight, and it is therefore not part
-/// of the rollback snapshot. The number you actually want to move while playing
-/// -- *how big is it* -- is `tuning::monster_scale`, which multiplies all of
-/// this, and that one is in the Oven.
-pub const SHAPES: [Shape; PARTS] = [
-    // Head and neck: armoured, and between them they stop a jump-in to the
-    // ridge from the front.
-    part(
-        v((34, 10), (20, 10), (-6, 10)),
-        v((45, 10), (30, 10), (6, 10)),
-        false,
-        true,
-        WITH_HEAD,
-        false,
-    ),
-    part(
-        v((25, 10), (18, 10), (-5, 10)),
-        v((34, 10), (28, 10), (5, 10)),
-        false,
-        true,
-        WITH_HEAD,
-        false,
-    ),
-    // The barrel. Its top face at 2.4 m is the walkable back, and its sides are
-    // what a player on the ground is actually hitting.
-    part(
-        v((-24, 10), (13, 10), (-105, 100)),
-        v((26, 10), (24, 10), (105, 100)),
-        true,
-        true,
-        STILL,
-        false,
-    ),
-    // The ridge: a soft strip lying along the top of the barrel. Neither solid
-    // nor mountable -- it is a target volume, and walking over it is how you
-    // get to stand next to it.
-    part(
-        v((-4, 10), (24, 10), (-5, 10)),
-        v((12, 10), (275, 100), (5, 10)),
-        false,
-        false,
-        STILL,
-        false,
-    ),
-    // The tail. The base sits at 1.75 m, which is inside a jump, and that is
-    // the way up for a player with no platform to hand.
-    part(
-        v((-40, 10), (105, 100), (-6, 10)),
-        v((-24, 10), (175, 100), (6, 10)),
-        true,
-        true,
-        WITH_TAIL,
-        false,
-    ),
-    part(
-        v((-54, 10), (85, 100), (-4, 10)),
-        v((-40, 10), (135, 100), (4, 10)),
-        false,
-        true,
-        WITH_TAIL,
-        false,
-    ),
-    // Legs. The forelegs break, and a broken one costs it the turn.
-    part(
-        v((15, 10), (0, 1), (-10, 10)),
-        v((23, 10), (14, 10), (-4, 10)),
-        false,
-        true,
-        STILL,
-        true,
-    ),
-    part(
-        v((15, 10), (0, 1), (4, 10)),
-        v((23, 10), (14, 10), (10, 10)),
-        false,
-        true,
-        STILL,
-        true,
-    ),
-    part(
-        v((-23, 10), (0, 1), (-105, 100)),
-        v((-13, 10), (14, 10), (-45, 100)),
-        false,
-        true,
-        STILL,
-        true,
-    ),
-    part(
-        v((-23, 10), (0, 1), (45, 100)),
-        v((-13, 10), (14, 10), (105, 100)),
-        false,
-        true,
-        STILL,
-        true,
-    ),
-];
-
-/// Where the tail hinges, in body space. Part of the proportions, not a knob.
-const TAIL_PIVOT_X: Fx = Fx::ratio(-24, 10);
-
-/// The part's box at the creature's tuned scale.
-pub fn shape(index: usize) -> Shape {
-    let s = SHAPES[index.min(PARTS - 1)];
-    let k = t::monster_scale();
-    Shape {
-        min: s.min.scale(k),
-        max: s.max.scale(k),
-        ..s
-    }
-}
-
 /// How much of an attack's damage a part passes through. Below one is armour;
-/// the ridge is above one, which is the whole reason to climb.
+/// the two weak points are above it, which is the whole reason to climb.
+///
+/// **The feet are the softest thing a fighter on the floor can reach**, and
+/// that is the ground game: you cannot get to the back without help, and
+/// breaking a foot is the help.
 pub fn vulnerability(index: usize) -> Fx {
     match index {
         HEAD => t::vuln_head(),
         NECK => t::vuln_neck(),
+        NAPE => t::vuln_nape(),
+        SHOULDERS => t::vuln_shoulder(),
         BARREL => t::vuln_barrel(),
         RIDGE => t::vuln_ridge(),
+        HAUNCH => t::vuln_haunch(),
         TAIL_BASE => t::vuln_tail(),
+        TAIL_MID => t::vuln_tail_mid(),
         TAIL_TIP => t::vuln_tail_tip(),
-        FORELEG_L | FORELEG_R => t::vuln_foreleg(),
-        _ => t::vuln_hindleg(),
+        FORELEG_L | FORELEG_R | HINDLEG_L | HINDLEG_R => t::vuln_leg(),
+        _ => t::vuln_foot(),
     }
+}
+
+/// The four feet, in the order `beast::LEGS` walks them. Named because three
+/// separate things ask "has a leg gone" and each working it out from the part
+/// table its own way is how they come to disagree.
+pub const BREAKABLE: [usize; 4] = [FOREFOOT_L, FOREFOOT_R, HINDFOOT_L, HINDFOOT_R];
+
+/// The two soft places. Damage to either fills the poise pool, and a full pool
+/// is a topple.
+pub const fn is_weak_point(part: usize) -> bool {
+    part == RIDGE || part == NAPE
 }
 
 // ---------------------------------------------------------------------------
@@ -264,8 +126,8 @@ pub const MOVE_NAMES: [&str; MOVES] = [
 /// creature's own coordinates, a radius, and a height span. Body space rather
 /// than world space because that is where the move is authored -- "the head,
 /// one metre in front of it" does not change when the creature turns -- and
-/// because it makes `follows` free: the anchor rides the same articulation the
-/// parts do.
+/// because it makes `follows` free: the anchor rides the same bone the part
+/// does.
 #[derive(Clone, Copy, Debug)]
 pub struct Attack {
     pub name: &'static str,
@@ -278,7 +140,7 @@ pub struct Attack {
     pub hit_radius: Fx,
     pub hit_low: Fx,
     pub hit_high: Fx,
-    /// `WITH_HEAD` or `WITH_TAIL`, so the volume tracks the part that carries it.
+    /// The bone the volume rides: the head's, the tail tip's, or the body's.
     pub follows: u8,
     pub hitstun: u16,
     pub blockstun: u16,
@@ -307,6 +169,16 @@ pub struct Attack {
     /// Added per player standing on the creature. This is what makes a rider
     /// the only thing it cares about.
     pub rider_weight: i32,
+    /// Frames before it can throw this move again, counted from the frame it
+    /// started.
+    ///
+    /// **This is what makes a bait worth making.** Without it, the answer to
+    /// every buck is another buck: a rider who reads the shake, leaves the
+    /// ground over it and lands back on the animal has earned nothing, because
+    /// the next shake starts on the frame the last one ended. With it, reading
+    /// a move buys a window whose length you can learn. See
+    /// `docs/design/monsters.md` §3.
+    pub cooldown: u16,
 }
 
 impl Attack {
@@ -355,6 +227,7 @@ pub fn attack(kind: u8) -> Attack {
         aim_span: Fx::from_raw(raw(F::AimSpan)),
         weight: raw(F::Weight),
         rider_weight: raw(F::RiderWeight),
+        cooldown: raw(F::Cooldown) as u16,
     }
 }
 
@@ -368,6 +241,20 @@ pub fn attacks() -> [Attack; MOVES] {
         attack(4),
         attack(5),
     ]
+}
+
+/// Which bone an attack's hit volume rides. The numbering is the move table's
+/// own, kept because it is edited in the Oven as an integer.
+pub const FOLLOWS_BODY: u8 = 0;
+pub const FOLLOWS_TAIL: u8 = 1;
+pub const FOLLOWS_HEAD: u8 = 2;
+
+const fn follow_bone(follows: u8) -> usize {
+    match follows {
+        FOLLOWS_TAIL => beast::TAIL3,
+        FOLLOWS_HEAD => beast::HEAD,
+        _ => beast::ROOT,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -393,6 +280,18 @@ pub enum Doing {
     /// A flinch. Short, and it interrupts whatever was happening.
     Flinch {
         left: u16,
+    },
+    /// Down on a knee.
+    ///
+    /// The middle rung of the ladder, and the one the ground game is aimed at:
+    /// a broken foot puts the creature here, and so does a piece of crowd
+    /// control that lands while it is susceptible. The front or back end drops
+    /// far enough to climb, which is what makes breaking a leg a route up
+    /// rather than a slightly faster kill.
+    Stumble {
+        left: u16,
+        /// True when it is the front end that has gone down.
+        front: bool,
     },
     /// Poise broken. The long window the climb is for.
     Toppled {
@@ -421,8 +320,16 @@ impl Doing {
     pub const fn open(self) -> bool {
         matches!(
             self,
-            Doing::Recovery { .. } | Doing::Flinch { .. } | Doing::Toppled { .. }
+            Doing::Recovery { .. }
+                | Doing::Flinch { .. }
+                | Doing::Stumble { .. }
+                | Doing::Toppled { .. }
         )
+    }
+
+    /// Is it down far enough to climb onto from the floor?
+    pub const fn grounded_route(self) -> bool {
+        matches!(self, Doing::Stumble { .. } | Doing::Toppled { .. })
     }
 
     pub const fn tag(self) -> u32 {
@@ -434,6 +341,7 @@ impl Doing {
             Doing::Flinch { .. } => 4,
             Doing::Toppled { .. } => 5,
             Doing::Dead => 6,
+            Doing::Stumble { .. } => 7,
         }
     }
 
@@ -444,49 +352,10 @@ impl Doing {
             | Doing::Active { left, .. }
             | Doing::Recovery { left, .. }
             | Doing::Flinch { left }
+            | Doing::Stumble { left, .. }
             | Doing::Toppled { left } => left,
         }
     }
-
-    /// Frames since the current move began, and how long it runs in total.
-    /// Zero-length when nothing is running.
-    fn elapsed(self) -> (u16, u16) {
-        let Some(kind) = self.attacking() else {
-            return (0, 0);
-        };
-        let m = attack(kind);
-        let into = match self {
-            Doing::Startup { left, .. } => m.startup.saturating_sub(left),
-            Doing::Active { left, .. } => m.startup + m.active.saturating_sub(left),
-            Doing::Recovery { left, .. } => m.startup + m.active + m.recovery.saturating_sub(left),
-            _ => 0,
-        };
-        (into, m.total())
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The pose: five numbers, and no skeleton
-// ---------------------------------------------------------------------------
-
-/// How the creature is carrying itself this frame.
-///
-/// A pure function of `(what it is doing, how far into it)`, which is the
-/// reason none of it is in the snapshot and the reason a rollback reproduces it
-/// exactly. It is also what riders stand on, so these five numbers are the
-/// whole of the buck: nothing anywhere tags a move "this one throws people".
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
-pub struct Pose {
-    /// Added to the creature's steered yaw. The shake is entirely this.
-    pub yaw_extra: Fx,
-    /// Nose up, in turns.
-    pub pitch: Fx,
-    /// The whole body lifted or dropped.
-    pub bob: Fx,
-    /// An extra yaw applied to the tail alone, about the tail's own hinge.
-    pub tail_swing: Fx,
-    /// The head and neck sliding forward along the body's own axis.
-    pub head_reach: Fx,
 }
 
 /// Which phase, and how far through it, as a fraction.
@@ -509,233 +378,75 @@ fn phase(doing: Doing) -> (u8, Fx) {
     }
 }
 
-pub fn pose_of(doing: Doing) -> Pose {
-    use crate::math::{lerp, smoothstep};
-    let mut p = Pose::default();
-
-    if let Doing::Toppled { left } = doing {
-        // On its side. Pitched hard and dropped, going over quickly and coming
-        // back up slowly -- a fall is fast and standing up is not.
-        let total = t::topple_frames().max(1);
-        let gone = total.saturating_sub(left);
-        let down = if gone < t::topple_fall() {
-            smoothstep(Fx::from_int(gone as i32).div(Fx::from_int(t::topple_fall().max(1) as i32)))
-        } else if left < t::topple_rise() {
-            smoothstep(Fx::from_int(left as i32).div(Fx::from_int(t::topple_rise().max(1) as i32)))
-        } else {
-            Fx::ONE
-        };
-        p.pitch = t::topple_pitch().mul(down);
-        p.bob = t::topple_drop().mul(down).neg();
-        return p;
-    }
-    if let Doing::Flinch { left } = doing {
-        let span = Fx::from_int(t::flinch_frames().max(1) as i32);
-        let at = Fx::ONE.sub(Fx::from_int(left as i32).div(span));
-        p.pitch = t::flinch_pitch().mul(crate::math::arch(at));
-        return p;
-    }
-
-    let Some(kind) = doing.attacking() else {
-        return p;
-    };
-    let (which, at) = phase(doing);
-    let s = smoothstep(at);
-    let back = Fx::ONE.sub(s);
-
-    match kind {
-        BITE => {
-            // Draws the head back, then throws it. The draw is the tell.
-            let draw = t::bite_draw();
-            let reach = t::bite_reach();
-            p.head_reach = match which {
-                0 => draw.neg().mul(s),
-                1 => lerp(draw.neg(), reach, s),
-                _ => reach.mul(back),
-            };
-            p.pitch = match which {
-                0 => t::bite_rear().mul(s),
-                1 => lerp(t::bite_rear(), t::bite_rear().neg(), s),
-                _ => t::bite_rear().neg().mul(back),
-            };
-        }
-        STOMP => {
-            // The front end rises a little and comes down hard. Short enough
-            // that the rise is most of what you get to read.
-            let lift = t::stomp_lift();
-            let drop = t::stomp_drop();
-            p.pitch = match which {
-                0 => lift.mul(s),
-                1 => lerp(lift, drop.neg(), s),
-                _ => drop.neg().mul(back),
-            };
-            p.bob = match which {
-                1 => t::stomp_bob().neg().mul(s),
-                2 => t::stomp_bob().neg().mul(back),
-                _ => Fx::ZERO,
-            };
-        }
-        SWEEP => {
-            // Winds the tail one way and sweeps it the other. The body
-            // counter-rotates, because a tail that heavy cannot swing without
-            // the rest of the animal answering for it -- which is also what
-            // shears anyone standing on the barrel.
-            let wind = t::sweep_wind();
-            let swing = t::sweep_swing();
-            p.tail_swing = match which {
-                0 => wind.mul(s),
-                1 => lerp(wind, swing.neg(), s),
-                _ => swing.neg().mul(back),
-            };
-            p.yaw_extra = p.tail_swing.neg().mul(t::sweep_counter());
-        }
-        CHARGE => {
-            // Head down and level. The gallop is a small vertical cycle, which
-            // is what stops a rider being able to ignore a charge.
-            let lean = t::charge_lean();
-            p.pitch = match which {
-                0 => lean.neg().mul(s),
-                1 => lean.neg(),
-                _ => lean.neg().mul(back),
-            };
-            if which == 1 {
-                let (into, _) = doing.elapsed();
-                let cycles = Fx::from_int(t::charge_gallop());
-                p.bob = t::charge_bounce().mul(sin_turns(at.mul(cycles)));
-                let _ = into;
-            }
-        }
-        SLAM => {
-            // The long telegraph. It rears, hangs, and comes down. Riders on
-            // the back feel the whole reversal at once, which is why this is
-            // the move you leave for rather than brace against.
-            let rear = t::slam_rear();
-            let rise = t::slam_rise();
-            p.pitch = match which {
-                0 => rear.mul(s),
-                1 => lerp(rear, t::slam_dip().neg(), s),
-                _ => t::slam_dip().neg().mul(back),
-            };
-            p.bob = match which {
-                0 => rise.mul(s),
-                1 => lerp(rise, Fx::ZERO, s),
-                _ => Fx::ZERO,
-            };
-        }
-        _ => {
-            // Shake. No hitbox at all: it is the buck, and only the buck.
-            //
-            // The startup is a **lean, not a shudder**. Oscillating through the
-            // windup made the startup as violent as the move and threw riders
-            // before the telegraph had finished being a telegraph -- which is
-            // the one thing a long startup is for. It leans over, shakes, and
-            // settles back.
-            //
-            // The three pieces join at the same value on purpose. A step in the
-            // pose between two frames is an arbitrarily large acceleration, and
-            // an arbitrarily large acceleration throws everyone regardless of
-            // what the move was supposed to do.
-            let amount = t::shake_yaw();
-            let cycles = t::shake_cycles();
-            let ramp = t::shake_ramp();
-            p.yaw_extra = match which {
-                0 => amount.mul(s),
-                1 => amount.mul(cos_turns(at.mul(cycles))),
-                _ => amount.mul(cos_turns(cycles)).mul(back),
-            };
-            p.pitch = match which {
-                0 => Fx::ZERO,
-                1 => t::shake_pitch().mul(sin_turns(at.mul(cycles).mul(ramp))),
-                _ => t::shake_pitch().mul(sin_turns(cycles.mul(ramp))).mul(back),
-            };
-        }
-    }
-    p
+/// How far through a countdown we are, as a fraction: zero at the start.
+fn through(left: u16, total: u16) -> Fx {
+    let total = total.max(1);
+    Fx::from_int(total.saturating_sub(left.min(total)) as i32).div(Fx::from_int(total as i32))
 }
 
 // ---------------------------------------------------------------------------
-// Body space
+// Crowd control
 // ---------------------------------------------------------------------------
 
-/// Where the creature is and how it is oriented this frame -- everything needed
-/// to move a point between its frame and the world's.
+/// What a fighter's move would do to another fighter, offered to the creature.
 ///
-/// Yaw and pitch, and no roll. Nothing the creature does rolls it, and a third
-/// angle would cost a full rotation matrix for a motion the move set never
-/// makes.
-#[derive(Clone, Copy, Debug)]
-pub struct Stance {
-    pub origin: V3,
-    pub yaw: Fx,
-    pub pitch: Fx,
-    pub tail_swing: Fx,
-    pub head_reach: Fx,
+/// A monster does not get knocked into the air and it does not get dragged to
+/// the end of somebody's arm, but the *decision* to throw a knock-up at it
+/// should still be a decision -- otherwise half of every kit is dead weight in
+/// a hunt and the two halves of the game stop teaching each other anything.
+/// So a piece of crowd control is offered here and the creature answers with
+/// what it is willing to take. See `Monster::take_control`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Control {
+    /// Upward speed the move would have given a fighter. Anything above zero
+    /// reads as a knock-up.
+    pub launch: Fx,
+    /// Frames the move would have held a fighter for.
+    pub grabs: u16,
+    /// A slow, as the fighters' own `Player::slow` takes it.
+    pub slow_frames: u16,
+    pub slow_mul: Fx,
 }
 
-impl Stance {
-    /// Body space to world. Pitch first, in the creature's own frame, then yaw.
-    pub fn to_world(&self, local: V3) -> V3 {
-        let (cp, sp) = (cos_turns(self.pitch), sin_turns(self.pitch));
-        let x = local.x.mul(cp).sub(local.y.mul(sp));
-        let y = local.x.mul(sp).add(local.y.mul(cp));
-        let z = local.z;
-        let (cy, sy) = (cos_turns(self.yaw), sin_turns(self.yaw));
-        V3::new(
-            self.origin.x.add(x.mul(cy)).sub(z.mul(sy)),
-            self.origin.y.add(y),
-            self.origin.z.add(x.mul(sy)).add(z.mul(cy)),
-        )
-    }
-
-    /// World to body space. The exact inverse of `to_world`.
-    pub fn to_body(&self, world: V3) -> V3 {
-        let d = world.sub(self.origin);
-        let (cy, sy) = (cos_turns(self.yaw), sin_turns(self.yaw));
-        let x = d.x.mul(cy).add(d.z.mul(sy));
-        let z = d.z.mul(cy).sub(d.x.mul(sy));
-        let (cp, sp) = (cos_turns(self.pitch), sin_turns(self.pitch));
-        V3::new(x.mul(cp).add(d.y.mul(sp)), d.y.mul(cp).sub(x.mul(sp)), z)
-    }
-
-    /// A direction, not a point: rotated but not translated. Used to ask where
-    /// "up off the back" and "along the spine" point in the world, and to read
-    /// an acceleration in the frame where the surface normal is simply `+y`.
-    pub fn dir_to_body(&self, world: V3) -> V3 {
-        self.to_body(world.add(self.origin))
-    }
-
-    pub fn dir_to_world(&self, local: V3) -> V3 {
-        self.to_world(local).sub(self.origin)
-    }
-
-    /// Apply the articulation a part carries: the tail's swing about its hinge,
-    /// or the head's slide along the body axis.
-    pub fn articulate(&self, rides: u8, local: V3) -> V3 {
-        match rides {
-            WITH_TAIL => self.swing_tail(local, self.tail_swing),
-            WITH_HEAD => V3::new(local.x.add(self.head_reach), local.y, local.z),
-            _ => local,
+impl Control {
+    pub fn launching(launch: Fx) -> Control {
+        Control {
+            launch,
+            ..Control::default()
         }
     }
 
-    /// Undo it, so a landing spot can be recorded in the part's own rest frame.
-    pub fn unarticulate(&self, rides: u8, local: V3) -> V3 {
-        match rides {
-            WITH_TAIL => self.swing_tail(local, self.tail_swing.neg()),
-            WITH_HEAD => V3::new(local.x.sub(self.head_reach), local.y, local.z),
-            _ => local,
+    pub fn grabbing(frames: u16) -> Control {
+        Control {
+            grabs: frames,
+            ..Control::default()
         }
     }
 
-    fn swing_tail(&self, local: V3, by: Fx) -> V3 {
-        let pivot = TAIL_PIVOT_X.mul(t::monster_scale());
-        let dx = local.x.sub(pivot);
-        let (c, s) = (cos_turns(by), sin_turns(by));
-        V3::new(
-            pivot.add(dx.mul(c)).sub(local.z.mul(s)),
-            local.y,
-            dx.mul(s).add(local.z.mul(c)),
-        )
+    pub fn slowing(frames: u16, mul: Fx) -> Control {
+        Control {
+            slow_frames: frames,
+            slow_mul: mul,
+            ..Control::default()
+        }
+    }
+
+    pub fn is_anything(&self) -> bool {
+        self.launch.raw() > 0 || self.grabs > 0 || self.slow_frames > 0
+    }
+}
+
+/// What the creature actually took.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Took {
+    pub stumbled: bool,
+    pub rooted: bool,
+    pub slowed: bool,
+}
+
+impl Took {
+    pub fn anything(&self) -> bool {
+        self.stumbled || self.rooted || self.slowed
     }
 }
 
@@ -770,6 +481,8 @@ pub struct Brain {
     pub last_move: u8,
     /// Frames of variety penalty left on `last_move`.
     pub repeat_left: u16,
+    /// Per-move lockout. Zero means available.
+    pub cooldown: [u16; MOVES],
     /// Deterministic, advanced only from inside the tick, and part of the
     /// snapshot -- so a rollback replays the same choices.
     pub rng: u32,
@@ -785,6 +498,7 @@ impl Default for Brain {
             think_left: 0,
             last_move: NO_PART,
             repeat_left: 0,
+            cooldown: [0; MOVES],
             // Any odd seed. Xorshift is stuck at zero, and one is as good a
             // starting point as any other.
             rng: 0x2545_F491,
@@ -795,8 +509,7 @@ impl Default for Brain {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Monster {
     pub pos: V3,
-    /// Steered facing, in turns. The pose's `yaw_extra` is added on top and is
-    /// not stored, because it is a pure function of the action.
+    /// Steered facing, in turns.
     pub yaw: Fx,
     /// Turns per second. Having a rate at all is what gives the creature mass:
     /// it cannot reverse a swing instantly, so it overshoots, and the overshoot
@@ -806,13 +519,39 @@ pub struct Monster {
     /// could would make its turn limit meaningless.
     pub speed: Fx,
     pub health: i32,
-    /// Fills with ridge damage. Full, it goes over.
+    /// Fills with damage to either weak point. Full, it goes over.
     pub poise: i32,
+    /// **Damage taken recently**, bleeding away every frame.
+    ///
+    /// This is the whole of the crowd-control model and half of the interrupt
+    /// one. A creature this size ignores a knock-up thrown at it cold; hurt it
+    /// hard enough in the last couple of seconds and its footing is bad enough
+    /// that the same knock-up takes it off balance. Both thresholds fall as its
+    /// health does, so a hunt starts methodical and ends frantic. See
+    /// `docs/design/monsters.md` §4.
+    pub strain: i32,
     pub part_health: [i32; PARTS],
     pub doing: Doing,
     pub brain: Brain,
     /// The current active window has already connected.
     pub hit_used: bool,
+    /// Where it is in its stride, as a fraction of one cycle in 16.16's
+    /// fractional bits -- the same accumulator the fighters carry, for the same
+    /// reason: a gait on a fixed cadence skates the moment the body moves at
+    /// any other speed.
+    ///
+    /// In the snapshot, unlike a fighter's, because the creature's legs are
+    /// **collision geometry**: where a foot is decides what a player walks into.
+    pub stride: u16,
+    /// A free-running clock, for the parts of the idle that have nothing to do
+    /// with where it is going. Breathing, mostly.
+    pub beat: u16,
+    /// Frames of slow left, and how much of its speed the slow leaves it.
+    pub slowed: u16,
+    pub slow_mul: Fx,
+    /// Frames it is pinned in place. What a grab does to something too big to
+    /// drag.
+    pub rooted: u16,
 }
 
 impl Default for Monster {
@@ -830,10 +569,16 @@ impl Monster {
             speed: Fx::ZERO,
             health: t::monster_health(),
             poise: 0,
+            strain: 0,
             part_health: [t::limb_health(); PARTS],
             doing: Doing::Prowl,
             brain: Brain::default(),
             hit_used: false,
+            stride: 0,
+            beat: 0,
+            slowed: 0,
+            slow_mul: Fx::ONE,
+            rooted: 0,
         }
     }
 
@@ -842,47 +587,223 @@ impl Monster {
     /// The creature's answer to `state::Player::disabled`, and drawn on the
     /// same line: a topple is the long window the whole climb exists to earn,
     /// and a flinch is the cheap one that happens whenever it is hit hard
-    /// enough. Only the earned one counts.
+    /// enough. A stumble counts -- it has to be earned, by breaking a foot or
+    /// by landing crowd control on a creature that was already hurting.
     pub fn disabled(&self) -> bool {
-        matches!(self.doing, Doing::Toppled { .. })
+        matches!(self.doing, Doing::Toppled { .. } | Doing::Stumble { .. })
     }
 
     pub fn alive(&self) -> bool {
         self.health > 0
     }
 
-    /// A leg with no health left. The creature turns worse toward a broken one.
+    /// A foot with no health left. Breaking one drops that corner of the animal
+    /// for good and puts it on its knee for a moment.
     pub fn broken(&self, part: usize) -> bool {
         SHAPES[part].breakable && self.part_health[part] <= 0
     }
 
-    pub fn pose(&self) -> Pose {
-        pose_of(self.doing)
+    /// How many legs are gone at the front, and how many at the back.
+    pub fn lameness(&self) -> (i32, i32) {
+        let mut front = 0;
+        let mut rear = 0;
+        for leg in beast::LEGS {
+            if self.broken(leg.foot) {
+                if leg.front {
+                    front += 1;
+                } else {
+                    rear += 1;
+                }
+            }
+        }
+        (front, rear)
     }
 
-    pub fn stance(&self) -> Stance {
-        let p = self.pose();
-        Stance {
-            origin: V3::new(self.pos.x, self.pos.y.add(p.bob), self.pos.z),
-            yaw: self.yaw.add(p.yaw_extra),
-            pitch: p.pitch,
-            tail_swing: p.tail_swing,
-            head_reach: p.head_reach,
+    /// Net lean to one side, in broken legs: negative is to its left.
+    fn list(&self) -> i32 {
+        beast::LEGS
+            .iter()
+            .filter(|leg| self.broken(leg.foot))
+            .map(|leg| leg.side)
+            .sum()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The pose
+// ---------------------------------------------------------------------------
+
+impl Monster {
+    /// What the creature looks like this frame.
+    ///
+    /// A baked clip, chosen by what it is doing and read at the phase it is at,
+    /// with two layers added over it: the gait, and whatever its broken legs
+    /// are doing to its stance. Both additive, so a creature that is biting
+    /// while limping is one pose rather than a special case.
+    ///
+    /// Everything it reads is in the snapshot, so this is reproducible under
+    /// rollback -- which is the only property the pose has to have, and the
+    /// reason the clips are a table rather than a solver.
+    pub fn pose(&self) -> Pose {
+        let mut p = self.clip_pose();
+        let lame = self.lame_layer();
+        p = p.over(&lame, Fx::ONE);
+        if self.doing.free() {
+            p = p.over(&self.tracking_layer(), Fx::ONE);
+        }
+        p
+    }
+
+    /// The baked clip underneath everything else.
+    fn clip_pose(&self) -> Pose {
+        match self.doing {
+            Doing::Dead => beast::sample(Clip::Dead, Fx::ONE),
+            Doing::Toppled { left } => {
+                beast::sample(Clip::Topple, through(left, t::topple_frames()))
+            }
+            Doing::Stumble { left, .. } => {
+                beast::sample(Clip::Stumble, through(left, t::stumble_frames()))
+            }
+            Doing::Flinch { left } => {
+                beast::sample(Clip::Flinch, through(left, t::flinch_frames()))
+            }
+            Doing::Prowl => self.locomotion(),
+            _ => {
+                let kind = self.doing.attacking().unwrap_or(0);
+                let (which, at) = phase(self.doing);
+                let clip = Clip::of_move(kind);
+                let posed = beast::sample_phase(clip, which, at);
+                if kind == SHAKE {
+                    // The one clip whose *violence* is a gameplay number rather
+                    // than a look: it is what decides whether a braced rider
+                    // stays on. Everything else about the animation is content;
+                    // this is a knob. See `tuning::shake_force`.
+                    return Pose::rest().over(&posed, t::shake_force());
+                }
+                posed
+            }
         }
     }
 
-    /// Body-space position of a world point, with the part's articulation
-    /// removed -- the point in the part's own rest frame, which is what a rider
-    /// holds on to.
-    pub fn rest_frame(&self, part: usize, world: V3) -> V3 {
-        let s = self.stance();
-        s.unarticulate(SHAPES[part].rides, s.to_body(world))
+    /// Standing, walking or running, blended by how fast it is going.
+    ///
+    /// Indexed by **ground covered** rather than by time. The cycles are
+    /// sampled at the same stride phase before being blended, which is what
+    /// stops a creature accelerating out of a walk from planting two feet at
+    /// once.
+    fn locomotion(&self) -> Pose {
+        let phase = Fx::from_raw(self.stride as i32);
+        let breath = Fx::from_raw(self.beat as i32);
+        let idle = beast::sample(Clip::Idle, breath);
+        let speed = self.speed.abs();
+        if speed.raw() <= 0 {
+            return idle;
+        }
+        let walk = beast::sample(Clip::Walk, phase);
+        // Never zero, so the division below is a division. `Fx::from_raw(1)` is
+        // the smallest number 16.16 has, not a speed anybody chose.
+        let cruise = t::monster_walk().max(SMALLEST);
+        if speed.raw() <= cruise.raw() {
+            return idle.blend(&walk, speed.div(cruise).clamp(Fx::ZERO, Fx::ONE));
+        }
+        let gallop = beast::sample(Clip::Gallop, phase);
+        let top = t::gallop_speed().max(cruise.add(SMALLEST));
+        let at = speed
+            .sub(cruise)
+            .div(top.sub(cruise))
+            .clamp(Fx::ZERO, Fx::ONE);
+        walk.blend(&gallop, at)
     }
 
-    /// The world position of a point held in a part's rest frame.
+    /// What its broken legs do to how it stands.
+    ///
+    /// A corner with nothing under it drops, the body leans onto the legs that
+    /// are left, and the useless foot folds up rather than punching through the
+    /// floor. This is the *permanent* consequence -- the stumble is the moment
+    /// it happens; this is what the animal looks like for the rest of the
+    /// fight, and it is what brings the back low enough to matter.
+    fn lame_layer(&self) -> Pose {
+        let (front, rear) = self.lameness();
+        if front == 0 && rear == 0 {
+            return Pose::rest();
+        }
+        let drop = t::leg_drop();
+        let mut p = Pose::rest();
+        let f = Fx::from_int(front);
+        let r = Fx::from_int(rear);
+        // The **average** of the two ends rather than the sum. The hips are one
+        // point, and how much lower the front is than the back is the pitch
+        // below saying so -- adding both ends into the height as well drops the
+        // whole animal through the floor once three feet are gone.
+        p.hips.y = drop.mul(f.add(r)).mul(Fx::ratio(1, 2)).neg();
+        // Nose down when the front is gone, tail down when the back is. The
+        // rig's pitch is positive nose-*up*, so the subtraction runs the other
+        // way round to the one that reads naturally here.
+        p.bone[beast::ROOT].x = t::leg_pitch().mul(r.sub(f));
+        p.bone[beast::ROOT].z = t::leg_roll().mul(Fx::from_int(self.list()));
+        for leg in beast::LEGS {
+            if !self.broken(leg.foot) {
+                continue;
+            }
+            // The joint above a broken foot folds. Which way depends on which
+            // end it is: a foreleg buckles forward at the knee, a hindleg back
+            // at the hock, and that difference is most of what a limp looks
+            // like from across the arena.
+            let fold = if leg.front {
+                t::leg_fold()
+            } else {
+                t::leg_fold().neg()
+            };
+            p.bone[leg.hip].x = p.bone[leg.hip].x.add(t::leg_buckle().mul(fold).neg());
+            p.bone[leg.knee].x = p.bone[leg.knee].x.add(fold);
+        }
+        p
+    }
+
+    /// The neck turning to keep the target in view.
+    ///
+    /// Only while it is free -- a committed move has already decided where it
+    /// is pointed, and letting the head wander during one would be the
+    /// telegraph lying. Split across three bones so it curves rather than
+    /// hinging, which is the whole difference between a neck and a door.
+    fn tracking_layer(&self) -> Pose {
+        let to = V3::new(
+            self.brain.seen.x.sub(self.pos.x),
+            Fx::ZERO,
+            self.brain.seen.z.sub(self.pos.z),
+        );
+        if to.flat_len().raw() <= 0 {
+            return Pose::rest();
+        }
+        let want = crate::math::atan2_turns(to.z, to.x);
+        let error = crate::math::wrap_turns(want.sub(self.yaw));
+        let reach = t::head_track();
+        // Shared equally down the neck, so the answer curves rather than
+        // hinging. The divisor is how many bones there are, not a number.
+        let each = error
+            .clamp(reach.neg(), reach)
+            .div(Fx::from_int(NECK_CHAIN.len() as i32));
+        let mut p = Pose::rest();
+        for bone in NECK_CHAIN {
+            p.bone[bone].y = each;
+        }
+        p
+    }
+
+    /// Every bone, placed in the world.
+    pub fn rig(&self) -> Rig {
+        Rig::build(self.pos, self.yaw, &self.pose())
+    }
+
+    /// Body-space position of a world point in a part's own frame -- what a
+    /// rider holds on to, so that the bone moving under them moves them with it.
+    pub fn rest_frame(&self, part: usize, world: V3) -> V3 {
+        self.rig().world_to_part(part, world)
+    }
+
+    /// The world position of a point held in a part's own frame.
     pub fn world_of(&self, part: usize, rest: V3) -> V3 {
-        let s = self.stance();
-        s.to_world(s.articulate(SHAPES[part].rides, rest))
+        self.rig().part_to_world(part, rest)
     }
 
     /// The mountable part a body at `world` is standing on, if any.
@@ -896,36 +817,76 @@ impl Monster {
     /// it is applied here rather than in a second test -- two rules for
     /// standing on something is how a rider ends up hovering off the side.
     pub fn surface_under(&self, world: V3, body_radius: Fx) -> Option<(usize, Fx)> {
-        let s = self.stance();
+        self.rig().surface_under(world, body_radius)
+    }
+}
+
+impl Rig {
+    /// See [`Monster::surface_under`]. Lives on the rig because everything it
+    /// needs is a bone transform, and the callers that already hold one should
+    /// not have to rebuild the skeleton to ask.
+    pub fn surface_under(&self, world: V3, body_radius: Fx) -> Option<(usize, Fx)> {
+        self.surface_within(world, body_radius, t::mount_snap(), t::mount_snap())
+    }
+
+    /// The mountable part whose top face is somewhere between `below` beneath a
+    /// point and `above` over it.
+    ///
+    /// Two callers with two different questions. Landing asks about a band as
+    /// deep as it is tall -- are my feet on this. **Stepping up asks about a
+    /// band that is deep by a whisker and tall by a whole step**, which is the
+    /// difference between walking up a kerb and levitating onto a roof.
+    ///
+    /// Splitting them fixed a real dead end: the step-up probe used to sample
+    /// one point a full step above the feet and ask whether *that* was standing
+    /// on something, so it only ever found a surface sitting at exactly one
+    /// step up. A rider walking from the haunch to the barrel -- four
+    /// centimetres, not a step -- was shoved back by the barrel's own side
+    /// every frame and never got on, and the climb stopped at the hips.
+    pub fn surface_within(
+        &self,
+        world: V3,
+        body_radius: Fx,
+        below: Fx,
+        above: Fx,
+    ) -> Option<(usize, Fx)> {
         let lip = body_radius.mul(t::edge_grace());
-        let mut best: Option<(usize, Fx)> = None;
-        for (index, part) in SHAPES.iter().enumerate() {
+        let mut best: Option<(usize, Fx, Fx)> = None;
+        for (index, part) in beast::SHAPES.iter().enumerate() {
             if !part.mountable {
                 continue;
             }
             let sh = shape(index);
-            let rest = s.unarticulate(part.rides, s.to_body(world));
-            let over = rest.x.raw() > sh.min.x.sub(lip).raw()
-                && rest.x.raw() < sh.max.x.add(lip).raw()
-                && rest.z.raw() > sh.min.z.sub(lip).raw()
-                && rest.z.raw() < sh.max.z.add(lip).raw();
+            let local = self.world_to_part(index, world);
+            let over = local.x.raw() > sh.min.x.sub(lip).raw()
+                && local.x.raw() < sh.max.x.add(lip).raw()
+                && local.z.raw() > sh.min.z.sub(lip).raw()
+                && local.z.raw() < sh.max.z.add(lip).raw();
             if !over {
                 continue;
             }
-            let gap = rest.y.sub(sh.max.y);
-            if gap.raw() < t::mount_snap().neg().raw() || gap.raw() > t::mount_snap().raw() {
+            // How far the face is *above* the point asking.
+            let rise = sh.max.y.sub(local.y);
+            if rise.raw() > above.raw() || rise.neg().raw() > below.raw() {
                 continue;
             }
-            if best.is_none_or(|(_, top)| sh.max.y.raw() > top.raw()) {
-                best = Some((index, sh.max.y));
+            // Highest *in the world*, not highest in the bone's own frame: on a
+            // skeleton those are different questions the moment anything is
+            // pitched, and taking the local answer put riders on whichever part
+            // happened to be authored tallest.
+            let height = self
+                .part_to_world(index, V3::new(local.x, sh.max.y, local.z))
+                .y;
+            if best.is_none_or(|(_, _, seen)| height.raw() > seen.raw()) {
+                best = Some((index, sh.max.y, height));
             }
         }
-        best
+        best.map(|(i, top, _)| (i, top))
     }
 }
 
 // ---------------------------------------------------------------------------
-// Collision, in the creature's own frame
+// Collision, bone by bone
 // ---------------------------------------------------------------------------
 
 /// What resolving a body against the creature did to it.
@@ -961,26 +922,88 @@ fn out_of(v: Fx, lo: Fx, hi: Fx) -> Fx {
 impl Monster {
     /// Push a body out of the creature's solid parts.
     ///
-    /// The whole routine runs in **body space**, where every part is an
-    /// axis-aligned box, so this is the arena's own collision rule pointed at a
-    /// different frame of reference. That is the reason the parts are authored
-    /// in body space in the first place.
+    /// Every part is an axis-aligned box **in its own bone's frame**, so this
+    /// is the arena's collision rule run once per bone: transform the body into
+    /// the bone's frame, resolve against the box, transform back. One rule,
+    /// eighteen frames of reference.
+    ///
+    /// The body stays a vertical cylinder in the world while the box does not,
+    /// so a heavily rotated bone -- a foreleg at the top of a stomp -- resolves
+    /// a little conservatively. That is the same approximation the single-frame
+    /// version made for pitch, and it is the right one for a blockout: being
+    /// pushed out of a leg slightly early is invisible, and being pulled
+    /// through one is not.
     pub fn resolve(&self, world: V3, body_radius: Fx, body_height: Fx) -> Contact {
-        let s = self.stance();
-        let mut rest_of_world = s.to_body(world);
-        let mut landed = None;
-        let mut shoved = false;
+        self.rig().resolve(world, body_radius, body_height)
+    }
 
-        for (index, part) in SHAPES.iter().enumerate() {
+    /// Is a point inside the creature's solid parts, padded outward?
+    ///
+    /// For the camera. The rig's rule is that level geometry never gets between
+    /// the eye and the fighter and that the arm pulls *in* rather than swinging
+    /// away; a creature this size is level geometry for as long as it is
+    /// standing between the two.
+    pub fn contains(&self, world: V3, pad: Fx) -> bool {
+        let rig = self.rig();
+        beast::SHAPES.iter().enumerate().any(|(index, part)| {
+            if !part.solid {
+                return false;
+            }
+            let sh = shape(index);
+            let p = rig.world_to_part(index, world);
+            p.x.raw() > sh.min.x.sub(pad).raw()
+                && p.x.raw() < sh.max.x.add(pad).raw()
+                && p.y.raw() > sh.min.y.sub(pad).raw()
+                && p.y.raw() < sh.max.y.add(pad).raw()
+                && p.z.raw() > sh.min.z.sub(pad).raw()
+                && p.z.raw() < sh.max.z.add(pad).raw()
+        })
+    }
+
+    /// World height of the highest solid part beneath a point, or zero.
+    ///
+    /// The companion to `arena::ground_under`, and used for the same thing: the
+    /// camera treats a surface as something to rest on rather than something to
+    /// dodge, and the creature's back is a surface.
+    pub fn top_under(&self, world: V3) -> Fx {
+        let rig = self.rig();
+        let mut best = Fx::ZERO;
+        for (index, part) in beast::SHAPES.iter().enumerate() {
             if !part.solid {
                 continue;
             }
             let sh = shape(index);
-            // Articulated parts are resolved in their own swung frame, so a
-            // tail that has moved is a wall where it now is rather than where
-            // it was authored.
-            let rides = part.rides;
-            let mut p = s.unarticulate(rides, rest_of_world);
+            let p = rig.world_to_part(index, world);
+            let over = p.x.raw() > sh.min.x.raw()
+                && p.x.raw() < sh.max.x.raw()
+                && p.z.raw() > sh.min.z.raw()
+                && p.z.raw() < sh.max.z.raw();
+            if !over {
+                continue;
+            }
+            let top = rig.part_to_world(index, V3::new(p.x, sh.max.y, p.z)).y;
+            if top.raw() > best.raw() {
+                best = top;
+            }
+        }
+        best
+    }
+}
+
+impl Rig {
+    /// See [`Monster::resolve`].
+    pub fn resolve(&self, world: V3, body_radius: Fx, body_height: Fx) -> Contact {
+        let mut at = world;
+        let mut landed = None;
+        let mut shoved = false;
+
+        for (index, part) in beast::SHAPES.iter().enumerate() {
+            if !part.solid {
+                continue;
+            }
+            let sh = shape(index);
+            let frame = self.of(index);
+            let mut p = frame.world_to_local(at);
 
             let min_x = sh.min.x.sub(body_radius);
             let max_x = sh.max.x.add(body_radius);
@@ -1003,8 +1026,24 @@ impl Monster {
             let down = head.sub(sh.min.y);
             let vertical = up.min(down).abs();
 
-            if vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw() {
-                if up.raw() <= down.raw() {
+            // **A tread you could step onto is a floor, not a wall.** Least
+            // penetration alone is not enough here: the creature's mountable
+            // parts overlap so the climb has no seams, and where two of them
+            // meet the taller one is a lip a few centimetres proud of the
+            // shorter. A body standing in that lip is nearer its side than its
+            // top by a hair, so least penetration shoves them backwards --
+            // every frame, forever.
+            //
+            // Bounded by `mount_snap` rather than by `step_up`, and the
+            // difference is the whole of getting it right: a *landing*
+            // tolerance is a few centimetres and is what a seam between two
+            // treads measures, while a step is most of a metre and a rider
+            // walking into the side of one should be stopped by it rather than
+            // hoisted on top. Using the step here lifted a rider off the tail
+            // onto the haunch mid-sweep and dropped them off the far side.
+            let step = part.mountable && up.raw() >= 0 && up.raw() <= t::mount_snap().raw();
+            if step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw()) {
+                if step || up.raw() <= down.raw() {
                     p.y = sh.max.y;
                     landed = Some(index);
                 } else {
@@ -1017,76 +1056,24 @@ impl Monster {
                 p.z = p.z.add(pz);
                 shoved = true;
             }
-            rest_of_world = s.articulate(rides, p);
+            at = frame.local_to_world(p);
         }
 
         Contact {
-            pos: s.to_world(rest_of_world),
+            pos: at,
             landed,
             shoved,
         }
     }
+}
 
-    /// Is a point inside the creature's solid parts, padded outward?
-    ///
-    /// For the camera. The rig's rule is that level geometry never gets between
-    /// the eye and the fighter and that the arm pulls *in* rather than swinging
-    /// away; a nine metre animal is level geometry for as long as it is
-    /// standing between the two.
-    pub fn contains(&self, world: V3, pad: Fx) -> bool {
-        let s = self.stance();
-        let body = s.to_body(world);
-        SHAPES.iter().enumerate().any(|(index, part)| {
-            if !part.solid {
-                return false;
-            }
-            let sh = shape(index);
-            let p = s.unarticulate(part.rides, body);
-            p.x.raw() > sh.min.x.sub(pad).raw()
-                && p.x.raw() < sh.max.x.add(pad).raw()
-                && p.y.raw() > sh.min.y.sub(pad).raw()
-                && p.y.raw() < sh.max.y.add(pad).raw()
-                && p.z.raw() > sh.min.z.sub(pad).raw()
-                && p.z.raw() < sh.max.z.add(pad).raw()
-        })
-    }
+// ---------------------------------------------------------------------------
+// What it has out, and what is hitting it
+// ---------------------------------------------------------------------------
 
-    /// World height of the highest solid part beneath a point, or zero.
-    ///
-    /// The companion to `arena::ground_under`, and used for the same thing: the
-    /// camera treats a surface as something to rest on rather than something to
-    /// dodge, and the creature's back is a surface.
-    pub fn top_under(&self, world: V3) -> Fx {
-        let s = self.stance();
-        let body = s.to_body(world);
-        let mut best = Fx::ZERO;
-        for (index, part) in SHAPES.iter().enumerate() {
-            if !part.solid {
-                continue;
-            }
-            let sh = shape(index);
-            let p = s.unarticulate(part.rides, body);
-            let over = p.x.raw() > sh.min.x.raw()
-                && p.x.raw() < sh.max.x.raw()
-                && p.z.raw() > sh.min.z.raw()
-                && p.z.raw() < sh.max.z.raw();
-            if !over {
-                continue;
-            }
-            // Back into the world: the body's own `y` is not a height once it
-            // is pitched.
-            let top = s
-                .to_world(s.articulate(part.rides, V3::new(p.x, sh.max.y, p.z)))
-                .y;
-            if top.raw() > best.raw() {
-                best = top;
-            }
-        }
-        best
-    }
-
-    /// The attack volume out this frame, in body space: an anchor, a radius and
-    /// a height span, with the articulation already applied.
+impl Monster {
+    /// The attack volume out this frame, in world space: a vertical cylinder's
+    /// anchor, a radius and a height span.
     ///
     /// Exposed rather than kept private so the debug overlay draws *the volume
     /// the hit test uses*. An overlay that rebuilds the shape itself can drift
@@ -1100,48 +1087,58 @@ impl Monster {
         if m.damage <= 0 {
             return None;
         }
-        let s = self.stance();
-        let anchor = s.articulate(m.follows, V3::new(m.hit_x, Fx::ZERO, m.hit_z));
-        Some((anchor, m.hit_radius, m.hit_low, m.hit_high))
+        let rig = self.rig();
+        // The anchor is authored in body space and carried by whichever bone
+        // the move rides, so a bite whose head has been thrown forward puts its
+        // hitbox where the head now is rather than where the head starts.
+        let bone = rig.bone[follow_bone(m.follows)];
+        let carried = bone.at.sub(rig.bone[beast::ROOT].at);
+        let anchor = rig
+            .to_world(V3::new(m.hit_x, Fx::ZERO, m.hit_z))
+            .add(V3::new(carried.x, Fx::ZERO, carried.z));
+        let base = rig.origin.y;
+        Some((
+            anchor,
+            m.hit_radius,
+            base.add(m.hit_low),
+            base.add(m.hit_high),
+        ))
     }
 
     /// Does the volume out this frame reach a body standing at `world`?
     ///
-    /// A vertical cylinder, tested in body space. Height genuinely decides this
-    /// one -- a stomp aimed at the ground does not reach someone standing on
-    /// the creature's back -- which is the difference between a monster and a
-    /// fighter, and the reason this is not the flat test `state::resolve_hit`
-    /// uses.
+    /// Height genuinely decides this one -- a stomp aimed at the ground does
+    /// not reach someone standing on the creature's back -- which is the
+    /// difference between a monster and a fighter, and the reason this is not
+    /// the flat test `state::resolve_hit` uses.
     pub fn reaches(&self, world: V3, hurt_height: Fx, body_radius: Fx) -> bool {
         let Some((anchor, radius, low, high)) = self.hit_volume() else {
             return false;
         };
-        let b = self.stance().to_body(world);
-        let flat = V3::new(b.x.sub(anchor.x), Fx::ZERO, b.z.sub(anchor.z)).flat_len();
+        let flat = V3::new(world.x.sub(anchor.x), Fx::ZERO, world.z.sub(anchor.z)).flat_len();
         if flat.raw() > radius.add(body_radius).raw() {
             return false;
         }
-        b.y.add(hurt_height).raw() >= low.raw() && b.y.raw() <= high.raw()
+        world.y.add(hurt_height).raw() >= low.raw() && world.y.raw() <= high.raw()
     }
 
     /// Which part an attack touches, or `None`.
     ///
     /// When it touches more than one, the **softest** wins: the ridge lies over
-    /// the barrel, and a player who reached the weak point has hit the weak
-    /// point. Rewarding the aim rather than the array order is the only version
-    /// of this that a player could predict.
+    /// the barrel and the nape over the neck, and a player who reached a weak
+    /// point has hit the weak point. Rewarding the aim rather than the array
+    /// order is the only version of this a player could predict.
     pub fn part_struck(&self, centre: V3, radius: Fx, body_height: Fx) -> Option<usize> {
-        let s = self.stance();
-        let feet = s.to_body(centre);
-        let head = s.to_body(V3::new(centre.x, centre.y.add(body_height), centre.z));
-        let low = feet.y.min(head.y);
-        let high = feet.y.max(head.y);
-
+        let rig = self.rig();
         let mut best: Option<(usize, Fx)> = None;
-        for (index, part) in SHAPES.iter().enumerate() {
+        for index in 0..PARTS {
             let sh = shape(index);
-            let p = s.unarticulate(part.rides, feet);
-            if flat_gap(p.x, p.z, sh.min, sh.max).raw() > radius.raw() {
+            let frame = rig.of(index);
+            let feet = frame.world_to_local(centre);
+            let head = frame.world_to_local(V3::new(centre.x, centre.y.add(body_height), centre.z));
+            let low = feet.y.min(head.y);
+            let high = feet.y.max(head.y);
+            if flat_gap(feet.x, feet.z, sh.min, sh.max).raw() > radius.raw() {
                 continue;
             }
             if high.raw() < sh.min.y.raw() || low.raw() > sh.max.y.raw() {
@@ -1166,8 +1163,6 @@ impl Monster {
     /// in front of the barrel from above and behind it from the side, and
     /// whichever the shot reaches first is the one that was aimed at.
     ///
-    /// The whole test runs in **body space**, where every part is an
-    /// axis-aligned box, which is the reason the parts are authored there.
     /// `swell` is the shot's own radius, added to the box.
     pub fn part_struck_along(
         &self,
@@ -1176,18 +1171,14 @@ impl Monster {
         limit: Fx,
         swell: Fx,
     ) -> Option<(usize, Fx)> {
-        let s = self.stance();
-        let start = s.to_body(from);
-        let along = s.dir_to_body(dir);
+        let rig = self.rig();
         let out = V3::new(swell, swell, swell);
-
         let mut best: Option<(usize, Fx)> = None;
-        for (index, part) in SHAPES.iter().enumerate() {
+        for index in 0..PARTS {
             let sh = shape(index);
-            // The articulation is rigid, so undoing it on two points a unit
-            // apart gives back the direction as well as the origin.
-            let o = s.unarticulate(part.rides, start);
-            let d = s.unarticulate(part.rides, start.add(along)).sub(o);
+            let frame = rig.of(index);
+            let o = frame.world_to_local(from);
+            let d = frame.rot.unapply(dir);
             let Some(dist) = crate::math::ray_hits_box(o, d, sh.min.sub(out), sh.max.add(out))
             else {
                 continue;
@@ -1204,10 +1195,42 @@ impl Monster {
 }
 
 // ---------------------------------------------------------------------------
-// Damage
+// Damage, and the ladder of ways to be in trouble
 // ---------------------------------------------------------------------------
 
 impl Monster {
+    /// How hurt it is, as a percentage of its pool.
+    fn missing(&self) -> i32 {
+        let max = t::monster_health().max(1);
+        ((max - self.health).max(0) * 100) / max
+    }
+
+    /// A threshold, after the desperation discount.
+    ///
+    /// **Both thresholds fall as it is worn down.** That is the shape of the
+    /// fight: at full health nothing short of a real burst moves it, and by the
+    /// end an ordinary combo is enough. A hunt that starts methodical and ends
+    /// frantic is the whole reason this is a curve rather than a constant.
+    fn threshold(&self, base: i32) -> i32 {
+        let cut = (t::strain_desperation() * self.missing()) / 100;
+        (base * (100 - cut).clamp(5, 100)) / 100
+    }
+
+    /// Recent damage needed before crowd control means anything to it.
+    pub fn cc_bar(&self) -> i32 {
+        self.threshold(t::cc_strain())
+    }
+
+    /// Recent damage needed to break it out of what it is doing.
+    pub fn interrupt_bar(&self) -> i32 {
+        self.threshold(t::interrupt_strain())
+    }
+
+    /// Has it been hurt hard enough, recently enough, to be moved around?
+    pub fn susceptible(&self) -> bool {
+        self.strain >= self.cc_bar()
+    }
+
     /// Land a hit on a part. Returns the damage that actually went in, after
     /// the part's own vulnerability, which is what the caller should show.
     pub fn take_hit(&mut self, part: usize, raw: i32) -> i32 {
@@ -1216,10 +1239,8 @@ impl Monster {
         }
         let dealt = Fx::from_int(raw).mul(vulnerability(part)).to_int().max(0);
         self.health = (self.health - dealt).max(0);
-        if SHAPES[part].breakable {
-            self.part_health[part] = (self.part_health[part] - dealt).max(0);
-        }
-        if part == RIDGE {
+        self.strain += dealt;
+        if is_weak_point(part) {
             self.poise += dealt;
         }
 
@@ -1227,33 +1248,147 @@ impl Monster {
             self.doing = Doing::Dead;
             return dealt;
         }
+
+        // A foot going is the ground game's whole payout, so it is checked
+        // before anything else can claim the frame.
+        if SHAPES[part].breakable && self.part_health[part] > 0 {
+            self.part_health[part] -= dealt;
+            if self.part_health[part] <= 0 {
+                self.part_health[part] = 0;
+                self.break_a_leg(part);
+                return dealt;
+            }
+        }
+
         if self.poise >= t::poise_max() && !matches!(self.doing, Doing::Toppled { .. }) {
             // Over it goes. This is the window the climb is for, so it resets
             // the pool rather than draining it: you earn the next one again.
             //
-            // Unlike a flinch, this **does** interrupt a live hitbox. A flinch
-            // may not, because a creature whose swing can be cancelled by being
-            // hit is one you never have to trade with. Legs going out from
-            // under it mid-bite is a different event, and one the player has
-            // spent a whole climb earning.
+            // Unlike a flinch, this **does** interrupt a live hitbox. Legs
+            // going out from under it mid-bite is a different event from a
+            // flinch, and one the player has spent a whole climb earning.
             self.poise = 0;
-            self.doing = Doing::Toppled {
-                left: t::topple_frames(),
-            };
-            self.speed = Fx::ZERO;
-            self.yaw_rate = Fx::ZERO;
+            self.topple();
             return dealt;
         }
+
+        // **The interrupt.** Enough damage in a short enough window breaks it
+        // out of whatever it is doing -- and unlike a flinch, out of a live
+        // hitbox too. That is the point: a burst big enough to stop a charge is
+        // a decision worth building a kit around, and the cost is that the
+        // strain is spent and has to be earned again.
+        if self.strain >= self.interrupt_bar() && self.doing.attacking().is_some() {
+            self.strain = 0;
+            self.doing = Doing::Flinch {
+                left: t::flinch_frames(),
+            };
+            return dealt;
+        }
+
         // A flinch interrupts, but never an active frame: a creature whose hit
         // could be cancelled by being hit is a creature you never have to
         // trade with, and trading is most of what the ground game is.
-        let interruptible = !matches!(self.doing, Doing::Active { .. } | Doing::Toppled { .. });
+        let interruptible = !matches!(
+            self.doing,
+            Doing::Active { .. } | Doing::Toppled { .. } | Doing::Stumble { .. }
+        );
         if dealt >= t::flinch_threshold() && interruptible {
             self.doing = Doing::Flinch {
                 left: t::flinch_frames(),
             };
         }
         dealt
+    }
+
+    /// A foot has gone. Down it comes.
+    ///
+    /// The stumble is the moment; `lame_layer` is the rest of the fight. Both
+    /// matter and they are different things: the moment is the mount window,
+    /// and the limp is what makes the animal easier to stay ahead of
+    /// afterwards.
+    fn break_a_leg(&mut self, part: usize) {
+        let front = beast::LEGS
+            .iter()
+            .find(|leg| leg.foot == part)
+            .is_some_and(|leg| leg.front);
+        self.doing = Doing::Stumble {
+            left: t::stumble_frames(),
+            front,
+        };
+        self.speed = Fx::ZERO;
+        self.yaw_rate = Fx::ZERO;
+        self.strain = 0;
+    }
+
+    fn topple(&mut self) {
+        self.doing = Doing::Toppled {
+            left: t::topple_frames(),
+        };
+        self.speed = Fx::ZERO;
+        self.yaw_rate = Fx::ZERO;
+        self.strain = 0;
+    }
+
+    /// Offer the creature a piece of crowd control and see what it takes.
+    ///
+    /// Nothing, unless it is [`susceptible`](Monster::susceptible) -- and then a
+    /// weakened version: a knock-up takes it off balance rather than off the
+    /// ground, a grab roots it rather than dragging it, and a slow lands at a
+    /// fraction of its strength. **Partial on purpose.** A monster that took
+    /// full crowd control would be a monster you lock down, and the point of
+    /// putting a threshold in front of it is that the *same button* means
+    /// something in both halves of the game without meaning the same thing.
+    ///
+    /// The strain is spent, so control has to be bought again rather than held.
+    pub fn take_control(&mut self, cc: Control) -> Took {
+        let mut took = Took::default();
+        if !self.alive() || !cc.is_anything() || !self.susceptible() {
+            return took;
+        }
+        self.strain = (self.strain - self.cc_bar()).max(0);
+
+        if cc.slow_frames > 0 {
+            // Softened toward "no slow at all" by whatever fraction the Oven
+            // says a creature this size is willing to feel.
+            let bite = t::cc_slow_bite();
+            let mul = Fx::ONE.sub(Fx::ONE.sub(cc.slow_mul).mul(bite));
+            self.slow(cc.slow_frames, mul);
+            took.slowed = true;
+        }
+        if cc.grabs > 0 {
+            self.rooted = self
+                .rooted
+                .max(Fx::from_int(cc.grabs as i32).mul(t::cc_root()).to_int() as u16);
+            self.speed = Fx::ZERO;
+            took.rooted = true;
+        }
+        if cc.launch.raw() > 0 && !matches!(self.doing, Doing::Toppled { .. }) {
+            // A knock-up on something this heavy is a trip, not a lift. Its
+            // length scales with the launch the move would have given a
+            // fighter, so the moves that were built to open somebody up are the
+            // ones that open this up too.
+            let frames = t::cc_stumble()
+                .mul(cc.launch)
+                .to_int()
+                .clamp(1, t::stumble_frames() as i32) as u16;
+            self.doing = Doing::Stumble {
+                left: frames,
+                front: true,
+            };
+            self.speed = Fx::ZERO;
+            self.yaw_rate = Fx::ZERO;
+            took.stumbled = true;
+        }
+        took
+    }
+
+    /// Take a slow. The strongest one on you is the one that counts, the same
+    /// rule the fighters follow.
+    pub fn slow(&mut self, frames: u16, mul: Fx) {
+        if self.slowed == 0 || mul.raw() < self.slow_mul.raw() {
+            self.slow_mul = mul;
+        }
+        self.slowed = self.slowed.max(frames);
     }
 }
 
@@ -1332,6 +1467,9 @@ impl Monster {
     /// Range and angle multiply rather than add, because a move with perfect
     /// spacing and the target behind it is not half a good idea.
     pub fn appetite(&self, kind: u8, riders: i32) -> i32 {
+        if self.brain.cooldown[(kind as usize).min(MOVES - 1)] > 0 {
+            return 0;
+        }
         let m = attack(kind);
         let aim = self.lead_point(m.startup);
         let to = V3::new(aim.x.sub(self.pos.x), Fx::ZERO, aim.z.sub(self.pos.z));
@@ -1350,9 +1488,7 @@ impl Monster {
         score += riders * m.rider_weight;
 
         // Wounded animals commit harder, and they commit to bigger swings.
-        let max = t::monster_health().max(1);
-        let missing = ((max - self.health).max(0) * 100) / max;
-        score += (t::hurt_aggression() * missing * m.damage) / 10_000;
+        score += (t::hurt_aggression() * self.missing() * m.damage) / 10_000;
 
         if self.brain.last_move == kind && self.brain.repeat_left > 0 {
             let span = t::variety_frames().max(1) as i32;
@@ -1407,6 +1543,7 @@ impl Monster {
         self.hit_used = false;
         self.brain.last_move = kind;
         self.brain.repeat_left = t::variety_frames();
+        self.brain.cooldown[kind as usize] = m.cooldown;
         self.brain.think_left = 0;
     }
 
@@ -1431,18 +1568,22 @@ impl Monster {
         let want = crate::math::atan2_turns(aim.z.sub(self.pos.z), aim.x.sub(self.pos.x));
         let error = crate::math::wrap_turns(want.sub(self.yaw));
 
-        // Turning toward a side is driven off the foreleg on that side, so
+        // Turning toward a side is driven off the legs on that side, so
         // breaking one is something the player can see the consequence of.
         // Increasing yaw swings toward positive Z, which is the creature's own
         // right.
-        let lame = if error.raw() > 0 {
-            self.broken(FORELEG_R)
-        } else {
-            self.broken(FORELEG_L)
-        };
+        let toward_right = error.raw() > 0;
+        let lame = beast::LEGS
+            .iter()
+            .filter(|leg| (leg.side > 0) == toward_right)
+            .filter(|leg| self.broken(leg.foot))
+            .count() as i32;
         let mut cap = t::turn_rate_max();
-        if lame {
+        for _ in 0..lame {
             cap = cap.mul(t::turn_hurt());
+        }
+        if self.slowed > 0 {
+            cap = cap.mul(self.slow_mul);
         }
 
         let desired = error.mul(t::turn_gain()).clamp(cap.neg(), cap);
@@ -1452,10 +1593,25 @@ impl Monster {
         self.yaw = self.yaw.add(self.yaw_rate.mul(DT));
     }
 
+    /// How much of its speed it still has: slows and broken legs both cost it.
+    fn hobbled(&self) -> Fx {
+        let (front, rear) = self.lameness();
+        let mut mul = if self.slowed > 0 {
+            self.slow_mul
+        } else {
+            Fx::ONE
+        };
+        for _ in 0..(front + rear) {
+            mul = mul.mul(t::leg_speed_hurt());
+        }
+        mul
+    }
+
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
     /// that could strafe would make its turn limit decorative.
     fn walk(&mut self) {
         let want = match self.doing {
+            _ if self.rooted > 0 => Fx::ZERO,
             Doing::Active { kind, .. } => attack(kind).advance,
             Doing::Prowl => {
                 let range = V3::new(
@@ -1470,7 +1626,8 @@ impl Monster {
                     .clamp(t::monster_back().neg(), t::monster_walk())
             }
             _ => Fx::ZERO,
-        };
+        }
+        .mul(self.hobbled());
         let budget = t::monster_accel().mul(DT);
         self.speed = self
             .speed
@@ -1478,6 +1635,16 @@ impl Monster {
 
         let forward = V3::from_turns(self.yaw);
         self.pos = self.pos.add(forward.scale(self.speed.mul(DT)));
+
+        // Where it is in its stride. An accumulator rather than a ratio, for
+        // the reason the fighters' is: a stride is longer at a gallop than at a
+        // walk, so `distance / stride` jumps by whole cycles the moment the
+        // gait changes, which reads as four legs teleporting at once.
+        let covered = self.speed.abs().mul(DT).div(t::gait_stride());
+        self.stride = self
+            .stride
+            .wrapping_add(covered.raw().clamp(0, 65535) as u16);
+        self.beat = self.beat.wrapping_add(t::breath_rate());
 
         // It stays inside the arena and on the floor. Nothing in the move set
         // takes it off the ground, and a creature this size on a platform would
@@ -1523,6 +1690,11 @@ impl Monster {
             Doing::Recovery { .. } => rest(self),
             Doing::Flinch { left } if left > 0 => Doing::Flinch { left: left - 1 },
             Doing::Flinch { .. } => rest(self),
+            Doing::Stumble { left, front } if left > 0 => Doing::Stumble {
+                left: left - 1,
+                front,
+            },
+            Doing::Stumble { .. } => rest(self),
             Doing::Toppled { left } if left > 0 => Doing::Toppled { left: left - 1 },
             Doing::Toppled { .. } => rest(self),
         };
@@ -1538,6 +1710,7 @@ impl Monster {
         }
         self.glance(quarry);
         self.tick_action();
+        self.bleed_off();
 
         let riders = quarry.iter().filter(|q| q.alive && q.aboard).count() as i32;
         if self.doing.free() {
@@ -1554,5 +1727,27 @@ impl Monster {
 
         self.steer();
         self.walk();
+    }
+
+    /// Everything that ticks down on its own.
+    ///
+    /// The strain decays **proportionally, with a floor of one**, which is what
+    /// makes it mean "recently" rather than "ever". A flat drain would let a
+    /// single enormous hit sit in the pool for ten seconds; a pure percentage
+    /// never quite reaches zero in integers. Taking a percentage and at least
+    /// one does both jobs and terminates.
+    fn bleed_off(&mut self) {
+        if self.strain > 0 {
+            let drop = ((self.strain * t::strain_decay()) / 100).max(1);
+            self.strain = (self.strain - drop).max(0);
+        }
+        self.slowed = self.slowed.saturating_sub(1);
+        if self.slowed == 0 {
+            self.slow_mul = Fx::ONE;
+        }
+        self.rooted = self.rooted.saturating_sub(1);
+        for slot in self.brain.cooldown.iter_mut() {
+            *slot = slot.saturating_sub(1);
+        }
     }
 }
