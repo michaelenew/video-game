@@ -17,7 +17,7 @@ use crate::aim::{self, Contact, Path, Scene};
 use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
 pub use crate::class::Shield;
-use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
+use crate::class::{self, Class, Form, Ghost, Mechanic};
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::input::Input;
@@ -817,15 +817,6 @@ impl World {
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
                 self.players[attacker].hit_used = true;
-                // The autos are the steering wheel, and they only steer when
-                // they land: the Dual mage's fast way back toward centre is a
-                // far-side auto, which is why the class has to close distance
-                // exactly when it is strongest. See `docs/design/dual-mage.md`.
-                if let Some(kind) = snapshot[attacker].action.attack_kind() {
-                    if steers_on_contact(snapshot[attacker].class, kind) {
-                        steer_meter(&mut self.players[attacker], kind);
-                    }
-                }
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
                 // the way you are holding, so it is a repositioning tool you
@@ -2304,13 +2295,10 @@ fn begin_move(
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
     shadow::begin_echo(p, kind);
-    // Committing to a cast is committing to a side, for the one class where
-    // that is the mechanic. The autos are the exception and steer on contact
-    // instead -- a whiff steers nothing, which is what makes closing to melee
-    // the fast way back toward centre. See `steer_meter`.
-    if !steers_on_contact(p.class, kind) {
-        steer_meter(p, kind);
-    }
+    // Throwing anything at all is committing to a side, for the one class
+    // where that is the mechanic. **On the press, including the autos** -- see
+    // `steer_meter` for why that stopped being on contact.
+    steer_meter(p, kind);
     if aerial {
         arm_aerial(p, kind, input);
     }
@@ -2640,29 +2628,29 @@ fn step_mechanic(p: &mut Player) {
     }
 }
 
-/// Attacking steers the Dual mage's meter: dark darker, light lighter, and
-/// stronger moves push harder. Nothing else moves it, so every step is a
+/// Attacking steers the Dual mage's meter: dark darker, light lighter, an auto
+/// a little and a cast more. Nothing else moves it, so every step is a
 /// consequence of a decision the player made.
 ///
-/// **Which way comes from the move, not from the buttons held down** -- see
-/// `moves::dual::side`. Reading the input bits meant asking which of `shift`
-/// and `left click` won, and a move already knows which force it is made of.
+/// **On the press, every time, including the autos.** They used to steer on
+/// *contact* -- the design's own rule, and the reason for it is good: landing a
+/// far-side auto is the fast way back toward centre, which is what forces this
+/// class into melee exactly when it is most fragile. It was still wrong, and
+/// obviously so the moment anybody played it: with nothing in reach, **no
+/// button on the class moved the bar at all.** The autos hit nothing, the casts
+/// took their direction from an auto that had never landed, and the whole
+/// mechanic sat at zero. A resource you cannot move without a target is a
+/// resource you cannot learn, cannot tune, and cannot see working.
 ///
-/// A move with no side pushes you **further along whichever way you were already
-/// going**, which is the rule `docs/design/dual-mage.md` states for every input
-/// that is neither left nor right: direction comes from side-ness, and a key
-/// has none. At dead centre there is no path to push along, so it does nothing
-/// -- correctly, because leaving the middle is supposed to be a decision.
-/// Does this move steer the meter when it *lands* rather than when it is
-/// thrown?
+/// If the melee pull is wanted back it should return as a **bonus for
+/// landing** rather than as the only way to move -- see the feel log entry for
+/// 2026-09-13.
 ///
-/// The Dual mage's two autos, and nothing else in the game. Everything else
-/// votes the moment you commit to it; an auto has to connect, and a whiff
-/// steers nothing.
-fn steers_on_contact(class: Class, kind: u8) -> bool {
-    class == Class::DualMage && moves::dual::is_an_auto(kind)
-}
-
+/// **Which way comes from the force she is carrying, not from the buttons held
+/// down.** Only the autos have a side of their own, and throwing one is what
+/// sets which force she carries; everything else is made of that force. Reading
+/// the input bits instead meant asking which of `shift` and `left click` won,
+/// and a move already knows what it is made of.
 fn steer_meter(p: &mut Player, kind: u8) {
     let Mechanic::Meter {
         value,
@@ -2681,14 +2669,10 @@ fn steer_meter(p: &mut Player, kind: u8) {
     // force she is carrying. Everything else moves her further, in whichever
     // direction the last auto left her facing.
     let (push, colour) = match moves::dual::force(kind) {
-        Some(thrown) => (t::meter_auto_push(), Some(thrown)),
+        Some(thrown) => (t::meter_auto_push(), thrown),
         None => (t::meter_cast_push(), colour),
     };
-    // A cast before any auto has landed has no force to take: she is not
-    // carrying either of them yet, so it pushes her further along whichever way
-    // she was already going, and does nothing at dead centre.
-    let along = colour.map_or(value.signum(), Force::along);
-    let value = (value + push * along).clamp(-t::meter_max(), t::meter_max());
+    let value = (value + push * colour.along()).clamp(-t::meter_max(), t::meter_max());
     // Driven all the way to an end, and it takes her. There is no input for it
     // and there never was -- you got there one cast at a time.
     let ascending = if value.abs() >= t::meter_max() {
@@ -2782,7 +2766,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
         } => {
             h.write_u32(7);
             h.write_i32(*value);
-            h.write_i32(colour.map_or(0, |c| c.along()));
+            h.write_i32(colour.along());
             h.write_u32(*ascending as u32);
         }
     }

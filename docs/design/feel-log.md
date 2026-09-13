@@ -2367,3 +2367,48 @@ six frames may be too fast to read as an opening at all; the tip may be so much 
 the body of the wing that spacing for it is the only correct way to throw the move; and an
 ungated finisher with no depth scaling makes centre a perfectly good place to stand, which is
 the thing the whole class is built to punish.
+
+### 2026-09-13 — the bar did not move, and the reason was a rule that reads well
+
+**Reported from play:** "still not getting any movement of the bar with my attacks on dual
+mage." Reproduced in one test — a mage standing where she spawns, eight metres from anybody,
+pressing each of her five buttons five times:
+
+```
+LMB  dark auto   -> meter 0, carrying none
+RMB  light auto  -> meter 0, carrying none
+S+L  lance       -> meter 0, carrying none
+Q    judgement   -> meter 0, carrying none
+E    sweep       -> meter 0, carrying none
+```
+
+Every button on the class, and the mechanic never moved. Two rules, each defensible alone,
+that multiply to nothing:
+
+- **The autos steered on contact only.** With nothing in reach they steered nothing, which is
+  exactly what "a whiff steers nothing" says and exactly what makes it unusable — a player
+  with no target has no way to see the mechanic exist, and neither has anybody tuning it.
+- **Casts took their direction from the force she was carrying, and she carried none** until
+  an auto *landed*. So the casts multiplied by zero as well.
+
+Either one alone would have been survivable. Together they made a class whose entire identity
+is a resource into a class with no resource.
+
+**Changed.** Steering happens on the **press**, for everything, autos included. And she is
+always carrying one of the two forces — dark to start, which is arbitrary between two
+symmetric things and is not nothing.
+
+**What that costs, and how to get it back.** "Landing the far-side auto is the fast way back
+toward centre" is a real idea: it is what forces this class into melee exactly when it is
+deepest and most fragile, and it is now gone. It should come back as a **bonus for landing** —
+the press moves you, connecting moves you again — rather than as the only thing that moves you
+at all. That version keeps the pull toward melee and still lets a player in an empty arena see
+their own mechanic work.
+
+**The lesson worth keeping** is not about this class. It is that a rule which says *nothing
+happens unless* needs a second rule saying what happens the rest of the time, and both of
+these said "nothing". The test that now guards it does not check a number: it checks that
+**every button on the class moves the bar with nothing in range.**
+
+**Verdict** the fix is right and the loss is real. Whether the landing bonus is worth building
+before the class has depth scaling — which is the larger hole — is the open question.

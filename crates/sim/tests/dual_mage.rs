@@ -126,7 +126,7 @@ fn nothing_in_the_kit_is_locked_at_the_centre() {
         (Q, "judgement"),
         (L | SHIFT, "lance"),
     ] {
-        w.players[0].mechanic = meter_at(0, None);
+        w.players[0].mechanic = meter_at(0, Force::Dark);
         w.players[0].action = Action::Free;
         step(&mut w, 1, bits);
         assert!(
@@ -349,7 +349,7 @@ fn meter(w: &World) -> i32 {
     }
 }
 
-fn colour(w: &World) -> Option<Force> {
+fn colour(w: &World) -> Force {
     match w.players[0].mechanic {
         Mechanic::Meter { colour, .. } => colour,
         other => panic!("not a meter: {other:?}"),
@@ -363,7 +363,7 @@ fn ascending(w: &World) -> u16 {
     }
 }
 
-fn meter_at(value: i32, colour: Option<Force>) -> Mechanic {
+fn meter_at(value: i32, colour: Force) -> Mechanic {
     Mechanic::Meter {
         value,
         colour,
@@ -371,64 +371,70 @@ fn meter_at(value: i32, colour: Option<Force>) -> Mechanic {
     }
 }
 
-/// Land `bits` on the other fighter, from close enough that it connects.
-fn landed(bits: u16) -> World {
-    let mut w = mage();
-    // Walk in. Both spawn eight metres apart and the autos are melee.
-    step(&mut w, 90, Input::W);
-    let gap = w.players[1]
-        .pos
-        .sub(w.players[0].pos)
-        .flat_len()
-        .to_f32_for_render();
-    assert!(gap < 2.0, "fixture failed to close: {gap:.2} m apart");
-    let before = w.players[1].health;
-    step(&mut w, 1, bits);
-    step(&mut w, 14, 0);
-    assert!(
-        w.players[1].health < before,
-        "the fixture never connected, so it proves nothing about contact"
-    );
-    w
-}
-
 #[test]
-fn an_auto_steers_only_when_it_lands() {
-    // The autos are the steering wheel and they are melee: a whiff steers
-    // nothing, which is what forces the class to close distance exactly when
-    // it is at its most powerful and most fragile.
-    let mut whiffed = mage();
-    step(&mut whiffed, 1, L);
-    step(&mut whiffed, 30, 0);
-    assert_eq!(
-        meter(&whiffed),
-        0,
-        "a dark auto swung at nothing moved the meter"
-    );
-    assert_eq!(colour(&whiffed), None, "a whiff changed which force she is");
-
-    assert!(meter(&landed(L)) < 0, "landing a dark auto did not go dark");
-    assert!(
-        meter(&landed(R)) > 0,
-        "landing a light auto did not go light"
-    );
+fn every_attack_moves_the_bar_with_nothing_in_range() {
+    // **The bug this class shipped with.** The autos only steered on contact
+    // and the casts took their direction from an auto that had never landed, so
+    // a player standing where they spawn -- eight metres from anybody -- could
+    // press every button on the class and watch the bar sit at zero. A resource
+    // you cannot move without a target is one nobody can learn or tune.
+    for (bits, name) in [
+        (L, "dark auto"),
+        (R, "light auto"),
+        (L | SHIFT, "lance"),
+        (Q, "judgement"),
+        (E, "sweep"),
+    ] {
+        let mut w = mage();
+        let gap = w.players[1]
+            .pos
+            .sub(w.players[0].pos)
+            .flat_len()
+            .to_f32_for_render();
+        assert!(gap > 4.0, "the fixture is in range, so it proves nothing");
+        step(&mut w, 1, bits);
+        step(&mut w, 60, 0);
+        assert_ne!(
+            meter(&w),
+            0,
+            "{name} thrown at nothing moved the bar not at all"
+        );
+    }
 }
 
 #[test]
 fn an_auto_moves_the_bar_by_exactly_one_step() {
     // The bar is calibrated in autos: the thing you throw constantly is the
     // unit everything else is measured against.
-    let step_size = sim::tuning::meter_auto_push();
-    assert_eq!(meter(&landed(L)), -step_size);
-    assert_eq!(meter(&landed(R)), step_size);
+    let one = sim::tuning::meter_auto_push();
+    for (bits, force, name) in [(L, Force::Dark, "dark"), (R, Force::Light, "light")] {
+        let mut w = mage();
+        step(&mut w, 1, bits);
+        step(&mut w, 30, 0);
+        assert_eq!(meter(&w), one * force.along(), "the {name} auto");
+    }
 }
 
 #[test]
-fn the_last_auto_to_land_is_the_force_she_is_carrying() {
+fn the_last_auto_she_threw_is_the_force_she_is_carrying() {
     // The mechanic in one sentence. Her casts are made of whichever force she
-    // is carrying, and this is the only thing that sets it.
-    assert_eq!(colour(&landed(L)), Some(Force::Dark));
-    assert_eq!(colour(&landed(R)), Some(Force::Light));
+    // is carrying, and the autos are the only thing that sets it.
+    let mut w = mage();
+    step(&mut w, 1, R);
+    step(&mut w, 30, 0);
+    assert_eq!(colour(&w), Force::Light);
+    step(&mut w, 1, L);
+    step(&mut w, 30, 0);
+    assert_eq!(colour(&w), Force::Dark);
+}
+
+#[test]
+fn she_is_carrying_a_force_before_she_has_thrown_anything() {
+    // Otherwise the first key pressed in a match has no direction to push in,
+    // which is half of how the bar came to be unmovable.
+    let w = mage();
+    assert_eq!(colour(&w), Force::Dark);
+    assert_eq!(meter(&w), 0);
 }
 
 #[test]
@@ -447,7 +453,7 @@ fn a_cast_moves_her_further_than_an_auto_does_and_in_the_force_she_carries() {
     ] {
         for carrying in [Force::Dark, Force::Light] {
             let mut w = mage();
-            w.players[0].mechanic = meter_at(0, Some(carrying));
+            w.players[0].mechanic = meter_at(0, carrying);
             step(&mut w, 1, bits);
             step(&mut w, 40, 0);
             assert_eq!(
@@ -456,45 +462,22 @@ fn a_cast_moves_her_further_than_an_auto_does_and_in_the_force_she_carries() {
                 "{name} thrown while carrying the {} went the wrong way",
                 carrying.name()
             );
-            assert_eq!(colour(&w), Some(carrying), "a cast changed her force");
+            assert_eq!(colour(&w), carrying, "a cast changed her force");
         }
         let _ = force;
     }
 }
 
 #[test]
-fn a_cast_before_any_auto_pushes_her_further_along_the_way_she_was_going() {
-    // She is carrying neither force until one lands, and the rule the design
-    // states for every input that has no side of its own is that it pushes you
-    // further down whichever path you are already on.
-    for start in [-20, 20] {
-        let mut w = mage();
-        w.players[0].mechanic = meter_at(start, None);
-        step(&mut w, 1, E);
-        step(&mut w, 40, 0);
-        let moved = meter(&w) - start;
-        assert!(
-            moved.signum() == start.signum(),
-            "from {start} a sweep moved the meter by {moved}, which is back toward centre"
-        );
-    }
-    // And at dead centre it does nothing, because there is no path to be on.
-    let mut w = mage();
-    step(&mut w, 1, E);
-    step(&mut w, 40, 0);
-    assert_eq!(meter(&w), 0, "a forceless cast picked a side at centre");
-}
-
-#[test]
 fn the_meter_burns_at_depth_and_stops_when_you_come_back() {
     // The containment story: relief comes from stopping, not from a reward.
     let mut w = mage();
-    w.players[0].mechanic = meter_at(sim::tuning::meter_deep() + 20, None);
+    w.players[0].mechanic = meter_at(sim::tuning::meter_deep() + 20, Force::Light);
     let before = w.players[0].health;
     step(&mut w, 30, 0);
     assert!(w.players[0].health < before, "the edge costs nothing");
 
-    w.players[0].mechanic = meter_at(0, None);
+    w.players[0].mechanic = meter_at(0, Force::Dark);
     let inside = w.players[0].health;
     step(&mut w, 30, 0);
     assert_eq!(
@@ -514,7 +497,7 @@ fn driving_the_bar_to_an_end_starts_ascension() {
     for force in [Force::Dark, Force::Light] {
         let mut w = mage();
         let brink = (sim::tuning::meter_max() - 1) * force.along();
-        w.players[0].mechanic = meter_at(brink, Some(force));
+        w.players[0].mechanic = meter_at(brink, force);
         step(&mut w, 1, E);
         assert!(
             ascending(&w) > 0,
@@ -530,7 +513,7 @@ fn ascension_ends_on_its_own_clock() {
     // then went on draining, with nothing she could do about it and no way to
     // tell it had happened.
     let mut w = mage();
-    w.players[0].mechanic = meter_at(sim::tuning::meter_max() - 1, Some(Force::Light));
+    w.players[0].mechanic = meter_at(sim::tuning::meter_max() - 1, Force::Light);
     step(&mut w, 1, E);
     let clock = ascending(&w);
     assert_eq!(meter(&w), sim::tuning::meter_max(), "she is not at the end");
@@ -566,7 +549,7 @@ fn ascension_drains_faster_than_the_edge_burns() {
     // Two different things happen at depth and they have to feel different, or
     // there is no reason to fear the end of the bar over merely leaning on it.
     let mut edge = mage();
-    edge.players[0].mechanic = meter_at(sim::tuning::meter_max() - 1, None);
+    edge.players[0].mechanic = meter_at(sim::tuning::meter_max() - 1, Force::Light);
     let before = edge.players[0].health;
     step(&mut edge, 60, 0);
     let burned = before - edge.players[0].health;
@@ -574,7 +557,7 @@ fn ascension_drains_faster_than_the_edge_burns() {
     let mut gone = mage();
     gone.players[0].mechanic = Mechanic::Meter {
         value: sim::tuning::meter_max(),
-        colour: Some(Force::Dark),
+        colour: Force::Dark,
         ascending: sim::tuning::ascension_frames(),
     };
     let before = gone.players[0].health;
@@ -593,7 +576,7 @@ fn nothing_steers_the_bar_while_she_is_ascended() {
     let mut w = mage();
     w.players[0].mechanic = Mechanic::Meter {
         value: sim::tuning::meter_max(),
-        colour: Some(Force::Dark),
+        colour: Force::Dark,
         ascending: sim::tuning::ascension_frames(),
     };
     step(&mut w, 1, R);
@@ -617,10 +600,10 @@ fn neither_the_burn_nor_ascension_can_be_what_kills_her() {
     // The same rule the Blood mage's costs follow: dying to your own button is
     // not a decision anybody made.
     for mechanic in [
-        meter_at(sim::tuning::meter_max(), None),
+        meter_at(sim::tuning::meter_max(), Force::Light),
         Mechanic::Meter {
             value: sim::tuning::meter_max(),
-            colour: Some(Force::Light),
+            colour: Force::Light,
             ascending: sim::tuning::ascension_frames(),
         },
     ] {

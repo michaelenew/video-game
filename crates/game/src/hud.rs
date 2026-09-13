@@ -502,9 +502,8 @@ pub fn update(
             ASCENDED
         } else {
             match colour {
-                Some(sim::class::Force::Dark) => DARK,
-                Some(sim::class::Force::Light) => LIGHT,
-                None => DIM,
+                sim::class::Force::Dark => DARK,
+                sim::class::Force::Light => LIGHT,
             }
         };
     }
@@ -586,7 +585,7 @@ fn fill_of(value: i32, max: i32) -> (f32, f32) {
 /// `None` for the other five, which is what hides the bar rather than drawing
 /// an empty one -- a bar for a resource a class does not have is a thing to
 /// wonder about.
-fn meter_of(p: &sim::state::Player) -> Option<(i32, Option<sim::class::Force>, u16)> {
+fn meter_of(p: &sim::state::Player) -> Option<(i32, sim::class::Force, u16)> {
     match p.mechanic {
         sim::class::Mechanic::Meter {
             value,
