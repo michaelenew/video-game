@@ -333,7 +333,12 @@ scalars! {
     ShadowLockCone,   "Reaver",   "Crosshair lock on the shadow", Fixed, fx(1,10),  fx(6,1);
     ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(40,1);
     LotusRadius,      "Reaver",   "Lotus, how far the blades go", Fixed, fx(1,1),   fx(12,1);
-    LotusRise,        "Reaver",   "Lotus, how high they arc",   Fixed,   0,         fx(4,1);
+    // Was "how high they arc", when the blades left the shadow's feet and rose
+    // over the eruption. The flower is flat now and this slot carries the plane
+    // it lies in instead -- **renamed rather than removed**, because
+    // `tuned::SCALARS` is read by this enum's own discriminant and dropping one
+    // from the middle would hand every knob below it its neighbour's value.
+    LotusHeight,      "Reaver",   "Lotus, height off the shadow's feet", Fixed, 0,   fx(4,1);
     LotusCurl,        "Reaver",   "Lotus, curve of the path (turns)", Fixed, 0,     fx(1,4);
     LotusBladeRadius, "Reaver",   "Lotus, blade radius",        Fixed,   fx(1,10),  fx(2,1);
     LotusErupt,       "Reaver",   "Lotus, out",                 Frames,  1,         60;
@@ -351,6 +356,7 @@ scalars! {
     WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
     WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
+    LotusUncurl,       "Reaver",    "Lotus, turn coming home (turns)",       Fixed,  0,        fx(1,2);
 }
 
 // ---------------------------------------------------------------------------

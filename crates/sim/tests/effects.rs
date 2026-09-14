@@ -1807,3 +1807,212 @@ fn a_pillar_is_part_of_the_state_a_rollback_restores() {
     assert_eq!(saved.checksum(), w.checksum(), "restore lost the effects");
     assert_ne!(advanced, w.checksum(), "the restore did not go back");
 }
+
+// ---------------------------------------------------------------------------
+// The Guillotine lotus, as a shape
+// ---------------------------------------------------------------------------
+//
+// Six blades out of the Reaver's shadow and six back into it. What follows is
+// the *flower* rather than the cast -- where it is aimed is `aiming.rs`'s, and
+// what it does to somebody is the hit test's. These are the three things a
+// player reads off the screen while deciding whether they are standing in one.
+//
+// It used to be a different shape in all three respects: the blades left the
+// shadow's feet, arched up over the eruption and came back down to the floor at
+// full extension, and then retraced that arm exactly on the way home. The arc
+// left the volume half buried in the floor at precisely the reach where it does
+// the most work, and a flower whose height changes while it turns is hard to
+// read as a plane being swept.
+
+/// A lotus standing at the origin, at whatever age we want to look at it.
+fn flower(age: u16) -> sim::effects::Effect {
+    let mut e = sim::effects::Effect::cast(
+        EffectKind::GuillotineLotus,
+        0,
+        Class::ShadowReaver,
+        sim::state::SLOT_SPECIAL,
+        sim::V3::ZERO,
+        sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        Fx::ZERO,
+    );
+    e.age = age;
+    e
+}
+
+/// One blade's bearing around the centre, in turns, unwrapped against the
+/// previous sample so a sweep past the seam reads as a sweep.
+fn bearing(at: sim::V3) -> f64 {
+    let x = at.x.to_f32_for_render() as f64;
+    let z = at.z.to_f32_for_render() as f64;
+    z.atan2(x) / std::f64::consts::TAU
+}
+
+fn reach(at: sim::V3) -> f64 {
+    at.flat_len().to_f32_for_render() as f64
+}
+
+#[test]
+fn the_flower_is_flat() {
+    // One horizontal plane, for the whole life, for every blade. This is the
+    // property a player actually uses: a volume at a fixed height is one you
+    // can decide about once, and a volume that rises and falls while it turns
+    // is one you have to keep re-reading.
+    let life = EffectKind::GuillotineLotus.life();
+    let want = sim::tuning::lotus_height();
+    for age in 0..=life {
+        for blade in 0..sim::effects::LOTUS_BLADES {
+            let y = flower(age).lotus_at(blade, sim::V3::ZERO).y;
+            assert_eq!(
+                y.raw(),
+                want.raw(),
+                "blade {blade} at age {age} is {:.2} m up, not the {:.2} m the \
+                 flower lies at -- the lotus is meant to be planar",
+                y.to_f32_for_render(),
+                want.to_f32_for_render()
+            );
+        }
+    }
+}
+
+#[test]
+fn the_blades_leave_from_the_midriff_and_not_from_the_feet() {
+    // They erupt *out of the shadow*, so they start inside its body rather than
+    // at the floor under it. Bracketed against the body rather than pinned to a
+    // number: the point is that the plane is inside a standing fighter, which
+    // is what makes the flower something you are caught *in*.
+    let height = sim::tuning::lotus_height();
+    let body = sim::tuning::body_height();
+    assert!(
+        height.raw() > 0,
+        "the flower lies on the floor; the blades are supposed to come out of \
+         the shadow's midriff"
+    );
+    assert!(
+        height.raw() < body.raw(),
+        "the flower lies at {:.2} m, over the head of a {:.2} m fighter",
+        height.to_f32_for_render(),
+        body.to_f32_for_render()
+    );
+    // Below the chest a cast comes out of: these are off the waist, not the
+    // hands.
+    assert!(
+        height.raw() < sim::tuning::cast_height().raw(),
+        "the flower lies at chest height or above, where a cast comes from, \
+         rather than at the midriff"
+    );
+    // And a blade's own thickness does not put it underground at the start.
+    assert!(
+        height.raw() > sim::tuning::lotus_blade_radius().raw(),
+        "a blade at rest is wider than the flower is high, so it starts half \
+         buried in the floor"
+    );
+}
+
+#[test]
+fn the_blades_spiral_out_rather_than_running_straight() {
+    // Each leaves on its own sixth of the circle and keeps turning as it goes,
+    // which is what makes the six of them open like petals instead of as spokes
+    // of a wheel. Reach and bearing have to advance *together* for that: a
+    // radius with an angle bolted on somewhere else is a spoke that happens to
+    // be rotating.
+    let erupt = sim::tuning::lotus_erupt();
+    let mut last_reach = -1.0;
+    let mut last_bearing = bearing(flower(0).lotus_at(0, sim::V3::ZERO));
+    let mut turned = 0.0;
+    for age in 1..=erupt {
+        let at = flower(age).lotus_at(0, sim::V3::ZERO);
+        let (r, b) = (reach(at), bearing(at));
+        assert!(
+            r > last_reach,
+            "the blade stopped reaching outward at age {age}"
+        );
+        turned += b - last_bearing;
+        last_reach = r;
+        last_bearing = b;
+    }
+    assert!(
+        turned.abs() > 0.01,
+        "the blade travelled {turned:.3} turns on the way out -- it went \
+         straight, so this is a starburst and not a lotus"
+    );
+}
+
+#[test]
+fn the_way_home_turns_the_other_way_and_past_where_it_started() {
+    // The fix this test exists for. The return used to be the eruption played
+    // backwards, so the blade unwound onto the exact bearing it left on and the
+    // flower rewound rather than closing. It now comes home on a spiral of its
+    // own, turning against the way it opened and carrying on past the start.
+    let centre = sim::V3::ZERO;
+    let erupt = sim::tuning::lotus_erupt();
+    let life = EffectKind::GuillotineLotus.life();
+
+    let opened_on = bearing(flower(0).lotus_at(0, centre));
+    let out_to = bearing(flower(erupt).lotus_at(0, centre));
+    // The last frame with any reach left to measure a bearing from.
+    let home = bearing(flower(life - 1).lotus_at(0, centre));
+
+    let went = out_to - opened_on;
+    let came = home - out_to;
+    assert!(
+        went * came < 0.0,
+        "out {went:+.3} turns and home {came:+.3} turns: the way back does not \
+         turn against the way out"
+    );
+    assert!(
+        came.abs() > went.abs(),
+        "out {went:+.3} turns and home {came:+.3} turns. The return unwinds by \
+         no more than it wound, so it retraces the arm it came out on instead \
+         of closing on a spiral of its own."
+    );
+    // Which is the same thing said as a place rather than as a rotation: it
+    // finishes on the far side of the bearing it opened on.
+    assert!(
+        (home - opened_on) * went < 0.0,
+        "the blade finished back on the side it opened towards, so it never \
+         crossed its own starting bearing"
+    );
+}
+
+#[test]
+fn the_way_home_sweeps_floor_the_way_out_never_touched() {
+    // And this is why that is a hit test rather than a look. Ground a blade has
+    // already crossed is ground whose occupants have been cut once and have had
+    // the whole hold to walk off it, so a retraced return can only catch
+    // somebody who stepped back into the same line. Compared at matched reach,
+    // because that is the only fair comparison: the two passes are at the same
+    // distance from the shadow but should not be at the same bearing.
+    let centre = sim::V3::ZERO;
+    let erupt = sim::tuning::lotus_erupt();
+    let life = EffectKind::GuillotineLotus.life();
+    let full = reach(flower(erupt).lotus_at(0, centre));
+
+    let mut checked = 0;
+    for age in 1..erupt {
+        let out = flower(age).lotus_at(0, centre);
+        let r = reach(out);
+        // Skip the ends, where both passes are necessarily near the centre.
+        if r < full * 0.25 || r > full * 0.9 {
+            continue;
+        }
+        // The return frame that is at about this same distance out.
+        let back = (erupt..life)
+            .map(|a| flower(a).lotus_at(0, centre))
+            .min_by(|x, y| {
+                (reach(*x) - r)
+                    .abs()
+                    .partial_cmp(&(reach(*y) - r).abs())
+                    .expect("reaches compare")
+            })
+            .expect("the return has frames");
+        let apart = (bearing(back) - bearing(out)).abs();
+        assert!(
+            apart > 0.02,
+            "at {r:.1} m out the return is only {:.1}° from the arm the \
+             eruption drew. The way home is retracing already-cut ground.",
+            apart * 360.0
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "the fixture compared nothing");
+}

@@ -120,12 +120,24 @@ the shadow; keeps it
 **Six blades erupt from the shadow along curving paths, hang open, and then chase it
 home**, cutting on the way out and again on the way back.
 
-- Out fast, on a curve: each blade leaves on its own sixth of the circle and keeps
-  turning, so the six of them open like petals rather than spokes.
+- **The flower is flat.** It opens, holds and closes in one horizontal plane at the
+  shadow's midriff — chest-high on nobody, waist-high on everybody, and the same height
+  for the whole of its life.
+- Out fast, on a spiral: each blade leaves on its own sixth of the circle and keeps
+  turning as it reaches, so the six of them open like petals rather than spokes.
 - They hang at full extension for about two thirds of a second. That is the window a
   victim has to leave.
-- Coming back they decelerate into the shadow, and deal a share of what they dealt going
-  out.
+- **Home on a spiral of its own, turning the other way.** Coming back a blade sweeps
+  against the direction it opened in, and further, so it crosses the bearing it started
+  from rather than unwinding onto it. It decelerates into the shadow and deals a share of
+  what it dealt going out.
+
+That last one is a hit test as much as a look. A return that retraced its outward arm
+would be sweeping ground it had already cut — ground whose occupants were cut once and
+have had the whole hold to walk off it — so it could only catch somebody who stepped back
+into the same line. Turning past the start means the way home crosses floor the way out
+never touched, which is what makes the drag through a crowd the ability's own description
+of itself rather than a second helping of the first pass.
 
 **The blades track the shadow's live position every frame.** Recall the shadow with a
 lotus open and the six of them are dragged the length of the arena after it — a long
@@ -140,6 +152,12 @@ two buttons: `Q`, then right click.
 >
 > It briefly erupted **on the Reaver's own body**: the move was declared a swing with a
 > reach of zero, so its volume came out where she was standing.
+>
+> The blades used to leave the shadow's **feet** and arc up and back down over the
+> eruption. Two things were wrong with that and only one of them was how it looked: a
+> blade at full extension was back at ground level, so the volume spent the end of its
+> travel half buried in the floor at exactly the reach where it does the most work. The
+> flower is planar now, and the height it lies at is its own knob.
 >
 > The blades are tested as **swept lines** rather than as points, and that is a hit test
 > rather than a flourish: the eruption crosses four metres in seven frames, so a blade

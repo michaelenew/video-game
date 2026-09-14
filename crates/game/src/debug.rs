@@ -223,7 +223,14 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             // Six blades around a centre that is the shadow rather than the
             // spot this was cast on -- `effect.pos` is rewritten every frame to
             // follow it, so drawing from `pos` draws where the hit test is.
+            //
+            // The spokes are drawn from the middle of the **flower** rather
+            // than from the shadow's feet, so the overlay shows the flat disc
+            // the blades actually sweep. Drawn from the feet they fanned up out
+            // of the floor and read as a cone, which is the shape this used to
+            // be and is exactly the thing an overlay must not still be saying.
             EffectKind::GuillotineLotus => {
+                let hub = v3(effect.lotus_hub(effect.pos));
                 for blade in 0..sim::effects::LOTUS_BLADES {
                     let head = v3(effect.lotus_at(blade, effect.pos));
                     gizmos.sphere(
@@ -231,7 +238,7 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                         effect.field_radius().to_f32_for_render(),
                         FIELD,
                     );
-                    gizmos.line(at, head, FIELD);
+                    gizmos.line(hub, head, FIELD);
                 }
             }
         }
