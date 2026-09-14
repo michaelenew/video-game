@@ -1015,3 +1015,50 @@ fn cutting_a_recovery_short_does_not_rescue_her_from_the_punish() {
          out of the punish she cancelled"
     );
 }
+
+#[test]
+fn the_repeat_lockout_never_holds_up_the_recall() {
+    // Where this class's mechanic meets the roster-wide rule that an ability
+    // you have just thrown cannot be thrown again for thirty frames.
+    //
+    // The two would contradict each other if the lockout counted the recall as
+    // a second use: the shadow is the class's escape, and an escape you have to
+    // wait thirty frames for is the input lag the frame-1 startup exists to
+    // avoid -- displaced from the first press to the one that matters. It does
+    // not, because a press on a shadow that is already out is the second half
+    // of the activation that was paid for when it was sent, not a new one.
+    //
+    // What the lockout does gate is **sending it again** once it is home, which
+    // is the setup and not the escape. That is the ordinary rule and this class
+    // has no argument with it.
+    let mut w = duel();
+    run(&mut w, 2, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "right click did not send the shadow"
+    );
+    // Out on the field, and her own recovery over.
+    run(&mut w, 40, 0, 0);
+    assert!(shadow(&w).is_out(), "the shadow never went out");
+    assert!(
+        w.players[0].locked_out(SLOT_MECHANIC),
+        "the send armed no lockout at all, so this proves nothing about it \
+         being ignored"
+    );
+
+    // And the recall answers anyway.
+    run(&mut w, 1, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "the repeat lockout swallowed the recall. The shadow is the escape, \
+         and an escape on a thirty-frame gate is the input lag the frame-1 \
+         startup exists to avoid."
+    );
+    run(&mut w, 90, 0, 0);
+    assert!(
+        !shadow(&w).is_out(),
+        "the recall came out but the shadow never came home"
+    );
+}
