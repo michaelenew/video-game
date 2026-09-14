@@ -173,9 +173,13 @@ the floor below, and the only way to land one was to aim well under the target o
 
 Solving the line once, at the full reach, has neither problem. It is the crosshair's line, so
 it converges on whatever you are looking at from any height; it does not move while the mouse
-does not; and the hold slides a point along it. The far end is also the furthest the marker can
-wind, so the depth you pick is a depth **into the world** — hold a full Grasp at a wall six
-metres away and the arms converge on the wall rather than three metres inside it.
+does not; and the hold slides a point along it.
+
+**The line is read for its direction and nothing else.** How far the arms go is the hold, on
+its own — point at a wall two metres away, wind to full, and it is still a ten-metre Grasp that
+converges eight metres behind the wall. That is deliberate: a wall is a thing to punch an
+ability through, and a wind-up that quietly shortened itself against the scenery would stop
+meaning one thing.
 
 Aiming stays live through the wind-up — the body keeps turning with the mouse — and locks on
 the frame the button comes up, which is where every other move locks it too. The health is

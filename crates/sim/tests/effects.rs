@@ -928,38 +928,71 @@ fn a_still_mouse_holds_the_line_and_only_the_marker_moves() {
 }
 
 #[test]
-fn the_marker_never_reaches_past_what_the_crosshair_is_on() {
-    // The other half of solving the line first: the depth the player picks is a
-    // depth **into the world**. A ray that stopped on a wall six metres away is
-    // as far as the marker can wind, so a fully held Grasp fired at that wall
-    // converges on it rather than three metres inside it.
+fn the_marker_is_as_far_out_as_the_hold_and_nothing_else() {
+    // The other half of the split. The crosshair answers *which way*; the hold
+    // answers *how far*, on its own, and it does not ask what the ray stopped
+    // on. Aim at a wall two metres away and wind to full range and it is still
+    // a ten-metre Grasp -- it goes through the wall. A wall is a thing to punch
+    // an ability through, not a shorter version of the ability.
+    //
+    // Swept across pitches that put wildly different things under the reticle:
+    // open air at the top, the floor a few metres out at the bottom. The
+    // answer has to be the same number every time.
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    for pitch in [0i16, -6000, -12000, -16384] {
+    for pitch in [4096i16, 0, -4096, -8192, -12000, -16384] {
         let mut w = as_class(Class::BloodMage);
-        // Solved at the full reach, which is the line the hold walks along.
-        let full = {
-            let stones = sim::stones::gather(&w.players);
-            let players = w.players;
-            let effects = w.effects;
-            let scene = sim::aim::Scene {
-                stones: &stones,
-                players: &players,
-                effects: &effects,
-                quarry: w.monster.as_ref(),
+        for held in 0..=m.channel {
+            looking(&mut w, 1, Q, pitch, 0);
+            let Some((_, wound)) = w.players[0].action.channelling() else {
+                continue;
             };
-            let look = Input::looking_at(0, LOOK_RIGHT, pitch);
-            sim::aim::skillshot_path(0, look, m.reach, &scene).length()
-        };
-        looking(&mut w, m.channel as u32 + 1, Q, pitch, 0);
-        let far = w.players[0].aim_path.length();
-        assert!(
-            far.raw() <= full.raw() + sim::fixed::Fx::ratio(1, 100).raw(),
-            "at pitch {pitch} a full hold reached {} m along a line that is \
-             only {} m long",
-            far.to_f32_for_render(),
-            full.to_f32_for_render()
-        );
+            let want = m.reach_after(wound);
+            let got = w.players[0].aim_path.length();
+            assert!(
+                got.sub(want).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
+                "held {held} at pitch {pitch}: the marker is {} m out where the \
+                 hold says {} m",
+                got.to_f32_for_render(),
+                want.to_f32_for_render()
+            );
+        }
     }
+}
+
+#[test]
+fn a_grasp_wound_to_full_range_reaches_full_range_through_a_wall() {
+    // The same rule, stated where it actually bites: pointed straight down at
+    // the floor a metre and a half in front of her, where the crosshair's ray
+    // stops almost immediately. The arms still go out ten metres along that
+    // line, which is under the arena rather than along it -- and that is
+    // correct. What the player asked for was a depth, and the depth is the
+    // hold.
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
+    let mut w = as_class(Class::BloodMage);
+    // Straight down: whatever the ray meets, it meets it at once.
+    let pitch = -16384;
+    looking(&mut w, m.channel as u32 + 1, Q, pitch, 0);
+    let wound = w.players[0].aim_path.length();
+    assert!(
+        wound.sub(m.reach).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
+        "aimed at the floor underfoot, a full hold reached {} m of {}",
+        wound.to_f32_for_render(),
+        m.reach.to_f32_for_render()
+    );
+    // And the arms that come out of it carry the same number.
+    for _ in 0..90 {
+        run(&mut w, 1, 0, 0);
+        if let Some(arms) = effects_of(&w, EffectKind::Grasp).first() {
+            assert!(
+                arms.reach.sub(m.reach).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
+                "the marker wound to {} m and the arms came out at {} m",
+                wound.to_f32_for_render(),
+                arms.reach.to_f32_for_render()
+            );
+            return;
+        }
+    }
+    panic!("the arms never came out");
 }
 
 #[test]
@@ -973,17 +1006,17 @@ fn the_marker_starts_inside_melee_range() {
     let grasp = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
     let rend = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
     assert!(
-        grasp.wound_along(0, grasp.reach).raw() < rend.reach.raw(),
+        grasp.reach_after(0).raw() < rend.reach.raw(),
         "a tapped Grasp reaches {} m against {} m of Rend, so it does not start \
          at the caster",
-        grasp.wound_along(0, grasp.reach).to_f32_for_render(),
+        grasp.reach_after(0).to_f32_for_render(),
         rend.reach.to_f32_for_render()
     );
     // And the far end is still a long way past it, or the slider has no travel.
     assert!(
         grasp.reach.raw() > rend.reach.raw() * 3,
         "the slider runs {} m to {} m, which is not a range worth choosing",
-        grasp.wound_along(0, grasp.reach).to_f32_for_render(),
+        grasp.reach_after(0).to_f32_for_render(),
         grasp.reach.to_f32_for_render()
     );
 }

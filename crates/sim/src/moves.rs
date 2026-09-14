@@ -333,24 +333,25 @@ impl Move {
         self.channel > 0
     }
 
-    /// How far along a line of `full` metres a hold of `held` frames has wound.
+    /// How far out this move reaches after being held for `held` frames.
     ///
-    /// Between this move's near knob and the far end of the line, linearly, so
-    /// the two are the ends of one slider and the hold is what walks between
-    /// them. A move that does not channel is always at the far end, which is
-    /// what makes this safe to ask of any move.
+    /// Between this move's near knob and its own `reach`, linearly, so the two
+    /// are the ends of one slider and the hold is what walks between them. A
+    /// move that does not channel is always at its full reach, which is what
+    /// makes this safe to ask of any move.
     ///
-    /// **`full` is the line the aim actually solved**, not this row's `reach`.
-    /// The two differ whenever something is in the way, and taking the solved
-    /// one is what keeps the marker on the line rather than past the wall at
-    /// the end of it. See `state::aim_channel`.
-    pub fn wound_along(&self, held: u16, full: Fx) -> Fx {
+    /// **The hold is the whole of the answer.** It does not ask what the
+    /// crosshair is pointed at: the aim picks a *direction* and this picks a
+    /// *distance*, and keeping the two apart is what makes the wind-up mean one
+    /// thing. A Grasp held to full range at a wall six metres away reaches ten
+    /// metres, through the wall -- the wall is not a shorter Grasp.
+    pub fn reach_after(&self, held: u16) -> Fx {
         if !self.channels() {
-            return full;
+            return self.reach;
         }
-        let near = self.channel_from.min(full);
+        let near = self.channel_from.min(self.reach);
         let at = Fx::ratio(held.min(self.channel) as i32, self.channel as i32);
-        near.add(full.sub(near).mul(at))
+        near.add(self.reach.sub(near).mul(at))
     }
 
     /// Health returned for `dealt` damage, rounded down.
