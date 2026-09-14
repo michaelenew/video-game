@@ -92,6 +92,7 @@ few enough to balance and to read in third person.
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
+| [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
@@ -152,7 +153,7 @@ crates/game   Bevy app. Rendering only.
 crates/anim   Animation factory: recipes, the solver, contact sheets. See animation.md.
 crates/hunt   A scripted hunter, and the report that judges the fight it plays.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
-crates/web    WebAssembly build and the browser frame-data tool.
+crates/web    The browser: the playable page, and the frame-data tool.
 ```
 
 **Requires Rust 1.85+** (Bevy 0.16's MSRV). `rustup update` if Cargo complains about
@@ -176,6 +177,13 @@ to a direction when you commit to the move. See [controls.md](controls.md).
 **Camera settings** save to `~/.config/arena/settings.conf` as you change them: sensitivity on
 `-` / `=`, field of view on `F3` / `F4`, camera distance on `F5` / `F6`. Set `ARENA_SETTINGS`
 to keep separate settings per person on a shared machine.
+
+**Send it to somebody:** `./crates/web/build-game.sh` compiles the whole thing to
+WebAssembly and writes `target/web`, which is what GitHub Pages serves — the same
+simulation and the same renderer, on a canvas, one player against the training
+dummy. A browser cannot open a UDP socket, so peer-to-peer stays on the desktop;
+the query string does what the flags do, so `?p1=champion&dev` is
+`--p1 champion --dev`. See [web.md](web.md).
 
 **Play someone:** `game --port 47811 --peer <their-ip>:47812`. Rollback netcode, no server.
 `./scripts/p2p-localhost.sh` runs both ends locally;
@@ -222,7 +230,8 @@ decision, and belongs in a test.
 ## 8 · Next
 
 1. **Play it against a person.** Everything else is downstream of that — and the
-   Ridgeback needs it twice over. The climb now costs something to reach, and
+   Ridgeback needs it twice over. The browser build exists to make the asking
+   cheap: a link instead of a clone, [web.md](web.md). The climb now costs something to reach, and
    whether the reward is worth the trip, whether anyone finds the tail hop, and
    whether the ground game reads as a phase or as a toll are not things the
    harness can answer. See [monsters.md](monsters.md) §9.

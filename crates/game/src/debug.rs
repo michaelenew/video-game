@@ -19,7 +19,9 @@ impl Default for ShowDebug {
     fn default() -> Self {
         // On by default under DEMO so headless screenshots show the overlay,
         // and always under `--dev`.
-        ShowDebug(crate::dev_mode() || std::env::var("DEBUG_OVERLAY").is_ok_and(|v| v == "1"))
+        ShowDebug(
+            crate::dev_mode() || crate::platform::env("DEBUG_OVERLAY").as_deref() == Some("1"),
+        )
     }
 }
 

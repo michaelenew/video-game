@@ -82,8 +82,14 @@ as they get tested.
 
 - Is 4.2 the right speed while poking, and should it differ per class? A spear poke and a
   hammer poke arguably should not hinder the same amount.
-- Should mobility vary *across* a move's phases — free during startup, rooted through
-  recovery? That is a common shape and might read better than a flat rate.
+- **Is 1.4 the right speed while committed, and should it differ per move?** ⚠️ **Newly open,
+  2026-09-14.** Committed moves stopped rooting and became a crawl; all sixteen got the same
+  20% of the walk, which is a uniform first guess in exactly the way the poke's 60% was.
+- Should mobility vary *across* a move's phases — free during startup, rooted through active,
+  slowed in recovery? That is a common shape and might read better than a flat rate. It is a
+  better question than it was: now that nothing roots for its whole length, rooting *only* the
+  active frames would put "you committed to a spot" back where it belongs — the frames where
+  the hitbox is actually out — for a handful of frames instead of forty.
 - **Is Bash at 4 frames of startup too fast to react to?** Human reaction is
   roughly 15 frames at 60 Hz, so a 4-frame move is unreactable by design. That
   is correct for a poke you are meant to *anticipate*, but it may make neutral
@@ -3351,6 +3357,126 @@ lever available, and the interrupt turned out not to be reachable from that numb
 Worth keeping as a pair: the same symptom read as a damage problem from one side and a
 frames problem from the other, and only the second reading had a fix in it.
 
+
+### 2026-09-14 — nothing roots you any more
+**Changed** Committed moves keep **20% of walking speed — 1.4 m/s — instead of 0**, across all
+sixteen of them. Everything else about a committed move is untouched: for its whole length you
+still cannot jump, dodge, guard, or throw anything else. The walk table is now 7.0 free, 4.2
+poking, 3.0 crouching, 2.0 guarding, 1.4 committed.
+
+Second half, and the half that does the work: **the hindered speed is now arrived at rather
+than assigned.** Starting a move used to set horizontal velocity to the move's speed outright,
+which was a one-frame drop of 2.8 m/s for a poke and would have been 5.6 for a heavy. It now
+bleeds down to the move's speed over about four frames, on the same ramp that already handled
+the root, with the *direction* following the stick from the first frame and only the magnitude
+lagging. `tuning::attack_root_decay` is `tuning::hindrance_decay` for that reason; its floor is
+the move's own speed while you are steering and zero when you are not, which is why letting go
+of the stick mid-move still bleeds you to a stop.
+
+**Why** Reported as jarring, and it is the same report the poke drew on 2026-09-11 — "stopping
+dead feels jarring; a big slowdown with no jump and no dodge should play the same and read
+better". Worth recording that the earlier entry drew the line in the wrong place. It concluded
+that *the snap and the rooting were two different complaints wearing one coat*, fixed the snap
+everywhere and kept the rooting on the heavies as correct design. The snap half was right. The
+other half was a category error: a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to take the controls away, not the most defensible one.
+
+The thing that made rooting look load-bearing is that it was doing two jobs at once and only
+one of them was the standing still. Spatial commitment — you chose this, now live in it — is
+`Action::actionable` refusing every other button, and that was never this number. Taking the
+feet away on top of it read as the game asserting the commitment a second time, to a player
+who had already felt it.
+
+**The spacing arithmetic, because it is the obvious objection.** The longest committed move in
+the game is 42 frames. At 1.4 m/s that is 0.98 m of drift, against a body radius of 0.5 and a
+Slam that reaches 2.0. Facing still locks on frame one, so the drift is along one committed
+line rather than a way to re-aim: creeping forward during startup buys about 0.4 m of reach on
+a move whose whiff costs 24 frames of recovery. That is a skill expression at the scale of a
+footsie, not a change to whether heavies are punishable. Below the guard walk on purpose — a
+committed move should still be the most your feet ever cost you, and guarding is the slowest
+thing you can otherwise choose to do.
+
+**Verdict** open — wants a real match. The three things to watch: whether whiff-punishing a
+heavy got meaningfully harder (the arithmetic says no, the hands are the judge), whether 1.4
+reads as a crawl or as sluggish walking, and whether the four-frame ramp is visible at the
+start of a heavy or just felt.
+
+**Left open deliberately.** Every one of the sixteen got the same 20%, and there is no reason
+to believe a Cataclysm and a Bash-with-a-hammer want the same number — the per-move column
+exists and this is a uniform first guess, exactly as the poke's 60% was. The open question
+above it is the older one and is still open: *should mobility vary across a move's phases* —
+free during startup, rooted through active, slowed in recovery. Rooting only the active frames
+is the version worth trying first, because it would put the "commit to a spot" property back
+where it actually belongs without any of the cost above; it was not done here because it is a
+new mechanic rather than a number, and this change is a number.
+
+**What the harness now pins.** `feel::a_committed_move_is_a_crawl_and_never_a_stop` bounds the
+crawl at both ends: above zero, and below the guard walk. `feel::a_committed_move_takes_the_
+jump_and_the_dodge_away` drives real presses through a live `World` and is the one that matters
+— it is where commitment lives now, and if it ever passes silently while the crawl is being
+retuned, the retuning is free. `feel::hindrance_is_proportional_to_commitment` lost its
+`committed.roots()` assertion, which is why `Move::roots()` is gone: a predicate whose only
+true case the feel harness forbids is a predicate nobody can use.
+
+### 2026-09-14 — a match opens looking at your own fighter
+
+**Reported** The opening view is wrong. Tilt the starting angle down so it reads as an ordinary
+third-person view.
+
+**Changed** The opening pitch is its own Oven knob — *Opening pitch, below level*, **35 degrees**
+— where it used to borrow `Zones::neutral_pitch`, the middle of the neutral zone, which works
+out at 27.5.
+
+**Why the borrowed number was wrong, and it is not that 27.5 is close to 35.** On this rig the
+eye rides further out along the sphere the further below the horizon you look — that is the
+same geometry the 2026-09-11 entry above works through, where the mark on the ground lands at
+`h / tan θ`. So the opening pitch is not only which way the camera faces. It is *how far back
+the camera is*, and therefore whether the first thing anybody sees is their own fighter standing
+in an arena or a patch of floor with their own shield lying across the corner of it.
+
+At 27.5 degrees it was the floor. The fighter sat just below the bottom edge, the opponent was
+pinned against the HUD at the top, and the Bulwark's shield filled a third of the screen because
+the eye was close enough to be inside the arm holding it. Nothing about that reads as a game you
+know how to stand up in, which matters more than usual right now: it is the frame somebody
+following a link sees before they have pressed anything.
+
+**The middle of the neutral zone was never a claim about where to open.** It is a fact about the
+zones — halfway between the boundaries, so there is room to steer either way without crossing
+one. That is a good property for a resting angle to have and it says nothing about framing. The
+two questions wanted two numbers, so they have two now, and `neutral_pitch` goes back to meaning
+only what it says.
+
+**What was looked at.** Rendered stills of the opening frame, Bulwark against Bulwark, at 5.7,
+11.5, 17.2, 27.5, 34.4, 43 and 54.4 degrees below level:
+
+- **Above ~20** — no own fighter at all. The eye has come in toward the head and the body is
+  below the frame or faded.
+- **27.5, where it was** — the floor shot described above.
+- **34.4** — your fighter low-centre, the opponent centred on the dais, both arena walls in
+  frame. This is the one.
+- **43** — works, and is visibly further back and higher. Reads more like a diorama than like
+  standing there, and it is two degrees off the floor boundary, so a nudge of a neighbouring
+  knob would change which zone a match opens in.
+- **54.4** — past `floor_from`, so the view tilts toward your own feet: cropped arena, opponent
+  back up against the HUD. Worse than where it started.
+
+35 rather than 34.4 because a knob wants a round number and the exact value inside that zone is
+not what carries the reading.
+
+**Two tests, in `view/tests/presentation.rs`** rather than one assertion on the number. The
+opening angle sits strictly inside the neutral zone with margin at both ends — past `floor_from`
+a match opens pointed at the ground, above `neutral_to` the eye has come in too close to see
+yourself. And the property the number exists for: at the opening angle the eye is more than a
+metre back from the fighter and the body is not faded. They are in `presentation.rs` and not in
+`camera_knobs.rs` beside the other camera tests, because that file's one test deliberately drags
+the live knobs to nonsense and back, and tests in a file share a process — read these next to it
+and they see a camera mid-retune. That cost twenty minutes and a confusing "the eye opens 0.00 m
+from the fighter".
+
+**Verdict** open — chosen from stills, by someone who has not played it. The reading being
+claimed here (34.4 "reads like standing there", 43 "reads like a diorama") is exactly the kind
+of thing a still cannot settle. It is one slider in the Oven under *camera*, and `?shot_pitch=`
+in the browser build will render any angle without a rebuild.
 
 ---
 

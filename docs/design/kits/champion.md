@@ -166,7 +166,7 @@ The openers, which are what a weapon is before you have committed to a string:
 | | Reach | Startup | Recovery | Damage | On hit | Character |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Sword** | 2.0 m | 7f | 11f | most | +0 | The combo tool. Small knockback, small hitstun, and you can walk while you swing it. |
-| **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the string *starter*. Long stagger, roots you. |
+| **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the string *starter*. Long stagger, and it slows you to a crawl. |
 | **Spear** | 3.4 m | 10f | 14f | middling | +0 | The spacing tool. Longest reach in the game, thin, and it goes over a crouching opponent. |
 
 The hammer doing the least damage is deliberate and it is what "heavy" means here: it buys
