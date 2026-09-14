@@ -472,9 +472,12 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
     // decision about that class: the Blood mage's fourth is on `E`, because her
     // mechanic is health and there is nothing to toggle, the Reaver's fourth is
     // on `E` because throwing a second body across the arena and dashing it
-    // home through somebody is not an instant, the Elementalist's fourth is
-    // Cataclysm on right click -- otherwise dead weight on a class with no
-    // shield -- the Champion's nineteen are three weapons by six situations
+    // home through somebody is not an instant, the Elementalist's seven are
+    // those three plus Cataclysm on right click -- otherwise dead weight on a
+    // class with no shield -- and then a whole row of three more for the same
+    // buttons with her feet off the floor, which is the aerials question
+    // `docs/design/README.md` leaves open answered for a second class --
+    // the Champion's nineteen are three weapons by six situations
     // plus the vault, three of those six being the three hits of one ground
     // chain, and the Dual mage's five are those three plus Sweep on `E` -- her
     // mechanic is a meter steered by which button attacks, so `E` is free the
@@ -494,7 +497,8 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 19,
-            Class::BloodMage | Class::ShadowReaver | Class::Elementalist => 4,
+            Class::Elementalist => 7,
+            Class::BloodMage | Class::ShadowReaver => 4,
             Class::DualMage => 5,
             _ => 3,
         };

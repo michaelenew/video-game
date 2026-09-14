@@ -92,9 +92,10 @@ fn main() {
             };
             // A move with no volume of its own has no frame advantage worth
             // printing: those columns are all about what connecting is worth,
-            // and this one never connects. Two kinds -- the ones that put
-            // something in the world and let it do the hitting, and the
-            // Champion's pole vault, which puts nothing anywhere.
+            // and this one never connects. Three kinds -- the ones that leave
+            // something standing where they were cast, the ones that *throw*
+            // something that travels, and the Champion's pole vault, which
+            // puts nothing anywhere at all.
             if !m.strikes() {
                 // A move with no volume of its own has its hit delivered by
                 // whatever it put in the world, and not every one of those can
@@ -119,7 +120,9 @@ fn main() {
                 } else {
                     String::new()
                 };
-                let base = if m.shape.strikes() {
+                let base = if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
+                    format!("throws something; the thing it threw hits{ignored}{wound}")
+                } else if m.shape.strikes() {
                     format!("places something; the thing it placed hits{ignored}{wound}")
                 } else {
                     format!("movement, no hitbox{ignored}{wound}")

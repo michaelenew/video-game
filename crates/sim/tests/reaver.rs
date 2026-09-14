@@ -533,13 +533,8 @@ fn a_stone_across_the_line_leaves_her_with_an_ordinary_dodge() {
 
     // Halfway, and squarely on the line.
     let stone = sim::class::Structure {
-        at: V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)),
-        vel: V3::ZERO,
         age: u16::MAX,
-        struck: 0,
-        launched: false,
-        launch_from: V3::ZERO,
-        knock_struck: 0,
+        ..sim::class::Structure::raised(V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)))
     };
     w.players[1].mechanic = Mechanic::Structures([Some(stone), None, None]);
 

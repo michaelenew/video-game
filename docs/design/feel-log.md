@@ -3640,3 +3640,88 @@ picked at a desk. Things to watch for, in order of how likely they are to be wro
    plus enough to make the third a true block string, which it currently is not.
 5. **Is `space` + weapon a good idea at all?** It is comfortable on a keyboard and it is a
    precedent. Somebody with a controller should hold an opinion before it spreads.
+
+### 2026-09-14 — the Elementalist off the ground
+
+**Changed** three moves, on the three buttons she already had. Left click in the air is the
+**Air bolt**, right click is the **Gale**, and `E` is **Landfall**. Four moves became seven.
+Eight knobs are new, all under `Elementalist`: `Air bolt speed`, `Gale speed`, `Gale size
+leaving her hand (x)`, `Landfall dive speed`, `Landfall stone, how far ahead`, `Landfall stone
+rise`, `Landfall eruption, above the floor (turns)` and `Landfall eruption push`. Two of the
+Oven's *slider bounds* moved with them and no baked value did: a move's `Reach` now runs to
+twenty-eight metres — the width of the arena, past which more range cannot change anything —
+and its `Knockback` to thirty, which is what every other knockback knob in the Oven already
+runs to and what `Move::Knockback` would have had if it had not quietly inherited the shared
+twelve.
+
+**Why** the class had nothing in the air, and the README has had **Aerials** open since the
+Champion answered it for itself: *airborne attacks should be variants of their grounded
+counterparts rather than a separate move list.* That is a claim about one class until a second
+one is built the same way. So: the button is the thing you are throwing and the row is where
+your feet are, exactly as on the Champion, and a player who has learnt her standing up has
+learnt most of her in the air.
+
+#### The three decisions worth keeping if the numbers get thrown away
+
+**Air, and why it is not earth.** Earth is what she is standing on, and off the floor she is
+not standing on it. The two shots are the element she can reach up there; the way back to
+earth is to go and hit it, which is Landfall. That also gives the kit's *"ice, air and
+lightning are the specialisation axis for later"* its first outing without committing to a
+loadout.
+
+**Both shots travel, and nothing she throws standing up does.** Bolt and Cataclysm are instant
+lines resolved on the frame they come out. These have a speed, and the reason is the situation
+rather than the element: she is falling while she throws them, and an instant hit taken from a
+position she cannot hold would be free. A flight time is what makes leaving the floor a trade.
+
+**The Gale is worth what it has become.** It leaves her hand at 30% of its radius and arrives
+at full size, and damage and knockback ride the same fraction — 36 at point blank against 120
+at the tip. Every other projectile in the game is worth the same wherever it lands. This one
+inverts the spacing, which is the same sentence Flame spitter is already written around, and
+it hands the opponent an answer this class least wants to give and most deserves to be made to
+give: *close*. The stun is deliberately flat, because frame data that changed with distance
+would be a move nobody could learn.
+
+#### Landfall, and the first startup in the game that ends on a place
+
+Its row says 26 frames. What it *owes* is a 14-frame hang at the top and then a dive at 26 m/s
+until her feet arrive — so from the top of her jump the wind-up is a little over half a
+second, and from a short hop it is barely longer than the hang. The telegraph is as long as
+the height she chose to open up, which is the property the whole move is built on: going
+higher is buying reward with time the opponent gets to use.
+
+**And they can use it, with no rule of its own.** The descent is an ordinary startup, so a hit
+knocks her out of it exactly the way a hit knocks anybody out of a wind-up, and the slab she
+was about to drive up never appears. That was the requirement and it needed no code — which is
+the right outcome, and is worth noting because the obvious implementation (a bespoke
+"interruptible" flag on the move) would have been a second way of saying something the engine
+already says.
+
+The slab is the payoff and it is **driven rather than raised**: out of the floor in six frames
+against fourteen, because the telegraph was the plunge rather than the rise, and **leaning**
+forty-five degrees away from her, so whoever is standing over it is thrown up and back instead
+of merely staggered in place. Stones grew two fields for it — `rise` and `erupt` — and an
+ordinary stone's `erupt` is zero, which is the old behaviour written down rather than implied.
+
+**Verdict** open, and every number under it is a first guess. In order of how likely each is
+to be wrong:
+
+1. **Is the plunge's length-by-height a trade or a loophole?** Pressed low it is nearly all
+   hang, which is the shortest telegraph and the same reward. If that reads badly the fix is
+   probably a floor on the dive rather than a cap on the hang — she should not be able to
+   *arrive* faster than a foe can answer, and how high she started should stay the thing that
+   decides how long they get.
+2. **Is a Gale at her own feet too weak to be worth throwing?** 36 damage is close to
+   nothing, and a move that is nearly worthless at the range you are most likely to throw it
+   may read as broken rather than as spacing. `Gale size leaving her hand (x)` is the one
+   knob for it.
+3. **Is a fourth structure's worth of terrain every time she leaves the floor too much?** The
+   cap of three is a readability guess and this is a new way to spend it, on a button that
+   also does something else.
+4. **Does the 45° lean actually clear the space?** 13 m/s along it is a real shove on paper;
+   whether it separates her from somebody who has closed, or just pops them into a spot they
+   can airdodge out of, is the thing the move exists for and the thing a test cannot answer.
+5. **The air row shares the grounded clips.** The Air bolt plays Bolt's flick, the Gale plays
+   Cataclysm's throw and Landfall plays Fissure's *both hands driven into the ground* — which
+   is very nearly right, and is why this shipped without four new recipes. Four authored
+   clips is the obvious next piece of work on the class.

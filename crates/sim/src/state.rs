@@ -21,6 +21,7 @@ use crate::class::{self, Class, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
+use crate::gust::{self, Gale, MAX_GUSTS};
 use crate::input::Input;
 use crate::math::V3;
 use crate::monster::{self, Doing, Monster, Quarry};
@@ -753,6 +754,11 @@ pub struct World {
     /// thing a fire bolt is -- a real velocity, stepped frame by frame -- and
     /// for the same reason: see [`crate::debris`].
     pub debris: Shrapnel,
+    /// The Elementalist's air shots in flight. The only thing a fighter throws
+    /// that is neither part of a mechanic nor lit by something else -- she
+    /// throws these out of her own hands, with her feet off the floor. See
+    /// [`crate::gust`].
+    pub gusts: gust::Flight,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -777,6 +783,7 @@ impl World {
             effects: [None; MAX_EFFECTS],
             bolts: [None; MAX_BOLTS],
             debris: [None; MAX_DEBRIS],
+            gusts: [None; MAX_GUSTS],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -804,6 +811,7 @@ impl World {
         // last one ended would land on somebody standing on their mark.
         self.bolts = [None; MAX_BOLTS];
         self.debris = [None; MAX_DEBRIS];
+        self.gusts = [None; MAX_GUSTS];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -956,6 +964,30 @@ impl World {
             if p.class == Class::ShadowReaver && kind == SLOT_MECHANIC {
                 self.order_the_shadow(i, p.aim_at());
             }
+            // Her two air shots leave her hand here, along the line
+            // `crate::aim` already solved -- and *along* it rather than to the
+            // end of it, the same rule the two travelling effects follow: the
+            // crosshair picked a direction, and a disc thrown at somebody four
+            // metres away still travels its whole range. See `crate::gust`.
+            if let Some(gale) = Gale::thrown_by(p.class, kind) {
+                gust::throw(&mut self.gusts, i as u8, gale, p.aim_path);
+            }
+            // Landfall arriving: the slab of rock she drives up in front of
+            // her. **The one structure in the game the crosshair does not
+            // place** -- she is landing, not aiming -- so where it goes is
+            // `aim::planted_ahead` rather than either of the two lines of
+            // effect, and it spends the cap of three through `stones::raise`
+            // like the mechanic key does. Her own facing is the direction it
+            // leans away along, locked when the move started, so a slab thrown
+            // up behind her is not a thing a mouse flick can produce.
+            if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
+                let field = stones::gather(&self.players);
+                let at = aim::planted_ahead(p.pos, p.facing, t::landfall_ahead(), &field);
+                stones::raise(
+                    &mut self.players[i],
+                    class::Structure::slammed(at, p.facing),
+                );
+            }
             if let Some(leaves) = EffectKind::from_code(m.effect) {
                 // Where the move was aimed when it was thrown, already solved
                 // against the terrain and the move's reach. It used to be a
@@ -1104,6 +1136,13 @@ impl World {
             self.monster.is_none(),
             &mut self.monster,
         );
+        gust::step(
+            &mut self.gusts,
+            &mut self.players,
+            &standing,
+            self.monster.is_none(),
+            &mut self.monster,
+        );
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -1179,6 +1218,22 @@ impl World {
                     hash_v3(&mut h, &d.pos);
                     hash_v3(&mut h, &d.dir);
                     h.write_i32(d.travelled.raw());
+                }
+                None => h.write_u32(0),
+            }
+        }
+        for g in &self.gusts {
+            match g {
+                Some(g) => {
+                    h.write_u32(g.owner as u32 + 1);
+                    // Which of the two, on the wire: a bolt and a disc at the
+                    // same place going the same way are not the same shot, and
+                    // a checksum that could not tell them apart would let one
+                    // peer's disc be the other's bolt.
+                    h.write_u32(g.gale as u32);
+                    hash_v3(&mut h, &g.pos);
+                    hash_v3(&mut h, &g.dir);
+                    h.write_i32(g.travelled.raw());
                 }
                 None => h.write_u32(0),
             }
@@ -1863,6 +1918,14 @@ fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
             kind,
             left: left - 1,
         },
+        // A plunge that has not arrived has not finished winding up. The
+        // ordinary rule below turns a spent startup into active frames; this
+        // one refuses to, for the single move whose wind-up ends on the floor
+        // -- see [`waits_for_the_floor`]. The active frames start in
+        // `step_player`, on the frame her feet do.
+        Action::Startup { kind, .. } if waits_for_the_floor(p, kind) => {
+            Action::Startup { kind, left: 0 }
+        }
         Action::Startup { kind, .. } => Action::Active {
             kind,
             left: moves::get(p.class, kind).active,
@@ -2047,7 +2110,7 @@ fn step_player(
                     // mechanic is health and so has nothing to toggle -- it is
                     // thrown like any other move, with a startup you can be
                     // punished during and a cost you pay on the press.
-                    match moves::on_e(p.class).filter(|slot| p.can_throw(*slot, &out)) {
+                    match keyed_move(p).filter(|slot| p.can_throw(*slot, &out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, true),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -2293,7 +2356,19 @@ fn step_player(
     }
 
     if !p.grounded && dashing.is_none() {
-        if p.air_stall > 0 {
+        if plunging(p) {
+            // **The descent.** Driven rather than fallen: gravity would make
+            // the plunge take longer the lower she started, which is backwards
+            // -- the thing that should scale with height is how long the
+            // opponent gets to answer, not how fast she is moving when she
+            // gets there. A fixed speed makes the telegraph exactly as long as
+            // the distance she chose to open up.
+            //
+            // Vertical only. Air control is untouched above, so she still
+            // steers where she is coming down, which is what makes throwing it
+            // a read on where they will be rather than on where they are.
+            p.vel.y = t::landfall_dive().neg();
+        } else if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
             // whatever vertical speed you had **bleeds away** rather than being
             // deleted.
@@ -2375,6 +2450,18 @@ fn step_player(
                 left: t::slam_stagger(),
             };
         }
+        // Landfall arrives. The slam **is** the impact, so its active frames
+        // begin on the frame her feet reach something rather than on a number
+        // -- see [`plunging`]. Held at zero by `countdown` until this happens,
+        // which is what lets the wind-up be as long as the height she chose.
+        if let Action::Startup { kind, .. } = p.action {
+            if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
+                p.action = Action::Active {
+                    kind,
+                    left: moves::get(p.class, kind).active,
+                };
+            }
+        }
         p.slam = Fx::ZERO;
         p.air_dodged = false;
         p.jump_hold = 0;
@@ -2424,12 +2511,13 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // one input that outlives the frame it was pressed on. See
         // `crate::shadow` for both arguments.
         Class::ShadowReaver if shadow::order_queued(p) => Some(SLOT_MECHANIC),
-        // The Elementalist breaks it the same way for the same reason: no
-        // shield, so right click is otherwise dead. Cataclysm is aimed like
-        // the auto, along the crosshair, so it belongs on the mouse and not
-        // on a key -- see `crate::debris` and
-        // `crate::effects::EffectKind::FireTornado`.
-        Class::Elementalist if input.has(Input::RIGHT) => Some(SLOT_HEAVY),
+        // The Elementalist breaks it a fourth way, and then a fifth. Right
+        // click is Cataclysm, for the reason the Reaver's is the mechanic --
+        // no shield, so the button is otherwise dead, and Cataclysm is aimed
+        // along the crosshair like the auto. And both clicks mean something
+        // different once her feet leave the floor, which is the *row* rather
+        // than a fifth exception: see `elementalist_move`.
+        Class::Elementalist => elementalist_move(p, input),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
                 SLOT_COMMITTED
@@ -2438,6 +2526,98 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
             }
         }),
     }
+}
+
+/// Which of the Elementalist's seven a click asks for.
+///
+/// **The row is where her feet are.** On the floor it is the shared grammar
+/// plus Cataclysm on right click; off it, the same two buttons throw the two
+/// things she can make out of air — see `moves::elementalist`, which is where
+/// the grid is drawn.
+///
+/// Shift is spent on the ground and ignored in the air, and that is a
+/// statement rather than an oversight: shift plus left click is Fissure, a
+/// crack that races *along the ground*, and there is no airborne version of it
+/// to reach for. A modifier that silently threw the grounded move from the air
+/// would put a skillshot into the dirt below her; one that threw nothing would
+/// eat the input. It throws the Air bolt, which is what left click means up
+/// there.
+///
+/// `E` is not here. It is the only one of her three airborne moves that
+/// displaces something rather than adding to it — on the floor that key is the
+/// mechanic and has no frames at all — so it is answered by
+/// [`keyed_move`] beside the rest of the mechanic grammar.
+fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::elementalist as e;
+    if !p.grounded {
+        // Left before right, so both buttons at once is an attack rather than
+        // silence -- the same tie-break the Dual mage and the Champion make.
+        if input.has(Input::LEFT) {
+            return Some(e::AIR_BOLT);
+        }
+        return input.has(Input::RIGHT).then_some(e::GALE);
+    }
+    if input.has(Input::RIGHT) {
+        return Some(SLOT_HEAVY);
+    }
+    input.has(Input::LEFT).then(|| {
+        if input.has(Input::SHIFT) {
+            SLOT_COMMITTED
+        } else {
+            SLOT_POKE
+        }
+    })
+}
+
+/// Which move the mechanic key throws, here and now.
+///
+/// [`moves::on_e`] answers for the *class* — which classes put an ability on
+/// `E` at all, because their mechanic is not a thing you toggle. This answers
+/// for the **situation**, which is one class's business: the Elementalist's
+/// mechanic is an instant on the floor (raise a stone, no frames, nothing to
+/// punish) and an ability off it (Landfall, a long plunge you can be knocked
+/// out of). `None` means the key falls through to `mechanic_action`.
+///
+/// Split the same way `clicked_move` and `moves::binding` are: what the kit
+/// declares lives in `moves`, and what your feet are doing is read here.
+fn keyed_move(p: &Player) -> Option<u8> {
+    if p.class == Class::Elementalist && !p.grounded {
+        return Some(moves::elementalist::LANDFALL);
+    }
+    moves::on_e(p.class)
+}
+
+/// Is this fighter part-way through Landfall's plunge, with the wind-up spent
+/// and the floor still to come?
+///
+/// **Landfall is the one move in the game whose startup ends on a place rather
+/// than on a count.** The frames in its row are the part she is guaranteed to
+/// owe — the hang at the top (`Move::air_stall`) and then the descent — and the
+/// descent is over when her feet arrive, which from four metres up takes longer
+/// than from one. So the startup runs down normally, and if it reaches zero
+/// while she is still falling it *stays* at zero until the ground answers: see
+/// [`countdown`], which holds it, and the landing in [`step_player`], which
+/// spends it.
+///
+/// Everything about that is deliberately ordinary in one respect: it is a
+/// startup, so being hit during it interrupts it exactly the way being hit
+/// during any other wind-up does, and the slab of rock she was going to drive
+/// up never appears. That is the whole of "a foe can stop her coming down",
+/// and it needed no rule of its own — see
+/// `tests/elementalist_air.rs::a_hit_on_the_way_down_ends_the_plunge`.
+fn plunging(p: &Player) -> bool {
+    let Action::Startup { kind, .. } = p.action else {
+        return false;
+    };
+    !p.grounded
+        && p.air_stall == 0
+        && p.class == Class::Elementalist
+        && kind == moves::elementalist::LANDFALL
+}
+
+/// Is this startup one that waits for the floor rather than for its own clock?
+fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
+    !p.grounded && p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL
 }
 
 /// Which of the Dual mage's five a click asks for.
@@ -3119,8 +3299,13 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     // The class's fast button, which for the Champion in the air is the sword.
     // Its hammer is the committed one and its spear pays for the shove by
     // having to connect first -- see the fan's boost in `advance`.
-    let fast =
-        kind == SLOT_POKE || (p.class == Class::Champion && kind == moves::champion::AIR_SWORD);
+    let fast = kind == SLOT_POKE
+        || (p.class == Class::Champion && kind == moves::champion::AIR_SWORD)
+        // The Elementalist's air row has its own cheap button, and it is the
+        // same button: left click. The Air bolt is the thing she throws
+        // constantly up there, so it is the one that gets to be part of moving
+        // rather than a pause in it.
+        || (p.class == Class::Elementalist && kind == moves::elementalist::AIR_BOLT);
     if !fast || (ax == 0 && az == 0) {
         return;
     }
@@ -3248,16 +3433,15 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
         Mechanic::Shadow(_) => {}
 
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
-        // is the resource.
-        Mechanic::Structures(mut slots) => {
-            let raised = class::Structure::raised(placed(t::raise_reach()));
-            if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
-                *free = Some(raised);
-            } else {
-                slots.rotate_left(1);
-                slots[class::MAX_STRUCTURES - 1] = Some(raised);
-            }
-            p.mechanic = Mechanic::Structures(slots);
+        // is the resource -- and `stones::raise` is where that rule lives,
+        // because Landfall raises one too and the two have to spend the cap
+        // the same way.
+        //
+        // **On the ground only.** Off it, `E` is Landfall instead: a move with
+        // frames somebody can punish rather than an instant, which is why it
+        // is picked in `keyed_move` before this is ever reached.
+        Mechanic::Structures(_) => {
+            stones::raise(p, class::Structure::raised(placed(t::raise_reach())));
         }
 
         // Health is the resource; there is no separate button.
@@ -3561,6 +3745,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                         h.write_u32(s.launched as u32);
                         hash_v3(h, &s.launch_from);
                         h.write_u32(s.knock_struck as u32);
+                        h.write_u32(s.rise as u32);
+                        hash_v3(h, &s.erupt);
                     }
                     None => h.write_u32(0),
                 }
@@ -4670,7 +4856,7 @@ fn step_rider(
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, false)
                 } else if pressed_mechanic {
-                    match moves::on_e(p.class).filter(|slot| p.can_throw(*slot, out)) {
+                    match keyed_move(p).filter(|slot| p.can_throw(*slot, out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, false),
                         None => {
                             mechanic_action(p, who, input, scene);

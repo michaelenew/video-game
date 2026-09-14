@@ -236,7 +236,7 @@ thing in her kit the crosshair aims, and the mouse is where aiming lives. The
 swing it displaced went to the key, which does not read the crosshair as a
 place. See [kits/shadow-reaver.md](kits/shadow-reaver.md).
 
-### Two things that are not lines of effect
+### Three things that are not lines of effect
 
 **Is the crosshair on the shadow?** `aim::pointing_at` answers it, and the
 Reaver's forward dodge reads the answer to decide whether it is a dodge or the
@@ -263,6 +263,20 @@ them has the same horizontal footprint** and they differ only in how they rise.
 That makes the four corner lines — soles to soles, soles to crown, crown to
 soles, crown to crown — the extremes of the whole family, and a solid that
 crosses all four crosses everything in between. One getting through is enough.
+
+**Where does a thing go that nobody aimed?** `aim::planted_ahead` answers that
+one — added 2026-09-14, for the Elementalist's Landfall. The move's own line of
+effect is a **swing**: she is a body arriving, and its volume is a disc on the
+floor at her own feet. The slab of rock the arrival levers out of the ground is a
+second thing, and it goes a fixed distance in front of her rather than anywhere
+the crosshair chose, because *she is landing, not aiming*. The facing is used
+flat: a plunge that put its slab nearer because she happened to be looking down
+would be aiming after all.
+
+It is here rather than beside the move for the reason the two above are. Written
+there it would be a facing, a distance and a floor query sitting next to an
+ability — which is the exact shape of the mistake this document exists to
+prevent, three metres of it at a time.
 
 It is what lets her dash *up*. At the foot of a platform with the shadow on the
 deck, the line from her soles goes into the wall of it and the line from her

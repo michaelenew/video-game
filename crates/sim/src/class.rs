@@ -405,6 +405,27 @@ pub struct Structure {
     /// kicked again and again, and each kick is a fresh event that ought to
     /// be able to hurt someone the last one already caught.
     pub knock_struck: u8,
+    /// How many frames this one takes to come out of the floor.
+    ///
+    /// Per stone rather than a single rule, because there are two ways a stone
+    /// arrives and they are not the same event. **Raised**, the rise *is* the
+    /// telegraph — `tuning::structure_rise`, a quarter of a second of ground
+    /// churning before anything hurts. **Driven up** by Landfall, the telegraph
+    /// was the plunge that put it there, and the slab comes out of the floor in
+    /// a fraction of the time. Both still read the same curve, so the churn and
+    /// the eruption move with whichever number applies.
+    pub rise: u16,
+    /// The direction this stone's eruption throws whoever it catches, as a unit
+    /// vector. [`V3::ZERO`] on an ordinary stone, which erupts straight up and
+    /// leaves you standing where you were.
+    ///
+    /// One stone in the game has one: Landfall's, levered out of the ground at
+    /// an angle away from the Elementalist, so the slab shoves along the angle
+    /// rather than merely appearing. The direction is stored rather than worked
+    /// out at the moment it erupts because by then she has landed and moved on,
+    /// and a push aimed from where she is *now* would point somewhere nobody
+    /// chose. See `crate::stones` and `tuning::landfall_tilt`.
+    pub erupt: V3,
 }
 
 // ---------------------------------------------------------------------------

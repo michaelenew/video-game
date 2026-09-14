@@ -136,6 +136,7 @@ fn main() {
                     place_beams,
                     place_bolts,
                     place_debris,
+                    place_gusts,
                     place_wings,
                     place_wing_tips,
                     place_marks,
@@ -459,6 +460,10 @@ struct BoltMesh(usize);
 #[derive(Component)]
 struct DebrisMesh(usize);
 
+/// One of the Elementalist's air shots in flight -- an Air bolt or a Gale.
+#[derive(Component)]
+struct GustMesh(usize);
+
 /// One slice of the Dual mage's wing.
 ///
 /// The wing is the one attack volume in the game that is not a line, so the
@@ -778,6 +783,18 @@ fn setup(
             DebrisMesh(slot),
         ));
     }
+    // The Elementalist's air shots. Beam-skinned rather than stone: it is air,
+    // and the same barely-opaque material the rest of what she throws with her
+    // hands is drawn in.
+    for slot in 0..sim::gust::MAX_GUSTS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            GustMesh(slot),
+        ));
+    }
     // The Dual mage's wing, and the ball it finishes on. Spawned for every
     // fighter rather than for her alone, because the class is picked at runtime
     // and can change mid-match with Tab.
@@ -974,6 +991,37 @@ fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &
         tf.translation = fx3(shard.pos);
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shard.dir).normalize_or_zero());
         tf.scale = Vec3::splat(radius * 2.0);
+    }
+}
+
+/// Put the Elementalist's air shots where they are, at the size they have
+/// **become**.
+///
+/// The size is the whole of the Gale: it leaves her hand small and arrives
+/// large, and how big it is on any one frame is what decides whether it
+/// reached you. So the scale comes off `Gust::girth`, which is the same
+/// number the hit test asks for -- the overlay rule (`CLAUDE.md`) applied to
+/// something that is not an overlay: a disc drawn one size and tested at
+/// another would be a lie you could not see through.
+///
+/// A disc rather than a pellet: flattened along its own line of travel, so
+/// what you see coming is a wall of air face-on rather than a ball. The bolt
+/// keeps the stretched-along-its-flight treatment `place_bolts` gives a fire
+/// bolt, for the same reason -- it reads as travelling rather than hanging.
+fn place_gusts(sim: Res<Sim>, mut meshes: Query<(&GustMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(shot) = sim.cur.gusts[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        let radius = shot.girth().to_f32_for_render();
+        tf.translation = fx3(shot.pos);
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
+        tf.scale = match shot.gale {
+            sim::gust::Gale::Bolt => Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0),
+            sim::gust::Gale::Disc => Vec3::new(radius * 2.0, radius * 0.5, radius * 2.0),
+        };
     }
 }
 
