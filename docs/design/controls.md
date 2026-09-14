@@ -851,9 +851,10 @@ see [kits/blood-mage.md](kits/blood-mage.md).
 
 **A channelled move is a skillshot whose line is solved once.** The crosshair picks the line at
 the move's full reach, every frame, and the hold picks a point along it — so the line does not
-move while the mouse does not, and the marker slides rather than jumps. It also means the depth
-you are choosing is a depth into the world: the far end of that line is as far as the marker
-can wind. See [aiming.md](aiming.md).
+move while the mouse does not, and the marker slides rather than jumps. **The line is read for
+its direction only:** how far out the marker gets is the hold and nothing else, so a full hold
+aimed at a wall two metres away still reaches ten, through the wall. See
+[aiming.md](aiming.md).
 
 ## Open questions
 

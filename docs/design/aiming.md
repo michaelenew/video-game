@@ -377,9 +377,15 @@ the only way to land one was to aim well under the target on screen.
 Solving the line once, at the full reach, has neither problem. The line is the
 crosshair's, so it converges on what the player is looking at from any height;
 it does not move while the mouse does not; and the hold slides a point along it.
-The far end of that line is also the furthest the marker can wind, so the depth
-being chosen is a depth **into the world** — a Grasp fully held at a wall six
-metres away converges on the wall rather than three metres inside it.
+
+**The line is read for its direction and nothing else.** How far out the marker
+is comes from the hold alone, and it does not ask what the ray stopped on: point
+at a wall two metres away, wind to full range, and it is still a ten-metre
+Grasp — the arms converge eight metres *behind* the wall. A wall is a thing to
+punch an ability through, not a shorter version of the ability. Cutting the
+marker back to the wall was tried on the way here and is wrong for the same
+reason a slider that snapped to whatever was in front of it would be: the
+wind-up would stop meaning one thing.
 
 The aim stays live for the whole wind-up — the body turns with the mouse — and
 **locks on the frame the button comes up**, which is the frame the move starts.

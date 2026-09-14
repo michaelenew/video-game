@@ -3774,6 +3774,11 @@ direction frame by frame across a channel and gets zero drift at every pitch.
 and is right: a Grasp fully held at a wall six metres away converges on the wall rather than
 three metres inside it. `the_marker_never_reaches_past_what_the_crosshair_is_on` pins it.
 
+> **Wrong, and reversed the next day** — see the entry below. Capping the distance at the
+> solved length puts the scenery in charge of *how far*, which is the half of the question the
+> hold is supposed to own. The marker winds along the move's own reach and goes through walls.
+
+
 **Not fixed: melee swings from a platform.** The Champion's spear thrown laterally off a
 platform still goes out level and over a target on the floor, for the same reason version 2 of
 the Grasp did — the swing dead zone. Left alone deliberately. A swing is not aimed *at*
@@ -3794,3 +3799,37 @@ specific depth a real piece of execution rather than a wait.
 worry that survives all three is unchanged in shape but smaller at thirty frames: the wind-up
 is a telegraph, and the marker being legible now makes it easier for the other player to read
 the depth and step out of it too.
+
+### 2026-09-14 — the crosshair picks the direction, the hold picks the distance, and nothing crosses over
+
+**Changed** one line, and it undoes a rule from the entry above that should never have shipped.
+
+```
+before   the marker winds along the SOLVED path, so a ray that stopped on a
+         wall six metres out capped the Grasp at six metres
+now      the marker winds along the move's own reach, so the same Grasp is
+         ten metres and the arms converge four metres behind the wall
+```
+
+**Why it was wrong.** The entry above got the split right and then let the two halves leak into
+each other in the last paragraph. "Solve the line once, then pick a point along it" was
+supposed to separate *which way* from *how far*; capping the distance at the solved length puts
+the scenery back in charge of the second question. The result is an ability that quietly
+becomes a different ability depending on what happens to be in front of you — a full wind-up
+that reaches ten metres in the open and two indoors, with nothing on screen saying why. The
+marker was honest about it, which is worse rather than better: it told the player their fully
+charged cast was a stub.
+
+**A wall is a thing to punch an ability through.** The arms are a cone that converges; there is
+no reason for them to respect a surface on the way. Aim at a wall two metres away, wind to
+full, and it is still a ten-metre Grasp. `a_grasp_wound_to_full_range_reaches_full_range_through_a_wall`
+pins the extreme version — pointed straight down at the floor underfoot, the ten metres go
+*under the arena*, and that is correct, because what the player asked for was a depth.
+
+`the_marker_never_reaches_past_what_the_crosshair_is_on` is deleted and
+`the_marker_is_as_far_out_as_the_hold_and_nothing_else` is back, which is the assertion the
+first version of the channel had and the right one all along — it was only ever failing because
+the *aim* was being solved at the wound-up range. Same assertion, different bug underneath it.
+
+**Verdict** settled, on this part at least. Which way and how far are two questions, and the
+only thing that should answer the second is the button.

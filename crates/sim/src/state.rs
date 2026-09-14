@@ -3212,10 +3212,10 @@ fn step_channel(
     // Released. The aim locks now, on the frame the wind-up becomes a move,
     // which is where every other move locks it too.
     aim_channel(p, who, kind, held, input, scene);
-    // The length of the path that was solved, not the reach that was asked
-    // for. The two differ when something got in the way, and taking the solved
-    // one is what stops the marker sitting on a wall while the ability lands
-    // behind it.
+    // Read back off the path rather than recomputed from the hold. The two are
+    // the same number -- `aim_channel` has just put the marker there -- and
+    // taking it from the path is what makes the arms land on the marker rather
+    // than on a second calculation that agrees with it today.
     p.channelled = p.aim_path.length();
     // `aerial` is always true here and always harmless: `arm_aerial` returns on
     // the spot for anybody whose feet are on something, and aboard the creature
@@ -3235,16 +3235,23 @@ const fn channel_button(kind: u8) -> u16 {
     }
 }
 
-/// Re-solve a channelled move's aim, and cut it back to where the hold has got.
+/// Re-solve a channelled move's aim: the crosshair picks the line, the hold
+/// picks how far along it.
 ///
-/// **The line is solved at the move's full reach every frame, and the hold only
-/// picks a point along it.** That split is the whole of what makes a marker
-/// readable. Solving at the wound-up range instead -- which is what this did
-/// first -- means the raycast's own answer changes as the range grows: the far
-/// end walks off one surface and onto another, so a player holding the mouse
-/// perfectly still watched the marker jump between the floor, a wall and the
-/// edge of the range while they were choosing a depth. With the line held
-/// still, the only thing moving is the thing the player is moving.
+/// **Two questions, kept apart, and that is the whole of what makes a wind-up
+/// readable.** The line is solved at the move's full reach every frame, so it
+/// does not move while the mouse does not. Solving it at the wound-up range
+/// instead -- which is what this did first -- means the raycast's own answer
+/// changes as the range grows: the far end walks off one surface and onto
+/// another, and a player holding the mouse perfectly still watched the marker
+/// jump between the floor, a wall and the edge of the range while they were
+/// choosing a depth.
+///
+/// **The distance is the hold and nothing but the hold.** It does not ask what
+/// the crosshair stopped on. Aiming at a wall six metres away and winding to
+/// full range is a ten-metre Grasp that goes through the wall -- a wall is a
+/// thing to punch an ability through, not a shorter version of the ability. The
+/// solved line is only ever read for its *direction*.
 ///
 /// Nothing is decided here: `aim_at` is the same call the finished move uses,
 /// so there is no second answer to where the ability goes and the marker cannot
@@ -3252,11 +3259,7 @@ const fn channel_button(kind: u8) -> u16 {
 fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, scene: &Scene) {
     let m = moves::get(p.class, kind);
     aim_at(p, who, kind, m.reach, input, scene);
-    // Cut back to the hold. Along the solved line, so a wall the ray stopped at
-    // is as far as the marker can ever get -- the depth the player picks is a
-    // depth into the world rather than a number that ignores it.
-    let along = m.wound_along(held, p.aim_path.length());
-    p.aim_path.to = p.aim_path.at(along);
+    p.aim_path.to = p.aim_path.at(m.reach_after(held));
 }
 
 /// Work out where this move goes, and hold it there for the move's duration.
