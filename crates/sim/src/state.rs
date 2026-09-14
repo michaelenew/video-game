@@ -403,6 +403,31 @@ pub struct Player {
     /// the telegraph worth nothing. You commit to a place when you commit to
     /// the move.
     pub aim_path: Path,
+    /// Frames left before each of this class's moves may be thrown again.
+    ///
+    /// **Per move, and only ever the one you just threw** -- which is what
+    /// separates it from a cooldown and is why the combat kernel allows it. The
+    /// rest of the kit is always available, so the question it puts to a player
+    /// is never *do I have anything* but *what else have I got*. See
+    /// `tuning::repeat_lockout`.
+    ///
+    /// Indexed by move slot and sized to the widest class, so the Champion's
+    /// ten fit and everybody else leaves the tail at zero. In the snapshot
+    /// because it decides what a button does: a lockout kept outside it would
+    /// let a rollback re-throw a move the original frame refused.
+    pub repeat_lock: [u16; moves::MAX_SLOTS],
+    /// Frames left before an ability that is **still out there** may be used
+    /// again -- the recall, not the cast.
+    ///
+    /// A separate clock from `repeat_lock` because it answers a different
+    /// question. `repeat_lock` is *when does this ability come back*; this is
+    /// *how soon may I use the half of it I have already paid for*. Running
+    /// both off one number is what made the first version of this eat the
+    /// Reaver's recall: the send armed a thirty-frame lockout and the press
+    /// that brings the shadow home is the same button.
+    ///
+    /// Zero everywhere until somebody plays it -- see `Move::reactivate`.
+    pub reactivate_lock: [u16; moves::MAX_SLOTS],
     /// The reach a channelled move wound up to before its button came back up.
     ///
     /// Kept because the move outlives the channel: the arms of a Grasp are
@@ -450,6 +475,119 @@ impl Player {
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
             Mechanic::Meter { value, .. } => value.abs() >= t::meter_deep(),
             Mechanic::Forms { .. } | Mechanic::Blood => true,
+        }
+    }
+
+    /// Which of this fighter's abilities still have something of their own out
+    /// in the world, and so have not finished being used yet.
+    ///
+    /// **The one place that answers it**, indexed by move slot, and the reason
+    /// it is one place is that the answer is stored in two completely different
+    /// shapes: the second body is the class mechanic, and the hanging blades
+    /// are an entry in the world's effect table. A caller that went looking for
+    /// itself would find one of them.
+    ///
+    /// Read against the scene as it stood at the top of the frame, which is the
+    /// same snapshot the aiming ray is cast against and is deterministic for
+    /// the same reason.
+    pub fn abilities_out(&self, who: usize, scene: &Scene) -> [bool; moves::MAX_SLOTS] {
+        let mut out = [false; moves::MAX_SLOTS];
+        for (slot, flag) in out.iter_mut().enumerate() {
+            // Which slots are worth asking about is `moves::lingers`, so the
+            // frame table and the simulation cannot come to different views of
+            // which abilities the lockout waits for.
+            if !moves::lingers(self.class, slot as u8) {
+                continue;
+            }
+            *flag = match slot as u8 {
+                // Send shadow: out from the frame it leaves her shoulder until
+                // the frame it is back at it, flight home included.
+                SLOT_MECHANIC => shadow::of(self).is_some_and(|s| s.is_out()),
+                // Guillotine lotus: out for as long as a blade of it is still
+                // hanging or still chasing.
+                SLOT_SPECIAL => scene.effects.iter().flatten().any(|e| {
+                    e.kind == crate::effects::EffectKind::GuillotineLotus && e.owner == who as u8
+                }),
+                _ => false,
+            };
+        }
+        out
+    }
+
+    /// Is this move still locked out from the last time it was thrown?
+    ///
+    /// See [`Player::repeat_lock`]. A slot past the end of this class's list
+    /// can never be locked, which keeps the answer total for any `kind` a
+    /// caller can produce.
+    pub fn locked_out(&self, kind: u8) -> bool {
+        self.repeat_lock.get(kind as usize).is_some_and(|&f| f > 0)
+    }
+
+    /// Everything that has to be true before a press becomes a move.
+    ///
+    /// One predicate rather than three at each of the six call sites, because
+    /// they are asked together every single time and a call site that remembered
+    /// only some of them would be a move you could spam on one input path and
+    /// not on another.
+    ///
+    /// **Three cases, and the middle one is the whole reason this takes an
+    /// argument.** An ability that is not out is gated by the shared repeat
+    /// lockout, which is the ordinary rule. An ability that *is* out, on a
+    /// button that reactivates it, is not being used again at all -- the press
+    /// is the second half of the one already paid for, so the lockout must not
+    /// touch it and its own [`Move::reactivate`] gap is what gates it. An
+    /// ability that is out on a button that does *not* reactivate it is simply
+    /// not available: the first cast is not finished, so there is nothing for a
+    /// second one to be.
+    pub fn can_throw(&self, kind: u8, out: &[bool; moves::MAX_SLOTS]) -> bool {
+        if !self.mechanic_ready(kind) {
+            return false;
+        }
+        match out.get(kind as usize) {
+            Some(true) if moves::reactivates(self.class, kind) => self
+                .reactivate_lock
+                .get(kind as usize)
+                .is_none_or(|&f| f == 0),
+            Some(true) => false,
+            _ => !self.locked_out(kind),
+        }
+    }
+
+    /// Start this move's clocks. Called as the move comes out, not as the
+    /// button goes down -- a channel spends its own frames first.
+    fn lock_repeat(&mut self, kind: u8) {
+        let m = moves::get(self.class, kind);
+        if let Some(slot) = self.repeat_lock.get_mut(kind as usize) {
+            *slot = m.repeat_lock();
+        }
+        if let Some(slot) = self.reactivate_lock.get_mut(kind as usize) {
+            *slot = m.reactivate;
+        }
+    }
+
+    /// Run the clocks down by a frame.
+    ///
+    /// **An ability still out in the world holds its lockout at full rather
+    /// than spending it**, so the countdown begins on the frame the last of it
+    /// comes home. That is the rule that keeps the lockout a charge for
+    /// *finishing* with an ability rather than a tax on starting one: sending
+    /// the shadow and leaving it standing there for five seconds does not
+    /// quietly serve the lockout while it waits.
+    ///
+    /// Parked rather than paused, which needs no memory of whether it was
+    /// parked last frame: re-arming it to full every frame it is out leaves it
+    /// at full on the frame it stops being out, which is the same thing and is
+    /// one line.
+    fn tick_repeat_locks(&mut self, out: &[bool; moves::MAX_SLOTS]) {
+        for (kind, f) in self.repeat_lock.iter_mut().enumerate() {
+            if out[kind] {
+                *f = moves::get(self.class, kind as u8).repeat_lock();
+            } else {
+                *f = f.saturating_sub(1);
+            }
+        }
+        for f in self.reactivate_lock.iter_mut() {
+            *f = f.saturating_sub(1);
         }
     }
 
@@ -566,6 +704,8 @@ impl Default for Player {
             air_stall: 0,
             air_dodged: false,
             hit_used: false,
+            repeat_lock: [0; moves::MAX_SLOTS],
+            reactivate_lock: [0; moves::MAX_SLOTS],
             class: Class::Bulwark,
             mechanic: Mechanic::Shield(Shield::Held),
             rounds_won: 0,
@@ -1096,6 +1236,12 @@ impl World {
             h.write_u32(p.grip_settle as u32);
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
+            for f in &p.repeat_lock {
+                h.write_u32(*f as u32);
+            }
+            for f in &p.reactivate_lock {
+                h.write_u32(*f as u32);
+            }
             hash_mechanic(&mut h, &p.mechanic);
         }
         match &self.monster {
@@ -1719,11 +1865,21 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
+    // The repeat lockouts run down first, and above the rider branch so they
+    // run exactly once a frame on either tick. Before the input is read rather
+    // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
+    //
+    // Which abilities are still out is worked out once and handed to both the
+    // tick and the gate below, because they have to agree: a lockout parked by
+    // one answer and consulted against another is a move that is locked on the
+    // frame it was meant to come back.
+    let out = p.abilities_out(who, scene);
+    p.tick_repeat_locks(&out);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     if p.aboard() {
         match beast {
-            Some(beast) => return step_rider(p, who, input, beast, scene),
+            Some(beast) => return step_rider(p, who, input, beast, scene, &out),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
             None => p.mount = monster::NO_PART,
@@ -1822,7 +1978,7 @@ fn step_player(
                 // the three clicks, and `Q` is free.
                 if input.has(Input::SPECIAL)
                     && p.class != Class::Champion
-                    && p.mechanic_ready(SLOT_SPECIAL)
+                    && p.can_throw(SLOT_SPECIAL, &out)
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, true)
                 } else if pressed_mechanic {
@@ -1833,7 +1989,7 @@ fn step_player(
                     // mechanic is health and so has nothing to toggle -- it is
                     // thrown like any other move, with a startup you can be
                     // punished during and a cost you pay on the press.
-                    match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    match moves::on_e(p.class).filter(|slot| p.can_throw(*slot, &out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, true),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -1844,7 +2000,8 @@ fn step_player(
                 // Which move a click asks for. After the mechanic, so that Rush
                 // can be started while a click is held down, and before the dodge,
                 // because a click is what disambiguates shift.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, &out))
+                {
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
                     begin_champion(p, kind);
@@ -2451,6 +2608,11 @@ fn begin_move(
 /// below -- which is a no-op for the one class that channels today and a bug
 /// waiting for the second one.
 fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
+    // The lockout starts here, on the frame the move comes out, rather than on
+    // the press that asked for it. For a channel those are different frames and
+    // the wind-up has already been paid for in frames of its own; charging from
+    // the press would bill the hold twice.
+    p.lock_repeat(kind);
     // The second body throws the same thing a few frames later. A no-op for
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
@@ -3964,7 +4126,14 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
 /// metre-per-second dash on a surface two metres wide is a way to fall off by
 /// accident, and taking it away is what makes bracing a real answer rather than
 /// a worse version of one you already had.
-fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: &Scene) {
+fn step_rider(
+    p: &mut Player,
+    who: usize,
+    input: Input,
+    beast: &Monster,
+    scene: &Scene,
+    out: &[bool; moves::MAX_SLOTS],
+) {
     let part = p.mount as usize;
     let held = p.local;
     let radius = t::body_radius();
@@ -4039,11 +4208,11 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
             None => {
                 if input.has(Input::SPECIAL)
                     && p.class != Class::Champion
-                    && p.mechanic_ready(SLOT_SPECIAL)
+                    && p.can_throw(SLOT_SPECIAL, out)
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, false)
                 } else if pressed_mechanic {
-                    match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    match moves::on_e(p.class).filter(|slot| p.can_throw(*slot, out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, false),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -4056,7 +4225,7 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
                 // nowhere useful -- there is no ground under it to dash along --
                 // but nothing needs to say so: `grounded` is true aboard, so the
                 // standing row is what `clicked_move` picks anyway.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, out)) {
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, false)
                 } else if want_guard {

@@ -89,6 +89,23 @@ as they get tested.
   learn to dodge on sight.
 - **Is the grapple's 20-frame startup too slow to ever land?** It beats guard,
   so it needs to be slow — but if it never connects it is decoration.
+- **Is 30 frames the right repeat lockout?** The number is a first guess and
+  nothing else. Too short and spamming an auto is still correct; too long and
+  the correct play becomes standing still, which is the failure mode
+  `feel::the_lockout_always_leaves_something_faster_to_do_than_wait` is watching
+  for. Half a second was picked because it is roughly the gap between two
+  deliberate button presses, and because at that length it happens to charge
+  every auto and no committed heavy.
+- **Which abilities want a multiplier, and which way?** The per-move column
+  exists and is 100% on all thirty of them. The autos are the obvious
+  candidates for more, since they are the ones a player leans on; the moves
+  that already cost forty frames are candidates for zero, since the lockout is
+  invisible on them anyway and a knob that does nothing is a knob that confuses
+  somebody later.
+- **Should a reactivation be gated at all?** `Move::reactivate` is zero
+  everywhere, so the Reaver can send the shadow and recall it on consecutive
+  frames. That may be fine — the send costs 18 frames of its own — or it may
+  make the send-recall pair a single fast button rather than two decisions.
 
 ### Defence
 - **Is the 4-frame parry window findable?** This is the single most important
@@ -3066,3 +3083,48 @@ rather than a smaller turn.
 
 Nothing here touched `lotus_radius`, the three clocks, or the damage, so the ability's timing
 and reach are exactly what they were.
+
+### 2026-09-14 — the repeat lockout
+
+**Changed** a move you have just thrown cannot be thrown again for 30 frames.
+Per ability, not global: the rest of the kit is untouched the whole time. A new
+`Offence / Repeat lockout` scalar in the Oven carries the shared number, and a
+`Repeat lockout (%)` column on every move scales it — 100% on all thirty, so
+today the rule is exactly "30 frames, everything".
+
+**Why** frame data prices a move against time, so the cheapest move in a kit is
+the correct one to throw most of the time, and six abilities that a player uses
+one of is not a kit. Nothing in the game pushed back against repetition except
+the creature, which has had a variety penalty on its own move choice since it
+was built — the player side had nothing equivalent.
+
+The shape of it was chosen against the no-cooldown decision in
+[combat-kernel.md](combat-kernel.md) rather than around it. Two properties do
+the work. It only ever holds the ability you just threw, so the question is
+never *do I have anything* but *what else have I got*. And the clock starts on
+the frame the move **comes out** rather than when its recovery ends, so a move
+that already commits you for longer than the lockout never notices it: at 30
+frames that is every committed heavy in the game, and what is left charged is
+every auto and fast poke. Bash pays 13 idle frames on top of its 17; Grapple's
+53 frames of commitment pay nothing. The rule taxes cheapness, which is what
+made repetition correct in the first place.
+
+Two abilities needed the rule bent, and the bend is the interesting part. Send
+shadow and the Guillotine lotus are *activated twice* — out and home, hung and
+dragged — and a lockout armed by the first press is a lockout on the second. So
+an ability is not counted as used until it is spent: while any of it is still
+out in the world its lockout is parked at full rather than running down, and the
+press that spends the second activation is exempt. Which button reactivates
+which ability is declared in `moves::reactivates` rather than inferred from what
+a move leaves behind — inferring it answers yes for the fire pillar and the
+black spike, neither of which can be pressed again at all.
+
+**Verdict** open, and open in a way that needs a person rather than a test. What
+the harness can say is that the relationships hold: nothing is ever locked out
+for longer than it takes to throw something else, one press can never cost more
+than one option, and the Reaver's recall still gets through. What it cannot say
+is whether half a second reads as *use your kit* or as *the game just ignored my
+click*. The HUD's frame-data line names the locked ability and counts it down,
+which is there for exactly that judgement — if the answer turns out to be that
+the lock needs to be felt rather than read, that is a sign the number is wrong
+rather than a sign the readout needs to be bigger.

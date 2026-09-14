@@ -621,7 +621,17 @@ fn describe(p: &sim::state::Player) -> String {
         )
     };
     match p.action {
-        Action::Free => "free".into(),
+        // Free, but not necessarily free to do *everything*. A press that is
+        // refused by the repeat lockout does nothing and says nothing, which
+        // reads as the game eating an input rather than as a rule -- so while
+        // anything is locked, the readout says which and for how long. It is
+        // the frame data line, not an icon row: the point of the lockout is
+        // that you are watching the fight and not a set of timers, and this is
+        // the same debug surface that already prints startup and recovery.
+        Action::Free => match locked(p) {
+            Some(note) => note,
+            None => "free".into(),
+        },
         Action::Startup { kind, left } => phase_of(kind, "startup", left),
         Action::Active { kind, left } => phase_of(kind, "ACTIVE", left),
         Action::Recovery { kind, left } => phase_of(kind, "recovery", left),
@@ -654,6 +664,34 @@ fn describe(p: &sim::state::Player) -> String {
             )
         }
     }
+}
+
+/// What this fighter may not throw yet, and for how long.
+///
+/// The soonest one only. Every lockout in the game is the same length today, so
+/// a list would be the same number repeated, and the question a player has
+/// while standing there is *when can I go again* rather than *what is the state
+/// of all ten slots*.
+fn locked(p: &sim::state::Player) -> Option<String> {
+    (0..sim::moves::table(p.class).len())
+        .filter_map(|slot| {
+            let left = p.repeat_lock[slot];
+            (left > 0).then_some((left, slot))
+        })
+        .min()
+        .map(|(left, slot)| {
+            let name = sim::moves::get(p.class, slot as u8).name;
+            // An ability still out in the world has its lockout parked, so the
+            // countdown beside it is not a countdown -- it is the number it
+            // will start from once the ability is spent. Printing it as frames
+            // remaining would have it sit unchanged on the same value while the
+            // shadow stands in a corner, which reads as a stuck clock.
+            if sim::moves::lingers(p.class, slot as u8) {
+                format!("free  --  {name} still out, {left}f once it is back")
+            } else {
+                format!("free  --  {name} locked {left}f")
+            }
+        })
 }
 
 /// Advance one player's class, leaving the other alone.
