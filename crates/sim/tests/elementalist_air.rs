@@ -356,6 +356,12 @@ fn the_gale_is_a_frisbee_rather_than_a_ball() {
     // Pinned because the renderer has to draw the same thing. It drew the disc
     // face-on to its own travel for a while -- a picture of a wall of air
     // rather than of a frisbee -- and there was nothing to catch it.
+    //
+    // The drawing is tipped into the plane of the throw now (`place_discs`),
+    // which costs this nothing: the disc's width lies along `dir x axis`, and
+    // that is horizontal whichever way the throw is pitched. Sideways still
+    // catches you and straight up still does not, which is what is measured
+    // here.
     let girth = sim::moves::get(Class::Elementalist, air::GALE).radius;
     let mut w = elementalist();
     // A level line at chest height, nine metres of it, down the clear lane.
