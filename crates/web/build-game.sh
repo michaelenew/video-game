@@ -43,27 +43,34 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 wasm-bindgen --target web --no-typescript --out-name game --out-dir "$OUT" "$WASM"
 
-# Optional, and worth about a quarter of the module. Not a dependency:
-# `binaryen` is a separate install, and a build without it has to work.
+# ---------------------------------------------------------------------------
+# What gets published has to be something a browser will actually accept.
 #
-# `--all-features` because the profile strips the `target_features` section
-# that wasm-opt would otherwise read the answer out of, so it has to be told
-# that the module is allowed to use the things the compiler already emitted --
-# bulk memory being the one it trips over first.
+# This check is here because the first published build was not. The step it
+# replaces ran `wasm-opt -Oz --all-features` to shrink the module;
+# `--all-features` tells binaryen it may use everything it knows, GC included,
+# and it wrote a type section no browser would parse -- `CompileError: invalid
+# value type 0x0 @+198`, on a page that had loaded eighteen megabytes first. It
+# passed locally because this machine had a different binaryen from the
+# runner's, which is the whole reason a check belongs in the script rather than
+# in somebody's memory of having looked once.
 #
-# Failure here is a warning, not an error. An optimisation nobody asked for
-# must not be able to fail a build, and the unoptimised module is correct.
-if command -v wasm-opt >/dev/null 2>&1; then
-  before=$(stat -c%s "$OUT/game_bg.wasm")
-  if wasm-opt -Oz --all-features -o "$OUT/game_bg.opt.wasm" "$OUT/game_bg.wasm"; then
-    mv "$OUT/game_bg.opt.wasm" "$OUT/game_bg.wasm"
-    echo "wasm-opt: $((before / 1024)) KB -> $(($(stat -c%s "$OUT/game_bg.wasm") / 1024)) KB"
+# `WebAssembly.compile` is the same validator the browser runs, so this is the
+# real thing rather than a proxy for it. Node is on every CI runner; when it is
+# missing, say so rather than implying the build was checked.
+# ---------------------------------------------------------------------------
+if command -v node >/dev/null 2>&1; then
+  if node --input-type=module -e "
+      import { readFile } from 'node:fs/promises';
+      await WebAssembly.compile(await readFile('$OUT/game_bg.wasm'));
+    "; then
+    echo "the module validates"
   else
-    rm -f "$OUT/game_bg.opt.wasm"
-    echo "wasm-opt failed; shipping the module unoptimised" >&2
+    echo "REFUSING TO PUBLISH: a browser cannot compile $OUT/game_bg.wasm" >&2
+    exit 1
   fi
 else
-  echo "wasm-opt not found; skipping (install binaryen for a smaller module)"
+  echo "node not found, so nothing has checked that a browser can load this" >&2
 fi
 
 # The controls panel comes from the manual, so the page cannot describe keys the
