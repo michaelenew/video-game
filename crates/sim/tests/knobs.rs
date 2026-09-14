@@ -60,10 +60,18 @@ const EXEMPT: &[(&str, &str)] = &[
          of anything is half of it, and any other number would stop it being the middle.",
     ),
     (
-        "let tan_tilt = Fx::ONE.sub(ball.at.mul(Fx::from_int(2))).mul(tan_half)",
+        ".sub(ball.at.mul(Fx::from_int(2)))",
         "Turning a screen fraction into a tangent. The 2 is that a fraction is \
          measured from the bottom of the screen while the angle is measured from \
          its middle, which is half of it -- geometry, not a number to tune.",
+    ),
+    (
+        "let screen = standing.radius.mul(tan_half_fov()).mul(Fx::from_int(2))",
+        "The same 2, used the other way round: the height of the screen at the \
+         sphere's surface is twice the half-height a tangent gives, because a \
+         screen has two halves. It turns a share of the screen into metres so \
+         the camera can hold still for exactly the rise that carries a fighter \
+         up to the crosshair and no further.",
     ),
     (
         "const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10)",

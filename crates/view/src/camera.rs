@@ -371,7 +371,7 @@ impl CameraRig {
             crate::pitch_from_radians(pitch),
         );
         let stood = sim::V3::new(fx_of(self.focus[0]), fx_of(feet), fx_of(self.focus[2]));
-        let eye = sim::camera::eye(stood, look);
+        let eye = sim::camera::eye(stood, look, fx_of(around.aloft));
         let (back, up) = (
             -((eye.x.to_f32_for_render() - self.focus[0]) * along[0]
                 + (eye.z.to_f32_for_render() - self.focus[2]) * along[1]),
@@ -568,16 +568,26 @@ fn smoothing_for(per_tick: f32, dt: f32) -> f32 {
     1.0 - (1.0 - per_tick).powf(dt * crate::TICK_HZ)
 }
 
-/// What else is in the arena this frame.
+/// What else is in the arena this frame, and where the followed fighter's feet
+/// are.
 ///
-/// A struct rather than two arguments because the pair is one fact -- there is
-/// an animal, and whether you are on it changes what it is to the camera -- and
-/// a bare `bool` at a call site says nothing about which way round it goes.
+/// A struct rather than three arguments because the creature pair is one fact
+/// -- there is an animal, and whether you are on it changes what it is to the
+/// camera -- and a bare `bool` at a call site says nothing about which way
+/// round it goes.
 #[derive(Clone, Copy, Default)]
 pub struct Surroundings<'a> {
     pub beast: Option<&'a sim::Monster>,
     /// The fighter the camera is following is standing on it.
     pub aboard: bool,
+    /// How far the framing has swung over to the airborne one -- **the
+    /// simulation's own number**, read out of the snapshot rather than worked
+    /// out here. It has memory and it decides where abilities land, so it lives
+    /// in `sim::state::Player::aloft`; the renderer only carries it across.
+    ///
+    /// Zero is the default, which is the grounded framing and is exactly what
+    /// every fixture that never leaves the floor wants.
+    pub aloft: f32,
 }
 
 /// RENDER-ONLY. Metres to the simulation's fixed point, for asking the

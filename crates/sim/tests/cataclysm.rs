@@ -593,7 +593,7 @@ fn look_at(stood: V3, mark: V3) -> (u16, i16) {
     ) as u16;
     let mut tilt = 0i16;
     for _ in 0..6 {
-        let eye = sim::camera::eye(stood, Input::looking_at(0, yaw, tilt));
+        let eye = sim::camera::eye(stood, Input::looking_at(0, yaw, tilt), Fx::ZERO);
         let flat = mark.sub(eye).flat_len().to_f32_for_render();
         let rise = mark.y.sub(eye.y).to_f32_for_render();
         tilt = turns(rise.atan2(flat)) as i16;

@@ -362,7 +362,7 @@ pub struct Sighted {
 /// still a body the shot went through.
 pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
     let caster = &scene.players[who];
-    let eye = crate::camera::eye(caster.pos, look);
+    let eye = crate::camera::eye(caster.pos, look, caster.aloft);
     let dir = look.look_dir();
     let cast = origin(caster.pos);
 
@@ -594,7 +594,7 @@ fn swing_tilt(look: Input, grounded: bool) -> Fx {
 /// wall, and whether she can actually *get* there is a separate question asked
 /// of the world rather than of the camera -- see [`clear_between`].
 pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) -> bool {
-    let eye = crate::camera::eye(scene.players[who].pos, look);
+    let eye = crate::camera::eye(scene.players[who].pos, look, scene.players[who].aloft);
     let column = t::body_radius().add(slack);
     let foot = V3::new(at.x, at.y.sub(slack), at.z);
     crate::math::ray_hits_cylinder(

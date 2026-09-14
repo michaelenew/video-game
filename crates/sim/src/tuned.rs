@@ -1569,7 +1569,7 @@ pub const MONSTER: [i32; 138] = [
 ];
 
 #[rustfmt::skip]
-pub const VIEW: [i32; 19] = [
+pub const VIEW: [i32; 26] = [
           602931, // camera.sphere_radius_(m) = 9.2
            13107, // camera.sphere,_at_the_head_(m) = 0.2
               85, // camera.look_down_limit = 85
@@ -1589,4 +1589,11 @@ pub const VIEW: [i32; 19] = [
               50, // camera.smooth,_first_person_(%) = 50
               60, // camera.body_dims_to_(%) = 60
               35, // camera.opening_pitch,_below_level = 35
+          196608, // camera.airborne_framing,_full_at_(m) = 3
+            6554, // camera.airborne_framing,_most_it_takes_hold_a_frame = 0.1
+            2949, // camera.airborne_framing,_most_it_lets_go_a_frame = 0.045
+           27525, // camera.airborne_framing,_curve:_leaves = 0.42
+               0, // camera.airborne_framing,_curve:_leaves_lift = 0
+           38011, // camera.airborne_framing,_curve:_arrives = 0.58
+           65536, // camera.airborne_framing,_curve:_arrives_lift = 1
 ];

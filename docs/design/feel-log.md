@@ -3833,3 +3833,64 @@ the *aim* was being solved at the wound-up range. Same assertion, different bug 
 
 **Verdict** settled, on this part at least. Which way and how far are two questions, and the
 only thing that should answer the second is the button.
+### 2026-09-14 — the camera climbed with you, so the aim point ran away
+
+**Changed** off the ground, the camera's sphere stays centred **below the fighter's feet, on the
+height they left**, rather than riding up with them. Eight knobs are new, all under `Camera`:
+`Airborne framing, full at (m)` = 3, `most it takes hold a frame` = 0.10, `most it lets go a
+frame` = 0.045, and the four handles of its curve. Nothing already baked moved.
+
+**Why.** The report was that a shot thrown from the air, aimed down, went somewhere nobody
+chose. Two separate things were wrong and they compounded, which is why the symptom had no shape
+to it. The first was the skillshot lift measuring from the caster rather than from the ground
+the ray met — fixed the same day from the other end, by the platform case, and written up in the
+entry above as `aim::standing_middle`. This is the second.
+
+The camera's sphere is anchored to the fighter, so a jump takes the eye up with them — and at a
+fixed downward pitch the patch of floor under the crosshair is set by how high the eye is. Hold
+the mouse perfectly still and climb five metres and the thing you are pointing at races seven
+metres away from you. There is nothing to learn there; the aim point is simply not yours.
+
+> You climb the screen toward the crosshair instead of the camera climbing beside you — until
+> you are just under it, and from there it follows again.
+
+**How far it may hold is derived rather than tuned**, and that is the part worth keeping if the
+numbers get thrown away. It is exactly the rise that carries the fighter from wherever the pitch
+zone has put them on screen up to the turn zone's own top waypoint — *the head riding 5% under
+the crosshair* — and no further, because past that they would be climbing over the reticle.
+Which makes the awkward cases answer themselves: look steeply down and the floor zone has
+already carried you to the reticle with your feet on the ground, so there is no room left and
+the camera stays glued to you, which is exactly right when what you are looking at is the patch
+of floor you are standing over. At a shallow aim it works out at about 2.9 m.
+
+Measured on a full jump at 30° down: the eye moved 0.05 m while she climbed the first 3.0 m, and
+the aim point held inside a metre of where it started. Before, the same climb swept it from 0.9 m
+to 8.0 m ahead of her.
+
+Two knobs shape the approach. An **S-curve in height**, so a hop barely moves it — at `full at` =
+3 m a short hop fits inside the hold entirely and the camera simply does not move. And an
+**asymmetric rate limit**: quick to take hold going up, slower to let go coming down, because
+terminal velocity is eighteen metres a second and the last few metres of a long fall arrive in a
+handful of frames. Setting the two equal turns the asymmetry off.
+
+**The cost, stated plainly:** the framing now has memory, so it is simulation state
+(`Player::aloft`), in the rollback snapshot and in the desync checksum. That is the same
+argument that pulled the camera's knobs into the checksum in the first place — the eye is where
+the aiming ray starts — and it is why this could not be done in `view`.
+
+**Verdict** open; this wants playing, which is what it was built for. Things to watch, in order
+of how likely each is to be wrong:
+
+1. **Is 3 m the right height to be fully held?** It is set so that a short hop is entirely
+   inside the hold and a full jump (5.7 m at this tuning) spends roughly half its climb there.
+   Lower and a hop starts swinging the view; higher and the top of a jump arrives as a lurch.
+2. **Does the hold read as the camera lagging rather than as you rising?** That is the failure
+   mode of the whole idea, and it is the one a measurement cannot detect.
+3. **Is letting go at 0.045 a frame slow enough on a long fall, or is it now visibly behind on
+   landing?** At the moment the camera is about 1.4 m low as the feet touch and takes a dozen
+   frames to settle.
+4. **The Elementalist's Landfall dives at 26 m/s.** The framing unwinds slower than the plunge
+   arrives, so the camera is deliberately trailing her all the way down. That may read as
+   weight, or it may read as the view failing to keep up with the move.
+5. **Does anything want this besides a fighter in the air?** Being knocked off a ledge frames
+   the same way as jumping to the same height, which seems right and has not been played.

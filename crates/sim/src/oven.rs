@@ -481,9 +481,31 @@ view_knobs! {
     // opening angle belongs inside the neutral zone; what stops it being
     // *committed* there is `view/tests/camera_knobs.rs`, not the slider.
     StartPitch,     "Opening pitch, below level", Int,   1,   60;
+    // **The airborne framing**, appended for the reason everything above it is:
+    // `tuned::VIEW` is read by this enum's own discriminant, so slotting one in
+    // beside its relatives would hand every knob below it its neighbour's baked
+    // value.
+    //
+    // Off the ground the camera swings over to framing the fighter's head just
+    // under the crosshair, and how far over it has swung is a function of how
+    // high above the floor they are -- an S-curve in height, rate-limited in
+    // time so that a long fall does not whip the view around. See
+    // `camera::aloft_target` and `camera::aloft_step`.
+    AloftFull,      "Airborne framing, full at (m)", Fixed, fx(1,2), fx(20,1);
+    AloftRate,      "Airborne framing, most it takes hold a frame", Fixed, fx(1,1000), fx(1,1);
+    AloftEase,      "Airborne framing, most it lets go a frame",   Fixed, fx(1,1000), fx(1,1);
+    AloftCurveX1,   "Airborne framing, curve: leaves",      Fixed, 0, fx(1,1);
+    AloftCurveY1,   "Airborne framing, curve: leaves lift", Fixed, 0, fx(1,1);
+    AloftCurveX2,   "Airborne framing, curve: arrives",     Fixed, 0, fx(1,1);
+    AloftCurveY2,   "Airborne framing, curve: arrives lift",Fixed, 0, fx(1,1);
 }
 
-pub const VIEW_COUNT: usize = 19;
+/// Counted from the table rather than written down, the same way
+/// [`SCALAR_COUNT`] is. A literal here is a second statement of how many camera
+/// knobs there are, and the two disagree the first time somebody appends one --
+/// which shows up as a type error on the baked array rather than as anything
+/// that names the cause.
+pub const VIEW_COUNT: usize = ViewKnob::ALL.len();
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data

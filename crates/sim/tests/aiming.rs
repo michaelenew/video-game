@@ -275,7 +275,11 @@ fn aiming_at_the_side_of_a_stone_puts_the_next_one_at_its_foot() {
     let face = V3::new(first.at.x, first.top().mul(Fx::ratio(1, 2)), first.at.z);
     let mut tilt = 0i32;
     for _ in 0..6 {
-        let eye = sim::camera::eye(w.players[0].pos, Input::looking_at(0, 0, down(tilt)));
+        let eye = sim::camera::eye(
+            w.players[0].pos,
+            Input::looking_at(0, 0, down(tilt)),
+            w.players[0].aloft,
+        );
         let flat = face.sub(eye).flat_len().to_f32_for_render();
         let rise = face.y.sub(eye.y).to_f32_for_render();
         tilt = (-rise.atan2(flat)).to_degrees().round() as i32;

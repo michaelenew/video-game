@@ -194,8 +194,60 @@ Outside the easing the ramp is untouched, so **the waypoints stay exactly true**
 the ramp is eased all the way through and its middle still lands on the waypoint, because the two
 ends give back what each other took.
 
+### Off the ground the camera stops following you — added 2026-09-14
+
+The zones above are a function of **pitch**, and they were authored for a fighter standing on
+the floor. That is most of a match and none of the air.
+
+The complaint that found it: *"in the air, aiming down, the bolts go seemingly random
+directions nowhere near where the cursor was."* Two things were wrong and they compounded. The
+[aiming](aiming.md) half is `aim::standing_middle`, written up there and arrived at from the
+other end — the same mistake sent every shot over the head of anybody standing below a
+platform. This is the camera half. The sphere is
+anchored to the fighter, so a jump takes the eye up five metres with them while the crosshair
+stays nailed to the middle of the screen. At a fixed downward pitch the patch of floor under
+that crosshair is decided by how high the eye is, so it sweeps metres further out while the
+player's hand never moves. There is nothing to learn there; the aim point is simply not yours.
+
+So height is a second driver, and what it does is decline to follow:
+
+> Off the ground, the sphere stays centred **below your feet, on the height you left**. You
+> climb the screen toward the crosshair instead of the camera climbing beside you — until you
+> are just under it, and from there it follows again.
+
+A vertical impulse already moves you toward the reticle. This is only the camera getting out of
+the way and letting it read that way.
+
+**How far it may hold is not a knob, it is the geometry.** It is exactly the rise that takes you
+from where the pitch zone has put you on screen up to *the head riding 5% under the crosshair* —
+the turn zone's own top waypoint, which is already the sentence "the crosshair rides just above
+the head" — and no further, because past that you would be climbing over the reticle. That makes
+the awkward cases answer themselves: look steeply down and the floor zone has already carried
+you to the crosshair with your feet on the ground, so there is no room left and the camera stays
+glued to you, which is exactly what you want when the thing you are looking at is the patch of
+floor you are standing over.
+
+Two knobs shape the approach, and both are what keep it from being disorienting:
+
+- **An S-curve in height**, so a hop barely moves it and a real jump takes it all the way over.
+  At the current numbers a short hop fits inside the hold entirely: the camera simply does not
+  move, and you bob up toward the reticle and back.
+- **A rate limit in time, and an asymmetric one** — quick to take hold on the way up, slower to
+  let go on the way down. Terminal velocity is eighteen metres a second, so the last few metres
+  of a long fall arrive in a handful of frames, and a framing that tracked height exactly would
+  snap the view through its whole travel in them. Set the two rates equal and the asymmetry is
+  off.
+
+**This makes the framing simulation state**, which is a real cost and worth naming. It has
+memory — it may only move so far a frame — and the eye is where the aiming ray starts, so it
+lives in the rollback snapshot (`state::Player::aloft`) and is folded into the desync checksum
+along with the camera's knobs. A camera with memory that was not in the snapshot would come back
+from a rollback framing the fight differently than the first pass did, which is the same bug the
+knobs were pulled into the checksum for.
+
 **The shape is the design; the numbers are knobs.** Every boundary angle, both radii, every
-percentage and every easing is in the Oven under **Camera**.
+percentage and every easing is in the Oven under **Camera**, the airborne framing's six
+included.
 
 **A note on the percentages.** They are written against the framing's own field of view, not the
 player's. Set the two to the same number and the fractions are literally what you see; leave them

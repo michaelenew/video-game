@@ -186,6 +186,7 @@ fn draw_one(rig: &mut CameraRig, prev: &World, cur: &World, n: u32) {
         Surroundings {
             beast: cur.monster.as_ref(),
             aboard: cur.players[0].aboard(),
+            aloft: frame.players[0].aloft,
         },
     );
     std::hint::black_box(framing);
