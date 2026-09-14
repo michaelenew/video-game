@@ -526,11 +526,195 @@ fn hindrance_is_proportional_to_commitment() {
             committed.name
         );
         assert!(
-            committed.roots(),
-            "{class:?}: '{}' is a committed move that lets you keep walking",
+            committed.mobility as i32 * 100 <= poke.mobility as i32 * COMMITTED_SHARE_OF_A_POKE,
+            "{class:?}: '{}' hinders you barely more than the poke '{}' does ({}% against {}%)",
+            committed.name,
+            poke.name,
+            committed.mobility,
+            poke.mobility
+        );
+    }
+}
+
+/// How much of a poke's mobility a committed move is allowed to keep, as a
+/// percentage. Half: the two have to be *obviously* different to throw, or the
+/// frame data is saying one thing and the feet another.
+const COMMITTED_SHARE_OF_A_POKE: i32 = 50;
+
+#[test]
+fn a_committed_move_is_a_crawl_and_never_a_stop() {
+    // The other half of `a_poke_is_a_slow_not_a_stop_and_not_free`, and the same
+    // two failure modes one rung down.
+    //
+    // Zero is the one the design gave up on 2026-09-14: a character who ignores
+    // the stick reads as the game taking the controls away, and a forty-frame
+    // heavy is the worst place in the game to do that. What commitment means is
+    // pinned by `a_committed_move_takes_the_jump_and_the_dodge_away` below --
+    // that is where the spatial cost actually lives, and it is untouched.
+    //
+    // The ceiling is the other failure: a committed move you can walk out of at
+    // guard speed has stopped costing you the ground, and spacing is most of
+    // neutral.
+    for class in ALL_CLASSES {
+        let committed = moves::get(class, SLOT_COMMITTED);
+        let speed = t::move_speed().mul(Fx::ratio(committed.mobility as i32, 100));
+        assert!(
+            committed.mobility > 0,
+            "{class:?}: '{}' roots you outright",
+            committed.name
+        );
+        assert!(
+            speed.raw() < t::guard_move_speed().raw(),
+            "{class:?}: '{}' leaves you faster than guarding does, so committing to it \
+             costs you no ground",
             committed.name
         );
     }
+}
+
+/// Aim angle for a fighter looking the way they spawn. Movement and attacks are
+/// camera-relative, so a fixture that does not say where it is looking is not
+/// saying what its buttons mean.
+const LOOKING: u16 = 0;
+
+/// Where player one is, and what they are doing, four frames into a move thrown
+/// with `throw` while holding `then`.
+fn four_frames_into(class: sim::class::Class, throw: u16, then: u16) -> (u32, i32, i32) {
+    use sim::{Input, World};
+    let mut w = World::with_classes([class, class]);
+    w.advance([Input::aimed(throw, LOOKING), Input::default()]);
+    assert!(
+        w.players[0].action.attack_kind().is_some(),
+        "{}: the fixture threw nothing",
+        class.name()
+    );
+    for _ in 0..4 {
+        w.advance([Input::aimed(then, LOOKING), Input::default()]);
+    }
+    let p = &w.players[0];
+    (p.action.tag(), p.pos.y.raw(), p.vel.y.raw())
+}
+
+#[test]
+fn no_attack_lets_you_jump_or_dodge_out_of_it() {
+    // **What commitment means, now that nothing roots.** The spatial cost of a
+    // move is not that you stand still -- it is that for its whole length the
+    // only thing you can do is finish it. If jump or dodge leaked out of one,
+    // the crawl above would be all that was left of the commitment, and the
+    // crawl is a feel decision rather than a cost.
+    //
+    // Measured against the same move with no second press rather than against
+    // an absolute, because a move with `self_lift` takes you off the ground on
+    // its own and an assertion that you are still standing would read that as a
+    // jump.
+    //
+    // Both attack buttons, because shift plus left click is the committed move
+    // on four of the six and the Champion and the Dual mage spend the modifier
+    // differently -- whatever comes out is still an attack, which is the claim.
+    use sim::Input;
+    for class in ALL_CLASSES {
+        for throw in [Input::LEFT, Input::SHIFT | Input::LEFT] {
+            let quiet = four_frames_into(class, throw, 0);
+            assert_eq!(
+                four_frames_into(class, throw, Input::SPACE),
+                quiet,
+                "{}: jumped out of an attack",
+                class.name()
+            );
+            assert_eq!(
+                four_frames_into(class, throw, Input::SHIFT | Input::W),
+                quiet,
+                "{}: dodged out of an attack",
+                class.name()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_move_never_snaps_you_to_its_speed() {
+    // The half of the 2026-09-14 change that does the work, and the half that
+    // is easiest to lose: **the hindered speed is arrived at, not assigned.**
+    //
+    // Setting it outright is a one-frame drop of 5.6 m/s into a committed
+    // move's crawl, which is the same lurch the old dead stop was with a
+    // different number at the bottom of it. Both were reported as jarring and
+    // both are this assertion. A regression here would not fail any other test
+    // in the file: the speeds either side of the ramp would still be right.
+    use sim::{Input, World};
+    for class in ALL_CLASSES {
+        let mut w = World::with_classes([class, class]);
+        // Up to a full walk first: there is nothing to ramp down from
+        // otherwise.
+        for _ in 0..30 {
+            w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
+        }
+        let walking = flat_speed(&w);
+
+        // Throw the heaviest thing left click will give this class, and keep
+        // holding the direction. Which move that is differs -- shift plus left
+        // is the committed move on four of the six, and the Champion's left
+        // click is the sword whatever the modifier says -- so the speed to ramp
+        // to is read off whatever actually came out rather than assumed.
+        let held = Input::SHIFT | Input::LEFT | Input::W;
+        w.advance([Input::aimed(held, LOOKING), Input::default()]);
+        let kind = w.players[0]
+            .action
+            .attack_kind()
+            .unwrap_or_else(|| panic!("{}: the fixture threw nothing", class.name()));
+        let m = moves::get(class, kind);
+        let target = t::move_speed().mul(Fx::ratio(m.mobility as i32, 100)).raw();
+        assert!(
+            target < walking,
+            "{}: '{}' does not hinder you at all, so there is no ramp to test",
+            class.name(),
+            m.name
+        );
+
+        let first = flat_speed(&w);
+        assert!(
+            first > target,
+            "{}: '{}' snapped you straight to {} on its first frame",
+            class.name(),
+            m.name,
+            target
+        );
+
+        // And it gets there, rather than gliding for the length of the move.
+        let mut speed = first;
+        for _ in 0..8 {
+            w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
+            let next = flat_speed(&w);
+            assert!(
+                next <= speed,
+                "{}: the ramp into '{}' went back up",
+                class.name(),
+                m.name
+            );
+            speed = next;
+        }
+        assert!(
+            (speed - target).abs() <= SETTLED,
+            "{}: eight frames into '{}' and still not down to its own speed \
+             ({speed} against {target})",
+            class.name(),
+            m.name
+        );
+    }
+}
+
+/// How close to a move's own speed counts as having arrived, in raw 16.16 bits.
+///
+/// Not a tolerance on the design: the ramp lands exactly on the floor, and then
+/// the floor is multiplied by a *unit* direction whose components were rounded
+/// to fixed point, which is worth a raw unit or two either way. Sixteen of them
+/// is four ten-thousandths of a metre per second.
+const SETTLED: i32 = 16;
+
+/// Player one's horizontal speed, in raw fixed point.
+fn flat_speed(w: &sim::World) -> i32 {
+    let v = w.players[0].vel;
+    sim::math::V3::new(v.x, Fx::ZERO, v.z).flat_len().raw()
 }
 
 #[test]

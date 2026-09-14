@@ -2117,10 +2117,21 @@ fn step_player(
     // Horizontal movement.
     //
     // How much a move hinders you is proportional to how much it commits you.
-    // The heavy moves root you outright -- that is what commitment means, and
-    // it is the whole basis of spatial play here. A fast poke does not: it is
-    // the neutral tool, thrown constantly, and stopping dead every time made
-    // neutral sticky and read as the game taking the controls away.
+    // A fast poke slows you; a committed move slows you to a crawl, slower than
+    // guarding, which is the most your feet ever cost you.
+    //
+    // **Nothing stops you dead.** The committed moves used to, and it was the
+    // same complaint the poke drew before it: a character who ignores the stick
+    // reads as the game taking the controls away, and a heavy move is the worst
+    // place to do that because it is where you are looking at your own feet. It
+    // costs no spacing to give the frames back -- a crawl over a forty-frame
+    // slam is under a metre -- and what commitment actually means survives
+    // untouched, because it was never the standing still. It is that you cannot
+    // jump, dodge, guard or throw anything else until the move is done, and that
+    // is decided by `Action::actionable`, not by this number.
+    //
+    // Zero is still reachable from the palette and still roots, so this keeps
+    // filtering it out rather than dividing the two cases twice.
     let attack_speed = p
         .action
         .attack_kind()
@@ -2182,16 +2193,34 @@ fn step_player(
         let dir = move_dir(p.aim(input), ax, az);
         p.vel.x = dir.x.mul(dragged(p, t::guard_move_speed()));
         p.vel.z = dir.z.mul(dragged(p, t::guard_move_speed()));
-    } else if let (Some(speed), true) = (attack_speed, steering) {
+    } else if let (Some(allowed), true) = (attack_speed, steering) {
+        // Hindered, and steering. **The hindered speed is arrived at, not
+        // assigned.** Setting it outright would drop a running fighter from a
+        // full walk to a crawl in one frame, which is the same lurch the dead
+        // stop was -- the snap and the stopping were always two complaints
+        // wearing one coat, and only one of them is design.
+        //
+        // Direction follows the stick from the first frame and only the
+        // magnitude bleeds, which is what keeps it feeling responsive: you are
+        // steering immediately, you are just not going anywhere fast yet.
         let dir = move_dir(p.aim(input), ax, az);
-        p.vel.x = dir.x.mul(dragged(p, speed));
-        p.vel.z = dir.z.mul(dragged(p, speed));
+        let floor = dragged(p, allowed);
+        let carried = V3::new(p.vel.x, Fx::ZERO, p.vel.z)
+            .flat_len()
+            .mul(t::hindrance_decay());
+        let speed = if carried.raw() > floor.raw() {
+            carried
+        } else {
+            floor
+        };
+        p.vel.x = dir.x.mul(speed);
+        p.vel.z = dir.z.mul(speed);
     } else if p.action.attack_kind().is_some() {
-        // Rooted, or steering nothing. Bleed the speed off over a few frames
-        // rather than snapping to a halt: the snap was the jarring part, not
-        // the rooting.
-        p.vel.x = p.vel.x.mul(t::attack_root_decay());
-        p.vel.z = p.vel.z.mul(t::attack_root_decay());
+        // Steering nothing -- or rooted, if somebody has tuned a move's
+        // mobility to zero. The same ramp with the floor at zero: bleed the
+        // speed off over a few frames rather than snapping to a halt.
+        p.vel.x = p.vel.x.mul(t::hindrance_decay());
+        p.vel.z = p.vel.z.mul(t::hindrance_decay());
     } else {
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;

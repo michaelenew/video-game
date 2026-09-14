@@ -217,21 +217,33 @@ A move takes your feet away in proportion to how much it commits you.
 | Throwing a poke | 4.2 |
 | Crouching | 3.0 |
 | Guarding | 2.0 |
-| Committed move | 0 — rooted |
+| Committed move | 1.4 — a crawl |
 
-Rooting is what commitment *means*, and it is right for the heavy moves: spacing only matters
-if choosing to swing costs you the ability to reposition. It is wrong for a fast poke. The
-poke is the neutral tool, thrown constantly, and stopping dead for every one makes neutral
-sticky and reads as the game taking the controls away. Slowing you keeps the cost — you
-cannot close or escape at full speed while swinging — without the lurch.
+**Nothing roots you.** ⚠️ **Changed 2026-09-14.** The committed moves used to sit at zero, and
+rooting was taken to be what commitment *meant*. It is not, and the giveaway is that the
+complaint it drew was word for word the one the poke drew three days earlier: a character who
+ignores the stick reads as the game taking the controls away. That is true of a heavy move
+more than of a poke, not less — a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to hold you *still*.
 
-Even where rooting is correct, arriving at rooted takes about four frames rather than one.
-The snap from a full walk to nothing was the jarring part, not the rooting. The distance slid
-while bleeding off is about twenty centimetres: nothing for spacing, everything for how it
-reads.
+What commitment means is the other half of it, and that half is untouched: **for the whole of
+a move you cannot jump, dodge, guard, or throw anything else.** You have the stick and nothing
+else, and the stick is worth 1.4 metres a second. Over the longest heavy in the game that is
+under a metre of ground — less than the move's own reach, and less than a single dodge — so
+the spacing game the rooting was there to protect never depended on it. Slower than guarding,
+which is the slowest thing you can otherwise choose to do, so a committed move is still the
+most your feet ever cost you.
 
-`cargo run -p sim --bin frametable` prints these alongside the frame data, and marks which
-moves root you.
+**Arriving at the hindered speed takes about four frames, not one.** This is the older half of
+the same lesson and it applies at every rung of the table: the snap from a full walk to the
+new speed is a separate complaint from the speed itself, and dropping straight to a crawl
+would have put the lurch back with a different number underneath it. Direction follows the
+stick immediately and only the magnitude bleeds, so you are steering from the first frame —
+you are just not going anywhere fast yet. Let the stick go mid-move and the same ramp takes
+you to a stop.
+
+`cargo run -p sim --bin frametable` prints these alongside the frame data, and gives every
+move its own walking speed in metres.
 
 ### Abilities land where the crosshair is
 

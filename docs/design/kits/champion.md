@@ -58,7 +58,7 @@ actually carries it — **their own shapes**. See [Hitboxes](#hitboxes).
 | | Reach | Startup | Recovery | Damage | On hit | Character |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Sword** | 2.0 m | 7f | 11f | most | +0 | The combo tool. Small knockback, small hitstun, and you can walk while you swing it. |
-| **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the combo *starter*. Big knockback, long stagger, roots you. |
+| **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the combo *starter*. Big knockback, long stagger, and it slows you to a crawl. |
 | **Spear** | 3.4 m | 10f | 14f | middling | +0 | The spacing tool. Longest reach in the game, thin, and it goes over a crouching opponent. |
 
 The hammer doing the least damage is deliberate and it is what "heavy" means here: it buys
