@@ -312,7 +312,7 @@ It dims while you are committed to something and the button will not answer.
 
 ### Settings
 
-Three numbers are adjustable mid-match. They show above the control legend and are written
+Three numbers are adjustable mid-match. They are written
 to `~/.config/arena/settings.conf` immediately. `ARENA_SETTINGS` overrides the path, which is
 how two people on one machine keep separate settings without a profile system.
 

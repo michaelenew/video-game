@@ -1,9 +1,9 @@
 //! Everything you can type, in one place.
 //!
 //! This is the **single source of truth** for controls, flags and environment
-//! variables — not a document *about* them. The in-game legend is generated
-//! from the same tables, and a test checks that every key the game actually
-//! handles appears here. A help text maintained separately from the thing it
+//! variables — not a document *about* them. A test checks that every key the
+//! game actually handles appears here, and the browser build's controls panel
+//! is generated from the same tables. A help text maintained separately from the thing it
 //! describes is wrong within a month, and wrong help is worse than none: it
 //! sends you looking for a feature that moved.
 //!
@@ -16,8 +16,6 @@ pub struct Entry {
     pub invocation: &'static str,
     /// What it does, in one line.
     pub what: &'static str,
-    /// The compact form for the on-screen legend, where it earns a place.
-    pub short: Option<&'static str>,
 }
 
 pub struct Section {
@@ -36,19 +34,7 @@ pub struct Section {
 }
 
 const fn e(invocation: &'static str, what: &'static str) -> Entry {
-    Entry {
-        invocation,
-        what,
-        short: None,
-    }
-}
-
-const fn s(invocation: &'static str, what: &'static str, short: &'static str) -> Entry {
-    Entry {
-        invocation,
-        what,
-        short: Some(short),
-    }
+    Entry { invocation, what }
 }
 
 pub const SECTIONS: &[Section] = &[
@@ -128,65 +114,41 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "Camera-relative: W is away from the camera, not along a world axis.",
         entries: &[
-            s(
-                "Mouse",
-                "Aim. Where you look is where you are pointed.",
-                "Mouse aims",
-            ),
-            s(
-                "Click / Esc",
-                "Capture the mouse, and release it.",
-                "click to capture, Esc to release",
-            ),
-            s(
-                "W A S D",
-                "Move, relative to the camera.",
-                "WASD move (camera-relative)",
-            ),
-            s(
+            e("Mouse", "Aim. Where you look is where you are pointed."),
+            e("Click / Esc", "Capture the mouse, and release it."),
+            e("W A S D", "Move, relative to the camera."),
+            e(
                 "Space",
                 "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial.",
-                "Space jump (hold = higher)",
             ),
-            s(
+            e(
                 "Shift + direction",
                 "Dodge. Airborne, an airdodge — once per jump.",
-                "Shift+dir dodge",
             ),
-            s(
-                "Ctrl or C",
-                "Crouch. Ducks overheads, costs you speed.",
-                "Ctrl crouch",
-            ),
-            s(
+            e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
+            e(
                 "J or left click",
                 "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword, and held down it walks that weapon's whole three-hit string.",
-                "J poke",
             ),
-            s(
+            e(
                 "Shift + J",
                 "The committed attack. Slower, hurts, and slows you to a crawl -- you keep the stick, you lose the jump and the dodge until it is over.",
-                "Shift+J committed",
             ),
-            s(
+            e(
                 "K or right click",
                 "Guard. The first few frames parry. Three classes spend it instead, none of them having a shield to raise: the Champion's spear, the Dual mage's light auto, and the Shadow Reaver's shadow -- hers is the one the crosshair aims, so it goes on the hand doing the aiming.",
-                "K guard",
             ),
-            s(
+            e(
                 "U or middle click",
                 "The third attack button. Only the Champion has one: it is the hammer.",
-                "U third attack",
             ),
-            s(
+            e(
                 "Q",
                 "The class special. The fire pillar, the grapple — the move only that class has. The Champion has none: its three weapons are its three clicks.",
-                "Q special",
             ),
-            s(
+            e(
                 "E",
                 "The class mechanic. Different on every class: throw the shield, Rush, raise a structure. Three classes put a real ability here instead, with a wind-up you can be punished during — and on the Shadow Reaver it is not even the mechanic, because hers went to right click.",
-                "E mechanic",
             ),
         ],
     },
@@ -195,20 +157,17 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move.",
         entries: &[
-            s(
+            e(
                 "Left click",
                 "Sword. Arc across the front. Fast, wide, least commitment — the move you string with.",
-                "LMB sword",
             ),
-            s(
+            e(
                 "Middle click (or U)",
                 "Hammer. Arc down to the floor. Slow, short, and it staggers — the move you start with.",
-                "MMB hammer",
             ),
-            s(
+            e(
                 "Right click",
                 "Spear. A line straight ahead. Longest reach, and it goes over anyone crouching.",
-                "RMB spear",
             ),
             e(
                 "Keep swinging",
@@ -226,10 +185,9 @@ pub const SECTIONS: &[Section] = &[
                 "In the air",
                 "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
             ),
-            s(
+            e(
                 "E",
                 "Rush. A dash on one charge, and it cancels any recovery. It does not end a string — one charge buys you a reposition in the middle of one.",
-                "E rush",
             ),
             e(
                 "While rushing",
@@ -242,30 +200,25 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "Two forces, one in each arm, and a bar between them. Which button you attack with is which way you drift, and depth is power -- but past a threshold it burns you.",
         entries: &[
-            s(
+            e(
                 "Left click",
                 "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. Moves you five darker, and makes you dark.",
-                "LMB dark auto",
             ),
-            s(
+            e(
                 "Right click",
                 "Light auto. The same punch and wing mirrored onto the right arm. Moves you five lighter, and makes you light. There is no guard on this class.",
-                "RMB light auto",
             ),
-            s(
+            e(
                 "Shift + left click",
                 "Lance. A line at whatever the crosshair is on. Committed, and it moves you darker whether or not it connects.",
-                "Shift+LMB lance",
             ),
-            s(
+            e(
                 "E",
                 "Sweep. Both arms across the whole front. No side of its own, so it pushes you further along whichever way you were already going.",
-                "E sweep",
             ),
-            s(
+            e(
                 "Q",
                 "Judgement. The finisher: a delayed strike where the crosshair is.",
-                "Q judgement",
             ),
             e(
                 "The tip",
@@ -294,20 +247,17 @@ pub const SECTIONS: &[Section] = &[
                 "The shadow copies you",
                 "Whatever you swing, it swings a few frames later for a quarter of the damage. Held at your shoulder that is a quarter again on everything; sent out, it is a second threat somewhere you are not.",
             ),
-            s(
+            e(
                 "Right click",
                 "Send the shadow where you are pointing, fast, and it stops there. Press again and it dashes home through anything in the way, cutting and slowing it — and taking an open Guillotine lotus with it. It answers whatever else you are doing: pressed during the tail of another move it cuts that tail short, and pressed a few frames early it is remembered rather than dropped.",
-                "RMB send shadow",
             ),
-            s(
+            e(
                 "Q",
                 "Guillotine lotus. Six blades erupt from the shadow, hang open, and chase it home — so recalling the shadow with right click drags them the length of the arena.",
-                "Q lotus",
             ),
-            s(
+            e(
                 "E",
                 "Executioner, the committed melee. Shift + left click throws the same move. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim.",
-                "E executioner",
             ),
             e(
                 "Shift + forward",
@@ -328,10 +278,9 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",
         entries: &[
-            s(
+            e(
                 "H",
                 "Hunt the Ridgeback, or go back to fighting each other. Restarts the match either way.",
-                "H hunt",
             ),
             e(
                 "Land on it",
@@ -373,26 +322,21 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "What the other fighter does while you work on something.",
         entries: &[
-            s("1", "Dummy stands still.", "1-4 dummy"),
+            e("1", "Dummy stands still."),
             e("2", "Dummy blocks."),
             e(
                 "3",
                 "Dummy attacks on a cadence, so the parry window is practisable.",
             ),
             e("4", "Dummy is a second player on the keys above."),
-            s(
-                "Tab",
-                "Cycle player one's class. Restarts the match.",
-                "Tab class",
-            ),
-            s(
+            e("Tab", "Cycle player one's class. Restarts the match."),
+            e(
                 "F8",
-                "Show or hide the class pickers beside each health bar. On under --dev. Clicking one cycles that player's class, and it needs a free cursor -- which is what the Oven gives you.",
-                "F8 class pickers",
+                "Hide or show the class pickers beside each health bar. On by default. Clicking one cycles that player's class, and it needs a free cursor -- press Esc, or open the Oven.",
             ),
-            s("R", "Reset the match.", "R reset"),
-            s("P", "Pause.", "P pause"),
-            s("]", "Step one frame. Pauses if it was running.", "] step"),
+            e("R", "Reset the match."),
+            e("P", "Pause."),
+            e("]", "Step one frame. Pauses if it was running."),
         ],
     },
     Section {
@@ -400,25 +344,18 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "The tools for working out why something happened.",
         entries: &[
-            s(
+            e(
                 "F1",
                 "Debug overlay: hitbox and hurtbox wireframes, guard arcs, facing.",
-                "F1 debug",
             ),
-            s(
+            e(
                 "F2",
                 "Freeze the skeleton at rest. Tells a bad clip from a bad rig.",
-                "F2 bind pose",
             ),
-            s(
-                "F7",
-                "The Oven: every tuned number in the game, live.",
-                "F7 oven",
-            ),
-            s(
+            e("F7", "The Oven: every tuned number in the game, live."),
+            e(
                 "F9",
                 "The animation hub: every clip, editable while it runs.",
-                "F9 animation",
             ),
         ],
     },
@@ -427,16 +364,11 @@ pub const SECTIONS: &[Section] = &[
         in_browser: true,
         blurb: "Saved to ~/.config/arena/settings.conf as you change them.",
         entries: &[
-            s(
-                "- and =",
-                "Mouse sensitivity, in multiplicative notches.",
-                "- / = mouse",
-            ),
-            s("F3 and F4", "Field of view, 2 degrees a step.", "F3 F4 fov"),
-            s(
+            e("- and =", "Mouse sensitivity, in multiplicative notches."),
+            e("F3 and F4", "Field of view, 2 degrees a step."),
+            e(
                 "F5 and F6",
                 "Camera distance -- how big the fighter draws, 0.4 m a step.",
-                "F5 F6 camera distance",
             ),
         ],
     },
@@ -679,8 +611,8 @@ pub fn render() -> String {
 
 /// The controls panel for the browser build, as HTML.
 ///
-/// The third rendering of the same tables, after the manual text and the
-/// on-screen legend, and it exists for the same reason they do: the page a link
+/// The second rendering of the same tables, after the manual text, and it
+/// exists for the same reason that one does: the page a link
 /// leads to is the first thing a person who has never seen this game reads, and
 /// a hand-written copy of the controls on that page would be wrong by the next
 /// time a key moves. There is nowhere for it to disagree.
@@ -719,35 +651,6 @@ fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
-}
-
-/// The compact on-screen legend, built from the same tables.
-///
-/// One group per section that has short forms, which is what stops the legend
-/// and the manual from drifting apart: there is nowhere for them to disagree.
-/// Wrapped at a readable width rather than one line per section — the fighting
-/// controls alone are eleven entries and ran off the screen.
-pub fn legend() -> String {
-    const WIDTH: usize = 62;
-    let mut lines: Vec<String> = Vec::new();
-    for section in SECTIONS {
-        let mut line = String::new();
-        for short in section.entries.iter().filter_map(|e| e.short) {
-            if line.is_empty() {
-                line = short.to_string();
-            } else if line.len() + 3 + short.len() <= WIDTH {
-                line.push_str(" / ");
-                line.push_str(short);
-            } else {
-                lines.push(std::mem::take(&mut line));
-                line = short.to_string();
-            }
-        }
-        if !line.is_empty() {
-            lines.push(line);
-        }
-    }
-    lines.join("\n")
 }
 
 #[cfg(test)]

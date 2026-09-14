@@ -163,7 +163,8 @@ crates/web    The browser: the playable page, and the frame-data tool.
 arguments pass through, so `./scripts/dev.sh --p1 champion` works.
 
 **What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,
-key, flag and environment variable, generated from the same tables the in-game legend reads.
+key, flag and environment variable, and the browser build's controls panel is generated from
+the same tables.
 
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
 overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4. Click to capture the mouse, Escape
