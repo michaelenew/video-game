@@ -121,6 +121,25 @@ pub struct Move {
     /// to what the move itself deals and to what anything it leaves behind
     /// drains -- one number per ability, wherever the damage happens to land.
     pub leech: u8,
+    /// This move's share of the shared repeat lockout, as a percentage.
+    ///
+    /// 100 on everything until somebody plays it and finds otherwise, which is
+    /// the point of it being a column rather than a constant: the shared number
+    /// is the rule and this is where a move argues with it. Zero exempts a move
+    /// from the rule outright.
+    ///
+    /// The frames themselves are [`Move::repeat_lock`]; this is only the
+    /// multiplier, because the number it multiplies is tuned in one place for
+    /// the whole roster.
+    pub repeat_mul: u8,
+    /// The shortest gap between one activation of this ability and the next,
+    /// for the ones that are used more than once per cast.
+    ///
+    /// Zero on everything, including the two that have a second activation:
+    /// today neither of them is gated and the number is here to be found by
+    /// playing rather than guessed at a desk. Meaningless on a move whose own
+    /// button does not reactivate it -- see [`reactivates`].
+    pub reactivate: u16,
     /// The volume this move puts in the world. See [`Shape`].
     pub shape: Shape,
     /// Which arm it comes out of. See [`crate::aim::Hand`].
@@ -257,6 +276,29 @@ impl Move {
     /// Total commitment if it whiffs entirely.
     pub const fn whiff_cost(&self) -> u16 {
         self.startup + self.active + self.recovery
+    }
+
+    /// How long after throwing this move you may not throw *it* again.
+    ///
+    /// The shared number from [`tuning::repeat_lockout`] scaled by this move's
+    /// own [`repeat_mul`]. See that function for why this is not a cooldown.
+    ///
+    /// [`tuning::repeat_lockout`]: crate::tuning::repeat_lockout
+    /// [`repeat_mul`]: Move::repeat_mul
+    pub fn repeat_lock(&self) -> u16 {
+        (crate::tuning::repeat_lockout() as u32 * self.repeat_mul as u32 / 100).min(u16::MAX as u32)
+            as u16
+    }
+
+    /// Frames the lockout keeps you waiting *beyond* the move itself.
+    ///
+    /// The number that says whether the rule touches this move at all. A move
+    /// that commits you for longer than its own lockout comes out of recovery
+    /// with the lockout already expired, so this is zero and the rule is
+    /// invisible on it -- which is every committed heavy in the game. What is
+    /// left is the autos and the fast pokes, which is the set the rule is for.
+    pub fn repeat_idle(&self) -> u16 {
+        self.repeat_lock().saturating_sub(self.whiff_cost())
     }
 
     /// Whether the move pins you in place for its duration.
@@ -608,6 +650,25 @@ pub const TOTAL_SLOTS: usize = {
     n
 };
 
+/// The most slots any one class has -- the Champion's ten.
+///
+/// Counted rather than written down, for the same reason [`TOTAL_SLOTS`] is: a
+/// literal is a second statement of the same fact, and the two disagree the
+/// first time somebody gives a class another move. It is the width of the
+/// per-move storage a *fighter* carries, which today is the repeat lockout.
+pub const MAX_SLOTS: usize = {
+    let mut n = 0;
+    let mut i = 0;
+    while i < crate::class::ALL_CLASSES.len() {
+        let s = slots(crate::class::ALL_CLASSES[i]);
+        if s > n {
+            n = s;
+        }
+        i += 1;
+    }
+    n
+};
+
 /// Where a class's slots begin in that store.
 pub const fn base_slot(class: Class) -> usize {
     let mut n = 0;
@@ -751,6 +812,61 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
     }
 }
 
+/// Does this ability stay **out in the world** after the cast, so that its
+/// repeat lockout has to wait for it?
+///
+/// Two abilities do, and both are the Reaver's: the shadow stands where it was
+/// sent until it is called back, and the lotus hangs its blades until a recall
+/// drags them home. An ability is not *used* until it is spent, so their
+/// lockouts are parked at full for as long as any of it is still out there --
+/// otherwise leaving the shadow parked in a corner would quietly serve the
+/// lockout for the next send while it waited.
+///
+/// **Declared here, and what it declares is the question rather than the
+/// answer.** Whether the thing is still out is a fact about the world and lives
+/// in `state::Player::abilities_out`, which is the only place that knows how to
+/// look -- the shadow is the class mechanic and the blades are an entry in the
+/// effect table, and nothing but that function knows both. This says which
+/// slots it is worth asking about, which is what lets the frame table say
+/// "waits until it is home" where it would otherwise print a frame count that
+/// is only true for an ability that finishes when its recovery does.
+///
+/// An ability that lingers but has no answer in `abilities_out` simply gets the
+/// ordinary rule, which is the safe direction to be wrong in: its lockout
+/// starts at the cast rather than never starting at all.
+pub const fn lingers(class: Class, kind: u8) -> bool {
+    matches!(class, Class::ShadowReaver)
+        && matches!(
+            kind,
+            crate::state::SLOT_MECHANIC | crate::state::SLOT_SPECIAL
+        )
+}
+
+/// Does this slot's own button, pressed again, **reactivate** what the first
+/// press put out there -- rather than throwing a second copy of it?
+///
+/// **Declared, not inferred**, the same way [`shape`] and [`hand`] are, and for
+/// a sharper reason than either: the repeat lockout reads this to decide
+/// whether a press is a new use of the ability or the rest of the one already
+/// paid for, and getting that backwards either eats the recall or makes the
+/// ability free to spam. Inferring it from "does this class leave something in
+/// the world" answers yes for the fire pillar and the black spike, neither of
+/// which can be pressed again at all.
+///
+/// One move in the game says yes. **Send shadow** is one button with two
+/// meanings decided by where the second body is -- out, or home -- so the press
+/// that brings it back is the second half of the send rather than another send.
+///
+/// The **Guillotine lotus** is the near miss that shows why this is a question
+/// about the *button* and not about the ability. It has a second activation --
+/// recalling the shadow drags the hanging blades home, which is the combination
+/// the whole kit is built around -- but that activation is on *right click*,
+/// not on the lotus's own key. Pressing `Q` again would be a fresh lotus while
+/// the first one is still hanging, so its answer is no.
+pub const fn reactivates(class: Class, kind: u8) -> bool {
+    matches!(class, Class::ShadowReaver) && kind == crate::state::SLOT_MECHANIC
+}
+
 /// Does this class use this slot at all?
 ///
 /// Storage is **packed** to each class's own count, so this is now simply
@@ -800,6 +916,8 @@ pub fn get(class: Class, kind: u8) -> Move {
         rehit: raw(F::Rehit) as u16,
         channel: raw(F::Channel) as u16,
         channel_from: Fx::from_raw(raw(F::ChannelFrom)),
+        repeat_mul: raw(F::RepeatMul).clamp(0, 255) as u8,
+        reactivate: raw(F::Reactivate).max(0) as u16,
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
     }

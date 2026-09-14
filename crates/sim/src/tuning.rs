@@ -119,6 +119,28 @@ pub fn parry_window() -> u16 {
     oven::scalar(Scalar::ParryWindow) as u16
 }
 
+/// How long a move you just threw is unavailable to you.
+///
+/// **This is not a cooldown, and the difference is the whole of why it is
+/// allowed to exist** -- see `docs/design/combat-kernel.md`. A cooldown asks
+/// *did I have it available*, which it can ask because it takes a move away
+/// from you while you are doing something else. This only ever locks the move
+/// you have just this moment thrown, so the answer is always "yes, everything
+/// else in the kit": it does not gate access, it charges for *repetition*.
+///
+/// Thirty frames is half a second, and it is measured from the frame the move
+/// comes out rather than from the end of its recovery. That is what keeps it
+/// honest: it can only ever spend frames you would otherwise have had free, so
+/// a move that already commits you for longer than this never notices it at
+/// all. Every committed heavy in the game is in that group, and every auto and
+/// fast poke is not -- which is exactly the set the rule is aimed at. The
+/// relationship is pinned by `feel::the_lockout_only_taxes_the_cheap_moves`.
+///
+/// A guess, and flagged as one: 30 is the first number, not a measured one.
+pub fn repeat_lockout() -> u16 {
+    oven::scalar(Scalar::RepeatLockout) as u16
+}
+
 /// What a successful parry costs the attacker. Must be long enough that the
 /// punish is worth the risk of trying to parry at all.
 pub fn parry_stagger() -> u16 {

@@ -61,12 +61,34 @@ fn main() {
             );
         }
         println!(
-            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} notes",
-            "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "aimed"
+            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}{:>6}  {:<10} notes",
+            "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "lock", "aimed"
         );
         for (slot, m) in (0..moves::slots(class)).map(|slot| (slot, moves::get(class, slot as u8)))
         {
             let mut notes = Vec::new();
+            // What repeating it actually costs. The lockout column on its own
+            // does not say: it is measured from the frame the move comes out,
+            // so on anything that commits you for longer than it lasts the
+            // answer is "nothing", and the only moves it charges are the ones
+            // cheap enough to have frames left over.
+            //
+            // Worked out above the branch below rather than inside it, because
+            // the two moves with the most to say here -- Send shadow and the
+            // Guillotine, the two that are used twice -- are both moves that
+            // place something and take the other path out.
+            let repeat = if moves::reactivates(class, slot as u8) {
+                format!(
+                    "press again to bring it back; then {}f before another",
+                    m.repeat_lock()
+                )
+            } else if moves::lingers(class, slot as u8) {
+                format!("{}f after the last of it comes home", m.repeat_lock())
+            } else if m.repeat_idle() > 0 {
+                format!("+{}f to throw again", m.repeat_idle())
+            } else {
+                String::new()
+            };
             // A move with no volume of its own has no frame advantage worth
             // printing: those columns are all about what connecting is worth,
             // and this one never connects. Two kinds -- the ones that put
@@ -96,13 +118,18 @@ fn main() {
                 } else {
                     String::new()
                 };
-                let what = if m.shape.strikes() {
+                let base = if m.shape.strikes() {
                     format!("places something; the thing it placed hits{ignored}{wound}")
                 } else {
                     format!("movement, no hitbox{ignored}{wound}")
                 };
+                let what = if repeat.is_empty() {
+                    base
+                } else {
+                    format!("{base}; {repeat}")
+                };
                 println!(
-                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} {what}",
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}{:>6}  {:<10} {what}",
                     moves::binding(class, slot),
                     m.name,
                     m.startup,
@@ -111,6 +138,10 @@ fn main() {
                     "--",
                     "--",
                     "--",
+                    // The lockout is real on these even though the advantage
+                    // columns are not: a move that places something is still a
+                    // move you can lean on the button for.
+                    m.repeat_lock(),
                     // Still printed, and it matters more here than anywhere:
                     // the whole question about a move that places something is
                     // *where*, and this column is the answer.
@@ -155,8 +186,11 @@ fn main() {
             } else {
                 format!("{:+}", m.on_hit())
             };
+            if !repeat.is_empty() {
+                notes.push(&repeat);
+            }
             println!(
-                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}  {:<10} {}",
+                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}{:>6}  {:<10} {}",
                 moves::binding(class, slot),
                 m.name,
                 m.startup,
@@ -165,6 +199,7 @@ fn main() {
                 m.damage,
                 m.on_block(),
                 on_hit,
+                m.repeat_lock(),
                 // Which line of effect it uses, so "where does this actually
                 // go" is answerable from the table rather than from the source.
                 m.aim().name(),
@@ -176,7 +211,10 @@ fn main() {
 
     println!(
         "On block is the safety number: negative means punishable, and every move\n\
-         should be. Record what you change in docs/design/feel-log.md."
+         should be. Lock is the repeat lockout: how long after throwing a move you\n\
+         may not throw *that* move again, counted from the frame it comes out. The\n\
+         rest of the kit is never locked, so it charges for repeating yourself and\n\
+         not for attacking. Record what you change in docs/design/feel-log.md."
     );
 }
 
