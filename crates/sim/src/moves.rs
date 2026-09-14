@@ -371,9 +371,10 @@ impl Move {
 /// Three is the shared vocabulary. The Blood mage has a fourth on `E`, because
 /// her mechanic is *health* -- not a thing you press a button to change -- so
 /// the key is free for an ability, and an ability needs a startup, a reach and
-/// a cost like any other. The Champion has ten, because its three mouse buttons
-/// are three weapons and each of them behaves differently on foot, in the air
-/// and mid-Rush: see [`champion`].
+/// a cost like any other. The Champion has nineteen, because its three mouse
+/// buttons are three weapons, each of them chains three hits deep, and each of
+/// them behaves differently on foot, in the air, mid-Rush and on the way off
+/// the floor: see [`champion`].
 ///
 /// Storage is packed to these counts, so a class that does not have a slot does
 /// not have knobs for one either -- see [`slots`] and [`bound`].
@@ -383,18 +384,34 @@ const NAMES: [&[&str]; 6] = [
     //   Slam: the overhead. Heavily punishable if read, heavily rewarding if not.
     //   Grapple: beats guard outright, loses badly to dodge.
     &["Bash", "Slam", "Grapple"],
-    // Champion -- three weapons on three buttons, and a dash that changes what
-    // all three of them do. Ten moves: see `champion` for the grid they form.
+    // Champion -- three weapons on three buttons, and the row of the grid is
+    // the situation your feet are in. Nineteen moves: see `champion`.
+    //
+    // The first nine are the **chain**, three hits deep, and every hit is a
+    // free choice of weapon -- that is the class fantasy stated as a move list.
+    // Reading them as three rows of three rather than as three combos is the
+    // point: hit one is any of the first three, hit two is any of the second
+    // three, hit three is any of the last, and nothing says the three have to
+    // be the same weapon.
     &[
         "Sword",
         "Hammer",
         "Spear",
+        "Backcut",
+        "Uproot",
+        "Skewer",
+        "Crescent",
+        "Earthbreaker",
+        "Impale",
         "Air sword",
         "Air hammer",
         "Air spear",
         "Rush slash",
-        "Uppercut",
+        "Rush sweep",
         "Rush stab",
+        "Rising cut",
+        "Uppercut",
+        "Pole drive",
         "Pole vault",
     ],
     // Shadow Reaver -- two bodies. Options are a function of the line between
@@ -452,61 +469,128 @@ const NAMES: [&[&str]; 6] = [
 pub const SLOTS: usize = 3;
 
 // ---------------------------------------------------------------------------
-// The Champion's ten
+// The Champion's nineteen
 // ---------------------------------------------------------------------------
 
-/// The Champion's move list, as a **grid**: three stances by three weapons,
-/// plus the one move that is neither.
+/// The Champion's move list, as a **grid**: a row per situation, a column per
+/// weapon, and the first three rows are one three-hit chain rather than three.
 ///
 /// This is the whole of the class's input scheme and it is worth reading as a
-/// table rather than as a list of ten moves:
+/// table rather than as a list of nineteen moves:
 ///
 /// ```text
-///              left click      middle click    right click
-///   on foot    Sword           Hammer          Spear
-///   in the air Air sword       Air hammer      Air spear
-///   rushing    Rush slash      Uppercut        Rush stab / Pole vault
+///                     left click      middle click    right click
+///   on foot, hit 1    Sword           Hammer          Spear
+///   on foot, hit 2    Backcut         Uproot          Skewer
+///   on foot, hit 3    Crescent        Earthbreaker    Impale
+///   in the air        Air sword       Air hammer      Air spear
+///   rushing           Rush slash      Rush sweep      Rush stab
+///   leaving the floor Rising cut      Uppercut        Pole drive
+///   (rushing, aimed at the floor: Pole vault)
 /// ```
 ///
-/// The button is the **weapon** and never changes meaning; the row is where
-/// your feet are. That is the entire thing a new player has to learn, and it
-/// is why the Champion can carry ten moves on three buttons without a single
+/// The button is the **weapon** and never changes meaning; the row is the
+/// situation. That is the entire thing a new player has to learn, and it is why
+/// the Champion can carry nineteen moves on three buttons without a single
 /// modifier: you never choose a move, you choose a weapon, and the situation
 /// chooses the move.
 ///
-/// The tenth is the Pole vault, which shares right click with the Rush stab
-/// and is separated by where you are pointing: a spear planted in the ground
-/// vaults, a spear levelled at someone stabs.
+/// **The first three rows are one chain.** Connect with any of the first row
+/// and the same three buttons throw the second row; connect again and they
+/// throw the third. Which weapon each hit is thrown with is a free choice every
+/// time, so sword into spear into hammer is an ordinary thing to do and is the
+/// class fantasy -- one haft, three heads, chosen a hit at a time. See
+/// [`link_of`] and `state::champion_move`.
+///
+/// The last row is the **takeoff**: a weapon thrown on the same press as jump,
+/// which is how this class leaves the ground with something already swinging.
+///
+/// The nineteenth is the Pole vault, which shares right click with the Rush
+/// stab and is separated by where you are pointing: a spear planted in the
+/// ground vaults, a spear levelled at someone stabs.
 pub mod champion {
     /// Weapons, in button order. The column of the grid.
     pub const SWORD: u8 = 0;
     pub const HAMMER: u8 = 1;
     pub const SPEAR: u8 = 2;
 
-    /// Stances. The row of the grid, as a base to add a weapon to.
-    pub const ON_FOOT: u8 = 0;
-    pub const IN_THE_AIR: u8 = 3;
-    pub const RUSHING: u8 = 6;
+    /// Rows. The situation, as a base to add a weapon to.
+    ///
+    /// The first three are the chain, in order, which is what lets the stage a
+    /// player has reached be a number rather than a table: the move is
+    /// `LINKS[stage] + weapon`.
+    pub const FIRST: u8 = 0;
+    pub const SECOND: u8 = 3;
+    pub const THIRD: u8 = 6;
+    pub const IN_THE_AIR: u8 = 9;
+    pub const RUSHING: u8 = 12;
+    pub const TAKEOFF: u8 = 15;
 
-    pub const SWORD_GROUND: u8 = ON_FOOT + SWORD;
-    pub const HAMMER_GROUND: u8 = ON_FOOT + HAMMER;
-    pub const SPEAR_GROUND: u8 = ON_FOOT + SPEAR;
+    /// The three rows of the chain, deepest last.
+    pub const LINKS: [u8; 3] = [FIRST, SECOND, THIRD];
+    /// How many hits deep the chain goes.
+    pub const DEPTH: u8 = LINKS.len() as u8;
+
+    pub const SWORD_GROUND: u8 = FIRST + SWORD;
+    pub const HAMMER_GROUND: u8 = FIRST + HAMMER;
+    pub const SPEAR_GROUND: u8 = FIRST + SPEAR;
+    pub const BACKCUT: u8 = SECOND + SWORD;
+    pub const UPROOT: u8 = SECOND + HAMMER;
+    pub const SKEWER: u8 = SECOND + SPEAR;
+    pub const CRESCENT: u8 = THIRD + SWORD;
+    pub const EARTHBREAKER: u8 = THIRD + HAMMER;
+    pub const IMPALE: u8 = THIRD + SPEAR;
     pub const AIR_SWORD: u8 = IN_THE_AIR + SWORD;
     pub const AIR_HAMMER: u8 = IN_THE_AIR + HAMMER;
     pub const AIR_SPEAR: u8 = IN_THE_AIR + SPEAR;
     pub const RUSH_SLASH: u8 = RUSHING + SWORD;
-    pub const UPPERCUT: u8 = RUSHING + HAMMER;
+    pub const RUSH_SWEEP: u8 = RUSHING + HAMMER;
     pub const RUSH_STAB: u8 = RUSHING + SPEAR;
+    pub const RISING_CUT: u8 = TAKEOFF + SWORD;
+    pub const UPPERCUT: u8 = TAKEOFF + HAMMER;
+    pub const POLE_DRIVE: u8 = TAKEOFF + SPEAR;
     /// The odd one out: right click during a Rush, aimed at the floor.
-    pub const POLE_VAULT: u8 = 9;
+    pub const POLE_VAULT: u8 = 18;
 
-    pub const COUNT: usize = 10;
+    pub const COUNT: usize = 19;
 
     /// Which weapon a move is thrown with. The column of the grid, except for
     /// the vault, which is planted with the spear like everything else on
     /// right click.
     pub const fn weapon(kind: u8) -> u8 {
         if kind == POLE_VAULT { SPEAR } else { kind % 3 }
+    }
+
+    /// How many hits into the chain this move is, if it is one of the nine.
+    ///
+    /// `Some(0)` is an opener, `Some(2)` a finisher, `None` a move that is not
+    /// part of the chain at all -- an aerial, a Rush move, a takeoff. Asked
+    /// rather than inferred from the index anywhere else, because "is this
+    /// thing a chain link" is the question three separate rules need answered
+    /// and each of them getting it from arithmetic is how one of them ends up
+    /// disagreeing.
+    pub const fn link_of(kind: u8) -> Option<u8> {
+        if kind < IN_THE_AIR {
+            Some(kind / 3)
+        } else {
+            None
+        }
+    }
+
+    /// The move a given weapon throws at a given depth into the chain.
+    ///
+    /// Clamped rather than wrapped: a fourth press is the finisher again in
+    /// arithmetic and a fresh opener in play, and it is the caller -- which
+    /// knows whether the chain is still alive -- that decides which. Clamping
+    /// keeps a bad stage from indexing off the end of the table.
+    pub const fn link(stage: u8, weapon: u8) -> u8 {
+        let stage = if stage >= DEPTH { DEPTH - 1 } else { stage };
+        LINKS[stage as usize] + weapon
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        kind >= TAKEOFF && kind < POLE_VAULT
     }
 }
 
@@ -581,11 +665,11 @@ pub mod dual {
 /// How many moves a class has.
 ///
 /// Per class rather than a single constant because the Champion legitimately
-/// grew: its three mouse buttons are three weapons and each weapon behaves
-/// differently on foot, in the air and mid-Rush, which is nine moves plus the
-/// vault. Every other class still has the original three, and the storage in
-/// the Oven is packed to these counts so the five that did not grow cost
-/// nothing.
+/// grew: its three mouse buttons are three weapons, the ground chain is three
+/// hits deep, and a weapon behaves differently in the air, mid-Rush and on the
+/// frame the feet leave the floor -- eighteen moves plus the vault. Every other
+/// class still has the original three, and the storage in the Oven is packed to
+/// these counts so the five that did not grow cost nothing.
 pub const fn slots(class: Class) -> usize {
     match class {
         Class::Champion => champion::COUNT,
@@ -619,8 +703,8 @@ pub const fn slots(class: Class) -> usize {
 /// cost like any other.
 ///
 /// A function rather than a fixed slot index, because "the fourth slot" stopped
-/// meaning "the `E` key" the moment a class had ten of them: the Champion's
-/// fourth is its aerial sword.
+/// meaning "the `E` key" the moment a class had nineteen of them: the
+/// Champion's fourth is the second link of its sword chain.
 pub const fn on_e(class: Class) -> Option<u8> {
     match class {
         Class::BloodMage => Some(SLOTS as u8),
@@ -650,7 +734,7 @@ pub const TOTAL_SLOTS: usize = {
     n
 };
 
-/// The most slots any one class has -- the Champion's ten.
+/// The most slots any one class has -- the Champion's nineteen.
 ///
 /// Counted rather than written down, for the same reason [`TOTAL_SLOTS`] is: a
 /// literal is a second statement of the same fact, and the two disagree the
@@ -692,18 +776,27 @@ pub const fn base_slot(class: Class) -> usize {
 /// `crates/manual`; this is the label, not the binding.
 pub const fn binding(class: Class, slot: usize) -> &'static str {
     match class {
-        // The grid in `champion`: the button is the weapon, the row is where
-        // your feet are.
+        // The grid in `champion`: the button is the weapon, the row is the
+        // situation -- and the first three rows are one chain.
         Class::Champion => match slot {
             0 => "LMB",
             1 => "MMB",
             2 => "RMB",
-            3 => "LMB air",
-            4 => "MMB air",
-            5 => "RMB air",
-            6 => "LMB rush",
-            7 => "MMB rush",
-            8 => "RMB rush",
+            3 => "LMB, 2nd",
+            4 => "MMB, 2nd",
+            5 => "RMB, 2nd",
+            6 => "LMB, 3rd",
+            7 => "MMB, 3rd",
+            8 => "RMB, 3rd",
+            9 => "LMB air",
+            10 => "MMB air",
+            11 => "RMB air",
+            12 => "LMB rush",
+            13 => "MMB rush",
+            14 => "RMB rush",
+            15 => "Space+LMB",
+            16 => "Space+MMB",
+            17 => "Space+RMB",
             _ => "RMB rush, low",
         },
         // The Reaver's committed melee answers to right click as well, because
@@ -755,21 +848,42 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
 pub const fn shape(class: Class, kind: u8) -> Shape {
     use champion as c;
     match class {
+        // **Shape is a property of the weapon, not of the move.** Every sword
+        // move in the class cuts across, every hammer move travels up or down
+        // the vertical, every spear move is a line along the aim -- through all
+        // three links of the chain, in the air and out of a Rush. That is what
+        // "each weapon has an identity" means when it is written as code rather
+        // than as prose: a player who has learnt that the hammer owns the
+        // ground under it has learnt something that is true of every hammer
+        // move there is.
+        //
+        // The two exceptions are both the air, and both are the same exception:
+        // off the ground there is no floor to cut across, so the sword rolls
+        // its arc into the vertical and the spear sweeps its fan flat around
+        // the aim instead of thrusting down a line nobody is standing on.
         Class::Champion => match kind {
-            // Across the front, at hip height. The sword owns the width.
-            c::SWORD_GROUND => Shape::Swing(Plane::Flat),
-            // Overhead to the floor. The hammer owns the line under it.
-            c::HAMMER_GROUND => Shape::Swing(Plane::Upright),
+            // Across the front. The sword owns the width -- at hip height
+            // opening, coming back the other way, and all the way round on the
+            // finisher.
+            c::SWORD_GROUND | c::BACKCUT | c::CRESCENT | c::RUSH_SLASH => Shape::Swing(Plane::Flat),
+            // Up and down the vertical plane the aim lies in. The hammer owns
+            // the line under it: overhead to the floor, torn back out of it,
+            // and driven through it.
+            c::HAMMER_GROUND | c::UPROOT | c::EARTHBREAKER | c::RUSH_SWEEP => {
+                Shape::Swing(Plane::Upright)
+            }
             // Straight out along the aim. The spear owns the distance.
-            c::SPEAR_GROUND => Shape::Thrust,
-            // The same three, rolled into the vertical: a sword cut you bring
-            // down on somebody, a hammer you drop on them, and a fan the spear
-            // sweeps around wherever you are pointing.
+            c::SPEAR_GROUND | c::SKEWER | c::IMPALE | c::RUSH_STAB => Shape::Thrust,
+            // The air: a sword cut you bring down on somebody, a hammer you
+            // drop on them, and a fan the spear sweeps around wherever you are
+            // pointing.
             c::AIR_SWORD | c::AIR_HAMMER => Shape::Swing(Plane::Upright),
             c::AIR_SPEAR => Shape::Swing(Plane::Flat),
-            c::RUSH_SLASH => Shape::Swing(Plane::Flat),
-            c::UPPERCUT => Shape::Swing(Plane::Upright),
-            c::RUSH_STAB => Shape::Thrust,
+            // The takeoffs are all vertical, because all three of them are the
+            // weapon going the way the body is about to: the sword and the
+            // hammer rise through the arc and the spear drives the other end of
+            // itself into the floor.
+            c::RISING_CUT | c::UPPERCUT | c::POLE_DRIVE => Shape::Swing(Plane::Upright),
             // Movement, not an attack. A vault that also hit people would be
             // strictly better than the stab it shares a button with.
             _ => Shape::None,
@@ -926,8 +1040,8 @@ pub fn get(class: Class, kind: u8) -> Move {
 /// Every move a class actually has, live.
 ///
 /// A `Vec` rather than an array because the count is not the same for
-/// everybody: three for most of the roster, four for the Blood mage, ten for
-/// the Champion. The callers are the frame table and the feel tests, neither of
+/// everybody: three for most of the roster, four for the Blood mage, nineteen
+/// for the Champion. The callers are the frame table and the feel tests, neither of
 /// which runs inside a frame, so the allocation buys readability for nothing.
 pub fn table(class: Class) -> Vec<Move> {
     (0..slots(class)).map(|i| get(class, i as u8)).collect()

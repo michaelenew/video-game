@@ -3,6 +3,7 @@ status: decided
 decided: 2026-09-10
 renamed: 2026-09-11
 rebuilt: 2026-09-12
+chained: 2026-09-14
 formerly: Bellator, Shifter
 supersedes: docs/archive/combat-design/shifter-skills.md
 ---
@@ -36,9 +37,18 @@ that incentivise nonlinear play sometimes. The two sections below are how that g
 > onto Rush + hammer, where it is a combo hinge rather than a committed launcher. The
 > diagnosis in [The core addition](#the-core-addition--mid-animation-form-swap) below was
 > right about *why* the class was linear and the fix went one step further than the
-> sentence it is written in: the toggle is gone rather than made mid-animation. The swap
-> itself is still worth building and is now easier to state — see
-> [kits/champion.md](kits/champion.md#still-to-build).
+> sentence it is written in: the toggle is gone rather than made mid-animation.
+
+> **Chained 2026-09-14.** Ten became nineteen, and the shape of the class changed with it.
+> The grounded row is now a **three-hit string**, and **every hit is a free choice of all
+> three weapons** — sword into spear into hammer is an ordinary thing to do. Every weapon
+> also gained a **takeoff**, thrown on the same press as jump, and the uppercut moved
+> again: off Rush and onto the hammer's takeoff, where the launcher costs a jump rather
+> than a charge. Rush + hammer became a low run-through that owns the floor. The whole
+> thing is specified in
+> [kits/champion.md](kits/champion.md#the-chain--rebuilt-2026-09-14), and what it did to
+> the mid-animation swap below is the interesting part: it took most of what the swap was
+> reaching for, at a fraction of the animation cost.
 
 ## What the mode toggle cost, stated properly
 
@@ -57,6 +67,15 @@ with their own hit volumes is what the nine multipliers were reaching for and co
 reach.
 
 ## The core addition — mid-animation form swap
+
+> **Superseded in the direction it was pointing, 2026-09-14.** The idea below is still
+> sound and still unbuilt, but the thing it was *for* — making the choice of weapon a
+> decision you take more than once per exchange — is now what the three-hit chain does, and
+> the chain does it with nine ordinary animations rather than with nine blended tails. Read
+> this section as the argument that got the class here rather than as the next thing to
+> build. What is left for the swap afterwards is the **bait**: a silhouette that says one
+> weapon and a tail that does another, which the chain cannot do because each of its hits
+> is honest about itself from the first frame.
 
 Form swapping is currently a mode toggle: free, instant, and outside the flow of a move.
 That is exactly why the class is linear — pick the form for the range, press the button.
@@ -99,17 +118,36 @@ Three questions per exchange:
 Deep without being wide. The class stays legible to a new player — pick the right range
 band — while having a real ceiling.
 
+**Restated after the chain, 2026-09-14.** The three questions are still the right three,
+and two of them are now asked by a mechanism that exists. "Which form do I end in" is the
+third hit of a string rather than the tail of one move, and it is asked twice rather than
+once:
+
+1. Which weapon opens, which is a question about range.
+2. Which weapon connects, which is a question about where they *went*.
+3. Which weapon finishes, which is a question about what you want the exchange to end as —
+   a body knocked across the arena, a body launched, or a body on the floor with a broken
+   guard.
+4. Do I spend Rush to go somewhere else in the middle of it?
+
+Four rather than three, and the extra one is free: it needs no input the player did not
+already have.
+
 ## Carried forward from the old notes
 
 - Rush as a chargeable dash, one charge, shift-click to charge. **Built**, on `E`, as a
   dash that also cancels any recovery.
 - Per-form auto attacks: sword medium melee strike, hammer short blow (staggers while
   rushing), spear long thrust (vault off the ground while moving or rushing). **Built**,
-  and the two parenthetical notes turned out to be the good half of the idea: the hammer
-  thrown out of a Rush is the uppercut, and the spear planted while rushing is the vault.
+  and the two parenthetical notes turned out to be the good half of the idea: the spear
+  planted while rushing is the vault, and the hammer thrown out of a Rush is the low
+  run-through that owns the floor.
 - Per-form signature moves: Uppercut (sword), Hammerfall (hammer), Spear toss (spear).
   Uppercut is built, on the hammer rather than the sword — a launcher is a heavy weapon's
-  move. The other two are open.
+  move — and since 2026-09-14 it is the hammer's **takeoff**, thrown on the same press as
+  jump. Hammerfall arrived under another name: **Earthbreaker**, the hammer's chain
+  finisher, which is the whole body over the head and through a shield. Spear toss is still
+  open, and is now the only thing on this list that is.
 - The reforge idea for combining weapons at the cost of an accessory slot — "quicksilver
   ___" as the reforged weapon title.
 
@@ -120,9 +158,15 @@ kit's depth lives**, and it is a better home for it than the swap matrix because
 extra inputs at all: the same three buttons mean three different moves off the ground.
 
 The loop is: hit them up, get somewhere else fast, and have an attack already waiting when
-they arrive. Hammer to stagger, Rush to cancel the recovery, uppercut to take them both up,
-space to take it higher, air hammer to put them back into the floor. Every step costs
-something real — frames, the one Rush charge, or committing to the air with them.
+they arrive. Hammer to stagger, jump-plus-hammer to take them both up, space to take it
+higher, air hammer to put them back into the floor. Every step costs something real —
+frames, the jump, or committing to the air with them.
+
+**Amended 2026-09-14.** The launcher used to need the Rush charge and now needs the jump,
+which is the better price for two reasons. A loop whose first step is a resource check is a
+loop you often cannot start; and having three *different* ways off the floor — one per
+weapon — makes leaving the ground a choice rather than a step. The Rush charge is free for
+the reposition, which is the half of this the class was always better at.
 
 It is the anime pattern, and the reason it works as *play* rather than as spectacle is that
 the reposition is the hard part. Launching somebody is easy. Being where they land is not.
@@ -132,9 +176,15 @@ the reposition is the hard part. Launching somebody is easy. Being where they la
 - Is the mid-animation swap free, or does it cost Rush? Free is more expressive; costed
   makes it compete with the cancel and forces a choice. Leaning free, with the risk being
   the whiff itself. **Now cheaper to answer**: the weapon is a button, so the swap is
-  "press a different button during the active frames" rather than a mode change.
+  "press a different button during the active frames" rather than a mode change. **And
+  less urgent, 2026-09-14** — the chain already lets you change weapon between hits, so
+  what is left for the swap is the bait rather than the mixing.
 - Three forms or more? Four gives sixteen enders but the readability cost is steep — and
-  steeper now that each weapon carries three moves rather than one.
+  it is much steeper now: each weapon carries six moves, and a fourth column would be a
+  twenty-fifth move on a class that already asks a player to hold nineteen.
+- **Does the chain want a fourth hit for one weapon?** Three is symmetrical and readable.
+  A weapon with a fourth would be a real asymmetry, and asymmetry is where a class gets a
+  favourite. Nobody has played three yet.
 - Does the swap have a window, or can it happen any time during active frames? A window
   is a cleaner mechanical test.
 - **Does `Q` want something?** The class special is unassigned: the three weapons are the

@@ -849,6 +849,66 @@ pub fn thrust_extend() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrustExtend))
 }
 
+// --- The ground chain ------------------------------------------------------
+//
+// Three hits deep, and every hit is a free choice of all three weapons. What
+// these four numbers decide is the *rhythm* of that -- how long you have to
+// commit to the next hit, and how much of a link's tail you serve before it can
+// begin. The move table decides everything else.
+
+/// How long a chain survives once the fighter stops swinging.
+///
+/// It is the window the next hit has to arrive in, and it is a real decision
+/// rather than a formality: long enough to feel a beat in, short enough that a
+/// string is something you commit to rather than something you can leave lying
+/// around. Parked at full for as long as a link is actually running, so a slow
+/// finisher cannot time its own chain out from under itself -- see
+/// `state::step_mechanic`.
+pub fn chain_grace() -> u16 {
+    oven::scalar(Scalar::ChainGrace) as u16
+}
+
+/// How much of a connected link's recovery you serve before the next link may
+/// start, when the next one is a **different** weapon. A percentage of that
+/// move's own recovery, so a heavy tail still costs more than a light one.
+///
+/// Below [`chain_cancel_repeated`], and that gap is the whole of the class's
+/// nonlinear incentive: one haft with three heads, and the weapon re-forms out
+/// of the follow-through rather than being re-chambered. Set the two equal and
+/// the incentive is off without anything else changing.
+pub fn chain_cancel_swapped() -> u16 {
+    oven::scalar(Scalar::ChainCancelSwap).clamp(0, 100) as u16
+}
+
+/// The same, for swinging the **same** weapon twice in a row.
+///
+/// Higher, but not by much. Repeating a weapon is meant to stay completely
+/// viable -- "strong when played linearly" is a design goal for this class, not
+/// a concession -- so the repeat is a few frames slower rather than a wall.
+pub fn chain_cancel_repeated() -> u16 {
+    oven::scalar(Scalar::ChainCancelRepeat).clamp(0, 100) as u16
+}
+
+/// How long after the jump button goes down a weapon click still takes off.
+///
+/// "Attack as you jump" is one intention and two buttons, and nobody presses
+/// two buttons on the same frame. This is how wrong the timing may be and still
+/// mean what the player meant. See `state::arm_takeoff`.
+pub fn takeoff_window() -> u16 {
+    oven::scalar(Scalar::TakeoffWindow) as u16
+}
+
+/// The forward shove the spear's takeoff gives, on the frame the shaft reaches
+/// the floor.
+///
+/// The move is a jump with a weapon in it: `Move::self_lift` supplies the
+/// height and this supplies the direction, so the pole drive is how a Champion
+/// crosses ground and gains height in one press. Read from the live input, like
+/// the aerial fan's shove -- you choose where to go as the spear lands.
+pub fn pole_drive_boost() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PoleDriveBoost))
+}
+
 /// Where the inner edge of a wing sits, as a fraction of the move's reach.
 ///
 /// A wing is a **section of a torus** lying flat (see `moves::Shape::Wing`), and

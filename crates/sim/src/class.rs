@@ -132,6 +132,10 @@ impl Class {
                 rush: 0,
                 recharge: 0,
                 rush_vel: V3::ZERO,
+                chain: 0,
+                chain_left: 0,
+                chain_hit: false,
+                takeoff: 0,
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -434,6 +438,37 @@ pub enum Mechanic {
         recharge: u16,
         /// The horizontal velocity the dash drives, in metres per second.
         rush_vel: V3,
+        /// How many hits of the ground chain are already behind you: 0 means
+        /// the next click opens, 2 means the next click finishes.
+        ///
+        /// **A number, not a list of moves.** Which weapon each hit was thrown
+        /// with is not remembered anywhere, and that is the mechanic rather
+        /// than an omission: every hit is a free choice of all three weapons,
+        /// so the only thing the chain has to carry is how deep it is. See
+        /// `moves::champion::link`.
+        chain: u8,
+        /// Frames left in which the chain survives. Zero means the next hit
+        /// opens a new one.
+        ///
+        /// A clock rather than a flag because a chain is a rhythm: it has to
+        /// outlive the frames between one swing ending and the next beginning,
+        /// and it has to die if the player stops. Re-armed on every link.
+        chain_left: u16,
+        /// The last link connected, so its recovery may be cut short to make
+        /// room for the next one. Cleared when the next link starts.
+        ///
+        /// **The chain is a hit confirm.** Blocked and whiffed links pay their
+        /// whole recovery, which is what keeps every move's printed frame data
+        /// true against a defender who did something about it -- see
+        /// `state::chain_cancel`.
+        chain_hit: bool,
+        /// Frames left in which a weapon click is a **takeoff** rather than the
+        /// grounded or airborne move.
+        ///
+        /// Armed by the jump button and spent by the click, so "attack on the
+        /// same press as jump" survives the two arriving a few frames apart --
+        /// which they always do. Zero everywhere else.
+        takeoff: u16,
     },
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),
@@ -537,19 +572,39 @@ pub mod alloc_free {
                 Mechanic::Shield(Shield::Held) => Summary::Text("shield: held"),
                 Mechanic::Shield(Shield::Planted { .. }) => Summary::Text("shield: planted"),
                 Mechanic::Shield(Shield::Flying { .. }) => Summary::Text("shield: in flight"),
+                // Three things want saying and there is one line to say them
+                // in, so they are ranked by how soon they stop being true. A
+                // dash lasts twenty frames, a live chain a little longer, and
+                // the charge is either back or it is not -- so the dash wins,
+                // then which hit comes next, and the charge is what the line
+                // says when nothing is happening.
                 Mechanic::Forms {
                     form,
                     rush,
                     recharge,
+                    chain,
+                    chain_left,
                     ..
-                } => Summary::Text(match (form, *rush > 0, *recharge == 0) {
-                    (_, true, _) => "RUSHING",
-                    (Form::Hammer, _, true) => "hammer / rush ready",
-                    (Form::Hammer, _, false) => "hammer",
-                    (Form::Sword, _, true) => "sword / rush ready",
-                    (Form::Sword, _, false) => "sword",
-                    (Form::Spear, _, true) => "spear / rush ready",
-                    (Form::Spear, _, false) => "spear",
+                } => Summary::Text(if *rush > 0 {
+                    "RUSHING"
+                } else if *chain_left > 0 && *chain > 0 {
+                    match (form, *chain) {
+                        (Form::Hammer, 1) => "hammer / 2nd hit",
+                        (Form::Hammer, _) => "hammer / 3rd hit",
+                        (Form::Sword, 1) => "sword / 2nd hit",
+                        (Form::Sword, _) => "sword / 3rd hit",
+                        (Form::Spear, 1) => "spear / 2nd hit",
+                        (Form::Spear, _) => "spear / 3rd hit",
+                    }
+                } else {
+                    match (form, *recharge == 0) {
+                        (Form::Hammer, true) => "hammer / rush ready",
+                        (Form::Hammer, false) => "hammer",
+                        (Form::Sword, true) => "sword / rush ready",
+                        (Form::Sword, false) => "sword",
+                        (Form::Spear, true) => "spear / rush ready",
+                        (Form::Spear, false) => "spear",
+                    }
                 }),
                 Mechanic::Shadow(shadow) => Summary::Text(match shadow.doing {
                     Ghost::Attending => "shadow: with you",

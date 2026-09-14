@@ -93,7 +93,11 @@ never comes out as a dodge.
   would turn a jump into flight.
 - Space while airborne does nothing, **with one exception**: while a Champion's uppercut has
   hold of somebody, it takes the pair of you higher, once. See
-  [kits/champion.md](kits/champion.md#uppercut--middle-click).
+  [kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor).
+- **Space plus a weapon, on the ground, is a takeoff** — again on the Champion only, added
+  2026-09-14. Three moves, one per weapon, thrown as the feet leave the floor. It is the
+  first time `space` has modified anything, and the section below on that class is where
+  the argument lives.
 - **Airborne attacks are their own moves on the class that has them.** Settled 2026-09-12
   for the Champion and still open for everyone else — see below.
 
@@ -637,21 +641,49 @@ are**.
 
 | | `L` | `M` | `R` |
 | --- | --- | --- | --- |
-| On foot | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| On foot, hit 1 | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| On foot, hit 2 | Backcut | Uproot | Skewer |
+| On foot, hit 3 | Crescent | Earthbreaker — unblockable | Impale |
 | Airborne | Air sword | Air hammer — spikes | Air spear — a fan around the aim |
-| Rushing | Rush slash | Uppercut | Rush stab, or Pole vault aimed at the floor |
+| Rushing | Rush slash | Rush sweep — along the floor | Rush stab, or Pole vault aimed at the floor |
+| `space` + weapon | Rising cut | Uppercut | Pole drive |
 
 | Input | Result |
 | --- | --- |
 | `E` | **Rush.** One charge. A dash, and it cancels any recovery |
 | `space`, airborne, holding somebody | The uppercut's second leap. Both of you go higher |
 
-Ten moves, three buttons, one modifier key, no chords. The full kit is in
+Nineteen moves, three buttons, one modifier key, no chords. The full kit is in
 [kits/champion.md](kits/champion.md).
+
+### Two rows that are new, 2026-09-14
+
+**The first three rows are one three-hit string.** Connect and the same three buttons throw
+the next row; connect again and they throw the last. **Every hit is a free choice of all
+three weapons**, which is the class fantasy as an input scheme rather than as a fiction —
+sword into spear into hammer is an ordinary thing to do. Nothing remembers what the last
+hit was made of.
+
+The string is a **hit confirm**: a connected link cuts its own recovery short so the next
+one can begin, and a blocked, parried or whiffed one pays in full. That is why blocking one
+hit of a string is worth doing, and why every number in the frame table stays true against
+somebody who did.
+
+**`space` plus a weapon is that weapon's takeoff.** It is the one place in the grammar where
+two buttons combine on this class, and it is not a chord in the awkward sense: `space` is
+already under the thumb and the weapon is already under a finger. The window is a few frames
+wide on purpose — *jump then weapon* is the order that works, and both at once is the same
+frame — because "attack as you jump" is one intention and two buttons and nobody presses two
+buttons on the same tick. A takeoff spends the window, so one jump buys one of them.
+
+**This is the first real use of `space` as a modifier anywhere in the grammar**, and it is
+worth flagging as a precedent rather than as a Champion detail: if it reads well here it is
+a whole row of options every class could have, and if it reads badly it should not spread.
 
 **The mid-animation swap still needs no new input**, and it is now easier to say what it
 means: press a different weapon's button during active frames and the move ends in that
-weapon. It is not built.
+weapon. It is not built, and the chain has taken most of what it was for — see
+[champion.md](champion.md#the-core-addition--mid-animation-form-swap).
 
 The directional variants below are not built on this class and may not be wanted — the
 stance rows already do the work that `w`/`a`/`d`/`s` plus a click was meant to do, and

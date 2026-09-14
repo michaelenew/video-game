@@ -95,7 +95,13 @@ fn the_same_move_held_down_comes_out_on_the_lockout_and_not_before() {
     // The whole rule in one measurement. Lean on left click and the auto comes
     // out every `repeat_lock` frames rather than every `whiff_cost` frames,
     // which is the difference between a spam button and a rhythm.
-    for class in [Class::Bulwark, Class::Champion, Class::Elementalist] {
+    //
+    // **Not the Champion**, and not because the rule is different there: on
+    // that class a held button does not repeat a move at all, it walks the
+    // three hits of a chain, so the thing this measures does not happen. The
+    // rule still applies to each of the three slots, which is what
+    // `a_chain_never_brings_a_locked_move_back_early` below checks instead.
+    for class in [Class::Bulwark, Class::Elementalist] {
         let mut w = duel(class);
         let m = sim::moves::get(class, SLOT_POKE);
         run(&mut w, 1, L);
@@ -115,6 +121,41 @@ fn the_same_move_held_down_comes_out_on_the_lockout_and_not_before() {
             m.whiff_cost(),
         );
     }
+}
+
+#[test]
+fn a_chain_never_brings_a_locked_move_back_early() {
+    // The Champion's version of the measurement above. Leaning on one button
+    // there walks a three-hit string rather than repeating one move, so what
+    // has to hold is the rule stated per slot: however the chain steps between
+    // them, no single move comes back inside its own lockout.
+    //
+    // It is worth a test of its own rather than a widened one because a chain
+    // is exactly the shape of thing that could launder a lockout -- three slots
+    // taking turns is a way to keep swinging, and the question is whether any
+    // one of them is being thrown more often than the rule allows.
+    let mut w = duel(Class::Champion);
+    let mut last: [Option<u32>; sim::moves::MAX_SLOTS] = [None; sim::moves::MAX_SLOTS];
+    for frame in 0..400u32 {
+        w.advance([Input::new(L), Input::default()]);
+        let Some(kind) = started(&w) else { continue };
+        let m = sim::moves::get(Class::Champion, kind);
+        if let Some(before) = last[kind as usize] {
+            assert!(
+                frame - before >= m.repeat_lock() as u32,
+                "{} came back {} frames after itself, inside its {}-frame lockout",
+                m.name,
+                frame - before,
+                m.repeat_lock()
+            );
+        }
+        last[kind as usize] = Some(frame);
+    }
+    assert!(
+        last.iter().filter(|seen| seen.is_some()).count() >= 3,
+        "holding left click on the Champion threw fewer than three different moves, \
+         so the chain is not walking"
+    );
 }
 
 #[test]
