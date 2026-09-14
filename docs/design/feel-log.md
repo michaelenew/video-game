@@ -3024,9 +3024,9 @@ before   skillshot: a ground hit is raised to the CASTER's cast height
 now      skillshot: a ground hit is raised to the middle of a fighter STANDING
          on that spot (`aim::standing_middle`)
 
-before   Grasp: a channelled swing, dead-zoned level, 1.5 m to 10 m
+before   Grasp: a channelled swing, dead-zoned level, 1.5 m to 10 m over 60f
 now      Grasp: a channelled skillshot whose line is solved ONCE at the full
-         reach, with the hold picking a point along it
+         reach, with the hold picking a point along it -- and back to 30f
 ```
 
 **Why the raise moved.** The two are the same number on flat ground and nothing like it off
@@ -3073,7 +3073,13 @@ imprecise zone and stepping off a platform is the answer; if it turns out to mat
 is `swing_level_to` and the real fix is probably that the dead zone should shrink with height
 above the floor.
 
+**The channel went back to half a second.** It had been doubled to sixty frames while the
+marker was still jumping about, on the theory that it was too fast to read; once the line
+stopped moving, thirty was legible again and a full second of standing still was simply a long
+time. The marker now covers about twenty-eight centimetres a frame, which makes placing a
+specific depth a real piece of execution rather than a wait.
+
 **Verdict** open on the Grasp, and this is the version to play rather than the last two. The
-worry that survives all three is unchanged: a full second of standing still is a long
-telegraph, and the marker being legible now makes it *easier* for the other player to read the
-depth and step out of it.
+worry that survives all three is unchanged in shape but smaller at thirty frames: the wind-up
+is a telegraph, and the marker being legible now makes it easier for the other player to read
+the depth and step out of it too.

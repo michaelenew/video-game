@@ -149,7 +149,7 @@ tendrils that only pay out if you stay close enough to collect. It closes the ra
 #### Holding `Q` chooses the depth
 
 The only move in the game you aim with *time*. Press and hold and a small marker leaves the
-caster's chest and travels outward over a second, from melee range out to ten metres; let go
+caster's chest and travels outward over half a second, from melee range out to ten metres; let go
 and the arms converge on wherever it had got to. Hold past the end and it throws itself, so
 there is no storing a paid-for ability and waiting.
 
@@ -182,8 +182,8 @@ the frame the button comes up, which is where every other move locks it too. The
 paid on the *press*, because there is no cancelling out of a channel: an ability you started
 is an ability you bought.
 
-A full second is a long time to stand still, and that is the cost. The whole wind-up is a
-telegraph: at max depth you have spent a second of neutral before anything has left your
+Half a second is a long time to stand still, and that is the cost. The whole wind-up is a
+telegraph: at max depth you have spent half a second of neutral before anything has left your
 hands, in plain view of somebody who can simply walk out of the cone.
 
 **Aiming it from above works because the crosshair converges.** Standing on a platform and
@@ -394,16 +394,17 @@ half again as much.
   fantasy.
 - Are the costs anywhere near right? They are a first pass: 15 for the auto up to 120 for the
   spike, against a thousand-point bar. Nothing has been played against them.
-- **Is a second the right channel?** It shipped at half of one and was too fast to read. It is
-  two decisions at once: how long the wind-up is, and how far the slider travels in it. Melee
-  to ten metres over sixty frames means the marker moves about fourteen centimetres a frame,
-  which is slow enough to place and fast enough not to feel like waiting. Both ends are
-  move-table knobs (`Channel, longest hold` and `Channel, reach at no hold`), so the answer is
-  a play question.
+- **Is half a second the right channel?** It went to a full second while the marker was still
+  jumping about, on the theory that it was too fast to read; once the line stopped moving,
+  half was enough again. It is two decisions at once: how long the wind-up is, and how far the
+  slider travels in it. Melee to ten metres over thirty frames means the marker moves about
+  twenty-eight centimetres a frame, which is quick — fast enough that placing a specific depth
+  is a real skill rather than a wait. Both ends are move-table knobs (`Channel, longest hold`
+  and `Channel, reach at no hold`), so the answer stays a play question.
 - **Should the Grasp be cancellable?** It is not: the health is paid on the press and the only
   way out is to throw it. A channel you could back out of would be a free look at what the
-  other player does with a second of your commitment, which is the opposite of the ability's
-  design.
+  other player does with half a second of your commitment, which is the opposite of the
+  ability's design.
 - **Is 1.4× the right bonus against a disabled enemy?** Guessed. The feel tests bound it
   between 1.2 and 2 — below the floor nobody notices it and Grasp goes back to being a catch
   with no payoff; above the ceiling one read ends the round, which is the opposite of a game

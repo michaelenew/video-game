@@ -304,7 +304,7 @@ that is already out is the thing this document is about. See `Effect::home`.
 
 One move is aimed with the *length of a button press*: hold the Blood mage's
 Grasp and the reach it is solved at walks from melee out to its own `reach` over
-a second. A small marker shows where that has got to — it leaves the caster's
+half a second. A small marker shows where that has got to — it leaves the caster's
 chest and travels outward, and where it stops is where the arms will converge.
 
 **The marker is not a second answer.** It is the far end of `Player::aim_path`,
