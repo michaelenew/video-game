@@ -605,8 +605,27 @@ pub fn lotus_uncurl() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusUncurl))
 }
 
+/// How wide a blade is, in the plane the flower lies in.
+///
+/// The **width** of a shuriken rather than the radius of a ball: paired with
+/// `lotus_blade_thickness`, which is how thin it is across that plane. It used
+/// to be both at once, at 0.45 -- wider than a fighter's own body, which is why
+/// six of them read as beach balls. Twelve at 0.22 is a flower made of blades.
 pub fn lotus_blade_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusBladeRadius))
+}
+
+/// Half a blade's thickness, across the plane it lies in.
+///
+/// The other half of the shuriken. A blade tested as a sphere reached from a
+/// standing fighter's shins to their chest, which is not a shape anybody can do
+/// anything about; a slab this thin at waist height is one they can **jump**,
+/// and that is the counterplay the ability's own description always implied.
+///
+/// Half rather than whole because it is used either side of the plane, which is
+/// where the flower actually is -- see `state::World::sliced`.
+pub fn lotus_blade_thickness() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusBladeThick))
 }
 
 /// Frames the blades take to reach full extension.

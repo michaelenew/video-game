@@ -100,12 +100,29 @@ pub const GRASP_CORNERS: [(i32, i32); GRASP_ARMS] = [(-1, 1), (-1, -1), (1, 1), 
 
 /// How many blades a Guillotine lotus opens with.
 ///
-/// Six, and a count rather than a knob for the same reason the Grasp has four
-/// arms: it is what the ability *is*. A slider from one to twelve would be a
-/// second, worse way of writing the move list, and the bookkeeping below packs
-/// one bit per blade per victim into a `u32`, which six of them and three
-/// victims exactly fits.
-pub const LOTUS_BLADES: usize = 6;
+/// Twelve, and a count rather than a knob for the same reason the Grasp has
+/// four arms: it is what the ability *is*. A slider would be a second, worse
+/// way of writing the move list.
+///
+/// It was six, of twice the size and twice the damage each. Six read as beach
+/// balls rather than blades -- at a radius wider than a fighter's own, the
+/// thing sweeping past was not shaped like anything you could call a blade.
+/// Twelve smaller ones at half the damage is the same flower and the same total
+/// if you eat all of it, made of pieces that look like what they are.
+pub const LOTUS_BLADES: usize = 12;
+
+/// The hit mask has room for every part of every effect against every victim.
+///
+/// Checked here because the failure is silent and looks like a gameplay bug: a
+/// part whose bit falls off the end of the mask is a blade that can cut the
+/// same person on every frame of its pass, or -- worse -- one that shares a bit
+/// with another blade and goes quiet after that one lands. Going from six
+/// blades to twelve is what made this worth stating: at six the mask needed 18
+/// bits and a `u32` was fine, at twelve it needs 36 and was not.
+const _: () = assert!(
+    LOTUS_BLADES * VICTIMS <= u64::BITS as usize,
+    "the hit mask cannot address every part against every victim"
+);
 
 impl EffectKind {
     pub const fn name(self) -> &'static str {
@@ -283,12 +300,15 @@ pub struct Effect {
     /// pass back — and clears the mask between them, so it can catch the same
     /// person twice. A Grasp has four, one per arm, and never clears: an arm
     /// hits you once, and how many *different* arms have is exactly the
-    /// question the root is asking. A lotus has six, and clears at the turn the
-    /// way the blade does.
+    /// question the root is asking. A lotus has twelve, and clears at the turn
+    /// the way the blade does.
     ///
-    /// A `u32` rather than a `u16`, which is what the lotus cost: six parts
-    /// against three victims is eighteen bits and a `u16` holds five parts.
-    pub struck: u32,
+    /// A `u64`, and the lotus is what costs it: twelve parts against three
+    /// victims is thirty-six bits. It was a `u32` at six blades, which fitted
+    /// exactly and would have silently truncated at twelve -- see the
+    /// assertion beside [`LOTUS_BLADES`], which is there so the next count
+    /// change fails to compile rather than failing to cut.
+    pub struck: u64,
     /// How far this one travels, which is normally the move's own `reach`.
     ///
     /// On the row for every effect rather than read back off the move, because
@@ -724,8 +744,8 @@ impl Effect {
 
     // -- Bookkeeping --------------------------------------------------------
 
-    fn bit(part: usize, victim: usize) -> u32 {
-        1u32 << (part * VICTIMS + victim)
+    fn bit(part: usize, victim: usize) -> u64 {
+        1u64 << (part * VICTIMS + victim)
     }
 
     /// Has this part already caught this victim?

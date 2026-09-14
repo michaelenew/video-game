@@ -1062,6 +1062,7 @@ impl World {
                             dir,
                             blocked: victim.action.guarding(),
                             parried: false,
+                            interrupts: true,
                         },
                     );
                     // Contact drops it where it struck.
@@ -1179,7 +1180,7 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u32(e.struck);
+                    h.write_u64(e.struck);
                     h.write_i32(e.banked);
                     h.write_i32(e.reach.raw());
                     hash_v3(&mut h, &e.pos);
@@ -1321,6 +1322,24 @@ pub(crate) struct Hit {
     pub dir: V3,
     pub blocked: bool,
     pub parried: bool,
+    /// Does landing this take the victim's frames away?
+    ///
+    /// **Almost everything does, and the exception is the point.** A hit
+    /// normally writes `Action::HitStun` over whatever the victim was doing, so
+    /// even a hit with `hitstun: 0` cancels the move they were in the middle
+    /// of -- they are free again next frame, but the attack they had committed
+    /// to is gone. That is a full interrupt however small the number is, and a
+    /// move that can be thrown instantly and interrupts is the panic button
+    /// that makes commitment optional.
+    ///
+    /// False means it lands without touching their action at all: the damage
+    /// and the slow arrive, and the victim keeps swinging. See
+    /// `World::recall_cuts`, which is the one thing in the game that wants
+    /// this, and `docs/design/kits/shadow-reaver.md` for why.
+    ///
+    /// It is about **frames**, not about force. Knockback is still whatever the
+    /// number says, because moving somebody is not the same as stopping them.
+    pub interrupts: bool,
 }
 
 /// The attack volume a fighter currently has out.
@@ -1701,6 +1720,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         dir: attacker.facing,
         blocked: guarding,
         parried,
+        interrupts: true,
     })
 }
 
@@ -1735,10 +1755,12 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.blocked {
         // No chip damage. The cost of blocking is knockback plus a window
         // where you cannot act -- see defense.md.
-        defender.stun_total = hit.blockstun;
-        defender.action = Action::BlockStun {
-            left: hit.blockstun,
-        };
+        if hit.interrupts {
+            defender.stun_total = hit.blockstun;
+            defender.action = Action::BlockStun {
+                left: hit.blockstun,
+            };
+        }
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
     } else {
@@ -1747,7 +1769,12 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
             defender.seized(hit.by, hit.grabs, 0);
-        } else {
+        } else if hit.interrupts {
+            // Writing the action is the interrupt, and it happens even when
+            // `hitstun` is zero -- `HitStun { left: 0 }` is one frame of
+            // nothing, but the move it replaced is gone. Anything that must
+            // land without stopping its victim has to skip this branch rather
+            // than tune the number to zero. See `Hit::interrupts`.
             defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
         }
@@ -3487,6 +3514,15 @@ impl World {
                 dir: away,
                 blocked: guarding,
                 parried: false,
+                // **The one hit in the game that does not take frames.** The
+                // shadow can be sent on the frame it is asked for and out of
+                // any recovery, so if it also interrupted, the Reaver would
+                // never have to commit to anything: throw the risky move, and
+                // when it goes wrong, recall through whoever is punishing you
+                // and take their attack off them. A shine, and a worse one,
+                // because not even her own animations gate it. It cuts and it
+                // slows; what it may not do is hand her the exchange back.
+                interrupts: false,
             },
         );
         self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
@@ -3678,6 +3714,7 @@ impl World {
                                 dir: V3::ZERO,
                                 blocked: guarding,
                                 parried,
+                                interrupts: true,
                             },
                         );
                         if parried {
@@ -3780,12 +3817,13 @@ impl World {
             EffectKind::GuillotineLotus => {
                 let radius = effect.field_radius();
                 let coming_back = effect.lotus_coming_back();
+                let half_thick = t::lotus_blade_thickness();
                 for blade in 0..LOTUS_BLADES {
                     let (was, at) = effect.lotus_span(blade, effect.pos);
                     for i in 0..MAX_PLAYERS {
                         if !self.effects_reach(i, effect.owner)
                             || effect.already_hit(blade, i)
-                            || !self.swept(i, was, at, radius)
+                            || !self.sliced(i, was, at, radius, half_thick)
                         {
                             continue;
                         }
@@ -3858,16 +3896,37 @@ impl World {
         victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
     }
 
-    /// Did a blade sweeping from `was` to `at` cross this fighter's body?
+    /// Did a blade sweeping from `was` to `at` slice this fighter?
     ///
-    /// The capsule test [`resolve_hit`] already uses for a weapon that is a
-    /// line, against the same standing body. It exists because a fast enough
-    /// point tunnels: the thing being tested here crosses a metre in a frame,
-    /// and a body is not a metre wide.
-    fn swept(&self, victim: usize, was: V3, at: V3, radius: Fx) -> bool {
+    /// **A disc, not a ball**, and the shape is the ability. A Guillotine blade
+    /// is a shuriken thrown flat: wide in the plane the flower lies in, and
+    /// barely there at all across it. Tested as a sphere it was a beach ball --
+    /// at a radius wider than a fighter it swallowed everything near the line
+    /// whatever its height, which is both the wrong picture and the wrong rule.
+    ///
+    /// So two tests rather than one. **Width is measured flat**, against the
+    /// swept line, because that is the direction a blade is wide in. **Height
+    /// is a slab**: the blade occupies `half_thick` either side of the plane,
+    /// and has to overlap the body to touch it.
+    ///
+    /// The second one is the interesting half. The flower is planar and at
+    /// waist height, so a slab that thin is something a fighter can **jump**,
+    /// which a ball of the old radius was not -- it reached from the shins to
+    /// the chest. That is the counterplay the shape was always supposed to
+    /// imply and never did.
+    fn sliced(&self, victim: usize, was: V3, at: V3, radius: Fx, half_thick: Fx) -> bool {
         let p = self.players[victim];
-        let spine = V3::new(p.pos.x, p.pos.y.add(p.hurt_height()), p.pos.z);
-        crate::math::segment_gap(was, at, p.pos, spine).raw() <= radius.add(t::body_radius()).raw()
+        let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
+        let here = flat(p.pos);
+        let wide = crate::math::segment_gap(flat(was), flat(at), here, here);
+        if wide.raw() > radius.add(t::body_radius()).raw() {
+            return false;
+        }
+        // The slab the blade sweeps this frame: it is level, so both ends are
+        // at the same height and either will do.
+        let lo = at.y.sub(half_thick);
+        let hi = at.y.add(half_thick);
+        p.pos.y.raw() <= hi.raw() && p.pos.y.add(p.hurt_height()).raw() >= lo.raw()
     }
 
     /// Is this fighter's body inside a sphere?
@@ -3966,6 +4025,7 @@ impl World {
                 dir: away,
                 blocked: guarding,
                 parried,
+                interrupts: true,
             },
         );
         if parried {
@@ -4594,6 +4654,7 @@ impl World {
                         dir: beam.dir(),
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 if parried {
@@ -4756,6 +4817,7 @@ impl World {
                         dir: away,
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 if parried {

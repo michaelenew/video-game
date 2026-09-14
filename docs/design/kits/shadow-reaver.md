@@ -117,9 +117,13 @@ is still a punish.
 **Startup** fast · **Recovery** short · **Range** at the shadow · **Mechanic** requires
 the shadow; keeps it
 
-**Six blades erupt from the shadow along curving paths, hang open, and then chase it
+**Twelve blades erupt from the shadow along curving paths, hang open, and then chase it
 home**, cutting on the way out and again on the way back.
 
+- **Each one is a disc.** A shuriken thrown flat: wide in the plane the flower lies in,
+  and barely there across it. It was a sphere of nearly half a metre — wider than a
+  fighter's own body and reaching from the shins to the chest — which read as a beach
+  ball rather than a blade, and was not a shape anybody could do anything about.
 - **The flower is flat.** It opens, holds and closes in one horizontal plane at the
   shadow's midriff — chest-high on nobody, waist-high on everybody, and the same height
   for the whole of its life.
@@ -131,6 +135,19 @@ home**, cutting on the way out and again on the way back.
   against the direction it opened in, and further, so it crosses the bearing it started
   from rather than unwinding onto it. It decelerates into the shadow and deals a share of
   what it dealt going out.
+
+**So the flower can be jumped**, and that is the counterplay the shape always implied and
+never delivered. A thin slab at waist height is something a fighter can get over; a sphere
+from the shins to the chest was not. Leaving sideways used to be the only answer.
+
+**Twelve small blades rather than six big ones, at half the damage each.** The danger is
+meant to be the shape it sweeps rather than any one thing landing, and a single blade is
+now a scratch — under a third of her own poke. What that buys is a flower that reads as
+petals: solid near the shadow, and **gapped at the rim**, where the twelve arms are far
+enough apart to stand between. Measured at full extension, where you are standing relative
+to a petal is worth the difference between taking nothing and taking a third of what the
+middle deals. That is spatial counterplay of the kind the class is supposed to be made of,
+and it is why the blades are not simply made wider to close the gaps.
 
 That last one is a hit test as much as a look. A return that retraced its outward arm
 would be sweeping ground it had already cut — ground whose occupants were cut once and
@@ -161,8 +178,8 @@ two buttons: `Q`, then right click.
 >
 > The blades are tested as **swept lines** rather than as points, and that is a hit test
 > rather than a flourish: the eruption crosses four metres in seven frames, so a blade
-> sampled as a ball starts the frame at the shadow's feet and ends it a metre past
-> whoever was standing there — missing the one victim the ability is named for.
+> sampled at a point starts the frame at the shadow and ends it a metre past whoever was
+> standing there — missing the one victim the ability is named for.
 
 ### The dash to the shadow — `shift` + forward
 **Startup** instant · **Range** the leash · **Mechanic** requires the shadow out;

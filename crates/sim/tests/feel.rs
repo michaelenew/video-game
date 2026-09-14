@@ -131,10 +131,23 @@ fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
     // And it has to be the smallest hit in the class: what it buys is an
     // interrupt, not damage, and a no-stun move that also hit hard would beat
     // the moves that pay stun for their damage at their own game.
+    //
+    // **Only moves that actually swing something.** A move with no hitbox --
+    // `radius` zero, a gesture that puts something into the world and lets the
+    // thing it placed do the hitting -- has no frame advantage to be wrong
+    // about: `on_hit` is derived from the attacker's own active and recovery
+    // frames against a victim the move never touches, which is why the frame
+    // table prints `--` for it rather than a number. The rule above is about
+    // hitboxes that trade stun for an interrupt, and a gesture trades nothing.
+    // Asked of one anyway it reads a `damage` field that belongs to whatever
+    // the gesture placed, which is how it came to have an opinion about the
+    // Reaver's Send shadow -- a move whose damage is carried by the second body
+    // on its way home, and which by design cannot interrupt anybody at all.
+    // See `Hit::interrupts`.
     for class in ALL_CLASSES {
         let table = moves::table(class);
         let softest = table.iter().map(|m| m.damage).min().unwrap();
-        for m in table.iter().filter(|m| m.hitstun == 0) {
+        for m in table.iter().filter(|m| m.hitstun == 0 && m.strikes()) {
             assert!(
                 m.on_hit() < 0,
                 "{} {}: {:+} on hit with no stun at all -- free pressure",

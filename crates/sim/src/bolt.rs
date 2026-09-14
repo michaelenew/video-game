@@ -223,6 +223,7 @@ pub fn step(
                         dir: V3::new(shot.dir.x, Fx::ZERO, shot.dir.z).normalized(),
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 *slot = None;

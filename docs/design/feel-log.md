@@ -3128,3 +3128,84 @@ click*. The HUD's frame-data line names the locked ability and counts it down,
 which is there for exactly that judgement — if the answer turns out to be that
 the lock needs to be felt rather than read, that is a sign the number is wrong
 rather than a sign the readout needs to be bigger.
+### 2026-09-14 — Send shadow: instant, and in exchange it cannot take your frames
+
+**Changed** `send_shadow.startup` to 1 (from the 0 it was baked to, and the 8 before that).
+`send_shadow.damage` back to 70 from 0. `hitstun`, `blockstun` and `knockback` stay at 0. New
+`Hit::interrupts`, false for the recall and true for everything else. The `reaver_mechanic`
+clip's gather is now conditional on there being startup frames to hold one.
+
+**Why** Reported: the shadow feels much better at a frame of startup, otherwise it feels like
+input lag — and to compensate it must have no immediate effect on struck enemies, or it becomes
+the Melee shine and a more oppressive one, because not even her own abilities gate it. She would
+never have to fully commit: hold the shadow for an opportune interrupt in case any of her own
+abilities put her in a bad position.
+
+That is exactly right, and the second half was **not** achievable by tuning. `apply_hit` writes
+`Action::HitStun` over whatever the victim was doing regardless of the number, so
+`HitStun { left: 0 }` is one frame of nothing and a *cancelled attack* — a full interrupt with a
+zero on it. Zeroing `hitstun` looked like it removed the interrupt and removed only the stun.
+Hence a real flag rather than a number, and it is about frames rather than force: knockback is
+still whatever the number says, because moving somebody is not the same as stopping them.
+
+With a lever that works, the damage does not need to be zero. The mechanic's own description of
+itself is a second body dashing home through anything in the way, **cutting and slowing it** —
+what it gives up is the interrupt.
+
+**One frame rather than none.** Zero is not faster in any way a player can feel and it leaves
+the animation nothing to put the release on: `phases()` is `(s-1, s, s+a)`, so a zero startup
+collapses the wind-up frame and the strike frame onto frame 0 and the body has to teleport into
+the gesture. It was breaking two clip tests for exactly that reason.
+
+The clip's gather is conditional now, which is the honest authoring: a wind-up is frames the
+opponent gets to read, and at one frame of startup there are none. **A body that visibly gathers
+before a move that cannot be reacted to is the animation lying about the frame data.** Drag the
+startup back up in the Oven and the gather comes back with it.
+
+**Verdict** open. The prediction is that this is the shape the mechanic wanted all along — the
+press answers instantly, and what it buys is position rather than tempo. The thing to watch is
+whether the recall now feels *weightless* going through somebody: a cut with no stun and no
+shove is a strange sensation, and if it reads as passing through them rather than through them,
+the answer is probably a visual one rather than putting the stun back.
+
+### 2026-09-14 — the blades were beach balls
+
+**Changed** The Guillotine opens **twelve** blades rather than six, each a **disc** rather than
+a sphere, at **half the damage**. `lotus,_blade_radius` 0.45 → 0.22, new
+`lotus,_blade_half-thickness` at 0.08, `guillotine.damage` 40 → 20. `Effect::struck` widened
+from `u32` to `u64`.
+
+**Why** Reported: the hitboxes should be discs or short cylinders, because they are supposed to
+be shuriken-like blades — right now they are really big and feel like beach balls.
+
+They were. A sphere of radius 0.45 is wider than a fighter's own body and reached from the shins
+to the chest, so six of them was less a flower than a ring of boulders. A blade is now wide in
+the plane the flower lies in and barely there across it, which is what a shuriken thrown flat
+actually is, and the hit test says so: width measured flat against the swept line, height a thin
+slab that has to overlap the body.
+
+**The slab is the interesting half.** The flower is planar and at waist height, so a blade this
+thin is something a fighter can **jump** — which the old sphere was not. That is counterplay the
+ability's own description always implied and never delivered.
+
+**Twelve at half the damage is close to the same ability, and that is deliberate.** Doubling the
+count halves the angular spacing while halving the radius halves each blade's coverage, so what
+one victim actually eats barely moves; what changes is that the danger is the shape rather than
+any one thing landing. Measured against a standing dummy: 66 damage at a metre out, 46 at two,
+13–46 at three, 0–33 at four — and at the rim **where you stand relative to a petal is worth the
+whole difference**, because twelve arms at full extension are far enough apart to stand between.
+
+That gap is a feature and the reason the blades are not simply widened to close it: near the
+shadow the flower is solid, at the rim it is petals, and reading which you are in is the spatial
+decision the class is made of. It is worth watching that it does not read as the ability
+*whiffing* rather than as the player having positioned well.
+
+**`Effect::struck` had to grow.** The mask packs one bit per part per victim; at six blades and
+three victims that is eighteen bits and a `u32` fitted exactly, at twelve it is thirty-six and
+would have truncated in **silence** — a blade sharing a bit with another goes quiet the moment
+that one lands. There is now a `const` assertion beside `LOTUS_BLADES` so the next count change
+fails to compile rather than failing to cut.
+
+**Verdict** open on both the count and the rim gaps. `lotus,_blade_radius` is the knob if the
+petals turn out to be too easy to stand between, and the jump is the one to watch in play: it may
+turn out that a flower you can hop is a flower nobody respects.

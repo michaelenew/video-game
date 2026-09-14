@@ -842,7 +842,11 @@ fn mechanic() -> Recipe {
     let clip = Clip::ReaverMechanic;
     let (_, release, follow) = phases(clip);
     let last = clip.length() - 1;
-    let gather = release.saturating_sub(4).max(1);
+    // Four frames before the release, when there are four frames to have. At a
+    // one-frame startup there are none: the release *is* the first frame she
+    // does anything on, and the gather is dropped rather than crushed into the
+    // same frame. See the note on the key list.
+    let gather = release.saturating_sub(4);
     let settle = follow + (last - follow) / 2;
 
     // Gathered. Weight back over the rear foot, both hands drawn in across the
@@ -924,14 +928,25 @@ fn mechanic() -> Recipe {
                 gesture ends, and an arm that stopped dead would say it had \
                 already arrived."
             .into(),
-        keys: vec![
-            Key::eased(0, ready(), Ease::SMOOTH),
-            Key::eased(gather, gathered, Ease::OUT),
-            Key::eased(release, thrown, Ease::OUT),
-            Key::eased(follow, following, Ease::SMOOTH),
-            Key::eased(settle, following, Ease::SMOOTH),
-            Key::eased(last, ready(), Ease::SMOOTH),
-        ],
+        keys: {
+            let mut keys = vec![Key::eased(0, ready(), Ease::SMOOTH)];
+            // **The gather is conditional, and that is the move being honest.**
+            // It is a wind-up, and a wind-up is frames the opponent gets to
+            // read. Send shadow is thrown on the frame it is asked for, so
+            // there are none to read and there must not be an animation
+            // claiming otherwise -- a body that visibly gathers before a move
+            // that cannot be reacted to is the animation lying about the frame
+            // data. Drag the startup back up in the Oven and the gather comes
+            // back with it.
+            if gather > 0 && gather < release {
+                keys.push(Key::eased(gather, gathered, Ease::OUT));
+            }
+            keys.push(Key::eased(release, thrown, Ease::OUT));
+            keys.push(Key::eased(follow, following, Ease::SMOOTH));
+            keys.push(Key::eased(settle, following, Ease::SMOOTH));
+            keys.push(Key::eased(last, ready(), Ease::SMOOTH));
+            keys
+        },
     }
 }
 

@@ -751,36 +751,44 @@ fn being_hit_throws_the_remembered_press_away() {
     // to want it, on an input she gave in a situation that no longer exists.
     let mut w = duel();
     let at_her = Input::aimed(L, Input::QUARTER_TURN * 2);
-    // She presses right click and is caught by the dummy's poke in the same
-    // breath. The press is live; the hit lands on top of it.
-    w.advance([Input::new(R), at_her]);
-    // She threw the send, so wait it out and put the shadow back at her heel,
-    // leaving nothing but the question of what a *second* press survives.
-    run(&mut w, 40, 0, 0);
-    let out_before = shadow(&w).is_out();
+    let settled = shadow(&w).doing;
+    assert!(
+        matches!(settled, Ghost::Attending),
+        "the fixture did not start with the shadow at her heel"
+    );
 
-    // Now the press that matters: one frame of right click, and then she is hit
-    // before it can be spent.
+    // Wind the dummy up and wait for the blow to be **live**, so the press
+    // below lands a frame or two before it connects rather than at whatever
+    // moment the loop happens to reach. Timing this by luck is how the test
+    // came to depend on a hit arriving inside the buffer.
+    let mut swinging = false;
+    for _ in 0..60 {
+        w.advance([Input::default(), at_her]);
+        if matches!(w.players[1].action, Action::Active { .. }) {
+            swinging = true;
+            break;
+        }
+    }
+    assert!(swinging, "the dummy never got a blow out");
+
+    // One frame of right click, into the teeth of it.
+    w.advance([Input::new(R), at_her]);
     let mut hit = false;
-    for f in 0..180 {
-        let hers = if f == 0 {
-            Input::new(R)
-        } else {
-            Input::default()
-        };
-        w.advance([hers, at_her]);
+    for _ in 0..8 {
+        w.advance([Input::default(), at_her]);
         if w.players[0].action.stunned() {
             hit = true;
             break;
         }
     }
-    assert!(hit, "the dummy never managed to hit her");
+    assert!(hit, "the blow that was already live never landed");
+
+    // Long enough for the stun to run out and the whole buffer with it.
     run(&mut w, 90, 0, 0);
-    assert_eq!(
-        shadow(&w).is_out(),
-        out_before,
-        "a right click pressed before she was hit fired anyway once the stun \
-         ran out"
+    assert!(
+        matches!(shadow(&w).doing, Ghost::Attending),
+        "a right click pressed before she was hit sent the shadow anyway once \
+         the stun ran out"
     );
 }
 
@@ -832,4 +840,225 @@ fn cutting_a_recovery_short_leaves_every_move_punishable() {
             m.name
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// It is instant, and in exchange it cannot save her
+// ---------------------------------------------------------------------------
+//
+// Two rules that only make sense as a pair, and the pair is the whole balance
+// of the mechanic.
+//
+// **It comes out on the frame it is asked for.** Anything slower reads as input
+// lag rather than as a wind-up, because the shadow is not an attack you are
+// committing to -- it is where your second body is, and a delay between asking
+// and moving it feels like the game not listening.
+//
+// **So it may not take an enemy's frames.** Send shadow can already be thrown
+// out of any move's recovery. Instant *and* interrupting, it would be the melee
+// shine and a worse one: not even her own animations gate it, so she would
+// never have to fully commit to anything. Throw the risky move, and when it
+// goes wrong, recall through whoever is punishing you and take their attack off
+// them. The shadow can hold for an opportune interrupt in case any of her own
+// abilities put her in a bad position, and that is precisely the option the
+// class must not have.
+//
+// It cuts, and it slows. What it may not do is hand her the exchange back.
+
+#[test]
+fn the_shadow_comes_out_on_the_frame_it_is_asked_for() {
+    // One frame of startup, not none and not eight. None is not faster in any
+    // way a player can feel -- it is one frame -- and it leaves the animation
+    // with nothing to put the release on, so the body has to teleport into the
+    // gesture. What matters is that it is *unreactable and unwaitable*: a
+    // startup you could see coming would be a startup you could answer, and
+    // this is a mechanic rather than an attack.
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    assert_eq!(
+        send.startup, 1,
+        "Send shadow is {} frames of startup. It is the one input in the kit \
+         that is not an attack, and anything past a frame reads as input lag.",
+        send.startup
+    );
+
+    // And that is what the player gets: press, and the second body is already
+    // leaving.
+    let mut w = duel();
+    run(&mut w, 1, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "right click did not throw Send shadow on the press frame"
+    );
+    run(&mut w, 2, 0, 0);
+    assert!(
+        !matches!(shadow(&w).doing, Ghost::Attending),
+        "the shadow had not begun to leave two frames after the press"
+    );
+}
+
+#[test]
+fn the_recall_does_not_take_an_enemys_frames() {
+    // The load-bearing one. He is mid-swing when the shadow comes home through
+    // him: he takes the cut, and he keeps swinging.
+    //
+    // Note that tuning `hitstun` to zero does **not** buy this. A hit writes
+    // `Action::HitStun` over whatever the victim was doing whatever the number
+    // is, so `HitStun { left: 0 }` is one frame of nothing and a cancelled
+    // attack -- a full interrupt with a zero on it. See `Hit::interrupts`.
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::ZERO);
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-3), Fx::ZERO, Fx::from_int(6));
+    run(&mut w, 20, 0, 0);
+
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    tap(
+        &mut w,
+        R,
+        down(25),
+        (send.whiff_cost() + t::shadow_send_frames()) as u32,
+    );
+    // Stand him on the line home, and start him swinging.
+    let out = shadow(&w).pos;
+    let midway = V3::new(
+        out.x.add(w.players[0].pos.x).mul(Fx::ratio(1, 2)),
+        Fx::ZERO,
+        out.z.add(w.players[0].pos.z).mul(Fx::ratio(1, 2)),
+    );
+    w.players[1].pos = midway;
+
+    // He throws his committed move -- the slowest thing he has, so there is
+    // plenty of it left to be robbed of.
+    let his = sim::moves::get(Class::Bulwark, SLOT_COMMITTED);
+    w.advance([Input::default(), Input::new(SHIFT | L)]);
+    assert_eq!(
+        w.players[1].action.attack_kind(),
+        Some(SLOT_COMMITTED),
+        "the dummy never started his move"
+    );
+
+    // And she recalls through him.
+    let before = hurt(&w);
+    let mut caught_mid_move = false;
+    let mut still_swinging = true;
+    w.advance([Input::new(R), Input::default()]);
+    for _ in 0..(his.whiff_cost() as usize) {
+        w.advance([Input::default(), Input::default()]);
+        if hurt(&w) > before {
+            caught_mid_move = true;
+        }
+        if caught_mid_move && w.players[1].action.attack_kind().is_none() {
+            still_swinging = false;
+            break;
+        }
+    }
+
+    assert!(
+        caught_mid_move,
+        "the recall never reached him, so this proves nothing"
+    );
+    assert!(
+        still_swinging,
+        "the recall cut him and took his move off him. Instant and interrupting \
+         is the shine: she could throw anything, and recall out of the punish."
+    );
+}
+
+#[test]
+fn the_recall_still_cuts_and_slows() {
+    // The other half, and the reason "no immediate effect" is not "no effect".
+    // The mechanic's own description of itself is a second body dashing home
+    // through anything in the way, *cutting and slowing it* -- what it gives up
+    // is the interrupt, not the damage.
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    assert!(
+        send.damage > 0,
+        "the recall deals no damage, so the shadow comes home through people \
+         without touching them"
+    );
+    assert_eq!(
+        send.hitstun, 0,
+        "the recall stuns, which is the interrupt arriving by the front door"
+    );
+    assert_eq!(
+        send.knockback.raw(),
+        0,
+        "the recall shoves, which is taking somebody's position away in a move \
+         that is not allowed to take their frames"
+    );
+}
+
+#[test]
+fn cutting_a_recovery_short_does_not_rescue_her_from_the_punish() {
+    // The two rules meeting. She throws Executioner, it is blocked, and she
+    // cancels the recovery into a recall aimed through him -- the exact escape
+    // the philosophy forbids. He is punishing her before the shadow arrives and
+    // he keeps punishing her through it.
+    let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    let exec = sim::moves::get(Class::ShadowReaver, SLOT_COMMITTED);
+    // Cancelling swaps the rest of a recovery for the whole of Send shadow, so
+    // the frames only come back if Send shadow is shorter than what it cut.
+    // That is survivable on its own; what would not be is buying an interrupt
+    // with them as well.
+    let cancelled_busy = (exec.active as i32 - 1) + send.whiff_cost() as i32;
+    assert!(
+        exec.blockstun as i32 - cancelled_busy < 0,
+        "a blocked Executioner cancelled into Send shadow is {:+} on block -- \
+         she is safe, and the cancel has become the escape it is not meant to be",
+        exec.blockstun as i32 - cancelled_busy
+    );
+    // And the shadow it throws cannot close the gap by stopping him.
+    assert!(
+        send.hitstun == 0 && send.knockback.raw() == 0,
+        "the move she cancels into can stun or shove, so she can buy her way \
+         out of the punish she cancelled"
+    );
+}
+
+#[test]
+fn the_repeat_lockout_never_holds_up_the_recall() {
+    // Where this class's mechanic meets the roster-wide rule that an ability
+    // you have just thrown cannot be thrown again for thirty frames.
+    //
+    // The two would contradict each other if the lockout counted the recall as
+    // a second use: the shadow is the class's escape, and an escape you have to
+    // wait thirty frames for is the input lag the frame-1 startup exists to
+    // avoid -- displaced from the first press to the one that matters. It does
+    // not, because a press on a shadow that is already out is the second half
+    // of the activation that was paid for when it was sent, not a new one.
+    //
+    // What the lockout does gate is **sending it again** once it is home, which
+    // is the setup and not the escape. That is the ordinary rule and this class
+    // has no argument with it.
+    let mut w = duel();
+    run(&mut w, 2, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "right click did not send the shadow"
+    );
+    // Out on the field, and her own recovery over.
+    run(&mut w, 40, 0, 0);
+    assert!(shadow(&w).is_out(), "the shadow never went out");
+    assert!(
+        w.players[0].locked_out(SLOT_MECHANIC),
+        "the send armed no lockout at all, so this proves nothing about it \
+         being ignored"
+    );
+
+    // And the recall answers anyway.
+    run(&mut w, 1, R, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(SLOT_MECHANIC),
+        "the repeat lockout swallowed the recall. The shadow is the escape, \
+         and an escape on a thirty-frame gate is the input lag the frame-1 \
+         startup exists to avoid."
+    );
+    run(&mut w, 90, 0, 0);
+    assert!(
+        !shadow(&w).is_out(),
+        "the recall came out but the shadow never came home"
+    );
 }
