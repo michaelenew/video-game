@@ -566,8 +566,9 @@ fn swing_tilt(look: Input, grounded: bool) -> Fx {
 /// its usual disguise: it agrees with the crosshair at long range and is out by
 /// a body at short.
 ///
-/// Nothing occludes it. A shadow is a shadow; you can point at one through a
-/// wall, and the dash that follows is the class's mobility rather than a shot.
+/// Nothing occludes it. A shadow is a shadow: you can point at one through a
+/// wall, and whether she can actually *get* there is a separate question asked
+/// of the world rather than of the camera -- see [`clear_between`].
 pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) -> bool {
     let eye = crate::camera::eye(scene.players[who].pos, look);
     let column = t::body_radius().add(slack);
@@ -580,6 +581,82 @@ pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) ->
         t::body_height().add(slack.add(slack)),
     )
     .is_some()
+}
+
+/// Is there a straight line from one body to another that nothing solid
+/// crosses?
+///
+/// The Reaver's dash to her shadow is the one thing that asks, and the rule it
+/// is asking about is deliberately blunt: **the dash goes to wherever the
+/// shadow is, along the straight line between them, and only a total
+/// obstruction stops it.** Total means what it says -- not "a ledge is in the
+/// way of her feet", which is every dash onto anything, but "there is no way
+/// through at all".
+///
+/// `from` and `to` are the two sets of feet. Both bodies are upright columns
+/// standing over a fixed spot, so **every line between them has the same
+/// horizontal projection** and they differ only in how they rise. That makes
+/// the four corner lines -- feet to feet, feet to head, head to feet, head to
+/// head -- the extremes of the whole family, and a solid that crosses all four
+/// crosses everything in between. So: clear if any one of the four is clear.
+///
+/// It is what lets her dash *up*. Standing at the foot of a platform with the
+/// shadow on the deck, the line from her feet is through the wall of it and the
+/// line from her head is over the lip -- she can see a way up, so she takes it.
+/// Standing on the floor with the shadow on the far side of that platform, all
+/// four lines go into it, and the dodge stays an ordinary dodge.
+///
+/// The four lines are measured from just above the soles and just below the
+/// crown, by the collision skin. A body standing on a surface is standing
+/// *exactly* on it, so a line taken from the soles themselves grazes the thing
+/// it is standing on and reads as a wall. Trimming the body rather than the
+/// world is what keeps two stacked solids one obstruction instead of two with a
+/// hairline gap between them.
+pub fn clear_between(from: V3, to: V3, scene: &Scene) -> bool {
+    let sole = arena::SKIN;
+    let crown = t::body_height().sub(arena::SKIN);
+    [(sole, sole), (sole, crown), (crown, sole), (crown, crown)]
+        .into_iter()
+        .any(|(lift_a, lift_b)| {
+            nothing_between(
+                V3::new(from.x, from.y.add(lift_a), from.z),
+                V3::new(to.x, to.y.add(lift_b), to.z),
+                scene,
+            )
+        })
+}
+
+/// One line of [`clear_between`], against the terrain and the structures on it.
+///
+/// The ground plane is not consulted: every surface a body can stand on is at
+/// or above it, so the floor is never *between* two of them.
+fn nothing_between(a: V3, b: V3, scene: &Scene) -> bool {
+    let span = b.sub(a);
+    let reach = span.len();
+    if reach.raw() <= 0 {
+        return true;
+    }
+    let dir = span.normalized();
+    // Short of the far end, so a line that arrives exactly on the surface the
+    // other body is standing on has not been stopped by it.
+    let stopped = |hit: Option<Fx>| hit.is_some_and(|d| d.raw() < reach.raw());
+    for solid in arena::SOLIDS.iter() {
+        if stopped(crate::math::ray_hits_box(a, dir, solid.min, solid.max)) {
+            return false;
+        }
+    }
+    for stone in scene.stones.iter().flatten() {
+        if stopped(crate::math::ray_hits_cylinder(
+            a,
+            dir,
+            stone.at,
+            t::structure_radius(),
+            stone.standing_height(),
+        )) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Where the class mechanic is standing.

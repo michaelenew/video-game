@@ -540,6 +540,24 @@ pub fn shadow_buffer() -> u16 {
     oven::scalar(Scalar::ShadowBuffer).max(1) as u16
 }
 
+/// How long the carry lasts: the window a dash's arrival opens, in which a jump
+/// takes the speed she crossed at up with her.
+///
+/// **A timing rather than a distance.** What is left of the dodge when she
+/// arrives is already a window of exactly this kind -- she is still sliding,
+/// and the slide decays -- but its length is however much of the dodge the
+/// crossing did not spend, which is a function of how far away she left the
+/// shadow. At the end of the leash that is about a frame, and a tech nobody
+/// can hit at the range the class is built around is a tech that does not
+/// exist. So arriving tops the dodge up to at least this many frames, and the
+/// window is the same length however far she came.
+///
+/// It never *shortens* one: a short dash keeps the whole vulnerable tail it
+/// has always had, and only the first frames of that tail are the window.
+pub fn shadow_carry() -> u16 {
+    oven::scalar(Scalar::ShadowCarry).max(0) as u16
+}
+
 /// How fast she crosses to her shadow on a dash.
 ///
 /// Constant while the dash runs rather than a decaying shove, so the distance

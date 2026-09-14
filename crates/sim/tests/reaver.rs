@@ -68,6 +68,90 @@ fn hurt(w: &World) -> i32 {
     sim::state::max_health() - w.players[1].health
 }
 
+/// Ask `aim` something about a world as it stands. The scene is everything a
+/// ray can meet, borrowed from copies exactly as the simulation builds it.
+fn with_scene<T>(w: &World, ask: impl FnOnce(&sim::aim::Scene) -> T) -> T {
+    let stones = sim::stones::gather(&w.players);
+    let players = w.players;
+    let effects = w.effects;
+    ask(&sim::aim::Scene {
+        stones: &stones,
+        players: &players,
+        effects: &effects,
+        quarry: w.monster.as_ref(),
+    })
+}
+
+/// The pitch, looking down +X, that puts her crosshair on a thing standing at
+/// `at`.
+///
+/// Searched rather than solved. The camera's geometry belongs to the camera,
+/// and a test that worked the angle out for itself would be a second copy of
+/// it -- which is the whole mistake `aim` exists to stop.
+fn crosshair_onto(w: &World, at: V3) -> i16 {
+    with_scene(w, |scene| {
+        for degrees in -89..=89 {
+            let pitch = (degrees * 65536 / 360) as i16;
+            if sim::aim::pointing_at(
+                0,
+                Input::looking_at(0, 0, pitch),
+                at,
+                t::shadow_lock_cone(),
+                scene,
+            ) {
+                return pitch;
+            }
+        }
+        panic!("no pitch puts the crosshair on it");
+    })
+}
+
+/// Stand the shadow out on the field at `at`, without playing a throw to get it
+/// there. The dash tests are about the dash.
+fn put_the_shadow_at(w: &mut World, at: V3) {
+    let mut s = shadow(w);
+    s.pos = at;
+    s.doing = Ghost::Waiting;
+    w.players[0].mechanic = Mechanic::Shadow(s);
+}
+
+/// A Reaver on open floor, facing down +X, with nothing in front of her and
+/// nobody near enough to shove her off a line.
+///
+/// `z = 8` is past the end of both platforms, which matters more than it
+/// sounds: `duel()` stands her on top of one.
+fn in_the_open() -> World {
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
+    run(&mut w, 20, 0, 0);
+    w
+}
+
+/// The right-hand platform: the dais the third dash test is about.
+///
+/// Found rather than written down, so the test follows the blockout. The walls
+/// are solids too and they sit *outside* the play area, which is what tells
+/// them apart from a platform you can stand in front of.
+fn dais() -> sim::arena::Solid {
+    *sim::arena::SOLIDS
+        .iter()
+        .filter(|s| s.max.x.raw() < sim::arena::ARENA_HALF.raw())
+        .max_by_key(|s| s.min.x.raw())
+        .expect("the arena has a platform")
+}
+
+/// A Reaver on the floor with that platform four metres in front of her.
+fn facing_the_dais() -> World {
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::ZERO);
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
+    run(&mut w, 20, 0, 0);
+    w
+}
+
 // ---------------------------------------------------------------------------
 // It is always somewhere
 // ---------------------------------------------------------------------------
@@ -342,6 +426,209 @@ fn a_forward_dodge_at_the_shadow_crosses_to_it() {
     assert!(
         !shadow(&w).is_out(),
         "she crossed to the shadow and left it standing there"
+    );
+}
+
+#[test]
+fn a_forward_air_dodge_at_the_shadow_is_the_dash_too() {
+    // Being off the floor is the commonest reason she is not standing where she
+    // wants to be, so a mobility option that switched off the moment she jumped
+    // would be mobility in the wrong place. The airdodge, aimed, is the dash --
+    // and it pays the airdodge, because one commitment per airtime is what
+    // stops a jump becoming flight.
+    let mut w = in_the_open();
+    let out = V3::new(Fx::from_int(7), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+
+    run(&mut w, 10, Input::SPACE, 0);
+    assert!(!w.players[0].grounded, "she never left the floor");
+    // Seven metres, against an airdodge that covers a shade over three. Nothing
+    // but the dash reaches from here.
+    let reach = t::air_dodge_speed()
+        .mul(Fx::from_int(t::air_dodge_frames() as i32))
+        .mul(sim::DT);
+    assert!(
+        out.sub(w.players[0].pos).flat_len().raw() > reach.raw().saturating_mul(2),
+        "the fixture left the shadow inside an airdodge's reach, so arriving proves nothing"
+    );
+
+    let mut spent_the_airdodge = false;
+    let mut closest = Fx::from_int(100);
+    for _ in 0..(t::dodge_frames() as u32 + 4) {
+        let pitch = crosshair_onto(&w, out);
+        run(&mut w, 1, SHIFT | W, pitch);
+        spent_the_airdodge |= w.players[0].air_dodged;
+        closest = closest.min(w.players[0].pos.sub(out).len());
+    }
+    assert!(
+        closest.raw() < t::body_radius().raw(),
+        "she came no closer than {:.1} m to the shadow, so it was an airdodge",
+        closest.to_f32_for_render()
+    );
+    assert!(
+        !shadow(&w).is_out(),
+        "she crossed to the shadow and left it standing there"
+    );
+    assert!(
+        spent_the_airdodge,
+        "the air dash was free -- one commitment per airtime is what stops a \
+         jump becoming flight"
+    );
+}
+
+#[test]
+fn the_dash_climbs_to_a_shadow_standing_on_a_dais() {
+    // The dash goes to where the shadow *is*, along the straight line between
+    // them. It used to drive only her feet, so a shadow a storey up was a
+    // shadow she ran at the side of the thing it was standing on.
+    let mut w = facing_the_dais();
+    let dais = dais();
+    let deck = V3::new(
+        dais.min.x.add(dais.max.x).mul(Fx::ratio(1, 2)),
+        dais.max.y,
+        Fx::ZERO,
+    );
+    put_the_shadow_at(&mut w, deck);
+    assert!(
+        w.players[0].pos.y.raw() == 0,
+        "she is meant to start on the floor, below the thing she is dashing on to"
+    );
+
+    let mut arrived = None;
+    for _ in 0..(t::dodge_frames() as u32 + 4) {
+        let pitch = crosshair_onto(&w, deck);
+        run(&mut w, 1, SHIFT | W, pitch);
+        if arrived.is_none() && !shadow(&w).is_out() {
+            arrived = Some(w.players[0].pos);
+        }
+    }
+    let landed = arrived.expect("she never reached the shadow at all");
+    assert!(
+        landed.y.raw() >= dais.max.y.raw(),
+        "she arrived at {:.2} m up, below the deck at {:.2} m",
+        landed.y.to_f32_for_render(),
+        dais.max.y.to_f32_for_render()
+    );
+    assert!(
+        landed.x.raw() > dais.min.x.raw() && landed.x.raw() < dais.max.x.raw(),
+        "she got the height but not the place: {:.2} m is not over the dais",
+        landed.x.to_f32_for_render()
+    );
+}
+
+#[test]
+fn a_stone_across_the_line_leaves_her_with_an_ordinary_dodge() {
+    // The one thing that refuses a dash: no line at all. A stone is exactly as
+    // tall as a fighter, so one standing between the two bodies blocks every
+    // line between them -- which makes denying the Reaver's line a thing the
+    // Elementalist can actually do, rather than a rule nothing exercises.
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Elementalist]);
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
+    run(&mut w, 20, 0, 0);
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+
+    // Halfway, and squarely on the line.
+    let stone = sim::class::Structure {
+        at: V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)),
+        vel: V3::ZERO,
+        age: u16::MAX,
+        struck: 0,
+        launched: false,
+        launch_from: V3::ZERO,
+        knock_struck: 0,
+    };
+    w.players[1].mechanic = Mechanic::Structures([Some(stone), None, None]);
+
+    let stood = w.players[0].pos;
+    let mut sighted = false;
+    for _ in 0..(t::dodge_frames() as u32 + 4) {
+        run(&mut w, 1, SHIFT | W, pitch);
+        sighted |= w.players[0].action.invulnerable();
+    }
+    assert!(sighted, "she did not dodge at all, so this proves nothing");
+    assert!(
+        shadow(&w).is_out(),
+        "she crossed to a shadow there was no way through to"
+    );
+    // She still got the dodge. The class's mobility and the universal defensive
+    // option are the same button, so a refused dash is the other half of the
+    // button rather than a dead press.
+    let went = w.players[0].pos.sub(stood).flat_len();
+    assert!(
+        went.raw() > Fx::ONE.raw(),
+        "the dash was refused and so was the dodge -- she did not move at all"
+    );
+}
+
+#[test]
+fn a_jump_inside_the_carry_leaves_with_the_dash_under_her() {
+    // Arriving leaves her sliding at the speed she crossed at, and the slide
+    // decays. A jump pressed inside that window takes what is left of it up
+    // with her; the earlier she finds it, the further she goes.
+    let mut w = in_the_open();
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+
+    let mut took_off = None;
+    for _ in 0..(t::dodge_frames() as u32 * 2) {
+        // Shift comes off the moment the window opens, so what is measured is
+        // the jump rather than a second dodge thrown on the next frame.
+        let carrying = shadow(&w).carry > 0;
+        let bits = if carrying {
+            W | Input::SPACE
+        } else {
+            SHIFT | W
+        };
+        run(&mut w, 1, bits, pitch);
+        if carrying && took_off.is_none() && !w.players[0].grounded {
+            took_off = Some(w.players[0].vel);
+        }
+    }
+    let leaving = took_off.expect("the jump inside the carry never left the ground");
+    let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
+    assert!(
+        leaving.y.raw() > 0,
+        "she was airborne without going up, so that was the dash and not a jump"
+    );
+    assert!(
+        along.raw() > t::move_speed().mul(Fx::from_int(2)).raw(),
+        "she left the ground at {:.1} m/s, which is a standing jump rather than \
+         a jump with the dash under it",
+        along.to_f32_for_render()
+    );
+}
+
+#[test]
+fn an_ordinary_dodge_has_no_carry_to_jump_out_of() {
+    // The window is a dash's, and only a dash's. Every dodge in the game has a
+    // tail you can be punished during, and a jump out of that tail would be a
+    // universal escape rather than one class's tech.
+    let mut w = in_the_open();
+    let stood = w.players[0].pos;
+    // Nothing out on the field, so shift and forward is the ordinary dodge.
+    assert!(!shadow(&w).is_out());
+    let mut airborne = false;
+    for frame in 0..t::dodge_frames() as u32 {
+        let bits = if frame == 4 {
+            SHIFT | W | Input::SPACE
+        } else {
+            SHIFT | W
+        };
+        run(&mut w, 1, bits, 0);
+        airborne |= !w.players[0].grounded;
+    }
+    assert!(
+        !airborne,
+        "she jumped out of an ordinary dodge, so the carry is not the dash's"
+    );
+    assert!(
+        w.players[0].pos.sub(stood).flat_len().raw() > Fx::ONE.raw(),
+        "she did not dodge at all, so this proves nothing"
     );
 }
 
