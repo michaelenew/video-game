@@ -1017,11 +1017,29 @@ fn place_gusts(sim: Res<Sim>, mut meshes: Query<(&GustMesh, &mut Transform, &mut
         *vis = Visibility::Inherited;
         let radius = shot.girth().to_f32_for_render();
         tf.translation = fx3(shot.pos);
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
-        tf.scale = match shot.gale {
-            sim::gust::Gale::Bolt => Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0),
-            sim::gust::Gale::Disc => Vec3::new(radius * 2.0, radius * 0.5, radius * 2.0),
-        };
+        match shot.gale {
+            // The bolt is stretched along its flight, so it reads as
+            // travelling rather than as a bead hanging in the air.
+            sim::gust::Gale::Bolt => {
+                tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
+                tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+            }
+            // **The disc lies flat, and it is not a choice.** Its hit volume
+            // is a horizontal disc: `aim::first_along` swells the victim's
+            // standing cylinder by the shot's girth in *radius* and never in
+            // height, so what the Gale occupies is a flat disc of that radius
+            // sweeping along its line, and somebody clear above or below that
+            // line is not caught by it however wide it has grown.
+            //
+            // It used to be turned face-on to its own travel -- squashed along
+            // `dir` -- which drew the one picture the volume is not: a wall of
+            // air coming at you, when the thing that can actually hit you is a
+            // frisbee flying edge-first. Identity rotation is the honest one.
+            sim::gust::Gale::Disc => {
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::new(radius * 2.0, radius * 0.12, radius * 2.0);
+            }
+        }
     }
 }
 

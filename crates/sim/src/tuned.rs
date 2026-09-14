@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 250] = [
+pub const SCALARS: [i32; 251] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -251,13 +251,14 @@ pub const SCALARS: [i32; 250] = [
               10, // reaver.dash_carry,_the_jump_window = 10
               20, // movement.committed_mobility_(%) = 20
          2228224, // elementalist.air_bolt_speed = 34
-         1048576, // elementalist.gale_speed = 16
+         1572864, // elementalist.gale_speed = 24
            19661, // elementalist.gale_size_leaving_her_hand_(x) = 0.3
          1703936, // elementalist.landfall_dive_speed = 26
           144179, // elementalist.landfall_stone,_how_far_ahead = 2.2
                6, // elementalist.landfall_stone_rise = 6
             8192, // elementalist.landfall_eruption,_above_the_floor_(turns) = 0.125
           851968, // elementalist.landfall_eruption_push = 13
+         1048576, // elementalist.gale_full_size_after_(m) = 16
 ];
 
 #[rustfmt::skip]
@@ -1131,7 +1132,7 @@ pub const MOVES: [i32; 1134] = [
                3, // move.elementalist.gale.active = 3
               20, // move.elementalist.gale.recovery = 20
              120, // move.elementalist.gale.damage = 120
-         1048576, // move.elementalist.gale.reach = 16
+         2097152, // move.elementalist.gale.reach = 32
           117964, // move.elementalist.gale.radius = 1.8
               22, // move.elementalist.gale.hitstun = 22
               12, // move.elementalist.gale.blockstun = 12

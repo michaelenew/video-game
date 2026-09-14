@@ -24,8 +24,20 @@
 //!
 //! ## The Gale grows, and that is the whole move
 //!
+//! **It is a frisbee, and the hit test says so.** The disc lies *flat* --
+//! `aim::first_along` swells the victim's standing cylinder by the shot's girth
+//! in **radius only**, never in height, so what the shot occupies is a
+//! horizontal disc of that radius sweeping along its line. Someone standing
+//! clear above or below the line it is flying is not caught by it however wide
+//! it has grown, and the renderer draws it lying flat for exactly that reason:
+//! a disc drawn face-on to its own travel would be a picture of a volume the
+//! game does not have.
+//!
 //! A disc of air leaves her hand at [`tuning::gale_start`] of the size its move
-//! row lists and arrives at full size at the end of its travel. **Damage and
+//! row lists and arrives at full size once it has travelled
+//! [`tuning::gale_grow`] -- which is **not** its reach, on purpose: how far it
+//! goes and how fast it opens are two decisions, and a single number for both
+//! means every change to the range quietly retunes the growth. **Damage and
 //! knockback ride the same fraction**, so what it is worth is what it has
 //! become: caught at point blank it is a nudge, and caught at the far end it is
 //! the heaviest shove in the kit. That inverts the spacing every other
@@ -46,6 +58,7 @@
 //! thrown at somebody four metres away still travels its whole range.
 //!
 //! [`tuning::gale_start`]: crate::tuning::gale_start
+//! [`tuning::gale_grow`]: crate::tuning::gale_grow
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
@@ -165,19 +178,26 @@ pub struct Gust {
 }
 
 impl Gust {
-    /// How far along its travel it is, from none of it to all of it.
-    pub fn through(&self) -> Fx {
-        let reach = self.gale.source().reach;
-        if reach.raw() <= 0 {
+    /// How far through its **opening** it is, from none of it to all of it.
+    ///
+    /// **Measured against its own opening distance, not against its reach**,
+    /// and the two are deliberately different questions. How far a shot goes is
+    /// one decision; how quickly it comes up to size is another, and tying them
+    /// together means every change to the range silently retunes the growth --
+    /// double the reach and the disc is half as big everywhere a fighter
+    /// actually stands. See `tuning::gale_grow`.
+    pub fn opened(&self) -> Fx {
+        let over = t::gale_grow();
+        if over.raw() <= 0 {
             return Fx::ONE;
         }
-        let p = self.travelled.div(reach);
+        let p = self.travelled.div(over);
         if p.raw() > Fx::ONE.raw() { Fx::ONE } else { p }
     }
 
     /// How much of itself it is carrying, right now.
     pub fn swell(&self) -> Fx {
-        self.gale.swell(self.through())
+        self.gale.swell(self.opened())
     }
 
     /// Its radius, right now. What the hit test uses and what the renderer

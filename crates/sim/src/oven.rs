@@ -379,6 +379,12 @@ scalars! {
     LandfallRise,      "Elementalist", "Landfall stone rise",                   Frames, 1,        90;
     LandfallTilt,      "Elementalist", "Landfall eruption, above the floor (turns)", Fixed, 0,    fx(1,4);
     LandfallErupt,     "Elementalist", "Landfall eruption push",                Fixed,  0,        fx(40,1);
+    // Appended rather than slotted in beside `GaleStart`, which is where it
+    // belongs by subject and where it may not go: `tuned::SCALARS` is read by
+    // this enum's own discriminant, so inserting one in the middle hands every
+    // knob below it its neighbour's baked value. The palette groups by family,
+    // so it still shows up next to the rest of hers.
+    GaleGrow,          "Elementalist", "Gale full size after (m)",              Fixed,  fx(1,1),  fx(40,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -701,15 +707,18 @@ impl MoveField {
             // should be able to reach for; the Gale, whose whole point is
             // being the heaviest push in its class, is the first that does.
             MoveField::Knockback => (0, fx(30, 1)),
-            // A reach may be as long as the arena is wide, and no longer:
-            // past that, more range is a number that cannot change anything.
+            // A reach may be as far as a shot fired corner to corner has to
+            // travel, and no further: past that, more range is a number that
+            // cannot change anything. That is the **diagonal** rather than the
+            // width -- `arena::ARENA_HALF` is fourteen, so the floor is
+            // twenty-eight across and a little under forty corner to corner.
+            //
             // The shared `Fixed` bound below is twelve metres, which was every
-            // move's answer right up until a class was given something to
-            // throw with its feet off the floor -- the Elementalist's Air bolt
-            // crosses most of the arena, and that reach is the whole of what
-            // being airborne buys her. `arena::ARENA_HALF` is fourteen, so the
-            // floor is twenty-eight across.
-            MoveField::Reach => (0, fx(28, 1)),
+            // move's answer right up until a class was given something to throw
+            // with its feet off the floor: what being airborne buys the
+            // Elementalist is reach, and both of her air shots want more of it
+            // than a grounded move has ever asked for.
+            MoveField::Reach => (0, fx(40, 1)),
             // Past 100, unlike every other percentage here: this one *scales*
             // the shared lockout rather than taking a share of something, and
             // a move worth locking for twice as long as the rest is the first

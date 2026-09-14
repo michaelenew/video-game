@@ -294,6 +294,115 @@ fn the_gale_opens_from_her_hand_to_its_full_size() {
 }
 
 #[test]
+fn the_gale_is_full_size_well_before_it_is_out_of_range() {
+    // **How far it goes and how fast it opens are two decisions**, and they are
+    // two knobs. They were one for a day, with the growth measured against the
+    // reach, which meant that bumping the range silently halved the disc's size
+    // everywhere a fighter actually stands -- a retune nobody asked for wearing
+    // a range change's clothes.
+    let reach = sim::moves::get(Class::Elementalist, air::GALE).reach;
+    assert!(
+        t::gale_grow().raw() < reach.raw(),
+        "the Gale only reaches full size at {:.1} m and its range is {:.1} m, so it \
+         never gets there before it expires",
+        t::gale_grow().to_f32_for_render(),
+        reach.to_f32_for_render()
+    );
+    // And the opening itself is measured against that distance rather than the
+    // reach: at the growth distance it is all of itself, whatever the range is.
+    let at = |travelled: f32| {
+        let mut shot = sim::gust::Gust {
+            pos: V3::ZERO,
+            dir: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+            owner: 0,
+            travelled: metres(travelled),
+            gale: Gale::Disc,
+        };
+        shot.travelled = metres(travelled);
+        shot.swell()
+    };
+    let grow = t::gale_grow().to_f32_for_render();
+    assert_eq!(
+        at(grow).raw(),
+        Fx::ONE.raw(),
+        "the disc is still opening at the distance it is supposed to be open by"
+    );
+    assert_eq!(
+        at(grow * 1.5).raw(),
+        Fx::ONE.raw(),
+        "the disc kept growing past full size"
+    );
+    assert!(
+        at(grow * 0.5).raw() < Fx::ONE.raw(),
+        "the disc is already full size halfway through its opening"
+    );
+}
+
+#[test]
+fn the_gale_is_a_frisbee_rather_than_a_ball() {
+    // **The disc lies flat, and the hit test is what says so.** What the shot
+    // occupies is a horizontal disc of its current radius sweeping along its
+    // line: `aim::first_along` swells the victim's standing cylinder by the
+    // girth in *radius* and never in height. So the same displacement catches
+    // you sideways and does not catch you upward -- which is the whole of the
+    // difference between a frisbee and a ball, and is the one thing the shape
+    // has to mean.
+    //
+    // Asked of the volume directly, the way `gust::step` asks it, rather than
+    // by standing somebody up in the air: a fighter parked four metres up with
+    // nothing under him simply falls into the line and is hit on the way down,
+    // which measures gravity rather than the disc.
+    //
+    // Pinned because the renderer has to draw the same thing. It drew the disc
+    // face-on to its own travel for a while -- a picture of a wall of air
+    // rather than of a frisbee -- and there was nothing to catch it.
+    let girth = sim::moves::get(Class::Elementalist, air::GALE).radius;
+    let mut w = elementalist();
+    // A level line at chest height, nine metres of it, down the clear lane.
+    let line = sim::aim::Path {
+        from: at(-6.0, 1.0, 8.0),
+        to: at(3.0, 1.0, 8.0),
+    };
+    // Well inside the disc's own radius, and well outside a body's.
+    let off = girth.to_f32_for_render() * 0.6;
+
+    w.players[1].pos = at(3.0, 0.0, 8.0 + off);
+    let beside = with_scene(&w, |scene| {
+        sim::aim::first_along(
+            line,
+            girth,
+            0,
+            scene,
+            sim::aim::Targets::none().fighters(true),
+        )
+    });
+    assert!(
+        beside.is_some(),
+        "somebody standing {off:.2} m to the side of the line was missed by a disc \
+         {:.2} m across, so it has no width at all",
+        girth.to_f32_for_render() * 2.0
+    );
+
+    // The same displacement, upward: his feet start that far above the line, so
+    // he is clear of it by the same margin that caught him sideways.
+    w.players[1].pos = at(3.0, 1.0 + off, 8.0);
+    let above = with_scene(&w, |scene| {
+        sim::aim::first_along(
+            line,
+            girth,
+            0,
+            scene,
+            sim::aim::Targets::none().fighters(true),
+        )
+    });
+    assert!(
+        above.is_none(),
+        "the same {off:.2} m of clearance missed sideways and connected upward -- the \
+         disc is being tested as a ball, and the renderer draws it flat"
+    );
+}
+
+#[test]
 fn a_gale_is_worth_more_at_the_tip_than_at_the_hand() {
     // **The spacing, inverted.** Every other projectile in the game is worth
     // the same wherever it lands; this one is worth what it has become, which

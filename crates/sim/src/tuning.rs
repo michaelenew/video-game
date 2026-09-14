@@ -1880,6 +1880,18 @@ pub fn gale_start() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GaleStart))
 }
 
+/// How far the Gale has to travel to be all of itself.
+///
+/// **Not its reach, and that is the point.** How far a shot goes and how
+/// quickly it comes up to size are two decisions, and one number for both means
+/// every change to the range silently retunes the growth: double the reach and
+/// the disc is half as big everywhere a fighter actually stands. Past this it
+/// simply stays full size for the rest of its flight, which is the shape a
+/// thrown disc has anyway -- it opens, and then it is open.
+pub fn gale_grow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleGrow))
+}
+
 /// How fast Landfall drives her at the floor once the wind-up is spent.
 ///
 /// Fast enough that the plunge reads as a commitment rather than a fall, and
