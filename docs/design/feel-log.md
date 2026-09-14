@@ -3209,3 +3209,33 @@ fails to compile rather than failing to cut.
 **Verdict** open on both the count and the rim gaps. `lotus,_blade_radius` is the knob if the
 petals turn out to be too easy to stand between, and the jump is the one to watch in play: it may
 turn out that a flower you can hop is a flower nobody respects.
+
+### 2026-09-14 — half the flower was invisible
+
+**Changed** `EFFECT_PARTS` in the renderer is counted from the widest effect rather than
+written down. No tuning moved.
+
+**Why** Reported: only the first six blades have a model, the rest are just red discs.
+
+The renderer spawns a fixed pool of meshes per effect and asks `effect_piece` for each one.
+That pool was a literal `6`, with a comment saying "six, which is the Guillotine lotus: one
+blade each" — correct on the day it was written and quietly wrong the day the flower grew to
+twelve. The back six blades had no mesh to be drawn with. The red discs were the debug
+overlay's own outlines, which loop over `LOTUS_BLADES` and so were drawing all twelve
+faithfully; with `F1` off there was simply nothing there.
+
+**It is worth being clear about which half was wrong.** The hit test was right the whole time —
+twelve blades, cutting. So the ability was doing exactly what the entry above describes and
+half of it was doing so invisibly, which is the worst version of this bug: not a thing that
+fails to work, a thing that works with nothing on screen to say it is there. Everything in the
+previous entry about how the flower *reads* was written against a picture nobody could see.
+
+The rule this belongs under is the standing one about the overlay drawing what the hit test
+uses, generalised: **anything that walks the parts of an effect has to get the count from the
+effect.** The overlay already did. The renderer had its own copy, and a copy of a count is a
+count that goes stale. It is derived now, so a thirteenth blade would widen the pool rather
+than fall off the end of it — and the test beside it asserts the pool covers every piece
+`effect_piece` will answer for, which is the property rather than the number.
+
+**Verdict** kept, and it means the previous entry's verdict is still genuinely open: the thing
+it describes has not actually been seen yet.
