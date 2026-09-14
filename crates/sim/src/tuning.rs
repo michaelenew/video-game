@@ -1834,3 +1834,101 @@ pub fn hunter_spawn() -> Fx {
 pub fn step_up() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepUp))
 }
+
+// ---------------------------------------------------------------------------
+// The Elementalist, off the ground
+// ---------------------------------------------------------------------------
+//
+// Three moves, and everything that is not a frame count is here. What *is* a
+// frame count -- startup, active, recovery, the hang -- stays in the move
+// table, along with the two things the shots take from their own row: how far
+// they reach and how thick they are. A second copy of either would only be a
+// number the frame table could disagree with, which is the same argument the
+// beam's own range makes above.
+//
+// See `docs/design/kits/elementalist.md` and `crate::gust`.
+
+/// How fast the Air bolt travels.
+///
+/// Slower than a fire bolt on purpose: the fire bolt is the payoff for putting
+/// a pillar between you and somebody, and this is the shot she throws
+/// constantly. A poke you can see coming is a poke you can answer, which is
+/// what makes throwing it a decision rather than a reflex.
+pub fn air_bolt_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBoltSpeed))
+}
+
+/// How fast the Gale disc travels.
+///
+/// Half the Air bolt's, and the slowest thing she throws. It has to be walked
+/// away from: a disc that grows into a real hit at the far end of its travel
+/// is only a decision if the target has time to decide.
+pub fn gale_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleSpeed))
+}
+
+/// How big the Gale is as it leaves her hand, as a share of the size it
+/// reaches at the end of its travel.
+///
+/// The move table's `radius` is the far end; this is the near one. What it
+/// buys is the whole of the move's spacing: damage and knockback ride the same
+/// fraction, so a disc caught at point-blank range is a puff of air and one
+/// caught at the tip is the heaviest shove in the kit. The same inversion
+/// Flame spitter is written around -- see the kit -- and the opposite of every
+/// other projectile in the game.
+pub fn gale_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleStart))
+}
+
+/// How fast Landfall drives her at the floor once the wind-up is spent.
+///
+/// Fast enough that the plunge reads as a commitment rather than a fall, and
+/// slow enough that it is a *descent* somebody can hit her out of -- which is
+/// most of what the move is. From the top of her jump it lasts about as long
+/// again as the hang did.
+pub fn landfall_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallDive))
+}
+
+/// How far in front of her the Landfall stone comes up.
+///
+/// A distance rather than a reach, and the only placement in the class the
+/// crosshair does not decide: she is arriving, not aiming. Just past a body
+/// radius plus a stone's, so the slab stands clear of where she lands rather
+/// than shoving her off her own arrival. See `aim::planted_ahead`.
+pub fn landfall_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallAhead))
+}
+
+/// How long the Landfall stone takes to come out of the floor.
+///
+/// Well under `structure_rise`, and that is the point: an ordinary stone is
+/// raised and the rise is its telegraph, while this one is *driven* up by a
+/// body hitting the ground and has already been telegraphed by the plunge
+/// that put it there. The two phases still come off the same curve, so the
+/// churn and the eruption move with it -- see `crate::stones`.
+pub fn landfall_rise() -> u16 {
+    oven::scalar(Scalar::LandfallRise).max(1) as u16
+}
+
+/// How far above the floor the Landfall stone throws what it erupts under,
+/// in turns.
+///
+/// An eighth of a turn is forty-five degrees: up and away in equal measure. A
+/// slab levered out of the ground at an angle throws you along the angle, so
+/// this is a push *and* a pop rather than either on its own -- and pointing it
+/// away from her is what makes the move a way of clearing the space she has
+/// just landed in.
+pub fn landfall_tilt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallTilt))
+}
+
+/// How hard the Landfall stone's eruption throws whoever is standing over it.
+///
+/// An ordinary eruption does damage and a stagger and leaves you where you
+/// were. This one adds the shove, along the angle above. The damage and the
+/// stagger are still `stone_erupt_damage` and `stone_erupt_stagger` -- it is
+/// the same eruption, leaning.
+pub fn landfall_erupt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallErupt))
+}

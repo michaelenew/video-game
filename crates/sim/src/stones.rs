@@ -67,12 +67,57 @@ impl Structure {
             launched: false,
             launch_from: V3::ZERO,
             knock_struck: 0,
+            rise: t::structure_rise(),
+            // Straight up, and nobody is thrown by it. Every stone on the
+            // field but one.
+            erupt: V3::ZERO,
+        }
+    }
+
+    /// A stone **driven** up rather than raised: Landfall's slab, thrown out
+    /// of the floor in front of the Elementalist as she arrives.
+    ///
+    /// Two differences from [`raised`](Structure::raised), and they are the
+    /// same difference twice. It comes out **quicker**, because the telegraph
+    /// was the plunge rather than the rise. And it comes out **leaning**, at
+    /// `tuning::landfall_tilt` above the floor along `away` — so whoever is
+    /// standing over it is thrown up and back along the lean instead of merely
+    /// staggered where they stand.
+    ///
+    /// `away` is the flat direction from her to the stone. Flattened by the
+    /// caller or not, the lean is built here: the angle is the knob's and the
+    /// bearing is the stone's, so retuning the angle moves every slab rather
+    /// than one.
+    pub fn slammed(at: V3, away: V3) -> Structure {
+        let flat = V3::new(away.x, Fx::ZERO, away.z).normalized();
+        let tilt = t::landfall_tilt();
+        let erupt = V3::new(
+            flat.x.mul(crate::fixed::cos_turns(tilt)),
+            crate::fixed::sin_turns(tilt),
+            flat.z.mul(crate::fixed::cos_turns(tilt)),
+        )
+        .normalized();
+        Structure {
+            rise: t::landfall_rise(),
+            erupt,
+            ..Structure::raised(at)
         }
     }
 
     /// How far out of the ground it is, from none of it to all of it.
     pub fn risen(&self) -> Fx {
-        risen_at(self.age)
+        self.risen_at(self.age)
+    }
+
+    /// The rise at a given age, along the Oven's curve.
+    ///
+    /// A method rather than a free function now that the *length* of the rise
+    /// is per stone: a slab driven up by a slam is out of the floor in a third
+    /// of the time a raised one takes, and the curve is what both of them are
+    /// shaped by.
+    fn risen_at(&self, age: u16) -> Fx {
+        let frames = self.rise.max(1);
+        t::structure_rise_curve().at(Fx::ratio(age as i32, frames as i32))
     }
 
     /// The surface you can stand on.
@@ -87,7 +132,7 @@ impl Structure {
     }
 
     pub fn phase(&self) -> Phase {
-        if self.age >= t::structure_rise() {
+        if self.age >= self.rise {
             Phase::Standing
         } else if self.risen().raw() >= t::stone_erupt().raw() {
             Phase::Erupting
@@ -103,7 +148,9 @@ impl Structure {
     /// burst climbs far faster than anything walks, and whatever is riding the
     /// top keeps that speed when the burst ends.
     pub fn surface_speed(&self) -> Fx {
-        let grew = risen_at(self.age).sub(risen_at(self.age.saturating_sub(1)));
+        let grew = self
+            .risen_at(self.age)
+            .sub(self.risen_at(self.age.saturating_sub(1)));
         self.vel.y.add(t::structure_height().mul(grew).div(DT))
     }
 
@@ -111,12 +158,6 @@ impl Structure {
     fn already_struck(&self, player: usize) -> bool {
         self.struck & (1 << player) != 0
     }
-}
-
-/// The rise at a given age, along the Oven's curve.
-fn risen_at(age: u16) -> Fx {
-    let frames = t::structure_rise().max(1);
-    t::structure_rise_curve().at(Fx::ratio(age as i32, frames as i32))
 }
 
 // ---------------------------------------------------------------------------
@@ -485,6 +526,31 @@ pub fn destroy(players: &mut [Player; MAX_PLAYERS], index: usize) -> Option<V3> 
 }
 
 // ---------------------------------------------------------------------------
+// Raising one
+// ---------------------------------------------------------------------------
+
+/// Put a structure into a fighter's mechanic, collapsing the oldest if the cap
+/// is already full.
+///
+/// **The cap is the resource** — `class::MAX_STRUCTURES`, and spending it is
+/// what makes hoarding stones cost you new ones. This is here rather than
+/// beside either of the two things that raise one — the mechanic key, and
+/// Landfall — because a second copy of "and if there are already three" is how
+/// one of them ends up quietly not spending it.
+pub fn raise(p: &mut Player, stone: Structure) {
+    let Mechanic::Structures(mut slots) = p.mechanic else {
+        return;
+    };
+    if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
+        *free = Some(stone);
+    } else {
+        slots.rotate_left(1);
+        slots[MAX_STRUCTURES - 1] = Some(stone);
+    }
+    p.mechanic = Mechanic::Structures(slots);
+}
+
+// ---------------------------------------------------------------------------
 // Stones against fighters
 // ---------------------------------------------------------------------------
 
@@ -628,6 +694,21 @@ pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
                     p.action = Action::Stagger {
                         left: t::stone_erupt_stagger(),
                     };
+                    // A slab levered out of the floor at an angle throws you
+                    // along the angle. Zero on every ordinary stone, which
+                    // comes up square and leaves you standing where you were
+                    // -- see `Structure::slammed`, which is the one thing on
+                    // the field that sets this.
+                    //
+                    // **Set, not added.** They are staggered as of the line
+                    // above, so what is left of their own velocity is a thing
+                    // that is already decaying and the shove is the whole of
+                    // where they go next. Taking their feet off the floor with
+                    // it is the same rule a launching hit follows.
+                    if stone.erupt.len_sq().raw() > 0 {
+                        p.vel = stone.erupt.scale(t::landfall_erupt());
+                        p.grounded = false;
+                    }
                 }
                 Phase::Standing => {}
             }

@@ -40,7 +40,7 @@ every one of them is a function in `aim.rs`:**
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 
-Two more functions live there and are **not** lines of effect. `aim::pointing_at`
+Three more functions live there and are **not** lines of effect. `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
@@ -49,7 +49,13 @@ angle worked out beside the ability, which is the mistake below wearing a hat.
 one*, which the same dodge asks second: the dash crosses to wherever the shadow
 is unless nothing reaches it. It is ray-against-shape work in service of a
 decision about where something goes, so it belongs here rather than beside the
-dodge for exactly the same reason.
+dodge for exactly the same reason. `aim::planted_ahead` answers *where does a
+thing go that nobody aimed* — the slab the Elementalist's Landfall drives out of
+the floor, a fixed distance along her flat facing, because she is arriving rather
+than pointing. Its move still declares a line of effect (a swing, for the slam
+itself); this is the second thing the same move puts in the world, and written
+beside the ability it would be a facing, a distance and a floor query sitting
+next to a move, which is the mistake below in its usual clothes.
 
 Which one a move is comes from `Move::aim()`, **declared** in the move table so
 every move has an answer, and printed in the `aimed` column of

@@ -577,7 +577,22 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::ShadowReaver, _) => Clip::ReaverMechanic,
         (Class::Elementalist, 0) => Clip::ElementalistPoke,
         (Class::Elementalist, 1) => Clip::ElementalistCommitted,
-        (Class::Elementalist, _) => Clip::ElementalistSpecial,
+        (Class::Elementalist, 2) => Clip::ElementalistSpecial,
+        (Class::Elementalist, 3) => Clip::ElementalistHeavy,
+        // Her air row, on the grounded clips it is the air version *of*.
+        // Deliberately not four new clips: the class has four authored
+        // animations and each of these is recognisably one of them thrown off
+        // the floor -- the Air bolt is the same flicked jab, the Gale is
+        // Cataclysm's two-handed throw, and Landfall is Fissure exactly, both
+        // hands driven into the ground with the power going down rather than
+        // out. Clips are a contract (`view::clips`) and the bake refuses to
+        // run with one missing, so an air row that wanted its own would be
+        // four recipes' worth of work before any of this could be played at
+        // all. Reaching for them is the right next step and is logged as such
+        // in `docs/design/feel-log.md`.
+        (Class::Elementalist, 4) => Clip::ElementalistPoke,
+        (Class::Elementalist, 5) => Clip::ElementalistHeavy,
+        (Class::Elementalist, _) => Clip::ElementalistCommitted,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,

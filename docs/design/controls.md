@@ -798,13 +798,30 @@ differentiation.
 
 ### Elementalist
 
+Current as of 2026-09-14. **The row is where her feet are** — the same three buttons mean one
+thing standing up and another off the floor, which is the Champion's grid read one class
+further. See [kits/elementalist.md](kits/elementalist.md) §"In the air".
+
 | Input | Result |
 | --- | --- |
-| `L` | Ranged auto — a beam along the crosshair, and whatever it meets first |
-| `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
-| right click | **Cataclysm.** A slow, long-range heavy along the same beam: breaks a structure into thrown debris, turns a fire pillar into a travelling tornado, or lands a real hit on a fighter |
-| direction + click | Fissure, Quake, Ice blast |
-| `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |
+| `L` | **Bolt** — the auto. A beam along the crosshair, and whatever it meets first. **Bound** |
+| `shift` + `L` | **Fissure** — the committed ground skillshot. **Bound** |
+| `Q` | **Fire pillar**, planted where the crosshair is. **Bound** |
+| right click | **Cataclysm.** A slow, long-range heavy along the same beam: breaks a structure into thrown debris, turns a fire pillar into a travelling tornado, or lands a real hit on a fighter. **Bound** |
+| `E` | **Raise.** Spawn a structure at the crosshair — the mechanic, and an instant with no frames at all. **Bound** |
+| `L` in the air | **Air bolt** — a small, fast, long-range shot of air. The air row's poke. **Bound** |
+| right click in the air | **Gale** — a disc of air that grows as it travels and is worth what it has become. **Bound** |
+| `E` in the air | **Landfall** — the descending slam, and a slab of rock levered out of the floor in front of her. **Bound** |
+| direction + click | Quake, Ice blast |
+| the rest | Flame spitter, and the heavier elemental work |
+
+`shift` is spent on the ground and **ignored in the air**: shift plus left click is Fissure, a
+crack that races along the *ground*, and there is no airborne version of it to reach for. Up
+there left click means what left click means.
+
+`E` was listed as `R` here until 2026-09-14, which was the table remembering an older scheme —
+Raise was on right click before Cataclysm took the button, and the mechanic key is where it
+actually lives.
 
 ### Blood mage
 

@@ -50,15 +50,9 @@ fn has_structure(w: &World) -> bool {
 /// A fully risen structure, standing at rest on the ground -- the same
 /// fixture `crates/sim/tests/stones.rs` uses.
 fn standing_at(x: i32) -> Structure {
-    Structure {
-        at: V3::new(Fx::from_int(x), Fx::ZERO, Fx::ZERO),
-        vel: V3::ZERO,
-        age: sim::tuning::structure_rise() + 1,
-        struck: 0,
-        launched: false,
-        launch_from: V3::ZERO,
-        knock_struck: 0,
-    }
+    let mut stone = Structure::raised(V3::new(Fx::from_int(x), Fx::ZERO, Fx::ZERO));
+    stone.age = stone.rise + 1;
+    stone
 }
 
 /// Put exactly these structures on the caster's own mechanic, bypassing

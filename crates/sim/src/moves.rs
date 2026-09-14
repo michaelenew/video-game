@@ -435,6 +435,8 @@ const NAMES: [&[&str]; 6] = [
     //     through anybody in the way.
     &["Slash", "Executioner", "Guillotine", "Send shadow"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
+    // Seven: four on the ground, and a whole row of three off it. See
+    // [`elementalist`].
     //   Bolt: the game's one *skillshot* -- an instant line from her hand to
     //   whatever the crosshair is on, so its `reach` is the max-range sphere
     //   and its `radius` is the line's thickness. Resolved where it is fired
@@ -449,7 +451,20 @@ const NAMES: [&[&str]; 6] = [
     //   breaks into thrown debris (see `crate::debris`); a fire pillar in the
     //   way is not charged, it is torn loose into a travelling fire tornado
     //   (see `crate::effects::EffectKind::FireTornado`).
-    &["Bolt", "Fissure", "Fire pillar", "Cataclysm"],
+    //   Air bolt, Gale, Landfall: the same three buttons with her feet off the
+    //   floor. Both shots *travel*, unlike anything she throws standing up --
+    //   see `crate::gust` -- and neither has a hitbox of its own, which is
+    //   what `Shape::None` in [`shape`] says. Landfall does: a disc on the
+    //   floor where she arrives.
+    &[
+        "Bolt",
+        "Fissure",
+        "Fire pillar",
+        "Cataclysm",
+        "Air bolt",
+        "Gale",
+        "Landfall",
+    ],
     // Blood mage -- sustain through aggression. Everything costs health, and
     // every one of these has a cost in the table to prove it.
     //   Bloodletter: the auto. Out to a fixed distance and back, cutting on
@@ -666,6 +681,61 @@ pub mod dual {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The Elementalist's seven
+// ---------------------------------------------------------------------------
+
+/// The Elementalist's move list, as **two rows**: what the three buttons do
+/// with her feet on the floor, and what they do off it.
+///
+/// ```text
+///                 left click      right click     E
+///   standing      Bolt            Cataclysm       Raise -- the mechanic,
+///                 (shift: Fissure, Q: Fire pillar)  an instant, no frames
+///   in the air    Air bolt        Gale            Landfall
+/// ```
+///
+/// The row is the situation and the button never changes meaning, which is the
+/// Champion's grid read one class further: left click is the cheap shot you
+/// throw constantly, right click is the committed one, `E` is earth. That is
+/// the answer `docs/design/README.md` left open under **Aerials** -- airborne
+/// attacks are *variants of their grounded counterparts* rather than a
+/// separate move list -- given to the second class.
+///
+/// **Why air.** Earth is what she is standing on, and off the floor she is not
+/// standing on it: the two shots are the element she can reach in the air, and
+/// the way back to earth is to go and hit it. That is Landfall, and it is the
+/// only one of the three that leaves a structure behind.
+///
+/// Shift does not modify the air row. There is no airborne Fissure -- a crack
+/// racing along the ground is a thing thrown *from* the ground -- so shift plus
+/// left click in the air is the Air bolt rather than a move that does not
+/// exist.
+pub mod elementalist {
+    /// Left click, airborne. A bolt of air with a real speed, thrown along the
+    /// crosshair -- see `crate::gust`.
+    pub const AIR_BOLT: u8 = 4;
+    /// Right click, airborne. A disc of air that **grows as it travels**, and
+    /// hits harder the bigger it has got: the same inverted spacing Flame
+    /// spitter is written around, as a projectile.
+    pub const GALE: u8 = 5;
+    /// `E`, airborne. The plunge: a long, readable descent that ends in a
+    /// stagger on the floor and a slab of rock thrown up at an angle in front
+    /// of her. On the ground `E` is still the mechanic and still an instant --
+    /// see `moves::on_e`, which answers for the key without knowing where her
+    /// feet are, and `state::keyed_move`, which is what does know.
+    pub const LANDFALL: u8 = 6;
+
+    pub const COUNT: usize = 7;
+
+    // **No `is_airborne` here, deliberately.** "Which move is this button" is
+    // answered once, in `state::elementalist_move` and `state::keyed_move`, and
+    // "does this move throw a travelling shot" is answered once, by
+    // `gust::Gale::thrown_by`. A third predicate saying the same thing in a
+    // third shape is not a declaration, it is a second answer waiting to
+    // disagree with the first.
+}
+
 /// How many moves a class has.
 ///
 /// Per class rather than a single constant because the Champion legitimately
@@ -677,10 +747,11 @@ pub mod dual {
 pub const fn slots(class: Class) -> usize {
     match class {
         Class::Champion => champion::COUNT,
-        // The fourth is Cataclysm, on right click -- structures and fire are
-        // her whole kit, and right click is otherwise dead weight on a class
-        // with no shield. See `clicked_move`.
-        Class::Elementalist => SLOTS + 1,
+        // Seven: the four she throws standing up -- the fourth being
+        // Cataclysm on right click, otherwise dead weight on a class with no
+        // shield -- and a row of three more for the same buttons with her feet
+        // off the floor. See [`elementalist`] and `state::clicked_move`.
+        Class::Elementalist => elementalist::COUNT,
         // The fourth is Black spike, on `E`. See `on_e`.
         Class::BloodMage => SLOTS + 1,
         // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
@@ -827,7 +898,12 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             0 => "LMB",
             1 => "Shift+LMB",
             2 => "Q",
-            _ => "RMB",
+            3 => "RMB",
+            // The air row. The button is the same; the situation is what
+            // changes what it throws. See [`elementalist`].
+            4 => "LMB air",
+            5 => "RMB air",
+            _ => "E air",
         },
         _ => match slot {
             0 => "LMB",
@@ -891,6 +967,21 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // Movement, not an attack. A vault that also hit people would be
             // strictly better than the stab it shares a button with.
             _ => Shape::None,
+        },
+        // Her two air shots put a thing in the world and let it do the
+        // hitting, so the body itself has no volume at all -- the same shape
+        // the Champion's vault is, arrived at from the other direction. The
+        // Blood mage's blade says the same thing with a radius of zero; these
+        // cannot, because a travelling shot needs a thickness and `radius` is
+        // where it is written. See `Move::strikes` for the two sentences.
+        //
+        // Everything else she has is still the original disc: three of the
+        // four grounded moves land on the floor where they were aimed, the
+        // fourth is a beam drawn from the line it flew, and Landfall is a disc
+        // on the floor at her own feet.
+        Class::Elementalist => match kind {
+            elementalist::AIR_BOLT | elementalist::GALE => Shape::None,
+            _ => Shape::Cylinder,
         },
         // The Dual mage's two autos are punches with a wing behind them, and
         // Sweep is a cut across the whole front. Lance and Judgement are still

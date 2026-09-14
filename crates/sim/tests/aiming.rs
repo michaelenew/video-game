@@ -306,10 +306,16 @@ fn aiming_down_onto_a_stone_from_above_puts_the_next_one_on_top() {
     let first = stones_of(&w)[0];
     let over = first.at;
 
-    // Straight above it, in the air, looking down -- and close enough that the
-    // cap is inside Raise's reach, which is measured from the chest.
+    // Straight above it, looking down -- and close enough that the cap is
+    // inside Raise's reach, which is measured from the chest.
+    //
+    // **Standing on something three metres up**, rather than hanging in the
+    // air: `E` is only the mechanic with her feet on a surface, and off one it
+    // throws Landfall instead (`state::keyed_move`). Standing above a stone is
+    // the situation this is about anyway -- stacking one on another needs you
+    // over the cap, which is what the class's own kit document says.
     w.players[0].pos = V3::new(over.x, Fx::from_int(3), over.z);
-    w.players[0].grounded = false;
+    w.players[0].grounded = true;
     tap(&mut w, E, down(89), 40);
 
     let second = stones_of(&w)[1];
@@ -1103,13 +1109,8 @@ fn a_stone_squarely_between_two_bodies_is_a_total_obstruction() {
 
     w.players[0].mechanic = Mechanic::Structures([
         Some(Structure {
-            at: V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)),
-            vel: V3::ZERO,
             age: u16::MAX,
-            struck: 0,
-            launched: false,
-            launch_from: V3::ZERO,
-            knock_struck: 0,
+            ..Structure::raised(V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)))
         }),
         None,
         None,

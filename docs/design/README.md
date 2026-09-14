@@ -64,7 +64,7 @@ poke is a design choice in a closed arena, not a gap.
 | Class | Mechanic — what abilities spend | Primary buttons | State |
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Lotus · `E` Executioner | Rebuilt |
-| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Raise | Strong |
+| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto · `Q` Judgement · `E` Sweep | Kit built |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Chained |
@@ -109,16 +109,16 @@ Nothing here blocks a prototype.
 | **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
 | **Move + heavy attack** | ⚠️ **Known gap.** Shift+direction dodges and shift+click is the heavy, so holding a direction while throwing a heavy has no input — the dodge eats it. Deferred deliberately: movement settles first, then the attack grammar is built around it |
 | **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
-| **Aerials** | **Settled on the Champion, open elsewhere.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. That is exactly how the Champion is built: the button is the weapon and the row of its grid is the situation. Nobody else has been given the treatment |
+| **Aerials** | **Settled on two classes, open on four.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. That is how the Champion is built (the button is the weapon and the row of its grid is the situation) and, since 2026-09-14, how the Elementalist is: left click is still the cheap shot, right click is still the committed one, `E` is still earth, and the row is where her feet are. A claim about one class was a coincidence; two is a pattern, and the four that are left are now behind rather than undecided |
 | **Attack strings** | ⚠️ **Newly open, 2026-09-14.** The Champion's ground attacks now chain three hits deep, and the chain is a *hit confirm* — a connected link cancels its own tail, a blocked one does not. Whether that is a Champion mechanic or the shape every class's offence should take is not decided, and it is the sort of thing that has to be one or the other |
 | **`space` as a modifier** | ⚠️ **Newly open, 2026-09-14.** `space` plus a weapon is a takeoff on the Champion — the first time the jump button has modified anything. It is a whole row of options every class could have, or a precedent that should not spread |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
-| **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
+| **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment. ⚠️ **Sharper since 2026-09-14:** `E` off the floor used to raise a stone, which made a stone under your own feet a sort of second jump for one class. It is Landfall now, so the Elementalist has lost the only thing in the game that was answering this question by accident |
 | Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. Whether the finisher stays on `Q` or moves to `M`, and what `shift` + right click should be once an ability has two forms |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all |
 | Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
-| Elementalist | Structure cap of three is a readability guess, not a balance one. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them |
+| Elementalist | Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
 | Blood mage | Health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
 
 ## 5 · Parked — not slated for initial implementation
@@ -139,7 +139,8 @@ character progression.
 
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
-least three exemplar moves -- nineteen on the Champion, five on the Dual mage, four
+least three exemplar moves -- nineteen on the Champion, seven on the
+Elementalist, five on the Dual mage, four
 on the Blood mage and the Shadow Reaver -- there is a monster to fight and
 climb, peer-to-peer rollback play works over real UDP, and the test suite covers
 determinism, combat relationships, aiming, the ride, the camera, kinematics,

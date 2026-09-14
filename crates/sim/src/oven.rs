@@ -366,6 +366,19 @@ scalars! {
     LotusBladeThick,   "Reaver",    "Lotus, blade half-thickness",           Fixed,  fx(1,100), fx(1,2);
     ShadowCarry,       "Reaver",    "Dash carry, the jump window",           Frames, 0,        40;
     CommittedMobility, "Movement",  "Committed mobility (%)",                Percent, 0,       100;
+    // The Elementalist's air row. Appended, like everything above them, because
+    // `tuned::SCALARS` is read by this enum's own discriminant -- slotting one
+    // in beside the other Elementalist knobs would hand every knob below it its
+    // neighbour's baked value. The palette groups by family, so they still show
+    // up next to the rest of hers.
+    AirBoltSpeed,      "Elementalist", "Air bolt speed",                        Fixed,  fx(5,1),  fx(80,1);
+    GaleSpeed,         "Elementalist", "Gale speed",                            Fixed,  fx(1,1),  fx(40,1);
+    GaleStart,         "Elementalist", "Gale size leaving her hand (x)",        Fixed,  fx(1,20), fx(1,1);
+    LandfallDive,      "Elementalist", "Landfall dive speed",                   Fixed,  fx(1,1),  fx(60,1);
+    LandfallAhead,     "Elementalist", "Landfall stone, how far ahead",         Fixed,  fx(1,2),  fx(8,1);
+    LandfallRise,      "Elementalist", "Landfall stone rise",                   Frames, 1,        90;
+    LandfallTilt,      "Elementalist", "Landfall eruption, above the floor (turns)", Fixed, 0,    fx(1,4);
+    LandfallErupt,     "Elementalist", "Landfall eruption push",                Fixed,  0,        fx(40,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -658,6 +671,23 @@ impl MoveField {
             // A takeoff speed, in the same units the jump is: the pole vault
             // is meant to beat a jump, and a jump is already 17.7.
             MoveField::SelfLift => (0, fx(30, 1)),
+            // A speed, in the units every other knockback in the Oven is
+            // written in -- `ShieldKnockback`, `FireBoltKnockback` and
+            // `DebrisKnockback` all run to thirty, and this one ran to twelve
+            // only because it inherited the shared `Fixed` bound below. A move
+            // that shoves harder than a thrown shield is a thing somebody
+            // should be able to reach for; the Gale, whose whole point is
+            // being the heaviest push in its class, is the first that does.
+            MoveField::Knockback => (0, fx(30, 1)),
+            // A reach may be as long as the arena is wide, and no longer:
+            // past that, more range is a number that cannot change anything.
+            // The shared `Fixed` bound below is twelve metres, which was every
+            // move's answer right up until a class was given something to
+            // throw with its feet off the floor -- the Elementalist's Air bolt
+            // crosses most of the arena, and that reach is the whole of what
+            // being airborne buys her. `arena::ARENA_HALF` is fourteen, so the
+            // floor is twenty-eight across.
+            MoveField::Reach => (0, fx(28, 1)),
             // Past 100, unlike every other percentage here: this one *scales*
             // the shared lockout rather than taking a share of something, and
             // a move worth locking for twice as long as the rest is the first

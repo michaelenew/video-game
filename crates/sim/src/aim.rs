@@ -675,6 +675,30 @@ pub fn mechanic_path(from: V3, mechanic: &Mechanic) -> Path {
     }
 }
 
+/// Where a move plants something **in front of the body**, on the floor.
+///
+/// Not a fifth line of effect, and it is worth being exact about why. The four
+/// above answer *where does this ability go*, and a move declares which of them
+/// it uses. This answers a narrower question that one move asks in addition to
+/// its own line of effect: the Elementalist's Landfall is a [`Kind::Swing`] --
+/// a body arriving, its volume on the floor at her own feet -- and the slab of
+/// rock it drives up is a second thing, put down a fixed distance in front of
+/// her rather than anywhere the crosshair chose. She is landing, not aiming.
+///
+/// It is here rather than beside the move for the reason [`pointing_at`] and
+/// [`clear_between`] are: it decides where something in the world ends up, and
+/// the alternative is a facing, a distance and a floor query written next to
+/// the ability, which is exactly the shape of the mistake this file exists to
+/// prevent. The facing is used **flat**: a plunge that put its stone nearer
+/// because she happened to be looking down would be aiming after all.
+///
+/// [`settle`] does the last step, so the stone comes up on top of whatever is
+/// under that spot -- another stone included -- rather than inside it.
+pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field) -> V3 {
+    let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
+    settle(pos.add(flat.scale(ahead)), stones)
+}
+
 // ---------------------------------------------------------------------------
 // What a path runs into
 // ---------------------------------------------------------------------------

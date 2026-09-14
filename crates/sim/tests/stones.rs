@@ -105,17 +105,15 @@ fn place(w: &mut World, stones: &[Structure]) {
 }
 
 fn standing_at(x: i32, z: i32) -> Structure {
-    Structure {
-        at: V3::new(Fx::from_int(x), Fx::ZERO, Fx::from_int(z)),
-        vel: V3::ZERO,
-        // Past the rise, so it is a plain solid rather than something still
-        // coming up.
-        age: t::structure_rise() + 1,
-        struck: 0,
-        launched: false,
-        launch_from: V3::ZERO,
-        knock_struck: 0,
-    }
+    // Through its own constructor rather than field by field, so a fixture
+    // does not have to be revisited every time a stone grows a field -- and so
+    // it is aged past *its* rise rather than past the shared one, now that a
+    // slab driven up by Landfall comes out quicker than a raised stone.
+    let mut stone = Structure::raised(V3::new(Fx::from_int(x), Fx::ZERO, Fx::from_int(z)));
+    // Past the rise, so it is a plain solid rather than something still
+    // coming up.
+    stone.age = stone.rise + 1;
+    stone
 }
 
 fn flat_speed(v: V3) -> Fx {
