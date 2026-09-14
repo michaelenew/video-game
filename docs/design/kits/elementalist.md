@@ -81,9 +81,17 @@ what there is instead is a shot that goes exactly where you are pointing.
 
 It is the game's one **skillshot** in the sense [../aiming.md](../aiming.md)
 means it, and that document is where the rule lives. The short version: the shot
-ends on the point the camera's ray through the crosshair reaches first, and
-when that point is the floor it is raised to the height the shot leaves her at,
-so a shot aimed at the ground flies level over the spot rather than into it.
+ends on the point the camera's ray through the crosshair reaches first, and when
+that point is the floor it is raised **off that floor** by a fixed height — the
+middle of a fighter standing there — so a shot aimed at the ground goes through
+whoever is on the spot rather than into the dirt.
+
+*Corrected 2026-09-14.* This said "raised to the height the shot leaves her at",
+which is the same number on flat ground and nothing like it anywhere else: from
+a platform, or from the air, it meant level over the plane **she** was on rather
+than over the place the crosshair was on, and the shot sailed over everybody.
+The rule was always meant to be a lift measured from the ground the ray met; the
+code says so now and so does this.
 
 > **Implemented** (`L`). What the line reaches **first** is the whole move,
 > checked every active frame and spending the move's one hit on whatever it
@@ -313,16 +321,34 @@ poke, and the same trade the grounded auto makes with a body added to it.
 > moving in the air rather than a pause in it.
 
 ### Gale — right click, airborne
-**Startup** slow · **Recovery** medium · **Range** medium, skillshot
+**Startup** slow · **Recovery** medium · **Range** long, skillshot
 
-A large disc of air that **keeps getting bigger as it travels**, and hits harder the bigger it
-has got.
+A **frisbee** of air, thrown flat, that opens as it goes and hits harder the wider it has got.
 
-> **The size is the move.** It leaves her hand at a fraction of its listed radius and arrives
-> at full size at the end of its travel, and damage and knockback ride that same fraction —
-> so a disc caught at point blank is a puff of air and one caught at the tip is the heaviest
+> **It lies flat, and the hit test is what says so.** What the shot occupies is a horizontal
+> disc of its current radius sweeping along its line — the victim's standing cylinder is
+> swollen by the shot's girth in *radius* and never in height — so the same clearance that
+> saves you by stepping aside does not save you by standing above it, and vice versa. It is a
+> thing flying edge-first past you, not a wall of air coming at you.
+>
+> That mattered in the drawing before it mattered anywhere else: the disc was drawn face-on to
+> its own travel, which is a picture of the one volume the game does not have, and it read from
+> the seat as a disc turned to face her. Flat is honest, and it is what
+> [../../../CLAUDE.md](../../../CLAUDE.md)'s overlay rule asks for in a place that is not
+> technically an overlay.
+>
+> **The size is the move.** It leaves her hand at a fraction of its listed radius and comes up
+> to full size over a distance of its own, and damage and knockback ride that same fraction —
+> so a disc caught at point blank is a puff of air and one caught out at size is the heaviest
 > shove in the kit. Every other projectile in the game is worth the same wherever it lands;
 > this one is worth what it has *become*.
+>
+> **How far it goes and how fast it opens are two knobs**, not one. They were one number for a
+> day — the growth measured against the reach — and the trouble showed up the first time the
+> range was bumped: doubling how far it flew silently halved how big it was everywhere a
+> fighter actually stands. `Gale full size after (m)` owns the opening; the move row's `reach`
+> owns the flight. It is full size well before it expires, and stays that way, which is the
+> shape a thrown disc has anyway: it opens, and then it is open.
 >
 > That inverts the spacing, and it is the same sentence **Flame spitter** below is already
 > written around — *"you want them at the tip"* — said as a thing that flies. The answer to it
@@ -332,8 +358,8 @@ has got.
 > **The stun does not scale.** How long a hit holds somebody is frame data, and frame data
 > that changed with distance would be a move nobody could learn. Only what it is worth moves.
 >
-> It is the slowest thing she throws. A disc that grows into a real hit at the far end of its
-> travel is only a decision if the target has time to make one.
+> It is still the slowest thing she throws, and the longest-lived: a disc that has to be walked
+> away from is only a decision if there is time to make one.
 
 ### Landfall — `E`, airborne
 **Startup** slow, telegraphed · **Recovery** medium · **Range** melee, around where she lands

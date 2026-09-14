@@ -3894,3 +3894,48 @@ of how likely each is to be wrong:
    weight, or it may read as the view failing to keep up with the move.
 5. **Does anything want this besides a fighter in the air?** Being knocked off a ledge frames
    the same way as jumping to the same height, which seems right and has not been played.
+
+### 2026-09-14 — the Gale was a wall of air, and it is a frisbee
+
+**Changed** three things about the Elementalist's airborne right click, from playing it. Its
+`reach` went 16 m → 32 and `Gale speed` 16 → 24 m/s, both as asked. One knob is new,
+`Gale full size after (m)` = 16, and one slider bound moved: a move's `Reach` now runs to 40 m
+rather than 28.
+
+**The drawing was wrong, and it was the complaint.** *"The rclick isn't a disk, or maybe it's a
+disk that faces me."* It was: the mesh was squashed along its own direction of travel, so the
+flat face pointed where the shot was going and the player — standing behind it — saw the full
+circle head-on. A wall of air coming at you.
+
+The hit volume was never that. `aim::first_along` swells the victim's standing cylinder by the
+shot's girth in **radius** and never in height, so what a Gale occupies is a horizontal disc of
+that radius sweeping along its line: the same clearance saves you by stepping aside and does not
+save you by standing above it. A frisbee, flying edge-first. So the fix is identity rotation and
+a thin flat disc — the drawing catching up with the rule rather than the rule changing.
+
+Worth noting as a near miss of the overlay rule. `state::hitbox` is drawn by the debug overlay
+and cannot drift from the hit test; a projectile's own mesh is outside that machinery, and drew
+a shape the game does not have for a week with nothing to catch it.
+`the_gale_is_a_frisbee_rather_than_a_ball` now pins the volume, which is the half a renderer
+cannot lie about.
+
+**Why the growth got a knob of its own.** The disc's size was measured against its `reach`,
+which is fine until the range moves — and the range just doubled. Tied together, "fly twice as
+far" also means "be half as big everywhere a fighter actually stands": at 20 m the disc would
+have dropped from full size to 74% of it, and the damage with it. That is a retune nobody asked
+for wearing a range change's clothes. How far a shot goes and how fast it opens are two
+decisions and now they are two numbers; the opening distance kept the old reach, so the disc
+opens exactly as it did and simply stays open for the second half of a much longer flight.
+
+**Verdict** open. Things to watch:
+
+1. **Is a 32 m disc at 24 m/s still walkable-away-from?** It crosses the arena in a little over
+   a second now. The whole design of the move is that you get to decide about it.
+2. **Does full-size-for-the-second-half read as flat?** The move's identity is that it is worth
+   what it has become, and it now spends half its flight having become all of it. If that reads
+   as a projectile with no character, the answer is to stretch the opening rather than to
+   shorten the range.
+3. **Does a flat disc read at all from behind it?** Edge-on is the thinnest possible silhouette
+   from exactly where the player is standing. It may want to be visibly thicker than the volume
+   it stands for, which would be the first deliberate lie in any of this and should be argued
+   for rather than slid in.
