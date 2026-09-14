@@ -412,20 +412,64 @@ fn poking_slows_you_without_stopping_you() {
 }
 
 #[test]
-fn a_committed_move_still_roots_you() {
-    // The other half of the rule. Rooting is what commitment *means*; if the
-    // heavy moves stopped rooting, spacing would stop mattering.
+fn a_committed_move_slows_you_to_a_crawl_and_not_to_a_stop() {
+    // The other half of the rule, and it changed on 2026-09-14: committed moves
+    // used to root you outright, on the reasoning that rooting is what
+    // commitment *means*. It is not -- what commitment means is that until the
+    // move is over the only thing you can do is finish it, and that is
+    // `a_committed_move_is_still_a_commitment` below.
+    //
+    // A crawl bounded at both ends. Above zero, because a character who ignores
+    // the stick reads as the game taking the controls away and a forty-frame
+    // heavy is the worst place in the game to do it. Below guarding, which is
+    // the slowest thing you can otherwise choose to do, so a heavy is still the
+    // most your feet ever cost you.
+    let guarding = sim::tuning::guard_move_speed().to_f32_for_render();
+    let poking = speed_after(Input::W | L, 20);
     let slam = speed_after(Input::W | SHIFT | L, 20);
+    assert!(slam > 0.3, "a committed move still stops you dead: {slam}");
     assert!(
-        slam < 0.3,
-        "a committed move let you keep walking at {slam}"
+        slam < guarding,
+        "a committed move leaves you at {slam}, faster than guarding at {guarding}"
+    );
+    assert!(
+        slam < poking,
+        "a committed move hinders you no more than a poke: {slam} against {poking}"
     );
 }
 
 #[test]
+fn a_committed_move_is_a_commitment() {
+    // What rooting was standing in for, and the thing that actually costs you
+    // the ground: for the whole of a move, every other button is refused.
+    let mut w = World::new();
+    run(&mut w, 1, SHIFT | L, 0);
+    assert!(
+        w.players[0].action.attack_kind().is_some(),
+        "the fixture never threw the move"
+    );
+    for bits in [Input::SPACE, SHIFT | Input::W, R, L] {
+        let mut w = w.clone();
+        run(&mut w, 4, bits, 0);
+        let p = &w.players[0];
+        assert!(
+            p.grounded,
+            "{bits:#x} got you off the ground during a committed move"
+        );
+        assert!(
+            !matches!(p.action, Action::Dodge { .. } | Action::Guard { .. }),
+            "{bits:#x} got you out of a committed move and into {:?}",
+            p.action
+        );
+    }
+}
+
+#[test]
 fn coming_to_rest_inside_a_move_is_not_instant() {
-    // The snap was the jarring part, not the rooting. A rooting move should
-    // bleed the speed off over a few frames.
+    // Letting go of the stick mid-move. The floor of the ramp is the move's own
+    // speed while you are steering and zero when you are not, so this is the
+    // same bleed arriving at nothing -- over a few frames rather than in one,
+    // because the snap was always a separate complaint from the stopping.
     let mut w = World::new();
     for _ in 0..10 {
         w.advance([
@@ -457,7 +501,7 @@ fn coming_to_rest_inside_a_move_is_not_instant() {
 
 #[test]
 fn releasing_a_direction_still_stops_you_crisply() {
-    // The decay is for moves that root you, not for ordinary walking. Letting
+    // The decay is for moves that hinder you, not for ordinary walking. Letting
     // go of W while free should stop you on the spot, or movement turns to ice.
     let mut w = World::new();
     for _ in 0..10 {

@@ -20,11 +20,12 @@ fn main() {
     // That is the guard working, not the guard being awkward -- the rule is
     // worth more than a convenient `{:.1}`.
     println!(
-        "walk {}  |  poking {}  |  crouching {}  |  guarding {}  |  committed 0",
+        "walk {}  |  poking {}  |  crouching {}  |  guarding {}  |  committed {}",
         tenths(t::move_speed()),
-        tenths(t::move_speed().mul(Fx::ratio(t::poke_mobility() as i32, 100))),
+        tenths(walking_at(t::poke_mobility())),
         tenths(t::crouch_move_speed()),
         tenths(t::guard_move_speed()),
+        tenths(walking_at(t::committed_mobility())),
     );
     println!(
         "reaction {}f  |  parry window {}f  |  dodge {}f ({} invulnerable)\n",
@@ -164,9 +165,15 @@ fn main() {
             if m.air_stall > 0 {
                 notes.push("hangs");
             }
-            if m.roots() {
-                notes.push("roots you");
-            }
+            // What the move costs your feet, and only when it is worth
+            // saying: every move hinders you, and the committed ones hinder
+            // you down to a crawl.
+            let feet = if m.mobility == 0 {
+                "roots you".to_string()
+            } else {
+                format!("walks {}", tenths(walking_at(m.mobility)))
+            };
+            notes.push(&feet);
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
@@ -216,6 +223,11 @@ fn main() {
          rest of the kit is never locked, so it charges for repeating yourself and\n\
          not for attacking. Record what you change in docs/design/feel-log.md."
     );
+}
+
+/// Walking speed at a given percentage of it. The mobility column, in metres.
+fn walking_at(percent: u8) -> Fx {
+    t::move_speed().mul(Fx::ratio(percent as i32, 100))
 }
 
 /// One decimal place, without touching floating point.

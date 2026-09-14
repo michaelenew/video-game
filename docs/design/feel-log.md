@@ -79,8 +79,14 @@ as they get tested.
 
 - Is 4.2 the right speed while poking, and should it differ per class? A spear poke and a
   hammer poke arguably should not hinder the same amount.
-- Should mobility vary *across* a move's phases — free during startup, rooted through
-  recovery? That is a common shape and might read better than a flat rate.
+- **Is 1.4 the right speed while committed, and should it differ per move?** ⚠️ **Newly open,
+  2026-09-14.** Committed moves stopped rooting and became a crawl; all sixteen got the same
+  20% of the walk, which is a uniform first guess in exactly the way the poke's 60% was.
+- Should mobility vary *across* a move's phases — free during startup, rooted through active,
+  slowed in recovery? That is a common shape and might read better than a flat rate. It is a
+  better question than it was: now that nothing roots for its whole length, rooting *only* the
+  active frames would put "you committed to a spot" back where it belongs — the frames where
+  the hitbox is actually out — for a handful of frames instead of forty.
 - **Is Bash at 4 frames of startup too fast to react to?** Human reaction is
   roughly 15 frames at 60 Hz, so a 4-frame move is unreactable by design. That
   is correct for a poke you are meant to *anticipate*, but it may make neutral
@@ -3239,6 +3245,175 @@ than fall off the end of it — and the test beside it asserts the pool covers e
 
 **Verdict** kept, and it means the previous entry's verdict is still genuinely open: the thing
 it describes has not actually been seen yet.
+
+### 2026-09-14 — the dash to the shadow only ever went along the floor
+
+**Changed** Three things about `shift` + forward on the Reaver, all of them the same
+sentence read properly — *the dash goes to where the second body is*.
+
+1. **It answers in the air.** A forward airdodge pointed at the shadow is the dash. It
+   spends the airdodge and keeps the dash's own frames.
+2. **It drives all three axes.** The line she flies is the straight line between the two
+   bodies; gravity and the arena are off for the crossing, and she arrives on the shadow's
+   own spot rather than within half a metre of it.
+3. **Only a total obstruction refuses it**, which is a new question in `aim.rs`:
+   `aim::clear_between`.
+
+Plus a fourth thing that is new rather than fixed: **the carry**, a window the arrival
+opens in which a jump takes the dash's speed up with her. New knob,
+`reaver.dash_carry,_the_jump_window`, at ten frames.
+
+**Why** Reported, in three parts, and the third is the one that explains the other two.
+
+**The air.** Being off the floor is the commonest reason she is not standing where she
+wants to be. A class whose mobility switched off the moment she jumped had the mobility in
+the wrong place — the airborne branch of the dodge simply never asked whether the crosshair
+was on the shadow. It asks now. It is the *airdodge*, aimed, so it costs the airdodge: one
+commitment per airtime is the rule that keeps a jump from becoming flight, and the dash is
+a bigger commitment than the one it replaces rather than a free extra. What it does not
+take is the airdodge's shorter sixteen frames, because a dash has somewhere to *be* and a
+tail cut short strands her halfway.
+
+**The dais.** `dash_drive` zeroed the vertical and `step_her_dash` measured the gap flat,
+so a shadow standing on a platform was, to the dash, a shadow standing on the floor
+underneath it. She ran at the side of the thing it was standing on and the arena stopped
+her — and then "arrived" was never true, so she never picked the shadow up either. The
+fix is to drive the real gap and measure the real gap. It brings two consequences with it
+and both are deliberate:
+
+- **The crossing is not resolved against the world.** Whether there was anything in the way
+  was decided when the dash began; pushing her out of the geometry halfway along is exactly
+  the *partial* obstruction the rule says there is no such thing as. It is what caught her
+  feet on the platform's side.
+- **She lands on the shadow's spot exactly.** The arrival tolerance is half a metre wide,
+  which on flat ground is invisible and on a ledge is the difference between the deck and
+  the lip.
+
+**The obstruction rule, and why it is so permissive.** "No unobstructed line from her to
+the shadow" is the specification, and the interesting part is what counts as *a line*.
+Feet-to-feet alone would have refused every dash onto anything, which is the bug. Both
+bodies are upright columns over fixed spots, so every line between them shares one
+horizontal footprint and they differ only in how they rise — which makes the four corner
+lines the extremes of the family, and one of them getting through enough. At the foot of a
+ledge the line from her crown clears the lip, so there is a way up and she takes it.
+
+The cost is that it is very permissive, and in this blockout it refuses nothing at all:
+platforms and walls are 1.5 m, a fighter is 1.8, so she can always see over. That is a fact
+about the arena rather than a hole in the rule — and a **structure** is exactly a fighter's
+height, so an Elementalist's stone raised on the line does refuse it. That turned out to be
+the nicest thing in the change: denying the Reaver's line is now something another class
+can do on purpose, and it is what the test pins.
+
+**The carry.** The slide after a dash was already there — the dodge's tail decays whatever
+speed you are carrying, and a dash arrives at thirty-four metres a second, so she keeps
+going for a good four metres. Reported as something that *wants* to be usable. It is now:
+a jump pressed inside the window takes the slide up with her, and cuts the dodge's tail
+short doing it, so the frames she would have spent being punished are spent in the air.
+
+Two decisions inside that:
+
+- **A press, not a hold**, and only after a dash. Every dodge in the game has a punishable
+  tail; a jump out of that one would be a universal escape rather than one class's tech.
+- **The window is a timing, not a distance.** What is left of the dodge on arrival already
+  *is* a window of this kind, but its length is however much of the dodge the crossing did
+  not spend — about a frame at the end of the leash, which is the range the class is built
+  around. So arriving tops the dodge up to the window's own length. It never shortens one:
+  a short dash keeps the whole tail it has always had, and only the first frames of that
+  tail are the window.
+
+**Verdict** open on all four, and the numbers to drag are the carry and the slide inside
+it. Ten frames is a guess. The slide is *inherited* rather than chosen — nobody picked four
+metres, it is what `defence.dodge_decay` does to thirty-four metres a second — and on a
+four-metre-wide dais that is most of the way to the far edge, so arriving on high ground
+and immediately sliding off it is the thing to watch for. If it reads badly, the honest fix
+is a knob for what fraction of the dash survives the arrival rather than shortening the
+window, because the window is what makes the jump findable.
+
+**One thing the dash can now do that it could not:** go over a wall. The blockout's walls are
+the same one and a half metres as its platforms, so the crown-line clears them and a shadow
+sent over one is a shadow she can follow. Leaving the arena was already possible — a full hop
+reaches 3.7 m and the walls are low on purpose, so anyone can jump onto one and step off the
+far side — and she is not stuck out there, because the wall is as jumpable from outside as
+from in. Filed rather than fixed: if the closed arena is meant to be closed, that is a fact
+about the walls rather than about this dash.
+
+One thing deliberately not touched: the air-speed cap still clamps her the moment she
+*steers* out of a dash jump, because `clamp_air_speed` runs whenever air acceleration finds
+head room and a turn always does. Hold the line you left on and the boost survives in full;
+fight it and it collapses to 14 m/s. That is the existing air model rather than anything new
+here — the Bulwark's leap has the same edge — and changing it is a decision about every
+class at once.
+
+**Found while doing it, and fixed elsewhere the same day:**
+`move.shadow_reaver.send_shadow.damage` was **0**, so the recall cut nobody against a kit
+document that says it "dashes back through anything between the two of you, damaging and
+slowing it". This branch wrote it up rather than guessing at a balance number;
+*Send shadow is instant and cannot interrupt*, above, put it back to 70 and explains why it
+had been zeroed — it was an attempt to remove the recall's **interrupt** with the only
+lever available, and the interrupt turned out not to be reachable from that number at all.
+Worth keeping as a pair: the same symptom read as a damage problem from one side and a
+frames problem from the other, and only the second reading had a fix in it.
+
+
+### 2026-09-14 — nothing roots you any more
+**Changed** Committed moves keep **20% of walking speed — 1.4 m/s — instead of 0**, across all
+sixteen of them. Everything else about a committed move is untouched: for its whole length you
+still cannot jump, dodge, guard, or throw anything else. The walk table is now 7.0 free, 4.2
+poking, 3.0 crouching, 2.0 guarding, 1.4 committed.
+
+Second half, and the half that does the work: **the hindered speed is now arrived at rather
+than assigned.** Starting a move used to set horizontal velocity to the move's speed outright,
+which was a one-frame drop of 2.8 m/s for a poke and would have been 5.6 for a heavy. It now
+bleeds down to the move's speed over about four frames, on the same ramp that already handled
+the root, with the *direction* following the stick from the first frame and only the magnitude
+lagging. `tuning::attack_root_decay` is `tuning::hindrance_decay` for that reason; its floor is
+the move's own speed while you are steering and zero when you are not, which is why letting go
+of the stick mid-move still bleeds you to a stop.
+
+**Why** Reported as jarring, and it is the same report the poke drew on 2026-09-11 — "stopping
+dead feels jarring; a big slowdown with no jump and no dodge should play the same and read
+better". Worth recording that the earlier entry drew the line in the wrong place. It concluded
+that *the snap and the rooting were two different complaints wearing one coat*, fixed the snap
+everywhere and kept the rooting on the heavies as correct design. The snap half was right. The
+other half was a category error: a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to take the controls away, not the most defensible one.
+
+The thing that made rooting look load-bearing is that it was doing two jobs at once and only
+one of them was the standing still. Spatial commitment — you chose this, now live in it — is
+`Action::actionable` refusing every other button, and that was never this number. Taking the
+feet away on top of it read as the game asserting the commitment a second time, to a player
+who had already felt it.
+
+**The spacing arithmetic, because it is the obvious objection.** The longest committed move in
+the game is 42 frames. At 1.4 m/s that is 0.98 m of drift, against a body radius of 0.5 and a
+Slam that reaches 2.0. Facing still locks on frame one, so the drift is along one committed
+line rather than a way to re-aim: creeping forward during startup buys about 0.4 m of reach on
+a move whose whiff costs 24 frames of recovery. That is a skill expression at the scale of a
+footsie, not a change to whether heavies are punishable. Below the guard walk on purpose — a
+committed move should still be the most your feet ever cost you, and guarding is the slowest
+thing you can otherwise choose to do.
+
+**Verdict** open — wants a real match. The three things to watch: whether whiff-punishing a
+heavy got meaningfully harder (the arithmetic says no, the hands are the judge), whether 1.4
+reads as a crawl or as sluggish walking, and whether the four-frame ramp is visible at the
+start of a heavy or just felt.
+
+**Left open deliberately.** Every one of the sixteen got the same 20%, and there is no reason
+to believe a Cataclysm and a Bash-with-a-hammer want the same number — the per-move column
+exists and this is a uniform first guess, exactly as the poke's 60% was. The open question
+above it is the older one and is still open: *should mobility vary across a move's phases* —
+free during startup, rooted through active, slowed in recovery. Rooting only the active frames
+is the version worth trying first, because it would put the "commit to a spot" property back
+where it actually belongs without any of the cost above; it was not done here because it is a
+new mechanic rather than a number, and this change is a number.
+
+**What the harness now pins.** `feel::a_committed_move_is_a_crawl_and_never_a_stop` bounds the
+crawl at both ends: above zero, and below the guard walk. `feel::a_committed_move_takes_the_
+jump_and_the_dodge_away` drives real presses through a live `World` and is the one that matters
+— it is where commitment lives now, and if it ever passes silently while the crawl is being
+retuned, the retuning is free. `feel::hindrance_is_proportional_to_commitment` lost its
+`committed.roots()` assertion, which is why `Move::roots()` is gone: a predicate whose only
+true case the feel harness forbids is a predicate nobody can use.
 
 ### 2026-09-14 — a match opens looking at your own fighter
 

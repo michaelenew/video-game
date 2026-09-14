@@ -126,8 +126,8 @@ standing where they threw it from is harmless.
 **Startup** medium · **Recovery** medium · **Range** melee · **Mechanic** medium cost; large
 return on hit
 
-A raking claw at chest-to-chest range. It roots you, it hurts, and connecting returns half of
-it.
+A raking claw at chest-to-chest range. It slows you to a crawl, it hurts, and connecting
+returns half of it.
 
 > **Changed 2026-09-12.** Rend was the auto until the auto became the Bloodletter, and it
 > moved down into the committed slot rather than being cut. The archive's version is a

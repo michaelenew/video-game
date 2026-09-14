@@ -217,21 +217,33 @@ A move takes your feet away in proportion to how much it commits you.
 | Throwing a poke | 4.2 |
 | Crouching | 3.0 |
 | Guarding | 2.0 |
-| Committed move | 0 — rooted |
+| Committed move | 1.4 — a crawl |
 
-Rooting is what commitment *means*, and it is right for the heavy moves: spacing only matters
-if choosing to swing costs you the ability to reposition. It is wrong for a fast poke. The
-poke is the neutral tool, thrown constantly, and stopping dead for every one makes neutral
-sticky and reads as the game taking the controls away. Slowing you keeps the cost — you
-cannot close or escape at full speed while swinging — without the lurch.
+**Nothing roots you.** ⚠️ **Changed 2026-09-14.** The committed moves used to sit at zero, and
+rooting was taken to be what commitment *meant*. It is not, and the giveaway is that the
+complaint it drew was word for word the one the poke drew three days earlier: a character who
+ignores the stick reads as the game taking the controls away. That is true of a heavy move
+more than of a poke, not less — a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to hold you *still*.
 
-Even where rooting is correct, arriving at rooted takes about four frames rather than one.
-The snap from a full walk to nothing was the jarring part, not the rooting. The distance slid
-while bleeding off is about twenty centimetres: nothing for spacing, everything for how it
-reads.
+What commitment means is the other half of it, and that half is untouched: **for the whole of
+a move you cannot jump, dodge, guard, or throw anything else.** You have the stick and nothing
+else, and the stick is worth 1.4 metres a second. Over the longest heavy in the game that is
+under a metre of ground — less than the move's own reach, and less than a single dodge — so
+the spacing game the rooting was there to protect never depended on it. Slower than guarding,
+which is the slowest thing you can otherwise choose to do, so a committed move is still the
+most your feet ever cost you.
 
-`cargo run -p sim --bin frametable` prints these alongside the frame data, and marks which
-moves root you.
+**Arriving at the hindered speed takes about four frames, not one.** This is the older half of
+the same lesson and it applies at every rung of the table: the snap from a full walk to the
+new speed is a separate complaint from the speed itself, and dropping straight to a crawl
+would have put the lurch back with a different number underneath it. Direction follows the
+stick immediately and only the magnitude bleeds, so you are steering from the first frame —
+you are just not going anywhere fast yet. Let the stick go mid-move and the same ramp takes
+you to a stop.
+
+`cargo run -p sim --bin frametable` prints these alongside the frame data, and gives every
+move its own walking speed in metres.
 
 ### Abilities land where the crosshair is
 
@@ -370,7 +382,8 @@ drift — the shared grammar is what lets one control scheme drive six kits, and
 *identity* is which weapon is in its hands has to spend its clicks on the weapons.
 
 That last row does real work. The Reaver's dash to its shadow *is* its dodge rather than an
-extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
+extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing,
+**on the ground and in the air alike**. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
 that matters (one charge, cancels recoveries, changes what the attack buttons do), and
 putting it on shift + direction would have made the class's central decision share an input
 with the universal defensive one. For the Reaver this is what makes movement and shadow
@@ -550,6 +563,12 @@ What exists today: **space is a vertical takeoff**, and **shift plus a direction
 airdodge, once per airtime**, which wipes vertical speed so it can never be a second jump.
 Airborne attacks are still the grounded ones.
 
+One class spends that airdodge on something else. The Reaver's forward airdodge, thrown with
+the crosshair on her shadow, is the **dash to it** — added 2026-09-14, because mobility that
+switched off the moment she jumped was mobility in the wrong place. It costs the airdodge
+like any other air commitment; what it buys is the whole distance to the second body rather
+than a sideways shove.
+
 ---
 
 ## The per-class schemes
@@ -684,7 +703,8 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. Cuts any recovery short, and the press is remembered for a few frames rather than dropped. **Bound** |
 | `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
-| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
+| `space`, in the frames after a dash lands | **The dash jump.** Takes the speed she arrived with up with her, and cuts the dodge's tail short. A press, and only after a dash |
 | `shift` + forward, anywhere else | The ordinary dodge |
 | — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 

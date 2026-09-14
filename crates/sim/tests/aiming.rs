@@ -1025,3 +1025,111 @@ fn standing_where_the_shadow_is_is_what_gets_you_cut() {
         "standing on the shadow cost nothing when the blades came up"
     );
 }
+
+// ---------------------------------------------------------------------------
+// A way through
+// ---------------------------------------------------------------------------
+//
+// `aim::clear_between` is the second thing in `aim` that is not a line of
+// effect. It answers **is there any straight line from this body to that one**,
+// and one input asks: the Reaver's dash to her shadow, which crosses the gap
+// unless there is no gap to cross.
+//
+// The rule is blunt on purpose. Two bodies are upright columns over fixed
+// spots, so every line between them shares one horizontal projection and they
+// differ only in how they rise -- which makes the four corner lines the
+// extremes of the whole family, and one of them getting through enough.
+
+/// The platform in the play area, found rather than written down: the walls are
+/// solids too, and they sit outside it.
+fn platform() -> sim::arena::Solid {
+    *sim::arena::SOLIDS
+        .iter()
+        .filter(|s| s.max.x.raw() < sim::arena::ARENA_HALF.raw())
+        .max_by_key(|s| s.min.x.raw())
+        .expect("the arena has a platform")
+}
+
+#[test]
+fn a_dais_is_not_an_obstruction_to_the_thing_standing_on_it() {
+    // The case the whole function exists for. A body at the foot of a ledge
+    // cannot see the deck along the floor -- but it can over the lip, and
+    // "over the lip" is a line, so there is a way up.
+    let w = elementalist();
+    let deck = platform();
+    let up_there = V3::new(
+        deck.min.x.add(deck.max.x).mul(Fx::ratio(1, 2)),
+        deck.max.y,
+        Fx::ZERO,
+    );
+    for gap in [1, 3, 6] {
+        let below = V3::new(deck.min.x.sub(Fx::from_int(gap)), Fx::ZERO, Fx::ZERO);
+        assert!(
+            with_scene(&w, |scene| sim::aim::clear_between(below, up_there, scene)),
+            "standing {gap} m from the ledge, nothing reached the deck on top of it"
+        );
+    }
+}
+
+#[test]
+fn a_body_is_not_blocked_by_what_it_is_standing_on() {
+    // Two bodies on the same deck are standing *exactly* on it, so a line taken
+    // from the soles grazes it for its whole length. The lines are measured
+    // from just above the soles for that reason, and the alternative -- shaving
+    // the world instead of the body -- opens a hairline between two stacked
+    // solids that a ray can thread.
+    let w = elementalist();
+    let deck = platform();
+    let one = V3::new(deck.min.x.add(Fx::ONE), deck.max.y, Fx::ONE.neg());
+    let two = V3::new(deck.max.x.sub(Fx::ONE), deck.max.y, Fx::ONE);
+    assert!(
+        with_scene(&w, |scene| sim::aim::clear_between(one, two, scene)),
+        "two bodies on the same platform could not see each other across it"
+    );
+}
+
+#[test]
+fn a_stone_squarely_between_two_bodies_is_a_total_obstruction() {
+    // A structure is exactly as tall as a fighter, so every line between two
+    // bodies on the floor is inside it -- there is no going over. That makes
+    // cutting the Reaver's line something the Elementalist can actually do.
+    let mut w = elementalist();
+    let here = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    let there = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    assert!(
+        with_scene(&w, |scene| sim::aim::clear_between(here, there, scene)),
+        "the open floor between them was an obstruction before anything was on it"
+    );
+
+    w.players[0].mechanic = Mechanic::Structures([
+        Some(Structure {
+            at: V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)),
+            vel: V3::ZERO,
+            age: u16::MAX,
+            struck: 0,
+            launched: false,
+            launch_from: V3::ZERO,
+            knock_struck: 0,
+        }),
+        None,
+        None,
+    ]);
+    assert!(
+        !with_scene(&w, |scene| sim::aim::clear_between(here, there, scene)),
+        "a stone standing on the line between them left a way through"
+    );
+
+    // And a stone off to one side is not in the way of anything.
+    let Mechanic::Structures(mut slots) = w.players[0].mechanic else {
+        unreachable!()
+    };
+    slots[0] = slots[0].map(|mut s| {
+        s.at = V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(12));
+        s
+    });
+    w.players[0].mechanic = Mechanic::Structures(slots);
+    assert!(
+        with_scene(&w, |scene| sim::aim::clear_between(here, there, scene)),
+        "a stone four metres off the line blocked it anyway"
+    );
+}

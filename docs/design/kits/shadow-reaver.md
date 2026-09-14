@@ -198,6 +198,57 @@ It replaces two abilities from the original list, **Shadow swap** and **Reascend
 of which were "get to the shadow" with a different verb attached. One movement option,
 aimed.
 
+#### Three things it did not used to do — added 2026-09-14
+
+All three are the same sentence read properly: **the dash goes to where the second body
+is.** Not to the floor under it, not only from the floor, and not only when the floor
+between the two of them is flat.
+
+**In the air as well.** A forward *air*dodge pointed at the shadow is the dash, exactly as
+the grounded one is. Being off the floor is the commonest reason she is not standing where
+she wants to be, and mobility that switched off the moment she jumped was mobility in the
+wrong place. It is the airdodge, aimed, so it **spends the airdodge** — one commitment per
+airtime is what keeps a jump from becoming flight — but it keeps the dash's own frames
+rather than the airdodge's shorter ones, because a tail cut short strands her halfway.
+
+**In three dimensions.** The line she flies is the straight line between the two bodies,
+and it goes up and down as readily as along. A shadow standing on a dais is *up there*; the
+old dash drove only her feet, so she ran at the side of the thing it was standing on and
+stopped. Gravity and the arena are off for the crossing — she is a shadow going to her
+shadow — and she arrives on the shadow's own spot rather than near it.
+
+**And only a total obstruction refuses it.** Total means what it says: *no* straight line
+from her body to its body, not "a ledge is in the way of her feet", which is every dash
+onto anything. Two bodies are upright columns over fixed spots, so every line between them
+has the same footprint and they differ only in how they rise — she takes any one of them
+that gets through. Refused, she gets the ordinary dodge, which is the other half of the
+button rather than a dead press.
+
+Nothing in the blockout is tall enough to refuse her: the platforms and the walls are one
+and a half metres and a fighter is one point eight, so she can always see over. **A
+structure can.** An Elementalist's stone is exactly a fighter's height, so one raised
+squarely on the line leaves no way through — which makes cutting the Reaver's line
+something another class can actually do, rather than a rule nothing exercises. See
+[../aiming.md](../aiming.md).
+
+#### The carry, and the jump out of it — added 2026-09-14
+
+**Arriving does not stop her.** She was crossing at more than thirty metres a second and
+that speed is still under her; the frames after she lands are a slide that decays. That
+window is the **carry**, and it is the same length however far she came — a dash that spent
+its whole dodge getting there is given the window rather than having the distance swallow
+it.
+
+**A jump pressed inside the carry takes the slide up with her.** It is the one thing that
+can cut a dodge's tail short, and that is half the reward: the frames she would have spent
+standing there being punished are spent in the air going somewhere instead. The other half
+is the speed, which decays while the window is open — so pressing early keeps more, and the
+tech is a gradient rather than a pass mark.
+
+It is a **press**, not a held button, and it answers only a dash. Every dodge in the game
+has a punishable tail, and a jump out of *that* would be a universal escape rather than one
+class's tech.
+
 ### Executioner — `E`, or `shift` + left click
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
 the shadow, which now always applies
@@ -252,6 +303,12 @@ somewhere that gives you an escape *and* a threat at once, which are usually dif
 places — and knowing when the quarter-damage copy at your own shoulder is worth more than
 either.
 
+**Where you put the shadow is now also where you can stand.** Sending it up onto a dais and
+dashing to it is a way onto high ground that costs a mechanic press rather than a jump
+arc — and a jump thrown out of the carry on arrival turns the whole thing into one long
+move across and up. That is the class's biggest piece of ground covered, and it is three
+inputs: right click, `shift` + forward, space.
+
 The two-button turn: `Q` opens the lotus wherever the shadow is standing, right click drags
 it home through everything in between. Since right click cuts a recovery short, the turn
 does not have to wait for the lotus to finish coming out — the drag is a decision made
@@ -262,6 +319,11 @@ makes with Rush.
 
 - Does the shadow have collision, or is it purely a marker? Collision makes it
   denial-able, which cuts both ways. **It has none today.**
+- **How long should the carry be, and how much of the dash should survive it?** Ten frames
+  is the first value and it is a guess. The slide itself is inherited rather than chosen —
+  it is what the dodge's decay does to thirty-four metres a second — and it carries her a
+  good four metres past the shadow, which on a dais is most of the way to the far edge.
+  Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
 - The archive's bonus on the first auto after reclaiming the shadow. Reclaiming is a dash
   now, so the trigger exists — nobody has decided whether the bonus should.

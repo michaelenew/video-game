@@ -65,12 +65,21 @@ pub struct Move {
     pub aim_code: u8,
     /// Percent of walking speed you keep while the move runs.
     ///
-    /// Zero roots you, which is what commitment means and is correct for the
-    /// heavy moves. It is wrong for a fast poke: the poke is the neutral tool,
-    /// thrown constantly, and stopping dead every time makes neutral sticky and
-    /// reads as the game snatching the controls away. Slowing you keeps the
-    /// cost -- you cannot close or escape at full speed while swinging --
-    /// without the lurch.
+    /// A poke slows you; a committed move slows you to a crawl. **Nothing is
+    /// zero.** Zero roots you, and rooting was what commitment used to mean --
+    /// but a character who ignores the stick reads as the game snatching the
+    /// controls away, which was the complaint that took it off the pokes first
+    /// and off the heavies after. What commitment means is that you cannot
+    /// jump, dodge, guard or throw anything else until the move is finished,
+    /// and none of that is this number: see `crate::state::Action::actionable`.
+    ///
+    /// See [`tuning::poke_mobility`] and [`tuning::committed_mobility`] for the
+    /// two reference speeds, and `docs/design/controls.md` for the table they
+    /// sit in. The palette can still set this to zero; the feel harness is what
+    /// says it should not be.
+    ///
+    /// [`tuning::poke_mobility`]: crate::tuning::poke_mobility
+    /// [`tuning::committed_mobility`]: crate::tuning::committed_mobility
     pub mobility: u8,
     /// How far a swing travels, in turns, and **which way**.
     ///
@@ -299,11 +308,6 @@ impl Move {
     /// left is the autos and the fast pokes, which is the set the rule is for.
     pub fn repeat_idle(&self) -> u16 {
         self.repeat_lock().saturating_sub(self.whiff_cost())
-    }
-
-    /// Whether the move pins you in place for its duration.
-    pub const fn roots(&self) -> bool {
-        self.mobility == 0
     }
 
     /// Whether this move strikes on its own, or only places something -- or

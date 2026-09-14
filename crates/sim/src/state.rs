@@ -1798,10 +1798,21 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             defender.slam = hit.launch.abs();
         }
     }
-    // Whatever else it did, it broke the dash. A Rush you could be hit out of
-    // and keep is a Rush with invulnerability attached.
-    if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
-        *rush = 0;
+    // Whatever else it did, it broke the dash -- the Champion's Rush, and the
+    // Reaver's dash to her shadow with the carry it leaves behind. A commitment
+    // you can be hit out of and keep is a commitment with invulnerability
+    // attached.
+    //
+    // **Unless the hit takes no frames.** A dash is frames, so a blow that
+    // lands without touching the victim's action must not end one either --
+    // see [`Hit::interrupts`], and the recall, which is the one hit that sets
+    // it. It is about force rather than frames, and ending somebody's dash is
+    // the other thing.
+    if hit.interrupts {
+        if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
+            *rush = 0;
+        }
+        shadow::broken_by_a_hit(defender);
     }
 }
 
@@ -2039,27 +2050,47 @@ fn step_player(
                     // moving -- which is most of the time -- did not jump. Space is
                     // now only ever a vertical takeoff.
                     let dir = move_dir(p.aim(input), ax, az);
-                    if p.grounded {
-                        // The Reaver's forward dodge, thrown with the crosshair on
-                        // her shadow, is the dash to it -- the same invulnerable
-                        // commitment, pointed at the one place on the map she cares
-                        // about. It is not an extra input: the class's mobility and
-                        // the universal defensive option are deliberately the same
-                        // button, which is what keeps her from being denied either.
-                        if shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
-                            shadow::begin_dash(p);
-                        } else {
-                            p.vel.x = dir.x.mul(t::dodge_speed());
-                            p.vel.z = dir.z.mul(t::dodge_speed());
+                    // On the ground there is nothing to spend; in the air the
+                    // commitment is spent once per airtime, because a second one
+                    // would turn a jump into flight.
+                    let may_commit = p.grounded || !p.air_dodged;
+                    // The Reaver's forward dodge, thrown with the crosshair on
+                    // her shadow, is the dash to it -- the same invulnerable
+                    // commitment, pointed at the one place on the map she cares
+                    // about. It is not an extra input: the class's mobility and
+                    // the universal defensive option are deliberately the same
+                    // button, which is what keeps her from being denied either.
+                    //
+                    // **In the air as much as on the ground.** Being off the floor
+                    // is the commonest reason she is not standing where she wants
+                    // to be, and the shadow is the answer to that question by
+                    // construction -- a class whose mobility switched off the
+                    // moment she jumped had the mobility in the wrong place. The
+                    // airborne one is the airdodge, aimed, so it costs the
+                    // airdodge; what it does not do is take the airdodge's shorter
+                    // frames, because the dash has somewhere to *be* and a tail cut
+                    // short would strand her halfway there.
+                    if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
+                        if !p.grounded {
+                            p.air_dodged = true;
                         }
+                        shadow::begin_dash(p);
+                        // Whatever she was doing vertically is over: from here the
+                        // dash drives all three axes along its own straight line.
+                        p.vel.y = Fx::ZERO;
+                        Action::Dodge {
+                            left: t::dodge_frames(),
+                        }
+                    } else if p.grounded {
+                        p.vel.x = dir.x.mul(t::dodge_speed());
+                        p.vel.z = dir.z.mul(t::dodge_speed());
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
                     } else if !p.air_dodged {
                         // An airdodge, once per airtime. It commits you to a
                         // direction in the air, where you otherwise have almost no
-                        // say, which is why it can only be spent once: a second one
-                        // would turn a jump into flight.
+                        // say.
                         p.air_dodged = true;
                         p.vel.x = dir.x.mul(t::air_dodge_speed());
                         p.vel.z = dir.z.mul(t::air_dodge_speed());
@@ -2086,10 +2117,21 @@ fn step_player(
     // Horizontal movement.
     //
     // How much a move hinders you is proportional to how much it commits you.
-    // The heavy moves root you outright -- that is what commitment means, and
-    // it is the whole basis of spatial play here. A fast poke does not: it is
-    // the neutral tool, thrown constantly, and stopping dead every time made
-    // neutral sticky and read as the game taking the controls away.
+    // A fast poke slows you; a committed move slows you to a crawl, slower than
+    // guarding, which is the most your feet ever cost you.
+    //
+    // **Nothing stops you dead.** The committed moves used to, and it was the
+    // same complaint the poke drew before it: a character who ignores the stick
+    // reads as the game taking the controls away, and a heavy move is the worst
+    // place to do that because it is where you are looking at your own feet. It
+    // costs no spacing to give the frames back -- a crawl over a forty-frame
+    // slam is under a metre -- and what commitment actually means survives
+    // untouched, because it was never the standing still. It is that you cannot
+    // jump, dodge, guard or throw anything else until the move is done, and that
+    // is decided by `Action::actionable`, not by this number.
+    //
+    // Zero is still reachable from the palette and still roots, so this keeps
+    // filtering it out rather than dividing the two cases twice.
     let attack_speed = p
         .action
         .attack_kind()
@@ -2098,12 +2140,19 @@ fn step_player(
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
 
-    if let Some(drive) = shadow::dash_drive(p) {
+    let dashing = shadow::dash_drive(p);
+    if let Some(drive) = dashing {
         // A dash has somewhere to be, so it holds its speed rather than
         // decaying like the dodge it rides on: a decaying shove covers whatever
         // distance the decay happens to be tuned for, and the shadow is at a
         // distance of its own choosing.
+        //
+        // **And it drives the vertical too**, which is what makes a shadow left
+        // on a dais somewhere she can actually get to. See the resolve below:
+        // for as long as this is driving, gravity and the arena are off and the
+        // line is the whole of her motion.
         p.vel.x = drive.x;
+        p.vel.y = drive.y;
         p.vel.z = drive.z;
     } else if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(t::dodge_decay());
@@ -2144,16 +2193,34 @@ fn step_player(
         let dir = move_dir(p.aim(input), ax, az);
         p.vel.x = dir.x.mul(dragged(p, t::guard_move_speed()));
         p.vel.z = dir.z.mul(dragged(p, t::guard_move_speed()));
-    } else if let (Some(speed), true) = (attack_speed, steering) {
+    } else if let (Some(allowed), true) = (attack_speed, steering) {
+        // Hindered, and steering. **The hindered speed is arrived at, not
+        // assigned.** Setting it outright would drop a running fighter from a
+        // full walk to a crawl in one frame, which is the same lurch the dead
+        // stop was -- the snap and the stopping were always two complaints
+        // wearing one coat, and only one of them is design.
+        //
+        // Direction follows the stick from the first frame and only the
+        // magnitude bleeds, which is what keeps it feeling responsive: you are
+        // steering immediately, you are just not going anywhere fast yet.
         let dir = move_dir(p.aim(input), ax, az);
-        p.vel.x = dir.x.mul(dragged(p, speed));
-        p.vel.z = dir.z.mul(dragged(p, speed));
+        let floor = dragged(p, allowed);
+        let carried = V3::new(p.vel.x, Fx::ZERO, p.vel.z)
+            .flat_len()
+            .mul(t::hindrance_decay());
+        let speed = if carried.raw() > floor.raw() {
+            carried
+        } else {
+            floor
+        };
+        p.vel.x = dir.x.mul(speed);
+        p.vel.z = dir.z.mul(speed);
     } else if p.action.attack_kind().is_some() {
-        // Rooted, or steering nothing. Bleed the speed off over a few frames
-        // rather than snapping to a halt: the snap was the jarring part, not
-        // the rooting.
-        p.vel.x = p.vel.x.mul(t::attack_root_decay());
-        p.vel.z = p.vel.z.mul(t::attack_root_decay());
+        // Steering nothing -- or rooted, if somebody has tuned a move's
+        // mobility to zero. The same ramp with the floor at zero: bleed the
+        // speed off over a few frames rather than snapping to a halt.
+        p.vel.x = p.vel.x.mul(t::hindrance_decay());
+        p.vel.z = p.vel.z.mul(t::hindrance_decay());
     } else {
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;
@@ -2177,6 +2244,25 @@ fn step_player(
         p.jump_hold = t::jump_hold_frames();
     }
 
+    // **The dash jump.** Arriving from a dash leaves the Reaver sliding for a
+    // few frames with the speed she crossed at still under her -- the carry --
+    // and a jump pressed inside that window takes the slide up with her instead
+    // of letting the floor have it. It cuts the dodge's tail short, which is the
+    // other half of the reward: the frames she would have spent standing there
+    // being punished are spent in the air going somewhere.
+    //
+    // A press rather than a hold, and the slide decays while the window is open,
+    // so the tech has a gradient -- the earlier she finds it, the further she
+    // goes. The ordinary jump above cannot fire here: the carry runs inside the
+    // dodge, and a dodge is not actionable.
+    if pressed_space && shadow::carrying_a_dash(p) {
+        p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
+        p.grounded = false;
+        p.jump_hold = t::jump_hold_frames();
+        p.action = Action::Free;
+        shadow::spend_carry(p);
+    }
+
     // The second half of the uppercut. You are both off the ground and you
     // have hold of them; pressing jump again takes the pair of you higher,
     // once. This is the "we are settling this in the air" button, and it is the
@@ -2186,7 +2272,7 @@ fn step_player(
         p.leap_used = true;
     }
 
-    if !p.grounded {
+    if !p.grounded && dashing.is_none() {
         if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
             // whatever vertical speed you had **bleeds away** rather than being
@@ -2229,6 +2315,21 @@ fn step_player(
     }
 
     p.pos = p.pos.add(p.vel.scale(DT));
+
+    // **A dash is not resolved against the world.** Whether there was anything
+    // in the way was decided on the frame it began, by `aim::clear_between`, and
+    // the answer it gives is all-or-nothing: either no line reaches the shadow
+    // and the press was an ordinary dodge, or one does and she takes it. Pushing
+    // her out of the geometry halfway along is exactly the *partial* obstruction
+    // the rule says there is no such thing as -- it is what used to catch her
+    // feet on the side of a platform and end the dash at the foot of the thing
+    // she was dashing on to.
+    //
+    // She arrives at the shadow's own spot, which is somewhere a body can stand,
+    // and the frame after the dash ends resolves her there normally.
+    if dashing.is_some() {
+        return;
+    }
 
     // How fast this fighter was going when the floor arrived. Read before the
     // resolve, which is what stops it.
@@ -3155,6 +3256,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.echo_age as u32);
             h.write_u32(shadow.echo_used as u32);
             h.write_u32(shadow.dash as u32);
+            h.write_u32(shadow.carry as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
