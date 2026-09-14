@@ -137,6 +137,7 @@ fn main() {
                     place_bolts,
                     place_debris,
                     place_gusts,
+                    place_discs,
                     place_wings,
                     place_wing_tips,
                     place_marks,
@@ -460,9 +461,21 @@ struct BoltMesh(usize);
 #[derive(Component)]
 struct DebrisMesh(usize);
 
-/// One of the Elementalist's air shots in flight -- an Air bolt or a Gale.
+/// One of the Elementalist's Air bolts in flight.
 #[derive(Component)]
 struct GustMesh(usize);
+
+/// One of her Gales -- the frisbee.
+///
+/// Its own pool and its own mesh rather than a scaled copy of the bolt's,
+/// because the *shape* is the move. A squashed sphere in a barely-opaque
+/// material has no flat face and no rim, so however thin it is scaled it reads
+/// as a glowing blob; a disc has an edge you can see it turn on. Two pools
+/// rather than one with the mesh swapped per frame, which is the same reason
+/// every other pool here is fixed: what a shot is drawn as must not be decided
+/// on the rollback path.
+#[derive(Component)]
+struct DiscMesh(usize);
 
 /// One slice of the Dual mage's wing.
 ///
@@ -785,7 +798,8 @@ fn setup(
     }
     // The Elementalist's air shots. Beam-skinned rather than stone: it is air,
     // and the same barely-opaque material the rest of what she throws with her
-    // hands is drawn in.
+    // hands is drawn in. A pool each, because the two are different shapes: a
+    // bolt is a stretched bead and a Gale is a disc with a rim.
     for slot in 0..sim::gust::MAX_GUSTS {
         commands.spawn((
             Mesh3d(pellet.clone()),
@@ -793,6 +807,13 @@ fn setup(
             Transform::default(),
             Visibility::Hidden,
             GustMesh(slot),
+        ));
+        commands.spawn((
+            Mesh3d(unit.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            DiscMesh(slot),
         ));
     }
     // The Dual mage's wing, and the ball it finishes on. Spawned for every
@@ -994,52 +1015,109 @@ fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &
     }
 }
 
-/// Put the Elementalist's air shots where they are, at the size they have
-/// **become**.
+/// Put the Elementalist's Air bolts where they are.
 ///
-/// The size is the whole of the Gale: it leaves her hand small and arrives
-/// large, and how big it is on any one frame is what decides whether it
-/// reached you. So the scale comes off `Gust::girth`, which is the same
-/// number the hit test asks for -- the overlay rule (`CLAUDE.md`) applied to
-/// something that is not an overlay: a disc drawn one size and tested at
-/// another would be a lie you could not see through.
+/// Stretched along its flight, the same treatment `place_bolts` gives a fire
+/// bolt and for the same reason: it reads as travelling rather than as a bead
+/// hanging in the air.
 ///
-/// A disc rather than a pellet: flattened along its own line of travel, so
-/// what you see coming is a wall of air face-on rather than a ball. The bolt
-/// keeps the stretched-along-its-flight treatment `place_bolts` gives a fire
-/// bolt, for the same reason -- it reads as travelling rather than hanging.
+/// The scale comes off `Gust::girth`, which is the number the hit test asks
+/// for -- the overlay rule (`CLAUDE.md`) applied to something that is not
+/// technically an overlay. A shot drawn one size and tested at another is a lie
+/// you cannot see through, and the Gale is where that mattered: see
+/// [`place_discs`].
 fn place_gusts(sim: Res<Sim>, mut meshes: Query<(&GustMesh, &mut Transform, &mut Visibility)>) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
         };
+        if !matches!(shot.gale, sim::gust::Gale::Bolt) {
+            *vis = Visibility::Hidden;
+            continue;
+        }
         *vis = Visibility::Inherited;
+        // Stretched along its flight, so a bolt reads as travelling rather than
+        // as a bead hanging in the air.
         let radius = shot.girth().to_f32_for_render();
         tf.translation = fx3(shot.pos);
-        match shot.gale {
-            // The bolt is stretched along its flight, so it reads as
-            // travelling rather than as a bead hanging in the air.
-            sim::gust::Gale::Bolt => {
-                tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
-                tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
-            }
-            // **The disc lies flat, and it is not a choice.** Its hit volume
-            // is a horizontal disc: `aim::first_along` swells the victim's
-            // standing cylinder by the shot's girth in *radius* and never in
-            // height, so what the Gale occupies is a flat disc of that radius
-            // sweeping along its line, and somebody clear above or below that
-            // line is not caught by it however wide it has grown.
-            //
-            // It used to be turned face-on to its own travel -- squashed along
-            // `dir` -- which drew the one picture the volume is not: a wall of
-            // air coming at you, when the thing that can actually hit you is a
-            // frisbee flying edge-first. Identity rotation is the honest one.
-            sim::gust::Gale::Disc => {
-                tf.rotation = Quat::IDENTITY;
-                tf.scale = Vec3::new(radius * 2.0, radius * 0.12, radius * 2.0);
-            }
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
+        tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+    }
+}
+
+/// Put the Gales where they are, lying in the plane they were thrown in.
+///
+/// **A frisbee, not a shield and not a ball.** The disc's own axis -- the one a
+/// thrown frisbee spins about -- is square to the line of effect that aimed the
+/// shot, and lies in the *vertical plane containing that line*. So a Gale
+/// thrown level is flat; one thrown down at the floor is tipped nose-down by
+/// exactly the angle it was thrown at, and it slices along its own path rather
+/// than being pushed through the air face-first.
+///
+/// ```text
+///    n  the disc's axis: square to `dir`, in the vertical plane through it
+///    ^
+///    |    ,--.            thrown level, the disc lies flat
+///    o---( == )------>  dir
+///         `--'
+///
+///
+///    o                    thrown downward, the axis tips *forward* with the
+///     `.            n     throw -- square to `dir` still, and in that same
+///       `.         /      vertical plane still -- so the disc tips with it
+///         `.      /       and stays edge-on to its own path, slicing along
+///           `.   /        it rather than being shoved through the air
+///             `./         face-first
+///              /`.
+///             /   `v  dir
+///
+///    (seen from the side, the disc *is* the line through the throw: its
+///    plane holds `dir`, so edge-on it and the path are drawn the same)
+/// ```
+///
+/// `n = up - (up . dir) dir`, normalised: the vertical, with whatever part of
+/// it runs along the throw taken out. That is the one direction that is both
+/// square to the throw and in the plane the throw shares with the vertical,
+/// which is the whole of the rule above.
+///
+/// **This does not put the drawing at odds with the hit test.** The sideways
+/// half-width of the disc is `dir x n`, which is *horizontal* whichever way the
+/// throw is pitched -- both `dir` and `n` lie in the same vertical plane, so
+/// their cross product is square to it. The test reads the centre path and a
+/// girth around it and asks that the path be inside the body's own height where
+/// it arrives (`aim::first_along`), which is a thin disc of that girth riding
+/// the path. Tipping that disc inside the plane its path already lies in leaves
+/// the horizontal footprint exactly where it was; all it moves is where the
+/// leading and trailing edges sit vertically, by less than the body height the
+/// test already spans. Step aside and you are clear, stand above it and you are
+/// clear -- before and after.
+fn place_discs(sim: Res<Sim>, mut meshes: Query<(&DiscMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(shot) = sim.cur.gusts[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        if !matches!(shot.gale, sim::gust::Gale::Disc) {
+            *vis = Visibility::Hidden;
+            continue;
         }
+        *vis = Visibility::Inherited;
+        let radius = shot.girth().to_f32_for_render();
+        let dir = fx3(shot.dir).normalize_or_zero();
+        // Thrown straight up or straight down there is no vertical left to take
+        // the throw out of, and no plane to be square to either. Any axis will
+        // do and the upright one is the least surprising; the aim's own pitch
+        // limit means it is never actually reached.
+        let axis = (Vec3::Y - dir * Vec3::Y.dot(dir))
+            .try_normalize()
+            .unwrap_or(Vec3::Y);
+        tf.translation = fx3(shot.pos);
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, axis);
+        // Thin, but not a sheet: a disc you cannot see turn is a disc nobody
+        // reads as spinning, and edge-on is exactly the view the player has of
+        // one they threw.
+        tf.scale = Vec3::new(radius * 2.0, radius * 0.18, radius * 2.0);
     }
 }
 

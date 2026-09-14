@@ -3939,3 +3939,57 @@ opens exactly as it did and simply stays open for the second half of a much long
    from exactly where the player is standing. It may want to be visibly thicker than the volume
    it stands for, which would be the first deliberate lie in any of this and should be argued
    for rather than slid in.
+
+### 2026-09-14 — the frisbee is thrown, not laid flat
+
+**Changed** how the Gale is drawn, twice over, and nothing about what it does. Same speed, same
+reach, same girth, same hit test. No knobs moved.
+
+**The complaint after the last entry.** *"Right now it's just a giant orb… it reads more like an
+orb or a shield. It's not that — it's offensive."* Two faults, and they were compounding.
+
+**It was a sphere.** The disc shared the bolt's mesh, `Sphere::new(0.5)`, squashed to 12% on one
+axis. A sphere has no flat face and no rim: every normal points straight out from the centre, so
+there is no edge for the light to break on and no silhouette that changes as it turns. In an
+almost-transparent material that is a glowing blob whatever you scale it to, and a blob that is
+wider than it is tall is a blob. It has its own mesh now — a real disc (`Cylinder`, 0.18 thick
+relative to its radius) with a rim you can see it turn on — and its own pool, because which mesh
+a shot is drawn as must not be decided per frame on the rollback path.
+
+**And it was laid flat in the world, not in the throw.** The last entry got "flat" right and
+stopped one step short. The rotation was identity, so a Gale thrown *down* at somebody was a
+dinner plate sliding horizontally through the air on its way to the floor — face-first again,
+just face-down this time instead of face-forward. A thrown frisbee tips with the throw.
+
+So the axis the disc spins about is now **square to the line of effect that aimed it, and in the
+vertical plane containing that line**: `n = up − (up·dir)·dir`, normalised — the vertical with
+whatever part of it runs along the throw taken out. Level throw, flat disc. Throw angled down at
+40°, disc tipped 40° nose-down, edge leading all the way in. That is the whole rule, and it is
+the user's, stated geometrically.
+
+**It costs the hit test nothing, which is the part worth checking rather than assuming.** The
+disc's sideways half-width is `dir × n`, and both `dir` and `n` lie in the same vertical plane,
+so that cross product is horizontal however the throw is pitched. Tipping the disc *inside* the
+plane its own path already lies in leaves the horizontal footprint exactly where it was; all
+that moves is where the leading and trailing edges sit vertically, by less than the body height
+`aim::first_along` already spans. Step aside and you are clear, stand above it and you are
+clear — before and after. `the_gale_is_a_frisbee_rather_than_a_ball` measures that directly off
+`aim::first_along` and is unchanged.
+
+**The last entry half-predicted this and misread which half.** It asked whether a flat disc reads
+at all from behind it, and guessed the answer would be to draw it thicker than its volume — the
+first deliberate lie. It did not need one. What it needed was a shape with an edge, and an
+orientation that turns as the shot is aimed, so the silhouette is doing work instead of sitting
+still. Worth remembering the next time "make it bigger than it is" looks like the fix.
+
+**Verdict** open. Things to watch:
+
+1. **Does a downward Gale still read as reaching the target, or as diving past them?** Nose-down
+   is right for a throw at the floor and may be too much for a throw at somebody's chest from
+   just above them.
+2. **Is 0.18 of the radius the right thickness?** Thin enough to be a disc, thick enough to catch
+   light at a glance. The number is the drawing's alone; the volume it stands for is thinner
+   still, so this is already a small lie and should not grow without an argument.
+3. **Does the rim read from directly behind, where the player usually is?** The throw tips the
+   disc away from face-on for anything but a level shot, which should help exactly in the case
+   the last entry worried about — and does nothing for a level shot, which is the common one.

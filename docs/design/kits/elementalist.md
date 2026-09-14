@@ -325,17 +325,25 @@ poke, and the same trade the grounded auto makes with a body added to it.
 
 A **frisbee** of air, thrown flat, that opens as it goes and hits harder the wider it has got.
 
-> **It lies flat, and the hit test is what says so.** What the shot occupies is a horizontal
-> disc of its current radius sweeping along its line — the victim's standing cylinder is
-> swollen by the shot's girth in *radius* and never in height — so the same clearance that
-> saves you by stepping aside does not save you by standing above it, and vice versa. It is a
-> thing flying edge-first past you, not a wall of air coming at you.
+> **It is thrown, not pushed.** The disc's own axis — the one a frisbee spins about — is square
+> to the line of effect that aimed it and lies in the *vertical plane containing that line*. So
+> a Gale thrown level lies flat, and one thrown down at the floor is tipped nose-down by exactly
+> the angle it was thrown at: it slices along its own path, edge leading. It is a thing going
+> past you, not a wall of air coming at you.
 >
-> That mattered in the drawing before it mattered anywhere else: the disc was drawn face-on to
-> its own travel, which is a picture of the one volume the game does not have, and it read from
-> the seat as a disc turned to face her. Flat is honest, and it is what
-> [../../../CLAUDE.md](../../../CLAUDE.md)'s overlay rule asks for in a place that is not
-> technically an overlay.
+> The hit test agrees and always did. What the shot occupies is a thin disc of its current
+> radius riding its line, with its width lying *across* the throw — the victim's standing
+> cylinder is swollen by the girth in radius and never in height — so the same clearance that
+> saves you by stepping aside does not save you by standing above it, and vice versa. Tipping
+> the disc into the plane its path already lies in costs that nothing: the width runs along
+> `dir × axis`, which is horizontal whichever way the throw is pitched.
+>
+> Getting there took two wrong drawings. It was face-on to its own travel first — a picture of
+> the one volume the game does not have, and it read from the seat as a disc turned to face
+> her. Then it was a flattened *sphere*, which in a barely-opaque material has no flat face and
+> no rim and so read as a glowing orb whatever it was scaled to. It is a disc mesh now, with an
+> edge you can see it turn on. [../../../CLAUDE.md](../../../CLAUDE.md)'s overlay rule is what
+> all of this is in service of, in a place that is not technically an overlay.
 >
 > **The size is the move.** It leaves her hand at a fraction of its listed radius and comes up
 > to full size over a distance of its own, and damage and knockback ride that same fraction —

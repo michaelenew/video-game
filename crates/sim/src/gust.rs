@@ -24,14 +24,24 @@
 //!
 //! ## The Gale grows, and that is the whole move
 //!
-//! **It is a frisbee, and the hit test says so.** The disc lies *flat* --
-//! `aim::first_along` swells the victim's standing cylinder by the shot's girth
-//! in **radius only**, never in height, so what the shot occupies is a
-//! horizontal disc of that radius sweeping along its line. Someone standing
-//! clear above or below the line it is flying is not caught by it however wide
-//! it has grown, and the renderer draws it lying flat for exactly that reason:
-//! a disc drawn face-on to its own travel would be a picture of a volume the
-//! game does not have.
+//! **It is a frisbee, and the hit test says so.** `aim::first_along` swells the
+//! victim's standing cylinder by the shot's girth in **radius only**, never in
+//! height, and asks that the centre path be inside the body's own height where
+//! it arrives -- so what the shot occupies is a thin disc of that girth riding
+//! its line, with its width lying across the throw. Someone standing clear
+//! above or below the line it is flying is not caught by it however wide it has
+//! grown.
+//!
+//! The renderer draws exactly that, tipped into the plane the throw lies in:
+//! the disc's own axis is square to the line of effect and in the vertical
+//! plane through it, so a Gale thrown level is flat and one thrown down at the
+//! floor is tipped nose-down by the angle it was thrown at -- slicing along its
+//! path rather than being pushed through the air face-first. The tip costs the
+//! hit test nothing, because the disc's width is `dir x axis`, which is
+//! horizontal whichever way the throw is pitched. See `game`'s `place_discs`.
+//! Drawn face-on to its own travel instead -- which it was, for a week -- it is
+//! a picture of a volume the game does not have: a wall of air coming at you
+//! rather than a disc going past you.
 //!
 //! A disc of air leaves her hand at [`tuning::gale_start`] of the size its move
 //! row lists and arrives at full size once it has travelled
