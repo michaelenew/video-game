@@ -421,10 +421,16 @@ their cover — the skill is placing them where they serve you more than the opp
   Ice blast in particular *wants* to reach structures rather than be stopped by the
   nearest one, so "blocks" cannot simply mean the same thing for every ability that
   travels.
-- **The beam ignores the arena.** Walls and platforms are not traced against, so a shot
-  aimed down at the floor passes through it and whiffs rather than stopping short of one.
-  Deliberate for now — stones are the one piece of terrain the shot is *for* — but it is
-  the obvious thing to revisit once the arena is more than a blockout.
+- **The beam ignores the arena, and so does everything else she throws.** Walls and
+  platforms are not traced against, so a shot aimed down at the floor passes through it and
+  whiffs rather than stopping short of one. The same is true of Cataclysm's debris, of the
+  fire bolt and of both air shots: the only solid any of them knows about is a stone.
+  Deliberate for now — stones are the one piece of terrain the shots are *for* — but it is
+  the obvious thing to revisit once the arena is more than a blockout, and it has already
+  cost one confusing test failure. A stone raised inside the dais's footprint is pushed up
+  **on to** it and stands a metre and a half in the air; debris then flies under the stone
+  *and through the platform holding it up*, which looks from the outside exactly like debris
+  punching through a stone. See `CLEAR_LANE` in `crates/sim/tests/cataclysm.rs`.
 - Should the first-thing-it-meets check on the auto also read *black spike*, or anything
   else a future element adds to `effects.rs`? Right now it only recognises fire pillars,
   because fire is the only element that currently ships with the class. The dispatch is

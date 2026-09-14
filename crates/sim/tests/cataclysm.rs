@@ -32,10 +32,16 @@ fn as_class(one: Class) -> World {
     World::with_classes([one, Class::Bulwark])
 }
 
-/// An Elementalist at the origin, facing +X, with nothing in her way. Every
-/// grounded and skillshot ability she has lands somewhere down this line by
-/// default, which is what lets these fixtures place a structure or a pillar
-/// "ahead" and then fire the heavy through it without having to aim it.
+/// An Elementalist at the origin, facing +X. Every grounded and skillshot
+/// ability she has lands somewhere down this line by default, which is what
+/// lets these fixtures place a structure or a pillar "ahead" and then fire the
+/// heavy through it without having to aim it.
+///
+/// **Clear for about five metres, and not beyond.** The blockout has a dais at
+/// `x ∈ [5, 9], z ∈ [-4, 4]`, a metre and a half tall (`arena::SOLIDS`), so a
+/// fixture that reaches past x = 5 on this line is standing things on a roof.
+/// Anything that needs real distance moves off the band first -- see
+/// [`CLEAR_LANE`].
 fn elementalist() -> World {
     let mut w = as_class(Class::Elementalist);
     w.players[0].pos = V3::ZERO;
@@ -43,14 +49,27 @@ fn elementalist() -> World {
     w
 }
 
+/// A line down positive X with genuinely nothing on it, for the fixtures that
+/// need more room than the dais leaves.
+///
+/// `tests/beam.rs` and `tests/aiming.rs` both already sit out here, and for the
+/// same reason. It cost a real failure to learn twice: a stone raised inside
+/// the dais's footprint is pushed up **on to** it, so it stands a metre and a
+/// half in the air with a gap underneath -- and debris does not collide with
+/// the arena at all (see the kit's open questions), so anything travelling near
+/// the floor sails under the thing that was supposed to stop it. What that
+/// looks like from the assertion is "debris punched through a stone", which is
+/// not what happened.
+const CLEAR_LANE: Fx = Fx::from_int(8);
+
 fn has_structure(w: &World) -> bool {
     matches!(w.players[0].mechanic, Mechanic::Structures(slots) if slots.iter().any(|s| s.is_some()))
 }
 
 /// A fully risen structure, standing at rest on the ground -- the same
 /// fixture `crates/sim/tests/stones.rs` uses.
-fn standing_at(x: i32) -> Structure {
-    let mut stone = Structure::raised(V3::new(Fx::from_int(x), Fx::ZERO, Fx::ZERO));
+fn standing_at(x: i32, z: Fx) -> Structure {
+    let mut stone = Structure::raised(V3::new(Fx::from_int(x), Fx::ZERO, z));
     stone.age = stone.rise + 1;
     stone
 }
@@ -246,28 +265,51 @@ fn the_debris_cone_stands_in_space_rather_than_lying_flat() {
 
 #[test]
 fn debris_shatters_on_the_first_stone_it_hits() {
-    let mut w = elementalist();
-    // Two on the same line: the near one is what Cataclysm actually breaks,
-    // the far one is what its debris should not be able to reach.
-    place(&mut w, &[standing_at(4), standing_at(8)]);
+    // **Run twice, and the second run is what makes the first mean anything.**
+    // With a second stone in the way he should take nothing; with the way
+    // clear he has to take *something*, or the assertion above is only saying
+    // that the debris never got there -- which is exactly the way this test
+    // stopped working. See [`CLEAR_LANE`]: at z = 0 the far stone stands on
+    // the dais with a metre and a half of air under it, the low pieces of the
+    // fan sail beneath it, and the failure reads as "debris punched through a
+    // stone" when nothing of the kind happened.
+    let fired_through = |blocked: bool| {
+        let mut w = elementalist();
+        w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, CLEAR_LANE);
+        // The near stone is what Cataclysm actually breaks. The far one, when
+        // it is there, is what its debris should not be able to reach past.
+        let near = standing_at(4, CLEAR_LANE);
+        let far = standing_at(8, CLEAR_LANE);
+        if blocked {
+            place(&mut w, &[near, far]);
+        } else {
+            place(&mut w, &[near]);
+        }
+        // Well past where the far stone stands, so nothing but a piece
+        // punching through it could ever reach him.
+        w.players[1].pos = V3::new(Fx::from_int(11), Fx::ZERO, CLEAR_LANE);
+        let before = w.players[1].health;
+        tap(&mut w, R, 90);
+        let far_survived = matches!(
+            w.players[0].mechanic,
+            Mechanic::Structures(slots) if slots[1].is_some()
+        );
+        (before - w.players[1].health, far_survived)
+    };
 
-    // Well past the far stone, so nothing but a piece punching through it
-    // could ever reach him.
-    w.players[1].pos = V3::new(Fx::from_int(11), Fx::ZERO, Fx::ZERO);
-    let before = w.players[1].health;
-
-    tap(&mut w, R, 90);
-
-    let far_survived = matches!(
-        w.players[0].mechanic,
-        Mechanic::Structures(slots) if slots[1].is_some()
+    let (through_open_air, _) = fired_through(false);
+    assert!(
+        through_open_air > 0,
+        "with nothing in the way the debris did not reach him either, so a stone          stopping it proves nothing"
     );
+
+    let (past_the_stone, far_survived) = fired_through(true);
     assert!(
         far_survived,
         "the far stone was destroyed -- debris should stop at the first solid thing, not break it"
     );
     assert_eq!(
-        w.players[1].health, before,
+        past_the_stone, 0,
         "debris punched through the stone in its way to reach whoever was behind it"
     );
 }
