@@ -473,9 +473,18 @@ struct EffectMesh {
 
 /// How many pieces one effect can be drawn as.
 ///
-/// Six, which is the Guillotine lotus: one blade each. The Grasp's four arms
-/// were the previous widest.
-const EFFECT_PARTS: usize = 6;
+/// **Counted from the widest effect rather than written down.** It was a
+/// literal six, correct on the day the Guillotine lotus had six blades -- and
+/// when the lotus grew to twelve the pool did not, so the first six blades had
+/// a model and the other six were nothing but the debug overlay's outline. A
+/// renderer that quietly draws *part* of a thing is worse than one that fails
+/// to draw it: the hit test was right the whole time, so half the blades were
+/// cutting people with nothing on screen to say so.
+const EFFECT_PARTS: usize = {
+    let blades = sim::effects::LOTUS_BLADES;
+    let arms = sim::effects::GRASP_ARMS;
+    if blades > arms { blades } else { arms }
+};
 
 /// One of the Elementalist's structures.
 #[derive(Component)]
@@ -1288,14 +1297,21 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             fx3(effect.arm_at(part)),
             effect.field_radius().to_f32_for_render(),
         )),
-        // One ball per blade, drawn around the shadow's live position rather
-        // than the spot the move was thrown at -- which is what makes them
-        // visibly chase it home. Same shape as the hit test, as everywhere.
+        // One **disc** per blade, drawn around the shadow's live position
+        // rather than the spot the move was thrown at -- which is what makes
+        // them visibly chase it home. Same shape as the hit test, as
+        // everywhere: a short wide cylinder lying in the flower's plane, which
+        // is a shuriken thrown flat. It was a ball, and a ball of that radius
+        // read as a beach ball rather than a blade.
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
-            shape: Shape::Ball,
+            shape: Shape::Column,
             skin: Skin::Shade,
             at: fx3(effect.lotus_at(part, effect.pos)),
-            scale: Vec3::splat(effect.field_radius().to_f32_for_render() * 2.0),
+            scale: Vec3::new(
+                effect.field_radius().to_f32_for_render() * 2.0,
+                sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
+                effect.field_radius().to_f32_for_render() * 2.0,
+            ),
         }),
         _ => None,
     }
@@ -2047,7 +2063,7 @@ fn fx3(v: sim::V3) -> Vec3 {
 mod tests {
     use super::*;
     use palette::UiFocus;
-    use sim::effects::{Effect, EffectKind, GRASP_ARMS};
+    use sim::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES};
 
     fn cast(kind: EffectKind, slot: u8) -> Effect {
         Effect::cast(
@@ -2185,6 +2201,71 @@ mod tests {
                     "arms {a} and {b} are drawn on top of each other"
                 );
             }
+        }
+    }
+
+    /// The same, for a class other than the Blood mage.
+    fn cast_as(kind: EffectKind, class: sim::Class, slot: u8) -> Effect {
+        Effect::cast(
+            kind,
+            0,
+            class,
+            slot,
+            sim::V3::ZERO,
+            sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+            sim::moves::get(class, slot).reach,
+        )
+    }
+
+    #[test]
+    fn every_blade_of_a_lotus_is_drawn() {
+        // All twelve, not the first six. The pool the renderer spawns from used
+        // to be a hand-written six, which was right when the flower had six
+        // blades and quietly wrong the day it had twelve: the back half cut
+        // people with nothing on screen to say they were there.
+        let mut effect = cast_as(
+            EffectKind::GuillotineLotus,
+            sim::Class::ShadowReaver,
+            sim::state::SLOT_SPECIAL,
+        );
+        effect.age = sim::tuning::lotus_erupt();
+        let drawn: Vec<Piece> = (0..LOTUS_BLADES)
+            .map(|blade| effect_piece(&effect, blade).expect("every blade is drawn"))
+            .collect();
+        for (blade, piece) in drawn.iter().enumerate() {
+            assert_eq!(piece.at, fx3(effect.lotus_at(blade, effect.pos)));
+        }
+        // Open, so no two of them are in the same place -- which is also what
+        // says the count the renderer walks is the count the flower has.
+        for a in 0..LOTUS_BLADES {
+            for b in a + 1..LOTUS_BLADES {
+                assert!(
+                    drawn[a].at.distance(drawn[b].at) > 0.1,
+                    "blades {a} and {b} are drawn on top of each other"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_pool_has_a_slot_for_every_piece_an_effect_draws() {
+        // The general form of the bug above, and the reason `EFFECT_PARTS` is
+        // counted rather than typed. The renderer spawns `EFFECT_PARTS` meshes
+        // per effect and asks `effect_piece` for each; anything the piece
+        // function will answer for beyond that has no mesh to be drawn with and
+        // is invisible. So: nothing may be drawn at the first index past the
+        // end of the pool.
+        for code in 0..32u8 {
+            let Some(kind) = EffectKind::from_code(code) else {
+                continue;
+            };
+            let effect = cast_as(kind, sim::Class::ShadowReaver, sim::state::SLOT_SPECIAL);
+            assert!(
+                effect_piece(&effect, EFFECT_PARTS).is_none(),
+                "{} draws a piece at part {EFFECT_PARTS}, which is past the end \
+                 of the pool the renderer spawns -- it would never be seen",
+                kind.name()
+            );
         }
     }
 

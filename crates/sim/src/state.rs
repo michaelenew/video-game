@@ -403,6 +403,31 @@ pub struct Player {
     /// the telegraph worth nothing. You commit to a place when you commit to
     /// the move.
     pub aim_path: Path,
+    /// Frames left before each of this class's moves may be thrown again.
+    ///
+    /// **Per move, and only ever the one you just threw** -- which is what
+    /// separates it from a cooldown and is why the combat kernel allows it. The
+    /// rest of the kit is always available, so the question it puts to a player
+    /// is never *do I have anything* but *what else have I got*. See
+    /// `tuning::repeat_lockout`.
+    ///
+    /// Indexed by move slot and sized to the widest class, so the Champion's
+    /// ten fit and everybody else leaves the tail at zero. In the snapshot
+    /// because it decides what a button does: a lockout kept outside it would
+    /// let a rollback re-throw a move the original frame refused.
+    pub repeat_lock: [u16; moves::MAX_SLOTS],
+    /// Frames left before an ability that is **still out there** may be used
+    /// again -- the recall, not the cast.
+    ///
+    /// A separate clock from `repeat_lock` because it answers a different
+    /// question. `repeat_lock` is *when does this ability come back*; this is
+    /// *how soon may I use the half of it I have already paid for*. Running
+    /// both off one number is what made the first version of this eat the
+    /// Reaver's recall: the send armed a thirty-frame lockout and the press
+    /// that brings the shadow home is the same button.
+    ///
+    /// Zero everywhere until somebody plays it -- see `Move::reactivate`.
+    pub reactivate_lock: [u16; moves::MAX_SLOTS],
     /// The reach a channelled move wound up to before its button came back up.
     ///
     /// Kept because the move outlives the channel: the arms of a Grasp are
@@ -450,6 +475,119 @@ impl Player {
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
             Mechanic::Meter { value, .. } => value.abs() >= t::meter_deep(),
             Mechanic::Forms { .. } | Mechanic::Blood => true,
+        }
+    }
+
+    /// Which of this fighter's abilities still have something of their own out
+    /// in the world, and so have not finished being used yet.
+    ///
+    /// **The one place that answers it**, indexed by move slot, and the reason
+    /// it is one place is that the answer is stored in two completely different
+    /// shapes: the second body is the class mechanic, and the hanging blades
+    /// are an entry in the world's effect table. A caller that went looking for
+    /// itself would find one of them.
+    ///
+    /// Read against the scene as it stood at the top of the frame, which is the
+    /// same snapshot the aiming ray is cast against and is deterministic for
+    /// the same reason.
+    pub fn abilities_out(&self, who: usize, scene: &Scene) -> [bool; moves::MAX_SLOTS] {
+        let mut out = [false; moves::MAX_SLOTS];
+        for (slot, flag) in out.iter_mut().enumerate() {
+            // Which slots are worth asking about is `moves::lingers`, so the
+            // frame table and the simulation cannot come to different views of
+            // which abilities the lockout waits for.
+            if !moves::lingers(self.class, slot as u8) {
+                continue;
+            }
+            *flag = match slot as u8 {
+                // Send shadow: out from the frame it leaves her shoulder until
+                // the frame it is back at it, flight home included.
+                SLOT_MECHANIC => shadow::of(self).is_some_and(|s| s.is_out()),
+                // Guillotine lotus: out for as long as a blade of it is still
+                // hanging or still chasing.
+                SLOT_SPECIAL => scene.effects.iter().flatten().any(|e| {
+                    e.kind == crate::effects::EffectKind::GuillotineLotus && e.owner == who as u8
+                }),
+                _ => false,
+            };
+        }
+        out
+    }
+
+    /// Is this move still locked out from the last time it was thrown?
+    ///
+    /// See [`Player::repeat_lock`]. A slot past the end of this class's list
+    /// can never be locked, which keeps the answer total for any `kind` a
+    /// caller can produce.
+    pub fn locked_out(&self, kind: u8) -> bool {
+        self.repeat_lock.get(kind as usize).is_some_and(|&f| f > 0)
+    }
+
+    /// Everything that has to be true before a press becomes a move.
+    ///
+    /// One predicate rather than three at each of the six call sites, because
+    /// they are asked together every single time and a call site that remembered
+    /// only some of them would be a move you could spam on one input path and
+    /// not on another.
+    ///
+    /// **Three cases, and the middle one is the whole reason this takes an
+    /// argument.** An ability that is not out is gated by the shared repeat
+    /// lockout, which is the ordinary rule. An ability that *is* out, on a
+    /// button that reactivates it, is not being used again at all -- the press
+    /// is the second half of the one already paid for, so the lockout must not
+    /// touch it and its own [`Move::reactivate`] gap is what gates it. An
+    /// ability that is out on a button that does *not* reactivate it is simply
+    /// not available: the first cast is not finished, so there is nothing for a
+    /// second one to be.
+    pub fn can_throw(&self, kind: u8, out: &[bool; moves::MAX_SLOTS]) -> bool {
+        if !self.mechanic_ready(kind) {
+            return false;
+        }
+        match out.get(kind as usize) {
+            Some(true) if moves::reactivates(self.class, kind) => self
+                .reactivate_lock
+                .get(kind as usize)
+                .is_none_or(|&f| f == 0),
+            Some(true) => false,
+            _ => !self.locked_out(kind),
+        }
+    }
+
+    /// Start this move's clocks. Called as the move comes out, not as the
+    /// button goes down -- a channel spends its own frames first.
+    fn lock_repeat(&mut self, kind: u8) {
+        let m = moves::get(self.class, kind);
+        if let Some(slot) = self.repeat_lock.get_mut(kind as usize) {
+            *slot = m.repeat_lock();
+        }
+        if let Some(slot) = self.reactivate_lock.get_mut(kind as usize) {
+            *slot = m.reactivate;
+        }
+    }
+
+    /// Run the clocks down by a frame.
+    ///
+    /// **An ability still out in the world holds its lockout at full rather
+    /// than spending it**, so the countdown begins on the frame the last of it
+    /// comes home. That is the rule that keeps the lockout a charge for
+    /// *finishing* with an ability rather than a tax on starting one: sending
+    /// the shadow and leaving it standing there for five seconds does not
+    /// quietly serve the lockout while it waits.
+    ///
+    /// Parked rather than paused, which needs no memory of whether it was
+    /// parked last frame: re-arming it to full every frame it is out leaves it
+    /// at full on the frame it stops being out, which is the same thing and is
+    /// one line.
+    fn tick_repeat_locks(&mut self, out: &[bool; moves::MAX_SLOTS]) {
+        for (kind, f) in self.repeat_lock.iter_mut().enumerate() {
+            if out[kind] {
+                *f = moves::get(self.class, kind as u8).repeat_lock();
+            } else {
+                *f = f.saturating_sub(1);
+            }
+        }
+        for f in self.reactivate_lock.iter_mut() {
+            *f = f.saturating_sub(1);
         }
     }
 
@@ -566,6 +704,8 @@ impl Default for Player {
             air_stall: 0,
             air_dodged: false,
             hit_used: false,
+            repeat_lock: [0; moves::MAX_SLOTS],
+            reactivate_lock: [0; moves::MAX_SLOTS],
             class: Class::Bulwark,
             mechanic: Mechanic::Shield(Shield::Held),
             rounds_won: 0,
@@ -922,6 +1062,7 @@ impl World {
                             dir,
                             blocked: victim.action.guarding(),
                             parried: false,
+                            interrupts: true,
                         },
                     );
                     // Contact drops it where it struck.
@@ -1039,7 +1180,7 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u32(e.struck);
+                    h.write_u64(e.struck);
                     h.write_i32(e.banked);
                     h.write_i32(e.reach.raw());
                     hash_v3(&mut h, &e.pos);
@@ -1096,6 +1237,12 @@ impl World {
             h.write_u32(p.grip_settle as u32);
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
+            for f in &p.repeat_lock {
+                h.write_u32(*f as u32);
+            }
+            for f in &p.reactivate_lock {
+                h.write_u32(*f as u32);
+            }
             hash_mechanic(&mut h, &p.mechanic);
         }
         match &self.monster {
@@ -1175,6 +1322,24 @@ pub(crate) struct Hit {
     pub dir: V3,
     pub blocked: bool,
     pub parried: bool,
+    /// Does landing this take the victim's frames away?
+    ///
+    /// **Almost everything does, and the exception is the point.** A hit
+    /// normally writes `Action::HitStun` over whatever the victim was doing, so
+    /// even a hit with `hitstun: 0` cancels the move they were in the middle
+    /// of -- they are free again next frame, but the attack they had committed
+    /// to is gone. That is a full interrupt however small the number is, and a
+    /// move that can be thrown instantly and interrupts is the panic button
+    /// that makes commitment optional.
+    ///
+    /// False means it lands without touching their action at all: the damage
+    /// and the slow arrive, and the victim keeps swinging. See
+    /// `World::recall_cuts`, which is the one thing in the game that wants
+    /// this, and `docs/design/kits/shadow-reaver.md` for why.
+    ///
+    /// It is about **frames**, not about force. Knockback is still whatever the
+    /// number says, because moving somebody is not the same as stopping them.
+    pub interrupts: bool,
 }
 
 /// The attack volume a fighter currently has out.
@@ -1555,6 +1720,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         dir: attacker.facing,
         blocked: guarding,
         parried,
+        interrupts: true,
     })
 }
 
@@ -1589,10 +1755,12 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.blocked {
         // No chip damage. The cost of blocking is knockback plus a window
         // where you cannot act -- see defense.md.
-        defender.stun_total = hit.blockstun;
-        defender.action = Action::BlockStun {
-            left: hit.blockstun,
-        };
+        if hit.interrupts {
+            defender.stun_total = hit.blockstun;
+            defender.action = Action::BlockStun {
+                left: hit.blockstun,
+            };
+        }
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
     } else {
@@ -1601,7 +1769,12 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
             defender.seized(hit.by, hit.grabs, 0);
-        } else {
+        } else if hit.interrupts {
+            // Writing the action is the interrupt, and it happens even when
+            // `hitstun` is zero -- `HitStun { left: 0 }` is one frame of
+            // nothing, but the move it replaced is gone. Anything that must
+            // land without stopping its victim has to skip this branch rather
+            // than tune the number to zero. See `Hit::interrupts`.
             defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
         }
@@ -1625,13 +1798,22 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             defender.slam = hit.launch.abs();
         }
     }
-    // Whatever else it did, it broke the dash. A Rush you could be hit out of
-    // and keep is a Rush with invulnerability attached, and the Reaver's dash to
-    // her shadow -- and the carry it leaves behind -- is the same bargain.
-    if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
-        *rush = 0;
+    // Whatever else it did, it broke the dash -- the Champion's Rush, and the
+    // Reaver's dash to her shadow with the carry it leaves behind. A commitment
+    // you can be hit out of and keep is a commitment with invulnerability
+    // attached.
+    //
+    // **Unless the hit takes no frames.** A dash is frames, so a blow that
+    // lands without touching the victim's action must not end one either --
+    // see [`Hit::interrupts`], and the recall, which is the one hit that sets
+    // it. It is about force rather than frames, and ending somebody's dash is
+    // the other thing.
+    if hit.interrupts {
+        if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
+            *rush = 0;
+        }
+        shadow::broken_by_a_hit(defender);
     }
-    shadow::broken_by_a_hit(defender);
 }
 
 /// Turn a stick reading into a world direction, given where the player looks.
@@ -1721,11 +1903,21 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
+    // The repeat lockouts run down first, and above the rider branch so they
+    // run exactly once a frame on either tick. Before the input is read rather
+    // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
+    //
+    // Which abilities are still out is worked out once and handed to both the
+    // tick and the gate below, because they have to agree: a lockout parked by
+    // one answer and consulted against another is a move that is locked on the
+    // frame it was meant to come back.
+    let out = p.abilities_out(who, scene);
+    p.tick_repeat_locks(&out);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     if p.aboard() {
         match beast {
-            Some(beast) => return step_rider(p, who, input, beast, scene),
+            Some(beast) => return step_rider(p, who, input, beast, scene, &out),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
             None => p.mount = monster::NO_PART,
@@ -1824,7 +2016,7 @@ fn step_player(
                 // the three clicks, and `Q` is free.
                 if input.has(Input::SPECIAL)
                     && p.class != Class::Champion
-                    && p.mechanic_ready(SLOT_SPECIAL)
+                    && p.can_throw(SLOT_SPECIAL, &out)
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, true)
                 } else if pressed_mechanic {
@@ -1835,7 +2027,7 @@ fn step_player(
                     // mechanic is health and so has nothing to toggle -- it is
                     // thrown like any other move, with a startup you can be
                     // punished during and a cost you pay on the press.
-                    match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    match moves::on_e(p.class).filter(|slot| p.can_throw(*slot, &out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, true),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -1846,7 +2038,8 @@ fn step_player(
                 // Which move a click asks for. After the mechanic, so that Rush
                 // can be started while a click is held down, and before the dodge,
                 // because a click is what disambiguates shift.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, &out))
+                {
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
                     begin_champion(p, kind);
@@ -2514,6 +2707,11 @@ fn begin_move(
 /// below -- which is a no-op for the one class that channels today and a bug
 /// waiting for the second one.
 fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
+    // The lockout starts here, on the frame the move comes out, rather than on
+    // the press that asked for it. For a channel those are different frames and
+    // the wind-up has already been paid for in frames of its own; charging from
+    // the press would bill the hold twice.
+    p.lock_repeat(kind);
     // The second body throws the same thing a few frames later. A no-op for
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
@@ -3389,6 +3587,15 @@ impl World {
                 dir: away,
                 blocked: guarding,
                 parried: false,
+                // **The one hit in the game that does not take frames.** The
+                // shadow can be sent on the frame it is asked for and out of
+                // any recovery, so if it also interrupted, the Reaver would
+                // never have to commit to anything: throw the risky move, and
+                // when it goes wrong, recall through whoever is punishing you
+                // and take their attack off them. A shine, and a worse one,
+                // because not even her own animations gate it. It cuts and it
+                // slows; what it may not do is hand her the exchange back.
+                interrupts: false,
             },
         );
         self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
@@ -3580,6 +3787,7 @@ impl World {
                                 dir: V3::ZERO,
                                 blocked: guarding,
                                 parried,
+                                interrupts: true,
                             },
                         );
                         if parried {
@@ -3682,12 +3890,13 @@ impl World {
             EffectKind::GuillotineLotus => {
                 let radius = effect.field_radius();
                 let coming_back = effect.lotus_coming_back();
+                let half_thick = t::lotus_blade_thickness();
                 for blade in 0..LOTUS_BLADES {
                     let (was, at) = effect.lotus_span(blade, effect.pos);
                     for i in 0..MAX_PLAYERS {
                         if !self.effects_reach(i, effect.owner)
                             || effect.already_hit(blade, i)
-                            || !self.swept(i, was, at, radius)
+                            || !self.sliced(i, was, at, radius, half_thick)
                         {
                             continue;
                         }
@@ -3760,16 +3969,37 @@ impl World {
         victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
     }
 
-    /// Did a blade sweeping from `was` to `at` cross this fighter's body?
+    /// Did a blade sweeping from `was` to `at` slice this fighter?
     ///
-    /// The capsule test [`resolve_hit`] already uses for a weapon that is a
-    /// line, against the same standing body. It exists because a fast enough
-    /// point tunnels: the thing being tested here crosses a metre in a frame,
-    /// and a body is not a metre wide.
-    fn swept(&self, victim: usize, was: V3, at: V3, radius: Fx) -> bool {
+    /// **A disc, not a ball**, and the shape is the ability. A Guillotine blade
+    /// is a shuriken thrown flat: wide in the plane the flower lies in, and
+    /// barely there at all across it. Tested as a sphere it was a beach ball --
+    /// at a radius wider than a fighter it swallowed everything near the line
+    /// whatever its height, which is both the wrong picture and the wrong rule.
+    ///
+    /// So two tests rather than one. **Width is measured flat**, against the
+    /// swept line, because that is the direction a blade is wide in. **Height
+    /// is a slab**: the blade occupies `half_thick` either side of the plane,
+    /// and has to overlap the body to touch it.
+    ///
+    /// The second one is the interesting half. The flower is planar and at
+    /// waist height, so a slab that thin is something a fighter can **jump**,
+    /// which a ball of the old radius was not -- it reached from the shins to
+    /// the chest. That is the counterplay the shape was always supposed to
+    /// imply and never did.
+    fn sliced(&self, victim: usize, was: V3, at: V3, radius: Fx, half_thick: Fx) -> bool {
         let p = self.players[victim];
-        let spine = V3::new(p.pos.x, p.pos.y.add(p.hurt_height()), p.pos.z);
-        crate::math::segment_gap(was, at, p.pos, spine).raw() <= radius.add(t::body_radius()).raw()
+        let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
+        let here = flat(p.pos);
+        let wide = crate::math::segment_gap(flat(was), flat(at), here, here);
+        if wide.raw() > radius.add(t::body_radius()).raw() {
+            return false;
+        }
+        // The slab the blade sweeps this frame: it is level, so both ends are
+        // at the same height and either will do.
+        let lo = at.y.sub(half_thick);
+        let hi = at.y.add(half_thick);
+        p.pos.y.raw() <= hi.raw() && p.pos.y.add(p.hurt_height()).raw() >= lo.raw()
     }
 
     /// Is this fighter's body inside a sphere?
@@ -3868,6 +4098,7 @@ impl World {
                 dir: away,
                 blocked: guarding,
                 parried,
+                interrupts: true,
             },
         );
         if parried {
@@ -4028,7 +4259,14 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
 /// metre-per-second dash on a surface two metres wide is a way to fall off by
 /// accident, and taking it away is what makes bracing a real answer rather than
 /// a worse version of one you already had.
-fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: &Scene) {
+fn step_rider(
+    p: &mut Player,
+    who: usize,
+    input: Input,
+    beast: &Monster,
+    scene: &Scene,
+    out: &[bool; moves::MAX_SLOTS],
+) {
     let part = p.mount as usize;
     let held = p.local;
     let radius = t::body_radius();
@@ -4103,11 +4341,11 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
             None => {
                 if input.has(Input::SPECIAL)
                     && p.class != Class::Champion
-                    && p.mechanic_ready(SLOT_SPECIAL)
+                    && p.can_throw(SLOT_SPECIAL, out)
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, false)
                 } else if pressed_mechanic {
-                    match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    match moves::on_e(p.class).filter(|slot| p.can_throw(*slot, out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, false),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -4120,7 +4358,7 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
                 // nowhere useful -- there is no ground under it to dash along --
                 // but nothing needs to say so: `grounded` is true aboard, so the
                 // standing row is what `clicked_move` picks anyway.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, out)) {
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, false)
                 } else if want_guard {
@@ -4489,6 +4727,7 @@ impl World {
                         dir: beam.dir(),
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 if parried {
@@ -4651,6 +4890,7 @@ impl World {
                         dir: away,
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 if parried {

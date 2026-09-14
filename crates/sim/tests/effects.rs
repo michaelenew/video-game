@@ -1807,3 +1807,345 @@ fn a_pillar_is_part_of_the_state_a_rollback_restores() {
     assert_eq!(saved.checksum(), w.checksum(), "restore lost the effects");
     assert_ne!(advanced, w.checksum(), "the restore did not go back");
 }
+
+// ---------------------------------------------------------------------------
+// The Guillotine lotus, as a shape
+// ---------------------------------------------------------------------------
+//
+// Six blades out of the Reaver's shadow and six back into it. What follows is
+// the *flower* rather than the cast -- where it is aimed is `aiming.rs`'s, and
+// what it does to somebody is the hit test's. These are the three things a
+// player reads off the screen while deciding whether they are standing in one.
+//
+// It used to be a different shape in all three respects: the blades left the
+// shadow's feet, arched up over the eruption and came back down to the floor at
+// full extension, and then retraced that arm exactly on the way home. The arc
+// left the volume half buried in the floor at precisely the reach where it does
+// the most work, and a flower whose height changes while it turns is hard to
+// read as a plane being swept.
+
+/// A lotus standing at the origin, at whatever age we want to look at it.
+fn flower(age: u16) -> sim::effects::Effect {
+    let mut e = sim::effects::Effect::cast(
+        EffectKind::GuillotineLotus,
+        0,
+        Class::ShadowReaver,
+        sim::state::SLOT_SPECIAL,
+        sim::V3::ZERO,
+        sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        Fx::ZERO,
+    );
+    e.age = age;
+    e
+}
+
+/// One blade's bearing around the centre, in turns, unwrapped against the
+/// previous sample so a sweep past the seam reads as a sweep.
+fn bearing(at: sim::V3) -> f64 {
+    let x = at.x.to_f32_for_render() as f64;
+    let z = at.z.to_f32_for_render() as f64;
+    z.atan2(x) / std::f64::consts::TAU
+}
+
+fn reach(at: sim::V3) -> f64 {
+    at.flat_len().to_f32_for_render() as f64
+}
+
+#[test]
+fn the_flower_is_flat() {
+    // One horizontal plane, for the whole life, for every blade. This is the
+    // property a player actually uses: a volume at a fixed height is one you
+    // can decide about once, and a volume that rises and falls while it turns
+    // is one you have to keep re-reading.
+    let life = EffectKind::GuillotineLotus.life();
+    let want = sim::tuning::lotus_height();
+    for age in 0..=life {
+        for blade in 0..sim::effects::LOTUS_BLADES {
+            let y = flower(age).lotus_at(blade, sim::V3::ZERO).y;
+            assert_eq!(
+                y.raw(),
+                want.raw(),
+                "blade {blade} at age {age} is {:.2} m up, not the {:.2} m the \
+                 flower lies at -- the lotus is meant to be planar",
+                y.to_f32_for_render(),
+                want.to_f32_for_render()
+            );
+        }
+    }
+}
+
+#[test]
+fn the_blades_leave_from_the_midriff_and_not_from_the_feet() {
+    // They erupt *out of the shadow*, so they start inside its body rather than
+    // at the floor under it. Bracketed against the body rather than pinned to a
+    // number: the point is that the plane is inside a standing fighter, which
+    // is what makes the flower something you are caught *in*.
+    let height = sim::tuning::lotus_height();
+    let body = sim::tuning::body_height();
+    assert!(
+        height.raw() > 0,
+        "the flower lies on the floor; the blades are supposed to come out of \
+         the shadow's midriff"
+    );
+    assert!(
+        height.raw() < body.raw(),
+        "the flower lies at {:.2} m, over the head of a {:.2} m fighter",
+        height.to_f32_for_render(),
+        body.to_f32_for_render()
+    );
+    // Below the chest a cast comes out of: these are off the waist, not the
+    // hands.
+    assert!(
+        height.raw() < sim::tuning::cast_height().raw(),
+        "the flower lies at chest height or above, where a cast comes from, \
+         rather than at the midriff"
+    );
+    // And a blade's own thickness does not put it underground at the start.
+    assert!(
+        height.raw() > sim::tuning::lotus_blade_radius().raw(),
+        "a blade at rest is wider than the flower is high, so it starts half \
+         buried in the floor"
+    );
+}
+
+#[test]
+fn the_blades_spiral_out_rather_than_running_straight() {
+    // Each leaves on its own sixth of the circle and keeps turning as it goes,
+    // which is what makes the six of them open like petals instead of as spokes
+    // of a wheel. Reach and bearing have to advance *together* for that: a
+    // radius with an angle bolted on somewhere else is a spoke that happens to
+    // be rotating.
+    let erupt = sim::tuning::lotus_erupt();
+    let mut last_reach = -1.0;
+    let mut last_bearing = bearing(flower(0).lotus_at(0, sim::V3::ZERO));
+    let mut turned = 0.0;
+    for age in 1..=erupt {
+        let at = flower(age).lotus_at(0, sim::V3::ZERO);
+        let (r, b) = (reach(at), bearing(at));
+        assert!(
+            r > last_reach,
+            "the blade stopped reaching outward at age {age}"
+        );
+        turned += b - last_bearing;
+        last_reach = r;
+        last_bearing = b;
+    }
+    assert!(
+        turned.abs() > 0.01,
+        "the blade travelled {turned:.3} turns on the way out -- it went \
+         straight, so this is a starburst and not a lotus"
+    );
+}
+
+#[test]
+fn the_way_home_turns_the_other_way_and_past_where_it_started() {
+    // The fix this test exists for. The return used to be the eruption played
+    // backwards, so the blade unwound onto the exact bearing it left on and the
+    // flower rewound rather than closing. It now comes home on a spiral of its
+    // own, turning against the way it opened and carrying on past the start.
+    let centre = sim::V3::ZERO;
+    let erupt = sim::tuning::lotus_erupt();
+    let life = EffectKind::GuillotineLotus.life();
+
+    let opened_on = bearing(flower(0).lotus_at(0, centre));
+    let out_to = bearing(flower(erupt).lotus_at(0, centre));
+    // The last frame with any reach left to measure a bearing from.
+    let home = bearing(flower(life - 1).lotus_at(0, centre));
+
+    let went = out_to - opened_on;
+    let came = home - out_to;
+    assert!(
+        went * came < 0.0,
+        "out {went:+.3} turns and home {came:+.3} turns: the way back does not \
+         turn against the way out"
+    );
+    assert!(
+        came.abs() > went.abs(),
+        "out {went:+.3} turns and home {came:+.3} turns. The return unwinds by \
+         no more than it wound, so it retraces the arm it came out on instead \
+         of closing on a spiral of its own."
+    );
+    // Which is the same thing said as a place rather than as a rotation: it
+    // finishes on the far side of the bearing it opened on.
+    assert!(
+        (home - opened_on) * went < 0.0,
+        "the blade finished back on the side it opened towards, so it never \
+         crossed its own starting bearing"
+    );
+}
+
+#[test]
+fn the_way_home_sweeps_floor_the_way_out_never_touched() {
+    // And this is why that is a hit test rather than a look. Ground a blade has
+    // already crossed is ground whose occupants have been cut once and have had
+    // the whole hold to walk off it, so a retraced return can only catch
+    // somebody who stepped back into the same line. Compared at matched reach,
+    // because that is the only fair comparison: the two passes are at the same
+    // distance from the shadow but should not be at the same bearing.
+    let centre = sim::V3::ZERO;
+    let erupt = sim::tuning::lotus_erupt();
+    let life = EffectKind::GuillotineLotus.life();
+    let full = reach(flower(erupt).lotus_at(0, centre));
+
+    let mut checked = 0;
+    for age in 1..erupt {
+        let out = flower(age).lotus_at(0, centre);
+        let r = reach(out);
+        // Skip the ends, where both passes are necessarily near the centre.
+        if r < full * 0.25 || r > full * 0.9 {
+            continue;
+        }
+        // The return frame that is at about this same distance out.
+        let back = (erupt..life)
+            .map(|a| flower(a).lotus_at(0, centre))
+            .min_by(|x, y| {
+                (reach(*x) - r)
+                    .abs()
+                    .partial_cmp(&(reach(*y) - r).abs())
+                    .expect("reaches compare")
+            })
+            .expect("the return has frames");
+        let apart = (bearing(back) - bearing(out)).abs();
+        assert!(
+            apart > 0.02,
+            "at {r:.1} m out the return is only {:.1}° from the arm the \
+             eruption drew. The way home is retracing already-cut ground.",
+            apart * 360.0
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "the fixture compared nothing");
+}
+
+// ---------------------------------------------------------------------------
+// The blades are blades
+// ---------------------------------------------------------------------------
+
+/// Cast a lotus with the victim standing `feet` metres off the floor, and say
+/// how much the flower took off them.
+///
+/// She casts it at her own shadow, which is at her heel, so the blades sweep
+/// out through anybody standing inside `lotus_radius` of her.
+fn lotus_takes_off_a_victim_at(feet: Fx) -> i32 {
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = sim::V3::ZERO;
+    w.players[0].facing = sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    // Well inside the blades' reach, and well outside her own body.
+    let stand = sim::V3::new(Fx::from_int(3), feet, Fx::ZERO);
+    // Held there every frame, falling or not. This is a question about the
+    // shape of the volume, not about how long somebody can hang in the air --
+    // without the pin the airborne case simply lands before the blades arrive
+    // and the test passes for the wrong reason.
+    let hold = |w: &mut World, bits: u16| {
+        w.players[1].pos = stand;
+        w.players[1].vel = sim::V3::ZERO;
+        w.advance([Input::new(bits), Input::default()]);
+    };
+    for _ in 0..20 {
+        hold(&mut w, 0);
+    }
+
+    let start = w.players[1].health;
+    let cast = moves::get(Class::ShadowReaver, sim::state::SLOT_SPECIAL);
+    let life = EffectKind::GuillotineLotus.life() as u32;
+    for f in 0..(cast.whiff_cost() as u32 + life + 10) {
+        hold(&mut w, if f < 2 { Q } else { 0 });
+    }
+    start - w.players[1].health
+}
+
+#[test]
+fn a_blade_is_a_disc_and_not_a_ball() {
+    // A shuriken thrown flat: wide in the plane the flower lies in, and barely
+    // there across it. As a sphere at the old radius it reached from a standing
+    // fighter's shins to their chest, which is not a blade and is not a shape
+    // anybody can do anything about.
+    let wide = sim::tuning::lotus_blade_radius();
+    let thick = sim::tuning::lotus_blade_thickness();
+    assert!(
+        wide.raw() > thick.raw() * 2,
+        "a blade is {:.2} m wide and {:.2} m thick either side -- that is a \
+         ball, not a disc",
+        wide.to_f32_for_render(),
+        thick.to_f32_for_render()
+    );
+    // And narrower than the body it cuts, or it is a wall with a spin on it.
+    assert!(
+        wide.raw() < sim::tuning::body_radius().raw(),
+        "a blade is {:.2} m wide against a {:.2} m body. Six of these read as \
+         beach balls, which is what the count and the size were changed for.",
+        wide.to_f32_for_render(),
+        sim::tuning::body_radius().to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_flower_opens_twelve_blades() {
+    assert_eq!(
+        sim::effects::LOTUS_BLADES,
+        12,
+        "the flower's blade count changed; the hit mask, the damage per blade \
+         and the renderer all read it"
+    );
+    // The bookkeeping has to be able to address all of them. This is a
+    // compile-time assertion in `effects.rs` as well, because at six blades the
+    // mask fitted a `u32` exactly and twelve would have truncated in silence --
+    // a blade that shares a bit with another goes quiet the moment that one
+    // lands.
+    assert!(
+        sim::effects::LOTUS_BLADES * sim::effects::VICTIMS <= 64,
+        "the hit mask cannot address every blade against every victim"
+    );
+}
+
+#[test]
+fn a_single_blade_is_a_scratch_and_the_flower_is_the_threat() {
+    // Twelve smaller blades at half the damage rather than six big ones. The
+    // ability's danger is meant to be the shape it sweeps, not any one thing
+    // landing -- which is also what makes a partial clip through the edge of it
+    // feel like a graze instead of a punish.
+    let blade = moves::get(Class::ShadowReaver, sim::state::SLOT_SPECIAL).damage;
+    let poke = moves::get(Class::ShadowReaver, sim::state::SLOT_POKE).damage;
+    assert!(
+        blade * 3 < poke,
+        "one blade takes {blade} against a {poke} poke. A single blade should \
+         be a scratch."
+    );
+}
+
+#[test]
+fn the_flower_cuts_what_is_standing_in_it() {
+    let dealt = lotus_takes_off_a_victim_at(Fx::ZERO);
+    assert!(
+        dealt > 0,
+        "a fighter standing inside the flower took nothing at all"
+    );
+}
+
+#[test]
+fn the_flower_can_be_jumped() {
+    // The counterplay the shape implies and a ball never allowed. The flower is
+    // planar and at waist height, and a blade is a thin slab -- so being off
+    // the ground above it is being out of it. A ball of the old radius reached
+    // the shins to the chest and there was nothing to do about it but leave
+    // sideways.
+    let plane = sim::tuning::lotus_height();
+    let thick = sim::tuning::lotus_blade_thickness();
+    // Feet clear of the top of the slab, by a comfortable margin.
+    let over = plane.add(thick).add(Fx::ratio(1, 2));
+    // Stated against a body rather than against a jump arc: the clearance has
+    // to be something a fighter can obviously get over, and her short hop is
+    // 1.9 m by the frame table -- twice a body and well past this.
+    assert!(
+        over.raw() < sim::tuning::body_height().raw(),
+        "clearing the flower needs {:.2} m, which is over a fighter's own \
+         height -- 'jumpable' would be a claim about nothing",
+        over.to_f32_for_render()
+    );
+    assert_eq!(
+        lotus_takes_off_a_victim_at(over),
+        0,
+        "a fighter in the air above the flower was cut anyway -- the blades are \
+         still behaving like balls in the vertical"
+    );
+}

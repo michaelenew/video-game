@@ -131,10 +131,23 @@ fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
     // And it has to be the smallest hit in the class: what it buys is an
     // interrupt, not damage, and a no-stun move that also hit hard would beat
     // the moves that pay stun for their damage at their own game.
+    //
+    // **Only moves that actually swing something.** A move with no hitbox --
+    // `radius` zero, a gesture that puts something into the world and lets the
+    // thing it placed do the hitting -- has no frame advantage to be wrong
+    // about: `on_hit` is derived from the attacker's own active and recovery
+    // frames against a victim the move never touches, which is why the frame
+    // table prints `--` for it rather than a number. The rule above is about
+    // hitboxes that trade stun for an interrupt, and a gesture trades nothing.
+    // Asked of one anyway it reads a `damage` field that belongs to whatever
+    // the gesture placed, which is how it came to have an opinion about the
+    // Reaver's Send shadow -- a move whose damage is carried by the second body
+    // on its way home, and which by design cannot interrupt anybody at all.
+    // See `Hit::interrupts`.
     for class in ALL_CLASSES {
         let table = moves::table(class);
         let softest = table.iter().map(|m| m.damage).min().unwrap();
-        for m in table.iter().filter(|m| m.hitstun == 0) {
+        for m in table.iter().filter(|m| m.hitstun == 0 && m.strikes()) {
             assert!(
                 m.on_hit() < 0,
                 "{} {}: {:+} on hit with no stun at all -- free pressure",
@@ -618,6 +631,76 @@ fn an_aerial_hang_is_shorter_than_the_move_that_carries_it() {
             m.name,
             m.air_stall,
             m.whiff_cost()
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The repeat lockout
+// ---------------------------------------------------------------------------
+//
+// The behaviour is pinned in `tests/lockout.rs`. What belongs here is the pair
+// of relationships that decide whether the rule is still the one the design
+// argued for after somebody has finished dragging the knob around -- because
+// the same mechanism tuned twice as far stops being a charge for repetition
+// and becomes a cooldown, which `docs/design/combat-kernel.md` rules out.
+
+#[test]
+fn the_lockout_always_leaves_something_faster_to_do_than_wait() {
+    // **The line between this and a cooldown, as a number.**
+    //
+    // Being locked out of a move is only interesting while the answer is to
+    // throw something else. The moment the idle frames outlast the cheapest
+    // other thing in the kit, the answer becomes *stand still until it comes
+    // back* -- and standing still waiting for an ability is exactly the
+    // question the combat kernel refuses to ask.
+    for class in ALL_CLASSES {
+        let table = moves::table(class);
+        for (i, m) in table.iter().enumerate() {
+            let idle = m.repeat_idle();
+            if idle == 0 {
+                continue;
+            }
+            let cheapest_other = table
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, n)| n.whiff_cost())
+                .min()
+                .expect("every class has more than one move");
+            assert!(
+                idle <= cheapest_other,
+                "{} {}: locked out for {idle} frames after it finishes, and the \
+                 cheapest other move in the kit takes {cheapest_other}. Past that \
+                 point the correct play is to wait rather than to use the kit, \
+                 which is a cooldown wearing a different name.",
+                class.name(),
+                m.name,
+            );
+        }
+    }
+}
+
+#[test]
+fn one_press_can_never_lock_more_than_one_move() {
+    // The structural half of the same claim, and the one that would catch
+    // somebody making the lockout global in a hurry. A press costs you *that*
+    // ability and nothing else, so the worst case is always a kit with one
+    // fewer option in it -- never a kit with nothing in it.
+    use sim::state::SLOT_POKE;
+    for class in ALL_CLASSES {
+        let mut p = sim::state::Player::new(class);
+        let out = [false; moves::MAX_SLOTS];
+        p.repeat_lock[SLOT_POKE as usize] = 240;
+        let available = (0..moves::table(class).len())
+            .filter(|slot| p.can_throw(*slot as u8, &out))
+            .count();
+        assert_eq!(
+            available,
+            moves::table(class).len() - 1,
+            "{}: locking the poke left {available} of {} moves available",
+            class.name(),
+            moves::table(class).len(),
         );
     }
 }

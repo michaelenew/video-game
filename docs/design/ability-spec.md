@@ -39,9 +39,14 @@ Every ability is specified as:
 - **Mechanic** — what it requires of the class mechanic, and what it does to it. The most
   important field; it is where the class lives.
 - **Effect** — what happens.
+- **Repeat lockout** — how long after throwing it you may not throw *it* again, as a
+  multiplier on the shared 30 frames. `100%` unless the ability argues otherwise, and it
+  is invisible on anything that commits you for longer than it lasts. See
+  [combat-kernel.md](combat-kernel.md) §"The repeat lockout".
 
 Deliberately absent: cooldown, mana cost, damage numbers. Frame counts and damage need a
-prototype and cannot be reasoned to.
+prototype and cannot be reasoned to. The repeat lockout is not the exception it looks
+like: it holds one ability, never the kit, and is argued for where it is defined.
 
 ## Kit size
 
@@ -59,7 +64,11 @@ tool**, and something that is **only that class**.
 
 - **Reactivation is a design pattern, not a class feature.** Fire something, then make a
   second decision about it in flight. Used by the Blood mage's Rend, the Bulwark's shield
-  recall, and the Reaver's shadow. Reach for it freely.
+  recall, and the Reaver's shadow. Reach for it freely — but **declare it**: a reactivated
+  ability is not a second use of that ability, so the repeat lockout must neither eat the
+  press that reactivates it nor start counting until the last of it is spent. Whether a
+  slot's own button carries its reactivation is `moves::reactivates`, and an ability that
+  forgets to say so is one whose second half a player cannot reach.
 - **No hard stops without a hard condition.** Slows, roots that still allow attacking,
   pushes and pulls are the default. True staggers are gated behind reads — a parry, a
   telegraphed commitment. See [defense.md](defense.md).

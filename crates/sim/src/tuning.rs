@@ -119,6 +119,28 @@ pub fn parry_window() -> u16 {
     oven::scalar(Scalar::ParryWindow) as u16
 }
 
+/// How long a move you just threw is unavailable to you.
+///
+/// **This is not a cooldown, and the difference is the whole of why it is
+/// allowed to exist** -- see `docs/design/combat-kernel.md`. A cooldown asks
+/// *did I have it available*, which it can ask because it takes a move away
+/// from you while you are doing something else. This only ever locks the move
+/// you have just this moment thrown, so the answer is always "yes, everything
+/// else in the kit": it does not gate access, it charges for *repetition*.
+///
+/// Thirty frames is half a second, and it is measured from the frame the move
+/// comes out rather than from the end of its recovery. That is what keeps it
+/// honest: it can only ever spend frames you would otherwise have had free, so
+/// a move that already commits you for longer than this never notices it at
+/// all. Every committed heavy in the game is in that group, and every auto and
+/// fast poke is not -- which is exactly the set the rule is aimed at. The
+/// relationship is pinned by `feel::the_lockout_only_taxes_the_cheap_moves`.
+///
+/// A guess, and flagged as one: 30 is the first number, not a measured one.
+pub fn repeat_lockout() -> u16 {
+    oven::scalar(Scalar::RepeatLockout) as u16
+}
+
 /// What a successful parry costs the attacker. Must be long enough that the
 /// punish is worth the risk of trying to parry at all.
 pub fn parry_stagger() -> u16 {
@@ -552,9 +574,25 @@ pub fn lotus_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusRadius))
 }
 
-/// How high the blades arc on their way out.
-pub fn lotus_rise() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LotusRise))
+/// The height above the shadow's feet that the whole flower lies in.
+///
+/// **The lotus is flat.** It opens in one horizontal plane, holds there and
+/// closes there, so every blade is at this height for the whole of its life.
+///
+/// It used to arc instead: the blades left the shadow's feet, rose to a peak
+/// mid-eruption and came back down to the floor at full extension. Two things
+/// were wrong with that, and only one of them was how it looked. A blade at its
+/// furthest reach was back at ground level, so the volume that is supposed to
+/// be the punishing part of the ability spent the end of its travel half buried
+/// in the floor. And a flower that changes height while it turns is hard to
+/// read as a *plane* being swept, which is what a player has to judge when they
+/// decide whether they are standing in one.
+///
+/// Midriff on a fighter `body_height` tall -- below the chest that
+/// `cast_height` puts a cast at, because these come out of the shadow's waist
+/// rather than its hands.
+pub fn lotus_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusHeight))
 }
 
 /// How far a blade's path bends as it goes, in turns.
@@ -566,8 +604,46 @@ pub fn lotus_curl() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusCurl))
 }
 
+/// How far a blade turns on the way **home**, in turns, and the other way.
+///
+/// The return is its own spiral rather than the eruption played backwards.
+/// Coming home the blade sweeps this far against the direction it opened in,
+/// and it is deliberately more than `lotus_curl`, so it turns past the bearing
+/// it started on instead of unwinding onto it.
+///
+/// **That is a hit test as much as a look.** Set equal to `lotus_curl` the
+/// blade retraces its outward arm exactly -- and ground a blade has already
+/// crossed is ground whose occupants have already been cut and have had the
+/// whole hold to leave, so a retraced return can only catch somebody who walked
+/// back into the same line. Winding past the start means the way home sweeps
+/// floor the way out never touched, which is what makes the drag through a
+/// crowd the ability's own description of itself rather than a second helping
+/// of the first pass.
+pub fn lotus_uncurl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusUncurl))
+}
+
+/// How wide a blade is, in the plane the flower lies in.
+///
+/// The **width** of a shuriken rather than the radius of a ball: paired with
+/// `lotus_blade_thickness`, which is how thin it is across that plane. It used
+/// to be both at once, at 0.45 -- wider than a fighter's own body, which is why
+/// six of them read as beach balls. Twelve at 0.22 is a flower made of blades.
 pub fn lotus_blade_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusBladeRadius))
+}
+
+/// Half a blade's thickness, across the plane it lies in.
+///
+/// The other half of the shuriken. A blade tested as a sphere reached from a
+/// standing fighter's shins to their chest, which is not a shape anybody can do
+/// anything about; a slab this thin at waist height is one they can **jump**,
+/// and that is the counterplay the ability's own description always implied.
+///
+/// Half rather than whole because it is used either side of the plane, which is
+/// where the flower actually is -- see `state::World::sliced`.
+pub fn lotus_blade_thickness() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusBladeThick))
 }
 
 /// Frames the blades take to reach full extension.

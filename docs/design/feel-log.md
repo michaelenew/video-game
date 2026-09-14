@@ -89,6 +89,23 @@ as they get tested.
   learn to dodge on sight.
 - **Is the grapple's 20-frame startup too slow to ever land?** It beats guard,
   so it needs to be slow — but if it never connects it is decoration.
+- **Is 30 frames the right repeat lockout?** The number is a first guess and
+  nothing else. Too short and spamming an auto is still correct; too long and
+  the correct play becomes standing still, which is the failure mode
+  `feel::the_lockout_always_leaves_something_faster_to_do_than_wait` is watching
+  for. Half a second was picked because it is roughly the gap between two
+  deliberate button presses, and because at that length it happens to charge
+  every auto and no committed heavy.
+- **Which abilities want a multiplier, and which way?** The per-move column
+  exists and is 100% on all thirty of them. The autos are the obvious
+  candidates for more, since they are the ones a player leans on; the moves
+  that already cost forty frames are candidates for zero, since the lockout is
+  invisible on them anyway and a knob that does nothing is a knob that confuses
+  somebody later.
+- **Should a reactivation be gated at all?** `Move::reactivate` is zero
+  everywhere, so the Reaver can send the shadow and recall it on consecutive
+  frames. That may be fine — the send costs 18 frames of its own — or it may
+  make the send-recall pair a single fast button rather than two decisions.
 
 ### Defence
 - **Is the 4-frame parry window findable?** This is the single most important
@@ -3015,6 +3032,214 @@ from an aimed cast should do with that aim's pitch, and Cataclysm's tornado is t
 the kit that keeps a cast's direction alive after the cast itself is over. Worth watching for the
 same shape of bug anywhere else a moving effect inherits a beam's raw direction.
 
+### 2026-09-14 — the lotus was a fountain, not a flower
+
+**Changed** The Guillotine's six blades now leave the shadow's **midriff** rather than its
+feet, open in **one horizontal plane** rather than arcing up and back down, and come home on a
+**spiral of their own turning against the way they opened** rather than retracing the arm they
+came out on. `reaver.lotus,_how_high_they_arc` is now
+`reaver.lotus,_height_off_the_shadow's_feet` (1.2 → 0.9); new knob
+`reaver.lotus,_turn_coming_home_(turns)` at 0.28, against an outward curl of 0.14.
+
+**Why** Reported: the balls start at the feet of the shadow and jump up in a spiral. They did,
+and the arc was doing three things none of which anybody asked for.
+
+**The height was a real hitbox bug wearing an animation's clothes.** `arch(out)` is zero at both
+ends, so a blade was at floor level when it left *and* at floor level at full extension, peaking
+only in the middle. The volume is a ball of radius 0.45; at the reach where the ability does its
+work it was centred on the ground and therefore half buried. The blades now sit at 0.9 m — waist
+on a 1.8 m fighter, below the 1.25 m a cast comes out of, because these come out of the shadow's
+middle rather than its hands — for the whole of their life.
+
+**And a flower whose height changes while it turns is hard to read.** The thing a player has to
+judge is whether they are standing in a plane that is sweeping toward them. A volume at a fixed
+height is one you decide about once; one that rises and falls while it rotates has to be
+re-read every frame, and in third person at four metres out that decision is not available.
+
+**The return was a rewind, not a closing.** Bearing was `θ₀ + curl · extension` and the return
+just ran `extension` backwards, so the blade unwound onto the exact bearing it left on and
+retraced its outward arm. That is a hit test problem as much as a look: ground a blade has
+already crossed is ground whose occupants have been cut once and have had the whole 40-frame
+hold to walk off it, so a retraced return could only catch somebody who stepped back into the
+same line. The turn is now its own number and its own direction — out `+curl`, home `−uncurl`
+with `uncurl > curl` — so the blade crosses its starting bearing and the way home sweeps floor
+the way out never touched.
+
+Mechanically that meant splitting reach and bearing out of a single `extension` parameter, since
+extension 0.5 no longer says which way the blade is pointed — it depends on whether you are on
+the way out or the way back. `lotus_head` takes an **age** now and derives both from the phase,
+which also deleted the `lotus_extension_before` trick of cloning the effect with its clock wound
+back a frame.
+
+**Verdict** open, and the number to watch is `uncurl`. At 0.28 each blade sweeps about 100° on
+the way home against 50° on the way out, and with six blades 60° apart that means the return
+covers the full circle with overlap — so a victim near the shadow can be caught by about 1.7
+blades on the way back where they were caught by about one before. Per-blade damage is
+deliberately small and the return is already only 70% of the way out, so this is a change in
+the right direction rather than obviously too much, but it is the first thing to drag if the
+recall reads as a blender. The narrow band that winds past the start *without* full coverage is
+0.14–0.167, which is not much room; the honest alternative if it is too strong is fewer blades
+rather than a smaller turn.
+
+Nothing here touched `lotus_radius`, the three clocks, or the damage, so the ability's timing
+and reach are exactly what they were.
+
+### 2026-09-14 — the repeat lockout
+
+**Changed** a move you have just thrown cannot be thrown again for 30 frames.
+Per ability, not global: the rest of the kit is untouched the whole time. A new
+`Offence / Repeat lockout` scalar in the Oven carries the shared number, and a
+`Repeat lockout (%)` column on every move scales it — 100% on all thirty, so
+today the rule is exactly "30 frames, everything".
+
+**Why** frame data prices a move against time, so the cheapest move in a kit is
+the correct one to throw most of the time, and six abilities that a player uses
+one of is not a kit. Nothing in the game pushed back against repetition except
+the creature, which has had a variety penalty on its own move choice since it
+was built — the player side had nothing equivalent.
+
+The shape of it was chosen against the no-cooldown decision in
+[combat-kernel.md](combat-kernel.md) rather than around it. Two properties do
+the work. It only ever holds the ability you just threw, so the question is
+never *do I have anything* but *what else have I got*. And the clock starts on
+the frame the move **comes out** rather than when its recovery ends, so a move
+that already commits you for longer than the lockout never notices it: at 30
+frames that is every committed heavy in the game, and what is left charged is
+every auto and fast poke. Bash pays 13 idle frames on top of its 17; Grapple's
+53 frames of commitment pay nothing. The rule taxes cheapness, which is what
+made repetition correct in the first place.
+
+Two abilities needed the rule bent, and the bend is the interesting part. Send
+shadow and the Guillotine lotus are *activated twice* — out and home, hung and
+dragged — and a lockout armed by the first press is a lockout on the second. So
+an ability is not counted as used until it is spent: while any of it is still
+out in the world its lockout is parked at full rather than running down, and the
+press that spends the second activation is exempt. Which button reactivates
+which ability is declared in `moves::reactivates` rather than inferred from what
+a move leaves behind — inferring it answers yes for the fire pillar and the
+black spike, neither of which can be pressed again at all.
+
+**Verdict** open, and open in a way that needs a person rather than a test. What
+the harness can say is that the relationships hold: nothing is ever locked out
+for longer than it takes to throw something else, one press can never cost more
+than one option, and the Reaver's recall still gets through. What it cannot say
+is whether half a second reads as *use your kit* or as *the game just ignored my
+click*. The HUD's frame-data line names the locked ability and counts it down,
+which is there for exactly that judgement — if the answer turns out to be that
+the lock needs to be felt rather than read, that is a sign the number is wrong
+rather than a sign the readout needs to be bigger.
+### 2026-09-14 — Send shadow: instant, and in exchange it cannot take your frames
+
+**Changed** `send_shadow.startup` to 1 (from the 0 it was baked to, and the 8 before that).
+`send_shadow.damage` back to 70 from 0. `hitstun`, `blockstun` and `knockback` stay at 0. New
+`Hit::interrupts`, false for the recall and true for everything else. The `reaver_mechanic`
+clip's gather is now conditional on there being startup frames to hold one.
+
+**Why** Reported: the shadow feels much better at a frame of startup, otherwise it feels like
+input lag — and to compensate it must have no immediate effect on struck enemies, or it becomes
+the Melee shine and a more oppressive one, because not even her own abilities gate it. She would
+never have to fully commit: hold the shadow for an opportune interrupt in case any of her own
+abilities put her in a bad position.
+
+That is exactly right, and the second half was **not** achievable by tuning. `apply_hit` writes
+`Action::HitStun` over whatever the victim was doing regardless of the number, so
+`HitStun { left: 0 }` is one frame of nothing and a *cancelled attack* — a full interrupt with a
+zero on it. Zeroing `hitstun` looked like it removed the interrupt and removed only the stun.
+Hence a real flag rather than a number, and it is about frames rather than force: knockback is
+still whatever the number says, because moving somebody is not the same as stopping them.
+
+With a lever that works, the damage does not need to be zero. The mechanic's own description of
+itself is a second body dashing home through anything in the way, **cutting and slowing it** —
+what it gives up is the interrupt.
+
+**One frame rather than none.** Zero is not faster in any way a player can feel and it leaves
+the animation nothing to put the release on: `phases()` is `(s-1, s, s+a)`, so a zero startup
+collapses the wind-up frame and the strike frame onto frame 0 and the body has to teleport into
+the gesture. It was breaking two clip tests for exactly that reason.
+
+The clip's gather is conditional now, which is the honest authoring: a wind-up is frames the
+opponent gets to read, and at one frame of startup there are none. **A body that visibly gathers
+before a move that cannot be reacted to is the animation lying about the frame data.** Drag the
+startup back up in the Oven and the gather comes back with it.
+
+**Verdict** open. The prediction is that this is the shape the mechanic wanted all along — the
+press answers instantly, and what it buys is position rather than tempo. The thing to watch is
+whether the recall now feels *weightless* going through somebody: a cut with no stun and no
+shove is a strange sensation, and if it reads as passing through them rather than through them,
+the answer is probably a visual one rather than putting the stun back.
+
+### 2026-09-14 — the blades were beach balls
+
+**Changed** The Guillotine opens **twelve** blades rather than six, each a **disc** rather than
+a sphere, at **half the damage**. `lotus,_blade_radius` 0.45 → 0.22, new
+`lotus,_blade_half-thickness` at 0.08, `guillotine.damage` 40 → 20. `Effect::struck` widened
+from `u32` to `u64`.
+
+**Why** Reported: the hitboxes should be discs or short cylinders, because they are supposed to
+be shuriken-like blades — right now they are really big and feel like beach balls.
+
+They were. A sphere of radius 0.45 is wider than a fighter's own body and reached from the shins
+to the chest, so six of them was less a flower than a ring of boulders. A blade is now wide in
+the plane the flower lies in and barely there across it, which is what a shuriken thrown flat
+actually is, and the hit test says so: width measured flat against the swept line, height a thin
+slab that has to overlap the body.
+
+**The slab is the interesting half.** The flower is planar and at waist height, so a blade this
+thin is something a fighter can **jump** — which the old sphere was not. That is counterplay the
+ability's own description always implied and never delivered.
+
+**Twelve at half the damage is close to the same ability, and that is deliberate.** Doubling the
+count halves the angular spacing while halving the radius halves each blade's coverage, so what
+one victim actually eats barely moves; what changes is that the danger is the shape rather than
+any one thing landing. Measured against a standing dummy: 66 damage at a metre out, 46 at two,
+13–46 at three, 0–33 at four — and at the rim **where you stand relative to a petal is worth the
+whole difference**, because twelve arms at full extension are far enough apart to stand between.
+
+That gap is a feature and the reason the blades are not simply widened to close it: near the
+shadow the flower is solid, at the rim it is petals, and reading which you are in is the spatial
+decision the class is made of. It is worth watching that it does not read as the ability
+*whiffing* rather than as the player having positioned well.
+
+**`Effect::struck` had to grow.** The mask packs one bit per part per victim; at six blades and
+three victims that is eighteen bits and a `u32` fitted exactly, at twelve it is thirty-six and
+would have truncated in **silence** — a blade sharing a bit with another goes quiet the moment
+that one lands. There is now a `const` assertion beside `LOTUS_BLADES` so the next count change
+fails to compile rather than failing to cut.
+
+**Verdict** open on both the count and the rim gaps. `lotus,_blade_radius` is the knob if the
+petals turn out to be too easy to stand between, and the jump is the one to watch in play: it may
+turn out that a flower you can hop is a flower nobody respects.
+
+### 2026-09-14 — half the flower was invisible
+
+**Changed** `EFFECT_PARTS` in the renderer is counted from the widest effect rather than
+written down. No tuning moved.
+
+**Why** Reported: only the first six blades have a model, the rest are just red discs.
+
+The renderer spawns a fixed pool of meshes per effect and asks `effect_piece` for each one.
+That pool was a literal `6`, with a comment saying "six, which is the Guillotine lotus: one
+blade each" — correct on the day it was written and quietly wrong the day the flower grew to
+twelve. The back six blades had no mesh to be drawn with. The red discs were the debug
+overlay's own outlines, which loop over `LOTUS_BLADES` and so were drawing all twelve
+faithfully; with `F1` off there was simply nothing there.
+
+**It is worth being clear about which half was wrong.** The hit test was right the whole time —
+twelve blades, cutting. So the ability was doing exactly what the entry above describes and
+half of it was doing so invisibly, which is the worst version of this bug: not a thing that
+fails to work, a thing that works with nothing on screen to say it is there. Everything in the
+previous entry about how the flower *reads* was written against a picture nobody could see.
+
+The rule this belongs under is the standing one about the overlay drawing what the hit test
+uses, generalised: **anything that walks the parts of an effect has to get the count from the
+effect.** The overlay already did. The renderer had its own copy, and a copy of a count is a
+count that goes stale. It is derived now, so a thirteenth blade would widen the pool rather
+than fall off the end of it — and the test beside it asserts the pool covers every piece
+`effect_piece` will answer for, which is the property rather than the number.
+
+**Verdict** kept, and it means the previous entry's verdict is still genuinely open: the thing
+it describes has not actually been seen yet.
+
 ### 2026-09-14 — the dash to the shadow only ever went along the floor
 
 **Changed** Three things about `shift` + forward on the Reaver, all of them the same
@@ -3113,11 +3338,13 @@ fight it and it collapses to 14 m/s. That is the existing air model rather than 
 here — the Bulwark's leap has the same edge — and changing it is a decision about every
 class at once.
 
-**Found while doing it, unfixed:** `move.shadow_reaver.send_shadow.damage` is **0**, so the
-recall cuts nobody. The kit document says it "dashes back through anything between the two
-of you, damaging and slowing it", and the slow is all it does. `reaver.rs`'s
-`the_recall_cuts_the_creature_on_its_way_home` has been failing on that; its sibling
-`the_recall_cuts_and_slows_what_it_comes_home_through` passes *vacuously*, because it
-asserts the damage dealt equals `send.damage` and both sides are zero. It is one number in
-the Oven and it is a balance call, so it is written down here rather than guessed at.
+**Found while doing it, and fixed elsewhere the same day:**
+`move.shadow_reaver.send_shadow.damage` was **0**, so the recall cut nobody against a kit
+document that says it "dashes back through anything between the two of you, damaging and
+slowing it". This branch wrote it up rather than guessing at a balance number;
+*Send shadow is instant and cannot interrupt*, above, put it back to 70 and explains why it
+had been zeroed — it was an attempt to remove the recall's **interrupt** with the only
+lever available, and the interrupt turned out not to be reachable from that number at all.
+Worth keeping as a pair: the same symptom read as a damage problem from one side and a
+frames problem from the other, and only the second reading had a fix in it.
 

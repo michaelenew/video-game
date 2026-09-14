@@ -18,7 +18,11 @@ punishment, reads — not Tekken-like. The closed arena is deliberate: far less 
 open world.
 
 **No cooldowns.** Abilities cost **frames** (primary) and **the class mechanic** (secondary).
-There is no universal resource bar.
+There is no universal resource bar. **One qualifier, added 2026-09-14:** a move you have just
+thrown is locked for 30 frames — *that* move, nothing else, so the question stays "what else
+have I got" rather than "do I have anything". See
+[combat-kernel.md](combat-kernel.md) §"The repeat lockout" for why that is not the thing this
+line rules out.
 
 **Time to kill.** ~60 seconds versus. 1–20 minutes coop, by fight difficulty.
 
@@ -100,6 +104,7 @@ Nothing here blocks a prototype.
 | **Class names, across the board** | ⚠️ **Newly open.** *Bellator* became **Champion** on 2026-09-11. The old name was accurate — Latin for a combatant, and the class descends from the old cities' duelling champions — but it was the only Latin name on a roster of plain English ones and read as belonging to a different game. That is a reason to look at all six rather than one. Bulwark, Elementalist, Blood mage and Dual mage are *descriptions*; Shadow Reaver and Champion are *titles*. Worth deciding which register the roster is in before any of them reach a player |
 | **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
+| **The repeat lockout's number** | ⚠️ **Newly open.** 30 frames is a first guess. Which abilities want a multiplier and which way is the other half, and both need somebody to play it — the knobs are in the Oven under `Offence` and in each move's `Repeat lockout (%)`. Whether a reactivation wants gating at all (`Move::reactivate`, zero everywhere) is the third |
 | **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
 | **Move + heavy attack** | ⚠️ **Known gap.** Shift+direction dodges and shift+click is the heavy, so holding a direction while throwing a heavy has no input — the dodge eats it. Deferred deliberately: movement settles first, then the attack grammar is built around it |
 | **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
@@ -177,7 +182,7 @@ to keep separate settings per person on a shared machine.
 **Pick classes:** `game --p1 champion --p2 elementalist`, or Tab to cycle in-game.
 
 **Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
-on-hit advantage. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
+on-hit advantage, and the repeat lockout beside them. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
 
 **Tune it while it runs:** **F7** opens the Oven — every tuned number in the game, grouped by

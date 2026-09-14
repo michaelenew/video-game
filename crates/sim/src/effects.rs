@@ -100,12 +100,29 @@ pub const GRASP_CORNERS: [(i32, i32); GRASP_ARMS] = [(-1, 1), (-1, -1), (1, 1), 
 
 /// How many blades a Guillotine lotus opens with.
 ///
-/// Six, and a count rather than a knob for the same reason the Grasp has four
-/// arms: it is what the ability *is*. A slider from one to twelve would be a
-/// second, worse way of writing the move list, and the bookkeeping below packs
-/// one bit per blade per victim into a `u32`, which six of them and three
-/// victims exactly fits.
-pub const LOTUS_BLADES: usize = 6;
+/// Twelve, and a count rather than a knob for the same reason the Grasp has
+/// four arms: it is what the ability *is*. A slider would be a second, worse
+/// way of writing the move list.
+///
+/// It was six, of twice the size and twice the damage each. Six read as beach
+/// balls rather than blades -- at a radius wider than a fighter's own, the
+/// thing sweeping past was not shaped like anything you could call a blade.
+/// Twelve smaller ones at half the damage is the same flower and the same total
+/// if you eat all of it, made of pieces that look like what they are.
+pub const LOTUS_BLADES: usize = 12;
+
+/// The hit mask has room for every part of every effect against every victim.
+///
+/// Checked here because the failure is silent and looks like a gameplay bug: a
+/// part whose bit falls off the end of the mask is a blade that can cut the
+/// same person on every frame of its pass, or -- worse -- one that shares a bit
+/// with another blade and goes quiet after that one lands. Going from six
+/// blades to twelve is what made this worth stating: at six the mask needed 18
+/// bits and a `u32` was fine, at twelve it needs 36 and was not.
+const _: () = assert!(
+    LOTUS_BLADES * VICTIMS <= u64::BITS as usize,
+    "the hit mask cannot address every part against every victim"
+);
 
 impl EffectKind {
     pub const fn name(self) -> &'static str {
@@ -283,12 +300,15 @@ pub struct Effect {
     /// pass back — and clears the mask between them, so it can catch the same
     /// person twice. A Grasp has four, one per arm, and never clears: an arm
     /// hits you once, and how many *different* arms have is exactly the
-    /// question the root is asking. A lotus has six, and clears at the turn the
-    /// way the blade does.
+    /// question the root is asking. A lotus has twelve, and clears at the turn
+    /// the way the blade does.
     ///
-    /// A `u32` rather than a `u16`, which is what the lotus cost: six parts
-    /// against three victims is eighteen bits and a `u16` holds five parts.
-    pub struck: u32,
+    /// A `u64`, and the lotus is what costs it: twelve parts against three
+    /// victims is thirty-six bits. It was a `u32` at six blades, which fitted
+    /// exactly and would have silently truncated at twelve -- see the
+    /// assertion beside [`LOTUS_BLADES`], which is there so the next count
+    /// change fails to compile rather than failing to cut.
+    pub struck: u64,
     /// How far this one travels, which is normally the move's own `reach`.
     ///
     /// On the row for every effect rather than read back off the move, because
@@ -575,10 +595,15 @@ impl Effect {
     /// **snap** out, **hang** open, and then **slide** home decelerating. A
     /// single ease over the whole life would blur all three into one breath.
     pub fn lotus_phase(&self) -> LotusPhase {
+        self.lotus_phase_at(self.age)
+    }
+
+    /// The same question asked of any frame, so the sweep below can ask about
+    /// the one just gone without building a second, near-identical `Effect`.
+    fn lotus_phase_at(&self, age: u16) -> LotusPhase {
         let erupt = t::lotus_erupt().max(1);
         let hold = t::lotus_hold();
         let back = t::lotus_return().max(1);
-        let age = self.age;
         if age < erupt {
             LotusPhase::Erupting(Fx::ratio(age as i32, erupt as i32))
         } else if age < erupt + hold {
@@ -589,29 +614,44 @@ impl Effect {
         }
     }
 
-    /// How far out the blades are, as a fraction of `lotus_radius`.
+    /// How far out a blade is and how far round it has turned, at one age.
     ///
-    /// Out on a curve that is fastest at the start, because the eruption is
-    /// meant to be over before the victim can answer it; home on the mirror of
-    /// that, which is what "slowing" means -- the blades come off full speed
-    /// and settle into the shadow rather than snapping back into it.
-    fn lotus_extension(&self) -> Fx {
-        match self.lotus_phase() {
+    /// **The two come out together and that is the point.** A blade's path is
+    /// one motion -- reach and bearing advancing on the same curve -- so a
+    /// spiral is what you get rather than something you add. Split into a
+    /// radius here and an angle somewhere else, the two drift apart the first
+    /// time either ease is touched.
+    ///
+    /// Reach is out on a curve that is fastest at the start, because the
+    /// eruption is meant to be over before the victim can answer it; home on
+    /// the mirror of that, which is what "slowing" means -- the blades come off
+    /// full speed and settle into the shadow rather than snapping back.
+    ///
+    /// The turn is **not** symmetric, and that is the whole difference between
+    /// a flower closing and a flower rewinding. Going out a blade turns
+    /// `lotus_curl` in the direction it opened. Coming home it turns
+    /// `lotus_uncurl` the *other* way, which is more, so it carries on past the
+    /// bearing it started from and closes on a spiral of its own instead of
+    /// retracing the arm it came out on. See `tuning::lotus_uncurl` for why
+    /// that is a hit test and not only a look.
+    fn lotus_reach_and_turn(&self, age: u16) -> (Fx, Fx) {
+        match self.lotus_phase_at(age) {
             // Full speed on the first frame, arriving at rest.
-            LotusPhase::Erupting(p) => crate::math::ease_out(p),
-            LotusPhase::Held => Fx::ONE,
-            // The same curve run backwards: off the mark at speed, and
-            // decelerating into the shadow. That is the "slowing" in the
-            // ability's own description of itself.
-            LotusPhase::Returning(p) => Fx::ONE.sub(crate::math::ease_out(p)),
+            LotusPhase::Erupting(p) => {
+                let out = crate::math::ease_out(p);
+                (out, t::lotus_curl().mul(out))
+            }
+            LotusPhase::Held => (Fx::ONE, t::lotus_curl()),
+            // The reach runs the outward curve backwards; the turn does not.
+            // Both are driven off the same `u` so they stay one motion.
+            LotusPhase::Returning(p) => {
+                let u = crate::math::ease_out(p);
+                (
+                    Fx::ONE.sub(u),
+                    t::lotus_curl().sub(t::lotus_uncurl().mul(u)),
+                )
+            }
         }
-    }
-
-    /// How far out the blades were on the frame before this one.
-    fn lotus_extension_before(&self) -> Fx {
-        let mut before = *self;
-        before.age = self.age.saturating_sub(1);
-        before.lotus_extension()
     }
 
     /// The line one blade swept this frame: where its head was, and where it is.
@@ -629,7 +669,7 @@ impl Effect {
     /// end or the other on every frame of the crossing.
     pub fn lotus_span(&self, blade: usize, centre: V3) -> (V3, V3) {
         (
-            self.lotus_head(blade, centre, self.lotus_extension_before()),
+            self.lotus_head(blade, centre, self.age.saturating_sub(1)),
             self.lotus_at(blade, centre),
         )
     }
@@ -642,26 +682,45 @@ impl Effect {
     /// which is most of what the ability is for.
     ///
     /// Each blade leaves on its own sixth of the circle and keeps turning as it
-    /// goes -- `lotus_curl` turns over the full extension -- so the six of them
-    /// open like petals rather than as spokes of a wheel. They rise on the way
-    /// out and come down on the way in, on the same fraction, so the arc is one
-    /// motion rather than a height bolted onto a radius.
+    /// goes, so the six of them open like petals rather than as spokes of a
+    /// wheel -- and they come home turning the other way, past where they
+    /// started. See [`Effect::lotus_reach_and_turn`].
     pub fn lotus_at(&self, blade: usize, centre: V3) -> V3 {
-        self.lotus_head(blade, centre, self.lotus_extension())
+        self.lotus_head(blade, centre, self.age)
     }
 
-    /// One blade's head at a given extension. The shape of the flower, with the
-    /// clock taken out of it so the sweep above can ask for two frames at once.
-    fn lotus_head(&self, blade: usize, centre: V3, out: Fx) -> V3 {
-        let bearing = Fx::ratio(blade.min(LOTUS_BLADES - 1) as i32, LOTUS_BLADES as i32)
-            .add(t::lotus_curl().mul(out));
+    /// One blade's head at a given age. The shape of the flower, taking the age
+    /// rather than reading `self.age`, so the sweep above can ask for two
+    /// frames at once.
+    ///
+    /// **Flat.** Every blade sits `lotus_height` above the shadow's feet for the
+    /// whole of its life: the flower opens, holds and closes in one horizontal
+    /// plane. It used to arc up and back down over the eruption, which left the
+    /// blade half buried in the floor at exactly the reach where it does the
+    /// most work -- see `tuning::lotus_height`.
+    fn lotus_head(&self, blade: usize, centre: V3, age: u16) -> V3 {
+        let (out, turned) = self.lotus_reach_and_turn(age);
+        let bearing =
+            Fx::ratio(blade.min(LOTUS_BLADES - 1) as i32, LOTUS_BLADES as i32).add(turned);
         let along = V3::from_turns(bearing);
         let reach = t::lotus_radius().mul(out);
         V3::new(
             centre.x.add(along.x.mul(reach)),
-            centre.y.add(t::lotus_rise().mul(crate::math::arch(out))),
+            centre.y.add(t::lotus_height()),
             centre.z.add(along.z.mul(reach)),
         )
+    }
+
+    /// The middle of the flower: the centre raised into the plane the blades
+    /// lie in.
+    ///
+    /// Exists for the overlay, which draws a spoke from here out to each head.
+    /// Asked of the simulation rather than worked out beside the renderer,
+    /// because a plane the overlay believes in and a plane the hit test sweeps
+    /// are the same plane or the overlay is lying about the thing it is there
+    /// to illustrate.
+    pub fn lotus_hub(&self, centre: V3) -> V3 {
+        V3::new(centre.x, centre.y.add(t::lotus_height()), centre.z)
     }
 
     /// True once the blades have turned for home.
@@ -685,8 +744,8 @@ impl Effect {
 
     // -- Bookkeeping --------------------------------------------------------
 
-    fn bit(part: usize, victim: usize) -> u32 {
-        1u32 << (part * VICTIMS + victim)
+    fn bit(part: usize, victim: usize) -> u64 {
+        1u64 << (part * VICTIMS + victim)
     }
 
     /// Has this part already caught this victim?

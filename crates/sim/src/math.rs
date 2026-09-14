@@ -289,18 +289,6 @@ pub fn ease_out(t: Fx) -> Fx {
     t.mul(two.sub(t))
 }
 
-/// A triangle that rises 0 -> 1 -> 0 across 0..1. The shape of a windup
-/// followed by a return.
-pub fn arch(t: Fx) -> Fx {
-    let t = t.clamp(Fx::ZERO, Fx::ONE);
-    let two = Fx::ONE.add(Fx::ONE);
-    if t.raw() * 2 <= Fx::ONE.raw() {
-        smoothstep(t.mul(two))
-    } else {
-        smoothstep(Fx::ONE.sub(t).mul(two))
-    }
-}
-
 /// A section of a ring lying flat: a chunk of a torus, in the plane of the
 /// floor.
 ///
