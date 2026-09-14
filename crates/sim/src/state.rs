@@ -3395,13 +3395,22 @@ impl World {
                     effect.home = aim::origin(owner.pos);
                 }
             }
-            // A tornado also burns out the moment it leaves the arena, on top
-            // of its own clock -- the one effect whose centre can actually
-            // wander off the map, since every other one is either planted or
-            // tethered to a fighter who cannot.
-            let outside_the_world =
-                effect.kind == EffectKind::FireTornado && !arena::inside(effect.tornado_pos());
-            if effect.age >= effect.life || outside_the_world {
+            // A tornado's expiry is not its growth's question. `age`/`life`
+            // keep answering how grown it is, continuously, from whenever the
+            // pillar it came from was first planted -- see
+            // `Effect::pillar_volumes`. Whether it has *burned out* is asked
+            // on the clock `Effect::tornado_pos` already keeps, frames since
+            // it was cut loose rather than frames since it was planted, plus
+            // the one thing a planted effect never has to check: whether it
+            // has wandered off the map, the one effect whose centre actually
+            // can.
+            let expired = if effect.kind == EffectKind::FireTornado {
+                let flying = effect.age.saturating_sub(effect.banked as u16);
+                flying >= t::tornado_travel_life() || !arena::inside(effect.tornado_pos())
+            } else {
+                effect.age >= effect.life
+            };
+            if expired {
                 self.effects[i] = None;
                 self.pay_out(&effect);
                 continue;
@@ -3466,13 +3475,14 @@ impl World {
             // more, as a real hitstun -- not extra damage, the burn already
             // has that. That stagger is not a flourish: `Player`'s own
             // grounded movement *sets* velocity from the stick every frame a
-            // fighter is free to act, which would erase the pull below before
-            // it ever moved anyone. Stunned, movement instead decays whatever
-            // velocity is already there (see `step_player`'s `stunned()`
-            // branch), which is the one state the pull can actually win
-            // inside. Once the stagger runs out a fighter is free again and
-            // can walk or jump clear -- the pull keeps trying regardless, but
-            // their own legs win the moment they are allowed to use them.
+            // fighter is free to act, which would erase the pull and the
+            // carry below before either ever moved anyone. Stunned, movement
+            // instead decays whatever velocity is already there (see
+            // `step_player`'s `stunned()` branch), which is the one state
+            // they can actually win inside. Once the stagger runs out a
+            // fighter is free again and can walk or jump clear -- the pull
+            // and the carry keep trying regardless, but their own legs win
+            // the moment they are allowed to use them.
             EffectKind::FireTornado => {
                 let at = effect.tornado_pos();
                 if effect.ticks_now() {
@@ -3512,7 +3522,35 @@ impl World {
                             self.players[i].parried = PARRY_FLOURISH;
                         }
                     }
-                    let apart = V3::new(p.pos.x.sub(at.x), Fx::ZERO, p.pos.z.sub(at.z));
+                    // Carried first: moved by exactly as far as the tornado's
+                    // own centre moves this frame, the same way a rising
+                    // stone carries whoever is standing on it (see
+                    // `stones::resolve_body`) -- not by accelerating his
+                    // velocity toward the tornado's, which can never actually
+                    // catch up: `step_player`'s `stunned` branch decays
+                    // whatever velocity a stunned fighter already has every
+                    // single frame, so a steering force has to first cancel
+                    // that decay before it can add anything, and it never
+                    // fully does. Moving him with it directly cannot fall
+                    // behind at all.
+                    let step = effect.dir.scale(t::tornado_speed().mul(DT));
+                    self.players[i].pos.x = self.players[i].pos.x.add(step.x);
+                    self.players[i].pos.z = self.players[i].pos.z.add(step.z);
+                    // The suck, against where the carry just put him rather
+                    // than where he stood at the top of the frame -- `at` is
+                    // already this frame's centre, and the carry just moved
+                    // him to keep pace with it, so measuring against his
+                    // stale, pre-carry position would read the tornado's own
+                    // stride as if it were distance to close, and pull him
+                    // forward on top of a ride that already keeps up on its
+                    // own. What is left once the carry is accounted for is
+                    // genuine radial drift -- off to one side of the axis,
+                    // say -- and that is what the pull is actually for.
+                    let apart = V3::new(
+                        self.players[i].pos.x.sub(at.x),
+                        Fx::ZERO,
+                        self.players[i].pos.z.sub(at.z),
+                    );
                     let dist = apart.flat_len();
                     if dist.raw() > 0 {
                         let inward = apart.normalized();
@@ -4424,7 +4462,19 @@ impl World {
                 if let Some(slot) = fire_pillar_slot_at(&self.effects, at) {
                     if let Some(effect) = self.effects[slot].as_mut() {
                         effect.kind = EffectKind::FireTornado;
-                        effect.dir = beam.dir();
+                        // Flattened, not the raw beam: Cataclysm is only
+                        // level when it was aimed at the ground (see
+                        // `aim::skillshot_path`) -- anywhere else it meets a
+                        // wall, a body height, or the range sphere at
+                        // whatever pitch the camera happened to be at, and a
+                        // tornado is a ground hazard the same way the pillar
+                        // it came from was. A tilted `dir` walks `tornado_pos`
+                        // straight through the floor (or into the sky) a
+                        // couple of frames after it starts moving, and
+                        // `arena::inside` reads that as having wandered off
+                        // the map -- the tornado never gets to be seen at
+                        // all, it just vanishes where the pillar stood.
+                        effect.dir = V3::new(beam.dir().x, Fx::ZERO, beam.dir().z).normalized();
                         effect.struck = 0;
                         effect.banked = effect.age as i32;
                     }

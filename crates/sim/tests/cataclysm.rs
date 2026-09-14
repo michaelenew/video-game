@@ -359,6 +359,30 @@ fn a_tornado_grows_on_the_same_curve_its_pillar_did() {
 }
 
 #[test]
+fn a_tornado_gets_its_own_travel_time_no_matter_how_old_the_pillar_was() {
+    // As old as a fire pillar can be without having already expired on its
+    // own -- catching one this late used to cut its tornado's travel to
+    // almost nothing, because expiry read the same age/life pair growth
+    // does. The two are different questions now: how grown it is has
+    // nothing to do with how much longer it gets to travel.
+    let mut w = elementalist();
+    let ancient = sim::tuning::pillar_life() - 1;
+    let slot = light_tornado(
+        &mut w,
+        0,
+        V3::new(Fx::from_int(-10), Fx::ZERO, Fx::ZERO),
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        ancient,
+        sim::tuning::pillar_life(),
+    );
+    run(&mut w, 60, 0, 0);
+    assert!(
+        w.effects[slot].is_some(),
+        "a tornado cut loose from an old pillar burned out almost immediately"
+    );
+}
+
+#[test]
 fn catching_the_tornado_stuns_before_it_can_drag() {
     // A fighter's own grounded movement sets velocity from the stick every
     // frame he is free to act, which would erase the pull before it ever
@@ -380,6 +404,47 @@ fn catching_the_tornado_stuns_before_it_can_drag() {
     assert!(
         w.players[1].action.stunned(),
         "the tornado caught him without stunning him"
+    );
+}
+
+#[test]
+fn catching_the_tornado_carries_a_fighter_along_rather_than_leaving_him_behind() {
+    // The suck alone only ever tugs a victim toward wherever the tornado's
+    // centre currently is, which it is racing away from at full speed --
+    // being caught has to mean riding along with it, not being left further
+    // and further behind a point it keeps abandoning.
+    let mut w = elementalist();
+    w.players[1].pos = V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO);
+    let start = w.players[1].pos;
+    light_tornado(
+        &mut w,
+        0,
+        start,
+        V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
+        900,
+        1000,
+    );
+
+    let gap_at = |w: &World| {
+        let tornado = w
+            .effects
+            .iter()
+            .flatten()
+            .find(|e| e.kind == EffectKind::FireTornado)
+            .expect("it vanished early");
+        w.players[1].pos.sub(tornado.tornado_pos()).flat_len()
+    };
+
+    run(&mut w, 20, 0, 0);
+    let early_gap = gap_at(&w);
+    run(&mut w, 20, 0, 0); // still well short of the arena's own edge
+    let later_gap = gap_at(&w);
+    assert!(
+        later_gap.raw() <= early_gap.raw(),
+        "the gap behind the tornado's live centre kept growing rather than settling \
+         once he was caught: {} m, then {} m",
+        early_gap.to_f32_for_render(),
+        later_gap.to_f32_for_render()
     );
 }
 
@@ -409,29 +474,34 @@ fn the_tornado_travels_and_burns_out_on_its_own_clock() {
 #[test]
 fn the_tornado_pulls_and_burns_whoever_it_catches() {
     let mut w = elementalist();
-    w.players[1].pos = V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO);
-    let start = w.players[1].pos;
+    // Off to one side of the line the tornado is about to travel, rather than
+    // sitting dead on it -- riding along the axis is the carry's job (see
+    // `catching_the_tornado_carries_a_fighter_along_rather_than_leaving_him_behind`),
+    // and standing exactly on it leaves the pull nothing to do: an axis the
+    // carry already keeps him matched to has no radial drift left for suction
+    // to close. A half-metre offset gives it something real to pull him out
+    // of, without putting him outside the pillar's own volumes.
+    let lit_at = V3::new(Fx::from_int(3), Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(3).add(Fx::ratio(1, 2)), Fx::ZERO, Fx::ZERO);
     let before = w.players[1].health;
 
-    // Lit right where he is standing and off sideways from there, so a good
-    // stretch of its travel keeps him inside its own volumes -- what is under
-    // test is the pull and the tick, not a chase across the arena. Already
-    // well grown, with plenty of life left to run the fixture on: a freshly
-    // lit tornado is also freshly tiny and travelling at full speed from its
-    // first frame, so standing exactly where it was just lit is closer to a
-    // test of whether it can outrun him than of whether it can catch him.
+    // Already well grown, with plenty of life left to run the fixture on: a
+    // freshly lit tornado is also freshly tiny and travelling at full speed
+    // from its first frame, so a fixture that lit one right where he stands
+    // would be closer to a test of whether it can outrun him than of whether
+    // it can catch him.
     light_tornado(
         &mut w,
         0,
-        start,
+        lit_at,
         V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE),
         900,
         1000,
     );
     run(&mut w, 5, 0, 0);
     assert!(
-        w.players[1].vel.z.raw() > 0,
-        "standing where the tornado is, he was not pulled toward it"
+        w.players[1].vel.x.raw() < 0,
+        "standing off to the side of the tornado's axis, he was not pulled toward it"
     );
 
     run(&mut w, 60, 0, 0); // comfortably past a damage tick
@@ -462,5 +532,85 @@ fn the_tornado_never_catches_its_own_owner() {
     assert_eq!(
         w.players[0].pos, start,
         "the tornado pulled at its own owner"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Aiming at height
+// ---------------------------------------------------------------------------
+
+/// The yaw and pitch that put the crosshair on a point in the world, for a
+/// fighter standing at `stood`.
+///
+/// The crosshair's ray starts at the *eye* -- well behind and above the
+/// fighter -- so "look at this spot" is not the angle from the fighter to it.
+/// Where the eye sits depends on the pitch, so this settles the two against
+/// each other; a couple of rounds is plenty, the rig being smooth. The same
+/// trick `crates/sim/tests/stones.rs` uses.
+fn look_at(stood: V3, mark: V3) -> (u16, i16) {
+    let turns = |v: f32| (v * 65536.0 / std::f32::consts::TAU) as i32;
+    let yaw = turns(
+        mark.z
+            .sub(stood.z)
+            .to_f32_for_render()
+            .atan2(mark.x.sub(stood.x).to_f32_for_render()),
+    ) as u16;
+    let mut tilt = 0i16;
+    for _ in 0..6 {
+        let eye = sim::camera::eye(stood, Input::looking_at(0, yaw, tilt));
+        let flat = mark.sub(eye).flat_len().to_f32_for_render();
+        let rise = mark.y.sub(eye.y).to_f32_for_render();
+        tilt = turns(rise.atan2(flat)) as i16;
+    }
+    (yaw, tilt)
+}
+
+/// Press, aimed at a point in the world, let go, and let it play out.
+fn tap_at(w: &mut World, button: u16, mark: V3, then: u32) {
+    let (yaw, tilt) = look_at(w.players[0].pos, mark);
+    for _ in 0..2 {
+        w.advance([Input::looking_at(button, yaw, tilt), Input::aimed(0, 0)]);
+    }
+    run(w, then, 0, 0);
+}
+
+/// A dais's top corner is Cataclysm's own worst case: caught with a pitch
+/// that is not level (see `aim::skillshot_path`, which only flattens Y when
+/// the crosshair reads as `Met::Ground`), a tornado's own line of travel used
+/// to inherit that tilt straight from the beam, walk its centre through the
+/// floor a couple of frames later, and read that as having wandered off the
+/// map -- the pillar vanished instead of ever being seen to move. This is a
+/// consistent player repro, not a knife's-edge one: stand beside one of the
+/// arena's two low platforms, plant a pillar at its base corner, then aim
+/// Cataclysm at the corner above that -- see `crate::arena::SOLIDS`.
+#[test]
+fn cataclysm_aimed_at_a_dais_corner_still_turns_the_pillar_into_a_tornado() {
+    let mut w = elementalist();
+    w.players[0].pos = V3::new(Fx::from_int(-11), Fx::ZERO, Fx::from_int(-4));
+    w.players[1].pos = V3::new(Fx::from_int(20), Fx::ZERO, Fx::from_int(20));
+
+    // The low platform at x in [-9, -5], z in [-4, 4] -- see `arena::SOLIDS`.
+    // The near-ground corner, for the pillar; the same corner on the
+    // platform's top, for Cataclysm.
+    let lower_corner = V3::new(Fx::from_int(-9), Fx::ZERO, Fx::from_int(4));
+    let upper_corner = V3::new(Fx::from_int(-9), Fx::ratio(3, 2), Fx::from_int(4));
+
+    tap_at(&mut w, Q, lower_corner, 50);
+    assert_eq!(
+        fire_pillars(&w),
+        1,
+        "fixture planted no pillar at the dais's base corner"
+    );
+
+    tap_at(&mut w, R, upper_corner, 30);
+    assert_eq!(
+        fire_pillars(&w),
+        0,
+        "the pillar was still standing -- Cataclysm should tear it loose"
+    );
+    assert_eq!(
+        tornadoes(&w),
+        1,
+        "aimed at the corner above the pillar, Cataclysm made it vanish instead of a tornado"
     );
 }
