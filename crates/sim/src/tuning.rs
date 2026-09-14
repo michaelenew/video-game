@@ -534,9 +534,25 @@ pub fn lotus_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusRadius))
 }
 
-/// How high the blades arc on their way out.
-pub fn lotus_rise() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LotusRise))
+/// The height above the shadow's feet that the whole flower lies in.
+///
+/// **The lotus is flat.** It opens in one horizontal plane, holds there and
+/// closes there, so every blade is at this height for the whole of its life.
+///
+/// It used to arc instead: the blades left the shadow's feet, rose to a peak
+/// mid-eruption and came back down to the floor at full extension. Two things
+/// were wrong with that, and only one of them was how it looked. A blade at its
+/// furthest reach was back at ground level, so the volume that is supposed to
+/// be the punishing part of the ability spent the end of its travel half buried
+/// in the floor. And a flower that changes height while it turns is hard to
+/// read as a *plane* being swept, which is what a player has to judge when they
+/// decide whether they are standing in one.
+///
+/// Midriff on a fighter `body_height` tall -- below the chest that
+/// `cast_height` puts a cast at, because these come out of the shadow's waist
+/// rather than its hands.
+pub fn lotus_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusHeight))
 }
 
 /// How far a blade's path bends as it goes, in turns.
@@ -546,6 +562,25 @@ pub fn lotus_rise() -> Fx {
 /// petals rather than a starburst.
 pub fn lotus_curl() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusCurl))
+}
+
+/// How far a blade turns on the way **home**, in turns, and the other way.
+///
+/// The return is its own spiral rather than the eruption played backwards.
+/// Coming home the blade sweeps this far against the direction it opened in,
+/// and it is deliberately more than `lotus_curl`, so it turns past the bearing
+/// it started on instead of unwinding onto it.
+///
+/// **That is a hit test as much as a look.** Set equal to `lotus_curl` the
+/// blade retraces its outward arm exactly -- and ground a blade has already
+/// crossed is ground whose occupants have already been cut and have had the
+/// whole hold to leave, so a retraced return can only catch somebody who walked
+/// back into the same line. Winding past the start means the way home sweeps
+/// floor the way out never touched, which is what makes the drag through a
+/// crowd the ability's own description of itself rather than a second helping
+/// of the first pass.
+pub fn lotus_uncurl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusUncurl))
 }
 
 pub fn lotus_blade_radius() -> Fx {

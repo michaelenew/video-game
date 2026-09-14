@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 232] = [
+pub const SCALARS: [i32; 233] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -227,7 +227,7 @@ pub const SCALARS: [i32; 232] = [
           131072, // reaver.crosshair_lock_on_the_shadow = 2
          2228224, // reaver.dash_to_the_shadow,_speed = 34
           294912, // reaver.lotus,_how_far_the_blades_go = 4.5
-           78643, // reaver.lotus,_how_high_they_arc = 1.2
+           58982, // reaver.lotus,_height_off_the_shadow's_feet = 0.9
             9175, // reaver.lotus,_curve_of_the_path_(turns) = 0.14
            29491, // reaver.lotus,_blade_radius = 0.45
                7, // reaver.lotus,_out = 7
@@ -240,6 +240,7 @@ pub const SCALARS: [i32; 232] = [
             4784, // dual_mage.wing,_finishes_off_centre_(turns) = 0.073
            32768, // dual_mage.wing,_tip_radius = 0.5
               24, // reaver.send_shadow,_press_stays_live = 24
+           18350, // reaver.lotus,_turn_coming_home_(turns) = 0.28
 ];
 
 #[rustfmt::skip]
