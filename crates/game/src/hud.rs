@@ -650,7 +650,9 @@ fn describe(p: &sim::state::Player) -> String {
                 "{} channel {held}/{}f   {} m",
                 m.name,
                 m.channel,
-                m.reach_after(held).to_f32_for_render()
+                // The solved line, cut back to the hold -- which is the marker,
+                // and is what the arms will actually converge on.
+                p.aim_path.length().to_f32_for_render()
             )
         }
     }

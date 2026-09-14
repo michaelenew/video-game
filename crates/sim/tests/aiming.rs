@@ -515,10 +515,14 @@ fn a_grounded_cast_lands_exactly_where_the_ray_landed() {
 }
 
 #[test]
-fn a_skillshot_aimed_at_the_floor_flies_level_over_the_spot() {
-    // A shot that cannot land on the ground still has to go *at* the place the
-    // player is pointing: straight up from that spot to the height it leaves
-    // her at, and level from there.
+fn a_skillshot_aimed_at_the_floor_goes_through_whoever_is_standing_on_it() {
+    // The floor is never the target. Bodies are not on the aiming ray, so
+    // aiming *at* somebody puts the crosshair through them and onto the ground
+    // behind -- a ground hit means "there", and a shot sent to the dirt at
+    // `there` passes under whoever is standing on it.
+    //
+    // So it is raised, and **what it is raised to** is the whole of this test:
+    // the middle of a fighter standing on that spot.
     let w = elementalist();
     let look = Input::looking_at(0, 0, down(20));
     let (seen, path) = with_scene(&w, |scene| {
@@ -541,8 +545,55 @@ fn a_skillshot_aimed_at_the_floor_flies_level_over_the_spot() {
     );
     assert_eq!(
         path.to.y.raw(),
-        path.from.y.raw(),
-        "a shot aimed at the floor dived into it instead of flying level"
+        aim::standing_middle(seen.at).y.raw(),
+        "a shot aimed at the floor did not end at chest height over the spot"
+    );
+    assert!(
+        path.to.y.raw() > seen.at.y.raw(),
+        "a shot aimed at the floor dived into it"
+    );
+}
+
+#[test]
+fn a_skillshot_from_a_height_aims_down_at_the_floor_it_is_pointed_at() {
+    // The reason the raise is measured from the **ground the ray met** rather
+    // than from the caster's own cast height, which is what it used to be.
+    //
+    // Those are the same number on flat ground and nothing like it off it. From
+    // three metres up, raising to the caster's height put the far end of every
+    // skillshot four and a quarter metres above the arena floor -- level out of
+    // the platform and clean over the head of anybody standing below. The only
+    // way to land one was to aim at a patch of floor well short of the target,
+    // which is not something a player should have to know.
+    let mut w = elementalist();
+    let up = Fx::from_int(3);
+    w.players[0].pos = V3::new(w.players[0].pos.x, up, w.players[0].pos.z);
+    let look = Input::looking_at(0, 0, down(40));
+    let (seen, path) = with_scene(&w, |scene| {
+        (
+            aim::sight(0, look, Fx::from_int(20), scene),
+            aim::skillshot_path(0, look, Fx::from_int(20), scene),
+        )
+    });
+    assert_eq!(
+        seen.met,
+        aim::Met::Ground,
+        "fixture did not aim at the floor"
+    );
+    assert!(
+        path.to.y.raw() < path.from.y.raw(),
+        "standing {} m up and aiming at the floor, the shot still went out \
+         level at {} m",
+        up.to_f32_for_render(),
+        path.to.y.to_f32_for_render()
+    );
+    // And it ends where a fighter down there actually is, not merely lower.
+    assert_eq!(
+        path.to.y.raw(),
+        aim::standing_middle(seen.at).y.raw(),
+        "the shot ended at {} m over a floor at {} m",
+        path.to.y.to_f32_for_render(),
+        seen.at.y.to_f32_for_render()
     );
 }
 

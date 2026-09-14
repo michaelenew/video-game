@@ -193,6 +193,29 @@ pub fn origin(pos: V3) -> V3 {
     V3::new(pos.x, pos.y.add(t::cast_height()), pos.z)
 }
 
+/// The point a shot aimed at a patch of *floor* should actually go to: the
+/// middle of a fighter standing on it.
+///
+/// The floor is never the target. Aiming at somebody puts the crosshair through
+/// them and onto the ground behind -- bodies are not on the ray -- so a ground
+/// hit means "there", and a shot sent to the dirt at `there` passes under
+/// whoever is standing on it.
+///
+/// **Half a body up from the ground it hit**, not up to the caster's own cast
+/// height, which is what this used to be. The two are the same number on flat
+/// ground and nothing like it off it: from the top of a dais the caster's cast
+/// height is three metres above the arena floor, so every skillshot aimed at
+/// somebody below flew level out of the platform and over their head, and the
+/// only way to land one was to aim at a patch of floor well in front of them.
+/// Measuring from the ground the ray met makes the rule true from any height.
+pub fn standing_middle(ground: V3) -> V3 {
+    V3::new(
+        ground.x,
+        ground.y.add(t::body_height().div(Fx::from_int(2))),
+        ground.z,
+    )
+}
+
 /// Which arm a move comes out of.
 ///
 /// Most moves have no answer worth giving -- a two-handed overhead, a gesture
@@ -459,10 +482,11 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
     let from = origin(scene.players[who].pos);
     let seen = sight(who, look, reach, scene);
     let to = match seen.met {
-        // Aimed at the floor. Raised straight up to the height the shot leaves
-        // at, so it flies level over the spot the crosshair is on instead of
-        // burying itself in the ground a metre in front of her.
-        Met::Ground => V3::new(seen.at.x, from.y, seen.at.z),
+        // Aimed at the floor, which is never really the target: raised to the
+        // middle of a fighter standing there, so it goes through whoever is on
+        // that spot instead of burying itself in the dirt. See
+        // [`standing_middle`].
+        Met::Ground => standing_middle(seen.at),
         // A wall, the side of a stone, the edge of the range: the point
         // itself, because that is the thing the player is looking at.
         Met::Solid | Met::Reach => seen.at,

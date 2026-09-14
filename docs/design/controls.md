@@ -160,7 +160,8 @@ by correction. One degree of mouse is one degree around the sphere, in every zon
 runs through the middle of the screen, and it stops at the first of three things: the floor, an
 object that is not the floor, or the edge of that ability's own range. A grounded ability lands
 exactly there. Anything not grounded targets the middle of a fighter *standing* there when the
-ray met the floor, and the point itself when it met anything else. Then the ability is sent along
+ray met the floor, and the point itself when it met anything else — so aiming down at somebody
+from a platform lands on them rather than flying out level over their head. Then the ability is sent along
 the line from where it is cast to that point — so what you pointed at is what you get, and the
 travel is the fighter's business rather than the camera's.
 
@@ -762,7 +763,7 @@ Current as of 2026-09-13, and the four rows marked **bound** are what the game d
 | --- | --- |
 | `L` | **Bloodletter** — the auto. A blade out to a fixed distance and back, cutting on both passes and paying out on the catch. **Bound** |
 | `shift` + `L` | **Rend** — the committed melee rake. **Bound** |
-| hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge at a depth you chose by how long you held the button, from melee to ten metres over a second; all four catch. **Bound** |
+| hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge at a depth you chose by how long you held the button, from melee to ten metres over a second along the line the crosshair picked; all four catch. **Bound** |
 | `E` | **Black spike** — a spike in a draining, slowing field, placed at long range. **Bound**, and the one place in the game where the mechanic key is an ability rather than a state change |
 | direction + click | Cripple, Affliction, and the reactivating projectile Rend was meant to be |
 | the seals | Unplaced. Seal of the unforgiven wants a button of its own and there is not an obvious one |
@@ -779,12 +780,11 @@ does. The press is what costs health; there is no backing out of it. Both ends o
 and its length are move-table knobs, so a second channelled move gets the grammar for free —
 see [kits/blood-mage.md](kits/blood-mage.md).
 
-**A channelled move is pointed the way a melee swing is**, not the way a skillshot is: the
-body's facing for the yaw, and the camera's pitch through the same dead zone — level through
-the first 45° below the horizon, exact above it. That is what makes the depth readable. A
-skillshot's marker sits wherever the crosshair's ray lands, so it jumps between the floor, a
-wall and the edge of the range as the camera moves, and the hold's contribution disappears
-underneath it. See [aiming.md](aiming.md).
+**A channelled move is a skillshot whose line is solved once.** The crosshair picks the line at
+the move's full reach, every frame, and the hold picks a point along it — so the line does not
+move while the mouse does not, and the marker slides rather than jumps. It also means the depth
+you are choosing is a depth into the world: the far end of that line is as far as the marker
+can wind. See [aiming.md](aiming.md).
 
 ## Open questions
 

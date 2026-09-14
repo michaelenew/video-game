@@ -287,19 +287,24 @@ impl Move {
         self.channel > 0
     }
 
-    /// The reach this move has after being held for `held` frames.
+    /// How far along a line of `full` metres a hold of `held` frames has wound.
     ///
-    /// Between its near end and its own `reach`, linearly, so the two knobs are
-    /// the ends of one slider and the hold is what walks between them. A move
-    /// that does not channel is always at its full reach, which is what makes
-    /// this safe to ask of any move.
-    pub fn reach_after(&self, held: u16) -> Fx {
+    /// Between this move's near knob and the far end of the line, linearly, so
+    /// the two are the ends of one slider and the hold is what walks between
+    /// them. A move that does not channel is always at the far end, which is
+    /// what makes this safe to ask of any move.
+    ///
+    /// **`full` is the line the aim actually solved**, not this row's `reach`.
+    /// The two differ whenever something is in the way, and taking the solved
+    /// one is what keeps the marker on the line rather than past the wall at
+    /// the end of it. See `state::aim_channel`.
+    pub fn wound_along(&self, held: u16, full: Fx) -> Fx {
         if !self.channels() {
-            return self.reach;
+            return full;
         }
-        let near = self.channel_from.min(self.reach);
+        let near = self.channel_from.min(full);
         let at = Fx::ratio(held.min(self.channel) as i32, self.channel as i32);
-        near.add(self.reach.sub(near).mul(at))
+        near.add(full.sub(near).mul(at))
     }
 
     /// Health returned for `dealt` damage, rounded down.

@@ -3014,3 +3014,66 @@ assume a caster on flat, unobstructed ground when it comes to what a *travelling
 from an aimed cast should do with that aim's pitch, and Cataclysm's tornado is the first thing in
 the kit that keeps a cast's direction alive after the cast itself is over. Worth watching for the
 same shape of bug anywhere else a moving effect inherits a beam's raw direction.
+
+### 2026-09-14 — a shot aimed at the floor goes through whoever is standing on it
+
+**Changed** two things, and the second is the reason for the first.
+
+```
+before   skillshot: a ground hit is raised to the CASTER's cast height
+now      skillshot: a ground hit is raised to the middle of a fighter STANDING
+         on that spot (`aim::standing_middle`)
+
+before   Grasp: a channelled swing, dead-zoned level, 1.5 m to 10 m
+now      Grasp: a channelled skillshot whose line is solved ONCE at the full
+         reach, with the hold picking a point along it
+```
+
+**Why the raise moved.** The two are the same number on flat ground and nothing like it off
+it. Standing on one of the low platforms, the caster's cast height is 2.75 m above the arena
+floor, so every skillshot aimed at somebody below flew out level and over their head. Landing
+one meant aiming at a patch of floor well short of the target, which is not a thing a player
+should have to know. Measuring the raise from *the ground the ray met* makes the rule true from
+any height, and it is what `controls.md` already said — "the middle of a fighter standing
+there". `aiming.md` and `CLAUDE.md` said the other thing. One of the two was wrong and both are
+fixed.
+
+It is a small change even on flat ground: shots now end 0.9 m above the spot rather than 1.25,
+which is a fighter's middle rather than a fighter's shoulder.
+
+**Why the Grasp went back to being a skillshot, and what is actually different this time.**
+This is the third version of its aiming and the first two each fixed the other's bug:
+
+1. **Skillshot solved at the wound-up range.** The raycast's own answer changes as the range
+   grows, so the far end walked off the floor and onto a wall and back. Holding the mouse
+   perfectly still, the marker jumped about while the player was choosing a depth.
+2. **Swing, dead-zoned level.** Nothing to stop against, so the line held still — but a level
+   line out of a platform passes clean over anybody on the floor, which is the bug above wearing
+   a different hat.
+3. **Skillshot, solved once at the full reach, hold picks a point along it.** The line is the
+   crosshair's, so it converges from any height; it is solved at a constant range, so it does
+   not move while the mouse does not; and the hold slides a marker along it.
+
+The third is not a compromise between the first two — it is the observation that *solving the
+line* and *choosing a distance along it* are separate questions, and the first two versions
+had them tangled. `a_still_mouse_holds_the_line_and_only_the_marker_moves` measures the
+direction frame by frame across a channel and gets zero drift at every pitch.
+
+**The far end of the line is also the furthest the marker can wind**, which falls out for free
+and is right: a Grasp fully held at a wall six metres away converges on the wall rather than
+three metres inside it. `the_marker_never_reaches_past_what_the_crosshair_is_on` pins it.
+
+**Not fixed: melee swings from a platform.** The Champion's spear thrown laterally off a
+platform still goes out level and over a target on the floor, for the same reason version 2 of
+the Grasp did — the swing dead zone. Left alone deliberately. A swing is not aimed *at*
+anything, it is a body moving through an arc, and the dead zone exists because you fight people
+at your own height by looking slightly down at them. Making it read a target's height would be
+making a swing into a skillshot. The honest version of the complaint is that melee is an
+imprecise zone and stepping off a platform is the answer; if it turns out to matter, the knob
+is `swing_level_to` and the real fix is probably that the dead zone should shrink with height
+above the floor.
+
+**Verdict** open on the Grasp, and this is the version to play rather than the last two. The
+worry that survives all three is unchanged: a full second of standing still is a long
+telegraph, and the marker being legible now makes it *easier* for the other player to read the
+depth and step out of it.

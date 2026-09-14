@@ -160,20 +160,22 @@ promise a depth the arms do not deliver. That is the whole reason it is built th
 pieces of arithmetic agreeing with each other is how the crosshair and the ability came to
 disagree three times before (see [../aiming.md](../aiming.md)).
 
-**It is aimed like a swing, not like a skillshot**, and the difference is the whole
-readability of the move. A skillshot ends wherever the crosshair's ray stops — a wall, the
-floor, the edge of the range — so the marker jumped by metres when the camera moved by
-degrees, and the depth the hold had bought was buried under the shape of the arena. As a swing
-it is a ray off the body along the facing, pitched by the camera with the standing dead zone:
-level through the first 45° below the horizon, exact above it. The camera already sits above
-the shoulder, so looking at somebody at your own height keeps the marker running flat across
-the floor at chest height — which is the view that makes a depth legible in the first place.
-Look further down than 45° and the cast goes into the ground, which is a mistake you can watch
-yourself make.
+**The line is solved at the move's full reach every frame, and the hold only picks a point
+along it.** That split is the whole readability of the move, and it took two wrong versions to
+find.
 
-It is the one thing in the game aimed as a swing that is not melee, and
-`crates/sim/tests/one_aim.rs` allows it exactly on the grounds that a channel answers the
-question a swing otherwise cannot: how far.
+Solving the *aim* at the wound-up range — the first version — means the raycast's answer
+changes as the range grows: the far end walks off the floor and onto a wall and back, so
+holding the mouse perfectly still you watched the marker jump about while trying to choose a
+depth. Making the move a **swing** instead — a ray off the body, dead-zoned to stay level while
+standing — held the line still, but a level line out of a platform passes clean over anybody on
+the floor below, and the only way to land one was to aim well under the target on screen.
+
+Solving the line once, at the full reach, has neither problem. It is the crosshair's line, so
+it converges on whatever you are looking at from any height; it does not move while the mouse
+does not; and the hold slides a point along it. The far end is also the furthest the marker can
+wind, so the depth you pick is a depth **into the world** — hold a full Grasp at a wall six
+metres away and the arms converge on the wall rather than three metres inside it.
 
 Aiming stays live through the wind-up — the body keeps turning with the mouse — and locks on
 the frame the button comes up, which is where every other move locks it too. The health is
@@ -183,6 +185,13 @@ is an ability you bought.
 A full second is a long time to stand still, and that is the cost. The whole wind-up is a
 telegraph: at max depth you have spent a second of neutral before anything has left your
 hands, in plain view of somebody who can simply walk out of the cone.
+
+**Aiming it from above works because the crosshair converges.** Standing on a platform and
+putting the reticle on somebody below, the ray goes from the eye through the reticle and meets
+the floor at their feet; raised to the middle of a fighter standing there, that is a hit. No
+adjustment, no aiming short. This is the general rule in [../aiming.md](../aiming.md) rather
+than anything the Grasp does for itself — the same fix landed on Bolt, Bloodletter and Lance at
+the same time.
 
 #### The catch: bound, then hauled
 
