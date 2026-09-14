@@ -115,6 +115,28 @@ fails, either it is a bug **or a design decision changed** — and then
 just the assertion. Record what you tried in the feel log, including the things
 you reverted.
 
+## The browser build is the same program
+
+`game` compiles for a window and for a canvas, and **the two differ in exactly
+five things, each of which lives in a file that exists to hold it.** Where a
+run's settings come from (argv, or the query string — `?dev` is `--dev`), where
+a player's settings are kept (a file, or local storage) and where a panic can be
+read are `crates/game/src/platform.rs`. Whether there is a peer is `online.rs`.
+Whether there is a checkout to commit a bake to is `bake.rs` and `hub.rs`.
+Enforced by `crates/game/tests/one_platform.rs`, which fails on `std::env`,
+`std::fs`, `std::net`, `std::process`, `std::thread` or `web_sys` anywhere else
+in the crate.
+
+This rule is here for a failure that is *silent in one direction*, rather than
+for one that has cost time already. A `std::fs::write` added to a system
+compiles for wasm32 perfectly well — `std` is there, the call is there — and
+returns an error nobody reads. The feature then works on the desk and quietly
+does nothing on the web, and the first report of it comes from somebody who was
+sent a link.
+
+Build it with `./crates/web/build-game.sh`; the reasoning is
+[`docs/design/web.md`](docs/design/web.md).
+
 ## The overlay draws what the hit test uses
 
 `state::hitbox` is the one description of an attack's volume, and the debug
@@ -129,4 +151,7 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 ```
 
-There is no CI in this repository, so these are the only checks there are.
+These are the only checks there are: they run on your machine, and nothing
+runs them for you. The one workflow in `.github/` publishes the browser build to
+GitHub Pages and tests nothing, so a green Pages run means the page deployed,
+not that the change is good.

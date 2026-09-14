@@ -23,11 +23,14 @@ mod crosshair;
 mod debug;
 mod hub;
 mod hud;
+mod online;
 mod palette;
+mod platform;
 mod settings;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use online::Driver;
 use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
@@ -35,26 +38,6 @@ use view::play::{Crossfade, PoseInput};
 use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate, pitch_from_radians};
 
-/// How the match is being driven.
-///
-/// Local is the training mode. Online routes every tick through GGRS, which
-/// owns when to save, load and advance -- the simulation only has to do those
-/// three things correctly.
-enum Driver {
-    Local,
-    Online {
-        session: Box<net::ggrs::P2PSession<net::SessionConfig>>,
-        handle: usize,
-        desynced: bool,
-    },
-}
-
-/// `game` for training mode, or:
-///
-///     game --port 47801 --peer 192.168.1.20:47802
-///
-/// Both peers derive who is player one from the two addresses, so there is no
-/// server and no lobby.
 /// Loose class-name matching, so `--p1 reaver` works without remembering the
 /// full name.
 fn parse_class(name: &str) -> Option<sim::Class> {
@@ -79,60 +62,36 @@ fn matches(n: &str, c: sim::Class) -> bool {
     c.name().to_lowercase().contains(n) && !n.is_empty()
 }
 
-fn arg(flag: &str) -> Option<String> {
-    let args: Vec<String> = std::env::args().collect();
-    args.iter()
-        .position(|a| a == flag)
-        .and_then(|i| args.get(i + 1))
-        .cloned()
-}
-
 /// Start in a hunt rather than a versus match.
 ///
 /// A flag as well as a key, because the headless screenshot script takes flags
 /// and not keystrokes.
 fn hunting() -> bool {
-    std::env::args().any(|a| a == "--hunt")
+    platform::flag("--hunt")
 }
 
 fn chosen_classes() -> [sim::Class; 2] {
     [
-        arg("--p1")
-            .and_then(|n| parse_class(&n))
+        platform::value("--p1")
+            .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
-        arg("--p2")
-            .and_then(|n| parse_class(&n))
+        platform::value("--p2")
+            .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
     ]
-}
-
-fn parse_args() -> Option<(u16, std::net::SocketAddr)> {
-    let args: Vec<String> = std::env::args().collect();
-    let get = |flag: &str| {
-        args.iter()
-            .position(|a| a == flag)
-            .and_then(|i| args.get(i + 1))
-            .cloned()
-    };
-    let port: u16 = get("--port")?.parse().ok()?;
-    let peer: std::net::SocketAddr = get("--peer")?.parse().ok()?;
-    Some((port, peer))
 }
 
 fn main() {
     // `--help` before anything else, so asking what the flags are does not
     // require a window, a GPU, or the patience to wait for Bevy to start.
-    if std::env::args().any(|a| a == "--help" || a == "-h") {
+    if platform::flag("--help") || platform::flag("-h") {
         print!("{}", manual::render());
         return;
     }
+    platform::report_panics();
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Arena — prototype".into(),
-                resolution: (1280.0, 760.0).into(),
-                ..default()
-            }),
+            primary_window: Some(window()),
             ..default()
         }))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
@@ -213,6 +172,26 @@ fn main() {
         .run();
 }
 
+/// The window the arena is drawn in.
+///
+/// In the browser there is no window to make: there is a canvas already on the
+/// page, and the game has to be told which one and told to keep the browser's
+/// own shortcuts off the keys it uses — Space scrolls a page, and a player who
+/// jumps should not find the page has jumped instead.
+fn window() -> Window {
+    Window {
+        title: "Arena — prototype".into(),
+        resolution: (1280.0_f32, 760.0_f32).into(),
+        #[cfg(target_arch = "wasm32")]
+        canvas: Some("#arena".into()),
+        #[cfg(target_arch = "wasm32")]
+        fit_canvas_to_parent: true,
+        #[cfg(target_arch = "wasm32")]
+        prevent_default_event_handling: true,
+        ..default()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Resources
 // ---------------------------------------------------------------------------
@@ -276,33 +255,6 @@ impl Default for Sim {
         } else {
             World::with_classes(chosen_classes())
         };
-        let driver = match parse_args() {
-            Some((port, peer)) => {
-                let local: std::net::SocketAddr =
-                    format!("127.0.0.1:{port}").parse().expect("local addr");
-                let handle = net::p2p::local_handle_for(local, peer);
-                match net::p2p::start(port, peer, handle) {
-                    Ok(session) => {
-                        eprintln!(
-                            "online: port {port} to {peer}, you are player {}",
-                            handle + 1
-                        );
-                        Driver::Online {
-                            session: Box::new(session),
-                            handle,
-                            desynced: false,
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "could not start the session ({e}); falling back to training mode"
-                        );
-                        Driver::Local
-                    }
-                }
-            }
-            None => Driver::Local,
-        };
         Sim {
             prev: w.clone(),
             cur: w,
@@ -310,23 +262,18 @@ impl Default for Sim {
             paused: false,
             step_once: false,
             dummy: Dummy::Idle,
-            driver,
+            driver: online::start(),
             // `BIND_POSE=1` starts frozen, so the proportions of a build can be
             // captured without a keypress.
-            bind_pose: std::env::var("BIND_POSE").as_deref() == Ok("1"),
+            bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
         }
     }
 }
 
 impl Sim {
-    /// Which fighter this client drives. Online it is the GGRS handle; locally
-    /// it is always player one, with player two on the second key set.
     fn local_player(&self) -> usize {
-        match self.driver {
-            Driver::Online { handle, .. } => handle.min(1),
-            Driver::Local => 0,
-        }
+        self.driver.local_player()
     }
 }
 
@@ -347,7 +294,7 @@ impl Default for Scripted {
 
 /// Start pitch override, for capturing the camera at a known angle.
 fn env_f32(key: &str) -> Option<f32> {
-    std::env::var(key).ok()?.parse().ok()
+    platform::env_parsed(key)
 }
 
 /// `--dev` turns everything on at once: hitbox and hurtbox wireframes, and the
@@ -357,11 +304,11 @@ fn env_f32(key: &str) -> Option<f32> {
 /// mode you reach for every session should not need two keypresses and a
 /// reminder of which two.
 pub fn dev_mode() -> bool {
-    std::env::args().any(|a| a == "--dev")
+    platform::flag("--dev")
 }
 
 fn env_num(key: &str) -> Option<u32> {
-    std::env::var(key).ok()?.parse().ok()
+    platform::env_parsed(key)
 }
 
 /// Where each local player is looking. Renderer-side state: both angles are
@@ -1504,70 +1451,15 @@ fn tick_sim(
                 sim.cur.advance(pair);
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Driver::Online { .. } => {
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
                 let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
                 let local = scripted_or(scripted, held);
-                step_online(&mut sim, local);
+                online::step(&mut sim, local);
             }
         }
-    }
-}
-
-/// One networked tick.
-///
-/// GGRS decides when to save, load and advance; `handle_requests` services
-/// those against the simulation. Rollbacks land here as a load followed by
-/// several advances, all inside one call.
-fn step_online(sim: &mut Sim, local: SimInput) {
-    let Driver::Online {
-        session,
-        handle,
-        desynced,
-    } = &mut sim.driver
-    else {
-        return;
-    };
-
-    session.poll_remote_clients();
-    for event in session.events() {
-        match event {
-            net::ggrs::GgrsEvent::DesyncDetected { frame, .. } => {
-                // Should be impossible: the simulation is integer-only and
-                // SyncTest covers it. If it happens, say so loudly rather than
-                // letting the two players drift apart in silence.
-                eprintln!("DESYNC at frame {frame}");
-                *desynced = true;
-            }
-            net::ggrs::GgrsEvent::Disconnected { addr } => eprintln!("peer {addr} disconnected"),
-            net::ggrs::GgrsEvent::NetworkInterrupted { addr, .. } => {
-                eprintln!("peer {addr} interrupted")
-            }
-            _ => {}
-        }
-    }
-
-    if session.current_state() != net::ggrs::SessionState::Running {
-        return;
-    }
-
-    if session
-        .add_local_input(*handle, net::NetInput::from(local))
-        .is_err()
-    {
-        // Too far ahead of the peer. Waiting is the correct response.
-        return;
-    }
-
-    let prev = sim.cur.clone();
-    match session.advance_frame() {
-        Ok(requests) => {
-            net::handle_requests(&mut sim.cur, requests);
-            sim.prev = prev;
-        }
-        Err(net::ggrs::GgrsError::PredictionThreshold) => {}
-        Err(e) => eprintln!("advance failed: {e}"),
     }
 }
 
@@ -1590,7 +1482,7 @@ fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
 /// `DEMO=1` drives player one from a script instead of the keyboard. Used to
 /// verify posing and framing without a human at the controls.
 fn demo_mode() -> bool {
-    std::env::var("DEMO").is_ok_and(|v| v == "1")
+    platform::env("DEMO").as_deref() == Some("1")
 }
 
 /// Quantised angle of a flat direction.

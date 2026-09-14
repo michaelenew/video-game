@@ -14,8 +14,13 @@ crates/net    Rollback session (GGRS) + the headless soak binary.
 crates/view   Presentation logic: interpolation, camera framing, posing. No engine.
 crates/game   Bevy app. Rendering only -- it owns no gameplay state.
 crates/hunt   A scripted player, and the report that measures the fight it plays.
-crates/web    WebAssembly build and the browser frame-data tool.
+crates/web    The browser: the playable page, and the frame-data tool.
 ```
+
+The layering pays for itself again here. Because `game` owns no gameplay state
+and `sim` has no dependencies, compiling the whole thing to WebAssembly needed no
+gameplay code at all -- only a platform seam for the five things a page cannot
+do, all of them about the world outside the fight. See [web.md](web.md).
 
 `view` sitting between the simulation and Bevy is what keeps the engine choice
 reversible, and it means the parts that must be *correct* rather than pretty --

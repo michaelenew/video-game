@@ -114,7 +114,16 @@ fn every_environment_variable_is_documented() {
     let source = game_source();
     let text = manual::render();
     let mut missing = Vec::new();
-    for marker in ["env::var(\"", "env_num(\"", "env_f32(\""] {
+    // `platform::env` is how the game asks now; the other three are the
+    // spellings that reach it. All four have to be watched or a knob can be
+    // added by using the one this test forgot.
+    for marker in [
+        "env::var(\"",
+        "env_num(\"",
+        "env_f32(\"",
+        "platform::env(\"",
+        "env_parsed(\"",
+    ] {
         for (i, _) in source.match_indices(marker) {
             let rest = &source[i + marker.len()..];
             let Some(end) = rest.find('"') else { continue };
@@ -136,27 +145,88 @@ fn every_environment_variable_is_documented() {
 
 #[test]
 fn every_command_line_flag_is_documented() {
-    // Only `main.rs`, where argument parsing lives. `bake.rs` shells out to git
-    // and rustfmt, and their flags are theirs to document, not ours -- the first
-    // version of this test reported `--abbrev-ref` as an undocumented feature.
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("game/src/main.rs");
-    let source = std::fs::read_to_string(path).expect("main.rs is readable");
+    // Asking through `platform::flag` and `platform::value` is the only way the
+    // game reads a flag, so those two call sites are what this looks for rather
+    // than every `"--"` in the source. That used to mean scanning `main.rs`
+    // alone and excluding `bake.rs`, which shells out to git and rustfmt: the
+    // first version of this test reported `--abbrev-ref` as an undocumented
+    // feature. Now the whole crate can be read, subprocess arguments and the
+    // parser's own test cases included, because neither of those is a call.
+    let source = game_source();
     let text = manual::render();
     let mut missing = Vec::new();
-    for (i, _) in source.match_indices("\"--") {
-        let rest = &source[i + 1..];
-        let Some(end) = rest.find('"') else { continue };
-        let flag = &rest[..end];
-        if !text.contains(flag) {
-            missing.push(flag.to_string());
+    for marker in ["platform::flag(\"", "platform::value(\""] {
+        for (i, _) in source.match_indices(marker) {
+            let rest = &source[i + marker.len()..];
+            let Some(end) = rest.find('"') else { continue };
+            let flag = &rest[..end];
+            if !text.contains(flag) {
+                missing.push(flag.to_string());
+            }
         }
     }
     missing.sort();
     missing.dedup();
     assert!(missing.is_empty(), "undocumented flags: {missing:?}");
+}
+
+#[test]
+fn the_browser_panel_is_exactly_the_sections_marked_for_it() {
+    // The page a shared link leads to gets its controls from `browser_help`.
+    // Same check as the on-screen legend's: everything declared for it arrives,
+    // and nothing arrives that was not declared. A section quietly appearing
+    // there would be offering a browser something it cannot do; one quietly
+    // missing would leave a player without a key they need.
+    let html = manual::browser_help();
+    let mut declared = 0;
+    for section in manual::SECTIONS {
+        let heading = format!("<h3>{}</h3>", section.title);
+        assert_eq!(
+            html.contains(&heading),
+            section.in_browser,
+            "{:?} is marked in_browser = {} and the panel disagrees",
+            section.title,
+            section.in_browser
+        );
+        if !section.in_browser {
+            continue;
+        }
+        declared += section.entries.len();
+
+        // Inside this section's own block, not just somewhere in the page: two
+        // sections can name the same thing, and `./crates/web/build-game.sh` is
+        // in both "In a browser" and "Scripts" the way `./scripts/dev.sh`
+        // already is. Checking the whole page would let a shared name stand in
+        // for a missing one.
+        let from = html.find(&heading).expect("the heading is there");
+        let block = &html[from..];
+        let block = &block[..block.find("</section>").expect("the block closes")];
+        for entry in section.entries {
+            let term = format!("<dt>{}</dt>", escaped(entry.invocation));
+            assert!(
+                block.contains(&term),
+                "{:?} is declared for the browser panel and never reaches it",
+                entry.invocation
+            );
+        }
+    }
+
+    // And nothing else got in. Counting closes the other half: the loop above
+    // proves every declared entry arrived, this proves nothing arrived that was
+    // not declared.
+    assert_eq!(
+        html.matches("<dt>").count(),
+        declared,
+        "the browser panel shows a number of entries nothing declared"
+    );
+}
+
+/// The same escaping `browser_help` does, so a placeholder like `<class>` can be
+/// looked for as it actually reaches the page.
+fn escaped(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 #[test]
