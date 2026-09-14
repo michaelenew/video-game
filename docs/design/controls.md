@@ -370,7 +370,8 @@ drift — the shared grammar is what lets one control scheme drive six kits, and
 *identity* is which weapon is in its hands has to spend its clicks on the weapons.
 
 That last row does real work. The Reaver's dash to its shadow *is* its dodge rather than an
-extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
+extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing,
+**on the ground and in the air alike**. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
 that matters (one charge, cancels recoveries, changes what the attack buttons do), and
 putting it on shift + direction would have made the class's central decision share an input
 with the universal defensive one. For the Reaver this is what makes movement and shadow
@@ -550,6 +551,12 @@ What exists today: **space is a vertical takeoff**, and **shift plus a direction
 airdodge, once per airtime**, which wipes vertical speed so it can never be a second jump.
 Airborne attacks are still the grounded ones.
 
+One class spends that airdodge on something else. The Reaver's forward airdodge, thrown with
+the crosshair on her shadow, is the **dash to it** — added 2026-09-14, because mobility that
+switched off the moment she jumped was mobility in the wrong place. It costs the airdodge
+like any other air commitment; what it buys is the whole distance to the second body rather
+than a sideways shove.
+
 ---
 
 ## The per-class schemes
@@ -684,7 +691,8 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. Cuts any recovery short, and the press is remembered for a few frames rather than dropped. **Bound** |
 | `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
-| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
+| `space`, in the frames after a dash lands | **The dash jump.** Takes the speed she arrived with up with her, and cuts the dodge's tail short. A press, and only after a dash |
 | `shift` + forward, anywhere else | The ordinary dodge |
 | — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 

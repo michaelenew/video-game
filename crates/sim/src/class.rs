@@ -278,6 +278,15 @@ pub struct Shadow {
     /// alongside `Action::Dodge`, which supplies the invulnerability -- the
     /// dash is the dodge, aimed.
     pub dash: u16,
+    /// Frames left of **the carry**: the window that opens the moment a dash
+    /// arrives, while the speed it crossed at is still under her.
+    ///
+    /// It is there to be jumped out of. The dash ends at thirty-four metres a
+    /// second and the dodge's tail bleeds that away over a few frames; a jump
+    /// pressed inside the window takes what is left of it up with her instead
+    /// of throwing it on the floor. Pressing early keeps more, so the tech has
+    /// a gradient rather than a pass mark -- see `tuning::shadow_carry`.
+    pub carry: u16,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -319,6 +328,7 @@ impl Shadow {
             echo_age: 0,
             echo_used: false,
             dash: 0,
+            carry: 0,
         }
     }
 

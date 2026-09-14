@@ -250,7 +250,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift + forward",
-                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. Pointed anywhere else it is the ordinary dodge.",
+                "With the crosshair on the shadow, the dodge becomes the dash to it: invulnerable across the gap, and you pick the shadow up when you arrive. Straight to wherever it is standing -- up onto a platform included -- and only something with no way through at all can refuse it. In the air it is the airdodge that does it, and it costs the airdodge. Pointed anywhere else it is the ordinary dodge.",
+            ),
+            e(
+                "Space, the moment a dash lands",
+                "The dash jump. You arrive still moving, and a jump pressed in that short window takes the speed up with you instead of leaving it on the floor -- the earlier you find it, the further you go. It is the one thing that can cut a dodge's tail short, and it only answers a dash.",
             ),
             e(
                 "The leash",

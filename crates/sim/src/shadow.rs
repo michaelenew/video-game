@@ -136,8 +136,8 @@ pub fn step(p: &mut Player) {
     }
 
     age_the_echo(p, &mut shadow);
-    step_her_dash(p, &mut shadow);
     put(p, shadow);
+    step_her_dash(p);
 }
 
 /// A step of the ease every following thing here uses.
@@ -409,12 +409,24 @@ pub fn mark_cut(p: &mut Player, victim: usize) {
 
 /// Should a dodge thrown *now* be a dash to the shadow instead?
 ///
-/// Forward, and the crosshair on the shadow. Both halves matter: forward is
-/// what keeps the other three dodges as dodges, and the crosshair is what makes
-/// it a decision rather than something that happens to you whenever the shadow
-/// is roughly ahead. Asking [`aim::pointing_at`] rather than measuring an angle
-/// here is the standing rule about who is allowed to decide where something
-/// goes.
+/// Forward, the crosshair on the shadow, and a way through to it. The first two
+/// are what make it a decision: forward is what keeps the other three dodges as
+/// dodges, and the crosshair is what stops the dash happening to her whenever
+/// the shadow is roughly ahead. The third is the world's answer rather than
+/// hers -- see [`aim::clear_between`], and note how blunt it is. Nothing
+/// *partial* stops a dash. A ledge, a lip, a stone she would have to go round:
+/// she goes over or past all of them, because the dash is a straight line to
+/// wherever the second body is standing and the only thing that can refuse it
+/// is having no line at all.
+///
+/// Both questions are asked of [`crate::aim`] rather than answered here, which
+/// is the standing rule about who decides where something goes. The angle
+/// worked out beside the dodge, and the flat distance measured beside it, are
+/// the same mistake twice.
+///
+/// Refused, she gets the ordinary dodge. The class's mobility and the universal
+/// defensive option are the same button on purpose, so the failure case is the
+/// other half of the button rather than a dead press.
 pub fn dash_is_asked_for(
     p: &Player,
     who: usize,
@@ -426,6 +438,7 @@ pub fn dash_is_asked_for(
     forward
         && shadow.is_out()
         && aim::pointing_at(who, input, shadow.pos, t::shadow_lock_cone(), scene)
+        && aim::clear_between(p.pos, shadow.pos, scene)
 }
 
 /// Start the dash. It rides along with `Action::Dodge`, which is where the
@@ -443,17 +456,49 @@ pub fn begin_dash(p: &mut Player) {
 /// that depends on the tuning of the decay -- so a dash built out of one either
 /// falls short of the shadow or overshoots it, and which of those it does
 /// changes every time somebody drags a slider.
+///
+/// **All three axes.** The dash goes to where the shadow *is*, not to the patch
+/// of floor underneath it: a shadow standing on a dais is up there, and a dash
+/// that drove only `x` and `z` walked her into the side of it and stopped. The
+/// caller turns gravity and the arena off for the duration -- see
+/// `state::step_player` -- so the line she flies is the line this returns.
 pub fn dash_drive(p: &Player) -> Option<V3> {
     let shadow = of(p)?;
     if shadow.dash == 0 {
         return None;
     }
-    let gap = V3::new(
-        shadow.pos.x.sub(p.pos.x),
-        Fx::ZERO,
-        shadow.pos.z.sub(p.pos.z),
-    );
-    Some(gap.normalized().scale(t::shadow_dash_speed()))
+    Some(
+        shadow
+            .pos
+            .sub(p.pos)
+            .normalized()
+            .scale(t::shadow_dash_speed()),
+    )
+}
+
+/// Is the carry live: has a dash just arrived, with its speed still under her?
+///
+/// The window a jump can be thrown into. See [`Shadow::carry`].
+pub fn carrying_a_dash(p: &Player) -> bool {
+    of(p).is_some_and(|shadow| shadow.carry > 0)
+}
+
+/// Spend the carry on a jump, so it pays for one takeoff and not two.
+pub fn spend_carry(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.carry = 0;
+    put(p, shadow);
+}
+
+/// Being hit ends the dash and the carry both.
+///
+/// The same rule the Champion's Rush has, and for the same reason: a commitment
+/// you can be hit out of and keep is a commitment with invulnerability attached.
+pub fn broken_by_a_hit(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.dash = 0;
+    shadow.carry = 0;
+    put(p, shadow);
 }
 
 /// Count the dash down, and end it on arrival.
@@ -463,28 +508,54 @@ pub fn dash_drive(p: &Player) -> Option<V3> {
 /// back onto it, send again -- and a dash that left the shadow standing where
 /// she now is would leave the pair of them in the same place with the line
 /// between them gone and no way to say so.
-fn step_her_dash(p: &Player, shadow: &mut Shadow) {
+fn step_her_dash(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    // The carry runs down whether or not a dash is still going: it is what a
+    // dash leaves behind, and the frame it was opened on is one of its own.
+    shadow.carry = shadow.carry.saturating_sub(1);
     if shadow.dash == 0 {
+        put(p, shadow);
         return;
     }
     shadow.dash -= 1;
-    let gap = V3::new(
-        shadow.pos.x.sub(p.pos.x),
-        Fx::ZERO,
-        shadow.pos.z.sub(p.pos.z),
-    );
     // Within a body, or within one frame's worth of travel -- whichever is
     // larger. A tolerance smaller than the step would let her cross the shadow
-    // and turn round to come back at it.
+    // and turn round to come back at it. Measured in three dimensions now that
+    // the dash flies in three: a flat gap reads a shadow a storey up as
+    // arrived at, from the floor below it.
     let close = t::body_radius().max(t::shadow_dash_speed().mul(DT));
-    let arrived = gap.flat_len().raw() <= close.raw();
+    let arrived = shadow.pos.sub(p.pos).len().raw() <= close.raw();
     // Ends on arrival, and ends anyway the moment the dodge does -- getting
     // hit out of it, or simply running out of frames. The dash is the dodge; it
     // does not outlive it.
     if arrived || !matches!(p.action, Action::Dodge { .. }) {
         shadow.dash = 0;
     }
-    if arrived && shadow.is_out() {
-        shadow.doing = Ghost::Attending;
+    if arrived {
+        // **She lands on it, not near it.** The tolerance above is half a metre
+        // wide and the shadow is standing somewhere she can stand, so closing
+        // the last of the gap outright is both the honest reading of "the dash
+        // brings her to the shadow" and what makes arriving on a dais put her
+        // on the deck rather than half a metre short of the lip, where the
+        // arena would push her off again.
+        p.pos = shadow.pos;
+        // The line is over, so the world takes her back. Left alone, the rise
+        // that carried her up would keep carrying her off the top of it.
+        p.vel.y = Fx::ZERO;
+        shadow.carry = t::shadow_carry();
+        // The window is the same length however far she came. What is left of
+        // the dodge usually *is* that window -- she arrived early and the rest
+        // is the slide -- but a dash that spent the whole dodge crossing would
+        // leave none, so the dodge is topped up to fit. Never shortened: a
+        // short dash keeps the tail it has always had.
+        if let Action::Dodge { left } = p.action {
+            if left < shadow.carry {
+                p.action = Action::Dodge { left: shadow.carry };
+            }
+        }
+        if shadow.is_out() {
+            shadow.doing = Ghost::Attending;
+        }
     }
+    put(p, shadow);
 }

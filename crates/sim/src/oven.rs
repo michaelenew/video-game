@@ -351,6 +351,7 @@ scalars! {
     WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
     WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
+    ShadowCarry,       "Reaver",    "Dash carry, the jump window",           Frames, 0,        40;
 }
 
 // ---------------------------------------------------------------------------
