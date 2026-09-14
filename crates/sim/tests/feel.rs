@@ -474,8 +474,9 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
     // on `E` because throwing a second body across the arena and dashing it
     // home through somebody is not an instant, the Elementalist's fourth is
     // Cataclysm on right click -- otherwise dead weight on a class with no
-    // shield -- the Champion's ten are three weapons by three stances plus the
-    // vault, and the Dual mage's five are those three plus Sweep on `E` -- her
+    // shield -- the Champion's nineteen are three weapons by six situations
+    // plus the vault, three of those six being the three hits of one ground
+    // chain, and the Dual mage's five are those three plus Sweep on `E` -- her
     // mechanic is a meter steered by which button attacks, so `E` is free the
     // same way -- plus a second auto on right click, because her two forces
     // are two different moves rather than one move with a modifier.
@@ -492,7 +493,7 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         }
         let n = moves::table(class).len();
         let expected = match class {
-            Class::Champion => 10,
+            Class::Champion => 19,
             Class::BloodMage | Class::ShadowReaver | Class::Elementalist => 4,
             Class::DualMage => 5,
             _ => 3,
@@ -887,4 +888,197 @@ fn one_press_can_never_lock_more_than_one_move() {
             moves::table(class).len(),
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// The Champion's chain
+// ---------------------------------------------------------------------------
+//
+// Three hits deep on the ground, and every hit is a free choice of all three
+// weapons -- one haft, three heads, chosen a hit at a time. The numbers move
+// freely; what must not move is that a string **escalates**, that it stays
+// connected long enough to finish, and that each weapon still reads as itself
+// all the way through.
+
+/// How far a knockback of `speed` actually carries somebody, in metres.
+///
+/// The speed is applied once and decays by `knockback_decay` a frame, so what
+/// they travel is `speed * dt * (1 + d + d^2 + ...)` -- a geometric series, and
+/// nowhere near the speed itself. Worked out rather than measured because the
+/// thing being pinned is the relationship, and a simulated hit would drag in
+/// hitstun, the floor and whoever is standing where.
+fn shoved(speed: Fx) -> f32 {
+    let decay = t::knockback_decay().to_f32_for_render();
+    speed.to_f32_for_render() * sim::DT.to_f32_for_render() / (1.0 - decay).max(1e-3)
+}
+
+/// The Champion's ground chain, as a weapon at a time: opener, connector,
+/// finisher.
+fn chains() -> impl Iterator<Item = (&'static str, [Move; 3])> {
+    use sim::Class;
+    use sim::moves::champion as c;
+    [
+        ("sword", c::SWORD),
+        ("hammer", c::HAMMER),
+        ("spear", c::SPEAR),
+    ]
+    .into_iter()
+    .map(|(name, weapon)| {
+        (
+            name,
+            [0u8, 1, 2].map(|link| moves::get(Class::Champion, c::link(link, weapon))),
+        )
+    })
+}
+
+#[test]
+fn a_string_escalates() {
+    // Three hits that all hit the same is three presses, not a decision. Each
+    // hit has to be worth more than the one before it, and the last one has to
+    // be worth the whole string -- which is what makes being interrupted on the
+    // second hit a real loss rather than a rounding error.
+    for (weapon, links) in chains() {
+        for pair in links.windows(2) {
+            assert!(
+                pair[1].damage > pair[0].damage,
+                "the {weapon} chain goes {} ({}) then {} ({}), which is not an escalation",
+                pair[0].name,
+                pair[0].damage,
+                pair[1].name,
+                pair[1].damage
+            );
+        }
+    }
+}
+
+#[test]
+fn a_string_is_riskier_the_deeper_you_are_in_it() {
+    // Risk scales with reward, stated for the chain rather than for the kit:
+    // the finisher is the move you can be punished hardest for throwing, which
+    // is what stops the third hit being free once the first two landed.
+    for (weapon, links) in chains() {
+        assert!(
+            links[2].on_block() < links[0].on_block(),
+            "the {weapon} finisher {} is {:+} on block and its opener {} is {:+}",
+            links[2].name,
+            links[2].on_block(),
+            links[0].name,
+            links[0].on_block()
+        );
+        assert!(
+            links[2].whiff_cost() > links[0].whiff_cost(),
+            "the {weapon} finisher {} commits you for no longer than its opener",
+            links[2].name
+        );
+    }
+}
+
+#[test]
+fn the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them() {
+    // **The rule that makes a chain a chain.** A hit that shoves them out of
+    // range of the next one has ended the string whether or not the game says
+    // so, which is why the openers and connectors are the softest things the
+    // class throws and the finishers carry the knockback.
+    for (weapon, links) in chains() {
+        for early in &links[..2] {
+            assert!(
+                early.knockback.raw() < links[2].knockback.raw(),
+                "the {weapon} chain's {} knocks them further than its own finisher {} does",
+                early.name,
+                links[2].name
+            );
+            // And the shove has to be short enough in **metres** that they are
+            // still inside the next hit's reach when it arrives. Knockback is a
+            // speed that decays every frame, so the distance it actually
+            // carries somebody is the sum of a geometric series -- which is the
+            // number this rule is about, and it is nothing like the speed.
+            let travel = shoved(early.knockback);
+            assert!(
+                travel < links[2].reach.to_f32_for_render(),
+                "the {weapon} chain's {} carries them {travel:.2} m and the finisher {} \
+                 only reaches {:.2} m",
+                early.name,
+                links[2].name,
+                links[2].reach.to_f32_for_render()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_weapon_keeps_its_shape_for_the_whole_chain() {
+    // The identity half. A player who has learnt that the hammer owns the
+    // ground under it has learnt something true of every hammer move there is
+    // -- so the three links of one weapon are three swings of the same kind,
+    // and the three weapons at one depth are three different kinds.
+    use sim::moves::Shape;
+    for (weapon, links) in chains() {
+        assert!(
+            links.iter().all(|m| m.shape == links[0].shape),
+            "the {weapon} chain changes shape partway through: {:?}",
+            links.map(|m| m.shape)
+        );
+    }
+    let shapes: Vec<Shape> = chains().map(|(_, links)| links[0].shape).collect();
+    for (i, a) in shapes.iter().enumerate() {
+        for b in &shapes[i + 1..] {
+            assert_ne!(a, b, "two of the three weapons swing the same shape");
+        }
+    }
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[test]
+fn a_cancel_is_always_a_saving_and_a_swap_is_always_the_better_one() {
+    // The two knobs that decide the chain's rhythm, and the only relationship
+    // between them that is a design decision rather than a taste: swapping
+    // weapons flows faster than repeating one, because the weapon re-forms out
+    // of the follow-through. Setting them equal turns the incentive off, which
+    // is a decision somebody can make -- setting them the other way round is
+    // the class arguing against its own fantasy.
+    assert!(
+        t::chain_cancel_swapped() < t::chain_cancel_repeated(),
+        "repeating a weapon ({}%) flows no slower than swapping one ({}%)",
+        t::chain_cancel_repeated(),
+        t::chain_cancel_swapped()
+    );
+    assert!(
+        t::chain_cancel_repeated() < 100,
+        "a connected link pays its whole recovery, so the chain buys nothing at all"
+    );
+    assert!(t::chain_grace() > 0, "a chain dies the frame it is born");
+}
+
+#[test]
+fn every_weapon_has_its_own_way_off_the_ground_and_they_are_three_decisions() {
+    // The takeoff row. Three of them, one per weapon, and they have to differ
+    // in what they are *for* rather than in how much: the sword's is the one
+    // that hurts, the hammer's is the one that takes them with you, and the
+    // spear's is the one that goes furthest.
+    use sim::Class;
+    use sim::moves::champion as c;
+    let takeoffs =
+        [c::RISING_CUT, c::UPPERCUT, c::POLE_DRIVE].map(|kind| moves::get(Class::Champion, kind));
+    for m in &takeoffs {
+        assert!(
+            m.self_lift.raw() > 0,
+            "{}: a takeoff that does not leave the ground",
+            m.name
+        );
+    }
+    let hardest = takeoffs.iter().max_by_key(|m| m.damage).unwrap();
+    assert_eq!(
+        hardest.name, "Rising cut",
+        "the sword's takeoff is not the hardest-hitting of the three"
+    );
+    let highest = takeoffs.iter().max_by_key(|m| m.self_lift.raw()).unwrap();
+    assert_eq!(
+        highest.name, "Pole drive",
+        "the spear's takeoff is not the highest of the three"
+    );
+    let holder = takeoffs.iter().max_by_key(|m| m.grabs).unwrap();
+    assert_eq!(
+        holder.name, "Uppercut",
+        "the hammer's takeoff does not hold on to anybody"
+    );
 }

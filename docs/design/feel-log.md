@@ -56,6 +56,9 @@ as they get tested.
 
 ### Movement
 
+- **Is `space` plus a weapon a modifier the whole roster should have?** It is the
+  Champion's takeoff row since 2026-09-14 and the first time the jump button has modified
+  anything. A whole extra row of options per class, or a precedent that should not spread.
 - Should shift with no direction and no click do something? A spot dodge in place is the
   obvious candidate and costs one branch.
 - Is one airdodge per jump right, or does the air want a double jump as well?
@@ -3474,3 +3477,166 @@ from the fighter".
 claimed here (34.4 "reads like standing there", 43 "reads like a diorama") is exactly the kind
 of thing a still cannot settle. It is one slider in the Oven under *camera*, and `?shot_pitch=`
 in the browser build will render any angle without a rebuild.
+
+---
+
+### 2026-09-14 — the Champion's chain, and a weapon on the way off the floor
+
+**Changed** the grounded row of the Champion's grid became a **three-hit string** — nine
+moves where there were three — and every weapon gained a **takeoff** thrown on the same
+press as jump. Ten moves became nineteen. The uppercut moved off Rush + hammer onto the
+hammer's takeoff, and Rush + hammer became a new move. Six knobs are new: `Chain survives
+for`, `Chain, recovery owed on a swap (%)`, `…on a repeat (%)`, `Takeoff window around a
+jump`, `Pole drive, forward boost`, and nothing else in the Oven moved except the
+Champion's own rows.
+
+**Why** the report was that the class "feels very linear", which is the same word the
+2026-09-12 rebuild used about the mode toggle it removed. That rebuild was right and did
+not go far enough: it made *which weapon* a real choice, and then gave you exactly one of
+those choices per exchange. One press, one shape, back to neutral. The decision was real
+and you got to make it about as often as you got to make a decision about anything.
+
+A string is the cheapest possible fix for that, and the reason is arithmetic rather than
+taste. **Three hits with three weapons each is twenty-seven orderings out of nine
+animations.** The mid-animation swap in [champion.md](champion.md) was reaching for the
+same thing and asking for blended tails to get it; this asks for ordinary clips.
+
+#### What makes the weapon being free the mechanic rather than a flourish
+
+Each weapon owns a different volume — the sword owns width, the hammer owns the line
+underneath, the spear owns distance. So a **mixed** string covers three different pieces of
+space in three beats and a **pure** one covers the same piece three times. Against somebody
+who is moving, that is the difference between the third hit landing and the third hit
+whiffing, and **nothing had to be added to make it true**. The shapes were already there.
+That is the part worth keeping if any of the numbers below get thrown away.
+
+The frame data does one small thing on top of it. A connected link cuts its own recovery
+short so the next one can begin, and **swapping cuts it shorter than repeating** — 30% of
+the recovery against 55%, which is three frames against six on the sword and six against
+twelve on the hammer. The fiction is that the head re-forms out of the follow-through
+rather than being re-chambered; the mechanical intent is that linear play stays completely
+viable and mixing pays a little better, which is what
+[champion.md](champion.md#identity) has asked for since the class was written down. Set the
+two equal and the incentive is off, with nothing else changing. **That is the number most
+likely to be wrong**, in either direction.
+
+#### The chain is a hit confirm, and that is the load-bearing decision
+
+The first version cancelled the recovery whenever the next button was pressed, and it took
+about ten minutes of looking at the frame table to see what that costs: `on_block` is
+measured from the full recovery, so a cancel available on block quietly makes half the kit
+plus on block, and `every_attack_is_punishable_on_block` — the one property that keeps
+offence honest — would have become a statement about a number nobody pays.
+
+So the cancel is **on hit only**. Blocked, parried and whiffed links pay in full. Three
+things fall out, and all three are better than the alternative:
+
+- every number the frame table prints stays true against a defender who did something;
+- blocking one hit of a string costs the attacker about thirteen frames across a sword
+  chain, which is a window rather than a moral victory;
+- whiffing the opener and continuing anyway is a choice you can be punished for.
+
+The string still *continues* on a block or a whiff — it just continues at the printed
+speed. That matters for feel: a button that does nothing because the last swing missed
+reads as broken, and the fix is to make it slower rather than to make it silent.
+
+#### What a string dies to
+
+Half a second of not swinging, being hit, blocking, dodging, or leaving the floor. **Not a
+Rush**, and that is deliberate: the grace window keeps running through the dash, so one
+charge buys a reposition in the middle of a string and the third hit can arrive from
+somewhere they were not watching. It is the best thing in the change and it was free —
+`Action::Free` while grounded is what the clock ticks on, and a dash is exactly that.
+
+#### The knockback rule nobody would think to write down
+
+The first pass kept the hammer's opener at its old knockback of 11 and the chain did not
+work at all, for a reason that is obvious once seen: **a hit that shoves them out of range
+of the next one has ended the string whether or not the game says so.** Eleven metres a
+second carries somebody 1.3 m, and Uproot reaches 1.8 m from a body that is already a
+metre away.
+
+So the knockback moved to the finishers — 4 on the hammer's opener, 11 on Earthbreaker —
+and the hammer's identity moved with it, from "big knockback and a long stagger" to "a long
+stagger, and then a finisher that moves people". That is a better hammer anyway: the payoff
+is at the end of the commitment rather than at the start of it.
+
+It is pinned as `the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them`
+in `feel.rs`, and the assertion does the geometric-series arithmetic rather than comparing
+the speed to the reach — because the first version of the test compared those two directly,
+failed on a perfectly good number, and was measuring the wrong thing.
+
+#### The takeoffs
+
+`space` plus a weapon, on the ground, is that weapon's way off the floor. **This is the
+first time the jump button has modified anything anywhere in the grammar**, and it is
+flagged in [README](README.md#4--open) as a precedent rather than a Champion detail.
+
+- **Rising cut** (sword) — an angled slash up and forward. The hardest hit of the three and
+  nothing else in it: no grab, no shove, and a long fall if it misses.
+- **Uppercut** (hammer) — the existing move, re-homed. It launches and holds on, and space
+  again takes you both higher.
+- **Pole drive** (spear) — the butt of the spear into the floor at your own feet. Least
+  damage in the class, most height, and a shove in whatever direction you are holding.
+
+Read from behind they are a diagonal, a column and a vault, which is how you tell which one
+somebody threw while all three are in the air.
+
+**The uppercut moving off Rush is the biggest single change here** and it is worth its own
+sentence. The class's headline loop started with a resource check: hammer, *do I have the
+charge*, uppercut. A loop you often cannot start is not a loop. It now starts with a button
+everyone always has, and the charge is free for the reposition — which is the half of the
+class Rush was always better at. Rush + hammer became **Rush sweep**, the hammer dragged
+along the floor through everyone you run past, which fills the hole and gives the Rush row
+three heights rather than two.
+
+**The window is eight frames**, and it exists because "attack as you jump" is one intention
+and two buttons. Jump then weapon is the order that works; both at once is the same frame.
+Click first throws the grounded move, which is correct — it already did.
+
+#### The animation, which was most of the work
+
+Nine new clips, and the rule they are authored to is the thing to keep:
+
+- **Hit one opens from the guard and comes back to it.** It is the only row that does.
+- **Hit two never opens from the guard.** Its first key is the far side of somebody else's
+  swing — hands where a cut left them, the hammer head still on the floor, the point still
+  out. It has no wind-up, only a continuation, and *that is the whole read*: a body that
+  did not come back to guard is a body that is not finished.
+- **Hit three commits the feet.** The finishers are the only grounded moves that turn, step
+  through or leave the floor behind, because they are the only ones you cannot take back.
+
+That third rule is the one a player will actually use without noticing. Everything else in
+the kit puts the feet back where it found them, so feet that move mean *this is the last
+one*, from any angle and at any distance.
+
+Four clips failed `baked_motion_is_continuous` on the first bake and all four failed the
+same way — a torso or a hand crossing too much ground between two keys — which is the test
+doing exactly its job. The fixes were the honest ones: **Crescent** keeps its hands near
+the sternum and lets the haft go round, which is what the file's own note about grips says
+and what a real swing does; **Earthbreaker** got a key halfway down, because a weight that
+size does not go from held to landed in one interval; **Impale** got a key with the rear leg
+swinging under the hips, because a flèche is a step rather than a hop; **Rising cut**
+stopped trying to move the whole torso through sixty degrees in two frames. All four read
+better afterwards, which is the usual result and is why the ceiling is where it is.
+
+**Verdict** open, and unusually so — this is a mechanic rather than a number, and the
+numbers under it are all first guesses. A held sword string is 234 damage in eighty frames
+and a held hammer string is 212 in a hundred and twenty-one, which is the intended shape
+(the hammer buys stagger and a guard break rather than numbers) but is a big gap to have
+picked at a desk. Things to watch for, in order of how likely they are to be wrong:
+
+1. **Is three hits too many?** A string you can be interrupted out of twice is a string
+   whose third hit rarely happens. If so, the fix is not a fourth cancel rule — it is to
+   move damage from the finishers onto the openers, so that being cut off costs less.
+2. **Is the swap bonus findable?** Three frames on the sword may be below the threshold at
+   which anyone notices, in which case it is either bigger or gone. Gone is a real option:
+   the shapes already make mixing correct.
+3. **Is the grace window right?** 26 frames is a guess, and it is the number that decides
+   whether a string is a rhythm or a thing you mash.
+4. **Does the hammer string ever get thrown?** Two seconds is a long time to be committed,
+   and Earthbreaker's twenty frames of startup is the most readable telegraph in the game
+   on purpose. If it never lands, the answer is probably that the *second* hit needs to be
+   plus enough to make the third a true block string, which it currently is not.
+5. **Is `space` + weapon a good idea at all?** It is comfortable on a keyboard and it is a
+   precedent. Somebody with a controller should hold an opinion before it spreads.

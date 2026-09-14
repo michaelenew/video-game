@@ -929,7 +929,7 @@ impl World {
 
         // What a move does *as it comes out*, on its first active frame: the
         // leap of a leaping move, and whatever it leaves standing in the world.
-        for i in 0..MAX_PLAYERS {
+        for (i, input) in inputs.into_iter().enumerate() {
             let p = self.players[i];
             let Action::Active { kind, left } = p.action else {
                 continue;
@@ -941,6 +941,13 @@ impl World {
             if m.self_lift.raw() > 0 {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
+                // The spear's takeoff spends the plant on a direction as well
+                // as on height. On the same frame as the lift, because they are
+                // one motion: the butt of the spear hits the floor and both
+                // halves of the launch come out of it.
+                if p.class == Class::Champion && kind == moves::champion::POLE_DRIVE {
+                    pole_drive_boost(&mut self.players[i], input);
+                }
             }
             // `E` on the Reaver: the second body goes out, or comes home
             // through whatever is in the way. On the first active frame like
@@ -1024,6 +1031,11 @@ impl World {
                 // direction locked at the throw, because the whole point is
                 // that you choose where to go *as* it connects.
                 champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
+                // A chain link that actually landed may cut its recovery short
+                // for the next one. Blocked and parried links pay in full, so
+                // the string ends on a defender who answered it -- see
+                // `chain_cancel`.
+                confirm_chain(&mut self.players[attacker], hit.blocked || hit.parried);
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
@@ -1995,6 +2007,14 @@ fn step_player(
         p.action = Action::Free;
     }
 
+    // The jump button holds the takeoff window open, and a connected chain link
+    // lets the next one start early. Both are Champion-only and both are no-ops
+    // for everybody else; both go here, before the countdown, for the same
+    // reason the Rush cancel does -- a recovery that has been cut short has to
+    // reach the input below on the frame it was cut, not the frame after.
+    arm_takeoff(p, input);
+    chain_cancel(p, input);
+
     queue_the_shadow(p, input);
 
     // A channel resolves **instead of** the countdown, because it is the one
@@ -2453,27 +2473,47 @@ fn dual_move(input: Input) -> Option<u8> {
 // throwing one does to the dash, what the dash does to your feet, how a dash
 // begins, and the two consequences of swinging a shape rather than a disc.
 
-/// Which of the Champion's ten moves this click asks for, if any.
+/// Which weapon a click is asking for. The column of the grid, and the one
+/// thing about the Champion's controls that never changes meaning.
+///
+/// Left before middle before right, so a player mashing two buttons gets an
+/// attack rather than silence.
+const fn champion_weapon(input: Input) -> Option<u8> {
+    use moves::champion as c;
+    if input.has(Input::LEFT) {
+        Some(c::SWORD)
+    } else if input.has(Input::MIDDLE) {
+        Some(c::HAMMER)
+    } else if input.has(Input::RIGHT) {
+        Some(c::SPEAR)
+    } else {
+        None
+    }
+}
+
+/// Which of the Champion's nineteen moves this click asks for, if any.
 ///
 /// `None` for every other class, which is what keeps the shared grammar in
-/// `step_player` unchanged for the five of them. The order of the three tests
-/// is the design: **rushing beats airborne beats standing**, because the Rush
-/// moves are the ones you spent a charge to reach and they should not be taken
-/// away by the fact that the uppercut has already left the floor.
+/// `step_player` unchanged for the five of them. The order of the tests is the
+/// design: **rushing beats taking off beats airborne beats standing.**
+///
+/// Rushing first because the Rush moves are the ones you spent a charge to
+/// reach, and they should not be taken away by the fact that the uppercut has
+/// already left the floor. Taking off next because the takeoff window runs a
+/// few frames *into* the jump it belongs to -- see [`champion_takeoff_window`]
+/// -- and for those frames "I pressed jump and a weapon" has to beat "my feet
+/// are off the ground", which is the same sentence with the answer the player
+/// did not mean.
+///
+/// What is left on the ground is the **chain**, and which of its three rows you
+/// get is how many hits are already behind you rather than anything about the
+/// button. See `moves::champion::link`.
 fn champion_move(p: &Player, input: Input) -> Option<u8> {
     use moves::champion as c;
     if p.class != Class::Champion {
         return None;
     }
-    let weapon = if input.has(Input::LEFT) {
-        c::SWORD
-    } else if input.has(Input::MIDDLE) {
-        c::HAMMER
-    } else if input.has(Input::RIGHT) {
-        c::SPEAR
-    } else {
-        return None;
-    };
+    let weapon = champion_weapon(input)?;
     if rushing(p).is_some() {
         // Right click during a Rush is two moves told apart by where you are
         // pointing, which is the honest separator: a pole vault *is* a spear
@@ -2483,29 +2523,188 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
         }
         return Some(c::RUSHING + weapon);
     }
-    Some(if p.grounded {
-        c::ON_FOOT + weapon
-    } else {
-        c::IN_THE_AIR + weapon
-    })
+    // No takeoffs on the creature's back: up there the jump button is how you
+    // *leave*, and a move that spent it on an attack would take that away. The
+    // window is armed on the floor and can still be open on the frame you land
+    // aboard, which is the only way this is ever reached.
+    if !p.aboard() && champion_takeoff_window(p) > 0 {
+        return Some(c::TAKEOFF + weapon);
+    }
+    if !p.grounded {
+        return Some(c::IN_THE_AIR + weapon);
+    }
+    Some(c::link(champion_chain(p).0, weapon))
 }
 
-/// What throwing one of the Champion's moves does to the weapon in hand and to
-/// the dash underneath it.
-fn begin_champion(p: &mut Player, kind: u8) {
+/// How deep the grounded chain is, and how long it has left to live.
+///
+/// `(0, 0)` for anybody who is not a Champion, which makes every caller below
+/// safe to write without a class test of its own.
+fn champion_chain(p: &Player) -> (u8, u16) {
+    match p.mechanic {
+        Mechanic::Forms {
+            chain, chain_left, ..
+        } => (chain, chain_left),
+        _ => (0, 0),
+    }
+}
+
+/// Frames left in which a weapon click leaves the floor rather than swinging on
+/// it.
+fn champion_takeoff_window(p: &Player) -> u16 {
+    match p.mechanic {
+        Mechanic::Forms { takeoff, .. } => takeoff,
+        _ => 0,
+    }
+}
+
+/// Hold the takeoff window open while the jump button is down and the feet are
+/// on something.
+///
+/// **The window exists because two buttons are never pressed on the same
+/// frame.** "Attack as you jump" is one intention and two inputs, and a rule
+/// that needed them on the same tick would be a rule nobody could hit -- so the
+/// jump arms a few frames during which a weapon click is a takeoff, and the
+/// click spends them.
+///
+/// Armed off the button being *down* rather than off its press edge, and
+/// grounded rather than actionable, which between them cover the three orders
+/// the player can press in. Jump then click is the window. Both at once is the
+/// same frame, and the window is armed before the click is read. Click first
+/// throws the grounded move, because it already has -- and the window is still
+/// armed underneath it, so a weapon pressed again as the recovery ends takes
+/// off out of it.
+///
+/// It can only ever be open around a real jump: standing on the floor with the
+/// jump button down *is* jumping, on the frame you are free to.
+fn arm_takeoff(p: &mut Player, input: Input) {
+    if p.class != Class::Champion || !p.grounded || !input.has(Input::SPACE) {
+        return;
+    }
+    if let Mechanic::Forms { takeoff, .. } = &mut p.mechanic {
+        *takeoff = t::takeoff_window();
+    }
+}
+
+/// Cut a **connected** chain link's recovery short, so the next hit can start.
+///
+/// The third cancel in the game and the narrowest, and the two rules around it
+/// are what keep it from being a licence to swing forever.
+///
+/// **It is a hit confirm.** A link that was blocked, parried or thrown at
+/// nothing pays its recovery in full, so every number the frame table prints
+/// about a Champion move is true against a defender who did something about it.
+/// `every_attack_is_punishable_on_block` stays a fact rather than an
+/// approximation, and blocking one hit of a three-hit string is worth doing
+/// because it ends the string.
+///
+/// **Swapping weapons cancels earlier than repeating one.** The class's whole
+/// fantasy is one haft with three heads, and the honest reason the swap is
+/// quicker is that the weapon is *re-formed out of the follow-through* while
+/// swinging the same one twice has to re-chamber it. It is a few frames rather
+/// than a wall: repeating a weapon stays completely viable, which is the
+/// "strong when played linearly" half of the design, and mixing is the half
+/// that pays a little better. The two knobs are the whole of that decision and
+/// setting them equal turns it off -- see `tuning::chain_cancel_swapped`.
+fn chain_cancel(p: &mut Player, input: Input) {
     use moves::champion as c;
+    if p.class != Class::Champion {
+        return;
+    }
+    let Action::Recovery { kind, left } = p.action else {
+        return;
+    };
+    if c::link_of(kind).is_none() {
+        return;
+    }
     let Mechanic::Forms {
-        rush,
-        recharge,
-        rush_vel,
+        chain,
+        chain_left,
+        chain_hit: true,
         ..
     } = p.mechanic
     else {
         return;
     };
-    // The weapon is whichever button was pressed. Nothing else sets it: there
-    // is no mode to be in any more.
-    let form = Form::of_move(kind);
+    // Nothing to cancel into: the chain has run out of links, or out of time.
+    if chain >= c::DEPTH || chain_left == 0 {
+        return;
+    }
+    let Some(next) = champion_weapon(input) else {
+        return;
+    };
+    let m = moves::get(p.class, kind);
+    let share = if next == c::weapon(kind) {
+        t::chain_cancel_repeated()
+    } else {
+        t::chain_cancel_swapped()
+    };
+    let owed = (m.recovery as u32 * share as u32 / 100) as u16;
+    if m.recovery.saturating_sub(left) < owed {
+        return;
+    }
+    // Free rather than straight into the next link: the ordinary input path is
+    // three lines below and already knows how to throw one, including the
+    // lockout, the aim and the animation. A second way to start a move is a
+    // second way for one of those to be forgotten.
+    p.action = Action::Free;
+}
+
+/// Record that a chain link landed, so its recovery may be cut short.
+///
+/// Called from the one place a hit is resolved, and a no-op for everything that
+/// is not a Champion swinging one of the nine. Blocked and parried hits do not
+/// count: see [`chain_cancel`].
+fn confirm_chain(p: &mut Player, blocked: bool) {
+    if p.class != Class::Champion || blocked {
+        return;
+    }
+    let Some(kind) = p.action.attack_kind() else {
+        return;
+    };
+    if moves::champion::link_of(kind).is_none() {
+        return;
+    }
+    if let Mechanic::Forms { chain_hit, .. } = &mut p.mechanic {
+        *chain_hit = true;
+    }
+}
+
+/// Where the chain is after this move: one hit deeper, or back to nothing.
+///
+/// **Only the nine ground moves are in it.** An aerial, a Rush move or a
+/// takeoff ends the chain outright rather than being ignored by it, and that is
+/// the design rather than an implementation shortcut: leaving the floor is a
+/// different situation, and a string you could park in the air and come back to
+/// would make the grace window meaningless.
+fn advance_chain(p: &mut Player, kind: u8) {
+    let stage = match moves::champion::link_of(kind) {
+        Some(link) => link + 1,
+        None => 0,
+    };
+    if let Mechanic::Forms {
+        chain,
+        chain_left,
+        chain_hit,
+        ..
+    } = &mut p.mechanic
+    {
+        *chain = stage;
+        *chain_left = if stage > 0 { t::chain_grace() } else { 0 };
+        *chain_hit = false;
+    }
+}
+
+/// What throwing one of the Champion's moves does to the weapon in hand, to the
+/// chain it is part of, and to the dash underneath it.
+fn begin_champion(p: &mut Player, kind: u8) {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return;
+    }
+    let Mechanic::Forms { rush, rush_vel, .. } = p.mechanic else {
+        return;
+    };
     let (rush, rush_vel) = match kind {
         // Planting the spear spends the run on height. The dash is kept alive
         // for exactly as long as the plant takes so the approach does not stop
@@ -2524,12 +2723,55 @@ fn begin_champion(p: &mut Player, kind: u8) {
     if kind == c::UPPERCUT {
         p.leap_used = false;
     }
-    p.mechanic = Mechanic::Forms {
+    // The chain moves on, or ends, depending on what this move was.
+    advance_chain(p, kind);
+    if let Mechanic::Forms {
         form,
-        rush,
-        recharge,
-        rush_vel,
+        rush: r,
+        rush_vel: v,
+        takeoff,
+        ..
+    } = &mut p.mechanic
+    {
+        // The weapon is whichever button was pressed. Nothing else sets it:
+        // there is no mode to be in any more.
+        *form = Form::of_move(kind);
+        *r = rush;
+        *v = rush_vel;
+        // A takeoff spends the window it came out of, so one jump buys one of
+        // them. Everything else leaves it alone: a grounded swing thrown with
+        // the jump button already down is a move you can still take off out of
+        // when its recovery ends.
+        if c::is_takeoff(kind) {
+            *takeoff = 0;
+        }
+    }
+}
+
+/// The horizontal shove the pole drive gives, on the frame the spear reaches
+/// the floor.
+///
+/// **The move is a jump with a weapon in it**, so the reward is a direction
+/// rather than damage: the butt of the spear cracks the ground, the fighter
+/// goes up higher than a jump reaches, and the run they were holding comes with
+/// them. Read from the live input on the frame it happens, for the same reason
+/// the aerial fan's shove is -- the point is that you choose where to go as the
+/// spear lands, not when you pressed the button.
+///
+/// Holding nothing still gets you something: forward, along the facing. A
+/// reward you can fail to collect by not touching a key reads as broken rather
+/// than as demanding.
+fn pole_drive_boost(p: &mut Player, input: Input) {
+    let (ax, az) = input.move_axis();
+    let dir = if ax == 0 && az == 0 {
+        V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+    } else {
+        move_dir(p.aim(input), ax, az)
     };
+    let boost = t::pole_drive_boost();
+    p.vel.x = p.vel.x.add(dir.x.mul(boost));
+    p.vel.z = p.vel.z.add(dir.z.mul(boost));
+    clamp_air_speed(p);
 }
 
 /// Which part of the creature a fighter's attack volume touches.
@@ -2634,10 +2876,7 @@ fn rushing(p: &Player) -> Option<V3> {
 /// Rush is a retreat and a sidestep as well as an approach -- and so that the
 /// run-through can be aimed across an opponent rather than only at one.
 fn start_rush(p: &mut Player, input: Input) -> bool {
-    let Mechanic::Forms {
-        form, recharge: 0, ..
-    } = p.mechanic
-    else {
+    let Mechanic::Forms { recharge: 0, .. } = p.mechanic else {
         return false;
     };
     let (ax, az) = input.move_axis();
@@ -2646,18 +2885,23 @@ fn start_rush(p: &mut Player, input: Input) -> bool {
     } else {
         move_dir(p.aim(input), ax, az)
     };
-    p.mechanic = Mechanic::Forms {
-        form,
-        rush: t::rush_frames(),
+    if let Mechanic::Forms {
+        rush,
+        recharge,
+        rush_vel,
+        ..
+    } = &mut p.mechanic
+    {
+        *rush = t::rush_frames();
         // The charge is gone until the dash has finished *and* the recharge has
         // run, so the two never overlap and "rush ready" on the HUD means it.
-        recharge: t::rush_frames() + t::rush_recharge(),
-        rush_vel: V3::new(
+        *recharge = t::rush_frames() + t::rush_recharge();
+        *rush_vel = V3::new(
             dir.x.mul(t::rush_speed()),
             Fx::ZERO,
             dir.z.mul(t::rush_speed()),
-        ),
-    };
+        );
+    }
     true
 }
 
@@ -3074,18 +3318,57 @@ fn step_mechanic(p: &mut Player) {
         // The dash and its charge, both counting down. Saturating, so a dash
         // that has run out sits at zero rather than wrapping into a very long
         // one.
-        Mechanic::Forms {
-            form,
-            rush,
-            recharge,
-            rush_vel,
-        } => {
-            p.mechanic = Mechanic::Forms {
-                form,
-                rush: rush.saturating_sub(1),
-                recharge: recharge.saturating_sub(1),
-                rush_vel,
-            };
+        //
+        // The chain's own clock runs here too, and it runs in three modes
+        // rather than one, because a chain is a rhythm rather than a timer:
+        //
+        //   * **parked** while a link of it is actually being thrown, so a
+        //     fifty-frame finisher cannot time its own chain out from under
+        //     itself. The same idiom the repeat lockout uses for an ability
+        //     that is still out in the world -- re-armed to full every frame it
+        //     is held, so it is at full on the frame it stops being held;
+        //   * **counting down** while the fighter is standing on the floor with
+        //     nothing to do, which is the window the next hit has to arrive in;
+        //   * **gone** for anything else. Being hit, blocking, dodging, jumping
+        //     and rushing all end a string, and that is most of what makes
+        //     committing to one a decision: three hits is a plan, and the
+        //     opponent gets to have an opinion about it.
+        Mechanic::Forms { .. } => {
+            let live = p
+                .action
+                .attack_kind()
+                .is_some_and(|kind| moves::champion::link_of(kind).is_some());
+            let standing = p.action.actionable() && p.grounded;
+            if let Mechanic::Forms {
+                rush,
+                recharge,
+                chain,
+                chain_left,
+                chain_hit,
+                takeoff,
+                ..
+            } = &mut p.mechanic
+            {
+                *rush = rush.saturating_sub(1);
+                *recharge = recharge.saturating_sub(1);
+                *takeoff = takeoff.saturating_sub(1);
+                if live {
+                    *chain_left = t::chain_grace();
+                } else if standing && *chain < moves::champion::DEPTH {
+                    *chain_left = chain_left.saturating_sub(1);
+                } else {
+                    // Either the fighter is doing something a string does not
+                    // survive, or the string has spent its third hit. There is
+                    // no fourth: a chain that has finished is over on the frame
+                    // its finisher stops running, and the next press opens a
+                    // new one.
+                    *chain_left = 0;
+                }
+                if *chain_left == 0 {
+                    *chain = 0;
+                    *chain_hit = false;
+                }
+            }
         }
 
         // The second body: where it is, what it is copying, and the leash.
@@ -3227,12 +3510,20 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             rush,
             recharge,
             rush_vel,
+            chain,
+            chain_left,
+            chain_hit,
+            takeoff,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
             h.write_u32(*rush as u32);
             h.write_u32(*recharge as u32);
             hash_v3(h, rush_vel);
+            h.write_u32(*chain as u32);
+            h.write_u32(*chain_left as u32);
+            h.write_u32(*chain_hit as u32);
+            h.write_u32(*takeoff as u32);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -4357,6 +4648,11 @@ fn step_rider(
     }
 
     step_mechanic(p);
+    // Aboard, the Champion reads the standing row of its grid, so the chain is
+    // live on the creature's back and cancels the same way it does on the
+    // floor. There is no takeoff up here: jumping is how you *leave*, and a
+    // move that spent the jump on an attack would take that away.
+    chain_cancel(p, input);
     queue_the_shadow(p, input);
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
 

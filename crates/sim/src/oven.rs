@@ -313,6 +313,11 @@ scalars! {
     SweepHeight,      "Champion", "Sweep thrown from (x chest)",Fixed,   fx(1,10),  fx(3,2);
     SweepDip,         "Champion", "Sweep travels below level",  Fixed,   0,         fx(1,8);
     ThrustExtend,     "Champion", "Thrust out on the first active frame (x)", Fixed, 0, fx(1,1);
+    ChainGrace,       "Champion", "Chain survives for",         Frames,  0,         120;
+    ChainCancelSwap,  "Champion", "Chain, recovery owed on a swap (%)",     Percent, 0, 100;
+    ChainCancelRepeat,"Champion", "Chain, recovery owed on a repeat (%)",   Percent, 0, 100;
+    TakeoffWindow,    "Champion", "Takeoff window around a jump", Frames, 0,        30;
+    PoleDriveBoost,   "Champion", "Pole drive, forward boost",  Fixed,   0,         fx(30,1);
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
     WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);

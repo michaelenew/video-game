@@ -145,7 +145,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "Space",
-                "Jump. Hold it to go higher; releasing is final.",
+                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial.",
                 "Space jump (hold = higher)",
             ),
             s(
@@ -160,7 +160,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "J or left click",
-                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword.",
+                "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword, and held down it walks that weapon's whole three-hit string.",
                 "J poke",
             ),
             s(
@@ -193,11 +193,11 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Champion",
         in_browser: true,
-        blurb: "Three weapons on three clicks, and a dash that changes what all three of them do. The button is the weapon; where your feet are picks the move.",
+        blurb: "Three weapons on three clicks, a three-hit string where every hit is a free choice of weapon, and a dash that changes what all three of them do. The button is the weapon; the situation picks the move.",
         entries: &[
             s(
                 "Left click",
-                "Sword. Arc across the front. Most damage, least commitment — the move you combo with.",
+                "Sword. Arc across the front. Fast, wide, least commitment — the move you string with.",
                 "LMB sword",
             ),
             s(
@@ -211,17 +211,29 @@ pub const SECTIONS: &[Section] = &[
                 "RMB spear",
             ),
             e(
+                "Keep swinging",
+                "Land a hit and the same three buttons throw the second of three, then the third. Every hit is a free choice of all three weapons, so sword into spear into hammer is an ordinary thing to do. The string flows only while you are connecting: blocked or thrown at nothing, you pay the whole recovery. It ends if you stop for half a second, are hit, block, dodge, or leave the ground.",
+            ),
+            e(
+                "The third hit",
+                "Crescent is a full turning cut and the widest thing in the game. Earthbreaker goes through a guard. Impale reaches four and a half metres. All three commit your feet.",
+            ),
+            e(
+                "Space and a weapon",
+                "That weapon's takeoff, thrown as your feet leave the floor. Sword rises into an angled slash and hits hardest; hammer is the uppercut, which launches and holds on, and space again takes you both higher; spear cracks the shaft into the ground for the most height in the class plus a shove the way you are holding. Press jump first and the weapon a few frames later — that order always works.",
+            ),
+            e(
                 "In the air",
                 "The same three buttons, different moves. Sword cuts downward; hammer winds up slowly and spikes an airborne target into the floor; spear fans around the aim and shoves you the way you are holding if it connects.",
             ),
             s(
                 "E",
-                "Rush. A dash on one charge, and it cancels any recovery.",
+                "Rush. A dash on one charge, and it cancels any recovery. It does not end a string — one charge buys you a reposition in the middle of one.",
                 "E rush",
             ),
             e(
                 "While rushing",
-                "Sword cuts as you run past without stopping the dash. Hammer is the uppercut — it launches, holds on, and space takes you both higher. Spear stabs, or vaults if you are pointing at the floor.",
+                "Sword cuts as you run past without stopping the dash. Hammer drags along the floor and takes the legs of anyone you pass. Spear stabs for the biggest single hit in the class, or vaults if you are pointing at the floor.",
             ),
         ],
     },

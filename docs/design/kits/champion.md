@@ -2,6 +2,7 @@
 status: implemented
 decided: 2026-09-10
 rebuilt: 2026-09-12
+chained: 2026-09-14
 formerly: Bellator, Shifter
 sources: docs/archive/combat-design/shifter-skills.md
 depends: ../champion.md
@@ -10,32 +11,137 @@ depends: ../champion.md
 # Champion — kit
 
 **Identity.** Range bands and flow, in three dimensions. Three weapons on three mouse
-buttons, a dash that changes what all three of them do, and an air game that is the point
-of the class rather than a place it visits.
+buttons, a three-hit string where every hit is a free choice of all three, a dash that
+changes what all three of them do, and an air game that is the point of the class rather
+than a place it visits.
 
 ## The grid
 
-The whole input scheme, and it is worth reading as a table rather than as a list of ten
-moves:
+The whole input scheme, and it is worth reading as a table rather than as a list of
+nineteen moves:
 
 | | Left click | Middle click | Right click |
 | --- | --- | --- | --- |
-| **On foot** | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| **On foot, hit 1** | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| **On foot, hit 2** | Backcut — back the other way | Uproot — torn up out of the floor | Skewer — a second, shorter |
+| **On foot, hit 3** | Crescent — a full turning cut | Earthbreaker — the guard break | Impale — the longest lunge |
 | **In the air** | Air sword — the arc rolled vertical | Air hammer — wind up, then spike | Air spear — a fan around the aim |
-| **Rushing** | Rush slash — cut as you go past | Uppercut — launch, and hold on | Rush stab / Pole vault |
+| **Rushing** | Rush slash — cut as you go past | Rush sweep — dragged along the floor | Rush stab / Pole vault |
+| **Leaving the floor** | Rising cut — up and away | Uppercut — launch, and hold on | Pole drive — the floor throws you |
 
-**The button is the weapon and never changes meaning. The row is where your feet are.**
-That is the entire thing a new player has to learn, and it is why ten moves fit on three
-buttons with no modifier: you never choose a move, you choose a weapon, and the situation
-chooses the move.
+**The button is the weapon and never changes meaning. The row is the situation.**
+That is the entire thing a new player has to learn, and it is why nineteen moves fit on
+three buttons with one modifier: you never choose a move, you choose a weapon, and the
+situation chooses the move.
 
-The tenth move shares right click with the ninth and is separated by where you are
-pointing — a spear put into the ground vaults, a spear levelled at somebody stabs. That is
-the only overloaded input in the class and it is the honest one: a pole vault *is* a spear
-planted in the floor.
+The nineteenth move shares right click with the Rush stab and is separated by where you
+are pointing — a spear put into the ground vaults, a spear levelled at somebody stabs.
+That is the only overloaded input in the class and it is the honest one: a pole vault *is*
+a spear planted in the floor.
 
 `Q` is unassigned. The class's identity is the three weapons and the dash, and there is
 nothing left that wants a key.
+
+## The chain — rebuilt 2026-09-14
+
+**The first three rows are one three-hit string, and every hit is a free choice of all
+three weapons.**
+
+Connect with anything in the first row and the same three buttons throw the second row;
+connect again and they throw the third. Nothing remembers what the previous hit was made
+of, so *sword into spear into hammer* is an ordinary thing to do — and it is the class
+fantasy written as a move list. One haft, three heads, chosen a hit at a time.
+
+### Why the weapon being free is the whole point
+
+Each weapon owns a different piece of space — the sword owns width, the hammer owns the
+line underneath, the spear owns distance — so a **mixed** string covers three different
+volumes in three beats and a **pure** one covers the same volume three times. Against
+somebody moving, that is not a flavour choice, it is the difference between the third hit
+landing and the third hit whiffing. Nothing has to reward mixing for mixing to be correct;
+the shapes do it.
+
+The frame data does one small thing on top of that, and it is deliberately small. **A
+connected link cuts its own recovery short so the next one can start, and swapping weapons
+cuts it shorter than repeating one** — because the head is re-formed out of the
+follow-through rather than re-chambered. On the sword that is three frames against six; on
+the hammer six against twelve. Linear play stays completely viable, which is the "strong
+when played linearly" half of [the design](../champion.md#identity); mixing pays a little
+better, which is the other half. The two knobs are `Chain, recovery owed on a swap (%)`
+and `…on a repeat (%)` in the Oven, and setting them equal turns the incentive off without
+changing anything else.
+
+### The chain is a hit confirm
+
+**A blocked, parried or whiffed link pays its whole recovery.** The string still continues
+— the button does something, which matters — but it continues at the speed the frame table
+prints rather than at the cancelled speed.
+
+Three things fall out of that, and all three are load-bearing:
+
+- **Every number in the frame table stays true.** On-block advantage is measured from the
+  full recovery, and against a defender who blocked, the full recovery is what you pay. A
+  cancel available on block would have quietly made half the kit plus on block.
+- **Blocking one hit is worth doing.** It costs the attacker about thirteen frames across
+  a three-hit sword string, which is a real window rather than a moral victory.
+- **Whiffing is still punishable.** Throwing the opener at nothing and continuing anyway is
+  a choice you can make and a choice you can be hit for.
+
+### What a string costs and what it buys
+
+| | Frames, start to free | Damage | Character |
+| --- | --- | --- | --- |
+| Sword ×3 | 80 | 234 | The fast one. Widest coverage, smallest commitment |
+| Spear ×3 | 87 | 230 | The same, a metre and a half further out |
+| Hammer ×3 | 121 | 212 | The slow one, and it ends with a guard break |
+
+The hammer being both the slowest and the least damaging is the same deliberate choice it
+always was: it buys stagger, knockback and — on the finisher — an attack that goes through
+a shield. Live numbers: `cargo run -p sim --bin frametable`.
+
+**A string dies** if you stop swinging for about half a second, if you are hit, if you
+block, if you dodge, or if you leave the floor. It survives a Rush, which is worth knowing:
+one charge buys you a reposition in the middle of a string, and the grace window keeps
+running while you dash.
+
+### The rhythm: fast, fast, slow
+
+Each weapon's second hit is **faster** than its opener — the weapon is already moving —
+and its third is **slower and much bigger**. That is the shape of the whole thing, and it
+is what makes the decision to commit to a finisher a decision:
+
+| | Hit 1 | Hit 2 | Hit 3 |
+| --- | --- | --- | --- |
+| Sword | 7f, 66 | 6f, 72 | 11f, 96 |
+| Hammer | 15f, 48 | 13f, 54 | 20f, 110 |
+| Spear | 10f, 58 | 8f, 64 | 13f, 108 |
+
+Each finisher also does something the first two do not. **Crescent** is the widest volume
+in the game — most of a half turn, and it catches everything in front of you. **Earthbreaker**
+is **unblockable**, which is this class's answer to a turtle. **Impale** reaches four and a
+half metres, which is further than anything else on the ground.
+
+## The takeoffs — a weapon on the way off the floor
+
+Press a weapon on the same press as jump and you get that weapon's **takeoff** instead of
+its grounded or airborne move. Three moves, one per weapon, and they are three different
+reasons to leave the ground:
+
+| | What it is for |
+| --- | --- |
+| **Rising cut** (sword) | An angled slash up and forward, and the hardest hit of the three. No grab, no boost, nothing else in it — and a long fall if it misses |
+| **Uppercut** (hammer) | Launches, and *holds on*: both fighters leave the ground together. Press space again and you both go higher, once |
+| **Pole drive** (spear) | The butt of the spear cracked into the floor at your own feet. The least damage in the class and the most height, plus a shove in whatever direction you are holding |
+
+Read from behind they are a **diagonal**, a **column** and a **vault**, which is how you
+tell which one somebody threw while all three are in the air.
+
+**The window is a few frames wide**, because "attack as you jump" is one intention and two
+buttons and nobody presses two buttons on the same frame. Jump then weapon is the window;
+both at once is the same frame. A takeoff spends the window, so one jump buys one of them.
+
+Aboard the creature there are no takeoffs: jumping is how you leave its back, and a move
+that spent the jump on an attack would take that away.
 
 ## What replaced the form toggle
 
@@ -55,15 +161,24 @@ actually carries it — **their own shapes**. See [Hitboxes](#hitboxes).
 
 ## The three weapons
 
+The openers, which are what a weapon is before you have committed to a string:
+
 | | Reach | Startup | Recovery | Damage | On hit | Character |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Sword** | 2.0 m | 7f | 11f | most | +0 | The combo tool. Small knockback, small hitstun, and you can walk while you swing it. |
-| **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the combo *starter*. Big knockback, long stagger, and it slows you to a crawl. |
+| **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the string *starter*. Long stagger, and it slows you to a crawl. |
 | **Spear** | 3.4 m | 10f | 14f | middling | +0 | The spacing tool. Longest reach in the game, thin, and it goes over a crouching opponent. |
 
 The hammer doing the least damage is deliberate and it is what "heavy" means here: it buys
-stagger and knockback, not numbers. Its +7 on hit is the whole of its job — it is the move
-that starts the exchange the sword finishes.
+stagger, not numbers. Its +7 on hit is the whole of its job — it is the move that starts
+the exchange the sword finishes.
+
+**The openers and the second hits are the softest things the class throws, on purpose.** A
+hit that shoves somebody out of range of the next one has ended the string whether or not
+the game says so, so the knockback lives on the finishers: four on the hammer's opener,
+eleven on Earthbreaker. That rule is pinned in `crates/sim/tests/feel.rs` as
+`the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them`, and it is the
+thing most likely to be broken by an innocent-looking retune.
 
 Live numbers: `cargo run -p sim --bin frametable`.
 
@@ -86,6 +201,15 @@ to read:
 - **The spear is a line**, extending along the aim over its active frames. It owns
   distance, and it is thin enough to miss with.
 
+**The shape belongs to the weapon rather than to the move.** Every sword move in the class
+cuts across, every hammer move travels up or down the vertical plane you are aiming along,
+every spear move is a line — through all three links of the chain, mid-Rush, and on the way
+off the floor. So a player who has learnt that the hammer owns the ground under it has
+learnt something true of every hammer move there is, which is what makes nineteen moves
+learnable. The two exceptions are both the air and both the same exception: off the ground
+there is no floor to cut across, so the sword rolls its arc into the vertical and the spear
+sweeps its fan flat around the aim.
+
 Because a capsule has a top and a bottom, **height is now real** for this class: an attack
 thrown from the air can miss somebody standing under it, and one aimed at the floor can
 reach somebody below you. That is what makes the air game below possible at all.
@@ -104,10 +228,17 @@ hammer's twenty-two frames of recovery are the price of its stagger, and Rush is
 decline to pay it, once.
 
 **It changes what the three buttons do.** While the dash runs, the mouse buttons throw the
-Rush moves rather than the standing ones, and rushing beats airborne — an uppercut that has
-already left the floor is still a Rush move.
+Rush moves rather than the standing ones, and rushing beats every other row — a Rush move
+is the one you spent a charge to reach, and a jump or a set of feet in the air should not
+take it away from you.
 
 Getting hit ends the dash. One charge, on a recharge, so spending it is always a decision.
+
+**A Rush does not end a string.** The grace window keeps running while you dash, so one
+charge buys a reposition in the middle of a chain: open, cancel the recovery, cross four
+metres, and finish from somewhere they were not expecting the third hit to come from.
+Throwing a *Rush move* does end it, because that is a different weapon in a different
+situation.
 
 ### Rush slash — left click
 
@@ -119,20 +250,23 @@ This is the only move in the game that hits more than once, and it is the only o
 which "on hit" means nothing — the exchange is not over when it connects, it is still
 swinging.
 
-### Uppercut — middle click
+### Rush sweep — middle click
 
-**The combo hinge, and the reason the class has an air game.** It launches, and it *holds
-on*: both fighters leave the ground together. It does not slow the dash at all — it is an
-attack that starts while you are already travelling.
+The hammer's answer to somebody you are running at, and it is the one that goes
+**underneath**. The head comes down outside the lead foot, scrapes the floor across the
+whole front, and comes back up behind the hip without the run ever stopping. It does not
+slow the dash.
 
-Then **press space and you both go higher, once.** That is the "we are settling this in the
-air" button, and it is the only thing space does while airborne.
+The Rush row is three answers to the same question, and they are three heights: the sword
+cuts across at chest level, the spear stops and puts everything into the point, and this
+one owns the floor. Somebody crouching under a run-through, or standing on a ridge along an
+animal's back, is what it is for.
 
-The move used to be the class special on `Q`, a slow committed launcher thrown from
-standing. It did not feel good, and the reason is that it was a *commitment to the air*
-rather than a *continuation*: sixteen frames of startup from a standstill, telegraphed, and
-if it missed you were airborne and helpless. As a Rush move it is fast, it comes out of
-movement you already committed to, and its cost is the charge rather than the frames.
+It took this slot from the uppercut on 2026-09-14, which moved onto the hammer's **takeoff**
+— see [The takeoffs](#the-takeoffs--a-weapon-on-the-way-off-the-floor). The reason is worth
+keeping: a launcher behind a charge is a launcher you often do not have, and the loop the
+whole class is built around started with a resource check. It starts with a button now, and
+the charge is free for the reposition it was always better at.
 
 ### Rush stab — right click, level
 
@@ -168,36 +302,52 @@ a reward: you get the reposition for catching somebody.
 
 ## Playing it
 
-The class is the loop, not the moves:
+The class is three loops, and they share a first beat.
 
-> **Hammer** (+7 on hit, big stagger) → **Rush** to cancel the recovery → **Uppercut**,
-> which launches and carries them up → **space**, taking the exchange higher → **air
-> hammer**, which spikes them into the floor → they land staggered, and you are on top of
-> them.
+**The string.** Three hits, and the decision is which weapon each one is:
 
-Every step of that is a decision with a cost. The hammer is fifteen frames of telegraph.
-Rush is one charge. The uppercut commits you to the air along with them. The air hammer is
-twenty-two frames of startup that they can see coming, and missing it leaves you falling
-with nothing.
+> **Hammer** (fifteen frames of telegraph, the longest stagger in the kit) → **Skewer**,
+> because they backed off and the spear is what reaches them there → **Crescent**, because
+> they are moving sideways and nothing else catches somebody moving sideways.
 
-The other half is the reverse: hit them *up*, then get somewhere else fast, so they come
-down into an attack that is already waiting. That is what the vault, the fan's on-hit
-shove, and the Rush slash's reposition are for. It is the anime pattern — you do not chase
-them, you arrive first.
+That is the whole class in one sentence: you are choosing a *shape* per beat against where
+they actually are, and the string is what gives you three beats to be right about.
 
-Linear play — pick the weapon for the range, throw it — is still meant to be strong. The
-sword is the best plain auto in the game. Nonlinear play is the loop above, and it is where
-the ceiling is.
+**The air.** The string is how you get the first hit; the air is what the third one buys:
+
+> **Hammer** (+7 on hit) → **jump + hammer** = **Uppercut**, which launches and carries
+> them up → **space**, taking the exchange higher → **air hammer**, which spikes them into
+> the floor → they land staggered, and you are on top of them.
+
+Every step is a decision with a cost. The hammer is fifteen frames of telegraph. The
+uppercut commits you to the air along with them, and it costs the jump. The air hammer is
+twenty-two frames of startup they can see coming, and missing it leaves you falling with
+nothing.
+
+**Arriving first.** The reverse of the same idea: hit them *up*, then get somewhere else
+fast, so they come down into an attack that is already waiting. That is what the pole
+drive, the vault, the fan's on-hit shove and the Rush slash's reposition are for. You do
+not chase them, you arrive first.
+
+Linear play — pick the weapon for the range, hold the button, take the whole string — is
+still meant to be strong, and it is: a held sword chain is 234 damage in eighty frames and
+needs one button. Nonlinear play is the three loops above, and it is where the ceiling is.
 
 ## Still to build
 
 - **The mid-animation form swap** — starting a move with one weapon and finishing it with
-  another, for n² endings out of 2n animations. This is the class's headline idea in
-  [../champion.md](../champion.md) and it is untouched: the swap needs a weapon *in* the
-  move to change, and until this rebuild the weapon was a mode rather than a button. Now
-  that the button is the weapon, the obvious shape for it is "press a different button
-  during the active frames".
+  another, for n² endings out of 2n animations. Still the class's headline idea in
+  [../champion.md](../champion.md), and the chain has changed what it would be *for*:
+  swapping between hits is already the class's texture, so a swap inside one hit now has to
+  justify itself as a different thing rather than as the only way to mix weapons. The
+  honest reading is that the chain took most of what the swap was reaching for, at a
+  fraction of the animation cost, and what is left for the swap is the *bait* — a
+  silhouette that says one thing and a tail that does another. Worth building for that, and
+  no longer urgent.
 - **The six-ability kit** — Drive, Sweep, Throw, Brace. Shift plus a click is unused on this
   class now.
 - **Air-to-air reads.** Two Champions both airborne with hammers wound up is a game of
   chicken nobody has played yet.
+- **Does the chain want a fourth hit for one weapon?** Three is symmetrical and readable.
+  A weapon with a fourth would be a real asymmetry, and asymmetry is where a class gets a
+  favourite. Nobody has played three yet, so this is a note rather than a proposal.
