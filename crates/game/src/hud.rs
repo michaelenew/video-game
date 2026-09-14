@@ -73,9 +73,6 @@ pub struct RoundText;
 #[derive(Component)]
 pub struct Banner;
 
-#[derive(Component)]
-pub struct SensitivityText;
-
 /// A click-to-cycle class picker, one per player.
 ///
 /// Sits beside that player's health bar because that is where you are already
@@ -84,13 +81,18 @@ pub struct SensitivityText;
 #[derive(Component)]
 pub struct ClassButton(pub usize);
 
-/// Whether the pickers are drawn. **F8**, and on by default under `--dev`.
+/// Whether the pickers are drawn. **F8**, and on by default everywhere.
+///
+/// They used to be `--dev` only, which meant the one way to change class
+/// outside it was Tab -- a key nobody finds without being told, on a game whose
+/// six classes are the whole product. Being able to try another one is not a
+/// development tool.
 #[derive(Resource)]
 pub struct ShowClassButtons(pub bool);
 
 impl Default for ShowClassButtons {
     fn default() -> Self {
-        ShowClassButtons(crate::dev_mode())
+        ShowClassButtons(true)
     }
 }
 
@@ -199,37 +201,14 @@ pub fn setup(mut commands: Commands) {
                     TextColor(P1),
                     StateText(0),
                 ));
-                bottom.spawn((
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        align_items: AlignItems::Center,
-                        row_gap: Val::Px(4.0),
-                        ..default()
-                    },
-                    children![
-                        (
-                            Text::new(""),
-                            TextFont {
-                                font_size: 14.0,
-                                ..default()
-                            },
-                            TextColor(INK),
-                            SensitivityText,
-                        ),
-                        (
-                            // Generated from `crates/manual`, which the
-                            // `--help` text reads too. The legend used to be a
-                            // hand-kept copy of the key handlers and had
-                            // already drifted once.
-                            Text::new(manual::legend()),
-                            TextFont {
-                                font_size: 13.0,
-                                ..default()
-                            },
-                            TextColor(DIM),
-                        ),
-                    ],
-                ));
+                // Nothing in the middle. There was a control legend here,
+                // assembled from every section of the manual at once -- so a
+                // Bulwark player read the Champion's three weapons, the Dual
+                // mage's two autos and the Reaver's shadow, none of which were
+                // theirs. Eleven lines under the crosshair, and most of them
+                // wrong for whoever was reading them. `--help` and the browser
+                // page both carry the real thing, and neither is in the way of
+                // the fight.
                 bottom.spawn((
                     Text::new("free"),
                     TextFont {
@@ -406,54 +385,18 @@ type StateQuery<'w, 's> = Query<
     'w,
     's,
     (&'static StateText, &'static mut Text),
-    (
-        Without<RoundText>,
-        Without<Banner>,
-        Without<SensitivityText>,
-        Without<ClassLabel>,
-    ),
+    (Without<RoundText>, Without<Banner>, Without<ClassLabel>),
 >;
-type RoundQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static mut Text,
-    (
-        With<RoundText>,
-        Without<Banner>,
-        Without<SensitivityText>,
-        Without<ClassLabel>,
-    ),
->;
-type BannerQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static mut Text,
-    (
-        With<Banner>,
-        Without<RoundText>,
-        Without<SensitivityText>,
-        Without<ClassLabel>,
-    ),
->;
-type SensitivityQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static mut Text,
-    (
-        With<SensitivityText>,
-        Without<RoundText>,
-        Without<Banner>,
-        Without<ClassLabel>,
-    ),
->;
-
+type RoundQuery<'w, 's> =
+    Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<ClassLabel>)>;
+type BannerQuery<'w, 's> =
+    Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<ClassLabel>)>;
 // A Bevy system's parameter list *is* its dependency declaration: every entry
 // is something the scheduler has to know this system touches. Splitting one to
 // get under a count would split the system, which is the opposite of the point.
 #[allow(clippy::too_many_arguments)]
 pub fn update(
     sim: Res<crate::Sim>,
-    settings: Res<crate::settings::Settings>,
     mut bars: Query<(&HealthBar, &mut Node)>,
     mut quarry: QuarryQuery,
     mut poise: PoiseQuery,
@@ -464,16 +407,7 @@ pub fn update(
     mut states: StateQuery,
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
-    mut sensitivity: SensitivityQuery,
 ) {
-    // `is_changed` is true on the first run as well as after an edit, so the
-    // readout fills itself in without a separate startup path.
-    if settings.is_changed() {
-        if let Ok(mut t) = sensitivity.single_mut() {
-            *t = Text::new(settings.label());
-        }
-    }
-
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
         node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
@@ -751,12 +685,7 @@ type LabelQuery<'w, 's> = Query<
     'w,
     's,
     (&'static ClassLabel, &'static mut Text),
-    (
-        Without<RoundText>,
-        Without<Banner>,
-        Without<SensitivityText>,
-        Without<StateText>,
-    ),
+    (Without<RoundText>, Without<Banner>, Without<StateText>),
 >;
 
 /// Show or hide the pickers, and keep their labels showing the current class.

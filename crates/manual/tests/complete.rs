@@ -173,8 +173,8 @@ fn every_command_line_flag_is_documented() {
 #[test]
 fn the_browser_panel_is_exactly_the_sections_marked_for_it() {
     // The page a shared link leads to gets its controls from `browser_help`.
-    // Same check as the on-screen legend's: everything declared for it arrives,
-    // and nothing arrives that was not declared. A section quietly appearing
+    // Everything declared for it arrives, and nothing arrives that was not
+    // declared. A section quietly appearing
     // there would be offering a browser something it cannot do; one quietly
     // missing would leave a player without a key they need.
     let html = manual::browser_help();
@@ -264,47 +264,5 @@ fn every_binary_and_script_in_the_repository_is_listed() {
     assert!(
         missing.is_empty(),
         "these exist but the manual never mentions them: {missing:?}"
-    );
-}
-
-#[test]
-fn the_on_screen_legend_is_exactly_the_short_forms() {
-    // The legend used to be a hand-kept copy of the key handlers and had
-    // already drifted once. It is now assembled from the same entries, so what
-    // this checks is that assembly: every short form reaches the screen, and
-    // the screen shows nothing that is not a short form.
-    //
-    // Note it cannot check the shorts against the manual *prose* -- they are
-    // deliberately compact rephrasings ("Mouse aims" against "Aim. Where you
-    // look is where you are pointed."), not substrings of it.
-    let legend = manual::legend();
-    assert!(!legend.is_empty(), "the legend is empty");
-
-    let shorts: Vec<&str> = manual::SECTIONS
-        .iter()
-        .flat_map(|s| s.entries.iter())
-        .filter_map(|e| e.short)
-        .collect();
-
-    for short in &shorts {
-        assert!(
-            legend.contains(short),
-            "{short:?} is marked for the legend but never reaches it"
-        );
-    }
-
-    // Checked by removal rather than by splitting on the separator: one short
-    // ("- / = mouse") contains " / " itself, and splitting counted it twice.
-    let mut remainder = legend.clone();
-    for short in &shorts {
-        let at = remainder
-            .find(short)
-            .unwrap_or_else(|| panic!("{short:?} missing from the legend"));
-        remainder.replace_range(at..at + short.len(), "");
-    }
-    let leftover: String = remainder.replace(" / ", "").replace('\n', "");
-    assert!(
-        leftover.is_empty(),
-        "the legend shows something no entry declares: {leftover:?}"
     );
 }

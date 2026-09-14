@@ -101,11 +101,6 @@ impl Settings {
         }
     }
 
-    /// One line for the heads-up display.
-    pub fn label(&self) -> String {
-        format!("mouse {:.2}   fov {:.0}", self.sensitivity, self.fov)
-    }
-
     pub fn parse(text: &str) -> Settings {
         let mut s = Settings::default();
         for line in text.lines() {
