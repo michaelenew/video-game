@@ -451,9 +451,19 @@ view_knobs! {
     SmoothHandover, "Smooth, handover (%)",     Int,     0,   100;
     SmoothEyes,     "Smooth, first person (%)", Int,     0,   100;
     CrosshairDim,   "Body dims to (%)",         Int,     0,   100;
+    // Appended rather than placed beside the other angles, for the reason the
+    // scalars above give: `tuned::VIEW` is read by this enum's own
+    // discriminant, so slotting one in beside its family would hand every knob
+    // below it its neighbour's baked value.
+    //
+    // The range runs past the floor boundary on purpose. Dragging it there and
+    // seeing the view pitch toward your own feet is how you find out why the
+    // opening angle belongs inside the neutral zone; what stops it being
+    // *committed* there is `view/tests/camera_knobs.rs`, not the slider.
+    StartPitch,     "Opening pitch, below level", Int,   1,   60;
 }
 
-pub const VIEW_COUNT: usize = 18;
+pub const VIEW_COUNT: usize = 19;
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data

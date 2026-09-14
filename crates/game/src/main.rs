@@ -333,9 +333,10 @@ impl Default for Look {
         Look {
             // Player one spawns at -X looking toward +X, where player two is.
             yaw: env_f32("SHOT_YAW").unwrap_or(0.0),
-            // Resting a little below the horizon, not level -- see
-            // `Zones::neutral_pitch`.
-            pitch: env_f32("SHOT_PITCH").unwrap_or(view::camera::Zones::tuned().neutral_pitch()),
+            // Below the horizon, not level, and far enough below it that the
+            // eye has ridden out far enough to show your own fighter -- see
+            // `Zones::start_pitch`.
+            pitch: env_f32("SHOT_PITCH").unwrap_or(view::camera::Zones::tuned().start_pitch()),
             yaw_two: std::f32::consts::PI,
             grabbed: false,
         }
