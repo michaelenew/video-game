@@ -119,7 +119,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             s(
                 "Shift + J",
-                "The committed attack. Slower, hurts, roots you.",
+                "The committed attack. Slower, hurts, and slows you to a crawl -- you keep the stick, you lose the jump and the dodge until it is over.",
                 "Shift+J committed",
             ),
             s(

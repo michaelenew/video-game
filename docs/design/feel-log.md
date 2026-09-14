@@ -79,8 +79,14 @@ as they get tested.
 
 - Is 4.2 the right speed while poking, and should it differ per class? A spear poke and a
   hammer poke arguably should not hinder the same amount.
-- Should mobility vary *across* a move's phases — free during startup, rooted through
-  recovery? That is a common shape and might read better than a flat rate.
+- **Is 1.4 the right speed while committed, and should it differ per move?** ⚠️ **Newly open,
+  2026-09-14.** Committed moves stopped rooting and became a crawl; all sixteen got the same
+  20% of the walk, which is a uniform first guess in exactly the way the poke's 60% was.
+- Should mobility vary *across* a move's phases — free during startup, rooted through active,
+  slowed in recovery? That is a common shape and might read better than a flat rate. It is a
+  better question than it was: now that nothing roots for its whole length, rooting *only* the
+  active frames would put "you committed to a spot" back where it belongs — the frames where
+  the hitbox is actually out — for a handful of frames instead of forty.
 - **Is Bash at 4 frames of startup too fast to react to?** Human reaction is
   roughly 15 frames at 60 Hz, so a 4-frame move is unreactable by design. That
   is correct for a poke you are meant to *anticipate*, but it may make neutral
@@ -3348,3 +3354,63 @@ lever available, and the interrupt turned out not to be reachable from that numb
 Worth keeping as a pair: the same symptom read as a damage problem from one side and a
 frames problem from the other, and only the second reading had a fix in it.
 
+
+### 2026-09-14 — nothing roots you any more
+**Changed** Committed moves keep **20% of walking speed — 1.4 m/s — instead of 0**, across all
+sixteen of them. Everything else about a committed move is untouched: for its whole length you
+still cannot jump, dodge, guard, or throw anything else. The walk table is now 7.0 free, 4.2
+poking, 3.0 crouching, 2.0 guarding, 1.4 committed.
+
+Second half, and the half that does the work: **the hindered speed is now arrived at rather
+than assigned.** Starting a move used to set horizontal velocity to the move's speed outright,
+which was a one-frame drop of 2.8 m/s for a poke and would have been 5.6 for a heavy. It now
+bleeds down to the move's speed over about four frames, on the same ramp that already handled
+the root, with the *direction* following the stick from the first frame and only the magnitude
+lagging. `tuning::attack_root_decay` is `tuning::hindrance_decay` for that reason; its floor is
+the move's own speed while you are steering and zero when you are not, which is why letting go
+of the stick mid-move still bleeds you to a stop.
+
+**Why** Reported as jarring, and it is the same report the poke drew on 2026-09-11 — "stopping
+dead feels jarring; a big slowdown with no jump and no dodge should play the same and read
+better". Worth recording that the earlier entry drew the line in the wrong place. It concluded
+that *the snap and the rooting were two different complaints wearing one coat*, fixed the snap
+everywhere and kept the rooting on the heavies as correct design. The snap half was right. The
+other half was a category error: a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to take the controls away, not the most defensible one.
+
+The thing that made rooting look load-bearing is that it was doing two jobs at once and only
+one of them was the standing still. Spatial commitment — you chose this, now live in it — is
+`Action::actionable` refusing every other button, and that was never this number. Taking the
+feet away on top of it read as the game asserting the commitment a second time, to a player
+who had already felt it.
+
+**The spacing arithmetic, because it is the obvious objection.** The longest committed move in
+the game is 42 frames. At 1.4 m/s that is 0.98 m of drift, against a body radius of 0.5 and a
+Slam that reaches 2.0. Facing still locks on frame one, so the drift is along one committed
+line rather than a way to re-aim: creeping forward during startup buys about 0.4 m of reach on
+a move whose whiff costs 24 frames of recovery. That is a skill expression at the scale of a
+footsie, not a change to whether heavies are punishable. Below the guard walk on purpose — a
+committed move should still be the most your feet ever cost you, and guarding is the slowest
+thing you can otherwise choose to do.
+
+**Verdict** open — wants a real match. The three things to watch: whether whiff-punishing a
+heavy got meaningfully harder (the arithmetic says no, the hands are the judge), whether 1.4
+reads as a crawl or as sluggish walking, and whether the four-frame ramp is visible at the
+start of a heavy or just felt.
+
+**Left open deliberately.** Every one of the sixteen got the same 20%, and there is no reason
+to believe a Cataclysm and a Bash-with-a-hammer want the same number — the per-move column
+exists and this is a uniform first guess, exactly as the poke's 60% was. The open question
+above it is the older one and is still open: *should mobility vary across a move's phases* —
+free during startup, rooted through active, slowed in recovery. Rooting only the active frames
+is the version worth trying first, because it would put the "commit to a spot" property back
+where it actually belongs without any of the cost above; it was not done here because it is a
+new mechanic rather than a number, and this change is a number.
+
+**What the harness now pins.** `feel::a_committed_move_is_a_crawl_and_never_a_stop` bounds the
+crawl at both ends: above zero, and below the guard walk. `feel::a_committed_move_takes_the_
+jump_and_the_dodge_away` drives real presses through a live `World` and is the one that matters
+— it is where commitment lives now, and if it ever passes silently while the crawl is being
+retuned, the retuning is free. `feel::hindrance_is_proportional_to_commitment` lost its
+`committed.roots()` assertion, which is why `Move::roots()` is gone: a predicate whose only
+true case the feel harness forbids is a predicate nobody can use.

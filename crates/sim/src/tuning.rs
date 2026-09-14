@@ -263,16 +263,37 @@ pub fn poke_mobility() -> u8 {
     oven::scalar(Scalar::PokeMobility) as u8
 }
 
-/// How much horizontal speed survives each frame of a move that roots you.
+/// Percent of walking speed kept while throwing a committed move.
 ///
-/// Rooting is correct for the committed moves -- that is what commitment means
-/// -- but arriving at rooted in a single frame is a snap from a full walk to
-/// nothing, which is the jarring part rather than the rooting itself. Over
-/// about four frames this bleeds off the speed instead. The distance slid is a
-/// few centimetres; it changes nothing about the spacing and everything about
-/// how it reads.
-pub fn attack_root_decay() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::AttackRootDecay))
+/// **Nothing roots any more.** Committed moves used to set this to zero, which
+/// is what commitment used to mean: you stopped, and the stick did nothing
+/// until the move was over. It read as jarring for exactly the reason the poke
+/// did -- a character who ignores the input is the game taking the controls
+/// away -- and the answer is the same one, further down. A crawl.
+///
+/// Below the guard walk, which is the slowest thing you can otherwise choose to
+/// do, so a committed move is still the most your feet ever cost you. What
+/// commitment means now is the other half of it: you cannot jump, dodge, guard
+/// or throw anything else until the move is finished, and that was always the
+/// part doing the work. See `docs/design/controls.md`.
+pub fn committed_mobility() -> u8 {
+    oven::scalar(Scalar::CommittedMobility) as u8
+}
+
+/// How much horizontal speed survives each frame of a move that hinders you.
+///
+/// A move takes your feet away in proportion to how much it commits you, but
+/// *arriving* at the hindered speed is a ramp rather than an assignment. The
+/// snap from a full walk to nothing in a single frame was the jarring half of
+/// the old dead stop, and dropping straight to a crawl instead would have put
+/// the same lurch back with a different number at the bottom of it. Over about
+/// four frames this bleeds down to whatever the move allows.
+///
+/// It is also what stops you dead when you let the stick go mid-move: the floor
+/// of the ramp is the move's own speed while you are steering, and zero when
+/// you are not.
+pub fn hindrance_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HindranceDecay))
 }
 
 /// How much vertical speed survives each frame of an aerial's hang.
