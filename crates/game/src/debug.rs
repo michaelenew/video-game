@@ -231,11 +231,17 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             // be and is exactly the thing an overlay must not still be saying.
             EffectKind::GuillotineLotus => {
                 let hub = v3(effect.lotus_hub(effect.pos));
+                let wide = effect.field_radius().to_f32_for_render();
                 for blade in 0..sim::effects::LOTUS_BLADES {
                     let head = v3(effect.lotus_at(blade, effect.pos));
-                    gizmos.sphere(
-                        Isometry3d::from_translation(head),
-                        effect.field_radius().to_f32_for_render(),
+                    // A **circle lying flat**, not a sphere: the blade is a
+                    // shuriken thrown level, wide in the flower's plane and
+                    // barely there across it, and a sphere drawn here would be
+                    // claiming a volume from the shins to the chest that the
+                    // hit test does not have. See `World::sliced`.
+                    gizmos.circle(
+                        Isometry3d::new(head, Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                        wide,
                         FIELD,
                     );
                     gizmos.line(hub, head, FIELD);

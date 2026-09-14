@@ -358,6 +358,7 @@ scalars! {
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
     LotusUncurl,       "Reaver",    "Lotus, turn coming home (turns)",       Fixed,  0,        fx(1,2);
     RepeatLockout,     "Offence",   "Repeat lockout",                        Frames, 0,        90;
+    LotusBladeThick,   "Reaver",    "Lotus, blade half-thickness",           Fixed,  fx(1,100), fx(1,2);
 }
 
 // ---------------------------------------------------------------------------

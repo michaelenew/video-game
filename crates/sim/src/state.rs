@@ -1180,7 +1180,7 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u32(e.struck);
+                    h.write_u64(e.struck);
                     h.write_i32(e.banked);
                     h.write_i32(e.reach.raw());
                     hash_v3(&mut h, &e.pos);
@@ -3817,12 +3817,13 @@ impl World {
             EffectKind::GuillotineLotus => {
                 let radius = effect.field_radius();
                 let coming_back = effect.lotus_coming_back();
+                let half_thick = t::lotus_blade_thickness();
                 for blade in 0..LOTUS_BLADES {
                     let (was, at) = effect.lotus_span(blade, effect.pos);
                     for i in 0..MAX_PLAYERS {
                         if !self.effects_reach(i, effect.owner)
                             || effect.already_hit(blade, i)
-                            || !self.swept(i, was, at, radius)
+                            || !self.sliced(i, was, at, radius, half_thick)
                         {
                             continue;
                         }
@@ -3895,16 +3896,37 @@ impl World {
         victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
     }
 
-    /// Did a blade sweeping from `was` to `at` cross this fighter's body?
+    /// Did a blade sweeping from `was` to `at` slice this fighter?
     ///
-    /// The capsule test [`resolve_hit`] already uses for a weapon that is a
-    /// line, against the same standing body. It exists because a fast enough
-    /// point tunnels: the thing being tested here crosses a metre in a frame,
-    /// and a body is not a metre wide.
-    fn swept(&self, victim: usize, was: V3, at: V3, radius: Fx) -> bool {
+    /// **A disc, not a ball**, and the shape is the ability. A Guillotine blade
+    /// is a shuriken thrown flat: wide in the plane the flower lies in, and
+    /// barely there at all across it. Tested as a sphere it was a beach ball --
+    /// at a radius wider than a fighter it swallowed everything near the line
+    /// whatever its height, which is both the wrong picture and the wrong rule.
+    ///
+    /// So two tests rather than one. **Width is measured flat**, against the
+    /// swept line, because that is the direction a blade is wide in. **Height
+    /// is a slab**: the blade occupies `half_thick` either side of the plane,
+    /// and has to overlap the body to touch it.
+    ///
+    /// The second one is the interesting half. The flower is planar and at
+    /// waist height, so a slab that thin is something a fighter can **jump**,
+    /// which a ball of the old radius was not -- it reached from the shins to
+    /// the chest. That is the counterplay the shape was always supposed to
+    /// imply and never did.
+    fn sliced(&self, victim: usize, was: V3, at: V3, radius: Fx, half_thick: Fx) -> bool {
         let p = self.players[victim];
-        let spine = V3::new(p.pos.x, p.pos.y.add(p.hurt_height()), p.pos.z);
-        crate::math::segment_gap(was, at, p.pos, spine).raw() <= radius.add(t::body_radius()).raw()
+        let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
+        let here = flat(p.pos);
+        let wide = crate::math::segment_gap(flat(was), flat(at), here, here);
+        if wide.raw() > radius.add(t::body_radius()).raw() {
+            return false;
+        }
+        // The slab the blade sweeps this frame: it is level, so both ends are
+        // at the same height and either will do.
+        let lo = at.y.sub(half_thick);
+        let hi = at.y.add(half_thick);
+        p.pos.y.raw() <= hi.raw() && p.pos.y.add(p.hurt_height()).raw() >= lo.raw()
     }
 
     /// Is this fighter's body inside a sphere?

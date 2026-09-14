@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 234] = [
+pub const SCALARS: [i32; 235] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -229,7 +229,7 @@ pub const SCALARS: [i32; 234] = [
           294912, // reaver.lotus,_how_far_the_blades_go = 4.5
            58982, // reaver.lotus,_height_off_the_shadow's_feet = 0.9
             9175, // reaver.lotus,_curve_of_the_path_(turns) = 0.14
-           29491, // reaver.lotus,_blade_radius = 0.45
+           14418, // reaver.lotus,_blade_radius = 0.22
                7, // reaver.lotus,_out = 7
               40, // reaver.lotus,_held_open = 40
               26, // reaver.lotus,_back_to_the_shadow = 26
@@ -242,6 +242,7 @@ pub const SCALARS: [i32; 234] = [
               24, // reaver.send_shadow,_press_stays_live = 24
            18350, // reaver.lotus,_turn_coming_home_(turns) = 0.28
               30, // offence.repeat_lockout = 30
+            5243, // reaver.lotus,_blade_half-thickness = 0.08
 ];
 
 #[rustfmt::skip]
@@ -682,7 +683,7 @@ pub const MOVES: [i32; 810] = [
                5, // move.shadow_reaver.guillotine.startup = 5
                5, // move.shadow_reaver.guillotine.active = 5
               16, // move.shadow_reaver.guillotine.recovery = 16
-              40, // move.shadow_reaver.guillotine.damage = 40
+              20, // move.shadow_reaver.guillotine.damage = 20
                0, // move.shadow_reaver.guillotine.reach = 0
                0, // move.shadow_reaver.guillotine.radius = 0
               22, // move.shadow_reaver.guillotine.hitstun = 22

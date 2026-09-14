@@ -1288,14 +1288,21 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             fx3(effect.arm_at(part)),
             effect.field_radius().to_f32_for_render(),
         )),
-        // One ball per blade, drawn around the shadow's live position rather
-        // than the spot the move was thrown at -- which is what makes them
-        // visibly chase it home. Same shape as the hit test, as everywhere.
+        // One **disc** per blade, drawn around the shadow's live position
+        // rather than the spot the move was thrown at -- which is what makes
+        // them visibly chase it home. Same shape as the hit test, as
+        // everywhere: a short wide cylinder lying in the flower's plane, which
+        // is a shuriken thrown flat. It was a ball, and a ball of that radius
+        // read as a beach ball rather than a blade.
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
-            shape: Shape::Ball,
+            shape: Shape::Column,
             skin: Skin::Shade,
             at: fx3(effect.lotus_at(part, effect.pos)),
-            scale: Vec3::splat(effect.field_radius().to_f32_for_render() * 2.0),
+            scale: Vec3::new(
+                effect.field_radius().to_f32_for_render() * 2.0,
+                sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
+                effect.field_radius().to_f32_for_render() * 2.0,
+            ),
         }),
         _ => None,
     }
