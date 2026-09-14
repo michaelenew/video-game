@@ -1965,6 +1965,9 @@ fn drive_camera(
         view::Surroundings {
             beast: sim.cur.monster.as_ref(),
             aboard: sim.cur.players[me].aboard(),
+            // Interpolated with everything else the fighter is drawn from, so
+            // the framing does not step at the simulation's cadence.
+            aloft: frame.players[me].aloft,
         },
     );
     inside.0 = framing.hidden;

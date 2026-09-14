@@ -16,6 +16,7 @@ use crate::DT;
 use crate::aim::{self, Contact, Path, Scene};
 use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
+use crate::camera;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
@@ -349,6 +350,23 @@ pub struct Player {
     /// to: those get different animations, and picking between them halfway
     /// through would visibly switch clips mid-flinch.
     pub stun_total: u16,
+    /// How far the camera's framing has swung over to the **airborne** one:
+    /// zero with their feet on something, one well above it.
+    ///
+    /// **A camera number in the snapshot, and it has to be.** Two things put it
+    /// here rather than leaving it to the renderer. The eye is where the aiming
+    /// ray starts (`crate::camera`), so a framing two peers disagreed about is
+    /// two peers aiming differently -- it is in the checksum for the same
+    /// reason the camera's knobs are. And it has **memory**: it may only move
+    /// so far a frame (`camera::aloft_step`), so a rollback that re-simulated
+    /// the middle of a jump without it would come out framing the fight
+    /// differently than the first pass did.
+    ///
+    /// Stepped at the end of the frame, after everything that aims. That is
+    /// deliberate: the aim a player takes on frame *n* was taken against the
+    /// camera they were looking at, which is the one frame *n-1* left behind.
+    /// See [`step_aloft`].
+    pub aloft: Fx,
 
     /// Which part of the creature this fighter is standing on, or
     /// `monster::NO_PART`.
@@ -727,6 +745,7 @@ impl Default for Player {
             parried: 0,
             crouched_for: 0,
             stun_total: 0,
+            aloft: Fx::ZERO,
             mount: monster::NO_PART,
             local: V3::ZERO,
             carry_yaw: Fx::ZERO,
@@ -868,9 +887,14 @@ impl World {
                     left: left - 1,
                 };
                 // Bodies still settle during the pause; nothing else acts.
+                // The camera keeps working through it -- a fighter knocked out
+                // of the air would otherwise have the view frozen mid-swing
+                // for the whole round-over pause.
+                let field = stones::gather(&self.players);
                 for p in self.players.iter_mut() {
                     settle(p);
                     advance_clocks(p);
+                    step_aloft(p, &field);
                 }
                 return;
             }
@@ -933,6 +957,7 @@ impl World {
             };
             step_player(p, i, input, &field, beast.as_ref(), &scene, carrying[i]);
             advance_clocks(p);
+            step_aloft(p, &field);
         }
 
         // What a move does *as it comes out*, on its first active frame: the
@@ -1286,6 +1311,7 @@ impl World {
             h.write_u32(p.parried as u32);
             h.write_u32(p.crouched_for as u32);
             h.write_u32(p.stun_total as u32);
+            h.write_i32(p.aloft.raw());
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
             let kind = match p.action {
@@ -3791,6 +3817,28 @@ fn hash_v3(h: &mut Fnv, v: &V3) {
 /// How long the parry flourish plays for. Frames, and long enough to be seen
 /// without outlasting the stagger it earned.
 pub const PARRY_FLOURISH: u16 = 14;
+
+/// One frame of the camera's swing between its grounded framing and its
+/// airborne one. See [`crate::camera`] for what the swing is and why.
+///
+/// **Last thing in the frame, on purpose.** Everything that aims reads the
+/// scene as it stood at the *top* of the frame, which is the camera the player
+/// was actually looking at when they pressed the button -- the renderer draws
+/// frame *n-1*'s snapshot while frame *n*'s input is being made. Stepping this
+/// first would aim against a framing nobody had seen yet.
+fn step_aloft(p: &mut Player, field: &Field) {
+    // How far the feet are above whatever they would land on. **Not `pos.y`**:
+    // standing on a platform, on a stone or on the creature's back is
+    // standing, and a framing that measured height from the world's origin
+    // would swing the view around for somebody who has not left the ground.
+    // `grounded` is exactly "my feet are on something", creature included.
+    let height = if p.grounded {
+        Fx::ZERO
+    } else {
+        p.pos.y.sub(aim::settle(p.pos, field).y)
+    };
+    p.aloft = camera::aloft_step(p.aloft, camera::aloft_target(height));
+}
 
 /// Advance the four clocks the renderer needs and combat does not.
 ///

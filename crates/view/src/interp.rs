@@ -61,6 +61,11 @@ pub struct PlayerView {
     /// along the crosshair, or the character is pointing one way and the
     /// attack is going another.
     pub aim_pitch: f32,
+    /// How far the camera's framing has swung over to the airborne one. Blended
+    /// between the two snapshots like every other continuous quantity, so the
+    /// view does not step at the simulation's cadence -- see
+    /// `sim::state::Player::aloft`.
+    pub aloft: f32,
 }
 
 /// The Reaver's second body, ready to draw.
@@ -168,6 +173,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     // like every other continuous quantity, so the arm does not step.
     let pitch_of = |v: &sim::state::Player| fx(v.aim_dir().y).clamp(-1.0, 1.0).asin();
     let aim_pitch = lerp(pitch_of(p), pitch_of(c), a);
+    let aloft = lerp(fx(p.aloft), fx(c.aloft), a);
 
     PlayerView {
         pos,
@@ -188,6 +194,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         rise: fx(c.vel.y),
         turn_rate,
         aim_pitch,
+        aloft,
     }
 }
 
