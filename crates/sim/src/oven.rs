@@ -281,6 +281,7 @@ scalars! {
     FireBoltKnockback, "Elementalist", "Fire bolt knockback",               Fixed,  0,        fx(30,1);
     TornadoSpeed,      "Elementalist", "Fire tornado speed",                Fixed,  fx(1,1),  fx(40,1);
     TornadoPull,       "Elementalist", "Fire tornado pull (m/s2)",          Fixed,  0,        fx(100,1);
+    TornadoTravelLife, "Elementalist", "Fire tornado travel time",          Frames, 1,        600;
     DebrisSpeed,       "Elementalist", "Cataclysm debris speed",            Fixed,  fx(1,1),  fx(40,1);
     DebrisRange,       "Elementalist", "Cataclysm debris range",            Fixed,  fx(1,1),  fx(20,1);
     DebrisRadius,      "Elementalist", "Cataclysm debris radius",           Fixed,  fx(1,10), fx(2,1);

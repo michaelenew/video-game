@@ -408,12 +408,15 @@ impl Effect {
     /// pillar would be either useless against a jump or unavoidable on the
     /// ground.
     ///
-    /// **A tornado grows the same way its pillar did**, on the same curve,
-    /// against `age` reset to zero at the moment it is torn loose -- see
-    /// `state::World::fire_the_cataclysm`. Not a fully-formed thing that
-    /// simply starts moving: it erupts again where it stands and grows into
-    /// itself exactly as a planted pillar does, and only then is it the
-    /// travelling hazard.
+    /// **A tornado grows on the same curve its pillar was already growing
+    /// on**, against `age` left exactly as it was the instant Cataclysm cut
+    /// it loose -- see `state::World::fire_the_cataclysm`, which never
+    /// resets it. It is not a new thing that starts moving already finished:
+    /// one caught early keeps erupting into itself while it travels, the
+    /// same growth a planted pillar would have shown standing still, and one
+    /// caught late is already as grown as it was ever going to get and stays
+    /// that way. How long it then gets to keep existing is a different
+    /// question, asked apart from this one -- see `tuning::tornado_travel_life`.
     pub fn pillar_volumes(&self) -> (Pillar, Pillar) {
         let grown = self.progress();
         let base = Pillar {

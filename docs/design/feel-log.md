@@ -2941,3 +2941,76 @@ shadow stands is the whole class.
 What has not been played is whether the cancel changes what she *throws*. The prediction is that
 Executioner stops being a move you only use on a read — its tail is the reason it is scary to
 commit to, and that tail now has somewhere to go.
+
+### 2026-09-14 — the tornado stopped early, dragged nobody, and once vanished outright
+
+**Changed** three things reported against the fix above, once it actually reached a player: the
+tornado still ran out of time far too early depending on when it was caught, standing inside it
+still left you behind rather than riding along, and aimed through a fire pillar at a dais corner
+it would vanish instead of converting at all.
+
+**Growth and expiry were still the same clock.** The previous fix made `age`/`life` answer "how
+grown is it" continuously across the moment of conversion, which was right -- but `step_effects`
+was still reading that same pair for "has it burned out." A pillar caught late in its own life,
+already most of the way to `pillar_life`'s 180 frames, got almost no time to travel before its
+budget ran out; one caught early got to travel for a while but stopped growing and expired at
+the same instant, because both questions were being asked of one number. They are different
+questions: how grown a tornado is was never in doubt, and how long it gets to keep existing once
+it starts moving does not need to be the same budget the stationary pillar was already spending.
+A new scalar, `tuning::tornado_travel_life`, answers the second question on its own clock --
+frames since `Effect::banked` was stamped, the same reference `tornado_pos` already measures
+flight from -- so every tornado gets the same travel window regardless of how much of its
+pillar's original life was left when it was cut loose.
+
+**The carry was an acceleration fighting a decay it could never win.** The previous entry got the
+*window* right -- a stunned fighter's velocity only decays, rather than being overwritten from
+the stick -- but the carry itself steered his velocity toward the tornado's own travelling
+velocity by a fixed acceleration each frame, the same shape `air_accelerate` uses for a jump.
+Solved for steady state, an acceleration racing a proportional decay converges on a velocity far
+short of the thing it is chasing: `stun_decay` at 0.86 loses 14% of whatever speed a fighter has
+every single frame, so the carry had to out-accelerate that loss before it could add anything at
+all, and never fully did -- caught, a fighter fell further behind the live centre every frame
+instead of riding alongside it, the exact bug the pull was supposed to have already fixed. The
+fix does not go through velocity at all: the tornado's own per-frame displacement is added
+straight to a caught fighter's position, the same way a rising stone carries whoever is standing
+on it (`stones::resolve_body`) rather than accelerating them upward to match its speed. Moved
+this way a fighter cannot fall behind, because he is not chasing the tornado's velocity, he is
+*being* the tornado's velocity for that one frame. The radial pull still runs, now measured
+*after* the carry rather than before it -- against the position it just moved him to, not the one
+he stood at the top of the frame, which used to read the tornado's own stride as radial distance
+to close and yank him forward on top of a ride that was already keeping pace on its own, the
+source of a slow drift the carry's own test caught once the acceleration bug above no longer
+buried it. What the pull is actually for, once the carry is doing its job, is genuine sideways
+drift off the axis -- and the fixture that exercises it now stands a fighter off to one side of
+the tornado's line rather than dead on it, because dead on it the carry alone already keeps him
+matched and there is nothing left for the pull to close.
+
+**The dais corner sent it through the floor.** `fire_the_cataclysm` was assigning a tornado's
+travel direction straight from the beam Cataclysm was aimed along -- `beam.dir()`, whatever pitch
+that beam happened to be flying at. Most casts are level, because most of what Cataclysm meets
+reads as `Met::Ground` and `aim::skillshot_path` flattens the beam's height for exactly that
+reading -- but aimed at the elevated top corner of one of the arena's two low platforms, sight's
+ray can miss the platform's box outright (a corner is a knife's-edge for `ray_hits_box`) and
+land on the max-range sphere instead, at whatever pitch the crosshair was actually on. `Met::Reach`
+does not get flattened, so the beam it produces flies wherever it was pointed, pitch included --
+still capable of meeting a fire pillar's column along the way, but handing the tornado a
+travelling direction with a real vertical component. `tornado_pos` had never needed to guard
+against that: it adds `dir` scaled by distance travelled straight onto `pos` every time it is
+asked, with nothing keeping the answer at ground level, so a tornado lit with even a small
+downward tilt walked its own centre through the floor within a couple of frames and
+`arena::inside` read that as having wandered off the map -- the pillar it came from simply
+vanished, having never been seen to move at all. A fire tornado is a ground hazard the same way
+the pillar it came from was, so its direction is flattened to the horizontal plane and
+renormalized the moment Cataclysm tears one loose, the same trick `bolt::light` already uses for
+a shot that might have been aimed with pitch of its own. Reproduces consistently: stand beside
+either platform, plant a pillar at its base corner, then aim Cataclysm at the platform-top corner
+directly above that one.
+
+**Verdict** open. The travel-time and carry fixes make the tornado read as one continuous move
+the way it was always meant to, rather than one whose window and drag depended on when in a
+pillar's life it happened to get caught. The dais fix is a straightforward correctness bug once
+found, but it was found by a player, not a test -- the four kinds of aiming in `aim.rs` all still
+assume a caster on flat, unobstructed ground when it comes to what a *travelling effect* born
+from an aimed cast should do with that aim's pitch, and Cataclysm's tornado is the first thing in
+the kit that keeps a cast's direction alive after the cast itself is over. Worth watching for the
+same shape of bug anywhere else a moving effect inherits a beam's raw direction.

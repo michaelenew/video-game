@@ -1086,6 +1086,18 @@ pub fn tornado_pull() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::TornadoPull))
 }
 
+/// How long a loosed pillar can fly before it burns out on its own clock,
+/// counted from the frame it was cut loose rather than from when it was
+/// first planted -- see `Effect::tornado_pos` and `state::World::step_effects`.
+/// Separate from how grown it is: growth is `pillar_life`'s question, answered
+/// continuously from the moment it was planted, so a pillar cut loose late in
+/// its life is already mature and one cut loose early keeps growing into
+/// itself as it travels -- either way, this is only asking how much longer it
+/// gets to exist once it starts moving.
+pub fn tornado_travel_life() -> u16 {
+    oven::scalar(Scalar::TornadoTravelLife) as u16
+}
+
 /// How fast each piece of a broken structure flies.
 pub fn debris_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DebrisSpeed))
