@@ -65,12 +65,21 @@ pub struct Move {
     pub aim_code: u8,
     /// Percent of walking speed you keep while the move runs.
     ///
-    /// Zero roots you, which is what commitment means and is correct for the
-    /// heavy moves. It is wrong for a fast poke: the poke is the neutral tool,
-    /// thrown constantly, and stopping dead every time makes neutral sticky and
-    /// reads as the game snatching the controls away. Slowing you keeps the
-    /// cost -- you cannot close or escape at full speed while swinging --
-    /// without the lurch.
+    /// A poke slows you; a committed move slows you to a crawl. **Nothing is
+    /// zero.** Zero roots you, and rooting was what commitment used to mean --
+    /// but a character who ignores the stick reads as the game snatching the
+    /// controls away, which was the complaint that took it off the pokes first
+    /// and off the heavies after. What commitment means is that you cannot
+    /// jump, dodge, guard or throw anything else until the move is finished,
+    /// and none of that is this number: see `crate::state::Action::actionable`.
+    ///
+    /// See [`tuning::poke_mobility`] and [`tuning::committed_mobility`] for the
+    /// two reference speeds, and `docs/design/controls.md` for the table they
+    /// sit in. The palette can still set this to zero; the feel harness is what
+    /// says it should not be.
+    ///
+    /// [`tuning::poke_mobility`]: crate::tuning::poke_mobility
+    /// [`tuning::committed_mobility`]: crate::tuning::committed_mobility
     pub mobility: u8,
     /// How far a swing travels, in turns, and **which way**.
     ///
@@ -121,6 +130,25 @@ pub struct Move {
     /// to what the move itself deals and to what anything it leaves behind
     /// drains -- one number per ability, wherever the damage happens to land.
     pub leech: u8,
+    /// This move's share of the shared repeat lockout, as a percentage.
+    ///
+    /// 100 on everything until somebody plays it and finds otherwise, which is
+    /// the point of it being a column rather than a constant: the shared number
+    /// is the rule and this is where a move argues with it. Zero exempts a move
+    /// from the rule outright.
+    ///
+    /// The frames themselves are [`Move::repeat_lock`]; this is only the
+    /// multiplier, because the number it multiplies is tuned in one place for
+    /// the whole roster.
+    pub repeat_mul: u8,
+    /// The shortest gap between one activation of this ability and the next,
+    /// for the ones that are used more than once per cast.
+    ///
+    /// Zero on everything, including the two that have a second activation:
+    /// today neither of them is gated and the number is here to be found by
+    /// playing rather than guessed at a desk. Meaningless on a move whose own
+    /// button does not reactivate it -- see [`reactivates`].
+    pub reactivate: u16,
     /// The volume this move puts in the world. See [`Shape`].
     pub shape: Shape,
     /// Which arm it comes out of. See [`crate::aim::Hand`].
@@ -259,9 +287,27 @@ impl Move {
         self.startup + self.active + self.recovery
     }
 
-    /// Whether the move pins you in place for its duration.
-    pub const fn roots(&self) -> bool {
-        self.mobility == 0
+    /// How long after throwing this move you may not throw *it* again.
+    ///
+    /// The shared number from [`tuning::repeat_lockout`] scaled by this move's
+    /// own [`repeat_mul`]. See that function for why this is not a cooldown.
+    ///
+    /// [`tuning::repeat_lockout`]: crate::tuning::repeat_lockout
+    /// [`repeat_mul`]: Move::repeat_mul
+    pub fn repeat_lock(&self) -> u16 {
+        (crate::tuning::repeat_lockout() as u32 * self.repeat_mul as u32 / 100).min(u16::MAX as u32)
+            as u16
+    }
+
+    /// Frames the lockout keeps you waiting *beyond* the move itself.
+    ///
+    /// The number that says whether the rule touches this move at all. A move
+    /// that commits you for longer than its own lockout comes out of recovery
+    /// with the lockout already expired, so this is zero and the rule is
+    /// invisible on it -- which is every committed heavy in the game. What is
+    /// left is the autos and the fast pokes, which is the set the rule is for.
+    pub fn repeat_idle(&self) -> u16 {
+        self.repeat_lock().saturating_sub(self.whiff_cost())
     }
 
     /// Whether this move strikes on its own, or only places something -- or
@@ -334,9 +380,10 @@ impl Move {
 /// Three is the shared vocabulary. The Blood mage has a fourth on `E`, because
 /// her mechanic is *health* -- not a thing you press a button to change -- so
 /// the key is free for an ability, and an ability needs a startup, a reach and
-/// a cost like any other. The Champion has ten, because its three mouse buttons
-/// are three weapons and each of them behaves differently on foot, in the air
-/// and mid-Rush: see [`champion`].
+/// a cost like any other. The Champion has nineteen, because its three mouse
+/// buttons are three weapons, each of them chains three hits deep, and each of
+/// them behaves differently on foot, in the air, mid-Rush and on the way off
+/// the floor: see [`champion`].
 ///
 /// Storage is packed to these counts, so a class that does not have a slot does
 /// not have knobs for one either -- see [`slots`] and [`bound`].
@@ -346,18 +393,34 @@ const NAMES: [&[&str]; 6] = [
     //   Slam: the overhead. Heavily punishable if read, heavily rewarding if not.
     //   Grapple: beats guard outright, loses badly to dodge.
     &["Bash", "Slam", "Grapple"],
-    // Champion -- three weapons on three buttons, and a dash that changes what
-    // all three of them do. Ten moves: see `champion` for the grid they form.
+    // Champion -- three weapons on three buttons, and the row of the grid is
+    // the situation your feet are in. Nineteen moves: see `champion`.
+    //
+    // The first nine are the **chain**, three hits deep, and every hit is a
+    // free choice of weapon -- that is the class fantasy stated as a move list.
+    // Reading them as three rows of three rather than as three combos is the
+    // point: hit one is any of the first three, hit two is any of the second
+    // three, hit three is any of the last, and nothing says the three have to
+    // be the same weapon.
     &[
         "Sword",
         "Hammer",
         "Spear",
+        "Backcut",
+        "Uproot",
+        "Skewer",
+        "Crescent",
+        "Earthbreaker",
+        "Impale",
         "Air sword",
         "Air hammer",
         "Air spear",
         "Rush slash",
-        "Uppercut",
+        "Rush sweep",
         "Rush stab",
+        "Rising cut",
+        "Uppercut",
+        "Pole drive",
         "Pole vault",
     ],
     // Shadow Reaver -- two bodies. Options are a function of the line between
@@ -377,6 +440,8 @@ const NAMES: [&[&str]; 6] = [
     //     through anybody in the way.
     &["Slash", "Executioner", "Guillotine", "Send shadow"],
     // Elementalist -- terrain author. Ranged, and creates its own targets.
+    // Seven: four on the ground, and a whole row of three off it. See
+    // [`elementalist`].
     //   Bolt: the game's one *skillshot* -- an instant line from her hand to
     //   whatever the crosshair is on, so its `reach` is the max-range sphere
     //   and its `radius` is the line's thickness. Resolved where it is fired
@@ -391,7 +456,20 @@ const NAMES: [&[&str]; 6] = [
     //   breaks into thrown debris (see `crate::debris`); a fire pillar in the
     //   way is not charged, it is torn loose into a travelling fire tornado
     //   (see `crate::effects::EffectKind::FireTornado`).
-    &["Bolt", "Fissure", "Fire pillar", "Cataclysm"],
+    //   Air bolt, Gale, Landfall: the same three buttons with her feet off the
+    //   floor. Both shots *travel*, unlike anything she throws standing up --
+    //   see `crate::gust` -- and neither has a hitbox of its own, which is
+    //   what `Shape::None` in [`shape`] says. Landfall does: a disc on the
+    //   floor where she arrives.
+    &[
+        "Bolt",
+        "Fissure",
+        "Fire pillar",
+        "Cataclysm",
+        "Air bolt",
+        "Gale",
+        "Landfall",
+    ],
     // Blood mage -- sustain through aggression. Everything costs health, and
     // every one of these has a cost in the table to prove it.
     //   Bloodletter: the auto. Out to a fixed distance and back, cutting on
@@ -415,61 +493,128 @@ const NAMES: [&[&str]; 6] = [
 pub const SLOTS: usize = 3;
 
 // ---------------------------------------------------------------------------
-// The Champion's ten
+// The Champion's nineteen
 // ---------------------------------------------------------------------------
 
-/// The Champion's move list, as a **grid**: three stances by three weapons,
-/// plus the one move that is neither.
+/// The Champion's move list, as a **grid**: a row per situation, a column per
+/// weapon, and the first three rows are one three-hit chain rather than three.
 ///
 /// This is the whole of the class's input scheme and it is worth reading as a
-/// table rather than as a list of ten moves:
+/// table rather than as a list of nineteen moves:
 ///
 /// ```text
-///              left click      middle click    right click
-///   on foot    Sword           Hammer          Spear
-///   in the air Air sword       Air hammer      Air spear
-///   rushing    Rush slash      Uppercut        Rush stab / Pole vault
+///                     left click      middle click    right click
+///   on foot, hit 1    Sword           Hammer          Spear
+///   on foot, hit 2    Backcut         Uproot          Skewer
+///   on foot, hit 3    Crescent        Earthbreaker    Impale
+///   in the air        Air sword       Air hammer      Air spear
+///   rushing           Rush slash      Rush sweep      Rush stab
+///   leaving the floor Rising cut      Uppercut        Pole drive
+///   (rushing, aimed at the floor: Pole vault)
 /// ```
 ///
-/// The button is the **weapon** and never changes meaning; the row is where
-/// your feet are. That is the entire thing a new player has to learn, and it
-/// is why the Champion can carry ten moves on three buttons without a single
+/// The button is the **weapon** and never changes meaning; the row is the
+/// situation. That is the entire thing a new player has to learn, and it is why
+/// the Champion can carry nineteen moves on three buttons without a single
 /// modifier: you never choose a move, you choose a weapon, and the situation
 /// chooses the move.
 ///
-/// The tenth is the Pole vault, which shares right click with the Rush stab
-/// and is separated by where you are pointing: a spear planted in the ground
-/// vaults, a spear levelled at someone stabs.
+/// **The first three rows are one chain.** Connect with any of the first row
+/// and the same three buttons throw the second row; connect again and they
+/// throw the third. Which weapon each hit is thrown with is a free choice every
+/// time, so sword into spear into hammer is an ordinary thing to do and is the
+/// class fantasy -- one haft, three heads, chosen a hit at a time. See
+/// [`link_of`] and `state::champion_move`.
+///
+/// The last row is the **takeoff**: a weapon thrown on the same press as jump,
+/// which is how this class leaves the ground with something already swinging.
+///
+/// The nineteenth is the Pole vault, which shares right click with the Rush
+/// stab and is separated by where you are pointing: a spear planted in the
+/// ground vaults, a spear levelled at someone stabs.
 pub mod champion {
     /// Weapons, in button order. The column of the grid.
     pub const SWORD: u8 = 0;
     pub const HAMMER: u8 = 1;
     pub const SPEAR: u8 = 2;
 
-    /// Stances. The row of the grid, as a base to add a weapon to.
-    pub const ON_FOOT: u8 = 0;
-    pub const IN_THE_AIR: u8 = 3;
-    pub const RUSHING: u8 = 6;
+    /// Rows. The situation, as a base to add a weapon to.
+    ///
+    /// The first three are the chain, in order, which is what lets the stage a
+    /// player has reached be a number rather than a table: the move is
+    /// `LINKS[stage] + weapon`.
+    pub const FIRST: u8 = 0;
+    pub const SECOND: u8 = 3;
+    pub const THIRD: u8 = 6;
+    pub const IN_THE_AIR: u8 = 9;
+    pub const RUSHING: u8 = 12;
+    pub const TAKEOFF: u8 = 15;
 
-    pub const SWORD_GROUND: u8 = ON_FOOT + SWORD;
-    pub const HAMMER_GROUND: u8 = ON_FOOT + HAMMER;
-    pub const SPEAR_GROUND: u8 = ON_FOOT + SPEAR;
+    /// The three rows of the chain, deepest last.
+    pub const LINKS: [u8; 3] = [FIRST, SECOND, THIRD];
+    /// How many hits deep the chain goes.
+    pub const DEPTH: u8 = LINKS.len() as u8;
+
+    pub const SWORD_GROUND: u8 = FIRST + SWORD;
+    pub const HAMMER_GROUND: u8 = FIRST + HAMMER;
+    pub const SPEAR_GROUND: u8 = FIRST + SPEAR;
+    pub const BACKCUT: u8 = SECOND + SWORD;
+    pub const UPROOT: u8 = SECOND + HAMMER;
+    pub const SKEWER: u8 = SECOND + SPEAR;
+    pub const CRESCENT: u8 = THIRD + SWORD;
+    pub const EARTHBREAKER: u8 = THIRD + HAMMER;
+    pub const IMPALE: u8 = THIRD + SPEAR;
     pub const AIR_SWORD: u8 = IN_THE_AIR + SWORD;
     pub const AIR_HAMMER: u8 = IN_THE_AIR + HAMMER;
     pub const AIR_SPEAR: u8 = IN_THE_AIR + SPEAR;
     pub const RUSH_SLASH: u8 = RUSHING + SWORD;
-    pub const UPPERCUT: u8 = RUSHING + HAMMER;
+    pub const RUSH_SWEEP: u8 = RUSHING + HAMMER;
     pub const RUSH_STAB: u8 = RUSHING + SPEAR;
+    pub const RISING_CUT: u8 = TAKEOFF + SWORD;
+    pub const UPPERCUT: u8 = TAKEOFF + HAMMER;
+    pub const POLE_DRIVE: u8 = TAKEOFF + SPEAR;
     /// The odd one out: right click during a Rush, aimed at the floor.
-    pub const POLE_VAULT: u8 = 9;
+    pub const POLE_VAULT: u8 = 18;
 
-    pub const COUNT: usize = 10;
+    pub const COUNT: usize = 19;
 
     /// Which weapon a move is thrown with. The column of the grid, except for
     /// the vault, which is planted with the spear like everything else on
     /// right click.
     pub const fn weapon(kind: u8) -> u8 {
         if kind == POLE_VAULT { SPEAR } else { kind % 3 }
+    }
+
+    /// How many hits into the chain this move is, if it is one of the nine.
+    ///
+    /// `Some(0)` is an opener, `Some(2)` a finisher, `None` a move that is not
+    /// part of the chain at all -- an aerial, a Rush move, a takeoff. Asked
+    /// rather than inferred from the index anywhere else, because "is this
+    /// thing a chain link" is the question three separate rules need answered
+    /// and each of them getting it from arithmetic is how one of them ends up
+    /// disagreeing.
+    pub const fn link_of(kind: u8) -> Option<u8> {
+        if kind < IN_THE_AIR {
+            Some(kind / 3)
+        } else {
+            None
+        }
+    }
+
+    /// The move a given weapon throws at a given depth into the chain.
+    ///
+    /// Clamped rather than wrapped: a fourth press is the finisher again in
+    /// arithmetic and a fresh opener in play, and it is the caller -- which
+    /// knows whether the chain is still alive -- that decides which. Clamping
+    /// keeps a bad stage from indexing off the end of the table.
+    pub const fn link(stage: u8, weapon: u8) -> u8 {
+        let stage = if stage >= DEPTH { DEPTH - 1 } else { stage };
+        LINKS[stage as usize] + weapon
+    }
+
+    /// Is this move thrown as the feet leave the floor?
+    pub const fn is_takeoff(kind: u8) -> bool {
+        kind >= TAKEOFF && kind < POLE_VAULT
     }
 }
 
@@ -541,21 +686,77 @@ pub mod dual {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The Elementalist's seven
+// ---------------------------------------------------------------------------
+
+/// The Elementalist's move list, as **two rows**: what the three buttons do
+/// with her feet on the floor, and what they do off it.
+///
+/// ```text
+///                 left click      right click     E
+///   standing      Bolt            Cataclysm       Raise -- the mechanic,
+///                 (shift: Fissure, Q: Fire pillar)  an instant, no frames
+///   in the air    Air bolt        Gale            Landfall
+/// ```
+///
+/// The row is the situation and the button never changes meaning, which is the
+/// Champion's grid read one class further: left click is the cheap shot you
+/// throw constantly, right click is the committed one, `E` is earth. That is
+/// the answer `docs/design/README.md` left open under **Aerials** -- airborne
+/// attacks are *variants of their grounded counterparts* rather than a
+/// separate move list -- given to the second class.
+///
+/// **Why air.** Earth is what she is standing on, and off the floor she is not
+/// standing on it: the two shots are the element she can reach in the air, and
+/// the way back to earth is to go and hit it. That is Landfall, and it is the
+/// only one of the three that leaves a structure behind.
+///
+/// Shift does not modify the air row. There is no airborne Fissure -- a crack
+/// racing along the ground is a thing thrown *from* the ground -- so shift plus
+/// left click in the air is the Air bolt rather than a move that does not
+/// exist.
+pub mod elementalist {
+    /// Left click, airborne. A bolt of air with a real speed, thrown along the
+    /// crosshair -- see `crate::gust`.
+    pub const AIR_BOLT: u8 = 4;
+    /// Right click, airborne. A disc of air that **grows as it travels**, and
+    /// hits harder the bigger it has got: the same inverted spacing Flame
+    /// spitter is written around, as a projectile.
+    pub const GALE: u8 = 5;
+    /// `E`, airborne. The plunge: a long, readable descent that ends in a
+    /// stagger on the floor and a slab of rock thrown up at an angle in front
+    /// of her. On the ground `E` is still the mechanic and still an instant --
+    /// see `moves::on_e`, which answers for the key without knowing where her
+    /// feet are, and `state::keyed_move`, which is what does know.
+    pub const LANDFALL: u8 = 6;
+
+    pub const COUNT: usize = 7;
+
+    // **No `is_airborne` here, deliberately.** "Which move is this button" is
+    // answered once, in `state::elementalist_move` and `state::keyed_move`, and
+    // "does this move throw a travelling shot" is answered once, by
+    // `gust::Gale::thrown_by`. A third predicate saying the same thing in a
+    // third shape is not a declaration, it is a second answer waiting to
+    // disagree with the first.
+}
+
 /// How many moves a class has.
 ///
 /// Per class rather than a single constant because the Champion legitimately
-/// grew: its three mouse buttons are three weapons and each weapon behaves
-/// differently on foot, in the air and mid-Rush, which is nine moves plus the
-/// vault. Every other class still has the original three, and the storage in
-/// the Oven is packed to these counts so the five that did not grow cost
-/// nothing.
+/// grew: its three mouse buttons are three weapons, the ground chain is three
+/// hits deep, and a weapon behaves differently in the air, mid-Rush and on the
+/// frame the feet leave the floor -- eighteen moves plus the vault. Every other
+/// class still has the original three, and the storage in the Oven is packed to
+/// these counts so the five that did not grow cost nothing.
 pub const fn slots(class: Class) -> usize {
     match class {
         Class::Champion => champion::COUNT,
-        // The fourth is Cataclysm, on right click -- structures and fire are
-        // her whole kit, and right click is otherwise dead weight on a class
-        // with no shield. See `clicked_move`.
-        Class::Elementalist => SLOTS + 1,
+        // Seven: the four she throws standing up -- the fourth being
+        // Cataclysm on right click, otherwise dead weight on a class with no
+        // shield -- and a row of three more for the same buttons with her feet
+        // off the floor. See [`elementalist`] and `state::clicked_move`.
+        Class::Elementalist => elementalist::COUNT,
         // The fourth is Black spike, on `E`. See `on_e`.
         Class::BloodMage => SLOTS + 1,
         // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
@@ -582,8 +783,8 @@ pub const fn slots(class: Class) -> usize {
 /// cost like any other.
 ///
 /// A function rather than a fixed slot index, because "the fourth slot" stopped
-/// meaning "the `E` key" the moment a class had ten of them: the Champion's
-/// fourth is its aerial sword.
+/// meaning "the `E` key" the moment a class had nineteen of them: the
+/// Champion's fourth is the second link of its sword chain.
 pub const fn on_e(class: Class) -> Option<u8> {
     match class {
         Class::BloodMage => Some(SLOTS as u8),
@@ -613,6 +814,25 @@ pub const TOTAL_SLOTS: usize = {
     n
 };
 
+/// The most slots any one class has -- the Champion's nineteen.
+///
+/// Counted rather than written down, for the same reason [`TOTAL_SLOTS`] is: a
+/// literal is a second statement of the same fact, and the two disagree the
+/// first time somebody gives a class another move. It is the width of the
+/// per-move storage a *fighter* carries, which today is the repeat lockout.
+pub const MAX_SLOTS: usize = {
+    let mut n = 0;
+    let mut i = 0;
+    while i < crate::class::ALL_CLASSES.len() {
+        let s = slots(crate::class::ALL_CLASSES[i]);
+        if s > n {
+            n = s;
+        }
+        i += 1;
+    }
+    n
+};
+
 /// Where a class's slots begin in that store.
 pub const fn base_slot(class: Class) -> usize {
     let mut n = 0;
@@ -636,18 +856,27 @@ pub const fn base_slot(class: Class) -> usize {
 /// `crates/manual`; this is the label, not the binding.
 pub const fn binding(class: Class, slot: usize) -> &'static str {
     match class {
-        // The grid in `champion`: the button is the weapon, the row is where
-        // your feet are.
+        // The grid in `champion`: the button is the weapon, the row is the
+        // situation -- and the first three rows are one chain.
         Class::Champion => match slot {
             0 => "LMB",
             1 => "MMB",
             2 => "RMB",
-            3 => "LMB air",
-            4 => "MMB air",
-            5 => "RMB air",
-            6 => "LMB rush",
-            7 => "MMB rush",
-            8 => "RMB rush",
+            3 => "LMB, 2nd",
+            4 => "MMB, 2nd",
+            5 => "RMB, 2nd",
+            6 => "LMB, 3rd",
+            7 => "MMB, 3rd",
+            8 => "RMB, 3rd",
+            9 => "LMB air",
+            10 => "MMB air",
+            11 => "RMB air",
+            12 => "LMB rush",
+            13 => "MMB rush",
+            14 => "RMB rush",
+            15 => "Space+LMB",
+            16 => "Space+MMB",
+            17 => "Space+RMB",
             _ => "RMB rush, low",
         },
         // The Reaver's committed melee answers to right click as well, because
@@ -674,7 +903,12 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             0 => "LMB",
             1 => "Shift+LMB",
             2 => "Q",
-            _ => "RMB",
+            3 => "RMB",
+            // The air row. The button is the same; the situation is what
+            // changes what it throws. See [`elementalist`].
+            4 => "LMB air",
+            5 => "RMB air",
+            _ => "E air",
         },
         _ => match slot {
             0 => "LMB",
@@ -699,24 +933,60 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
 pub const fn shape(class: Class, kind: u8) -> Shape {
     use champion as c;
     match class {
+        // **Shape is a property of the weapon, not of the move.** Every sword
+        // move in the class cuts across, every hammer move travels up or down
+        // the vertical, every spear move is a line along the aim -- through all
+        // three links of the chain, in the air and out of a Rush. That is what
+        // "each weapon has an identity" means when it is written as code rather
+        // than as prose: a player who has learnt that the hammer owns the
+        // ground under it has learnt something that is true of every hammer
+        // move there is.
+        //
+        // The two exceptions are both the air, and both are the same exception:
+        // off the ground there is no floor to cut across, so the sword rolls
+        // its arc into the vertical and the spear sweeps its fan flat around
+        // the aim instead of thrusting down a line nobody is standing on.
         Class::Champion => match kind {
-            // Across the front, at hip height. The sword owns the width.
-            c::SWORD_GROUND => Shape::Swing(Plane::Flat),
-            // Overhead to the floor. The hammer owns the line under it.
-            c::HAMMER_GROUND => Shape::Swing(Plane::Upright),
+            // Across the front. The sword owns the width -- at hip height
+            // opening, coming back the other way, and all the way round on the
+            // finisher.
+            c::SWORD_GROUND | c::BACKCUT | c::CRESCENT | c::RUSH_SLASH => Shape::Swing(Plane::Flat),
+            // Up and down the vertical plane the aim lies in. The hammer owns
+            // the line under it: overhead to the floor, torn back out of it,
+            // and driven through it.
+            c::HAMMER_GROUND | c::UPROOT | c::EARTHBREAKER | c::RUSH_SWEEP => {
+                Shape::Swing(Plane::Upright)
+            }
             // Straight out along the aim. The spear owns the distance.
-            c::SPEAR_GROUND => Shape::Thrust,
-            // The same three, rolled into the vertical: a sword cut you bring
-            // down on somebody, a hammer you drop on them, and a fan the spear
-            // sweeps around wherever you are pointing.
+            c::SPEAR_GROUND | c::SKEWER | c::IMPALE | c::RUSH_STAB => Shape::Thrust,
+            // The air: a sword cut you bring down on somebody, a hammer you
+            // drop on them, and a fan the spear sweeps around wherever you are
+            // pointing.
             c::AIR_SWORD | c::AIR_HAMMER => Shape::Swing(Plane::Upright),
             c::AIR_SPEAR => Shape::Swing(Plane::Flat),
-            c::RUSH_SLASH => Shape::Swing(Plane::Flat),
-            c::UPPERCUT => Shape::Swing(Plane::Upright),
-            c::RUSH_STAB => Shape::Thrust,
+            // The takeoffs are all vertical, because all three of them are the
+            // weapon going the way the body is about to: the sword and the
+            // hammer rise through the arc and the spear drives the other end of
+            // itself into the floor.
+            c::RISING_CUT | c::UPPERCUT | c::POLE_DRIVE => Shape::Swing(Plane::Upright),
             // Movement, not an attack. A vault that also hit people would be
             // strictly better than the stab it shares a button with.
             _ => Shape::None,
+        },
+        // Her two air shots put a thing in the world and let it do the
+        // hitting, so the body itself has no volume at all -- the same shape
+        // the Champion's vault is, arrived at from the other direction. The
+        // Blood mage's blade says the same thing with a radius of zero; these
+        // cannot, because a travelling shot needs a thickness and `radius` is
+        // where it is written. See `Move::strikes` for the two sentences.
+        //
+        // Everything else she has is still the original disc: three of the
+        // four grounded moves land on the floor where they were aimed, the
+        // fourth is a beam drawn from the line it flew, and Landfall is a disc
+        // on the floor at her own feet.
+        Class::Elementalist => match kind {
+            elementalist::AIR_BOLT | elementalist::GALE => Shape::None,
+            _ => Shape::Cylinder,
         },
         // The Dual mage's two autos are punches with a wing behind them, and
         // Sweep is a cut across the whole front. Lance and Judgement are still
@@ -754,6 +1024,61 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
         },
         _ => Hand::Centre,
     }
+}
+
+/// Does this ability stay **out in the world** after the cast, so that its
+/// repeat lockout has to wait for it?
+///
+/// Two abilities do, and both are the Reaver's: the shadow stands where it was
+/// sent until it is called back, and the lotus hangs its blades until a recall
+/// drags them home. An ability is not *used* until it is spent, so their
+/// lockouts are parked at full for as long as any of it is still out there --
+/// otherwise leaving the shadow parked in a corner would quietly serve the
+/// lockout for the next send while it waited.
+///
+/// **Declared here, and what it declares is the question rather than the
+/// answer.** Whether the thing is still out is a fact about the world and lives
+/// in `state::Player::abilities_out`, which is the only place that knows how to
+/// look -- the shadow is the class mechanic and the blades are an entry in the
+/// effect table, and nothing but that function knows both. This says which
+/// slots it is worth asking about, which is what lets the frame table say
+/// "waits until it is home" where it would otherwise print a frame count that
+/// is only true for an ability that finishes when its recovery does.
+///
+/// An ability that lingers but has no answer in `abilities_out` simply gets the
+/// ordinary rule, which is the safe direction to be wrong in: its lockout
+/// starts at the cast rather than never starting at all.
+pub const fn lingers(class: Class, kind: u8) -> bool {
+    matches!(class, Class::ShadowReaver)
+        && matches!(
+            kind,
+            crate::state::SLOT_MECHANIC | crate::state::SLOT_SPECIAL
+        )
+}
+
+/// Does this slot's own button, pressed again, **reactivate** what the first
+/// press put out there -- rather than throwing a second copy of it?
+///
+/// **Declared, not inferred**, the same way [`shape`] and [`hand`] are, and for
+/// a sharper reason than either: the repeat lockout reads this to decide
+/// whether a press is a new use of the ability or the rest of the one already
+/// paid for, and getting that backwards either eats the recall or makes the
+/// ability free to spam. Inferring it from "does this class leave something in
+/// the world" answers yes for the fire pillar and the black spike, neither of
+/// which can be pressed again at all.
+///
+/// One move in the game says yes. **Send shadow** is one button with two
+/// meanings decided by where the second body is -- out, or home -- so the press
+/// that brings it back is the second half of the send rather than another send.
+///
+/// The **Guillotine lotus** is the near miss that shows why this is a question
+/// about the *button* and not about the ability. It has a second activation --
+/// recalling the shadow drags the hanging blades home, which is the combination
+/// the whole kit is built around -- but that activation is on *right click*,
+/// not on the lotus's own key. Pressing `Q` again would be a fresh lotus while
+/// the first one is still hanging, so its answer is no.
+pub const fn reactivates(class: Class, kind: u8) -> bool {
+    matches!(class, Class::ShadowReaver) && kind == crate::state::SLOT_MECHANIC
 }
 
 /// Does this class use this slot at all?
@@ -805,6 +1130,8 @@ pub fn get(class: Class, kind: u8) -> Move {
         rehit: raw(F::Rehit) as u16,
         channel: raw(F::Channel) as u16,
         channel_from: Fx::from_raw(raw(F::ChannelFrom)),
+        repeat_mul: raw(F::RepeatMul).clamp(0, 255) as u8,
+        reactivate: raw(F::Reactivate).max(0) as u16,
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
     }
@@ -813,8 +1140,8 @@ pub fn get(class: Class, kind: u8) -> Move {
 /// Every move a class actually has, live.
 ///
 /// A `Vec` rather than an array because the count is not the same for
-/// everybody: three for most of the roster, four for the Blood mage, ten for
-/// the Champion. The callers are the frame table and the feel tests, neither of
+/// everybody: three for most of the roster, four for the Blood mage, nineteen
+/// for the Champion. The callers are the frame table and the feel tests, neither of
 /// which runs inside a frame, so the allocation buys readability for nothing.
 pub fn table(class: Class) -> Vec<Move> {
     (0..slots(class)).map(|i| get(class, i as u8)).collect()

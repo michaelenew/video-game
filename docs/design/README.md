@@ -18,7 +18,11 @@ punishment, reads — not Tekken-like. The closed arena is deliberate: far less 
 open world.
 
 **No cooldowns.** Abilities cost **frames** (primary) and **the class mechanic** (secondary).
-There is no universal resource bar.
+There is no universal resource bar. **One qualifier, added 2026-09-14:** a move you have just
+thrown is locked for 30 frames — *that* move, nothing else, so the question stays "what else
+have I got" rather than "do I have anything". See
+[combat-kernel.md](combat-kernel.md) §"The repeat lockout" for why that is not the thing this
+line rules out.
 
 **Time to kill.** ~60 seconds versus. 1–20 minutes coop, by fight difficulty.
 
@@ -60,10 +64,10 @@ poke is a design choice in a closed arena, not a gap.
 | Class | Mechanic — what abilities spend | Primary buttons | State |
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Lotus · `E` Executioner | Rebuilt |
-| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Raise | Strong |
+| [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto · `Q` Judgement · `E` Sweep | Kit built |
-| [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear · `E` Rush | Rebuilt |
+| [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Chained |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
 | ~~Gatekeeper~~ | — | — | Retired |
 
@@ -82,12 +86,13 @@ few enough to balance and to read in third person.
 | [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
 | [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
-| [champion.md](champion.md) | Forms and the mid-animation swap | Decided |
+| [champion.md](champion.md) | Forms, the three-hit chain, and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
+| [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
@@ -100,17 +105,20 @@ Nothing here blocks a prototype.
 | **Class names, across the board** | ⚠️ **Newly open.** *Bellator* became **Champion** on 2026-09-11. The old name was accurate — Latin for a combatant, and the class descends from the old cities' duelling champions — but it was the only Latin name on a roster of plain English ones and read as belonging to a different game. That is a reason to look at all six rather than one. Bulwark, Elementalist, Blood mage and Dual mage are *descriptions*; Shadow Reaver and Champion are *titles*. Worth deciding which register the roster is in before any of them reach a player |
 | **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
+| **The repeat lockout's number** | ⚠️ **Newly open.** 30 frames is a first guess. Which abilities want a multiplier and which way is the other half, and both need somebody to play it — the knobs are in the Oven under `Offence` and in each move's `Repeat lockout (%)`. Whether a reactivation wants gating at all (`Move::reactivate`, zero everywhere) is the third |
 | **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
 | **Move + heavy attack** | ⚠️ **Known gap.** Shift+direction dodges and shift+click is the heavy, so holding a direction while throwing a heavy has no input — the dodge eats it. Deferred deliberately: movement settles first, then the attack grammar is built around it |
 | **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
-| **Aerials** | ⚠️ **Newly open, and the intended direction.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. Nothing is implemented; airborne currently gives the grounded move |
+| **Aerials** | **Settled on two classes, open on four.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. That is how the Champion is built (the button is the weapon and the row of its grid is the situation) and, since 2026-09-14, how the Elementalist is: left click is still the cheap shot, right click is still the committed one, `E` is still earth, and the row is where her feet are. A claim about one class was a coincidence; two is a pattern, and the four that are left are now behind rather than undecided |
+| **Attack strings** | ⚠️ **Newly open, 2026-09-14.** The Champion's ground attacks now chain three hits deep, and the chain is a *hit confirm* — a connected link cancels its own tail, a blocked one does not. Whether that is a Champion mechanic or the shape every class's offence should take is not decided, and it is the sort of thing that has to be one or the other |
+| **`space` as a modifier** | ⚠️ **Newly open, 2026-09-14.** `space` plus a weapon is a takeoff on the Champion — the first time the jump button has modified anything. It is a whole row of options every class could have, or a precedent that should not spread |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
-| **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment |
+| **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment. ⚠️ **Sharper since 2026-09-14:** `E` off the floor used to raise a stone, which made a stone under your own feet a sort of second jump for one class. It is Landfall now, so the Elementalist has lost the only thing in the game that was answering this question by accident |
 | Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. Whether the finisher stays on `Q` or moves to `M`, and what `shift` + right click should be once an ability has two forms |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
-| Champion | Whether the mid-animation swap costs Rush |
+| Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all |
 | Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
-| Elementalist | Structure cap of three is a readability guess, not a balance one. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them |
+| Elementalist | Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
 | Blood mage | Health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
 
 ## 5 · Parked — not slated for initial implementation
@@ -131,7 +139,8 @@ character progression.
 
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
-least three exemplar moves -- ten on the Champion, five on the Dual mage, four
+least three exemplar moves -- nineteen on the Champion, seven on the
+Elementalist, five on the Dual mage, four
 on the Blood mage and the Shadow Reaver -- there is a monster to fight and
 climb, peer-to-peer rollback play works over real UDP, and the test suite covers
 determinism, combat relationships, aiming, the ride, the camera, kinematics,
@@ -145,7 +154,7 @@ crates/game   Bevy app. Rendering only.
 crates/anim   Animation factory: recipes, the solver, contact sheets. See animation.md.
 crates/hunt   A scripted hunter, and the report that judges the fight it plays.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
-crates/web    WebAssembly build and the browser frame-data tool.
+crates/web    The browser: the playable page, and the frame-data tool.
 ```
 
 **Requires Rust 1.85+** (Bevy 0.16's MSRV). `rustup update` if Cargo complains about
@@ -155,7 +164,8 @@ crates/web    WebAssembly build and the browser frame-data tool.
 arguments pass through, so `./scripts/dev.sh --p1 champion` works.
 
 **What can I type?** `./scripts/help.sh`, or `cargo run -p game -- --help`. Every command,
-key, flag and environment variable, generated from the same tables the in-game legend reads.
+key, flag and environment variable, and the browser build's controls panel is generated from
+the same tables.
 
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
 overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4. Click to capture the mouse, Escape
@@ -170,6 +180,13 @@ to a direction when you commit to the move. See [controls.md](controls.md).
 `-` / `=`, field of view on `F3` / `F4`, camera distance on `F5` / `F6`. Set `ARENA_SETTINGS`
 to keep separate settings per person on a shared machine.
 
+**Send it to somebody:** `./crates/web/build-game.sh` compiles the whole thing to
+WebAssembly and writes `target/web`, which is what GitHub Pages serves — the same
+simulation and the same renderer, on a canvas, one player against the training
+dummy. A browser cannot open a UDP socket, so peer-to-peer stays on the desktop;
+the query string does what the flags do, so `?p1=champion&dev` is
+`--p1 champion --dev`. See [web.md](web.md).
+
 **Play someone:** `game --port 47811 --peer <their-ip>:47812`. Rollback netcode, no server.
 `./scripts/p2p-localhost.sh` runs both ends locally;
 `cargo run -p net --bin p2p_localhost` checks two peers stay in sync over real UDP.
@@ -177,7 +194,7 @@ to keep separate settings per person on a shared machine.
 **Pick classes:** `game --p1 champion --p2 elementalist`, or Tab to cycle in-game.
 
 **Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
-on-hit advantage. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
+on-hit advantage, and the repeat lockout beside them. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
 
 **Tune it while it runs:** **F7** opens the Oven — every tuned number in the game, grouped by
@@ -215,7 +232,8 @@ decision, and belongs in a test.
 ## 8 · Next
 
 1. **Play it against a person.** Everything else is downstream of that — and the
-   Ridgeback needs it twice over. The climb now costs something to reach, and
+   Ridgeback needs it twice over. The browser build exists to make the asking
+   cheap: a link instead of a clone, [web.md](web.md). The climb now costs something to reach, and
    whether the reward is worth the trip, whether anyone finds the tail hop, and
    whether the ground game reads as a phase or as a toll are not things the
    harness can answer. See [monsters.md](monsters.md) §9.

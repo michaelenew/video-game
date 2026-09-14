@@ -10,11 +10,19 @@
 //! shows exactly which numbers moved. Every entry carries its identifier and its
 //! value as a comment, which is what makes the diff readable by someone who was
 //! not in the session.
-
-use std::path::{Path, PathBuf};
-use std::process::Command;
+//!
+//! **A browser cannot do any of that**, and the honest thing is to say so
+//! rather than to hide the button: the Oven still opens on the web and every
+//! number still moves live, so a tuning idea can be tried out and read off a
+//! link. Committing it needs a checkout. Both halves of that are below, and
+//! nothing outside this file knows which one it got.
 
 /// What happened, for showing in the palette.
+///
+/// `allow(dead_code)`: in the browser every outcome is a failure, so nothing
+/// constructs `Ok` there. The variant still has to exist, because the palette
+/// matches on both and the palette is one piece of code.
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Outcome {
     Ok(String),
@@ -24,15 +32,36 @@ pub enum Outcome {
 /// The repository root, found from where this crate was compiled.
 ///
 /// The Oven is a development tool run from a source checkout, so this is sound
-/// in the only situation it is ever used in.
-pub fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+/// in the only situation it is ever used in. In a browser there is no checkout
+/// and nothing asks: the callers that would write a file are the ones below.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn repo_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
-        .unwrap_or(Path::new("."))
+        .unwrap_or(std::path::Path::new("."))
         .to_path_buf()
 }
 
+/// What a browser can say when asked to commit something.
+///
+/// One sentence, and it names the way out. A disabled button with no
+/// explanation is a bug report.
+#[cfg(target_arch = "wasm32")]
+pub const NO_CHECKOUT: &str = "the browser build has no checkout to write to — the numbers are live here, \
+     but baking them needs `cargo run -p game` from a clone";
+
+#[cfg(target_arch = "wasm32")]
+pub fn bake(_message: &str) -> Outcome {
+    Outcome::Failed(NO_CHECKOUT.into())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
+#[cfg(not(target_arch = "wasm32"))]
+use std::process::Command;
+
+#[cfg(not(target_arch = "wasm32"))]
 fn run(root: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new(args[0])
         .args(&args[1..])
@@ -53,6 +82,7 @@ fn run(root: &Path, args: &[&str]) -> Result<String, String> {
 /// Deliberately not silent about any step: a bake that wrote the file but could
 /// not push is a *different* outcome from one that worked, and a tool that
 /// blurred the two would cost someone an afternoon of tuning.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn bake(message: &str) -> Outcome {
     let root = repo_root();
     let rel = "crates/sim/src/tuned.rs";

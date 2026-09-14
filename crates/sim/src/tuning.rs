@@ -119,6 +119,28 @@ pub fn parry_window() -> u16 {
     oven::scalar(Scalar::ParryWindow) as u16
 }
 
+/// How long a move you just threw is unavailable to you.
+///
+/// **This is not a cooldown, and the difference is the whole of why it is
+/// allowed to exist** -- see `docs/design/combat-kernel.md`. A cooldown asks
+/// *did I have it available*, which it can ask because it takes a move away
+/// from you while you are doing something else. This only ever locks the move
+/// you have just this moment thrown, so the answer is always "yes, everything
+/// else in the kit": it does not gate access, it charges for *repetition*.
+///
+/// Thirty frames is half a second, and it is measured from the frame the move
+/// comes out rather than from the end of its recovery. That is what keeps it
+/// honest: it can only ever spend frames you would otherwise have had free, so
+/// a move that already commits you for longer than this never notices it at
+/// all. Every committed heavy in the game is in that group, and every auto and
+/// fast poke is not -- which is exactly the set the rule is aimed at. The
+/// relationship is pinned by `feel::the_lockout_only_taxes_the_cheap_moves`.
+///
+/// A guess, and flagged as one: 30 is the first number, not a measured one.
+pub fn repeat_lockout() -> u16 {
+    oven::scalar(Scalar::RepeatLockout) as u16
+}
+
 /// What a successful parry costs the attacker. Must be long enough that the
 /// punish is worth the risk of trying to parry at all.
 pub fn parry_stagger() -> u16 {
@@ -241,16 +263,37 @@ pub fn poke_mobility() -> u8 {
     oven::scalar(Scalar::PokeMobility) as u8
 }
 
-/// How much horizontal speed survives each frame of a move that roots you.
+/// Percent of walking speed kept while throwing a committed move.
 ///
-/// Rooting is correct for the committed moves -- that is what commitment means
-/// -- but arriving at rooted in a single frame is a snap from a full walk to
-/// nothing, which is the jarring part rather than the rooting itself. Over
-/// about four frames this bleeds off the speed instead. The distance slid is a
-/// few centimetres; it changes nothing about the spacing and everything about
-/// how it reads.
-pub fn attack_root_decay() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::AttackRootDecay))
+/// **Nothing roots any more.** Committed moves used to set this to zero, which
+/// is what commitment used to mean: you stopped, and the stick did nothing
+/// until the move was over. It read as jarring for exactly the reason the poke
+/// did -- a character who ignores the input is the game taking the controls
+/// away -- and the answer is the same one, further down. A crawl.
+///
+/// Below the guard walk, which is the slowest thing you can otherwise choose to
+/// do, so a committed move is still the most your feet ever cost you. What
+/// commitment means now is the other half of it: you cannot jump, dodge, guard
+/// or throw anything else until the move is finished, and that was always the
+/// part doing the work. See `docs/design/controls.md`.
+pub fn committed_mobility() -> u8 {
+    oven::scalar(Scalar::CommittedMobility) as u8
+}
+
+/// How much horizontal speed survives each frame of a move that hinders you.
+///
+/// A move takes your feet away in proportion to how much it commits you, but
+/// *arriving* at the hindered speed is a ramp rather than an assignment. The
+/// snap from a full walk to nothing in a single frame was the jarring half of
+/// the old dead stop, and dropping straight to a crawl instead would have put
+/// the same lurch back with a different number at the bottom of it. Over about
+/// four frames this bleeds down to whatever the move allows.
+///
+/// It is also what stops you dead when you let the stick go mid-move: the floor
+/// of the ramp is the move's own speed while you are steering, and zero when
+/// you are not.
+pub fn hindrance_decay() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HindranceDecay))
 }
 
 /// How much vertical speed survives each frame of an aerial's hang.
@@ -518,6 +561,24 @@ pub fn shadow_buffer() -> u16 {
     oven::scalar(Scalar::ShadowBuffer).max(1) as u16
 }
 
+/// How long the carry lasts: the window a dash's arrival opens, in which a jump
+/// takes the speed she crossed at up with her.
+///
+/// **A timing rather than a distance.** What is left of the dodge when she
+/// arrives is already a window of exactly this kind -- she is still sliding,
+/// and the slide decays -- but its length is however much of the dodge the
+/// crossing did not spend, which is a function of how far away she left the
+/// shadow. At the end of the leash that is about a frame, and a tech nobody
+/// can hit at the range the class is built around is a tech that does not
+/// exist. So arriving tops the dodge up to at least this many frames, and the
+/// window is the same length however far she came.
+///
+/// It never *shortens* one: a short dash keeps the whole vulnerable tail it
+/// has always had, and only the first frames of that tail are the window.
+pub fn shadow_carry() -> u16 {
+    oven::scalar(Scalar::ShadowCarry).max(0) as u16
+}
+
 /// How fast she crosses to her shadow on a dash.
 ///
 /// Constant while the dash runs rather than a decaying shove, so the distance
@@ -534,9 +595,25 @@ pub fn lotus_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusRadius))
 }
 
-/// How high the blades arc on their way out.
-pub fn lotus_rise() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::LotusRise))
+/// The height above the shadow's feet that the whole flower lies in.
+///
+/// **The lotus is flat.** It opens in one horizontal plane, holds there and
+/// closes there, so every blade is at this height for the whole of its life.
+///
+/// It used to arc instead: the blades left the shadow's feet, rose to a peak
+/// mid-eruption and came back down to the floor at full extension. Two things
+/// were wrong with that, and only one of them was how it looked. A blade at its
+/// furthest reach was back at ground level, so the volume that is supposed to
+/// be the punishing part of the ability spent the end of its travel half buried
+/// in the floor. And a flower that changes height while it turns is hard to
+/// read as a *plane* being swept, which is what a player has to judge when they
+/// decide whether they are standing in one.
+///
+/// Midriff on a fighter `body_height` tall -- below the chest that
+/// `cast_height` puts a cast at, because these come out of the shadow's waist
+/// rather than its hands.
+pub fn lotus_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusHeight))
 }
 
 /// How far a blade's path bends as it goes, in turns.
@@ -548,8 +625,46 @@ pub fn lotus_curl() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusCurl))
 }
 
+/// How far a blade turns on the way **home**, in turns, and the other way.
+///
+/// The return is its own spiral rather than the eruption played backwards.
+/// Coming home the blade sweeps this far against the direction it opened in,
+/// and it is deliberately more than `lotus_curl`, so it turns past the bearing
+/// it started on instead of unwinding onto it.
+///
+/// **That is a hit test as much as a look.** Set equal to `lotus_curl` the
+/// blade retraces its outward arm exactly -- and ground a blade has already
+/// crossed is ground whose occupants have already been cut and have had the
+/// whole hold to leave, so a retraced return can only catch somebody who walked
+/// back into the same line. Winding past the start means the way home sweeps
+/// floor the way out never touched, which is what makes the drag through a
+/// crowd the ability's own description of itself rather than a second helping
+/// of the first pass.
+pub fn lotus_uncurl() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusUncurl))
+}
+
+/// How wide a blade is, in the plane the flower lies in.
+///
+/// The **width** of a shuriken rather than the radius of a ball: paired with
+/// `lotus_blade_thickness`, which is how thin it is across that plane. It used
+/// to be both at once, at 0.45 -- wider than a fighter's own body, which is why
+/// six of them read as beach balls. Twelve at 0.22 is a flower made of blades.
 pub fn lotus_blade_radius() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusBladeRadius))
+}
+
+/// Half a blade's thickness, across the plane it lies in.
+///
+/// The other half of the shuriken. A blade tested as a sphere reached from a
+/// standing fighter's shins to their chest, which is not a shape anybody can do
+/// anything about; a slab this thin at waist height is one they can **jump**,
+/// and that is the counterplay the ability's own description always implied.
+///
+/// Half rather than whole because it is used either side of the plane, which is
+/// where the flower actually is -- see `state::World::sliced`.
+pub fn lotus_blade_thickness() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LotusBladeThick))
 }
 
 /// Frames the blades take to reach full extension.
@@ -753,6 +868,66 @@ pub fn sweep_dip() -> Fx {
 /// extension is what a defender is reading when they decide to step back.
 pub fn thrust_extend() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ThrustExtend))
+}
+
+// --- The ground chain ------------------------------------------------------
+//
+// Three hits deep, and every hit is a free choice of all three weapons. What
+// these four numbers decide is the *rhythm* of that -- how long you have to
+// commit to the next hit, and how much of a link's tail you serve before it can
+// begin. The move table decides everything else.
+
+/// How long a chain survives once the fighter stops swinging.
+///
+/// It is the window the next hit has to arrive in, and it is a real decision
+/// rather than a formality: long enough to feel a beat in, short enough that a
+/// string is something you commit to rather than something you can leave lying
+/// around. Parked at full for as long as a link is actually running, so a slow
+/// finisher cannot time its own chain out from under itself -- see
+/// `state::step_mechanic`.
+pub fn chain_grace() -> u16 {
+    oven::scalar(Scalar::ChainGrace) as u16
+}
+
+/// How much of a connected link's recovery you serve before the next link may
+/// start, when the next one is a **different** weapon. A percentage of that
+/// move's own recovery, so a heavy tail still costs more than a light one.
+///
+/// Below [`chain_cancel_repeated`], and that gap is the whole of the class's
+/// nonlinear incentive: one haft with three heads, and the weapon re-forms out
+/// of the follow-through rather than being re-chambered. Set the two equal and
+/// the incentive is off without anything else changing.
+pub fn chain_cancel_swapped() -> u16 {
+    oven::scalar(Scalar::ChainCancelSwap).clamp(0, 100) as u16
+}
+
+/// The same, for swinging the **same** weapon twice in a row.
+///
+/// Higher, but not by much. Repeating a weapon is meant to stay completely
+/// viable -- "strong when played linearly" is a design goal for this class, not
+/// a concession -- so the repeat is a few frames slower rather than a wall.
+pub fn chain_cancel_repeated() -> u16 {
+    oven::scalar(Scalar::ChainCancelRepeat).clamp(0, 100) as u16
+}
+
+/// How long after the jump button goes down a weapon click still takes off.
+///
+/// "Attack as you jump" is one intention and two buttons, and nobody presses
+/// two buttons on the same frame. This is how wrong the timing may be and still
+/// mean what the player meant. See `state::arm_takeoff`.
+pub fn takeoff_window() -> u16 {
+    oven::scalar(Scalar::TakeoffWindow) as u16
+}
+
+/// The forward shove the spear's takeoff gives, on the frame the shaft reaches
+/// the floor.
+///
+/// The move is a jump with a weapon in it: `Move::self_lift` supplies the
+/// height and this supplies the direction, so the pole drive is how a Champion
+/// crosses ground and gains height in one press. Read from the live input, like
+/// the aerial fan's shove -- you choose where to go as the spear lands.
+pub fn pole_drive_boost() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PoleDriveBoost))
 }
 
 /// Where the inner edge of a wing sits, as a fraction of the move's reach.
@@ -1658,4 +1833,102 @@ pub fn hunter_spawn() -> Fx {
 /// that starts at the tail reach the ridge.
 pub fn step_up() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StepUp))
+}
+
+// ---------------------------------------------------------------------------
+// The Elementalist, off the ground
+// ---------------------------------------------------------------------------
+//
+// Three moves, and everything that is not a frame count is here. What *is* a
+// frame count -- startup, active, recovery, the hang -- stays in the move
+// table, along with the two things the shots take from their own row: how far
+// they reach and how thick they are. A second copy of either would only be a
+// number the frame table could disagree with, which is the same argument the
+// beam's own range makes above.
+//
+// See `docs/design/kits/elementalist.md` and `crate::gust`.
+
+/// How fast the Air bolt travels.
+///
+/// Slower than a fire bolt on purpose: the fire bolt is the payoff for putting
+/// a pillar between you and somebody, and this is the shot she throws
+/// constantly. A poke you can see coming is a poke you can answer, which is
+/// what makes throwing it a decision rather than a reflex.
+pub fn air_bolt_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirBoltSpeed))
+}
+
+/// How fast the Gale disc travels.
+///
+/// Half the Air bolt's, and the slowest thing she throws. It has to be walked
+/// away from: a disc that grows into a real hit at the far end of its travel
+/// is only a decision if the target has time to decide.
+pub fn gale_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleSpeed))
+}
+
+/// How big the Gale is as it leaves her hand, as a share of the size it
+/// reaches at the end of its travel.
+///
+/// The move table's `radius` is the far end; this is the near one. What it
+/// buys is the whole of the move's spacing: damage and knockback ride the same
+/// fraction, so a disc caught at point-blank range is a puff of air and one
+/// caught at the tip is the heaviest shove in the kit. The same inversion
+/// Flame spitter is written around -- see the kit -- and the opposite of every
+/// other projectile in the game.
+pub fn gale_start() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleStart))
+}
+
+/// How fast Landfall drives her at the floor once the wind-up is spent.
+///
+/// Fast enough that the plunge reads as a commitment rather than a fall, and
+/// slow enough that it is a *descent* somebody can hit her out of -- which is
+/// most of what the move is. From the top of her jump it lasts about as long
+/// again as the hang did.
+pub fn landfall_dive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallDive))
+}
+
+/// How far in front of her the Landfall stone comes up.
+///
+/// A distance rather than a reach, and the only placement in the class the
+/// crosshair does not decide: she is arriving, not aiming. Just past a body
+/// radius plus a stone's, so the slab stands clear of where she lands rather
+/// than shoving her off her own arrival. See `aim::planted_ahead`.
+pub fn landfall_ahead() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallAhead))
+}
+
+/// How long the Landfall stone takes to come out of the floor.
+///
+/// Well under `structure_rise`, and that is the point: an ordinary stone is
+/// raised and the rise is its telegraph, while this one is *driven* up by a
+/// body hitting the ground and has already been telegraphed by the plunge
+/// that put it there. The two phases still come off the same curve, so the
+/// churn and the eruption move with it -- see `crate::stones`.
+pub fn landfall_rise() -> u16 {
+    oven::scalar(Scalar::LandfallRise).max(1) as u16
+}
+
+/// How far above the floor the Landfall stone throws what it erupts under,
+/// in turns.
+///
+/// An eighth of a turn is forty-five degrees: up and away in equal measure. A
+/// slab levered out of the ground at an angle throws you along the angle, so
+/// this is a push *and* a pop rather than either on its own -- and pointing it
+/// away from her is what makes the move a way of clearing the space she has
+/// just landed in.
+pub fn landfall_tilt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallTilt))
+}
+
+/// How hard the Landfall stone's eruption throws whoever is standing over it.
+///
+/// An ordinary eruption does damage and a stagger and leaves you where you
+/// were. This one adds the shove, along the angle above. The damage and the
+/// stagger are still `stone_erupt_damage` and `stone_erupt_stagger` -- it is
+/// the same eruption, leaning.
+pub fn landfall_erupt() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LandfallErupt))
 }

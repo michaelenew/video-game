@@ -19,7 +19,9 @@ impl Default for ShowDebug {
     fn default() -> Self {
         // On by default under DEMO so headless screenshots show the overlay,
         // and always under `--dev`.
-        ShowDebug(crate::dev_mode() || std::env::var("DEBUG_OVERLAY").is_ok_and(|v| v == "1"))
+        ShowDebug(
+            crate::dev_mode() || crate::platform::env("DEBUG_OVERLAY").as_deref() == Some("1"),
+        )
     }
 }
 
@@ -223,15 +225,28 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             // Six blades around a centre that is the shadow rather than the
             // spot this was cast on -- `effect.pos` is rewritten every frame to
             // follow it, so drawing from `pos` draws where the hit test is.
+            //
+            // The spokes are drawn from the middle of the **flower** rather
+            // than from the shadow's feet, so the overlay shows the flat disc
+            // the blades actually sweep. Drawn from the feet they fanned up out
+            // of the floor and read as a cone, which is the shape this used to
+            // be and is exactly the thing an overlay must not still be saying.
             EffectKind::GuillotineLotus => {
+                let hub = v3(effect.lotus_hub(effect.pos));
+                let wide = effect.field_radius().to_f32_for_render();
                 for blade in 0..sim::effects::LOTUS_BLADES {
                     let head = v3(effect.lotus_at(blade, effect.pos));
-                    gizmos.sphere(
-                        Isometry3d::from_translation(head),
-                        effect.field_radius().to_f32_for_render(),
+                    // A **circle lying flat**, not a sphere: the blade is a
+                    // shuriken thrown level, wide in the flower's plane and
+                    // barely there across it, and a sphere drawn here would be
+                    // claiming a volume from the shins to the chest that the
+                    // hit test does not have. See `World::sliced`.
+                    gizmos.circle(
+                        Isometry3d::new(head, Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                        wide,
                         FIELD,
                     );
-                    gizmos.line(at, head, FIELD);
+                    gizmos.line(hub, head, FIELD);
                 }
             }
         }

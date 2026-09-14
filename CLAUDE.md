@@ -40,11 +40,22 @@ every one of them is a function in `aim.rs`:**
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 
-One more function lives there and is **not** a line of effect: `aim::pointing_at`
+Three more functions live there and are **not** lines of effect. `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
 angle worked out beside the ability, which is the mistake below wearing a hat.
+`aim::clear_between` answers *is there any straight line from this body to that
+one*, which the same dodge asks second: the dash crosses to wherever the shadow
+is unless nothing reaches it. It is ray-against-shape work in service of a
+decision about where something goes, so it belongs here rather than beside the
+dodge for exactly the same reason. `aim::planted_ahead` answers *where does a
+thing go that nobody aimed* — the slab the Elementalist's Landfall drives out of
+the floor, a fixed distance along her flat facing, because she is arriving rather
+than pointing. Its move still declares a line of effect (a swing, for the slam
+itself); this is the second thing the same move puts in the world, and written
+beside the ability it would be a facing, a distance and a floor query sitting
+next to a move, which is the mistake below in its usual clothes.
 
 Which one a move is comes from `Move::aim()`, **declared** in the move table so
 every move has an answer, and printed in the `aimed` column of
@@ -115,6 +126,28 @@ fails, either it is a bug **or a design decision changed** — and then
 just the assertion. Record what you tried in the feel log, including the things
 you reverted.
 
+## The browser build is the same program
+
+`game` compiles for a window and for a canvas, and **the two differ in exactly
+five things, each of which lives in a file that exists to hold it.** Where a
+run's settings come from (argv, or the query string — `?dev` is `--dev`), where
+a player's settings are kept (a file, or local storage) and where a panic can be
+read are `crates/game/src/platform.rs`. Whether there is a peer is `online.rs`.
+Whether there is a checkout to commit a bake to is `bake.rs` and `hub.rs`.
+Enforced by `crates/game/tests/one_platform.rs`, which fails on `std::env`,
+`std::fs`, `std::net`, `std::process`, `std::thread` or `web_sys` anywhere else
+in the crate.
+
+This rule is here for a failure that is *silent in one direction*, rather than
+for one that has cost time already. A `std::fs::write` added to a system
+compiles for wasm32 perfectly well — `std` is there, the call is there — and
+returns an error nobody reads. The feature then works on the desk and quietly
+does nothing on the web, and the first report of it comes from somebody who was
+sent a link.
+
+Build it with `./crates/web/build-game.sh`; the reasoning is
+[`docs/design/web.md`](docs/design/web.md).
+
 ## The overlay draws what the hit test uses
 
 `state::hitbox` is the one description of an attack's volume, and the debug
@@ -129,4 +162,7 @@ cargo clippy --workspace --all-targets
 cargo test --workspace
 ```
 
-There is no CI in this repository, so these are the only checks there are.
+These are the only checks there are: they run on your machine, and nothing
+runs them for you. The one workflow in `.github/` publishes the browser build to
+GitHub Pages and tests nothing, so a green Pages run means the page deployed,
+not that the change is good.

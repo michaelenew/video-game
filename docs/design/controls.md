@@ -93,7 +93,11 @@ never comes out as a dodge.
   would turn a jump into flight.
 - Space while airborne does nothing, **with one exception**: while a Champion's uppercut has
   hold of somebody, it takes the pair of you higher, once. See
-  [kits/champion.md](kits/champion.md#uppercut--middle-click).
+  [kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor).
+- **Space plus a weapon, on the ground, is a takeoff** — again on the Champion only, added
+  2026-09-14. Three moves, one per weapon, thrown as the feet leave the floor. It is the
+  first time `space` has modified anything, and the section below on that class is where
+  the argument lives.
 - **Airborne attacks are their own moves on the class that has them.** Settled 2026-09-12
   for the Champion and still open for everyone else — see below.
 
@@ -218,21 +222,33 @@ A move takes your feet away in proportion to how much it commits you.
 | Throwing a poke | 4.2 |
 | Crouching | 3.0 |
 | Guarding | 2.0 |
-| Committed move | 0 — rooted |
+| Committed move | 1.4 — a crawl |
 
-Rooting is what commitment *means*, and it is right for the heavy moves: spacing only matters
-if choosing to swing costs you the ability to reposition. It is wrong for a fast poke. The
-poke is the neutral tool, thrown constantly, and stopping dead for every one makes neutral
-sticky and reads as the game taking the controls away. Slowing you keeps the cost — you
-cannot close or escape at full speed while swinging — without the lurch.
+**Nothing roots you.** ⚠️ **Changed 2026-09-14.** The committed moves used to sit at zero, and
+rooting was taken to be what commitment *meant*. It is not, and the giveaway is that the
+complaint it drew was word for word the one the poke drew three days earlier: a character who
+ignores the stick reads as the game taking the controls away. That is true of a heavy move
+more than of a poke, not less — a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to hold you *still*.
 
-Even where rooting is correct, arriving at rooted takes about four frames rather than one.
-The snap from a full walk to nothing was the jarring part, not the rooting. The distance slid
-while bleeding off is about twenty centimetres: nothing for spacing, everything for how it
-reads.
+What commitment means is the other half of it, and that half is untouched: **for the whole of
+a move you cannot jump, dodge, guard, or throw anything else.** You have the stick and nothing
+else, and the stick is worth 1.4 metres a second. Over the longest heavy in the game that is
+under a metre of ground — less than the move's own reach, and less than a single dodge — so
+the spacing game the rooting was there to protect never depended on it. Slower than guarding,
+which is the slowest thing you can otherwise choose to do, so a committed move is still the
+most your feet ever cost you.
 
-`cargo run -p sim --bin frametable` prints these alongside the frame data, and marks which
-moves root you.
+**Arriving at the hindered speed takes about four frames, not one.** This is the older half of
+the same lesson and it applies at every rung of the table: the snap from a full walk to the
+new speed is a separate complaint from the speed itself, and dropping straight to a crawl
+would have put the lurch back with a different number underneath it. Direction follows the
+stick immediately and only the magnitude bleeds, so you are steering from the first frame —
+you are just not going anywhere fast yet. Let the stick go mid-move and the same ramp takes
+you to a stop.
+
+`cargo run -p sim --bin frametable` prints these alongside the frame data, and gives every
+move its own walking speed in metres.
 
 ### Abilities land where the crosshair is
 
@@ -297,7 +313,7 @@ It dims while you are committed to something and the button will not answer.
 
 ### Settings
 
-Three numbers are adjustable mid-match. They show above the control legend and are written
+Three numbers are adjustable mid-match. They are written
 to `~/.config/arena/settings.conf` immediately. `ARENA_SETTINGS` overrides the path, which is
 how two people on one machine keep separate settings without a profile system.
 
@@ -371,7 +387,8 @@ drift — the shared grammar is what lets one control scheme drive six kits, and
 *identity* is which weapon is in its hands has to spend its clicks on the weapons.
 
 That last row does real work. The Reaver's dash to its shadow *is* its dodge rather than an
-extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
+extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing,
+**on the ground and in the air alike**. **The Champion's Rush went to `E` instead** — it is the class mechanic in every sense
 that matters (one charge, cancels recoveries, changes what the attack buttons do), and
 putting it on shift + direction would have made the class's central decision share an input
 with the universal defensive one. For the Reaver this is what makes movement and shadow
@@ -551,6 +568,12 @@ What exists today: **space is a vertical takeoff**, and **shift plus a direction
 airdodge, once per airtime**, which wipes vertical speed so it can never be a second jump.
 Airborne attacks are still the grounded ones.
 
+One class spends that airdodge on something else. The Reaver's forward airdodge, thrown with
+the crosshair on her shadow, is the **dash to it** — added 2026-09-14, because mobility that
+switched off the moment she jumped was mobility in the wrong place. It costs the airdodge
+like any other air commitment; what it buys is the whole distance to the second body rather
+than a sideways shove.
+
 ---
 
 ## The per-class schemes
@@ -631,21 +654,49 @@ are**.
 
 | | `L` | `M` | `R` |
 | --- | --- | --- | --- |
-| On foot | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| On foot, hit 1 | Sword — arc across | Hammer — arc down | Spear — a line ahead |
+| On foot, hit 2 | Backcut | Uproot | Skewer |
+| On foot, hit 3 | Crescent | Earthbreaker — unblockable | Impale |
 | Airborne | Air sword | Air hammer — spikes | Air spear — a fan around the aim |
-| Rushing | Rush slash | Uppercut | Rush stab, or Pole vault aimed at the floor |
+| Rushing | Rush slash | Rush sweep — along the floor | Rush stab, or Pole vault aimed at the floor |
+| `space` + weapon | Rising cut | Uppercut | Pole drive |
 
 | Input | Result |
 | --- | --- |
 | `E` | **Rush.** One charge. A dash, and it cancels any recovery |
 | `space`, airborne, holding somebody | The uppercut's second leap. Both of you go higher |
 
-Ten moves, three buttons, one modifier key, no chords. The full kit is in
+Nineteen moves, three buttons, one modifier key, no chords. The full kit is in
 [kits/champion.md](kits/champion.md).
+
+### Two rows that are new, 2026-09-14
+
+**The first three rows are one three-hit string.** Connect and the same three buttons throw
+the next row; connect again and they throw the last. **Every hit is a free choice of all
+three weapons**, which is the class fantasy as an input scheme rather than as a fiction —
+sword into spear into hammer is an ordinary thing to do. Nothing remembers what the last
+hit was made of.
+
+The string is a **hit confirm**: a connected link cuts its own recovery short so the next
+one can begin, and a blocked, parried or whiffed one pays in full. That is why blocking one
+hit of a string is worth doing, and why every number in the frame table stays true against
+somebody who did.
+
+**`space` plus a weapon is that weapon's takeoff.** It is the one place in the grammar where
+two buttons combine on this class, and it is not a chord in the awkward sense: `space` is
+already under the thumb and the weapon is already under a finger. The window is a few frames
+wide on purpose — *jump then weapon* is the order that works, and both at once is the same
+frame — because "attack as you jump" is one intention and two buttons and nobody presses two
+buttons on the same tick. A takeoff spends the window, so one jump buys one of them.
+
+**This is the first real use of `space` as a modifier anywhere in the grammar**, and it is
+worth flagging as a precedent rather than as a Champion detail: if it reads well here it is
+a whole row of options every class could have, and if it reads badly it should not spread.
 
 **The mid-animation swap still needs no new input**, and it is now easier to say what it
 means: press a different weapon's button during active frames and the move ends in that
-weapon. It is not built.
+weapon. It is not built, and the chain has taken most of what it was for — see
+[champion.md](champion.md#the-core-addition--mid-animation-form-swap).
 
 The directional variants below are not built on this class and may not be wanted — the
 stance rows already do the work that `w`/`a`/`d`/`s` plus a click was meant to do, and
@@ -685,7 +736,8 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. Cuts any recovery short, and the press is remembered for a few frames rather than dropped. **Bound** |
 | `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
-| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow |
+| `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
+| `space`, in the frames after a dash lands | **The dash jump.** Takes the speed she arrived with up with her, and cuts the dodge's tail short. A press, and only after a dash |
 | `shift` + forward, anywhere else | The ordinary dodge |
 | — | Unplaced: Deadly mistake, which has no button left. Right click ignores `shift` and `shift` + `E` is Executioner |
 
@@ -747,13 +799,30 @@ differentiation.
 
 ### Elementalist
 
+Current as of 2026-09-14. **The row is where her feet are** — the same three buttons mean one
+thing standing up and another off the floor, which is the Champion's grid read one class
+further. See [kits/elementalist.md](kits/elementalist.md) §"In the air".
+
 | Input | Result |
 | --- | --- |
-| `L` | Ranged auto — a beam along the crosshair, and whatever it meets first |
-| `R` | **Raise.** Spawn a structure — the mechanic on a primary button |
-| right click | **Cataclysm.** A slow, long-range heavy along the same beam: breaks a structure into thrown debris, turns a fire pillar into a travelling tornado, or lands a real hit on a fighter |
-| direction + click | Fissure, Quake, Ice blast |
-| `shift` + click | Fire pillar, Flame spitter, and the heavier elemental work |
+| `L` | **Bolt** — the auto. A beam along the crosshair, and whatever it meets first. **Bound** |
+| `shift` + `L` | **Fissure** — the committed ground skillshot. **Bound** |
+| `Q` | **Fire pillar**, planted where the crosshair is. **Bound** |
+| right click | **Cataclysm.** A slow, long-range heavy along the same beam: breaks a structure into thrown debris, turns a fire pillar into a travelling tornado, or lands a real hit on a fighter. **Bound** |
+| `E` | **Raise.** Spawn a structure at the crosshair — the mechanic, and an instant with no frames at all. **Bound** |
+| `L` in the air | **Air bolt** — a small, fast, long-range shot of air. The air row's poke. **Bound** |
+| right click in the air | **Gale** — a disc of air that grows as it travels and is worth what it has become. **Bound** |
+| `E` in the air | **Landfall** — the descending slam, and a slab of rock levered out of the floor in front of her. **Bound** |
+| direction + click | Quake, Ice blast |
+| the rest | Flame spitter, and the heavier elemental work |
+
+`shift` is spent on the ground and **ignored in the air**: shift plus left click is Fissure, a
+crack that races along the *ground*, and there is no airborne version of it to reach for. Up
+there left click means what left click means.
+
+`E` was listed as `R` here until 2026-09-14, which was the table remembering an older scheme —
+Raise was on right click before Cataclysm took the button, and the mechanic key is where it
+actually lives.
 
 ### Blood mage
 

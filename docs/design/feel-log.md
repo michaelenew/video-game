@@ -56,6 +56,9 @@ as they get tested.
 
 ### Movement
 
+- **Is `space` plus a weapon a modifier the whole roster should have?** It is the
+  Champion's takeoff row since 2026-09-14 and the first time the jump button has modified
+  anything. A whole extra row of options per class, or a precedent that should not spread.
 - Should shift with no direction and no click do something? A spot dodge in place is the
   obvious candidate and costs one branch.
 - Is one airdodge per jump right, or does the air want a double jump as well?
@@ -79,8 +82,14 @@ as they get tested.
 
 - Is 4.2 the right speed while poking, and should it differ per class? A spear poke and a
   hammer poke arguably should not hinder the same amount.
-- Should mobility vary *across* a move's phases — free during startup, rooted through
-  recovery? That is a common shape and might read better than a flat rate.
+- **Is 1.4 the right speed while committed, and should it differ per move?** ⚠️ **Newly open,
+  2026-09-14.** Committed moves stopped rooting and became a crawl; all sixteen got the same
+  20% of the walk, which is a uniform first guess in exactly the way the poke's 60% was.
+- Should mobility vary *across* a move's phases — free during startup, rooted through active,
+  slowed in recovery? That is a common shape and might read better than a flat rate. It is a
+  better question than it was: now that nothing roots for its whole length, rooting *only* the
+  active frames would put "you committed to a spot" back where it belongs — the frames where
+  the hitbox is actually out — for a handful of frames instead of forty.
 - **Is Bash at 4 frames of startup too fast to react to?** Human reaction is
   roughly 15 frames at 60 Hz, so a 4-frame move is unreactable by design. That
   is correct for a poke you are meant to *anticipate*, but it may make neutral
@@ -89,6 +98,23 @@ as they get tested.
   learn to dodge on sight.
 - **Is the grapple's 20-frame startup too slow to ever land?** It beats guard,
   so it needs to be slow — but if it never connects it is decoration.
+- **Is 30 frames the right repeat lockout?** The number is a first guess and
+  nothing else. Too short and spamming an auto is still correct; too long and
+  the correct play becomes standing still, which is the failure mode
+  `feel::the_lockout_always_leaves_something_faster_to_do_than_wait` is watching
+  for. Half a second was picked because it is roughly the gap between two
+  deliberate button presses, and because at that length it happens to charge
+  every auto and no committed heavy.
+- **Which abilities want a multiplier, and which way?** The per-move column
+  exists and is 100% on all thirty of them. The autos are the obvious
+  candidates for more, since they are the ones a player leans on; the moves
+  that already cost forty frames are candidates for zero, since the lockout is
+  invisible on them anyway and a knob that does nothing is a knob that confuses
+  somebody later.
+- **Should a reactivation be gated at all?** `Move::reactivate` is zero
+  everywhere, so the Reaver can send the shadow and recall it on consecutive
+  frames. That may be fine — the send costs 18 frames of its own — or it may
+  make the send-recall pair a single fast button rather than two decisions.
 
 ### Defence
 - **Is the 4-frame parry window findable?** This is the single most important
@@ -3014,6 +3040,691 @@ assume a caster on flat, unobstructed ground when it comes to what a *travelling
 from an aimed cast should do with that aim's pitch, and Cataclysm's tornado is the first thing in
 the kit that keeps a cast's direction alive after the cast itself is over. Worth watching for the
 same shape of bug anywhere else a moving effect inherits a beam's raw direction.
+
+### 2026-09-14 — the lotus was a fountain, not a flower
+
+**Changed** The Guillotine's six blades now leave the shadow's **midriff** rather than its
+feet, open in **one horizontal plane** rather than arcing up and back down, and come home on a
+**spiral of their own turning against the way they opened** rather than retracing the arm they
+came out on. `reaver.lotus,_how_high_they_arc` is now
+`reaver.lotus,_height_off_the_shadow's_feet` (1.2 → 0.9); new knob
+`reaver.lotus,_turn_coming_home_(turns)` at 0.28, against an outward curl of 0.14.
+
+**Why** Reported: the balls start at the feet of the shadow and jump up in a spiral. They did,
+and the arc was doing three things none of which anybody asked for.
+
+**The height was a real hitbox bug wearing an animation's clothes.** `arch(out)` is zero at both
+ends, so a blade was at floor level when it left *and* at floor level at full extension, peaking
+only in the middle. The volume is a ball of radius 0.45; at the reach where the ability does its
+work it was centred on the ground and therefore half buried. The blades now sit at 0.9 m — waist
+on a 1.8 m fighter, below the 1.25 m a cast comes out of, because these come out of the shadow's
+middle rather than its hands — for the whole of their life.
+
+**And a flower whose height changes while it turns is hard to read.** The thing a player has to
+judge is whether they are standing in a plane that is sweeping toward them. A volume at a fixed
+height is one you decide about once; one that rises and falls while it rotates has to be
+re-read every frame, and in third person at four metres out that decision is not available.
+
+**The return was a rewind, not a closing.** Bearing was `θ₀ + curl · extension` and the return
+just ran `extension` backwards, so the blade unwound onto the exact bearing it left on and
+retraced its outward arm. That is a hit test problem as much as a look: ground a blade has
+already crossed is ground whose occupants have been cut once and have had the whole 40-frame
+hold to walk off it, so a retraced return could only catch somebody who stepped back into the
+same line. The turn is now its own number and its own direction — out `+curl`, home `−uncurl`
+with `uncurl > curl` — so the blade crosses its starting bearing and the way home sweeps floor
+the way out never touched.
+
+Mechanically that meant splitting reach and bearing out of a single `extension` parameter, since
+extension 0.5 no longer says which way the blade is pointed — it depends on whether you are on
+the way out or the way back. `lotus_head` takes an **age** now and derives both from the phase,
+which also deleted the `lotus_extension_before` trick of cloning the effect with its clock wound
+back a frame.
+
+**Verdict** open, and the number to watch is `uncurl`. At 0.28 each blade sweeps about 100° on
+the way home against 50° on the way out, and with six blades 60° apart that means the return
+covers the full circle with overlap — so a victim near the shadow can be caught by about 1.7
+blades on the way back where they were caught by about one before. Per-blade damage is
+deliberately small and the return is already only 70% of the way out, so this is a change in
+the right direction rather than obviously too much, but it is the first thing to drag if the
+recall reads as a blender. The narrow band that winds past the start *without* full coverage is
+0.14–0.167, which is not much room; the honest alternative if it is too strong is fewer blades
+rather than a smaller turn.
+
+Nothing here touched `lotus_radius`, the three clocks, or the damage, so the ability's timing
+and reach are exactly what they were.
+
+### 2026-09-14 — the repeat lockout
+
+**Changed** a move you have just thrown cannot be thrown again for 30 frames.
+Per ability, not global: the rest of the kit is untouched the whole time. A new
+`Offence / Repeat lockout` scalar in the Oven carries the shared number, and a
+`Repeat lockout (%)` column on every move scales it — 100% on all thirty, so
+today the rule is exactly "30 frames, everything".
+
+**Why** frame data prices a move against time, so the cheapest move in a kit is
+the correct one to throw most of the time, and six abilities that a player uses
+one of is not a kit. Nothing in the game pushed back against repetition except
+the creature, which has had a variety penalty on its own move choice since it
+was built — the player side had nothing equivalent.
+
+The shape of it was chosen against the no-cooldown decision in
+[combat-kernel.md](combat-kernel.md) rather than around it. Two properties do
+the work. It only ever holds the ability you just threw, so the question is
+never *do I have anything* but *what else have I got*. And the clock starts on
+the frame the move **comes out** rather than when its recovery ends, so a move
+that already commits you for longer than the lockout never notices it: at 30
+frames that is every committed heavy in the game, and what is left charged is
+every auto and fast poke. Bash pays 13 idle frames on top of its 17; Grapple's
+53 frames of commitment pay nothing. The rule taxes cheapness, which is what
+made repetition correct in the first place.
+
+Two abilities needed the rule bent, and the bend is the interesting part. Send
+shadow and the Guillotine lotus are *activated twice* — out and home, hung and
+dragged — and a lockout armed by the first press is a lockout on the second. So
+an ability is not counted as used until it is spent: while any of it is still
+out in the world its lockout is parked at full rather than running down, and the
+press that spends the second activation is exempt. Which button reactivates
+which ability is declared in `moves::reactivates` rather than inferred from what
+a move leaves behind — inferring it answers yes for the fire pillar and the
+black spike, neither of which can be pressed again at all.
+
+**Verdict** open, and open in a way that needs a person rather than a test. What
+the harness can say is that the relationships hold: nothing is ever locked out
+for longer than it takes to throw something else, one press can never cost more
+than one option, and the Reaver's recall still gets through. What it cannot say
+is whether half a second reads as *use your kit* or as *the game just ignored my
+click*. The HUD's frame-data line names the locked ability and counts it down,
+which is there for exactly that judgement — if the answer turns out to be that
+the lock needs to be felt rather than read, that is a sign the number is wrong
+rather than a sign the readout needs to be bigger.
+### 2026-09-14 — Send shadow: instant, and in exchange it cannot take your frames
+
+**Changed** `send_shadow.startup` to 1 (from the 0 it was baked to, and the 8 before that).
+`send_shadow.damage` back to 70 from 0. `hitstun`, `blockstun` and `knockback` stay at 0. New
+`Hit::interrupts`, false for the recall and true for everything else. The `reaver_mechanic`
+clip's gather is now conditional on there being startup frames to hold one.
+
+**Why** Reported: the shadow feels much better at a frame of startup, otherwise it feels like
+input lag — and to compensate it must have no immediate effect on struck enemies, or it becomes
+the Melee shine and a more oppressive one, because not even her own abilities gate it. She would
+never have to fully commit: hold the shadow for an opportune interrupt in case any of her own
+abilities put her in a bad position.
+
+That is exactly right, and the second half was **not** achievable by tuning. `apply_hit` writes
+`Action::HitStun` over whatever the victim was doing regardless of the number, so
+`HitStun { left: 0 }` is one frame of nothing and a *cancelled attack* — a full interrupt with a
+zero on it. Zeroing `hitstun` looked like it removed the interrupt and removed only the stun.
+Hence a real flag rather than a number, and it is about frames rather than force: knockback is
+still whatever the number says, because moving somebody is not the same as stopping them.
+
+With a lever that works, the damage does not need to be zero. The mechanic's own description of
+itself is a second body dashing home through anything in the way, **cutting and slowing it** —
+what it gives up is the interrupt.
+
+**One frame rather than none.** Zero is not faster in any way a player can feel and it leaves
+the animation nothing to put the release on: `phases()` is `(s-1, s, s+a)`, so a zero startup
+collapses the wind-up frame and the strike frame onto frame 0 and the body has to teleport into
+the gesture. It was breaking two clip tests for exactly that reason.
+
+The clip's gather is conditional now, which is the honest authoring: a wind-up is frames the
+opponent gets to read, and at one frame of startup there are none. **A body that visibly gathers
+before a move that cannot be reacted to is the animation lying about the frame data.** Drag the
+startup back up in the Oven and the gather comes back with it.
+
+**Verdict** open. The prediction is that this is the shape the mechanic wanted all along — the
+press answers instantly, and what it buys is position rather than tempo. The thing to watch is
+whether the recall now feels *weightless* going through somebody: a cut with no stun and no
+shove is a strange sensation, and if it reads as passing through them rather than through them,
+the answer is probably a visual one rather than putting the stun back.
+
+### 2026-09-14 — the blades were beach balls
+
+**Changed** The Guillotine opens **twelve** blades rather than six, each a **disc** rather than
+a sphere, at **half the damage**. `lotus,_blade_radius` 0.45 → 0.22, new
+`lotus,_blade_half-thickness` at 0.08, `guillotine.damage` 40 → 20. `Effect::struck` widened
+from `u32` to `u64`.
+
+**Why** Reported: the hitboxes should be discs or short cylinders, because they are supposed to
+be shuriken-like blades — right now they are really big and feel like beach balls.
+
+They were. A sphere of radius 0.45 is wider than a fighter's own body and reached from the shins
+to the chest, so six of them was less a flower than a ring of boulders. A blade is now wide in
+the plane the flower lies in and barely there across it, which is what a shuriken thrown flat
+actually is, and the hit test says so: width measured flat against the swept line, height a thin
+slab that has to overlap the body.
+
+**The slab is the interesting half.** The flower is planar and at waist height, so a blade this
+thin is something a fighter can **jump** — which the old sphere was not. That is counterplay the
+ability's own description always implied and never delivered.
+
+**Twelve at half the damage is close to the same ability, and that is deliberate.** Doubling the
+count halves the angular spacing while halving the radius halves each blade's coverage, so what
+one victim actually eats barely moves; what changes is that the danger is the shape rather than
+any one thing landing. Measured against a standing dummy: 66 damage at a metre out, 46 at two,
+13–46 at three, 0–33 at four — and at the rim **where you stand relative to a petal is worth the
+whole difference**, because twelve arms at full extension are far enough apart to stand between.
+
+That gap is a feature and the reason the blades are not simply widened to close it: near the
+shadow the flower is solid, at the rim it is petals, and reading which you are in is the spatial
+decision the class is made of. It is worth watching that it does not read as the ability
+*whiffing* rather than as the player having positioned well.
+
+**`Effect::struck` had to grow.** The mask packs one bit per part per victim; at six blades and
+three victims that is eighteen bits and a `u32` fitted exactly, at twelve it is thirty-six and
+would have truncated in **silence** — a blade sharing a bit with another goes quiet the moment
+that one lands. There is now a `const` assertion beside `LOTUS_BLADES` so the next count change
+fails to compile rather than failing to cut.
+
+**Verdict** open on both the count and the rim gaps. `lotus,_blade_radius` is the knob if the
+petals turn out to be too easy to stand between, and the jump is the one to watch in play: it may
+turn out that a flower you can hop is a flower nobody respects.
+
+### 2026-09-14 — half the flower was invisible
+
+**Changed** `EFFECT_PARTS` in the renderer is counted from the widest effect rather than
+written down. No tuning moved.
+
+**Why** Reported: only the first six blades have a model, the rest are just red discs.
+
+The renderer spawns a fixed pool of meshes per effect and asks `effect_piece` for each one.
+That pool was a literal `6`, with a comment saying "six, which is the Guillotine lotus: one
+blade each" — correct on the day it was written and quietly wrong the day the flower grew to
+twelve. The back six blades had no mesh to be drawn with. The red discs were the debug
+overlay's own outlines, which loop over `LOTUS_BLADES` and so were drawing all twelve
+faithfully; with `F1` off there was simply nothing there.
+
+**It is worth being clear about which half was wrong.** The hit test was right the whole time —
+twelve blades, cutting. So the ability was doing exactly what the entry above describes and
+half of it was doing so invisibly, which is the worst version of this bug: not a thing that
+fails to work, a thing that works with nothing on screen to say it is there. Everything in the
+previous entry about how the flower *reads* was written against a picture nobody could see.
+
+The rule this belongs under is the standing one about the overlay drawing what the hit test
+uses, generalised: **anything that walks the parts of an effect has to get the count from the
+effect.** The overlay already did. The renderer had its own copy, and a copy of a count is a
+count that goes stale. It is derived now, so a thirteenth blade would widen the pool rather
+than fall off the end of it — and the test beside it asserts the pool covers every piece
+`effect_piece` will answer for, which is the property rather than the number.
+
+**Verdict** kept, and it means the previous entry's verdict is still genuinely open: the thing
+it describes has not actually been seen yet.
+
+### 2026-09-14 — the dash to the shadow only ever went along the floor
+
+**Changed** Three things about `shift` + forward on the Reaver, all of them the same
+sentence read properly — *the dash goes to where the second body is*.
+
+1. **It answers in the air.** A forward airdodge pointed at the shadow is the dash. It
+   spends the airdodge and keeps the dash's own frames.
+2. **It drives all three axes.** The line she flies is the straight line between the two
+   bodies; gravity and the arena are off for the crossing, and she arrives on the shadow's
+   own spot rather than within half a metre of it.
+3. **Only a total obstruction refuses it**, which is a new question in `aim.rs`:
+   `aim::clear_between`.
+
+Plus a fourth thing that is new rather than fixed: **the carry**, a window the arrival
+opens in which a jump takes the dash's speed up with her. New knob,
+`reaver.dash_carry,_the_jump_window`, at ten frames.
+
+**Why** Reported, in three parts, and the third is the one that explains the other two.
+
+**The air.** Being off the floor is the commonest reason she is not standing where she
+wants to be. A class whose mobility switched off the moment she jumped had the mobility in
+the wrong place — the airborne branch of the dodge simply never asked whether the crosshair
+was on the shadow. It asks now. It is the *airdodge*, aimed, so it costs the airdodge: one
+commitment per airtime is the rule that keeps a jump from becoming flight, and the dash is
+a bigger commitment than the one it replaces rather than a free extra. What it does not
+take is the airdodge's shorter sixteen frames, because a dash has somewhere to *be* and a
+tail cut short strands her halfway.
+
+**The dais.** `dash_drive` zeroed the vertical and `step_her_dash` measured the gap flat,
+so a shadow standing on a platform was, to the dash, a shadow standing on the floor
+underneath it. She ran at the side of the thing it was standing on and the arena stopped
+her — and then "arrived" was never true, so she never picked the shadow up either. The
+fix is to drive the real gap and measure the real gap. It brings two consequences with it
+and both are deliberate:
+
+- **The crossing is not resolved against the world.** Whether there was anything in the way
+  was decided when the dash began; pushing her out of the geometry halfway along is exactly
+  the *partial* obstruction the rule says there is no such thing as. It is what caught her
+  feet on the platform's side.
+- **She lands on the shadow's spot exactly.** The arrival tolerance is half a metre wide,
+  which on flat ground is invisible and on a ledge is the difference between the deck and
+  the lip.
+
+**The obstruction rule, and why it is so permissive.** "No unobstructed line from her to
+the shadow" is the specification, and the interesting part is what counts as *a line*.
+Feet-to-feet alone would have refused every dash onto anything, which is the bug. Both
+bodies are upright columns over fixed spots, so every line between them shares one
+horizontal footprint and they differ only in how they rise — which makes the four corner
+lines the extremes of the family, and one of them getting through enough. At the foot of a
+ledge the line from her crown clears the lip, so there is a way up and she takes it.
+
+The cost is that it is very permissive, and in this blockout it refuses nothing at all:
+platforms and walls are 1.5 m, a fighter is 1.8, so she can always see over. That is a fact
+about the arena rather than a hole in the rule — and a **structure** is exactly a fighter's
+height, so an Elementalist's stone raised on the line does refuse it. That turned out to be
+the nicest thing in the change: denying the Reaver's line is now something another class
+can do on purpose, and it is what the test pins.
+
+**The carry.** The slide after a dash was already there — the dodge's tail decays whatever
+speed you are carrying, and a dash arrives at thirty-four metres a second, so she keeps
+going for a good four metres. Reported as something that *wants* to be usable. It is now:
+a jump pressed inside the window takes the slide up with her, and cuts the dodge's tail
+short doing it, so the frames she would have spent being punished are spent in the air.
+
+Two decisions inside that:
+
+- **A press, not a hold**, and only after a dash. Every dodge in the game has a punishable
+  tail; a jump out of that one would be a universal escape rather than one class's tech.
+- **The window is a timing, not a distance.** What is left of the dodge on arrival already
+  *is* a window of this kind, but its length is however much of the dodge the crossing did
+  not spend — about a frame at the end of the leash, which is the range the class is built
+  around. So arriving tops the dodge up to the window's own length. It never shortens one:
+  a short dash keeps the whole tail it has always had, and only the first frames of that
+  tail are the window.
+
+**Verdict** open on all four, and the numbers to drag are the carry and the slide inside
+it. Ten frames is a guess. The slide is *inherited* rather than chosen — nobody picked four
+metres, it is what `defence.dodge_decay` does to thirty-four metres a second — and on a
+four-metre-wide dais that is most of the way to the far edge, so arriving on high ground
+and immediately sliding off it is the thing to watch for. If it reads badly, the honest fix
+is a knob for what fraction of the dash survives the arrival rather than shortening the
+window, because the window is what makes the jump findable.
+
+**One thing the dash can now do that it could not:** go over a wall. The blockout's walls are
+the same one and a half metres as its platforms, so the crown-line clears them and a shadow
+sent over one is a shadow she can follow. Leaving the arena was already possible — a full hop
+reaches 3.7 m and the walls are low on purpose, so anyone can jump onto one and step off the
+far side — and she is not stuck out there, because the wall is as jumpable from outside as
+from in. Filed rather than fixed: if the closed arena is meant to be closed, that is a fact
+about the walls rather than about this dash.
+
+One thing deliberately not touched: the air-speed cap still clamps her the moment she
+*steers* out of a dash jump, because `clamp_air_speed` runs whenever air acceleration finds
+head room and a turn always does. Hold the line you left on and the boost survives in full;
+fight it and it collapses to 14 m/s. That is the existing air model rather than anything new
+here — the Bulwark's leap has the same edge — and changing it is a decision about every
+class at once.
+
+**Found while doing it, and fixed elsewhere the same day:**
+`move.shadow_reaver.send_shadow.damage` was **0**, so the recall cut nobody against a kit
+document that says it "dashes back through anything between the two of you, damaging and
+slowing it". This branch wrote it up rather than guessing at a balance number;
+*Send shadow is instant and cannot interrupt*, above, put it back to 70 and explains why it
+had been zeroed — it was an attempt to remove the recall's **interrupt** with the only
+lever available, and the interrupt turned out not to be reachable from that number at all.
+Worth keeping as a pair: the same symptom read as a damage problem from one side and a
+frames problem from the other, and only the second reading had a fix in it.
+
+
+### 2026-09-14 — nothing roots you any more
+**Changed** Committed moves keep **20% of walking speed — 1.4 m/s — instead of 0**, across all
+sixteen of them. Everything else about a committed move is untouched: for its whole length you
+still cannot jump, dodge, guard, or throw anything else. The walk table is now 7.0 free, 4.2
+poking, 3.0 crouching, 2.0 guarding, 1.4 committed.
+
+Second half, and the half that does the work: **the hindered speed is now arrived at rather
+than assigned.** Starting a move used to set horizontal velocity to the move's speed outright,
+which was a one-frame drop of 2.8 m/s for a poke and would have been 5.6 for a heavy. It now
+bleeds down to the move's speed over about four frames, on the same ramp that already handled
+the root, with the *direction* following the stick from the first frame and only the magnitude
+lagging. `tuning::attack_root_decay` is `tuning::hindrance_decay` for that reason; its floor is
+the move's own speed while you are steering and zero when you are not, which is why letting go
+of the stick mid-move still bleeds you to a stop.
+
+**Why** Reported as jarring, and it is the same report the poke drew on 2026-09-11 — "stopping
+dead feels jarring; a big slowdown with no jump and no dodge should play the same and read
+better". Worth recording that the earlier entry drew the line in the wrong place. It concluded
+that *the snap and the rooting were two different complaints wearing one coat*, fixed the snap
+everywhere and kept the rooting on the heavies as correct design. The snap half was right. The
+other half was a category error: a forty-frame commitment is the longest the game ever holds
+you, so it is the worst place to take the controls away, not the most defensible one.
+
+The thing that made rooting look load-bearing is that it was doing two jobs at once and only
+one of them was the standing still. Spatial commitment — you chose this, now live in it — is
+`Action::actionable` refusing every other button, and that was never this number. Taking the
+feet away on top of it read as the game asserting the commitment a second time, to a player
+who had already felt it.
+
+**The spacing arithmetic, because it is the obvious objection.** The longest committed move in
+the game is 42 frames. At 1.4 m/s that is 0.98 m of drift, against a body radius of 0.5 and a
+Slam that reaches 2.0. Facing still locks on frame one, so the drift is along one committed
+line rather than a way to re-aim: creeping forward during startup buys about 0.4 m of reach on
+a move whose whiff costs 24 frames of recovery. That is a skill expression at the scale of a
+footsie, not a change to whether heavies are punishable. Below the guard walk on purpose — a
+committed move should still be the most your feet ever cost you, and guarding is the slowest
+thing you can otherwise choose to do.
+
+**Verdict** open — wants a real match. The three things to watch: whether whiff-punishing a
+heavy got meaningfully harder (the arithmetic says no, the hands are the judge), whether 1.4
+reads as a crawl or as sluggish walking, and whether the four-frame ramp is visible at the
+start of a heavy or just felt.
+
+**Left open deliberately.** Every one of the sixteen got the same 20%, and there is no reason
+to believe a Cataclysm and a Bash-with-a-hammer want the same number — the per-move column
+exists and this is a uniform first guess, exactly as the poke's 60% was. The open question
+above it is the older one and is still open: *should mobility vary across a move's phases* —
+free during startup, rooted through active, slowed in recovery. Rooting only the active frames
+is the version worth trying first, because it would put the "commit to a spot" property back
+where it actually belongs without any of the cost above; it was not done here because it is a
+new mechanic rather than a number, and this change is a number.
+
+**What the harness now pins.** `feel::a_committed_move_is_a_crawl_and_never_a_stop` bounds the
+crawl at both ends: above zero, and below the guard walk. `feel::a_committed_move_takes_the_
+jump_and_the_dodge_away` drives real presses through a live `World` and is the one that matters
+— it is where commitment lives now, and if it ever passes silently while the crawl is being
+retuned, the retuning is free. `feel::hindrance_is_proportional_to_commitment` lost its
+`committed.roots()` assertion, which is why `Move::roots()` is gone: a predicate whose only
+true case the feel harness forbids is a predicate nobody can use.
+
+### 2026-09-14 — a match opens looking at your own fighter
+
+**Reported** The opening view is wrong. Tilt the starting angle down so it reads as an ordinary
+third-person view.
+
+**Changed** The opening pitch is its own Oven knob — *Opening pitch, below level*, **35 degrees**
+— where it used to borrow `Zones::neutral_pitch`, the middle of the neutral zone, which works
+out at 27.5.
+
+**Why the borrowed number was wrong, and it is not that 27.5 is close to 35.** On this rig the
+eye rides further out along the sphere the further below the horizon you look — that is the
+same geometry the 2026-09-11 entry above works through, where the mark on the ground lands at
+`h / tan θ`. So the opening pitch is not only which way the camera faces. It is *how far back
+the camera is*, and therefore whether the first thing anybody sees is their own fighter standing
+in an arena or a patch of floor with their own shield lying across the corner of it.
+
+At 27.5 degrees it was the floor. The fighter sat just below the bottom edge, the opponent was
+pinned against the HUD at the top, and the Bulwark's shield filled a third of the screen because
+the eye was close enough to be inside the arm holding it. Nothing about that reads as a game you
+know how to stand up in, which matters more than usual right now: it is the frame somebody
+following a link sees before they have pressed anything.
+
+**The middle of the neutral zone was never a claim about where to open.** It is a fact about the
+zones — halfway between the boundaries, so there is room to steer either way without crossing
+one. That is a good property for a resting angle to have and it says nothing about framing. The
+two questions wanted two numbers, so they have two now, and `neutral_pitch` goes back to meaning
+only what it says.
+
+**What was looked at.** Rendered stills of the opening frame, Bulwark against Bulwark, at 5.7,
+11.5, 17.2, 27.5, 34.4, 43 and 54.4 degrees below level:
+
+- **Above ~20** — no own fighter at all. The eye has come in toward the head and the body is
+  below the frame or faded.
+- **27.5, where it was** — the floor shot described above.
+- **34.4** — your fighter low-centre, the opponent centred on the dais, both arena walls in
+  frame. This is the one.
+- **43** — works, and is visibly further back and higher. Reads more like a diorama than like
+  standing there, and it is two degrees off the floor boundary, so a nudge of a neighbouring
+  knob would change which zone a match opens in.
+- **54.4** — past `floor_from`, so the view tilts toward your own feet: cropped arena, opponent
+  back up against the HUD. Worse than where it started.
+
+35 rather than 34.4 because a knob wants a round number and the exact value inside that zone is
+not what carries the reading.
+
+**Two tests, in `view/tests/presentation.rs`** rather than one assertion on the number. The
+opening angle sits strictly inside the neutral zone with margin at both ends — past `floor_from`
+a match opens pointed at the ground, above `neutral_to` the eye has come in too close to see
+yourself. And the property the number exists for: at the opening angle the eye is more than a
+metre back from the fighter and the body is not faded. They are in `presentation.rs` and not in
+`camera_knobs.rs` beside the other camera tests, because that file's one test deliberately drags
+the live knobs to nonsense and back, and tests in a file share a process — read these next to it
+and they see a camera mid-retune. That cost twenty minutes and a confusing "the eye opens 0.00 m
+from the fighter".
+
+**Verdict** open — chosen from stills, by someone who has not played it. The reading being
+claimed here (34.4 "reads like standing there", 43 "reads like a diorama") is exactly the kind
+of thing a still cannot settle. It is one slider in the Oven under *camera*, and `?shot_pitch=`
+in the browser build will render any angle without a rebuild.
+
+---
+
+### 2026-09-14 — the Champion's chain, and a weapon on the way off the floor
+
+**Changed** the grounded row of the Champion's grid became a **three-hit string** — nine
+moves where there were three — and every weapon gained a **takeoff** thrown on the same
+press as jump. Ten moves became nineteen. The uppercut moved off Rush + hammer onto the
+hammer's takeoff, and Rush + hammer became a new move. Six knobs are new: `Chain survives
+for`, `Chain, recovery owed on a swap (%)`, `…on a repeat (%)`, `Takeoff window around a
+jump`, `Pole drive, forward boost`, and nothing else in the Oven moved except the
+Champion's own rows.
+
+**Why** the report was that the class "feels very linear", which is the same word the
+2026-09-12 rebuild used about the mode toggle it removed. That rebuild was right and did
+not go far enough: it made *which weapon* a real choice, and then gave you exactly one of
+those choices per exchange. One press, one shape, back to neutral. The decision was real
+and you got to make it about as often as you got to make a decision about anything.
+
+A string is the cheapest possible fix for that, and the reason is arithmetic rather than
+taste. **Three hits with three weapons each is twenty-seven orderings out of nine
+animations.** The mid-animation swap in [champion.md](champion.md) was reaching for the
+same thing and asking for blended tails to get it; this asks for ordinary clips.
+
+#### What makes the weapon being free the mechanic rather than a flourish
+
+Each weapon owns a different volume — the sword owns width, the hammer owns the line
+underneath, the spear owns distance. So a **mixed** string covers three different pieces of
+space in three beats and a **pure** one covers the same piece three times. Against somebody
+who is moving, that is the difference between the third hit landing and the third hit
+whiffing, and **nothing had to be added to make it true**. The shapes were already there.
+That is the part worth keeping if any of the numbers below get thrown away.
+
+The frame data does one small thing on top of it. A connected link cuts its own recovery
+short so the next one can begin, and **swapping cuts it shorter than repeating** — 30% of
+the recovery against 55%, which is three frames against six on the sword and six against
+twelve on the hammer. The fiction is that the head re-forms out of the follow-through
+rather than being re-chambered; the mechanical intent is that linear play stays completely
+viable and mixing pays a little better, which is what
+[champion.md](champion.md#identity) has asked for since the class was written down. Set the
+two equal and the incentive is off, with nothing else changing. **That is the number most
+likely to be wrong**, in either direction.
+
+#### The chain is a hit confirm, and that is the load-bearing decision
+
+The first version cancelled the recovery whenever the next button was pressed, and it took
+about ten minutes of looking at the frame table to see what that costs: `on_block` is
+measured from the full recovery, so a cancel available on block quietly makes half the kit
+plus on block, and `every_attack_is_punishable_on_block` — the one property that keeps
+offence honest — would have become a statement about a number nobody pays.
+
+So the cancel is **on hit only**. Blocked, parried and whiffed links pay in full. Three
+things fall out, and all three are better than the alternative:
+
+- every number the frame table prints stays true against a defender who did something;
+- blocking one hit of a string costs the attacker about thirteen frames across a sword
+  chain, which is a window rather than a moral victory;
+- whiffing the opener and continuing anyway is a choice you can be punished for.
+
+The string still *continues* on a block or a whiff — it just continues at the printed
+speed. That matters for feel: a button that does nothing because the last swing missed
+reads as broken, and the fix is to make it slower rather than to make it silent.
+
+#### What a string dies to
+
+Half a second of not swinging, being hit, blocking, dodging, or leaving the floor. **Not a
+Rush**, and that is deliberate: the grace window keeps running through the dash, so one
+charge buys a reposition in the middle of a string and the third hit can arrive from
+somewhere they were not watching. It is the best thing in the change and it was free —
+`Action::Free` while grounded is what the clock ticks on, and a dash is exactly that.
+
+#### The knockback rule nobody would think to write down
+
+The first pass kept the hammer's opener at its old knockback of 11 and the chain did not
+work at all, for a reason that is obvious once seen: **a hit that shoves them out of range
+of the next one has ended the string whether or not the game says so.** Eleven metres a
+second carries somebody 1.3 m, and Uproot reaches 1.8 m from a body that is already a
+metre away.
+
+So the knockback moved to the finishers — 4 on the hammer's opener, 11 on Earthbreaker —
+and the hammer's identity moved with it, from "big knockback and a long stagger" to "a long
+stagger, and then a finisher that moves people". That is a better hammer anyway: the payoff
+is at the end of the commitment rather than at the start of it.
+
+It is pinned as `the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them`
+in `feel.rs`, and the assertion does the geometric-series arithmetic rather than comparing
+the speed to the reach — because the first version of the test compared those two directly,
+failed on a perfectly good number, and was measuring the wrong thing.
+
+#### The takeoffs
+
+`space` plus a weapon, on the ground, is that weapon's way off the floor. **This is the
+first time the jump button has modified anything anywhere in the grammar**, and it is
+flagged in [README](README.md#4--open) as a precedent rather than a Champion detail.
+
+- **Rising cut** (sword) — an angled slash up and forward. The hardest hit of the three and
+  nothing else in it: no grab, no shove, and a long fall if it misses.
+- **Uppercut** (hammer) — the existing move, re-homed. It launches and holds on, and space
+  again takes you both higher.
+- **Pole drive** (spear) — the butt of the spear into the floor at your own feet. Least
+  damage in the class, most height, and a shove in whatever direction you are holding.
+
+Read from behind they are a diagonal, a column and a vault, which is how you tell which one
+somebody threw while all three are in the air.
+
+**The uppercut moving off Rush is the biggest single change here** and it is worth its own
+sentence. The class's headline loop started with a resource check: hammer, *do I have the
+charge*, uppercut. A loop you often cannot start is not a loop. It now starts with a button
+everyone always has, and the charge is free for the reposition — which is the half of the
+class Rush was always better at. Rush + hammer became **Rush sweep**, the hammer dragged
+along the floor through everyone you run past, which fills the hole and gives the Rush row
+three heights rather than two.
+
+**The window is eight frames**, and it exists because "attack as you jump" is one intention
+and two buttons. Jump then weapon is the order that works; both at once is the same frame.
+Click first throws the grounded move, which is correct — it already did.
+
+#### The animation, which was most of the work
+
+Nine new clips, and the rule they are authored to is the thing to keep:
+
+- **Hit one opens from the guard and comes back to it.** It is the only row that does.
+- **Hit two never opens from the guard.** Its first key is the far side of somebody else's
+  swing — hands where a cut left them, the hammer head still on the floor, the point still
+  out. It has no wind-up, only a continuation, and *that is the whole read*: a body that
+  did not come back to guard is a body that is not finished.
+- **Hit three commits the feet.** The finishers are the only grounded moves that turn, step
+  through or leave the floor behind, because they are the only ones you cannot take back.
+
+That third rule is the one a player will actually use without noticing. Everything else in
+the kit puts the feet back where it found them, so feet that move mean *this is the last
+one*, from any angle and at any distance.
+
+Four clips failed `baked_motion_is_continuous` on the first bake and all four failed the
+same way — a torso or a hand crossing too much ground between two keys — which is the test
+doing exactly its job. The fixes were the honest ones: **Crescent** keeps its hands near
+the sternum and lets the haft go round, which is what the file's own note about grips says
+and what a real swing does; **Earthbreaker** got a key halfway down, because a weight that
+size does not go from held to landed in one interval; **Impale** got a key with the rear leg
+swinging under the hips, because a flèche is a step rather than a hop; **Rising cut**
+stopped trying to move the whole torso through sixty degrees in two frames. All four read
+better afterwards, which is the usual result and is why the ceiling is where it is.
+
+**Verdict** open, and unusually so — this is a mechanic rather than a number, and the
+numbers under it are all first guesses. A held sword string is 234 damage in eighty frames
+and a held hammer string is 212 in a hundred and twenty-one, which is the intended shape
+(the hammer buys stagger and a guard break rather than numbers) but is a big gap to have
+picked at a desk. Things to watch for, in order of how likely they are to be wrong:
+
+1. **Is three hits too many?** A string you can be interrupted out of twice is a string
+   whose third hit rarely happens. If so, the fix is not a fourth cancel rule — it is to
+   move damage from the finishers onto the openers, so that being cut off costs less.
+2. **Is the swap bonus findable?** Three frames on the sword may be below the threshold at
+   which anyone notices, in which case it is either bigger or gone. Gone is a real option:
+   the shapes already make mixing correct.
+3. **Is the grace window right?** 26 frames is a guess, and it is the number that decides
+   whether a string is a rhythm or a thing you mash.
+4. **Does the hammer string ever get thrown?** Two seconds is a long time to be committed,
+   and Earthbreaker's twenty frames of startup is the most readable telegraph in the game
+   on purpose. If it never lands, the answer is probably that the *second* hit needs to be
+   plus enough to make the third a true block string, which it currently is not.
+5. **Is `space` + weapon a good idea at all?** It is comfortable on a keyboard and it is a
+   precedent. Somebody with a controller should hold an opinion before it spreads.
+
+### 2026-09-14 — the Elementalist off the ground
+
+**Changed** three moves, on the three buttons she already had. Left click in the air is the
+**Air bolt**, right click is the **Gale**, and `E` is **Landfall**. Four moves became seven.
+Eight knobs are new, all under `Elementalist`: `Air bolt speed`, `Gale speed`, `Gale size
+leaving her hand (x)`, `Landfall dive speed`, `Landfall stone, how far ahead`, `Landfall stone
+rise`, `Landfall eruption, above the floor (turns)` and `Landfall eruption push`. Two of the
+Oven's *slider bounds* moved with them and no baked value did: a move's `Reach` now runs to
+twenty-eight metres — the width of the arena, past which more range cannot change anything —
+and its `Knockback` to thirty, which is what every other knockback knob in the Oven already
+runs to and what `Move::Knockback` would have had if it had not quietly inherited the shared
+twelve.
+
+**Why** the class had nothing in the air, and the README has had **Aerials** open since the
+Champion answered it for itself: *airborne attacks should be variants of their grounded
+counterparts rather than a separate move list.* That is a claim about one class until a second
+one is built the same way. So: the button is the thing you are throwing and the row is where
+your feet are, exactly as on the Champion, and a player who has learnt her standing up has
+learnt most of her in the air.
+
+#### The three decisions worth keeping if the numbers get thrown away
+
+**Air, and why it is not earth.** Earth is what she is standing on, and off the floor she is
+not standing on it. The two shots are the element she can reach up there; the way back to
+earth is to go and hit it, which is Landfall. That also gives the kit's *"ice, air and
+lightning are the specialisation axis for later"* its first outing without committing to a
+loadout.
+
+**Both shots travel, and nothing she throws standing up does.** Bolt and Cataclysm are instant
+lines resolved on the frame they come out. These have a speed, and the reason is the situation
+rather than the element: she is falling while she throws them, and an instant hit taken from a
+position she cannot hold would be free. A flight time is what makes leaving the floor a trade.
+
+**The Gale is worth what it has become.** It leaves her hand at 30% of its radius and arrives
+at full size, and damage and knockback ride the same fraction — 36 at point blank against 120
+at the tip. Every other projectile in the game is worth the same wherever it lands. This one
+inverts the spacing, which is the same sentence Flame spitter is already written around, and
+it hands the opponent an answer this class least wants to give and most deserves to be made to
+give: *close*. The stun is deliberately flat, because frame data that changed with distance
+would be a move nobody could learn.
+
+#### Landfall, and the first startup in the game that ends on a place
+
+Its row says 26 frames. What it *owes* is a 14-frame hang at the top and then a dive at 26 m/s
+until her feet arrive — so from the top of her jump the wind-up is a little over half a
+second, and from a short hop it is barely longer than the hang. The telegraph is as long as
+the height she chose to open up, which is the property the whole move is built on: going
+higher is buying reward with time the opponent gets to use.
+
+**And they can use it, with no rule of its own.** The descent is an ordinary startup, so a hit
+knocks her out of it exactly the way a hit knocks anybody out of a wind-up, and the slab she
+was about to drive up never appears. That was the requirement and it needed no code — which is
+the right outcome, and is worth noting because the obvious implementation (a bespoke
+"interruptible" flag on the move) would have been a second way of saying something the engine
+already says.
+
+The slab is the payoff and it is **driven rather than raised**: out of the floor in six frames
+against fourteen, because the telegraph was the plunge rather than the rise, and **leaning**
+forty-five degrees away from her, so whoever is standing over it is thrown up and back instead
+of merely staggered in place. Stones grew two fields for it — `rise` and `erupt` — and an
+ordinary stone's `erupt` is zero, which is the old behaviour written down rather than implied.
+
+**Verdict** open, and every number under it is a first guess. In order of how likely each is
+to be wrong:
+
+1. **Is the plunge's length-by-height a trade or a loophole?** Pressed low it is nearly all
+   hang, which is the shortest telegraph and the same reward. If that reads badly the fix is
+   probably a floor on the dive rather than a cap on the hang — she should not be able to
+   *arrive* faster than a foe can answer, and how high she started should stay the thing that
+   decides how long they get.
+2. **Is a Gale at her own feet too weak to be worth throwing?** 36 damage is close to
+   nothing, and a move that is nearly worthless at the range you are most likely to throw it
+   may read as broken rather than as spacing. `Gale size leaving her hand (x)` is the one
+   knob for it.
+3. **Is a fourth structure's worth of terrain every time she leaves the floor too much?** The
+   cap of three is a readability guess and this is a new way to spend it, on a button that
+   also does something else.
+4. **Does the 45° lean actually clear the space?** 13 m/s along it is a real shove on paper;
+   whether it separates her from somebody who has closed, or just pops them into a spot they
+   can airdodge out of, is the thing the move exists for and the thing a test cannot answer.
+5. **The air row shares the grounded clips.** The Air bolt plays Bolt's flick, the Gale plays
+   Cataclysm's throw and Landfall plays Fissure's *both hands driven into the ground* — which
+   is very nearly right, and is why this shipped without four new recipes. Four authored
+   clips is the obvious next piece of work on the class.
 
 ### 2026-09-14 — a shot aimed at the floor goes through whoever is standing on it
 

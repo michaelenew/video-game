@@ -7,10 +7,14 @@
 //! Unknown keys are preserved on save rather than dropped. A settings file that
 //! silently eats anything it does not recognise is a settings file people learn
 //! not to edit.
+//!
+//! *What* a setting is lives here; *where* it is kept is
+//! [`crate::platform`]'s question, because the answer is a file on the desktop
+//! and the browser's local storage on the web. The text is the same either way.
 
+use crate::platform;
 use bevy::prelude::Resource;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 /// Radians of turn per pixel of mouse movement at `sensitivity = 1.0`.
 ///
@@ -97,11 +101,6 @@ impl Settings {
         }
     }
 
-    /// One line for the heads-up display.
-    pub fn label(&self) -> String {
-        format!("mouse {:.2}   fov {:.0}", self.sensitivity, self.fov)
-    }
-
     pub fn parse(text: &str) -> Settings {
         let mut s = Settings::default();
         for line in text.lines() {
@@ -143,38 +142,18 @@ impl Settings {
         out
     }
 
-    /// Load from disk, falling back to defaults if anything at all goes wrong.
+    /// Read them back, falling back to defaults if anything at all goes wrong.
     pub fn load() -> Settings {
-        path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
+        platform::load_settings()
             .map(|t| Settings::parse(&t))
             .unwrap_or_default()
     }
 
-    /// Write to disk. Failure is reported and otherwise ignored -- losing a
+    /// Write them out. Failure is reported and otherwise ignored -- losing a
     /// sensitivity setting is not a reason to interrupt a match.
     pub fn save(&self) {
-        let Some(p) = path() else { return };
-        if let Some(dir) = p.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Err(e) = std::fs::write(&p, self.to_text()) {
-            eprintln!("could not save settings to {}: {e}", p.display());
-        }
+        platform::save_settings(&self.to_text());
     }
-}
-
-/// Where the settings file lives.
-///
-/// `ARENA_SETTINGS` overrides it, which is what makes this testable and what
-/// lets two people on one machine keep separate settings without a profile
-/// system.
-fn path() -> Option<PathBuf> {
-    if let Ok(explicit) = std::env::var("ARENA_SETTINGS") {
-        return Some(PathBuf::from(explicit));
-    }
-    let home = std::env::var("HOME").ok()?;
-    Some(PathBuf::from(home).join(".config/arena/settings.conf"))
 }
 
 #[cfg(test)]

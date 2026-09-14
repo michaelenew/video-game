@@ -20,11 +20,12 @@ fn main() {
     // That is the guard working, not the guard being awkward -- the rule is
     // worth more than a convenient `{:.1}`.
     println!(
-        "walk {}  |  poking {}  |  crouching {}  |  guarding {}  |  committed 0",
+        "walk {}  |  poking {}  |  crouching {}  |  guarding {}  |  committed {}",
         tenths(t::move_speed()),
-        tenths(t::move_speed().mul(Fx::ratio(t::poke_mobility() as i32, 100))),
+        tenths(walking_at(t::poke_mobility())),
         tenths(t::crouch_move_speed()),
         tenths(t::guard_move_speed()),
+        tenths(walking_at(t::committed_mobility())),
     );
     println!(
         "reaction {}f  |  parry window {}f  |  dodge {}f ({} invulnerable)\n",
@@ -61,17 +62,40 @@ fn main() {
             );
         }
         println!(
-            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} notes",
-            "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "aimed"
+            "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}{:>6}  {:<10} notes",
+            "key", "move", "st", "act", "rec", "damage", "on block", "on hit", "lock", "aimed"
         );
         for (slot, m) in (0..moves::slots(class)).map(|slot| (slot, moves::get(class, slot as u8)))
         {
             let mut notes = Vec::new();
+            // What repeating it actually costs. The lockout column on its own
+            // does not say: it is measured from the frame the move comes out,
+            // so on anything that commits you for longer than it lasts the
+            // answer is "nothing", and the only moves it charges are the ones
+            // cheap enough to have frames left over.
+            //
+            // Worked out above the branch below rather than inside it, because
+            // the two moves with the most to say here -- Send shadow and the
+            // Guillotine, the two that are used twice -- are both moves that
+            // place something and take the other path out.
+            let repeat = if moves::reactivates(class, slot as u8) {
+                format!(
+                    "press again to bring it back; then {}f before another",
+                    m.repeat_lock()
+                )
+            } else if moves::lingers(class, slot as u8) {
+                format!("{}f after the last of it comes home", m.repeat_lock())
+            } else if m.repeat_idle() > 0 {
+                format!("+{}f to throw again", m.repeat_idle())
+            } else {
+                String::new()
+            };
             // A move with no volume of its own has no frame advantage worth
             // printing: those columns are all about what connecting is worth,
-            // and this one never connects. Two kinds -- the ones that put
-            // something in the world and let it do the hitting, and the
-            // Champion's pole vault, which puts nothing anywhere.
+            // and this one never connects. Three kinds -- the ones that leave
+            // something standing where they were cast, the ones that *throw*
+            // something that travels, and the Champion's pole vault, which
+            // puts nothing anywhere at all.
             if !m.strikes() {
                 // A move with no volume of its own has its hit delivered by
                 // whatever it put in the world, and not every one of those can
@@ -96,13 +120,20 @@ fn main() {
                 } else {
                     String::new()
                 };
-                let what = if m.shape.strikes() {
+                let base = if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
+                    format!("throws something; the thing it threw hits{ignored}{wound}")
+                } else if m.shape.strikes() {
                     format!("places something; the thing it placed hits{ignored}{wound}")
                 } else {
                     format!("movement, no hitbox{ignored}{wound}")
                 };
+                let what = if repeat.is_empty() {
+                    base
+                } else {
+                    format!("{base}; {repeat}")
+                };
                 println!(
-                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}  {:<10} {what}",
+                    "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>10}{:>8}{:>6}  {:<10} {what}",
                     moves::binding(class, slot),
                     m.name,
                     m.startup,
@@ -111,6 +142,10 @@ fn main() {
                     "--",
                     "--",
                     "--",
+                    // The lockout is real on these even though the advantage
+                    // columns are not: a move that places something is still a
+                    // move you can lean on the button for.
+                    m.repeat_lock(),
                     // Still printed, and it matters more here than anywhere:
                     // the whole question about a move that places something is
                     // *where*, and this column is the answer.
@@ -133,9 +168,15 @@ fn main() {
             if m.air_stall > 0 {
                 notes.push("hangs");
             }
-            if m.roots() {
-                notes.push("roots you");
-            }
+            // What the move costs your feet, and only when it is worth
+            // saying: every move hinders you, and the committed ones hinder
+            // you down to a crawl.
+            let feet = if m.mobility == 0 {
+                "roots you".to_string()
+            } else {
+                format!("walks {}", tenths(walking_at(m.mobility)))
+            };
+            notes.push(&feet);
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
@@ -155,8 +196,11 @@ fn main() {
             } else {
                 format!("{:+}", m.on_hit())
             };
+            if !repeat.is_empty() {
+                notes.push(&repeat);
+            }
             println!(
-                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}  {:<10} {}",
+                "  {:<15}{:<12}{:>4}{:>5}{:>5}{:>8}{:>+10}{:>8}{:>6}  {:<10} {}",
                 moves::binding(class, slot),
                 m.name,
                 m.startup,
@@ -165,6 +209,7 @@ fn main() {
                 m.damage,
                 m.on_block(),
                 on_hit,
+                m.repeat_lock(),
                 // Which line of effect it uses, so "where does this actually
                 // go" is answerable from the table rather than from the source.
                 m.aim().name(),
@@ -176,8 +221,16 @@ fn main() {
 
     println!(
         "On block is the safety number: negative means punishable, and every move\n\
-         should be. Record what you change in docs/design/feel-log.md."
+         should be. Lock is the repeat lockout: how long after throwing a move you\n\
+         may not throw *that* move again, counted from the frame it comes out. The\n\
+         rest of the kit is never locked, so it charges for repeating yourself and\n\
+         not for attacking. Record what you change in docs/design/feel-log.md."
     );
+}
+
+/// Walking speed at a given percentage of it. The mobility column, in metres.
+fn walking_at(percent: u8) -> Fx {
+    t::move_speed().mul(Fx::ratio(percent as i32, 100))
 }
 
 /// One decimal place, without touching floating point.

@@ -131,10 +131,23 @@ fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
     // And it has to be the smallest hit in the class: what it buys is an
     // interrupt, not damage, and a no-stun move that also hit hard would beat
     // the moves that pay stun for their damage at their own game.
+    //
+    // **Only moves that actually swing something.** A move with no hitbox --
+    // `radius` zero, a gesture that puts something into the world and lets the
+    // thing it placed do the hitting -- has no frame advantage to be wrong
+    // about: `on_hit` is derived from the attacker's own active and recovery
+    // frames against a victim the move never touches, which is why the frame
+    // table prints `--` for it rather than a number. The rule above is about
+    // hitboxes that trade stun for an interrupt, and a gesture trades nothing.
+    // Asked of one anyway it reads a `damage` field that belongs to whatever
+    // the gesture placed, which is how it came to have an opinion about the
+    // Reaver's Send shadow -- a move whose damage is carried by the second body
+    // on its way home, and which by design cannot interrupt anybody at all.
+    // See `Hit::interrupts`.
     for class in ALL_CLASSES {
         let table = moves::table(class);
         let softest = table.iter().map(|m| m.damage).min().unwrap();
-        for m in table.iter().filter(|m| m.hitstun == 0) {
+        for m in table.iter().filter(|m| m.hitstun == 0 && m.strikes()) {
             assert!(
                 m.on_hit() < 0,
                 "{} {}: {:+} on hit with no stun at all -- free pressure",
@@ -459,10 +472,14 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
     // decision about that class: the Blood mage's fourth is on `E`, because her
     // mechanic is health and there is nothing to toggle, the Reaver's fourth is
     // on `E` because throwing a second body across the arena and dashing it
-    // home through somebody is not an instant, the Elementalist's fourth is
-    // Cataclysm on right click -- otherwise dead weight on a class with no
-    // shield -- the Champion's ten are three weapons by three stances plus the
-    // vault, and the Dual mage's five are those three plus Sweep on `E` -- her
+    // home through somebody is not an instant, the Elementalist's seven are
+    // those three plus Cataclysm on right click -- otherwise dead weight on a
+    // class with no shield -- and then a whole row of three more for the same
+    // buttons with her feet off the floor, which is the aerials question
+    // `docs/design/README.md` leaves open answered for a second class --
+    // the Champion's nineteen are three weapons by six situations
+    // plus the vault, three of those six being the three hits of one ground
+    // chain, and the Dual mage's five are those three plus Sweep on `E` -- her
     // mechanic is a meter steered by which button attacks, so `E` is free the
     // same way -- plus a second auto on right click, because her two forces
     // are two different moves rather than one move with a modifier.
@@ -479,8 +496,9 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         }
         let n = moves::table(class).len();
         let expected = match class {
-            Class::Champion => 10,
-            Class::BloodMage | Class::ShadowReaver | Class::Elementalist => 4,
+            Class::Champion => 19,
+            Class::Elementalist => 7,
+            Class::BloodMage | Class::ShadowReaver => 4,
             Class::DualMage => 5,
             _ => 3,
         };
@@ -513,11 +531,195 @@ fn hindrance_is_proportional_to_commitment() {
             committed.name
         );
         assert!(
-            committed.roots(),
-            "{class:?}: '{}' is a committed move that lets you keep walking",
+            committed.mobility as i32 * 100 <= poke.mobility as i32 * COMMITTED_SHARE_OF_A_POKE,
+            "{class:?}: '{}' hinders you barely more than the poke '{}' does ({}% against {}%)",
+            committed.name,
+            poke.name,
+            committed.mobility,
+            poke.mobility
+        );
+    }
+}
+
+/// How much of a poke's mobility a committed move is allowed to keep, as a
+/// percentage. Half: the two have to be *obviously* different to throw, or the
+/// frame data is saying one thing and the feet another.
+const COMMITTED_SHARE_OF_A_POKE: i32 = 50;
+
+#[test]
+fn a_committed_move_is_a_crawl_and_never_a_stop() {
+    // The other half of `a_poke_is_a_slow_not_a_stop_and_not_free`, and the same
+    // two failure modes one rung down.
+    //
+    // Zero is the one the design gave up on 2026-09-14: a character who ignores
+    // the stick reads as the game taking the controls away, and a forty-frame
+    // heavy is the worst place in the game to do that. What commitment means is
+    // pinned by `a_committed_move_takes_the_jump_and_the_dodge_away` below --
+    // that is where the spatial cost actually lives, and it is untouched.
+    //
+    // The ceiling is the other failure: a committed move you can walk out of at
+    // guard speed has stopped costing you the ground, and spacing is most of
+    // neutral.
+    for class in ALL_CLASSES {
+        let committed = moves::get(class, SLOT_COMMITTED);
+        let speed = t::move_speed().mul(Fx::ratio(committed.mobility as i32, 100));
+        assert!(
+            committed.mobility > 0,
+            "{class:?}: '{}' roots you outright",
+            committed.name
+        );
+        assert!(
+            speed.raw() < t::guard_move_speed().raw(),
+            "{class:?}: '{}' leaves you faster than guarding does, so committing to it \
+             costs you no ground",
             committed.name
         );
     }
+}
+
+/// Aim angle for a fighter looking the way they spawn. Movement and attacks are
+/// camera-relative, so a fixture that does not say where it is looking is not
+/// saying what its buttons mean.
+const LOOKING: u16 = 0;
+
+/// Where player one is, and what they are doing, four frames into a move thrown
+/// with `throw` while holding `then`.
+fn four_frames_into(class: sim::class::Class, throw: u16, then: u16) -> (u32, i32, i32) {
+    use sim::{Input, World};
+    let mut w = World::with_classes([class, class]);
+    w.advance([Input::aimed(throw, LOOKING), Input::default()]);
+    assert!(
+        w.players[0].action.attack_kind().is_some(),
+        "{}: the fixture threw nothing",
+        class.name()
+    );
+    for _ in 0..4 {
+        w.advance([Input::aimed(then, LOOKING), Input::default()]);
+    }
+    let p = &w.players[0];
+    (p.action.tag(), p.pos.y.raw(), p.vel.y.raw())
+}
+
+#[test]
+fn no_attack_lets_you_jump_or_dodge_out_of_it() {
+    // **What commitment means, now that nothing roots.** The spatial cost of a
+    // move is not that you stand still -- it is that for its whole length the
+    // only thing you can do is finish it. If jump or dodge leaked out of one,
+    // the crawl above would be all that was left of the commitment, and the
+    // crawl is a feel decision rather than a cost.
+    //
+    // Measured against the same move with no second press rather than against
+    // an absolute, because a move with `self_lift` takes you off the ground on
+    // its own and an assertion that you are still standing would read that as a
+    // jump.
+    //
+    // Both attack buttons, because shift plus left click is the committed move
+    // on four of the six and the Champion and the Dual mage spend the modifier
+    // differently -- whatever comes out is still an attack, which is the claim.
+    use sim::Input;
+    for class in ALL_CLASSES {
+        for throw in [Input::LEFT, Input::SHIFT | Input::LEFT] {
+            let quiet = four_frames_into(class, throw, 0);
+            assert_eq!(
+                four_frames_into(class, throw, Input::SPACE),
+                quiet,
+                "{}: jumped out of an attack",
+                class.name()
+            );
+            assert_eq!(
+                four_frames_into(class, throw, Input::SHIFT | Input::W),
+                quiet,
+                "{}: dodged out of an attack",
+                class.name()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_move_never_snaps_you_to_its_speed() {
+    // The half of the 2026-09-14 change that does the work, and the half that
+    // is easiest to lose: **the hindered speed is arrived at, not assigned.**
+    //
+    // Setting it outright is a one-frame drop of 5.6 m/s into a committed
+    // move's crawl, which is the same lurch the old dead stop was with a
+    // different number at the bottom of it. Both were reported as jarring and
+    // both are this assertion. A regression here would not fail any other test
+    // in the file: the speeds either side of the ramp would still be right.
+    use sim::{Input, World};
+    for class in ALL_CLASSES {
+        let mut w = World::with_classes([class, class]);
+        // Up to a full walk first: there is nothing to ramp down from
+        // otherwise.
+        for _ in 0..30 {
+            w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
+        }
+        let walking = flat_speed(&w);
+
+        // Throw the heaviest thing left click will give this class, and keep
+        // holding the direction. Which move that is differs -- shift plus left
+        // is the committed move on four of the six, and the Champion's left
+        // click is the sword whatever the modifier says -- so the speed to ramp
+        // to is read off whatever actually came out rather than assumed.
+        let held = Input::SHIFT | Input::LEFT | Input::W;
+        w.advance([Input::aimed(held, LOOKING), Input::default()]);
+        let kind = w.players[0]
+            .action
+            .attack_kind()
+            .unwrap_or_else(|| panic!("{}: the fixture threw nothing", class.name()));
+        let m = moves::get(class, kind);
+        let target = t::move_speed().mul(Fx::ratio(m.mobility as i32, 100)).raw();
+        assert!(
+            target < walking,
+            "{}: '{}' does not hinder you at all, so there is no ramp to test",
+            class.name(),
+            m.name
+        );
+
+        let first = flat_speed(&w);
+        assert!(
+            first > target,
+            "{}: '{}' snapped you straight to {} on its first frame",
+            class.name(),
+            m.name,
+            target
+        );
+
+        // And it gets there, rather than gliding for the length of the move.
+        let mut speed = first;
+        for _ in 0..8 {
+            w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
+            let next = flat_speed(&w);
+            assert!(
+                next <= speed,
+                "{}: the ramp into '{}' went back up",
+                class.name(),
+                m.name
+            );
+            speed = next;
+        }
+        assert!(
+            (speed - target).abs() <= SETTLED,
+            "{}: eight frames into '{}' and still not down to its own speed \
+             ({speed} against {target})",
+            class.name(),
+            m.name
+        );
+    }
+}
+
+/// How close to a move's own speed counts as having arrived, in raw 16.16 bits.
+///
+/// Not a tolerance on the design: the ramp lands exactly on the floor, and then
+/// the floor is multiplied by a *unit* direction whose components were rounded
+/// to fixed point, which is worth a raw unit or two either way. Sixteen of them
+/// is four ten-thousandths of a metre per second.
+const SETTLED: i32 = 16;
+
+/// Player one's horizontal speed, in raw fixed point.
+fn flat_speed(w: &sim::World) -> i32 {
+    let v = w.players[0].vel;
+    sim::math::V3::new(v.x, Fx::ZERO, v.z).flat_len().raw()
 }
 
 #[test]
@@ -620,4 +822,267 @@ fn an_aerial_hang_is_shorter_than_the_move_that_carries_it() {
             m.whiff_cost()
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// The repeat lockout
+// ---------------------------------------------------------------------------
+//
+// The behaviour is pinned in `tests/lockout.rs`. What belongs here is the pair
+// of relationships that decide whether the rule is still the one the design
+// argued for after somebody has finished dragging the knob around -- because
+// the same mechanism tuned twice as far stops being a charge for repetition
+// and becomes a cooldown, which `docs/design/combat-kernel.md` rules out.
+
+#[test]
+fn the_lockout_always_leaves_something_faster_to_do_than_wait() {
+    // **The line between this and a cooldown, as a number.**
+    //
+    // Being locked out of a move is only interesting while the answer is to
+    // throw something else. The moment the idle frames outlast the cheapest
+    // other thing in the kit, the answer becomes *stand still until it comes
+    // back* -- and standing still waiting for an ability is exactly the
+    // question the combat kernel refuses to ask.
+    for class in ALL_CLASSES {
+        let table = moves::table(class);
+        for (i, m) in table.iter().enumerate() {
+            let idle = m.repeat_idle();
+            if idle == 0 {
+                continue;
+            }
+            let cheapest_other = table
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .map(|(_, n)| n.whiff_cost())
+                .min()
+                .expect("every class has more than one move");
+            assert!(
+                idle <= cheapest_other,
+                "{} {}: locked out for {idle} frames after it finishes, and the \
+                 cheapest other move in the kit takes {cheapest_other}. Past that \
+                 point the correct play is to wait rather than to use the kit, \
+                 which is a cooldown wearing a different name.",
+                class.name(),
+                m.name,
+            );
+        }
+    }
+}
+
+#[test]
+fn one_press_can_never_lock_more_than_one_move() {
+    // The structural half of the same claim, and the one that would catch
+    // somebody making the lockout global in a hurry. A press costs you *that*
+    // ability and nothing else, so the worst case is always a kit with one
+    // fewer option in it -- never a kit with nothing in it.
+    use sim::state::SLOT_POKE;
+    for class in ALL_CLASSES {
+        let mut p = sim::state::Player::new(class);
+        let out = [false; moves::MAX_SLOTS];
+        p.repeat_lock[SLOT_POKE as usize] = 240;
+        let available = (0..moves::table(class).len())
+            .filter(|slot| p.can_throw(*slot as u8, &out))
+            .count();
+        assert_eq!(
+            available,
+            moves::table(class).len() - 1,
+            "{}: locking the poke left {available} of {} moves available",
+            class.name(),
+            moves::table(class).len(),
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The Champion's chain
+// ---------------------------------------------------------------------------
+//
+// Three hits deep on the ground, and every hit is a free choice of all three
+// weapons -- one haft, three heads, chosen a hit at a time. The numbers move
+// freely; what must not move is that a string **escalates**, that it stays
+// connected long enough to finish, and that each weapon still reads as itself
+// all the way through.
+
+/// How far a knockback of `speed` actually carries somebody, in metres.
+///
+/// The speed is applied once and decays by `knockback_decay` a frame, so what
+/// they travel is `speed * dt * (1 + d + d^2 + ...)` -- a geometric series, and
+/// nowhere near the speed itself. Worked out rather than measured because the
+/// thing being pinned is the relationship, and a simulated hit would drag in
+/// hitstun, the floor and whoever is standing where.
+fn shoved(speed: Fx) -> f32 {
+    let decay = t::knockback_decay().to_f32_for_render();
+    speed.to_f32_for_render() * sim::DT.to_f32_for_render() / (1.0 - decay).max(1e-3)
+}
+
+/// The Champion's ground chain, as a weapon at a time: opener, connector,
+/// finisher.
+fn chains() -> impl Iterator<Item = (&'static str, [Move; 3])> {
+    use sim::Class;
+    use sim::moves::champion as c;
+    [
+        ("sword", c::SWORD),
+        ("hammer", c::HAMMER),
+        ("spear", c::SPEAR),
+    ]
+    .into_iter()
+    .map(|(name, weapon)| {
+        (
+            name,
+            [0u8, 1, 2].map(|link| moves::get(Class::Champion, c::link(link, weapon))),
+        )
+    })
+}
+
+#[test]
+fn a_string_escalates() {
+    // Three hits that all hit the same is three presses, not a decision. Each
+    // hit has to be worth more than the one before it, and the last one has to
+    // be worth the whole string -- which is what makes being interrupted on the
+    // second hit a real loss rather than a rounding error.
+    for (weapon, links) in chains() {
+        for pair in links.windows(2) {
+            assert!(
+                pair[1].damage > pair[0].damage,
+                "the {weapon} chain goes {} ({}) then {} ({}), which is not an escalation",
+                pair[0].name,
+                pair[0].damage,
+                pair[1].name,
+                pair[1].damage
+            );
+        }
+    }
+}
+
+#[test]
+fn a_string_is_riskier_the_deeper_you_are_in_it() {
+    // Risk scales with reward, stated for the chain rather than for the kit:
+    // the finisher is the move you can be punished hardest for throwing, which
+    // is what stops the third hit being free once the first two landed.
+    for (weapon, links) in chains() {
+        assert!(
+            links[2].on_block() < links[0].on_block(),
+            "the {weapon} finisher {} is {:+} on block and its opener {} is {:+}",
+            links[2].name,
+            links[2].on_block(),
+            links[0].name,
+            links[0].on_block()
+        );
+        assert!(
+            links[2].whiff_cost() > links[0].whiff_cost(),
+            "the {weapon} finisher {} commits you for no longer than its opener",
+            links[2].name
+        );
+    }
+}
+
+#[test]
+fn the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them() {
+    // **The rule that makes a chain a chain.** A hit that shoves them out of
+    // range of the next one has ended the string whether or not the game says
+    // so, which is why the openers and connectors are the softest things the
+    // class throws and the finishers carry the knockback.
+    for (weapon, links) in chains() {
+        for early in &links[..2] {
+            assert!(
+                early.knockback.raw() < links[2].knockback.raw(),
+                "the {weapon} chain's {} knocks them further than its own finisher {} does",
+                early.name,
+                links[2].name
+            );
+            // And the shove has to be short enough in **metres** that they are
+            // still inside the next hit's reach when it arrives. Knockback is a
+            // speed that decays every frame, so the distance it actually
+            // carries somebody is the sum of a geometric series -- which is the
+            // number this rule is about, and it is nothing like the speed.
+            let travel = shoved(early.knockback);
+            assert!(
+                travel < links[2].reach.to_f32_for_render(),
+                "the {weapon} chain's {} carries them {travel:.2} m and the finisher {} \
+                 only reaches {:.2} m",
+                early.name,
+                links[2].name,
+                links[2].reach.to_f32_for_render()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_weapon_keeps_its_shape_for_the_whole_chain() {
+    // The identity half. A player who has learnt that the hammer owns the
+    // ground under it has learnt something true of every hammer move there is
+    // -- so the three links of one weapon are three swings of the same kind,
+    // and the three weapons at one depth are three different kinds.
+    use sim::moves::Shape;
+    for (weapon, links) in chains() {
+        assert!(
+            links.iter().all(|m| m.shape == links[0].shape),
+            "the {weapon} chain changes shape partway through: {:?}",
+            links.map(|m| m.shape)
+        );
+    }
+    let shapes: Vec<Shape> = chains().map(|(_, links)| links[0].shape).collect();
+    for (i, a) in shapes.iter().enumerate() {
+        for b in &shapes[i + 1..] {
+            assert_ne!(a, b, "two of the three weapons swing the same shape");
+        }
+    }
+}
+
+#[allow(clippy::assertions_on_constants)]
+#[test]
+fn a_cancel_is_always_a_saving_and_a_swap_is_always_the_better_one() {
+    // The two knobs that decide the chain's rhythm, and the only relationship
+    // between them that is a design decision rather than a taste: swapping
+    // weapons flows faster than repeating one, because the weapon re-forms out
+    // of the follow-through. Setting them equal turns the incentive off, which
+    // is a decision somebody can make -- setting them the other way round is
+    // the class arguing against its own fantasy.
+    assert!(
+        t::chain_cancel_swapped() < t::chain_cancel_repeated(),
+        "repeating a weapon ({}%) flows no slower than swapping one ({}%)",
+        t::chain_cancel_repeated(),
+        t::chain_cancel_swapped()
+    );
+    assert!(
+        t::chain_cancel_repeated() < 100,
+        "a connected link pays its whole recovery, so the chain buys nothing at all"
+    );
+    assert!(t::chain_grace() > 0, "a chain dies the frame it is born");
+}
+
+#[test]
+fn every_weapon_has_its_own_way_off_the_ground_and_they_are_three_decisions() {
+    // The takeoff row. Three of them, one per weapon, and they have to differ
+    // in what they are *for* rather than in how much: the sword's is the one
+    // that hurts, the hammer's is the one that takes them with you, and the
+    // spear's is the one that goes furthest.
+    use sim::Class;
+    use sim::moves::champion as c;
+    let takeoffs =
+        [c::RISING_CUT, c::UPPERCUT, c::POLE_DRIVE].map(|kind| moves::get(Class::Champion, kind));
+    for m in &takeoffs {
+        assert!(
+            m.self_lift.raw() > 0,
+            "{}: a takeoff that does not leave the ground",
+            m.name
+        );
+    }
+    let hardest = takeoffs.iter().max_by_key(|m| m.damage).unwrap();
+    assert_eq!(
+        hardest.name, "Rising cut",
+        "the sword's takeoff is not the hardest-hitting of the three"
+    );
+    let highest = takeoffs.iter().max_by_key(|m| m.self_lift.raw()).unwrap();
+    assert_eq!(
+        highest.name, "Pole drive",
+        "the spear's takeoff is not the highest of the three"
+    );
+    let holder = takeoffs.iter().max_by_key(|m| m.grabs).unwrap();
+    assert_eq!(
+        holder.name, "Uppercut",
+        "the hammer's takeoff does not hold on to anybody"
+    );
 }

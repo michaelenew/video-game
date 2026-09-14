@@ -246,7 +246,7 @@ thing in her kit the crosshair aims, and the mouse is where aiming lives. The
 swing it displaced went to the key, which does not read the crosshair as a
 place. See [kits/shadow-reaver.md](kits/shadow-reaver.md).
 
-### One thing that is not a line of effect
+### Three things that are not lines of effect
 
 **Is the crosshair on the shadow?** `aim::pointing_at` answers it, and the
 Reaver's forward dodge reads the answer to decide whether it is a dodge or the
@@ -256,6 +256,54 @@ does. The obvious alternative is an angle between the look direction and the
 line to the shadow, worked out beside the dodge, and that is the parallel-ray
 mistake in its usual disguise: it agrees with the crosshair at long range and is
 out by a whole body at short.
+
+**Is there a way through to it?** `aim::clear_between` answers that one, and the
+same dodge asks it second — added 2026-09-14, when the dash learned to go up.
+Nothing occludes `pointing_at`: a shadow is a shadow and you can point at one
+through a wall. Whether she can *get* there is a question about the world rather
+than about the camera, and the rule is deliberately blunt:
+
+> **The dash goes to wherever the shadow is, along the straight line between the
+> two bodies. Only a total obstruction stops it — meaning no line between them is
+> clear at all.**
+
+Not "a ledge is in the way of her feet", which is every dash onto anything. Both
+bodies are upright columns standing over a fixed spot, so **every line between
+them has the same horizontal footprint** and they differ only in how they rise.
+That makes the four corner lines — soles to soles, soles to crown, crown to
+soles, crown to crown — the extremes of the whole family, and a solid that
+crosses all four crosses everything in between. One getting through is enough.
+
+**Where does a thing go that nobody aimed?** `aim::planted_ahead` answers that
+one — added 2026-09-14, for the Elementalist's Landfall. The move's own line of
+effect is a **swing**: she is a body arriving, and its volume is a disc on the
+floor at her own feet. The slab of rock the arrival levers out of the ground is a
+second thing, and it goes a fixed distance in front of her rather than anywhere
+the crosshair chose, because *she is landing, not aiming*. The facing is used
+flat: a plunge that put its slab nearer because she happened to be looking down
+would be aiming after all.
+
+It is here rather than beside the move for the reason the two above are. Written
+there it would be a facing, a distance and a floor query sitting next to an
+ability — which is the exact shape of the mistake this document exists to
+prevent, three metres of it at a time.
+
+It is what lets her dash *up*. At the foot of a platform with the shadow on the
+deck, the line from her soles goes into the wall of it and the line from her
+crown goes over the lip: there is a way, so she takes it. It is also why the
+blockout refuses her nothing — the platforms and the walls are one and a half
+metres and a fighter is one point eight, so she can always see over. A
+**structure** is exactly a fighter's height, so an Elementalist's stone raised
+squarely on the line leaves no way through, and cutting the Reaver's line
+becomes something another class can do on purpose.
+
+The four lines are measured from just above the soles and just below the crown,
+by the collision skin. A body standing on a surface is standing *exactly* on it,
+so a line taken from the soles themselves grazes the thing it is standing on and
+reads as a wall. Trimming the body rather than the world is the choice that
+matters: shaving the solids instead opens a hairline between two stacked ones
+that a ray can thread, and two stones on top of each other have to be one
+obstruction.
 
 **A swing still commits to a plane, and the crosshair is where the plane comes
 from.** Added 2026-09-12 with the Champion's rebuild. The yaw of a swing is the

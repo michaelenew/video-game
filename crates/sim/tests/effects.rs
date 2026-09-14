@@ -1373,17 +1373,34 @@ fn rushing(toward: u16) -> World {
     w
 }
 
+/// Off the ground and **past the takeoff window**, so a click gives an aerial
+/// rather than the move that leaves the floor.
+///
+/// Every airborne test needs this now: the window is a few frames wide by
+/// design, and a script that jumps and immediately attacks is asking for a
+/// takeoff whether or not it meant to. Which is the right answer to that input
+/// -- it is what a player pressing both means -- so the fixture waits it out
+/// rather than the rule being softened.
+fn airborne() -> World {
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, Input::SPACE, 0);
+    run(&mut w, sim::tuning::takeoff_window() as u32 + 2, 0, 0);
+    assert!(!w.players[0].grounded, "the fixture never left the ground");
+    w
+}
+
 #[test]
 fn the_uppercut_takes_both_fighters_off_the_ground() {
     // The move is a leap, and it is a leap you bring someone along on. Either
     // half alone is a different move: without the lift it is a launcher you
     // cannot follow up on, and without the launch it is an escape.
     //
-    // It is a **Rush move** now -- middle click during the dash -- which is
-    // what makes it a combo rather than a button. See `docs/design/champion.md`.
-    let mut w = rushing(LOOK_RIGHT);
+    // It is the **hammer's takeoff** now -- middle click on the same press as
+    // jump -- which puts the launcher on a button the class always has rather
+    // than behind a charge it may have spent. See `docs/design/champion.md`.
+    let mut w = engaged(Class::Champion);
     let mut lifted = [false; MAX_PLAYERS];
-    run(&mut w, 2, MMB, 0);
+    run(&mut w, 2, MMB | Input::SPACE, 0);
     for _ in 0..60 {
         w.advance([Input::aimed(0, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         for (i, seen) in lifted.iter_mut().enumerate() {
@@ -1403,16 +1420,20 @@ fn pressing_jump_inside_an_uppercut_takes_the_pair_of_you_higher() {
     // uppercut holds on to somebody rather than merely launching them: you get
     // to decide, after it connects, how high this exchange is going to happen.
     let climb = |leap: bool| {
-        let mut w = rushing(LOOK_RIGHT);
-        run(&mut w, 2, MMB, 0);
+        let mut w = engaged(Class::Champion);
+        run(&mut w, 2, MMB | Input::SPACE, 0);
         let mut best = 0.0f32;
-        for f in 0..70 {
-            // Held down it would be one press; tapped, it is an input.
-            let space = if leap && (10..12).contains(&f) {
-                Input::SPACE
-            } else {
-                0
-            };
+        let mut off = 0;
+        for _ in 0..70 {
+            // The leap is only there to be pressed once the uppercut has
+            // actually taken you up, which is its first active frame -- so the
+            // script waits for the feet to leave the floor rather than counting
+            // to a number that a retune would move. Tapped rather than held: it
+            // is an input, and holding it down would be one press.
+            if !w.players[0].grounded {
+                off += 1;
+            }
+            let space = if leap && off == 2 { Input::SPACE } else { 0 };
             w.advance([Input::aimed(space, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
             best = best.max(w.players[1].pos.y.to_f32_for_render());
         }
@@ -1452,9 +1473,7 @@ fn the_three_buttons_are_three_weapons() {
 fn the_same_button_is_a_different_move_in_the_air() {
     // Aerials are variants of their grounded counterpart rather than a separate
     // list -- the direction `controls.md` has had open since the dodge moved.
-    let mut w = engaged(Class::Champion);
-    run(&mut w, 4, Input::SPACE, 0);
-    assert!(!w.players[0].grounded, "the fixture never left the ground");
+    let mut w = airborne();
     run(&mut w, 2, LMB, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
@@ -1529,6 +1548,39 @@ fn the_vault_trades_the_dash_for_height() {
         top > jump,
         "the vault reached {top:.2} m and a plain jump reaches {jump:.2} m, so planting the \
          spear bought nothing"
+    );
+}
+
+#[test]
+fn the_hammer_out_of_a_rush_goes_under_a_sword() {
+    // The Rush row is three answers to "what does this weapon do to somebody
+    // you are running at", and the hammer's is the one that goes underneath.
+    // Its volume has to reach the floor, and the sword's beside it has to not
+    // -- otherwise the row is one move with three damage numbers.
+    // The lowest point the volume reaches over the whole swing, in metres
+    // above the floor.
+    let floor_of = |button: u16| {
+        let mut w = rushing(LOOK_RIGHT);
+        let mut lowest = 9.0f32;
+        for f in 0..30 {
+            let bits = if f < 2 { button } else { 0 };
+            w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            if let Some(b) = sim::state::hitbox(&w.players[0]) {
+                let deepest = b.from.y.min(b.to.y).sub(b.radius);
+                lowest = lowest.min(deepest.to_f32_for_render());
+            }
+        }
+        lowest
+    };
+    let hammer = floor_of(MMB);
+    let sword = floor_of(LMB);
+    assert!(
+        hammer < 0.2,
+        "the hammer's run-through never reaches the floor: {hammer:.2} m"
+    );
+    assert!(
+        sword > hammer,
+        "the sword's run-through goes as low as the hammer's ({sword:.2} against {hammer:.2})"
     );
 }
 
@@ -1669,13 +1721,12 @@ fn the_air_spear_pays_its_shove_out_on_contact() {
     // it kicks you the way you are holding. Thrown at nothing it is just a
     // poke, which is what stops it being free flight.
     let speed = |hit: bool| {
-        let mut w = engaged(Class::Champion);
+        let mut w = airborne();
         if !hit {
             // Out of the way, so the identical script whiffs.
             w.players[1].pos =
                 sim::V3::new(sim::Fx::from_int(25), w.players[1].pos.y, sim::Fx::ZERO);
         }
-        run(&mut w, 4, Input::SPACE, 0);
         let mut best = 0.0f32;
         for f in 0..30 {
             let bits = if (0..2).contains(&f) { RMB } else { 0 } | Input::W;
@@ -1696,37 +1747,78 @@ fn the_air_spear_pays_its_shove_out_on_contact() {
 
 #[test]
 fn the_combo_the_class_is_built_around_is_playable() {
-    // Hammer, cancel the recovery with Rush, uppercut into the air, leap
-    // higher, and spike them back into the floor. Every piece of this is tested
-    // on its own above; this is the assertion that they **connect** -- that the
-    // hammer's advantage is long enough to Rush out of, that the uppercut
-    // catches somebody already in hitstun, that the carry lasts long enough to
-    // throw a twenty-two frame startup off the end of, and that the spike lands
-    // before they hit the ground on their own.
+    // Hammer, let the chain carry itself into the second hit, take the pair of
+    // you up with the hammer's takeoff, leap higher, and spike them back into
+    // the floor. Every piece of this is tested on its own above; this is the
+    // assertion that they **connect** -- that a connected link really does cut
+    // its own recovery short, that the launcher catches somebody already in
+    // hitstun, that the carry lasts long enough to throw a twenty-two frame
+    // startup off the end of, and that the spike lands before they hit the
+    // ground on their own.
     //
     // A loop that works step by step and does not join up is the usual way a
     // combo class turns out not to be one.
     let mut w = engaged(Class::Champion);
     let start = w.players[1].health;
 
-    run(&mut w, 2, MMB, 0); // hammer
-    run(&mut w, 22, 0, 0); // into its recovery
-    run(&mut w, 1, E, 0); // Rush, cancelling it
-    run(&mut w, 2, MMB, 0); // uppercut, which grabs and lifts
-    run(&mut w, 8, 0, 0);
+    // Hammer, and keep the button down: a link that lands cuts its own tail
+    // short, so the string walks itself into the second hit.
+    let mut second = false;
+    for _ in 0..50 {
+        w.advance([Input::aimed(MMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        second |= w.players[0].action.attack_kind() == Some(moves::champion::UPROOT);
+        if second {
+            break;
+        }
+    }
+    assert!(
+        second,
+        "the hammer never chained into its second hit: {:?}",
+        w.players[0].action
+    );
+    // Let the second hit finish. Bounded, so a stuck fixture fails rather than
+    // hangs.
+    for _ in 0..60 {
+        if w.players[0].action.actionable() {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
+
+    run(&mut w, 2, MMB | Input::SPACE, 0); // the uppercut: grabs, and lifts
+    for _ in 0..30 {
+        if !w.players[0].grounded {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
+    run(&mut w, 1, 0, 0);
     run(&mut w, 1, Input::SPACE, 0); // both of you, higher
-    run(&mut w, 24, 0, 0);
+    // Up until the uppercut's own tail gives the controls back.
+    for _ in 0..40 {
+        if w.players[0].action.actionable() {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
     assert!(
         !w.players[1].grounded && w.players[1].pos.y.to_f32_for_render() > 3.0,
         "the uppercut did not take them anywhere: {:.2} m",
         w.players[1].pos.y.to_f32_for_render()
     );
 
-    // And the spike, aimed down.
+    // And the spike, aimed down, thrown the first frame the uppercut's own tail
+    // gives the controls back.
     let down = -(1 << 13);
     let mut staggered = false;
-    for f in 0..80 {
-        let bits = if f < 2 { MMB } else { 0 };
+    let mut thrown = false;
+    for _ in 0..80 {
+        let bits = if !thrown && w.players[0].action.actionable() {
+            thrown = true;
+            MMB
+        } else {
+            0
+        };
         w.advance([
             Input::looking_at(bits, LOOK_RIGHT, down),
             Input::aimed(0, LOOK_LEFT),
@@ -1752,6 +1844,279 @@ fn the_combo_the_class_is_built_around_is_playable() {
         dealt < sim::tuning::max_health() / 2,
         "the loop deals {dealt} of {} health in one go",
         sim::tuning::max_health()
+    );
+}
+
+// --- The chain -------------------------------------------------------------
+//
+// Three hits deep on the ground, and every hit is a free choice of all three
+// weapons. What these check is the *grammar* of that rather than the numbers:
+// which move a press produces, what ends a string, and what a string costs when
+// the defender answers it.
+
+/// Hold one button down and collect every move it throws, in order.
+fn strung(w: &mut World, button: u16, frames: u32) -> Vec<u8> {
+    let mut seen: Vec<u8> = Vec::new();
+    for _ in 0..frames {
+        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        if let Some(kind) = w.players[0].action.attack_kind() {
+            if seen.last() != Some(&kind) {
+                seen.push(kind);
+            }
+        }
+    }
+    seen
+}
+
+#[test]
+fn one_weapon_held_down_walks_the_whole_chain_and_then_starts_again() {
+    // Linear play is meant to be strong, so the simplest possible input -- hold
+    // a button -- has to produce the whole string rather than the first hit
+    // three times.
+    use moves::champion as c;
+    let mut w = engaged(Class::Champion);
+    let seen = strung(&mut w, LMB, 180);
+    assert_eq!(
+        &seen[..3],
+        &[c::SWORD_GROUND, c::BACKCUT, c::CRESCENT],
+        "holding left click did not walk the sword chain: {seen:?}"
+    );
+    assert_eq!(
+        seen.get(3),
+        Some(&c::SWORD_GROUND),
+        "the chain did not go back to its opener after the finisher: {seen:?}"
+    );
+}
+
+#[test]
+fn every_hit_of_the_chain_is_a_free_choice_of_weapon() {
+    // **The class fantasy, as an assertion.** Sword into spear into hammer is
+    // an ordinary thing to do, and nothing about the second hit remembers what
+    // the first one was made of.
+    use moves::champion as c;
+    let mut w = engaged(Class::Champion);
+    let mut seen = Vec::new();
+    let mut want = [LMB, RMB, MMB].into_iter().peekable();
+    let mut button = want.next().unwrap();
+    for _ in 0..140 {
+        w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        if let Some(kind) = w.players[0].action.attack_kind() {
+            if seen.last() != Some(&kind) {
+                seen.push(kind);
+                if let Some(next) = want.next() {
+                    button = next;
+                }
+            }
+        }
+    }
+    assert_eq!(
+        &seen[..3],
+        &[c::SWORD_GROUND, c::SKEWER, c::EARTHBREAKER],
+        "a mixed string did not come out as one chain: {seen:?}"
+    );
+}
+
+#[test]
+fn a_blocked_link_pays_its_whole_recovery() {
+    // **The chain is a hit confirm**, and this is the half of it the defender
+    // owns. Blocking one hit of a string does not merely reduce the damage, it
+    // takes the string's rhythm away -- which is what keeps every number the
+    // frame table prints about a Champion move true against somebody who
+    // answered it.
+    let reached = |guarding: bool| {
+        let mut w = engaged(Class::Champion);
+        let block = if guarding { Input::RIGHT } else { 0 };
+        let mut at = 0u32;
+        for f in 0..60 {
+            w.advance([
+                Input::aimed(LMB, LOOK_RIGHT),
+                Input::aimed(block, LOOK_LEFT),
+            ]);
+            if w.players[0].action.attack_kind() == Some(moves::champion::BACKCUT) {
+                at = f;
+                break;
+            }
+        }
+        at
+    };
+    let open = reached(false);
+    let blocked = reached(true);
+    assert!(open > 0, "the sword never chained at all");
+    assert!(
+        blocked > open,
+        "the second hit arrived on frame {blocked} against a guard and frame {open} \
+         against nobody -- blocking bought no time"
+    );
+}
+
+#[test]
+fn swapping_weapons_flows_faster_than_swinging_the_same_one_twice() {
+    // The nonlinear incentive, and it is deliberately small: one haft with
+    // three heads, and the head is re-formed out of the follow-through rather
+    // than re-chambered. Linear play stays completely viable -- see
+    // `tuning::chain_cancel_swapped`.
+    let arrives = |second: u16, kind: u8| {
+        let mut w = engaged(Class::Champion);
+        run(&mut w, 1, LMB, 0);
+        for f in 1..60u32 {
+            w.advance([Input::aimed(second, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            if w.players[0].action.attack_kind() == Some(kind) {
+                return f;
+            }
+        }
+        u32::MAX
+    };
+    let repeated = arrives(LMB, moves::champion::BACKCUT);
+    let swapped = arrives(RMB, moves::champion::SKEWER);
+    assert!(
+        swapped < repeated,
+        "a swap reached the second hit on frame {swapped} and a repeat on frame \
+         {repeated}; the swap buys nothing"
+    );
+}
+
+#[test]
+fn leaving_the_ground_ends_a_string() {
+    // A chain you could park in the air and come back to would make the grace
+    // window mean nothing, and would let the class hold a finisher over
+    // somebody indefinitely.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, LMB, 0);
+    run(&mut w, 30, 0, 0);
+    run(&mut w, 1, Input::SPACE, 0);
+    run(&mut w, sim::tuning::takeoff_window() as u32 + 2, 0, 0);
+    // Back on the floor, and whatever the string was is over.
+    for _ in 0..90 {
+        if w.players[0].grounded {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
+    run(&mut w, 2, LMB, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(moves::champion::SWORD_GROUND),
+        "the chain survived a trip into the air"
+    );
+}
+
+#[test]
+fn a_string_dies_if_you_stop_swinging() {
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, LMB, 0);
+    // Long enough for the sword to finish and the grace to run all the way out.
+    run(&mut w, 40 + sim::tuning::chain_grace() as u32, 0, 0);
+    run(&mut w, 2, LMB, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(moves::champion::SWORD_GROUND),
+        "the chain outlived its grace window"
+    );
+}
+
+// --- Leaving the floor -----------------------------------------------------
+
+#[test]
+fn each_weapon_has_its_own_way_off_the_ground() {
+    // Three takeoffs on the three buttons, and the window is wide enough that
+    // "jump and attack" does not have to be one frame.
+    use moves::champion as c;
+    let thrown = |button: u16, wait: u32| {
+        let mut w = engaged(Class::Champion);
+        run(&mut w, 1, Input::SPACE, 0);
+        run(&mut w, wait, 0, 0);
+        run(&mut w, 1, button, 0);
+        w.players[0].action.attack_kind()
+    };
+    assert_eq!(thrown(LMB, 0), Some(c::RISING_CUT));
+    assert_eq!(thrown(MMB, 0), Some(c::UPPERCUT));
+    assert_eq!(thrown(RMB, 0), Some(c::POLE_DRIVE));
+    // A few frames late still means what the player meant.
+    assert_eq!(thrown(LMB, 3), Some(c::RISING_CUT));
+    // And past the window it is an ordinary aerial again.
+    assert_eq!(
+        thrown(LMB, sim::tuning::takeoff_window() as u32 + 2),
+        Some(c::AIR_SWORD)
+    );
+}
+
+#[test]
+fn a_takeoff_costs_the_jump_it_came_out_of() {
+    // One jump buys one of them. Without this the window would be a few frames
+    // of free launchers rather than a way to spend a jump.
+    let mut w = engaged(Class::Champion);
+    run(&mut w, 1, MMB | Input::SPACE, 0);
+    run(&mut w, 40, 0, 0);
+    assert!(!w.players[0].grounded, "the uppercut never left the floor");
+    run(&mut w, 2, LMB, 0);
+    assert_eq!(
+        w.players[0].action.attack_kind(),
+        Some(moves::champion::AIR_SWORD),
+        "a second takeoff came out of one jump"
+    );
+}
+
+#[test]
+fn the_spear_takeoff_buys_height_and_a_direction() {
+    // It is a jump with a weapon in it: the plant supplies height a jump cannot
+    // reach, and the run you were holding comes with you. Both halves, or it is
+    // only half a move.
+    let plain = {
+        let mut w = engaged(Class::Champion);
+        w.players[1].pos = sim::V3::new(sim::Fx::from_int(40), w.players[1].pos.y, sim::Fx::ZERO);
+        let mut top = 0.0f32;
+        for f in 0..80 {
+            let bits = if f < 3 { Input::SPACE } else { 0 };
+            w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            top = top.max(w.players[0].pos.y.to_f32_for_render());
+        }
+        top
+    };
+    let (driven, ground) = {
+        let mut w = engaged(Class::Champion);
+        // Nobody in the way: this is about how far the plant carries you, and a
+        // body you are already touching is a wall.
+        w.players[1].pos = sim::V3::new(sim::Fx::from_int(40), w.players[1].pos.y, sim::Fx::ZERO);
+        let from = w.players[0].pos;
+        let (mut top, mut far) = (0.0f32, 0.0f32);
+        for f in 0..80 {
+            let bits = if f < 3 { Input::SPACE | RMB } else { 0 } | Input::W;
+            w.advance([Input::aimed(bits, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            top = top.max(w.players[0].pos.y.to_f32_for_render());
+            far = far.max(w.players[0].pos.sub(from).flat_len().to_f32_for_render());
+        }
+        (top, far)
+    };
+    assert!(
+        driven > plain + 0.5,
+        "the pole drive reached {driven:.2} m and a plain jump {plain:.2} m"
+    );
+    assert!(
+        ground > 2.0,
+        "the pole drive went {ground:.2} m along the floor, so it has no direction in it"
+    );
+}
+
+#[test]
+fn the_sword_takeoff_is_the_hardest_hitting_of_the_three() {
+    // The three takeoffs are a real choice, and the sword's is the one you
+    // throw when you have read them: no grab, no boost, just the biggest number
+    // in the row and a long fall if it misses.
+    use moves::champion as c;
+    let damage = |kind: u8| moves::get(Class::Champion, kind).damage;
+    assert!(
+        damage(c::RISING_CUT) > damage(c::UPPERCUT)
+            && damage(c::RISING_CUT) > damage(c::POLE_DRIVE),
+        "the sword's takeoff does not hit hardest"
+    );
+    assert!(
+        moves::get(Class::Champion, c::UPPERCUT).grabs > 0,
+        "the uppercut does not hold on to anybody, so there is nothing to follow"
+    );
+    assert!(
+        moves::get(Class::Champion, c::POLE_DRIVE).self_lift.raw()
+            > moves::get(Class::Champion, c::RISING_CUT).self_lift.raw(),
+        "the spear's takeoff does not go highest"
     );
 }
 
@@ -1863,4 +2228,346 @@ fn a_pillar_is_part_of_the_state_a_rollback_restores() {
     w = saved.clone();
     assert_eq!(saved.checksum(), w.checksum(), "restore lost the effects");
     assert_ne!(advanced, w.checksum(), "the restore did not go back");
+}
+
+// ---------------------------------------------------------------------------
+// The Guillotine lotus, as a shape
+// ---------------------------------------------------------------------------
+//
+// Six blades out of the Reaver's shadow and six back into it. What follows is
+// the *flower* rather than the cast -- where it is aimed is `aiming.rs`'s, and
+// what it does to somebody is the hit test's. These are the three things a
+// player reads off the screen while deciding whether they are standing in one.
+//
+// It used to be a different shape in all three respects: the blades left the
+// shadow's feet, arched up over the eruption and came back down to the floor at
+// full extension, and then retraced that arm exactly on the way home. The arc
+// left the volume half buried in the floor at precisely the reach where it does
+// the most work, and a flower whose height changes while it turns is hard to
+// read as a plane being swept.
+
+/// A lotus standing at the origin, at whatever age we want to look at it.
+fn flower(age: u16) -> sim::effects::Effect {
+    let mut e = sim::effects::Effect::cast(
+        EffectKind::GuillotineLotus,
+        0,
+        Class::ShadowReaver,
+        sim::state::SLOT_SPECIAL,
+        sim::V3::ZERO,
+        sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        Fx::ZERO,
+    );
+    e.age = age;
+    e
+}
+
+/// One blade's bearing around the centre, in turns, unwrapped against the
+/// previous sample so a sweep past the seam reads as a sweep.
+fn bearing(at: sim::V3) -> f64 {
+    let x = at.x.to_f32_for_render() as f64;
+    let z = at.z.to_f32_for_render() as f64;
+    z.atan2(x) / std::f64::consts::TAU
+}
+
+fn reach(at: sim::V3) -> f64 {
+    at.flat_len().to_f32_for_render() as f64
+}
+
+#[test]
+fn the_flower_is_flat() {
+    // One horizontal plane, for the whole life, for every blade. This is the
+    // property a player actually uses: a volume at a fixed height is one you
+    // can decide about once, and a volume that rises and falls while it turns
+    // is one you have to keep re-reading.
+    let life = EffectKind::GuillotineLotus.life();
+    let want = sim::tuning::lotus_height();
+    for age in 0..=life {
+        for blade in 0..sim::effects::LOTUS_BLADES {
+            let y = flower(age).lotus_at(blade, sim::V3::ZERO).y;
+            assert_eq!(
+                y.raw(),
+                want.raw(),
+                "blade {blade} at age {age} is {:.2} m up, not the {:.2} m the \
+                 flower lies at -- the lotus is meant to be planar",
+                y.to_f32_for_render(),
+                want.to_f32_for_render()
+            );
+        }
+    }
+}
+
+#[test]
+fn the_blades_leave_from_the_midriff_and_not_from_the_feet() {
+    // They erupt *out of the shadow*, so they start inside its body rather than
+    // at the floor under it. Bracketed against the body rather than pinned to a
+    // number: the point is that the plane is inside a standing fighter, which
+    // is what makes the flower something you are caught *in*.
+    let height = sim::tuning::lotus_height();
+    let body = sim::tuning::body_height();
+    assert!(
+        height.raw() > 0,
+        "the flower lies on the floor; the blades are supposed to come out of \
+         the shadow's midriff"
+    );
+    assert!(
+        height.raw() < body.raw(),
+        "the flower lies at {:.2} m, over the head of a {:.2} m fighter",
+        height.to_f32_for_render(),
+        body.to_f32_for_render()
+    );
+    // Below the chest a cast comes out of: these are off the waist, not the
+    // hands.
+    assert!(
+        height.raw() < sim::tuning::cast_height().raw(),
+        "the flower lies at chest height or above, where a cast comes from, \
+         rather than at the midriff"
+    );
+    // And a blade's own thickness does not put it underground at the start.
+    assert!(
+        height.raw() > sim::tuning::lotus_blade_radius().raw(),
+        "a blade at rest is wider than the flower is high, so it starts half \
+         buried in the floor"
+    );
+}
+
+#[test]
+fn the_blades_spiral_out_rather_than_running_straight() {
+    // Each leaves on its own sixth of the circle and keeps turning as it goes,
+    // which is what makes the six of them open like petals instead of as spokes
+    // of a wheel. Reach and bearing have to advance *together* for that: a
+    // radius with an angle bolted on somewhere else is a spoke that happens to
+    // be rotating.
+    let erupt = sim::tuning::lotus_erupt();
+    let mut last_reach = -1.0;
+    let mut last_bearing = bearing(flower(0).lotus_at(0, sim::V3::ZERO));
+    let mut turned = 0.0;
+    for age in 1..=erupt {
+        let at = flower(age).lotus_at(0, sim::V3::ZERO);
+        let (r, b) = (reach(at), bearing(at));
+        assert!(
+            r > last_reach,
+            "the blade stopped reaching outward at age {age}"
+        );
+        turned += b - last_bearing;
+        last_reach = r;
+        last_bearing = b;
+    }
+    assert!(
+        turned.abs() > 0.01,
+        "the blade travelled {turned:.3} turns on the way out -- it went \
+         straight, so this is a starburst and not a lotus"
+    );
+}
+
+#[test]
+fn the_way_home_turns_the_other_way_and_past_where_it_started() {
+    // The fix this test exists for. The return used to be the eruption played
+    // backwards, so the blade unwound onto the exact bearing it left on and the
+    // flower rewound rather than closing. It now comes home on a spiral of its
+    // own, turning against the way it opened and carrying on past the start.
+    let centre = sim::V3::ZERO;
+    let erupt = sim::tuning::lotus_erupt();
+    let life = EffectKind::GuillotineLotus.life();
+
+    let opened_on = bearing(flower(0).lotus_at(0, centre));
+    let out_to = bearing(flower(erupt).lotus_at(0, centre));
+    // The last frame with any reach left to measure a bearing from.
+    let home = bearing(flower(life - 1).lotus_at(0, centre));
+
+    let went = out_to - opened_on;
+    let came = home - out_to;
+    assert!(
+        went * came < 0.0,
+        "out {went:+.3} turns and home {came:+.3} turns: the way back does not \
+         turn against the way out"
+    );
+    assert!(
+        came.abs() > went.abs(),
+        "out {went:+.3} turns and home {came:+.3} turns. The return unwinds by \
+         no more than it wound, so it retraces the arm it came out on instead \
+         of closing on a spiral of its own."
+    );
+    // Which is the same thing said as a place rather than as a rotation: it
+    // finishes on the far side of the bearing it opened on.
+    assert!(
+        (home - opened_on) * went < 0.0,
+        "the blade finished back on the side it opened towards, so it never \
+         crossed its own starting bearing"
+    );
+}
+
+#[test]
+fn the_way_home_sweeps_floor_the_way_out_never_touched() {
+    // And this is why that is a hit test rather than a look. Ground a blade has
+    // already crossed is ground whose occupants have been cut once and have had
+    // the whole hold to walk off it, so a retraced return can only catch
+    // somebody who stepped back into the same line. Compared at matched reach,
+    // because that is the only fair comparison: the two passes are at the same
+    // distance from the shadow but should not be at the same bearing.
+    let centre = sim::V3::ZERO;
+    let erupt = sim::tuning::lotus_erupt();
+    let life = EffectKind::GuillotineLotus.life();
+    let full = reach(flower(erupt).lotus_at(0, centre));
+
+    let mut checked = 0;
+    for age in 1..erupt {
+        let out = flower(age).lotus_at(0, centre);
+        let r = reach(out);
+        // Skip the ends, where both passes are necessarily near the centre.
+        if r < full * 0.25 || r > full * 0.9 {
+            continue;
+        }
+        // The return frame that is at about this same distance out.
+        let back = (erupt..life)
+            .map(|a| flower(a).lotus_at(0, centre))
+            .min_by(|x, y| {
+                (reach(*x) - r)
+                    .abs()
+                    .partial_cmp(&(reach(*y) - r).abs())
+                    .expect("reaches compare")
+            })
+            .expect("the return has frames");
+        let apart = (bearing(back) - bearing(out)).abs();
+        assert!(
+            apart > 0.02,
+            "at {r:.1} m out the return is only {:.1}° from the arm the \
+             eruption drew. The way home is retracing already-cut ground.",
+            apart * 360.0
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "the fixture compared nothing");
+}
+
+// ---------------------------------------------------------------------------
+// The blades are blades
+// ---------------------------------------------------------------------------
+
+/// Cast a lotus with the victim standing `feet` metres off the floor, and say
+/// how much the flower took off them.
+///
+/// She casts it at her own shadow, which is at her heel, so the blades sweep
+/// out through anybody standing inside `lotus_radius` of her.
+fn lotus_takes_off_a_victim_at(feet: Fx) -> i32 {
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = sim::V3::ZERO;
+    w.players[0].facing = sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    // Well inside the blades' reach, and well outside her own body.
+    let stand = sim::V3::new(Fx::from_int(3), feet, Fx::ZERO);
+    // Held there every frame, falling or not. This is a question about the
+    // shape of the volume, not about how long somebody can hang in the air --
+    // without the pin the airborne case simply lands before the blades arrive
+    // and the test passes for the wrong reason.
+    let hold = |w: &mut World, bits: u16| {
+        w.players[1].pos = stand;
+        w.players[1].vel = sim::V3::ZERO;
+        w.advance([Input::new(bits), Input::default()]);
+    };
+    for _ in 0..20 {
+        hold(&mut w, 0);
+    }
+
+    let start = w.players[1].health;
+    let cast = moves::get(Class::ShadowReaver, sim::state::SLOT_SPECIAL);
+    let life = EffectKind::GuillotineLotus.life() as u32;
+    for f in 0..(cast.whiff_cost() as u32 + life + 10) {
+        hold(&mut w, if f < 2 { Q } else { 0 });
+    }
+    start - w.players[1].health
+}
+
+#[test]
+fn a_blade_is_a_disc_and_not_a_ball() {
+    // A shuriken thrown flat: wide in the plane the flower lies in, and barely
+    // there across it. As a sphere at the old radius it reached from a standing
+    // fighter's shins to their chest, which is not a blade and is not a shape
+    // anybody can do anything about.
+    let wide = sim::tuning::lotus_blade_radius();
+    let thick = sim::tuning::lotus_blade_thickness();
+    assert!(
+        wide.raw() > thick.raw() * 2,
+        "a blade is {:.2} m wide and {:.2} m thick either side -- that is a \
+         ball, not a disc",
+        wide.to_f32_for_render(),
+        thick.to_f32_for_render()
+    );
+    // And narrower than the body it cuts, or it is a wall with a spin on it.
+    assert!(
+        wide.raw() < sim::tuning::body_radius().raw(),
+        "a blade is {:.2} m wide against a {:.2} m body. Six of these read as \
+         beach balls, which is what the count and the size were changed for.",
+        wide.to_f32_for_render(),
+        sim::tuning::body_radius().to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_flower_opens_twelve_blades() {
+    assert_eq!(
+        sim::effects::LOTUS_BLADES,
+        12,
+        "the flower's blade count changed; the hit mask, the damage per blade \
+         and the renderer all read it"
+    );
+    // The bookkeeping has to be able to address all of them. This is a
+    // compile-time assertion in `effects.rs` as well, because at six blades the
+    // mask fitted a `u32` exactly and twelve would have truncated in silence --
+    // a blade that shares a bit with another goes quiet the moment that one
+    // lands.
+    assert!(
+        sim::effects::LOTUS_BLADES * sim::effects::VICTIMS <= 64,
+        "the hit mask cannot address every blade against every victim"
+    );
+}
+
+#[test]
+fn a_single_blade_is_a_scratch_and_the_flower_is_the_threat() {
+    // Twelve smaller blades at half the damage rather than six big ones. The
+    // ability's danger is meant to be the shape it sweeps, not any one thing
+    // landing -- which is also what makes a partial clip through the edge of it
+    // feel like a graze instead of a punish.
+    let blade = moves::get(Class::ShadowReaver, sim::state::SLOT_SPECIAL).damage;
+    let poke = moves::get(Class::ShadowReaver, sim::state::SLOT_POKE).damage;
+    assert!(
+        blade * 3 < poke,
+        "one blade takes {blade} against a {poke} poke. A single blade should \
+         be a scratch."
+    );
+}
+
+#[test]
+fn the_flower_cuts_what_is_standing_in_it() {
+    let dealt = lotus_takes_off_a_victim_at(Fx::ZERO);
+    assert!(
+        dealt > 0,
+        "a fighter standing inside the flower took nothing at all"
+    );
+}
+
+#[test]
+fn the_flower_can_be_jumped() {
+    // The counterplay the shape implies and a ball never allowed. The flower is
+    // planar and at waist height, and a blade is a thin slab -- so being off
+    // the ground above it is being out of it. A ball of the old radius reached
+    // the shins to the chest and there was nothing to do about it but leave
+    // sideways.
+    let plane = sim::tuning::lotus_height();
+    let thick = sim::tuning::lotus_blade_thickness();
+    // Feet clear of the top of the slab, by a comfortable margin.
+    let over = plane.add(thick).add(Fx::ratio(1, 2));
+    // Stated against a body rather than against a jump arc: the clearance has
+    // to be something a fighter can obviously get over, and her short hop is
+    // 1.9 m by the frame table -- twice a body and well past this.
+    assert!(
+        over.raw() < sim::tuning::body_height().raw(),
+        "clearing the flower needs {:.2} m, which is over a fighter's own \
+         height -- 'jumpable' would be a claim about nothing",
+        over.to_f32_for_render()
+    );
+    assert_eq!(
+        lotus_takes_off_a_victim_at(over),
+        0,
+        "a fighter in the air above the flower was cut anyway -- the blades are \
+         still behaving like balls in the vertical"
+    );
 }

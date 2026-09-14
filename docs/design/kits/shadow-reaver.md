@@ -117,15 +117,44 @@ is still a punish.
 **Startup** fast · **Recovery** short · **Range** at the shadow · **Mechanic** requires
 the shadow; keeps it
 
-**Six blades erupt from the shadow along curving paths, hang open, and then chase it
+**Twelve blades erupt from the shadow along curving paths, hang open, and then chase it
 home**, cutting on the way out and again on the way back.
 
-- Out fast, on a curve: each blade leaves on its own sixth of the circle and keeps
-  turning, so the six of them open like petals rather than spokes.
+- **Each one is a disc.** A shuriken thrown flat: wide in the plane the flower lies in,
+  and barely there across it. It was a sphere of nearly half a metre — wider than a
+  fighter's own body and reaching from the shins to the chest — which read as a beach
+  ball rather than a blade, and was not a shape anybody could do anything about.
+- **The flower is flat.** It opens, holds and closes in one horizontal plane at the
+  shadow's midriff — chest-high on nobody, waist-high on everybody, and the same height
+  for the whole of its life.
+- Out fast, on a spiral: each blade leaves on its own sixth of the circle and keeps
+  turning as it reaches, so the six of them open like petals rather than spokes.
 - They hang at full extension for about two thirds of a second. That is the window a
   victim has to leave.
-- Coming back they decelerate into the shadow, and deal a share of what they dealt going
-  out.
+- **Home on a spiral of its own, turning the other way.** Coming back a blade sweeps
+  against the direction it opened in, and further, so it crosses the bearing it started
+  from rather than unwinding onto it. It decelerates into the shadow and deals a share of
+  what it dealt going out.
+
+**So the flower can be jumped**, and that is the counterplay the shape always implied and
+never delivered. A thin slab at waist height is something a fighter can get over; a sphere
+from the shins to the chest was not. Leaving sideways used to be the only answer.
+
+**Twelve small blades rather than six big ones, at half the damage each.** The danger is
+meant to be the shape it sweeps rather than any one thing landing, and a single blade is
+now a scratch — under a third of her own poke. What that buys is a flower that reads as
+petals: solid near the shadow, and **gapped at the rim**, where the twelve arms are far
+enough apart to stand between. Measured at full extension, where you are standing relative
+to a petal is worth the difference between taking nothing and taking a third of what the
+middle deals. That is spatial counterplay of the kind the class is supposed to be made of,
+and it is why the blades are not simply made wider to close the gaps.
+
+That last one is a hit test as much as a look. A return that retraced its outward arm
+would be sweeping ground it had already cut — ground whose occupants were cut once and
+have had the whole hold to walk off it — so it could only catch somebody who stepped back
+into the same line. Turning past the start means the way home crosses floor the way out
+never touched, which is what makes the drag through a crowd the ability's own description
+of itself rather than a second helping of the first pass.
 
 **The blades track the shadow's live position every frame.** Recall the shadow with a
 lotus open and the six of them are dragged the length of the arena after it — a long
@@ -141,10 +170,16 @@ two buttons: `Q`, then right click.
 > It briefly erupted **on the Reaver's own body**: the move was declared a swing with a
 > reach of zero, so its volume came out where she was standing.
 >
+> The blades used to leave the shadow's **feet** and arc up and back down over the
+> eruption. Two things were wrong with that and only one of them was how it looked: a
+> blade at full extension was back at ground level, so the volume spent the end of its
+> travel half buried in the floor at exactly the reach where it does the most work. The
+> flower is planar now, and the height it lies at is its own knob.
+>
 > The blades are tested as **swept lines** rather than as points, and that is a hit test
 > rather than a flourish: the eruption crosses four metres in seven frames, so a blade
-> sampled as a ball starts the frame at the shadow's feet and ends it a metre past
-> whoever was standing there — missing the one victim the ability is named for.
+> sampled at a point starts the frame at the shadow and ends it a metre past whoever was
+> standing there — missing the one victim the ability is named for.
 
 ### The dash to the shadow — `shift` + forward
 **Startup** instant · **Range** the leash · **Mechanic** requires the shadow out;
@@ -162,6 +197,57 @@ mouse rather than a second key.
 It replaces two abilities from the original list, **Shadow swap** and **Reascend**, both
 of which were "get to the shadow" with a different verb attached. One movement option,
 aimed.
+
+#### Three things it did not used to do — added 2026-09-14
+
+All three are the same sentence read properly: **the dash goes to where the second body
+is.** Not to the floor under it, not only from the floor, and not only when the floor
+between the two of them is flat.
+
+**In the air as well.** A forward *air*dodge pointed at the shadow is the dash, exactly as
+the grounded one is. Being off the floor is the commonest reason she is not standing where
+she wants to be, and mobility that switched off the moment she jumped was mobility in the
+wrong place. It is the airdodge, aimed, so it **spends the airdodge** — one commitment per
+airtime is what keeps a jump from becoming flight — but it keeps the dash's own frames
+rather than the airdodge's shorter ones, because a tail cut short strands her halfway.
+
+**In three dimensions.** The line she flies is the straight line between the two bodies,
+and it goes up and down as readily as along. A shadow standing on a dais is *up there*; the
+old dash drove only her feet, so she ran at the side of the thing it was standing on and
+stopped. Gravity and the arena are off for the crossing — she is a shadow going to her
+shadow — and she arrives on the shadow's own spot rather than near it.
+
+**And only a total obstruction refuses it.** Total means what it says: *no* straight line
+from her body to its body, not "a ledge is in the way of her feet", which is every dash
+onto anything. Two bodies are upright columns over fixed spots, so every line between them
+has the same footprint and they differ only in how they rise — she takes any one of them
+that gets through. Refused, she gets the ordinary dodge, which is the other half of the
+button rather than a dead press.
+
+Nothing in the blockout is tall enough to refuse her: the platforms and the walls are one
+and a half metres and a fighter is one point eight, so she can always see over. **A
+structure can.** An Elementalist's stone is exactly a fighter's height, so one raised
+squarely on the line leaves no way through — which makes cutting the Reaver's line
+something another class can actually do, rather than a rule nothing exercises. See
+[../aiming.md](../aiming.md).
+
+#### The carry, and the jump out of it — added 2026-09-14
+
+**Arriving does not stop her.** She was crossing at more than thirty metres a second and
+that speed is still under her; the frames after she lands are a slide that decays. That
+window is the **carry**, and it is the same length however far she came — a dash that spent
+its whole dodge getting there is given the window rather than having the distance swallow
+it.
+
+**A jump pressed inside the carry takes the slide up with her.** It is the one thing that
+can cut a dodge's tail short, and that is half the reward: the frames she would have spent
+standing there being punished are spent in the air going somewhere instead. The other half
+is the speed, which decays while the window is open — so pressing early keeps more, and the
+tech is a gradient rather than a pass mark.
+
+It is a **press**, not a held button, and it answers only a dash. Every dodge in the game
+has a punishable tail, and a jump out of *that* would be a universal escape rather than one
+class's tech.
 
 ### Executioner — `E`, or `shift` + left click
 **Startup** slow · **Recovery** committed · **Range** short · **Mechanic** stronger with
@@ -217,6 +303,12 @@ somewhere that gives you an escape *and* a threat at once, which are usually dif
 places — and knowing when the quarter-damage copy at your own shoulder is worth more than
 either.
 
+**Where you put the shadow is now also where you can stand.** Sending it up onto a dais and
+dashing to it is a way onto high ground that costs a mechanic press rather than a jump
+arc — and a jump thrown out of the carry on arrival turns the whole thing into one long
+move across and up. That is the class's biggest piece of ground covered, and it is three
+inputs: right click, `shift` + forward, space.
+
 The two-button turn: `Q` opens the lotus wherever the shadow is standing, right click drags
 it home through everything in between. Since right click cuts a recovery short, the turn
 does not have to wait for the lotus to finish coming out — the drag is a decision made
@@ -227,6 +319,11 @@ makes with Rush.
 
 - Does the shadow have collision, or is it purely a marker? Collision makes it
   denial-able, which cuts both ways. **It has none today.**
+- **How long should the carry be, and how much of the dash should survive it?** Ten frames
+  is the first value and it is a guess. The slide itself is inherited rather than chosen —
+  it is what the dodge's decay does to thirty-four metres a second — and it carries her a
+  good four metres past the shadow, which on a dais is most of the way to the far edge.
+  Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
 - The archive's bonus on the first auto after reclaiming the shadow. Reclaiming is a dash
   now, so the trigger exists — nobody has decided whether the bonus should.

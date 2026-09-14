@@ -259,6 +259,128 @@ A quick cone. Structures caught in it are knocked forward, dealing extra damage 
 staggering whatever they hit. This is the class's answer to a blocking opponent — the
 structure is the guard breaker.
 
+## In the air — built 2026-09-14
+
+**Implemented.** Three moves, and they are the same three buttons she already uses. The row
+is where her feet are:
+
+```text
+                left click      right click     E
+  standing      Bolt            Cataclysm       Raise — the mechanic, an instant
+                (shift: Fissure, Q: Fire pillar)
+  in the air    Air bolt        Gale            Landfall
+```
+
+That shape is the Champion's grid read one class further, and it is deliberately the
+[README's](../README.md) open **Aerials** question answered rather than dodged: *airborne
+attacks are variants of their grounded counterparts, not a separate move list.* Left click is
+still the cheap thing you throw constantly, right click is still the committed one, `E` is
+still earth. A player who has learnt her standing up has learnt most of her in the air.
+
+**Shift does not reach up there.** Shift plus left click is Fissure, a crack that races along
+the *ground*; there is no airborne version of it to reach for, so the modifier is ignored and
+left click means what left click means. Ignoring it has to come out as the Air bolt rather
+than as silence, or the input is simply eaten.
+
+### Why air
+
+Earth is the thing she is standing on, and off the floor she is not standing on it. So the two
+things she throws with her hands up there are **air** — the element listed above as a later
+specialisation axis, borrowed for the one situation where the element she has cannot reach.
+The way *back* to earth is to go and hit it, which is Landfall, and it is the only one of the
+three that leaves a structure behind.
+
+**Both shots travel**, which nothing she throws standing up does. Bolt and Cataclysm are
+instant lines resolved on the frame they come out; these have a speed. The reason is the
+situation rather than the element: she is falling while she throws them, and an instant hit
+taken from a position she cannot hold would be free. A flight time is what makes being in the
+air a trade. See `crate::gust`.
+
+### Air bolt — left click, airborne
+**Startup** fast · **Recovery** short · **Range** long, skillshot
+
+A small, fast bolt of air thrown along the crosshair. Low damage and a little stagger — the
+poke, and the same trade the grounded auto makes with a body added to it.
+
+> **What it buys is reach.** It is the longest thing in the kit by some way, longer than
+> Cataclysm and twice the beam, and that is the whole of what leaving the floor pays for: she
+> is committed to an arc, she cannot walk out of what she started, and what she gets for it is
+> the ability to touch somebody who thought they were out of the fight. It is slower than a
+> fire bolt on purpose — a poke you can see coming is a poke that can be answered, and a
+> long-range one that could not be would simply be the correct button.
+>
+> It carries the aerial shove the other pokes in the game get, so throwing it is *part of*
+> moving in the air rather than a pause in it.
+
+### Gale — right click, airborne
+**Startup** slow · **Recovery** medium · **Range** medium, skillshot
+
+A large disc of air that **keeps getting bigger as it travels**, and hits harder the bigger it
+has got.
+
+> **The size is the move.** It leaves her hand at a fraction of its listed radius and arrives
+> at full size at the end of its travel, and damage and knockback ride that same fraction —
+> so a disc caught at point blank is a puff of air and one caught at the tip is the heaviest
+> shove in the kit. Every other projectile in the game is worth the same wherever it lands;
+> this one is worth what it has *become*.
+>
+> That inverts the spacing, and it is the same sentence **Flame spitter** below is already
+> written around — *"you want them at the tip"* — said as a thing that flies. The answer to it
+> is to close, which is the answer this class least wants you to have and most deserves to be
+> given.
+>
+> **The stun does not scale.** How long a hit holds somebody is frame data, and frame data
+> that changed with distance would be a move nobody could learn. Only what it is worth moves.
+>
+> It is the slowest thing she throws. A disc that grows into a real hit at the far end of its
+> travel is only a decision if the target has time to make one.
+
+### Landfall — `E`, airborne
+**Startup** slow, telegraphed · **Recovery** medium · **Range** melee, around where she lands
+· **Mechanic** drives a structure up in front of her
+
+A descending slam. She hangs, then comes down hard; the arrival staggers a patch of floor for
+low damage and levers a slab of rock out of the ground in front of her at forty-five degrees,
+throwing whatever was standing there up and away.
+
+> **The wind-up ends on the floor, not on a number.** Landfall is the only move in the game
+> whose startup does — the frames in its row are what she is guaranteed to owe (a hang at the
+> top, then the drop), and the descent is over when her feet arrive, which from four metres up
+> takes longer than from one. So the telegraph is exactly as long as the height she chose to
+> open up. Going higher is buying reward with time the opponent gets to use.
+>
+> **And they can use it.** Everything about the descent is an ordinary startup, so a hit lands
+> on her the way it lands on anybody mid-wind-up: she is knocked out of it, and the slab she
+> was about to drive up never appears. That is the whole of it, and it needed no rule of its
+> own. Contesting the space she is coming down into is the counterplay, and the length of the
+> plunge is what makes it findable rather than a read.
+>
+> **The slab is the payoff, and it is not raised — it is driven.** Two differences from an
+> ordinary structure, and they are the same difference twice. It comes out of the floor in
+> well under half the time, because the telegraph was the plunge rather than the rise. And it
+> comes out **leaning**, forty-five degrees above the floor pointing away from her, so whoever
+> is standing over it is thrown up and back along the lean instead of merely staggered where
+> they stand. An ordinary eruption does damage and a stagger and leaves you where you were;
+> this one clears the space she has just landed in.
+>
+> It is a structure like any other and it spends the **cap of three**, collapsing the oldest
+> if she is already carrying three. A move that raised a fourth for free would be a way around
+> the only cost the mechanic has.
+>
+> **It comes up in front of her, not at the crosshair** — the one placement in the class the
+> mouse does not decide, because she is landing rather than aiming. That is `aim::planted_ahead`,
+> which lives with the rest of the aiming model for the reason everything else there does; see
+> [../aiming.md](../aiming.md).
+
+### What it is for
+
+The slam and the slab are one option, not two: the stagger holds somebody still exactly where
+a slab is coming up beside them, and the lean throws them out of the space rather than into
+it. Against somebody who has closed on her — which is the position this class least wants to
+be in — that is a reset she can take from above rather than a trade she has to win on the
+floor. The two shots are the other half: the Air bolt is how she pokes at range she cannot
+reach standing up, and the Gale is what she throws at somebody who has to come *through* it.
+
 ## Playing it
 
 Raise or Fissure to seed the field, then read the opponent's position and detonate the
@@ -267,16 +389,48 @@ their cover — the skill is placing them where they serve you more than the opp
 
 ## Open questions
 
+- **The air row wants playing before any of its numbers are believed.** Three in particular.
+  Whether the Gale's near end should be as weak as it is, or whether a disc that is nearly
+  worthless at her own feet reads as a bug rather than as spacing. Whether the plunge's length
+  *scaling with height* is the right trade or a free reward for pressing it low down — from a
+  short hop the telegraph is barely longer than the hang. And whether a fourth structure's
+  worth of terrain arriving every time she leaves the floor is more than the cap of three can
+  absorb.
+- **Landfall's aerials share the grounded clips.** The Air bolt plays Bolt's flick, the Gale
+  plays Cataclysm's two-handed throw and Landfall plays Fissure's *hands driven into the
+  ground* — each of which is recognisably the right shape, and none of which was authored for
+  the air. Clips are a contract (`view::clips`) and the bake refuses to run with one missing,
+  so four new ones is a real piece of work rather than a line; it is the obvious next step and
+  is logged in [../feel-log.md](../feel-log.md).
+- **Do the air shots interact with fire?** A bolt of air through a fire pillar is the
+  interaction the loadout is asking for, and nothing has been built: they are stopped by a
+  structure like everything else and pass through a pillar without noticing it. The dispatch
+  in `crate::gust` is one more branch away from having an answer, which is exactly the shape
+  the beam's own fire branch has.
+- **Should the Gale kick a stone the way the beam does?** It is the heaviest push she has and
+  a wall of moving air arriving at a boulder plainly ought to move it. Today it is stopped by
+  one, which is the same answer the fire bolt gives and has the same open question against it.
+- **Raising a stone mid-air is gone, and nobody has missed it yet.** `E` off the floor used to
+  be Raise, which made a stone under your own feet a sort of second jump. It is Landfall now.
+  Whether that pseudo-double-jump was load-bearing for her mobility is a thing to find out by
+  playing, not at a desk — and the **Double jump** row in [../README.md](../README.md) is
+  where the general version of the question lives.
 - **Settled for the auto, open for everything else.** Yes — the beam is blocked by a
   structure in its way, and that self-obstruction is a real cost worth keeping. Fissure,
   Quake and Ice blast are unbuilt skillshots and have not been given the same answer;
   Ice blast in particular *wants* to reach structures rather than be stopped by the
   nearest one, so "blocks" cannot simply mean the same thing for every ability that
   travels.
-- **The beam ignores the arena.** Walls and platforms are not traced against, so a shot
-  aimed down at the floor passes through it and whiffs rather than stopping short of one.
-  Deliberate for now — stones are the one piece of terrain the shot is *for* — but it is
-  the obvious thing to revisit once the arena is more than a blockout.
+- **The beam ignores the arena, and so does everything else she throws.** Walls and
+  platforms are not traced against, so a shot aimed down at the floor passes through it and
+  whiffs rather than stopping short of one. The same is true of Cataclysm's debris, of the
+  fire bolt and of both air shots: the only solid any of them knows about is a stone.
+  Deliberate for now — stones are the one piece of terrain the shots are *for* — but it is
+  the obvious thing to revisit once the arena is more than a blockout, and it has already
+  cost one confusing test failure. A stone raised inside the dais's footprint is pushed up
+  **on to** it and stands a metre and a half in the air; debris then flies under the stone
+  *and through the platform holding it up*, which looks from the outside exactly like debris
+  punching through a stone. See `CLEAR_LANE` in `crates/sim/tests/cataclysm.rs`.
 - Should the first-thing-it-meets check on the auto also read *black spike*, or anything
   else a future element adds to `effects.rs`? Right now it only recognises fire pillars,
   because fire is the only element that currently ships with the class. The dispatch is

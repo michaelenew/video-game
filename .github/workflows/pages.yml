@@ -1,0 +1,83 @@
+# Publish the browser build to GitHub Pages.
+#
+# A deploy, not a gate. It does not run the test suite and a red run here blocks
+# nothing: the checks in CLAUDE.md still run on a person's machine before a
+# push, and they are still the only checks. This exists so that "try it" is a
+# link rather than a clone.
+#
+# It needs Pages switched on for the repository, with the source set to GitHub
+# Actions: Settings -> Pages -> Build and deployment -> Source.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one halfway: a cancelled deploy can
+# leave the site on a half-uploaded build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Before the build, not after it. This is a two-second API call that
+      # fails when Pages is not switched on for the repository -- and when it
+      # ran last, it failed *after* a fourteen-minute build, which also meant
+      # `actions/cache` never reached its post step and never saved anything.
+      # A cheap precondition belongs in front of an expensive step.
+      - uses: actions/configure-pages@v5
+
+      # The toolchain file names the channel and the wasm target, so this is
+      # the whole Rust setup.
+      - run: rustup show
+
+      # Bevy is most of the build and none of it changes between runs. The key
+      # is the lock file; the wasm target directory rides along because a cold
+      # one is several minutes on its own.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/wasm-bindgen
+            target/wasm32-unknown-unknown
+          key: pages-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: pages-${{ runner.os }}-
+
+      # The version has to match the `wasm-bindgen` crate in the lock file, and
+      # the build script refuses to run if it does not -- so read it from there
+      # rather than writing it down twice.
+      - name: Install wasm-bindgen-cli
+        run: |
+          want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[",]/, "", $3); print $3; exit }' Cargo.lock)
+          have=$(wasm-bindgen --version 2>/dev/null | awk '{print $2}' || true)
+          if [ "$have" != "$want" ]; then
+            cargo install wasm-bindgen-cli --version "$want" --locked --force
+          fi
+
+      - run: ./crates/web/build-game.sh
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

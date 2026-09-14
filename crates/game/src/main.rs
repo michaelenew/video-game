@@ -23,11 +23,14 @@ mod crosshair;
 mod debug;
 mod hub;
 mod hud;
+mod online;
 mod palette;
+mod platform;
 mod settings;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
+use online::Driver;
 use sim::state::MAX_PLAYERS;
 use sim::{Input as SimInput, World, arena};
 use view::interp::TickClock;
@@ -35,26 +38,6 @@ use view::play::{Crossfade, PoseInput};
 use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
 use view::{CameraRig, aim_from_radians, camera::RigConfig, interpolate, pitch_from_radians};
 
-/// How the match is being driven.
-///
-/// Local is the training mode. Online routes every tick through GGRS, which
-/// owns when to save, load and advance -- the simulation only has to do those
-/// three things correctly.
-enum Driver {
-    Local,
-    Online {
-        session: Box<net::ggrs::P2PSession<net::SessionConfig>>,
-        handle: usize,
-        desynced: bool,
-    },
-}
-
-/// `game` for training mode, or:
-///
-///     game --port 47801 --peer 192.168.1.20:47802
-///
-/// Both peers derive who is player one from the two addresses, so there is no
-/// server and no lobby.
 /// Loose class-name matching, so `--p1 reaver` works without remembering the
 /// full name.
 fn parse_class(name: &str) -> Option<sim::Class> {
@@ -79,60 +62,36 @@ fn matches(n: &str, c: sim::Class) -> bool {
     c.name().to_lowercase().contains(n) && !n.is_empty()
 }
 
-fn arg(flag: &str) -> Option<String> {
-    let args: Vec<String> = std::env::args().collect();
-    args.iter()
-        .position(|a| a == flag)
-        .and_then(|i| args.get(i + 1))
-        .cloned()
-}
-
 /// Start in a hunt rather than a versus match.
 ///
 /// A flag as well as a key, because the headless screenshot script takes flags
 /// and not keystrokes.
 fn hunting() -> bool {
-    std::env::args().any(|a| a == "--hunt")
+    platform::flag("--hunt")
 }
 
 fn chosen_classes() -> [sim::Class; 2] {
     [
-        arg("--p1")
-            .and_then(|n| parse_class(&n))
+        platform::value("--p1")
+            .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
-        arg("--p2")
-            .and_then(|n| parse_class(&n))
+        platform::value("--p2")
+            .and_then(parse_class)
             .unwrap_or(sim::Class::Bulwark),
     ]
-}
-
-fn parse_args() -> Option<(u16, std::net::SocketAddr)> {
-    let args: Vec<String> = std::env::args().collect();
-    let get = |flag: &str| {
-        args.iter()
-            .position(|a| a == flag)
-            .and_then(|i| args.get(i + 1))
-            .cloned()
-    };
-    let port: u16 = get("--port")?.parse().ok()?;
-    let peer: std::net::SocketAddr = get("--peer")?.parse().ok()?;
-    Some((port, peer))
 }
 
 fn main() {
     // `--help` before anything else, so asking what the flags are does not
     // require a window, a GPU, or the patience to wait for Bevy to start.
-    if std::env::args().any(|a| a == "--help" || a == "-h") {
+    if platform::flag("--help") || platform::flag("-h") {
         print!("{}", manual::render());
         return;
     }
+    platform::report_panics();
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "Arena — prototype".into(),
-                resolution: (1280.0, 760.0).into(),
-                ..default()
-            }),
+            primary_window: Some(window()),
             ..default()
         }))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
@@ -177,6 +136,7 @@ fn main() {
                     place_beams,
                     place_bolts,
                     place_debris,
+                    place_gusts,
                     place_wings,
                     place_wing_tips,
                     place_marks,
@@ -211,6 +171,26 @@ fn main() {
                 .after(palette::draw),
         )
         .run();
+}
+
+/// The window the arena is drawn in.
+///
+/// In the browser there is no window to make: there is a canvas already on the
+/// page, and the game has to be told which one and told to keep the browser's
+/// own shortcuts off the keys it uses — Space scrolls a page, and a player who
+/// jumps should not find the page has jumped instead.
+fn window() -> Window {
+    Window {
+        title: "Arena — prototype".into(),
+        resolution: (1280.0_f32, 760.0_f32).into(),
+        #[cfg(target_arch = "wasm32")]
+        canvas: Some("#arena".into()),
+        #[cfg(target_arch = "wasm32")]
+        fit_canvas_to_parent: true,
+        #[cfg(target_arch = "wasm32")]
+        prevent_default_event_handling: true,
+        ..default()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -276,33 +256,6 @@ impl Default for Sim {
         } else {
             World::with_classes(chosen_classes())
         };
-        let driver = match parse_args() {
-            Some((port, peer)) => {
-                let local: std::net::SocketAddr =
-                    format!("127.0.0.1:{port}").parse().expect("local addr");
-                let handle = net::p2p::local_handle_for(local, peer);
-                match net::p2p::start(port, peer, handle) {
-                    Ok(session) => {
-                        eprintln!(
-                            "online: port {port} to {peer}, you are player {}",
-                            handle + 1
-                        );
-                        Driver::Online {
-                            session: Box::new(session),
-                            handle,
-                            desynced: false,
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "could not start the session ({e}); falling back to training mode"
-                        );
-                        Driver::Local
-                    }
-                }
-            }
-            None => Driver::Local,
-        };
         Sim {
             prev: w.clone(),
             cur: w,
@@ -310,23 +263,18 @@ impl Default for Sim {
             paused: false,
             step_once: false,
             dummy: Dummy::Idle,
-            driver,
+            driver: online::start(),
             // `BIND_POSE=1` starts frozen, so the proportions of a build can be
             // captured without a keypress.
-            bind_pose: std::env::var("BIND_POSE").as_deref() == Ok("1"),
+            bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
         }
     }
 }
 
 impl Sim {
-    /// Which fighter this client drives. Online it is the GGRS handle; locally
-    /// it is always player one, with player two on the second key set.
     fn local_player(&self) -> usize {
-        match self.driver {
-            Driver::Online { handle, .. } => handle.min(1),
-            Driver::Local => 0,
-        }
+        self.driver.local_player()
     }
 }
 
@@ -347,7 +295,7 @@ impl Default for Scripted {
 
 /// Start pitch override, for capturing the camera at a known angle.
 fn env_f32(key: &str) -> Option<f32> {
-    std::env::var(key).ok()?.parse().ok()
+    platform::env_parsed(key)
 }
 
 /// `--dev` turns everything on at once: hitbox and hurtbox wireframes, and the
@@ -357,11 +305,11 @@ fn env_f32(key: &str) -> Option<f32> {
 /// mode you reach for every session should not need two keypresses and a
 /// reminder of which two.
 pub fn dev_mode() -> bool {
-    std::env::args().any(|a| a == "--dev")
+    platform::flag("--dev")
 }
 
 fn env_num(key: &str) -> Option<u32> {
-    std::env::var(key).ok()?.parse().ok()
+    platform::env_parsed(key)
 }
 
 /// Where each local player is looking. Renderer-side state: both angles are
@@ -386,9 +334,10 @@ impl Default for Look {
         Look {
             // Player one spawns at -X looking toward +X, where player two is.
             yaw: env_f32("SHOT_YAW").unwrap_or(0.0),
-            // Resting a little below the horizon, not level -- see
-            // `Zones::neutral_pitch`.
-            pitch: env_f32("SHOT_PITCH").unwrap_or(view::camera::Zones::tuned().neutral_pitch()),
+            // Below the horizon, not level, and far enough below it that the
+            // eye has ridden out far enough to show your own fighter -- see
+            // `Zones::start_pitch`.
+            pitch: env_f32("SHOT_PITCH").unwrap_or(view::camera::Zones::tuned().start_pitch()),
             yaw_two: std::f32::consts::PI,
             grabbed: false,
         }
@@ -473,9 +422,18 @@ struct EffectMesh {
 
 /// How many pieces one effect can be drawn as.
 ///
-/// Six, which is the Guillotine lotus: one blade each. The Grasp's four arms
-/// were the previous widest.
-const EFFECT_PARTS: usize = 6;
+/// **Counted from the widest effect rather than written down.** It was a
+/// literal six, correct on the day the Guillotine lotus had six blades -- and
+/// when the lotus grew to twelve the pool did not, so the first six blades had
+/// a model and the other six were nothing but the debug overlay's outline. A
+/// renderer that quietly draws *part* of a thing is worse than one that fails
+/// to draw it: the hit test was right the whole time, so half the blades were
+/// cutting people with nothing on screen to say so.
+const EFFECT_PARTS: usize = {
+    let blades = sim::effects::LOTUS_BLADES;
+    let arms = sim::effects::GRASP_ARMS;
+    if blades > arms { blades } else { arms }
+};
 
 /// One of the Elementalist's structures.
 #[derive(Component)]
@@ -501,6 +459,10 @@ struct BoltMesh(usize);
 /// One piece of debris, thrown when Cataclysm destroys a structure.
 #[derive(Component)]
 struct DebrisMesh(usize);
+
+/// One of the Elementalist's air shots in flight -- an Air bolt or a Gale.
+#[derive(Component)]
+struct GustMesh(usize);
 
 /// One slice of the Dual mage's wing.
 ///
@@ -821,6 +783,18 @@ fn setup(
             DebrisMesh(slot),
         ));
     }
+    // The Elementalist's air shots. Beam-skinned rather than stone: it is air,
+    // and the same barely-opaque material the rest of what she throws with her
+    // hands is drawn in.
+    for slot in 0..sim::gust::MAX_GUSTS {
+        commands.spawn((
+            Mesh3d(pellet.clone()),
+            MeshMaterial3d(look.beam.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            GustMesh(slot),
+        ));
+    }
     // The Dual mage's wing, and the ball it finishes on. Spawned for every
     // fighter rather than for her alone, because the class is picked at runtime
     // and can change mid-match with Tab.
@@ -1017,6 +991,37 @@ fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &
         tf.translation = fx3(shard.pos);
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shard.dir).normalize_or_zero());
         tf.scale = Vec3::splat(radius * 2.0);
+    }
+}
+
+/// Put the Elementalist's air shots where they are, at the size they have
+/// **become**.
+///
+/// The size is the whole of the Gale: it leaves her hand small and arrives
+/// large, and how big it is on any one frame is what decides whether it
+/// reached you. So the scale comes off `Gust::girth`, which is the same
+/// number the hit test asks for -- the overlay rule (`CLAUDE.md`) applied to
+/// something that is not an overlay: a disc drawn one size and tested at
+/// another would be a lie you could not see through.
+///
+/// A disc rather than a pellet: flattened along its own line of travel, so
+/// what you see coming is a wall of air face-on rather than a ball. The bolt
+/// keeps the stretched-along-its-flight treatment `place_bolts` gives a fire
+/// bolt, for the same reason -- it reads as travelling rather than hanging.
+fn place_gusts(sim: Res<Sim>, mut meshes: Query<(&GustMesh, &mut Transform, &mut Visibility)>) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(shot) = sim.cur.gusts[tag.0] else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        let radius = shot.girth().to_f32_for_render();
+        tf.translation = fx3(shot.pos);
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
+        tf.scale = match shot.gale {
+            sim::gust::Gale::Bolt => Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0),
+            sim::gust::Gale::Disc => Vec3::new(radius * 2.0, radius * 0.5, radius * 2.0),
+        };
     }
 }
 
@@ -1288,14 +1293,21 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
             fx3(effect.arm_at(part)),
             effect.field_radius().to_f32_for_render(),
         )),
-        // One ball per blade, drawn around the shadow's live position rather
-        // than the spot the move was thrown at -- which is what makes them
-        // visibly chase it home. Same shape as the hit test, as everywhere.
+        // One **disc** per blade, drawn around the shadow's live position
+        // rather than the spot the move was thrown at -- which is what makes
+        // them visibly chase it home. Same shape as the hit test, as
+        // everywhere: a short wide cylinder lying in the flower's plane, which
+        // is a shuriken thrown flat. It was a ball, and a ball of that radius
+        // read as a beach ball rather than a blade.
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
-            shape: Shape::Ball,
+            shape: Shape::Column,
             skin: Skin::Shade,
             at: fx3(effect.lotus_at(part, effect.pos)),
-            scale: Vec3::splat(effect.field_radius().to_f32_for_render() * 2.0),
+            scale: Vec3::new(
+                effect.field_radius().to_f32_for_render() * 2.0,
+                sim::tuning::lotus_blade_thickness().to_f32_for_render() * 2.0,
+                effect.field_radius().to_f32_for_render() * 2.0,
+            ),
         }),
         _ => None,
     }
@@ -1488,70 +1500,15 @@ fn tick_sim(
                 sim.cur.advance(pair);
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Driver::Online { .. } => {
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
                 let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
                 let local = scripted_or(scripted, held);
-                step_online(&mut sim, local);
+                online::step(&mut sim, local);
             }
         }
-    }
-}
-
-/// One networked tick.
-///
-/// GGRS decides when to save, load and advance; `handle_requests` services
-/// those against the simulation. Rollbacks land here as a load followed by
-/// several advances, all inside one call.
-fn step_online(sim: &mut Sim, local: SimInput) {
-    let Driver::Online {
-        session,
-        handle,
-        desynced,
-    } = &mut sim.driver
-    else {
-        return;
-    };
-
-    session.poll_remote_clients();
-    for event in session.events() {
-        match event {
-            net::ggrs::GgrsEvent::DesyncDetected { frame, .. } => {
-                // Should be impossible: the simulation is integer-only and
-                // SyncTest covers it. If it happens, say so loudly rather than
-                // letting the two players drift apart in silence.
-                eprintln!("DESYNC at frame {frame}");
-                *desynced = true;
-            }
-            net::ggrs::GgrsEvent::Disconnected { addr } => eprintln!("peer {addr} disconnected"),
-            net::ggrs::GgrsEvent::NetworkInterrupted { addr, .. } => {
-                eprintln!("peer {addr} interrupted")
-            }
-            _ => {}
-        }
-    }
-
-    if session.current_state() != net::ggrs::SessionState::Running {
-        return;
-    }
-
-    if session
-        .add_local_input(*handle, net::NetInput::from(local))
-        .is_err()
-    {
-        // Too far ahead of the peer. Waiting is the correct response.
-        return;
-    }
-
-    let prev = sim.cur.clone();
-    match session.advance_frame() {
-        Ok(requests) => {
-            net::handle_requests(&mut sim.cur, requests);
-            sim.prev = prev;
-        }
-        Err(net::ggrs::GgrsError::PredictionThreshold) => {}
-        Err(e) => eprintln!("advance failed: {e}"),
     }
 }
 
@@ -1574,7 +1531,7 @@ fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
 /// `DEMO=1` drives player one from a script instead of the keyboard. Used to
 /// verify posing and framing without a human at the controls.
 fn demo_mode() -> bool {
-    std::env::var("DEMO").is_ok_and(|v| v == "1")
+    platform::env("DEMO").as_deref() == Some("1")
 }
 
 /// Quantised angle of a flat direction.
@@ -2047,7 +2004,7 @@ fn fx3(v: sim::V3) -> Vec3 {
 mod tests {
     use super::*;
     use palette::UiFocus;
-    use sim::effects::{Effect, EffectKind, GRASP_ARMS};
+    use sim::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES};
 
     fn cast(kind: EffectKind, slot: u8) -> Effect {
         Effect::cast(
@@ -2185,6 +2142,71 @@ mod tests {
                     "arms {a} and {b} are drawn on top of each other"
                 );
             }
+        }
+    }
+
+    /// The same, for a class other than the Blood mage.
+    fn cast_as(kind: EffectKind, class: sim::Class, slot: u8) -> Effect {
+        Effect::cast(
+            kind,
+            0,
+            class,
+            slot,
+            sim::V3::ZERO,
+            sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+            sim::moves::get(class, slot).reach,
+        )
+    }
+
+    #[test]
+    fn every_blade_of_a_lotus_is_drawn() {
+        // All twelve, not the first six. The pool the renderer spawns from used
+        // to be a hand-written six, which was right when the flower had six
+        // blades and quietly wrong the day it had twelve: the back half cut
+        // people with nothing on screen to say they were there.
+        let mut effect = cast_as(
+            EffectKind::GuillotineLotus,
+            sim::Class::ShadowReaver,
+            sim::state::SLOT_SPECIAL,
+        );
+        effect.age = sim::tuning::lotus_erupt();
+        let drawn: Vec<Piece> = (0..LOTUS_BLADES)
+            .map(|blade| effect_piece(&effect, blade).expect("every blade is drawn"))
+            .collect();
+        for (blade, piece) in drawn.iter().enumerate() {
+            assert_eq!(piece.at, fx3(effect.lotus_at(blade, effect.pos)));
+        }
+        // Open, so no two of them are in the same place -- which is also what
+        // says the count the renderer walks is the count the flower has.
+        for a in 0..LOTUS_BLADES {
+            for b in a + 1..LOTUS_BLADES {
+                assert!(
+                    drawn[a].at.distance(drawn[b].at) > 0.1,
+                    "blades {a} and {b} are drawn on top of each other"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_pool_has_a_slot_for_every_piece_an_effect_draws() {
+        // The general form of the bug above, and the reason `EFFECT_PARTS` is
+        // counted rather than typed. The renderer spawns `EFFECT_PARTS` meshes
+        // per effect and asks `effect_piece` for each; anything the piece
+        // function will answer for beyond that has no mesh to be drawn with and
+        // is invisible. So: nothing may be drawn at the first index past the
+        // end of the pool.
+        for code in 0..32u8 {
+            let Some(kind) = EffectKind::from_code(code) else {
+                continue;
+            };
+            let effect = cast_as(kind, sim::Class::ShadowReaver, sim::state::SLOT_SPECIAL);
+            assert!(
+                effect_piece(&effect, EFFECT_PARTS).is_none(),
+                "{} draws a piece at part {EFFECT_PARTS}, which is past the end \
+                 of the pool the renderer spawns -- it would never be seen",
+                kind.name()
+            );
         }
     }
 

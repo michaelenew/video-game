@@ -21,6 +21,7 @@ use crate::class::{self, Class, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
+use crate::gust::{self, Gale, MAX_GUSTS};
 use crate::input::Input;
 use crate::math::V3;
 use crate::monster::{self, Doing, Monster, Quarry};
@@ -403,6 +404,31 @@ pub struct Player {
     /// the telegraph worth nothing. You commit to a place when you commit to
     /// the move.
     pub aim_path: Path,
+    /// Frames left before each of this class's moves may be thrown again.
+    ///
+    /// **Per move, and only ever the one you just threw** -- which is what
+    /// separates it from a cooldown and is why the combat kernel allows it. The
+    /// rest of the kit is always available, so the question it puts to a player
+    /// is never *do I have anything* but *what else have I got*. See
+    /// `tuning::repeat_lockout`.
+    ///
+    /// Indexed by move slot and sized to the widest class, so the Champion's
+    /// ten fit and everybody else leaves the tail at zero. In the snapshot
+    /// because it decides what a button does: a lockout kept outside it would
+    /// let a rollback re-throw a move the original frame refused.
+    pub repeat_lock: [u16; moves::MAX_SLOTS],
+    /// Frames left before an ability that is **still out there** may be used
+    /// again -- the recall, not the cast.
+    ///
+    /// A separate clock from `repeat_lock` because it answers a different
+    /// question. `repeat_lock` is *when does this ability come back*; this is
+    /// *how soon may I use the half of it I have already paid for*. Running
+    /// both off one number is what made the first version of this eat the
+    /// Reaver's recall: the send armed a thirty-frame lockout and the press
+    /// that brings the shadow home is the same button.
+    ///
+    /// Zero everywhere until somebody plays it -- see `Move::reactivate`.
+    pub reactivate_lock: [u16; moves::MAX_SLOTS],
     /// The reach a channelled move wound up to before its button came back up.
     ///
     /// Kept because the move outlives the channel: the arms of a Grasp are
@@ -450,6 +476,119 @@ impl Player {
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
             Mechanic::Meter { value, .. } => value.abs() >= t::meter_deep(),
             Mechanic::Forms { .. } | Mechanic::Blood => true,
+        }
+    }
+
+    /// Which of this fighter's abilities still have something of their own out
+    /// in the world, and so have not finished being used yet.
+    ///
+    /// **The one place that answers it**, indexed by move slot, and the reason
+    /// it is one place is that the answer is stored in two completely different
+    /// shapes: the second body is the class mechanic, and the hanging blades
+    /// are an entry in the world's effect table. A caller that went looking for
+    /// itself would find one of them.
+    ///
+    /// Read against the scene as it stood at the top of the frame, which is the
+    /// same snapshot the aiming ray is cast against and is deterministic for
+    /// the same reason.
+    pub fn abilities_out(&self, who: usize, scene: &Scene) -> [bool; moves::MAX_SLOTS] {
+        let mut out = [false; moves::MAX_SLOTS];
+        for (slot, flag) in out.iter_mut().enumerate() {
+            // Which slots are worth asking about is `moves::lingers`, so the
+            // frame table and the simulation cannot come to different views of
+            // which abilities the lockout waits for.
+            if !moves::lingers(self.class, slot as u8) {
+                continue;
+            }
+            *flag = match slot as u8 {
+                // Send shadow: out from the frame it leaves her shoulder until
+                // the frame it is back at it, flight home included.
+                SLOT_MECHANIC => shadow::of(self).is_some_and(|s| s.is_out()),
+                // Guillotine lotus: out for as long as a blade of it is still
+                // hanging or still chasing.
+                SLOT_SPECIAL => scene.effects.iter().flatten().any(|e| {
+                    e.kind == crate::effects::EffectKind::GuillotineLotus && e.owner == who as u8
+                }),
+                _ => false,
+            };
+        }
+        out
+    }
+
+    /// Is this move still locked out from the last time it was thrown?
+    ///
+    /// See [`Player::repeat_lock`]. A slot past the end of this class's list
+    /// can never be locked, which keeps the answer total for any `kind` a
+    /// caller can produce.
+    pub fn locked_out(&self, kind: u8) -> bool {
+        self.repeat_lock.get(kind as usize).is_some_and(|&f| f > 0)
+    }
+
+    /// Everything that has to be true before a press becomes a move.
+    ///
+    /// One predicate rather than three at each of the six call sites, because
+    /// they are asked together every single time and a call site that remembered
+    /// only some of them would be a move you could spam on one input path and
+    /// not on another.
+    ///
+    /// **Three cases, and the middle one is the whole reason this takes an
+    /// argument.** An ability that is not out is gated by the shared repeat
+    /// lockout, which is the ordinary rule. An ability that *is* out, on a
+    /// button that reactivates it, is not being used again at all -- the press
+    /// is the second half of the one already paid for, so the lockout must not
+    /// touch it and its own [`Move::reactivate`] gap is what gates it. An
+    /// ability that is out on a button that does *not* reactivate it is simply
+    /// not available: the first cast is not finished, so there is nothing for a
+    /// second one to be.
+    pub fn can_throw(&self, kind: u8, out: &[bool; moves::MAX_SLOTS]) -> bool {
+        if !self.mechanic_ready(kind) {
+            return false;
+        }
+        match out.get(kind as usize) {
+            Some(true) if moves::reactivates(self.class, kind) => self
+                .reactivate_lock
+                .get(kind as usize)
+                .is_none_or(|&f| f == 0),
+            Some(true) => false,
+            _ => !self.locked_out(kind),
+        }
+    }
+
+    /// Start this move's clocks. Called as the move comes out, not as the
+    /// button goes down -- a channel spends its own frames first.
+    fn lock_repeat(&mut self, kind: u8) {
+        let m = moves::get(self.class, kind);
+        if let Some(slot) = self.repeat_lock.get_mut(kind as usize) {
+            *slot = m.repeat_lock();
+        }
+        if let Some(slot) = self.reactivate_lock.get_mut(kind as usize) {
+            *slot = m.reactivate;
+        }
+    }
+
+    /// Run the clocks down by a frame.
+    ///
+    /// **An ability still out in the world holds its lockout at full rather
+    /// than spending it**, so the countdown begins on the frame the last of it
+    /// comes home. That is the rule that keeps the lockout a charge for
+    /// *finishing* with an ability rather than a tax on starting one: sending
+    /// the shadow and leaving it standing there for five seconds does not
+    /// quietly serve the lockout while it waits.
+    ///
+    /// Parked rather than paused, which needs no memory of whether it was
+    /// parked last frame: re-arming it to full every frame it is out leaves it
+    /// at full on the frame it stops being out, which is the same thing and is
+    /// one line.
+    fn tick_repeat_locks(&mut self, out: &[bool; moves::MAX_SLOTS]) {
+        for (kind, f) in self.repeat_lock.iter_mut().enumerate() {
+            if out[kind] {
+                *f = moves::get(self.class, kind as u8).repeat_lock();
+            } else {
+                *f = f.saturating_sub(1);
+            }
+        }
+        for f in self.reactivate_lock.iter_mut() {
+            *f = f.saturating_sub(1);
         }
     }
 
@@ -566,6 +705,8 @@ impl Default for Player {
             air_stall: 0,
             air_dodged: false,
             hit_used: false,
+            repeat_lock: [0; moves::MAX_SLOTS],
+            reactivate_lock: [0; moves::MAX_SLOTS],
             class: Class::Bulwark,
             mechanic: Mechanic::Shield(Shield::Held),
             rounds_won: 0,
@@ -613,6 +754,11 @@ pub struct World {
     /// thing a fire bolt is -- a real velocity, stepped frame by frame -- and
     /// for the same reason: see [`crate::debris`].
     pub debris: Shrapnel,
+    /// The Elementalist's air shots in flight. The only thing a fighter throws
+    /// that is neither part of a mechanic nor lit by something else -- she
+    /// throws these out of her own hands, with her feet off the floor. See
+    /// [`crate::gust`].
+    pub gusts: gust::Flight,
     /// The quarry, in a hunt. `None` is a versus match.
     ///
     /// One slot rather than an array: a second creature is a thing to build
@@ -637,6 +783,7 @@ impl World {
             effects: [None; MAX_EFFECTS],
             bolts: [None; MAX_BOLTS],
             debris: [None; MAX_DEBRIS],
+            gusts: [None; MAX_GUSTS],
             monster: None,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
@@ -664,6 +811,7 @@ impl World {
         // last one ended would land on somebody standing on their mark.
         self.bolts = [None; MAX_BOLTS];
         self.debris = [None; MAX_DEBRIS];
+        self.gusts = [None; MAX_GUSTS];
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -789,7 +937,7 @@ impl World {
 
         // What a move does *as it comes out*, on its first active frame: the
         // leap of a leaping move, and whatever it leaves standing in the world.
-        for i in 0..MAX_PLAYERS {
+        for (i, input) in inputs.into_iter().enumerate() {
             let p = self.players[i];
             let Action::Active { kind, left } = p.action else {
                 continue;
@@ -801,6 +949,13 @@ impl World {
             if m.self_lift.raw() > 0 {
                 self.players[i].vel.y = m.self_lift;
                 self.players[i].grounded = false;
+                // The spear's takeoff spends the plant on a direction as well
+                // as on height. On the same frame as the lift, because they are
+                // one motion: the butt of the spear hits the floor and both
+                // halves of the launch come out of it.
+                if p.class == Class::Champion && kind == moves::champion::POLE_DRIVE {
+                    pole_drive_boost(&mut self.players[i], input);
+                }
             }
             // `E` on the Reaver: the second body goes out, or comes home
             // through whatever is in the way. On the first active frame like
@@ -808,6 +963,30 @@ impl World {
             // can punish rather than a formality.
             if p.class == Class::ShadowReaver && kind == SLOT_MECHANIC {
                 self.order_the_shadow(i, p.aim_at());
+            }
+            // Her two air shots leave her hand here, along the line
+            // `crate::aim` already solved -- and *along* it rather than to the
+            // end of it, the same rule the two travelling effects follow: the
+            // crosshair picked a direction, and a disc thrown at somebody four
+            // metres away still travels its whole range. See `crate::gust`.
+            if let Some(gale) = Gale::thrown_by(p.class, kind) {
+                gust::throw(&mut self.gusts, i as u8, gale, p.aim_path);
+            }
+            // Landfall arriving: the slab of rock she drives up in front of
+            // her. **The one structure in the game the crosshair does not
+            // place** -- she is landing, not aiming -- so where it goes is
+            // `aim::planted_ahead` rather than either of the two lines of
+            // effect, and it spends the cap of three through `stones::raise`
+            // like the mechanic key does. Her own facing is the direction it
+            // leans away along, locked when the move started, so a slab thrown
+            // up behind her is not a thing a mouse flick can produce.
+            if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
+                let field = stones::gather(&self.players);
+                let at = aim::planted_ahead(p.pos, p.facing, t::landfall_ahead(), &field);
+                stones::raise(
+                    &mut self.players[i],
+                    class::Structure::slammed(at, p.facing),
+                );
             }
             if let Some(leaves) = EffectKind::from_code(m.effect) {
                 // Where the move was aimed when it was thrown, already solved
@@ -884,6 +1063,11 @@ impl World {
                 // direction locked at the throw, because the whole point is
                 // that you choose where to go *as* it connects.
                 champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
+                // A chain link that actually landed may cut its recovery short
+                // for the next one. Blocked and parried links pay in full, so
+                // the string ends on a defender who answered it -- see
+                // `chain_cancel`.
+                confirm_chain(&mut self.players[attacker], hit.blocked || hit.parried);
                 if hit.parried {
                     self.players[attacker].action = Action::Stagger {
                         left: t::parry_stagger(),
@@ -922,6 +1106,7 @@ impl World {
                             dir,
                             blocked: victim.action.guarding(),
                             parried: false,
+                            interrupts: true,
                         },
                     );
                     // Contact drops it where it struck.
@@ -946,6 +1131,13 @@ impl World {
         );
         debris::step(
             &mut self.debris,
+            &mut self.players,
+            &standing,
+            self.monster.is_none(),
+            &mut self.monster,
+        );
+        gust::step(
+            &mut self.gusts,
             &mut self.players,
             &standing,
             self.monster.is_none(),
@@ -1030,6 +1222,22 @@ impl World {
                 None => h.write_u32(0),
             }
         }
+        for g in &self.gusts {
+            match g {
+                Some(g) => {
+                    h.write_u32(g.owner as u32 + 1);
+                    // Which of the two, on the wire: a bolt and a disc at the
+                    // same place going the same way are not the same shot, and
+                    // a checksum that could not tell them apart would let one
+                    // peer's disc be the other's bolt.
+                    h.write_u32(g.gale as u32);
+                    hash_v3(&mut h, &g.pos);
+                    hash_v3(&mut h, &g.dir);
+                    h.write_i32(g.travelled.raw());
+                }
+                None => h.write_u32(0),
+            }
+        }
         for e in &self.effects {
             match e {
                 Some(e) => {
@@ -1039,7 +1247,7 @@ impl World {
                     h.write_u32(e.slot as u32);
                     h.write_u32(e.age as u32);
                     h.write_u32(e.life as u32);
-                    h.write_u32(e.struck);
+                    h.write_u64(e.struck);
                     h.write_i32(e.banked);
                     h.write_i32(e.reach.raw());
                     hash_v3(&mut h, &e.pos);
@@ -1096,6 +1304,12 @@ impl World {
             h.write_u32(p.grip_settle as u32);
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
+            for f in &p.repeat_lock {
+                h.write_u32(*f as u32);
+            }
+            for f in &p.reactivate_lock {
+                h.write_u32(*f as u32);
+            }
             hash_mechanic(&mut h, &p.mechanic);
         }
         match &self.monster {
@@ -1175,6 +1389,24 @@ pub(crate) struct Hit {
     pub dir: V3,
     pub blocked: bool,
     pub parried: bool,
+    /// Does landing this take the victim's frames away?
+    ///
+    /// **Almost everything does, and the exception is the point.** A hit
+    /// normally writes `Action::HitStun` over whatever the victim was doing, so
+    /// even a hit with `hitstun: 0` cancels the move they were in the middle
+    /// of -- they are free again next frame, but the attack they had committed
+    /// to is gone. That is a full interrupt however small the number is, and a
+    /// move that can be thrown instantly and interrupts is the panic button
+    /// that makes commitment optional.
+    ///
+    /// False means it lands without touching their action at all: the damage
+    /// and the slow arrive, and the victim keeps swinging. See
+    /// `World::recall_cuts`, which is the one thing in the game that wants
+    /// this, and `docs/design/kits/shadow-reaver.md` for why.
+    ///
+    /// It is about **frames**, not about force. Knockback is still whatever the
+    /// number says, because moving somebody is not the same as stopping them.
+    pub interrupts: bool,
 }
 
 /// The attack volume a fighter currently has out.
@@ -1555,6 +1787,7 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         dir: attacker.facing,
         blocked: guarding,
         parried,
+        interrupts: true,
     })
 }
 
@@ -1589,10 +1822,12 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
     if hit.blocked {
         // No chip damage. The cost of blocking is knockback plus a window
         // where you cannot act -- see defense.md.
-        defender.stun_total = hit.blockstun;
-        defender.action = Action::BlockStun {
-            left: hit.blockstun,
-        };
+        if hit.interrupts {
+            defender.stun_total = hit.blockstun;
+            defender.action = Action::BlockStun {
+                left: hit.blockstun,
+            };
+        }
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
     } else {
@@ -1601,7 +1836,12 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
             defender.seized(hit.by, hit.grabs, 0);
-        } else {
+        } else if hit.interrupts {
+            // Writing the action is the interrupt, and it happens even when
+            // `hitstun` is zero -- `HitStun { left: 0 }` is one frame of
+            // nothing, but the move it replaced is gone. Anything that must
+            // land without stopping its victim has to skip this branch rather
+            // than tune the number to zero. See `Hit::interrupts`.
             defender.stun_total = hit.hitstun;
             defender.action = Action::HitStun { left: hit.hitstun };
         }
@@ -1625,10 +1865,21 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             defender.slam = hit.launch.abs();
         }
     }
-    // Whatever else it did, it broke the dash. A Rush you could be hit out of
-    // and keep is a Rush with invulnerability attached.
-    if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
-        *rush = 0;
+    // Whatever else it did, it broke the dash -- the Champion's Rush, and the
+    // Reaver's dash to her shadow with the carry it leaves behind. A commitment
+    // you can be hit out of and keep is a commitment with invulnerability
+    // attached.
+    //
+    // **Unless the hit takes no frames.** A dash is frames, so a blow that
+    // lands without touching the victim's action must not end one either --
+    // see [`Hit::interrupts`], and the recall, which is the one hit that sets
+    // it. It is about force rather than frames, and ending somebody's dash is
+    // the other thing.
+    if hit.interrupts {
+        if let Mechanic::Forms { rush, .. } = &mut defender.mechanic {
+            *rush = 0;
+        }
+        shadow::broken_by_a_hit(defender);
     }
 }
 
@@ -1667,6 +1918,14 @@ fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
             kind,
             left: left - 1,
         },
+        // A plunge that has not arrived has not finished winding up. The
+        // ordinary rule below turns a spent startup into active frames; this
+        // one refuses to, for the single move whose wind-up ends on the floor
+        // -- see [`waits_for_the_floor`]. The active frames start in
+        // `step_player`, on the frame her feet do.
+        Action::Startup { kind, .. } if waits_for_the_floor(p, kind) => {
+            Action::Startup { kind, left: 0 }
+        }
         Action::Startup { kind, .. } => Action::Active {
             kind,
             left: moves::get(p.class, kind).active,
@@ -1719,11 +1978,21 @@ fn step_player(
     scene: &Scene,
     carrying: bool,
 ) {
+    // The repeat lockouts run down first, and above the rider branch so they
+    // run exactly once a frame on either tick. Before the input is read rather
+    // than after, so a lockout of `n` costs `n` frames and not `n + 1`.
+    //
+    // Which abilities are still out is worked out once and handed to both the
+    // tick and the gate below, because they have to agree: a lockout parked by
+    // one answer and consulted against another is a move that is locked on the
+    // frame it was meant to come back.
+    let out = p.abilities_out(who, scene);
+    p.tick_repeat_locks(&out);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     if p.aboard() {
         match beast {
-            Some(beast) => return step_rider(p, who, input, beast, scene),
+            Some(beast) => return step_rider(p, who, input, beast, scene, &out),
             // The creature is gone. Whatever you were standing on is not there
             // any more, so neither are you.
             None => p.mount = monster::NO_PART,
@@ -1801,6 +2070,14 @@ fn step_player(
         p.action = Action::Free;
     }
 
+    // The jump button holds the takeoff window open, and a connected chain link
+    // lets the next one start early. Both are Champion-only and both are no-ops
+    // for everybody else; both go here, before the countdown, for the same
+    // reason the Rush cancel does -- a recovery that has been cut short has to
+    // reach the input below on the frame it was cut, not the frame after.
+    arm_takeoff(p, input);
+    chain_cancel(p, input);
+
     queue_the_shadow(p, input);
 
     // A channel resolves **instead of** the countdown, because it is the one
@@ -1822,7 +2099,7 @@ fn step_player(
                 // the three clicks, and `Q` is free.
                 if input.has(Input::SPECIAL)
                     && p.class != Class::Champion
-                    && p.mechanic_ready(SLOT_SPECIAL)
+                    && p.can_throw(SLOT_SPECIAL, &out)
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, true)
                 } else if pressed_mechanic {
@@ -1833,7 +2110,7 @@ fn step_player(
                     // mechanic is health and so has nothing to toggle -- it is
                     // thrown like any other move, with a startup you can be
                     // punished during and a cost you pay on the press.
-                    match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    match keyed_move(p).filter(|slot| p.can_throw(*slot, &out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, true),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -1844,7 +2121,8 @@ fn step_player(
                 // Which move a click asks for. After the mechanic, so that Rush
                 // can be started while a click is held down, and before the dodge,
                 // because a click is what disambiguates shift.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, &out))
+                {
                     // A no-op for anybody who is not the Champion; the weapon in
                     // hand and the dash underneath it are that class's alone.
                     begin_champion(p, kind);
@@ -1855,27 +2133,47 @@ fn step_player(
                     // moving -- which is most of the time -- did not jump. Space is
                     // now only ever a vertical takeoff.
                     let dir = move_dir(p.aim(input), ax, az);
-                    if p.grounded {
-                        // The Reaver's forward dodge, thrown with the crosshair on
-                        // her shadow, is the dash to it -- the same invulnerable
-                        // commitment, pointed at the one place on the map she cares
-                        // about. It is not an extra input: the class's mobility and
-                        // the universal defensive option are deliberately the same
-                        // button, which is what keeps her from being denied either.
-                        if shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
-                            shadow::begin_dash(p);
-                        } else {
-                            p.vel.x = dir.x.mul(t::dodge_speed());
-                            p.vel.z = dir.z.mul(t::dodge_speed());
+                    // On the ground there is nothing to spend; in the air the
+                    // commitment is spent once per airtime, because a second one
+                    // would turn a jump into flight.
+                    let may_commit = p.grounded || !p.air_dodged;
+                    // The Reaver's forward dodge, thrown with the crosshair on
+                    // her shadow, is the dash to it -- the same invulnerable
+                    // commitment, pointed at the one place on the map she cares
+                    // about. It is not an extra input: the class's mobility and
+                    // the universal defensive option are deliberately the same
+                    // button, which is what keeps her from being denied either.
+                    //
+                    // **In the air as much as on the ground.** Being off the floor
+                    // is the commonest reason she is not standing where she wants
+                    // to be, and the shadow is the answer to that question by
+                    // construction -- a class whose mobility switched off the
+                    // moment she jumped had the mobility in the wrong place. The
+                    // airborne one is the airdodge, aimed, so it costs the
+                    // airdodge; what it does not do is take the airdodge's shorter
+                    // frames, because the dash has somewhere to *be* and a tail cut
+                    // short would strand her halfway there.
+                    if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
+                        if !p.grounded {
+                            p.air_dodged = true;
                         }
+                        shadow::begin_dash(p);
+                        // Whatever she was doing vertically is over: from here the
+                        // dash drives all three axes along its own straight line.
+                        p.vel.y = Fx::ZERO;
+                        Action::Dodge {
+                            left: t::dodge_frames(),
+                        }
+                    } else if p.grounded {
+                        p.vel.x = dir.x.mul(t::dodge_speed());
+                        p.vel.z = dir.z.mul(t::dodge_speed());
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
                     } else if !p.air_dodged {
                         // An airdodge, once per airtime. It commits you to a
                         // direction in the air, where you otherwise have almost no
-                        // say, which is why it can only be spent once: a second one
-                        // would turn a jump into flight.
+                        // say.
                         p.air_dodged = true;
                         p.vel.x = dir.x.mul(t::air_dodge_speed());
                         p.vel.z = dir.z.mul(t::air_dodge_speed());
@@ -1902,10 +2200,21 @@ fn step_player(
     // Horizontal movement.
     //
     // How much a move hinders you is proportional to how much it commits you.
-    // The heavy moves root you outright -- that is what commitment means, and
-    // it is the whole basis of spatial play here. A fast poke does not: it is
-    // the neutral tool, thrown constantly, and stopping dead every time made
-    // neutral sticky and read as the game taking the controls away.
+    // A fast poke slows you; a committed move slows you to a crawl, slower than
+    // guarding, which is the most your feet ever cost you.
+    //
+    // **Nothing stops you dead.** The committed moves used to, and it was the
+    // same complaint the poke drew before it: a character who ignores the stick
+    // reads as the game taking the controls away, and a heavy move is the worst
+    // place to do that because it is where you are looking at your own feet. It
+    // costs no spacing to give the frames back -- a crawl over a forty-frame
+    // slam is under a metre -- and what commitment actually means survives
+    // untouched, because it was never the standing still. It is that you cannot
+    // jump, dodge, guard or throw anything else until the move is done, and that
+    // is decided by `Action::actionable`, not by this number.
+    //
+    // Zero is still reachable from the palette and still roots, so this keeps
+    // filtering it out rather than dividing the two cases twice.
     let attack_speed = p
         .action
         .attack_kind()
@@ -1914,12 +2223,19 @@ fn step_player(
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
 
-    if let Some(drive) = shadow::dash_drive(p) {
+    let dashing = shadow::dash_drive(p);
+    if let Some(drive) = dashing {
         // A dash has somewhere to be, so it holds its speed rather than
         // decaying like the dodge it rides on: a decaying shove covers whatever
         // distance the decay happens to be tuned for, and the shadow is at a
         // distance of its own choosing.
+        //
+        // **And it drives the vertical too**, which is what makes a shadow left
+        // on a dais somewhere she can actually get to. See the resolve below:
+        // for as long as this is driving, gravity and the arena are off and the
+        // line is the whole of her motion.
         p.vel.x = drive.x;
+        p.vel.y = drive.y;
         p.vel.z = drive.z;
     } else if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(t::dodge_decay());
@@ -1960,16 +2276,34 @@ fn step_player(
         let dir = move_dir(p.aim(input), ax, az);
         p.vel.x = dir.x.mul(dragged(p, t::guard_move_speed()));
         p.vel.z = dir.z.mul(dragged(p, t::guard_move_speed()));
-    } else if let (Some(speed), true) = (attack_speed, steering) {
+    } else if let (Some(allowed), true) = (attack_speed, steering) {
+        // Hindered, and steering. **The hindered speed is arrived at, not
+        // assigned.** Setting it outright would drop a running fighter from a
+        // full walk to a crawl in one frame, which is the same lurch the dead
+        // stop was -- the snap and the stopping were always two complaints
+        // wearing one coat, and only one of them is design.
+        //
+        // Direction follows the stick from the first frame and only the
+        // magnitude bleeds, which is what keeps it feeling responsive: you are
+        // steering immediately, you are just not going anywhere fast yet.
         let dir = move_dir(p.aim(input), ax, az);
-        p.vel.x = dir.x.mul(dragged(p, speed));
-        p.vel.z = dir.z.mul(dragged(p, speed));
+        let floor = dragged(p, allowed);
+        let carried = V3::new(p.vel.x, Fx::ZERO, p.vel.z)
+            .flat_len()
+            .mul(t::hindrance_decay());
+        let speed = if carried.raw() > floor.raw() {
+            carried
+        } else {
+            floor
+        };
+        p.vel.x = dir.x.mul(speed);
+        p.vel.z = dir.z.mul(speed);
     } else if p.action.attack_kind().is_some() {
-        // Rooted, or steering nothing. Bleed the speed off over a few frames
-        // rather than snapping to a halt: the snap was the jarring part, not
-        // the rooting.
-        p.vel.x = p.vel.x.mul(t::attack_root_decay());
-        p.vel.z = p.vel.z.mul(t::attack_root_decay());
+        // Steering nothing -- or rooted, if somebody has tuned a move's
+        // mobility to zero. The same ramp with the floor at zero: bleed the
+        // speed off over a few frames rather than snapping to a halt.
+        p.vel.x = p.vel.x.mul(t::hindrance_decay());
+        p.vel.z = p.vel.z.mul(t::hindrance_decay());
     } else {
         p.vel.x = Fx::ZERO;
         p.vel.z = Fx::ZERO;
@@ -1993,6 +2327,25 @@ fn step_player(
         p.jump_hold = t::jump_hold_frames();
     }
 
+    // **The dash jump.** Arriving from a dash leaves the Reaver sliding for a
+    // few frames with the speed she crossed at still under her -- the carry --
+    // and a jump pressed inside that window takes the slide up with her instead
+    // of letting the floor have it. It cuts the dodge's tail short, which is the
+    // other half of the reward: the frames she would have spent standing there
+    // being punished are spent in the air going somewhere.
+    //
+    // A press rather than a hold, and the slide decays while the window is open,
+    // so the tech has a gradient -- the earlier she finds it, the further she
+    // goes. The ordinary jump above cannot fire here: the carry runs inside the
+    // dodge, and a dodge is not actionable.
+    if pressed_space && shadow::carrying_a_dash(p) {
+        p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
+        p.grounded = false;
+        p.jump_hold = t::jump_hold_frames();
+        p.action = Action::Free;
+        shadow::spend_carry(p);
+    }
+
     // The second half of the uppercut. You are both off the ground and you
     // have hold of them; pressing jump again takes the pair of you higher,
     // once. This is the "we are settling this in the air" button, and it is the
@@ -2002,8 +2355,20 @@ fn step_player(
         p.leap_used = true;
     }
 
-    if !p.grounded {
-        if p.air_stall > 0 {
+    if !p.grounded && dashing.is_none() {
+        if plunging(p) {
+            // **The descent.** Driven rather than fallen: gravity would make
+            // the plunge take longer the lower she started, which is backwards
+            // -- the thing that should scale with height is how long the
+            // opponent gets to answer, not how fast she is moving when she
+            // gets there. A fixed speed makes the telegraph exactly as long as
+            // the distance she chose to open up.
+            //
+            // Vertical only. Air control is untouched above, so she still
+            // steers where she is coming down, which is what makes throwing it
+            // a read on where they will be rather than on where they are.
+            p.vel.y = t::landfall_dive().neg();
+        } else if p.air_stall > 0 {
             // An aerial hangs you for a few frames: gravity is held off, and
             // whatever vertical speed you had **bleeds away** rather than being
             // deleted.
@@ -2046,6 +2411,21 @@ fn step_player(
 
     p.pos = p.pos.add(p.vel.scale(DT));
 
+    // **A dash is not resolved against the world.** Whether there was anything
+    // in the way was decided on the frame it began, by `aim::clear_between`, and
+    // the answer it gives is all-or-nothing: either no line reaches the shadow
+    // and the press was an ordinary dodge, or one does and she takes it. Pushing
+    // her out of the geometry halfway along is exactly the *partial* obstruction
+    // the rule says there is no such thing as -- it is what used to catch her
+    // feet on the side of a platform and end the dash at the foot of the thing
+    // she was dashing on to.
+    //
+    // She arrives at the shadow's own spot, which is somewhere a body can stand,
+    // and the frame after the dash ends resolves her there normally.
+    if dashing.is_some() {
+        return;
+    }
+
     // How fast this fighter was going when the floor arrived. Read before the
     // resolve, which is what stops it.
     let impact = p.vel.y;
@@ -2069,6 +2449,18 @@ fn step_player(
             p.action = Action::Stagger {
                 left: t::slam_stagger(),
             };
+        }
+        // Landfall arrives. The slam **is** the impact, so its active frames
+        // begin on the frame her feet reach something rather than on a number
+        // -- see [`plunging`]. Held at zero by `countdown` until this happens,
+        // which is what lets the wind-up be as long as the height she chose.
+        if let Action::Startup { kind, .. } = p.action {
+            if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
+                p.action = Action::Active {
+                    kind,
+                    left: moves::get(p.class, kind).active,
+                };
+            }
         }
         p.slam = Fx::ZERO;
         p.air_dodged = false;
@@ -2119,12 +2511,13 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // one input that outlives the frame it was pressed on. See
         // `crate::shadow` for both arguments.
         Class::ShadowReaver if shadow::order_queued(p) => Some(SLOT_MECHANIC),
-        // The Elementalist breaks it the same way for the same reason: no
-        // shield, so right click is otherwise dead. Cataclysm is aimed like
-        // the auto, along the crosshair, so it belongs on the mouse and not
-        // on a key -- see `crate::debris` and
-        // `crate::effects::EffectKind::FireTornado`.
-        Class::Elementalist if input.has(Input::RIGHT) => Some(SLOT_HEAVY),
+        // The Elementalist breaks it a fourth way, and then a fifth. Right
+        // click is Cataclysm, for the reason the Reaver's is the mechanic --
+        // no shield, so the button is otherwise dead, and Cataclysm is aimed
+        // along the crosshair like the auto. And both clicks mean something
+        // different once her feet leave the floor, which is the *row* rather
+        // than a fifth exception: see `elementalist_move`.
+        Class::Elementalist => elementalist_move(p, input),
         _ => input.has(Input::LEFT).then(|| {
             if input.has(Input::SHIFT) {
                 SLOT_COMMITTED
@@ -2133,6 +2526,98 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
             }
         }),
     }
+}
+
+/// Which of the Elementalist's seven a click asks for.
+///
+/// **The row is where her feet are.** On the floor it is the shared grammar
+/// plus Cataclysm on right click; off it, the same two buttons throw the two
+/// things she can make out of air — see `moves::elementalist`, which is where
+/// the grid is drawn.
+///
+/// Shift is spent on the ground and ignored in the air, and that is a
+/// statement rather than an oversight: shift plus left click is Fissure, a
+/// crack that races *along the ground*, and there is no airborne version of it
+/// to reach for. A modifier that silently threw the grounded move from the air
+/// would put a skillshot into the dirt below her; one that threw nothing would
+/// eat the input. It throws the Air bolt, which is what left click means up
+/// there.
+///
+/// `E` is not here. It is the only one of her three airborne moves that
+/// displaces something rather than adding to it — on the floor that key is the
+/// mechanic and has no frames at all — so it is answered by
+/// [`keyed_move`] beside the rest of the mechanic grammar.
+fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
+    use moves::elementalist as e;
+    if !p.grounded {
+        // Left before right, so both buttons at once is an attack rather than
+        // silence -- the same tie-break the Dual mage and the Champion make.
+        if input.has(Input::LEFT) {
+            return Some(e::AIR_BOLT);
+        }
+        return input.has(Input::RIGHT).then_some(e::GALE);
+    }
+    if input.has(Input::RIGHT) {
+        return Some(SLOT_HEAVY);
+    }
+    input.has(Input::LEFT).then(|| {
+        if input.has(Input::SHIFT) {
+            SLOT_COMMITTED
+        } else {
+            SLOT_POKE
+        }
+    })
+}
+
+/// Which move the mechanic key throws, here and now.
+///
+/// [`moves::on_e`] answers for the *class* — which classes put an ability on
+/// `E` at all, because their mechanic is not a thing you toggle. This answers
+/// for the **situation**, which is one class's business: the Elementalist's
+/// mechanic is an instant on the floor (raise a stone, no frames, nothing to
+/// punish) and an ability off it (Landfall, a long plunge you can be knocked
+/// out of). `None` means the key falls through to `mechanic_action`.
+///
+/// Split the same way `clicked_move` and `moves::binding` are: what the kit
+/// declares lives in `moves`, and what your feet are doing is read here.
+fn keyed_move(p: &Player) -> Option<u8> {
+    if p.class == Class::Elementalist && !p.grounded {
+        return Some(moves::elementalist::LANDFALL);
+    }
+    moves::on_e(p.class)
+}
+
+/// Is this fighter part-way through Landfall's plunge, with the wind-up spent
+/// and the floor still to come?
+///
+/// **Landfall is the one move in the game whose startup ends on a place rather
+/// than on a count.** The frames in its row are the part she is guaranteed to
+/// owe — the hang at the top (`Move::air_stall`) and then the descent — and the
+/// descent is over when her feet arrive, which from four metres up takes longer
+/// than from one. So the startup runs down normally, and if it reaches zero
+/// while she is still falling it *stays* at zero until the ground answers: see
+/// [`countdown`], which holds it, and the landing in [`step_player`], which
+/// spends it.
+///
+/// Everything about that is deliberately ordinary in one respect: it is a
+/// startup, so being hit during it interrupts it exactly the way being hit
+/// during any other wind-up does, and the slab of rock she was going to drive
+/// up never appears. That is the whole of "a foe can stop her coming down",
+/// and it needed no rule of its own — see
+/// `tests/elementalist_air.rs::a_hit_on_the_way_down_ends_the_plunge`.
+fn plunging(p: &Player) -> bool {
+    let Action::Startup { kind, .. } = p.action else {
+        return false;
+    };
+    !p.grounded
+        && p.air_stall == 0
+        && p.class == Class::Elementalist
+        && kind == moves::elementalist::LANDFALL
+}
+
+/// Is this startup one that waits for the floor rather than for its own clock?
+fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
+    !p.grounded && p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL
 }
 
 /// Which of the Dual mage's five a click asks for.
@@ -2168,27 +2653,47 @@ fn dual_move(input: Input) -> Option<u8> {
 // throwing one does to the dash, what the dash does to your feet, how a dash
 // begins, and the two consequences of swinging a shape rather than a disc.
 
-/// Which of the Champion's ten moves this click asks for, if any.
+/// Which weapon a click is asking for. The column of the grid, and the one
+/// thing about the Champion's controls that never changes meaning.
+///
+/// Left before middle before right, so a player mashing two buttons gets an
+/// attack rather than silence.
+const fn champion_weapon(input: Input) -> Option<u8> {
+    use moves::champion as c;
+    if input.has(Input::LEFT) {
+        Some(c::SWORD)
+    } else if input.has(Input::MIDDLE) {
+        Some(c::HAMMER)
+    } else if input.has(Input::RIGHT) {
+        Some(c::SPEAR)
+    } else {
+        None
+    }
+}
+
+/// Which of the Champion's nineteen moves this click asks for, if any.
 ///
 /// `None` for every other class, which is what keeps the shared grammar in
-/// `step_player` unchanged for the five of them. The order of the three tests
-/// is the design: **rushing beats airborne beats standing**, because the Rush
-/// moves are the ones you spent a charge to reach and they should not be taken
-/// away by the fact that the uppercut has already left the floor.
+/// `step_player` unchanged for the five of them. The order of the tests is the
+/// design: **rushing beats taking off beats airborne beats standing.**
+///
+/// Rushing first because the Rush moves are the ones you spent a charge to
+/// reach, and they should not be taken away by the fact that the uppercut has
+/// already left the floor. Taking off next because the takeoff window runs a
+/// few frames *into* the jump it belongs to -- see [`champion_takeoff_window`]
+/// -- and for those frames "I pressed jump and a weapon" has to beat "my feet
+/// are off the ground", which is the same sentence with the answer the player
+/// did not mean.
+///
+/// What is left on the ground is the **chain**, and which of its three rows you
+/// get is how many hits are already behind you rather than anything about the
+/// button. See `moves::champion::link`.
 fn champion_move(p: &Player, input: Input) -> Option<u8> {
     use moves::champion as c;
     if p.class != Class::Champion {
         return None;
     }
-    let weapon = if input.has(Input::LEFT) {
-        c::SWORD
-    } else if input.has(Input::MIDDLE) {
-        c::HAMMER
-    } else if input.has(Input::RIGHT) {
-        c::SPEAR
-    } else {
-        return None;
-    };
+    let weapon = champion_weapon(input)?;
     if rushing(p).is_some() {
         // Right click during a Rush is two moves told apart by where you are
         // pointing, which is the honest separator: a pole vault *is* a spear
@@ -2198,29 +2703,188 @@ fn champion_move(p: &Player, input: Input) -> Option<u8> {
         }
         return Some(c::RUSHING + weapon);
     }
-    Some(if p.grounded {
-        c::ON_FOOT + weapon
-    } else {
-        c::IN_THE_AIR + weapon
-    })
+    // No takeoffs on the creature's back: up there the jump button is how you
+    // *leave*, and a move that spent it on an attack would take that away. The
+    // window is armed on the floor and can still be open on the frame you land
+    // aboard, which is the only way this is ever reached.
+    if !p.aboard() && champion_takeoff_window(p) > 0 {
+        return Some(c::TAKEOFF + weapon);
+    }
+    if !p.grounded {
+        return Some(c::IN_THE_AIR + weapon);
+    }
+    Some(c::link(champion_chain(p).0, weapon))
 }
 
-/// What throwing one of the Champion's moves does to the weapon in hand and to
-/// the dash underneath it.
-fn begin_champion(p: &mut Player, kind: u8) {
+/// How deep the grounded chain is, and how long it has left to live.
+///
+/// `(0, 0)` for anybody who is not a Champion, which makes every caller below
+/// safe to write without a class test of its own.
+fn champion_chain(p: &Player) -> (u8, u16) {
+    match p.mechanic {
+        Mechanic::Forms {
+            chain, chain_left, ..
+        } => (chain, chain_left),
+        _ => (0, 0),
+    }
+}
+
+/// Frames left in which a weapon click leaves the floor rather than swinging on
+/// it.
+fn champion_takeoff_window(p: &Player) -> u16 {
+    match p.mechanic {
+        Mechanic::Forms { takeoff, .. } => takeoff,
+        _ => 0,
+    }
+}
+
+/// Hold the takeoff window open while the jump button is down and the feet are
+/// on something.
+///
+/// **The window exists because two buttons are never pressed on the same
+/// frame.** "Attack as you jump" is one intention and two inputs, and a rule
+/// that needed them on the same tick would be a rule nobody could hit -- so the
+/// jump arms a few frames during which a weapon click is a takeoff, and the
+/// click spends them.
+///
+/// Armed off the button being *down* rather than off its press edge, and
+/// grounded rather than actionable, which between them cover the three orders
+/// the player can press in. Jump then click is the window. Both at once is the
+/// same frame, and the window is armed before the click is read. Click first
+/// throws the grounded move, because it already has -- and the window is still
+/// armed underneath it, so a weapon pressed again as the recovery ends takes
+/// off out of it.
+///
+/// It can only ever be open around a real jump: standing on the floor with the
+/// jump button down *is* jumping, on the frame you are free to.
+fn arm_takeoff(p: &mut Player, input: Input) {
+    if p.class != Class::Champion || !p.grounded || !input.has(Input::SPACE) {
+        return;
+    }
+    if let Mechanic::Forms { takeoff, .. } = &mut p.mechanic {
+        *takeoff = t::takeoff_window();
+    }
+}
+
+/// Cut a **connected** chain link's recovery short, so the next hit can start.
+///
+/// The third cancel in the game and the narrowest, and the two rules around it
+/// are what keep it from being a licence to swing forever.
+///
+/// **It is a hit confirm.** A link that was blocked, parried or thrown at
+/// nothing pays its recovery in full, so every number the frame table prints
+/// about a Champion move is true against a defender who did something about it.
+/// `every_attack_is_punishable_on_block` stays a fact rather than an
+/// approximation, and blocking one hit of a three-hit string is worth doing
+/// because it ends the string.
+///
+/// **Swapping weapons cancels earlier than repeating one.** The class's whole
+/// fantasy is one haft with three heads, and the honest reason the swap is
+/// quicker is that the weapon is *re-formed out of the follow-through* while
+/// swinging the same one twice has to re-chamber it. It is a few frames rather
+/// than a wall: repeating a weapon stays completely viable, which is the
+/// "strong when played linearly" half of the design, and mixing is the half
+/// that pays a little better. The two knobs are the whole of that decision and
+/// setting them equal turns it off -- see `tuning::chain_cancel_swapped`.
+fn chain_cancel(p: &mut Player, input: Input) {
     use moves::champion as c;
+    if p.class != Class::Champion {
+        return;
+    }
+    let Action::Recovery { kind, left } = p.action else {
+        return;
+    };
+    if c::link_of(kind).is_none() {
+        return;
+    }
     let Mechanic::Forms {
-        rush,
-        recharge,
-        rush_vel,
+        chain,
+        chain_left,
+        chain_hit: true,
         ..
     } = p.mechanic
     else {
         return;
     };
-    // The weapon is whichever button was pressed. Nothing else sets it: there
-    // is no mode to be in any more.
-    let form = Form::of_move(kind);
+    // Nothing to cancel into: the chain has run out of links, or out of time.
+    if chain >= c::DEPTH || chain_left == 0 {
+        return;
+    }
+    let Some(next) = champion_weapon(input) else {
+        return;
+    };
+    let m = moves::get(p.class, kind);
+    let share = if next == c::weapon(kind) {
+        t::chain_cancel_repeated()
+    } else {
+        t::chain_cancel_swapped()
+    };
+    let owed = (m.recovery as u32 * share as u32 / 100) as u16;
+    if m.recovery.saturating_sub(left) < owed {
+        return;
+    }
+    // Free rather than straight into the next link: the ordinary input path is
+    // three lines below and already knows how to throw one, including the
+    // lockout, the aim and the animation. A second way to start a move is a
+    // second way for one of those to be forgotten.
+    p.action = Action::Free;
+}
+
+/// Record that a chain link landed, so its recovery may be cut short.
+///
+/// Called from the one place a hit is resolved, and a no-op for everything that
+/// is not a Champion swinging one of the nine. Blocked and parried hits do not
+/// count: see [`chain_cancel`].
+fn confirm_chain(p: &mut Player, blocked: bool) {
+    if p.class != Class::Champion || blocked {
+        return;
+    }
+    let Some(kind) = p.action.attack_kind() else {
+        return;
+    };
+    if moves::champion::link_of(kind).is_none() {
+        return;
+    }
+    if let Mechanic::Forms { chain_hit, .. } = &mut p.mechanic {
+        *chain_hit = true;
+    }
+}
+
+/// Where the chain is after this move: one hit deeper, or back to nothing.
+///
+/// **Only the nine ground moves are in it.** An aerial, a Rush move or a
+/// takeoff ends the chain outright rather than being ignored by it, and that is
+/// the design rather than an implementation shortcut: leaving the floor is a
+/// different situation, and a string you could park in the air and come back to
+/// would make the grace window meaningless.
+fn advance_chain(p: &mut Player, kind: u8) {
+    let stage = match moves::champion::link_of(kind) {
+        Some(link) => link + 1,
+        None => 0,
+    };
+    if let Mechanic::Forms {
+        chain,
+        chain_left,
+        chain_hit,
+        ..
+    } = &mut p.mechanic
+    {
+        *chain = stage;
+        *chain_left = if stage > 0 { t::chain_grace() } else { 0 };
+        *chain_hit = false;
+    }
+}
+
+/// What throwing one of the Champion's moves does to the weapon in hand, to the
+/// chain it is part of, and to the dash underneath it.
+fn begin_champion(p: &mut Player, kind: u8) {
+    use moves::champion as c;
+    if p.class != Class::Champion {
+        return;
+    }
+    let Mechanic::Forms { rush, rush_vel, .. } = p.mechanic else {
+        return;
+    };
     let (rush, rush_vel) = match kind {
         // Planting the spear spends the run on height. The dash is kept alive
         // for exactly as long as the plant takes so the approach does not stop
@@ -2239,12 +2903,55 @@ fn begin_champion(p: &mut Player, kind: u8) {
     if kind == c::UPPERCUT {
         p.leap_used = false;
     }
-    p.mechanic = Mechanic::Forms {
+    // The chain moves on, or ends, depending on what this move was.
+    advance_chain(p, kind);
+    if let Mechanic::Forms {
         form,
-        rush,
-        recharge,
-        rush_vel,
+        rush: r,
+        rush_vel: v,
+        takeoff,
+        ..
+    } = &mut p.mechanic
+    {
+        // The weapon is whichever button was pressed. Nothing else sets it:
+        // there is no mode to be in any more.
+        *form = Form::of_move(kind);
+        *r = rush;
+        *v = rush_vel;
+        // A takeoff spends the window it came out of, so one jump buys one of
+        // them. Everything else leaves it alone: a grounded swing thrown with
+        // the jump button already down is a move you can still take off out of
+        // when its recovery ends.
+        if c::is_takeoff(kind) {
+            *takeoff = 0;
+        }
+    }
+}
+
+/// The horizontal shove the pole drive gives, on the frame the spear reaches
+/// the floor.
+///
+/// **The move is a jump with a weapon in it**, so the reward is a direction
+/// rather than damage: the butt of the spear cracks the ground, the fighter
+/// goes up higher than a jump reaches, and the run they were holding comes with
+/// them. Read from the live input on the frame it happens, for the same reason
+/// the aerial fan's shove is -- the point is that you choose where to go as the
+/// spear lands, not when you pressed the button.
+///
+/// Holding nothing still gets you something: forward, along the facing. A
+/// reward you can fail to collect by not touching a key reads as broken rather
+/// than as demanding.
+fn pole_drive_boost(p: &mut Player, input: Input) {
+    let (ax, az) = input.move_axis();
+    let dir = if ax == 0 && az == 0 {
+        V3::new(p.facing.x, Fx::ZERO, p.facing.z)
+    } else {
+        move_dir(p.aim(input), ax, az)
     };
+    let boost = t::pole_drive_boost();
+    p.vel.x = p.vel.x.add(dir.x.mul(boost));
+    p.vel.z = p.vel.z.add(dir.z.mul(boost));
+    clamp_air_speed(p);
 }
 
 /// Which part of the creature a fighter's attack volume touches.
@@ -2349,10 +3056,7 @@ fn rushing(p: &Player) -> Option<V3> {
 /// Rush is a retreat and a sidestep as well as an approach -- and so that the
 /// run-through can be aimed across an opponent rather than only at one.
 fn start_rush(p: &mut Player, input: Input) -> bool {
-    let Mechanic::Forms {
-        form, recharge: 0, ..
-    } = p.mechanic
-    else {
+    let Mechanic::Forms { recharge: 0, .. } = p.mechanic else {
         return false;
     };
     let (ax, az) = input.move_axis();
@@ -2361,18 +3065,23 @@ fn start_rush(p: &mut Player, input: Input) -> bool {
     } else {
         move_dir(p.aim(input), ax, az)
     };
-    p.mechanic = Mechanic::Forms {
-        form,
-        rush: t::rush_frames(),
+    if let Mechanic::Forms {
+        rush,
+        recharge,
+        rush_vel,
+        ..
+    } = &mut p.mechanic
+    {
+        *rush = t::rush_frames();
         // The charge is gone until the dash has finished *and* the recharge has
         // run, so the two never overlap and "rush ready" on the HUD means it.
-        recharge: t::rush_frames() + t::rush_recharge(),
-        rush_vel: V3::new(
+        *recharge = t::rush_frames() + t::rush_recharge();
+        *rush_vel = V3::new(
             dir.x.mul(t::rush_speed()),
             Fx::ZERO,
             dir.z.mul(t::rush_speed()),
-        ),
-    };
+        );
+    }
     true
 }
 
@@ -2451,6 +3160,11 @@ fn begin_move(
 /// below -- which is a no-op for the one class that channels today and a bug
 /// waiting for the second one.
 fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
+    // The lockout starts here, on the frame the move comes out, rather than on
+    // the press that asked for it. For a channel those are different frames and
+    // the wind-up has already been paid for in frames of its own; charging from
+    // the press would bill the hold twice.
+    p.lock_repeat(kind);
     // The second body throws the same thing a few frames later. A no-op for
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
@@ -2598,8 +3312,13 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     // The class's fast button, which for the Champion in the air is the sword.
     // Its hammer is the committed one and its spear pays for the shove by
     // having to connect first -- see the fan's boost in `advance`.
-    let fast =
-        kind == SLOT_POKE || (p.class == Class::Champion && kind == moves::champion::AIR_SWORD);
+    let fast = kind == SLOT_POKE
+        || (p.class == Class::Champion && kind == moves::champion::AIR_SWORD)
+        // The Elementalist's air row has its own cheap button, and it is the
+        // same button: left click. The Air bolt is the thing she throws
+        // constantly up there, so it is the one that gets to be part of moving
+        // rather than a pause in it.
+        || (p.class == Class::Elementalist && kind == moves::elementalist::AIR_BOLT);
     if !fast || (ax == 0 && az == 0) {
         return;
     }
@@ -2727,16 +3446,15 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
         Mechanic::Shadow(_) => {}
 
         // Spawn a structure ahead. A fourth collapses the oldest, so the cap
-        // is the resource.
-        Mechanic::Structures(mut slots) => {
-            let raised = class::Structure::raised(placed(t::raise_reach()));
-            if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
-                *free = Some(raised);
-            } else {
-                slots.rotate_left(1);
-                slots[class::MAX_STRUCTURES - 1] = Some(raised);
-            }
-            p.mechanic = Mechanic::Structures(slots);
+        // is the resource -- and `stones::raise` is where that rule lives,
+        // because Landfall raises one too and the two have to spend the cap
+        // the same way.
+        //
+        // **On the ground only.** Off it, `E` is Landfall instead: a move with
+        // frames somebody can punish rather than an instant, which is why it
+        // is picked in `keyed_move` before this is ever reached.
+        Mechanic::Structures(_) => {
+            stones::raise(p, class::Structure::raised(placed(t::raise_reach())));
         }
 
         // Health is the resource; there is no separate button.
@@ -2797,18 +3515,57 @@ fn step_mechanic(p: &mut Player) {
         // The dash and its charge, both counting down. Saturating, so a dash
         // that has run out sits at zero rather than wrapping into a very long
         // one.
-        Mechanic::Forms {
-            form,
-            rush,
-            recharge,
-            rush_vel,
-        } => {
-            p.mechanic = Mechanic::Forms {
-                form,
-                rush: rush.saturating_sub(1),
-                recharge: recharge.saturating_sub(1),
-                rush_vel,
-            };
+        //
+        // The chain's own clock runs here too, and it runs in three modes
+        // rather than one, because a chain is a rhythm rather than a timer:
+        //
+        //   * **parked** while a link of it is actually being thrown, so a
+        //     fifty-frame finisher cannot time its own chain out from under
+        //     itself. The same idiom the repeat lockout uses for an ability
+        //     that is still out in the world -- re-armed to full every frame it
+        //     is held, so it is at full on the frame it stops being held;
+        //   * **counting down** while the fighter is standing on the floor with
+        //     nothing to do, which is the window the next hit has to arrive in;
+        //   * **gone** for anything else. Being hit, blocking, dodging, jumping
+        //     and rushing all end a string, and that is most of what makes
+        //     committing to one a decision: three hits is a plan, and the
+        //     opponent gets to have an opinion about it.
+        Mechanic::Forms { .. } => {
+            let live = p
+                .action
+                .attack_kind()
+                .is_some_and(|kind| moves::champion::link_of(kind).is_some());
+            let standing = p.action.actionable() && p.grounded;
+            if let Mechanic::Forms {
+                rush,
+                recharge,
+                chain,
+                chain_left,
+                chain_hit,
+                takeoff,
+                ..
+            } = &mut p.mechanic
+            {
+                *rush = rush.saturating_sub(1);
+                *recharge = recharge.saturating_sub(1);
+                *takeoff = takeoff.saturating_sub(1);
+                if live {
+                    *chain_left = t::chain_grace();
+                } else if standing && *chain < moves::champion::DEPTH {
+                    *chain_left = chain_left.saturating_sub(1);
+                } else {
+                    // Either the fighter is doing something a string does not
+                    // survive, or the string has spent its third hit. There is
+                    // no fourth: a chain that has finished is over on the frame
+                    // its finisher stops running, and the next press opens a
+                    // new one.
+                    *chain_left = 0;
+                }
+                if *chain_left == 0 {
+                    *chain = 0;
+                    *chain_hit = false;
+                }
+            }
         }
 
         // The second body: where it is, what it is copying, and the leash.
@@ -2950,12 +3707,20 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             rush,
             recharge,
             rush_vel,
+            chain,
+            chain_left,
+            chain_hit,
+            takeoff,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
             h.write_u32(*rush as u32);
             h.write_u32(*recharge as u32);
             hash_v3(h, rush_vel);
+            h.write_u32(*chain as u32);
+            h.write_u32(*chain_left as u32);
+            h.write_u32(*chain_hit as u32);
+            h.write_u32(*takeoff as u32);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);
@@ -2979,6 +3744,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.echo_age as u32);
             h.write_u32(shadow.echo_used as u32);
             h.write_u32(shadow.dash as u32);
+            h.write_u32(shadow.carry as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -2992,6 +3758,8 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                         h.write_u32(s.launched as u32);
                         hash_v3(h, &s.launch_from);
                         h.write_u32(s.knock_struck as u32);
+                        h.write_u32(s.rise as u32);
+                        hash_v3(h, &s.erupt);
                     }
                     None => h.write_u32(0),
                 }
@@ -3338,6 +4106,15 @@ impl World {
                 dir: away,
                 blocked: guarding,
                 parried: false,
+                // **The one hit in the game that does not take frames.** The
+                // shadow can be sent on the frame it is asked for and out of
+                // any recovery, so if it also interrupted, the Reaver would
+                // never have to commit to anything: throw the risky move, and
+                // when it goes wrong, recall through whoever is punishing you
+                // and take their attack off them. A shine, and a worse one,
+                // because not even her own animations gate it. It cuts and it
+                // slows; what it may not do is hand her the exchange back.
+                interrupts: false,
             },
         );
         self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
@@ -3529,6 +4306,7 @@ impl World {
                                 dir: V3::ZERO,
                                 blocked: guarding,
                                 parried,
+                                interrupts: true,
                             },
                         );
                         if parried {
@@ -3631,12 +4409,13 @@ impl World {
             EffectKind::GuillotineLotus => {
                 let radius = effect.field_radius();
                 let coming_back = effect.lotus_coming_back();
+                let half_thick = t::lotus_blade_thickness();
                 for blade in 0..LOTUS_BLADES {
                     let (was, at) = effect.lotus_span(blade, effect.pos);
                     for i in 0..MAX_PLAYERS {
                         if !self.effects_reach(i, effect.owner)
                             || effect.already_hit(blade, i)
-                            || !self.swept(i, was, at, radius)
+                            || !self.sliced(i, was, at, radius, half_thick)
                         {
                             continue;
                         }
@@ -3709,16 +4488,37 @@ impl World {
         victim as u8 != owner && self.players[victim].health > 0 && self.monster.is_none()
     }
 
-    /// Did a blade sweeping from `was` to `at` cross this fighter's body?
+    /// Did a blade sweeping from `was` to `at` slice this fighter?
     ///
-    /// The capsule test [`resolve_hit`] already uses for a weapon that is a
-    /// line, against the same standing body. It exists because a fast enough
-    /// point tunnels: the thing being tested here crosses a metre in a frame,
-    /// and a body is not a metre wide.
-    fn swept(&self, victim: usize, was: V3, at: V3, radius: Fx) -> bool {
+    /// **A disc, not a ball**, and the shape is the ability. A Guillotine blade
+    /// is a shuriken thrown flat: wide in the plane the flower lies in, and
+    /// barely there at all across it. Tested as a sphere it was a beach ball --
+    /// at a radius wider than a fighter it swallowed everything near the line
+    /// whatever its height, which is both the wrong picture and the wrong rule.
+    ///
+    /// So two tests rather than one. **Width is measured flat**, against the
+    /// swept line, because that is the direction a blade is wide in. **Height
+    /// is a slab**: the blade occupies `half_thick` either side of the plane,
+    /// and has to overlap the body to touch it.
+    ///
+    /// The second one is the interesting half. The flower is planar and at
+    /// waist height, so a slab that thin is something a fighter can **jump**,
+    /// which a ball of the old radius was not -- it reached from the shins to
+    /// the chest. That is the counterplay the shape was always supposed to
+    /// imply and never did.
+    fn sliced(&self, victim: usize, was: V3, at: V3, radius: Fx, half_thick: Fx) -> bool {
         let p = self.players[victim];
-        let spine = V3::new(p.pos.x, p.pos.y.add(p.hurt_height()), p.pos.z);
-        crate::math::segment_gap(was, at, p.pos, spine).raw() <= radius.add(t::body_radius()).raw()
+        let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
+        let here = flat(p.pos);
+        let wide = crate::math::segment_gap(flat(was), flat(at), here, here);
+        if wide.raw() > radius.add(t::body_radius()).raw() {
+            return false;
+        }
+        // The slab the blade sweeps this frame: it is level, so both ends are
+        // at the same height and either will do.
+        let lo = at.y.sub(half_thick);
+        let hi = at.y.add(half_thick);
+        p.pos.y.raw() <= hi.raw() && p.pos.y.add(p.hurt_height()).raw() >= lo.raw()
     }
 
     /// Is this fighter's body inside a sphere?
@@ -3817,6 +4617,7 @@ impl World {
                 dir: away,
                 blocked: guarding,
                 parried,
+                interrupts: true,
             },
         );
         if parried {
@@ -3977,7 +4778,14 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
 /// metre-per-second dash on a surface two metres wide is a way to fall off by
 /// accident, and taking it away is what makes bracing a real answer rather than
 /// a worse version of one you already had.
-fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: &Scene) {
+fn step_rider(
+    p: &mut Player,
+    who: usize,
+    input: Input,
+    beast: &Monster,
+    scene: &Scene,
+    out: &[bool; moves::MAX_SLOTS],
+) {
     let part = p.mount as usize;
     let held = p.local;
     let radius = t::body_radius();
@@ -4039,6 +4847,11 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
     }
 
     step_mechanic(p);
+    // Aboard, the Champion reads the standing row of its grid, so the chain is
+    // live on the creature's back and cancels the same way it does on the
+    // floor. There is no takeoff up here: jumping is how you *leave*, and a
+    // move that spent the jump on an attack would take that away.
+    chain_cancel(p, input);
     queue_the_shadow(p, input);
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
 
@@ -4052,11 +4865,11 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
             None => {
                 if input.has(Input::SPECIAL)
                     && p.class != Class::Champion
-                    && p.mechanic_ready(SLOT_SPECIAL)
+                    && p.can_throw(SLOT_SPECIAL, out)
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, false)
                 } else if pressed_mechanic {
-                    match moves::on_e(p.class).filter(|slot| p.mechanic_ready(*slot)) {
+                    match keyed_move(p).filter(|slot| p.can_throw(*slot, out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, false),
                         None => {
                             mechanic_action(p, who, input, scene);
@@ -4069,7 +4882,7 @@ fn step_rider(p: &mut Player, who: usize, input: Input, beast: &Monster, scene: 
                 // nowhere useful -- there is no ground under it to dash along --
                 // but nothing needs to say so: `grounded` is true aboard, so the
                 // standing row is what `clicked_move` picks anyway.
-                else if let Some(kind) = clicked_move(p, input).filter(|k| p.mechanic_ready(*k)) {
+                else if let Some(kind) = clicked_move(p, input).filter(|k| p.can_throw(*k, out)) {
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, false)
                 } else if want_guard {
@@ -4438,6 +5251,7 @@ impl World {
                         dir: beam.dir(),
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 if parried {
@@ -4600,6 +5414,7 @@ impl World {
                         dir: away,
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 if parried {

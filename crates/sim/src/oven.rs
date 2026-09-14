@@ -120,7 +120,7 @@ scalars! {
     TurnRate,         "Movement", "Turn rate",              Fixed,   fx(1,100), fx(1,1);
     GuardTurnRate,    "Movement", "Turn rate, guarding",    Fixed,   fx(1,100), fx(1,1);
     PokeMobility,     "Movement", "Poke mobility (%)",      Percent, 0,         100;
-    AttackRootDecay,  "Movement", "Root decay per frame",   Fixed,   0,         fx(1,1);
+    HindranceDecay,   "Movement", "Hindrance decay per frame", Fixed, 0,        fx(1,1);
     JumpSpeed,        "Air",      "Takeoff speed",          Fixed,   fx(1,1),   fx(25,1);
     Gravity,          "Air",      "Gravity",                Fixed,   fx(-80,1), fx(-1,1);
     FallCap,          "Air",      "Terminal velocity",      Fixed,   fx(-60,1), fx(-1,1);
@@ -313,6 +313,11 @@ scalars! {
     SweepHeight,      "Champion", "Sweep thrown from (x chest)",Fixed,   fx(1,10),  fx(3,2);
     SweepDip,         "Champion", "Sweep travels below level",  Fixed,   0,         fx(1,8);
     ThrustExtend,     "Champion", "Thrust out on the first active frame (x)", Fixed, 0, fx(1,1);
+    ChainGrace,       "Champion", "Chain survives for",         Frames,  0,         120;
+    ChainCancelSwap,  "Champion", "Chain, recovery owed on a swap (%)",     Percent, 0, 100;
+    ChainCancelRepeat,"Champion", "Chain, recovery owed on a repeat (%)",   Percent, 0, 100;
+    TakeoffWindow,    "Champion", "Takeoff window around a jump", Frames, 0,        30;
+    PoleDriveBoost,   "Champion", "Pole drive, forward boost",  Fixed,   0,         fx(30,1);
     SwingLevelTo,      "Aim",       "Swing stays level to (deg down)",       Int,    0,        89;
     HandOffset,        "Body",      "Hand out from the centre line",         Fixed,  0,        fx(1,1);
     WingInner,         "Dual mage", "Wing, inner edge (x reach)",            Fixed,  0,        fx(1,1);
@@ -333,7 +338,12 @@ scalars! {
     ShadowLockCone,   "Reaver",   "Crosshair lock on the shadow", Fixed, fx(1,10),  fx(6,1);
     ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(40,1);
     LotusRadius,      "Reaver",   "Lotus, how far the blades go", Fixed, fx(1,1),   fx(12,1);
-    LotusRise,        "Reaver",   "Lotus, how high they arc",   Fixed,   0,         fx(4,1);
+    // Was "how high they arc", when the blades left the shadow's feet and rose
+    // over the eruption. The flower is flat now and this slot carries the plane
+    // it lies in instead -- **renamed rather than removed**, because
+    // `tuned::SCALARS` is read by this enum's own discriminant and dropping one
+    // from the middle would hand every knob below it its neighbour's value.
+    LotusHeight,      "Reaver",   "Lotus, height off the shadow's feet", Fixed, 0,   fx(4,1);
     LotusCurl,        "Reaver",   "Lotus, curve of the path (turns)", Fixed, 0,     fx(1,4);
     LotusBladeRadius, "Reaver",   "Lotus, blade radius",        Fixed,   fx(1,10),  fx(2,1);
     LotusErupt,       "Reaver",   "Lotus, out",                 Frames,  1,         60;
@@ -351,6 +361,24 @@ scalars! {
     WingFinish,        "Dual mage", "Wing, finishes off centre (turns)",     Fixed,  fx(-1,4), fx(1,4);
     WingTipRadius,     "Dual mage", "Wing, tip radius",                      Fixed,  fx(1,20), fx(2,1);
     ShadowBuffer,      "Reaver",    "Send shadow, press stays live",         Frames, 1,        30;
+    LotusUncurl,       "Reaver",    "Lotus, turn coming home (turns)",       Fixed,  0,        fx(1,2);
+    RepeatLockout,     "Offence",   "Repeat lockout",                        Frames, 0,        90;
+    LotusBladeThick,   "Reaver",    "Lotus, blade half-thickness",           Fixed,  fx(1,100), fx(1,2);
+    ShadowCarry,       "Reaver",    "Dash carry, the jump window",           Frames, 0,        40;
+    CommittedMobility, "Movement",  "Committed mobility (%)",                Percent, 0,       100;
+    // The Elementalist's air row. Appended, like everything above them, because
+    // `tuned::SCALARS` is read by this enum's own discriminant -- slotting one
+    // in beside the other Elementalist knobs would hand every knob below it its
+    // neighbour's baked value. The palette groups by family, so they still show
+    // up next to the rest of hers.
+    AirBoltSpeed,      "Elementalist", "Air bolt speed",                        Fixed,  fx(5,1),  fx(80,1);
+    GaleSpeed,         "Elementalist", "Gale speed",                            Fixed,  fx(1,1),  fx(40,1);
+    GaleStart,         "Elementalist", "Gale size leaving her hand (x)",        Fixed,  fx(1,20), fx(1,1);
+    LandfallDive,      "Elementalist", "Landfall dive speed",                   Fixed,  fx(1,1),  fx(60,1);
+    LandfallAhead,     "Elementalist", "Landfall stone, how far ahead",         Fixed,  fx(1,2),  fx(8,1);
+    LandfallRise,      "Elementalist", "Landfall stone rise",                   Frames, 1,        90;
+    LandfallTilt,      "Elementalist", "Landfall eruption, above the floor (turns)", Fixed, 0,    fx(1,4);
+    LandfallErupt,     "Elementalist", "Landfall eruption push",                Fixed,  0,        fx(40,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -443,9 +471,19 @@ view_knobs! {
     SmoothHandover, "Smooth, handover (%)",     Int,     0,   100;
     SmoothEyes,     "Smooth, first person (%)", Int,     0,   100;
     CrosshairDim,   "Body dims to (%)",         Int,     0,   100;
+    // Appended rather than placed beside the other angles, for the reason the
+    // scalars above give: `tuned::VIEW` is read by this enum's own
+    // discriminant, so slotting one in beside its family would hand every knob
+    // below it its neighbour's baked value.
+    //
+    // The range runs past the floor boundary on purpose. Dragging it there and
+    // seeing the view pitch toward your own feet is how you find out why the
+    // opening angle belongs inside the neutral zone; what stops it being
+    // *committed* there is `view/tests/camera_knobs.rs`, not the slider.
+    StartPitch,     "Opening pitch, below level", Int,   1,   60;
 }
 
-pub const VIEW_COUNT: usize = 18;
+pub const VIEW_COUNT: usize = 19;
 
 // ---------------------------------------------------------------------------
 // Per-class air, and per-move frame data
@@ -524,6 +562,13 @@ pub enum MoveField {
     // it goes -- asked about the wind-up instead.
     Channel,
     ChannelFrom,
+    // And again for the repeat lockout: this move's own share of the global
+    // one, as a percentage. See `moves::Move::repeat_lock`.
+    RepeatMul,
+    // And the other half of that rule, for the abilities that are used more
+    // than once per cast: the shortest gap between one activation and the next.
+    // See `moves::Move::reactivate`.
+    Reactivate,
 }
 
 impl MoveField {
@@ -553,6 +598,8 @@ impl MoveField {
         MoveField::Rehit,
         MoveField::Channel,
         MoveField::ChannelFrom,
+        MoveField::RepeatMul,
+        MoveField::Reactivate,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -582,6 +629,8 @@ impl MoveField {
             MoveField::Rehit => "Hits again every",
             MoveField::Channel => "Channel, longest hold",
             MoveField::ChannelFrom => "Channel, reach at no hold",
+            MoveField::RepeatMul => "Repeat lockout (%)",
+            MoveField::Reactivate => "Reactivate no sooner than",
         }
     }
 
@@ -598,9 +647,11 @@ impl MoveField {
             MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
                 Unit::Flag
             }
-            MoveField::Grabs | MoveField::Rehit | MoveField::Channel => Unit::Frames,
+            MoveField::Grabs | MoveField::Rehit | MoveField::Channel | MoveField::Reactivate => {
+                Unit::Frames
+            }
             MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
-            MoveField::Leech => Unit::Percent,
+            MoveField::Leech | MoveField::RepeatMul => Unit::Percent,
             _ => Unit::Fixed,
         }
     }
@@ -620,6 +671,29 @@ impl MoveField {
             // A takeoff speed, in the same units the jump is: the pole vault
             // is meant to beat a jump, and a jump is already 17.7.
             MoveField::SelfLift => (0, fx(30, 1)),
+            // A speed, in the units every other knockback in the Oven is
+            // written in -- `ShieldKnockback`, `FireBoltKnockback` and
+            // `DebrisKnockback` all run to thirty, and this one ran to twelve
+            // only because it inherited the shared `Fixed` bound below. A move
+            // that shoves harder than a thrown shield is a thing somebody
+            // should be able to reach for; the Gale, whose whole point is
+            // being the heaviest push in its class, is the first that does.
+            MoveField::Knockback => (0, fx(30, 1)),
+            // A reach may be as long as the arena is wide, and no longer:
+            // past that, more range is a number that cannot change anything.
+            // The shared `Fixed` bound below is twelve metres, which was every
+            // move's answer right up until a class was given something to
+            // throw with its feet off the floor -- the Elementalist's Air bolt
+            // crosses most of the arena, and that reach is the whole of what
+            // being airborne buys her. `arena::ARENA_HALF` is fourteen, so the
+            // floor is twenty-eight across.
+            MoveField::Reach => (0, fx(28, 1)),
+            // Past 100, unlike every other percentage here: this one *scales*
+            // the shared lockout rather than taking a share of something, and
+            // a move worth locking for twice as long as the rest is the first
+            // thing anybody will reach for. Zero is the other end and is a real
+            // setting -- it exempts a move from the rule entirely.
+            MoveField::RepeatMul => (0, 300),
             _ => match self.unit() {
                 Unit::Frames => (0, 90),
                 Unit::Int => (0, 600),
@@ -782,7 +856,7 @@ pub const AIR_COUNT: usize = CLASSES * 4;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 25;
+pub const MOVE_FIELDS: usize = 27;
 
 // ---------------------------------------------------------------------------
 // The live store

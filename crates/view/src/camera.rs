@@ -211,6 +211,9 @@ pub struct Zones {
     /// to see *through* somebody, not a reason for them to stop existing --
     /// see [`Framing::hidden`].
     pub crosshair_dim: f32,
+    /// How far below the horizon the view starts, before anybody has touched
+    /// the mouse. Positive, like the other boundaries here.
+    pub start_below: f32,
 }
 
 impl Zones {
@@ -232,6 +235,7 @@ impl Zones {
             head_gap: pct(V::HeadGapLevel),
             fade_near: metres(V::FadeNear),
             crosshair_dim: pct(V::CrosshairDim),
+            start_below: deg(V::StartPitch),
         }
     }
 
@@ -239,6 +243,20 @@ impl Zones {
     /// steer either way without leaving it.
     pub fn neutral_pitch(&self) -> f32 {
         -(self.floor_from + self.neutral_to) * 0.5
+    }
+
+    /// Where the camera points before anybody has touched the mouse. Negative,
+    /// like every pitch here: below the horizon.
+    ///
+    /// Its own number rather than [`Zones::neutral_pitch`], which it used to
+    /// borrow. That one is a *fact about the zones* -- the middle of the
+    /// neutral band -- and the middle is not where a match should open. The eye
+    /// rides further out the further down you look, so the opening angle is
+    /// what decides whether the first thing you see is your own fighter in an
+    /// arena or a patch of floor with your shield across it. Those are two
+    /// different questions and they wanted two different numbers.
+    pub fn start_pitch(&self) -> f32 {
+        -self.start_below
     }
 
     /// How far the eye has walked into the fighter's own head.

@@ -14,8 +14,13 @@ crates/net    Rollback session (GGRS) + the headless soak binary.
 crates/view   Presentation logic: interpolation, camera framing, posing. No engine.
 crates/game   Bevy app. Rendering only -- it owns no gameplay state.
 crates/hunt   A scripted player, and the report that measures the fight it plays.
-crates/web    WebAssembly build and the browser frame-data tool.
+crates/web    The browser: the playable page, and the frame-data tool.
 ```
+
+The layering pays for itself again here. Because `game` owns no gameplay state
+and `sim` has no dependencies, compiling the whole thing to WebAssembly needed no
+gameplay code at all -- only a platform seam for the five things a page cannot
+do, all of them about the world outside the fight. See [web.md](web.md).
 
 `view` sitting between the simulation and Bevy is what keeps the engine choice
 reversible, and it means the parts that must be *correct* rather than pretty --
@@ -518,15 +523,22 @@ frame you can see it. Bright means *out and still looking for someone* — a whi
 environment variable.
 
 `crates/manual` holds the tables, and is **the source of truth rather than a document about
-one**. The in-game legend is generated from the same entries, and `--help` returns before Bevy
-starts because the crate has no dependencies.
+one**. The browser build's controls panel is generated from the same entries, and `--help`
+returns before Bevy starts because the crate has no dependencies.
 
 Help maintained separately from the thing it describes is wrong within a month, and wrong help
 is worse than none: it sends you looking for a feature that moved. So four tests read the
 game's own source and fail if it responds to anything the manual does not mention — every
 `KeyCode`, every environment variable, every command-line flag, and every binary and script in
-the repository. The legend was already a hand-kept copy of the key handlers that had drifted
-once; it is now assembled from the entries, so there is nowhere for the two to disagree.
+the repository. The browser page's controls are assembled from the entries for the same reason,
+so there is nowhere for the two to disagree.
+
+**There used to be a legend on screen as well, and it was removed rather than fixed.** It was
+assembled from every section at once, so a Bulwark player read the Champion's three weapons, the
+Dual mage's two autos and the Reaver's shadow — eleven lines under the crosshair, most of them
+wrong for whoever was reading them. Generated-from-one-source kept it from drifting; it could
+not make it *relevant*, which was the thing it needed to be. A per-class version would be worth
+having; a per-everything one was worse than nothing.
 
 The interesting failure was in the tests rather than the code. The first flag check scanned all
 of `crates/game/src` and reported `--abbrev-ref` and `--cached` as undocumented features — they

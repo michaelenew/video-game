@@ -17,6 +17,7 @@ pub mod curve;
 pub mod debris;
 pub mod effects;
 pub mod fixed;
+pub mod gust;
 pub mod input;
 pub mod math;
 pub mod monster;

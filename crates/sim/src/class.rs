@@ -132,6 +132,10 @@ impl Class {
                 rush: 0,
                 recharge: 0,
                 rush_vel: V3::ZERO,
+                chain: 0,
+                chain_left: 0,
+                chain_hit: false,
+                takeoff: 0,
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -278,6 +282,15 @@ pub struct Shadow {
     /// alongside `Action::Dodge`, which supplies the invulnerability -- the
     /// dash is the dodge, aimed.
     pub dash: u16,
+    /// Frames left of **the carry**: the window that opens the moment a dash
+    /// arrives, while the speed it crossed at is still under her.
+    ///
+    /// It is there to be jumped out of. The dash ends at thirty-four metres a
+    /// second and the dodge's tail bleeds that away over a few frames; a jump
+    /// pressed inside the window takes what is left of it up with her instead
+    /// of throwing it on the floor. Pressing early keeps more, so the tech has
+    /// a gradient rather than a pass mark -- see `tuning::shadow_carry`.
+    pub carry: u16,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -319,6 +332,7 @@ impl Shadow {
             echo_age: 0,
             echo_used: false,
             dash: 0,
+            carry: 0,
         }
     }
 
@@ -391,6 +405,27 @@ pub struct Structure {
     /// kicked again and again, and each kick is a fresh event that ought to
     /// be able to hurt someone the last one already caught.
     pub knock_struck: u8,
+    /// How many frames this one takes to come out of the floor.
+    ///
+    /// Per stone rather than a single rule, because there are two ways a stone
+    /// arrives and they are not the same event. **Raised**, the rise *is* the
+    /// telegraph — `tuning::structure_rise`, a quarter of a second of ground
+    /// churning before anything hurts. **Driven up** by Landfall, the telegraph
+    /// was the plunge that put it there, and the slab comes out of the floor in
+    /// a fraction of the time. Both still read the same curve, so the churn and
+    /// the eruption move with whichever number applies.
+    pub rise: u16,
+    /// The direction this stone's eruption throws whoever it catches, as a unit
+    /// vector. [`V3::ZERO`] on an ordinary stone, which erupts straight up and
+    /// leaves you standing where you were.
+    ///
+    /// One stone in the game has one: Landfall's, levered out of the ground at
+    /// an angle away from the Elementalist, so the slab shoves along the angle
+    /// rather than merely appearing. The direction is stored rather than worked
+    /// out at the moment it erupts because by then she has landed and moved on,
+    /// and a push aimed from where she is *now* would point somewhere nobody
+    /// chose. See `crate::stones` and `tuning::landfall_tilt`.
+    pub erupt: V3,
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +459,37 @@ pub enum Mechanic {
         recharge: u16,
         /// The horizontal velocity the dash drives, in metres per second.
         rush_vel: V3,
+        /// How many hits of the ground chain are already behind you: 0 means
+        /// the next click opens, 2 means the next click finishes.
+        ///
+        /// **A number, not a list of moves.** Which weapon each hit was thrown
+        /// with is not remembered anywhere, and that is the mechanic rather
+        /// than an omission: every hit is a free choice of all three weapons,
+        /// so the only thing the chain has to carry is how deep it is. See
+        /// `moves::champion::link`.
+        chain: u8,
+        /// Frames left in which the chain survives. Zero means the next hit
+        /// opens a new one.
+        ///
+        /// A clock rather than a flag because a chain is a rhythm: it has to
+        /// outlive the frames between one swing ending and the next beginning,
+        /// and it has to die if the player stops. Re-armed on every link.
+        chain_left: u16,
+        /// The last link connected, so its recovery may be cut short to make
+        /// room for the next one. Cleared when the next link starts.
+        ///
+        /// **The chain is a hit confirm.** Blocked and whiffed links pay their
+        /// whole recovery, which is what keeps every move's printed frame data
+        /// true against a defender who did something about it -- see
+        /// `state::chain_cancel`.
+        chain_hit: bool,
+        /// Frames left in which a weapon click is a **takeoff** rather than the
+        /// grounded or airborne move.
+        ///
+        /// Armed by the jump button and spent by the click, so "attack on the
+        /// same press as jump" survives the two arriving a few frames apart --
+        /// which they always do. Zero everywhere else.
+        takeoff: u16,
     },
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),
@@ -527,19 +593,39 @@ pub mod alloc_free {
                 Mechanic::Shield(Shield::Held) => Summary::Text("shield: held"),
                 Mechanic::Shield(Shield::Planted { .. }) => Summary::Text("shield: planted"),
                 Mechanic::Shield(Shield::Flying { .. }) => Summary::Text("shield: in flight"),
+                // Three things want saying and there is one line to say them
+                // in, so they are ranked by how soon they stop being true. A
+                // dash lasts twenty frames, a live chain a little longer, and
+                // the charge is either back or it is not -- so the dash wins,
+                // then which hit comes next, and the charge is what the line
+                // says when nothing is happening.
                 Mechanic::Forms {
                     form,
                     rush,
                     recharge,
+                    chain,
+                    chain_left,
                     ..
-                } => Summary::Text(match (form, *rush > 0, *recharge == 0) {
-                    (_, true, _) => "RUSHING",
-                    (Form::Hammer, _, true) => "hammer / rush ready",
-                    (Form::Hammer, _, false) => "hammer",
-                    (Form::Sword, _, true) => "sword / rush ready",
-                    (Form::Sword, _, false) => "sword",
-                    (Form::Spear, _, true) => "spear / rush ready",
-                    (Form::Spear, _, false) => "spear",
+                } => Summary::Text(if *rush > 0 {
+                    "RUSHING"
+                } else if *chain_left > 0 && *chain > 0 {
+                    match (form, *chain) {
+                        (Form::Hammer, 1) => "hammer / 2nd hit",
+                        (Form::Hammer, _) => "hammer / 3rd hit",
+                        (Form::Sword, 1) => "sword / 2nd hit",
+                        (Form::Sword, _) => "sword / 3rd hit",
+                        (Form::Spear, 1) => "spear / 2nd hit",
+                        (Form::Spear, _) => "spear / 3rd hit",
+                    }
+                } else {
+                    match (form, *recharge == 0) {
+                        (Form::Hammer, true) => "hammer / rush ready",
+                        (Form::Hammer, false) => "hammer",
+                        (Form::Sword, true) => "sword / rush ready",
+                        (Form::Sword, false) => "sword",
+                        (Form::Spear, true) => "spear / rush ready",
+                        (Form::Spear, false) => "spear",
+                    }
                 }),
                 Mechanic::Shadow(shadow) => Summary::Text(match shadow.doing {
                     Ghost::Attending => "shadow: with you",
