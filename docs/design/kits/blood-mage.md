@@ -149,7 +149,7 @@ tendrils that only pay out if you stay close enough to collect. It closes the ra
 #### Holding `Q` chooses the depth
 
 The only move in the game you aim with *time*. Press and hold and a small marker leaves the
-caster's chest and travels outward over a second, from melee range out to ten metres; let go
+caster's chest and travels outward over half a second, from melee range out to ten metres; let go
 and the arms converge on wherever it had got to. Hold past the end and it throws itself, so
 there is no storing a paid-for ability and waiting.
 
@@ -160,29 +160,38 @@ promise a depth the arms do not deliver. That is the whole reason it is built th
 pieces of arithmetic agreeing with each other is how the crosshair and the ability came to
 disagree three times before (see [../aiming.md](../aiming.md)).
 
-**It is aimed like a swing, not like a skillshot**, and the difference is the whole
-readability of the move. A skillshot ends wherever the crosshair's ray stops — a wall, the
-floor, the edge of the range — so the marker jumped by metres when the camera moved by
-degrees, and the depth the hold had bought was buried under the shape of the arena. As a swing
-it is a ray off the body along the facing, pitched by the camera with the standing dead zone:
-level through the first 45° below the horizon, exact above it. The camera already sits above
-the shoulder, so looking at somebody at your own height keeps the marker running flat across
-the floor at chest height — which is the view that makes a depth legible in the first place.
-Look further down than 45° and the cast goes into the ground, which is a mistake you can watch
-yourself make.
+**The line is solved at the move's full reach every frame, and the hold only picks a point
+along it.** That split is the whole readability of the move, and it took two wrong versions to
+find.
 
-It is the one thing in the game aimed as a swing that is not melee, and
-`crates/sim/tests/one_aim.rs` allows it exactly on the grounds that a channel answers the
-question a swing otherwise cannot: how far.
+Solving the *aim* at the wound-up range — the first version — means the raycast's answer
+changes as the range grows: the far end walks off the floor and onto a wall and back, so
+holding the mouse perfectly still you watched the marker jump about while trying to choose a
+depth. Making the move a **swing** instead — a ray off the body, dead-zoned to stay level while
+standing — held the line still, but a level line out of a platform passes clean over anybody on
+the floor below, and the only way to land one was to aim well under the target on screen.
+
+Solving the line once, at the full reach, has neither problem. It is the crosshair's line, so
+it converges on whatever you are looking at from any height; it does not move while the mouse
+does not; and the hold slides a point along it. The far end is also the furthest the marker can
+wind, so the depth you pick is a depth **into the world** — hold a full Grasp at a wall six
+metres away and the arms converge on the wall rather than three metres inside it.
 
 Aiming stays live through the wind-up — the body keeps turning with the mouse — and locks on
 the frame the button comes up, which is where every other move locks it too. The health is
 paid on the *press*, because there is no cancelling out of a channel: an ability you started
 is an ability you bought.
 
-A full second is a long time to stand still, and that is the cost. The whole wind-up is a
-telegraph: at max depth you have spent a second of neutral before anything has left your
+Half a second is a long time to stand still, and that is the cost. The whole wind-up is a
+telegraph: at max depth you have spent half a second of neutral before anything has left your
 hands, in plain view of somebody who can simply walk out of the cone.
+
+**Aiming it from above works because the crosshair converges.** Standing on a platform and
+putting the reticle on somebody below, the ray goes from the eye through the reticle and meets
+the floor at their feet; raised to the middle of a fighter standing there, that is a hit. No
+adjustment, no aiming short. This is the general rule in [../aiming.md](../aiming.md) rather
+than anything the Grasp does for itself — the same fix landed on Bolt, Bloodletter and Lance at
+the same time.
 
 #### The catch: bound, then hauled
 
@@ -385,16 +394,17 @@ half again as much.
   fantasy.
 - Are the costs anywhere near right? They are a first pass: 15 for the auto up to 120 for the
   spike, against a thousand-point bar. Nothing has been played against them.
-- **Is a second the right channel?** It shipped at half of one and was too fast to read. It is
-  two decisions at once: how long the wind-up is, and how far the slider travels in it. Melee
-  to ten metres over sixty frames means the marker moves about fourteen centimetres a frame,
-  which is slow enough to place and fast enough not to feel like waiting. Both ends are
-  move-table knobs (`Channel, longest hold` and `Channel, reach at no hold`), so the answer is
-  a play question.
+- **Is half a second the right channel?** It went to a full second while the marker was still
+  jumping about, on the theory that it was too fast to read; once the line stopped moving,
+  half was enough again. It is two decisions at once: how long the wind-up is, and how far the
+  slider travels in it. Melee to ten metres over thirty frames means the marker moves about
+  twenty-eight centimetres a frame, which is quick — fast enough that placing a specific depth
+  is a real skill rather than a wait. Both ends are move-table knobs (`Channel, longest hold`
+  and `Channel, reach at no hold`), so the answer stays a play question.
 - **Should the Grasp be cancellable?** It is not: the health is paid on the press and the only
   way out is to throw it. A channel you could back out of would be a free look at what the
-  other player does with a second of your commitment, which is the opposite of the ability's
-  design.
+  other player does with half a second of your commitment, which is the opposite of the
+  ability's design.
 - **Is 1.4× the right bonus against a disabled enemy?** Guessed. The feel tests bound it
   between 1.2 and 2 — below the floor nobody notices it and Grasp goes back to being a catch
   with no payoff; above the ceiling one read ends the round, which is the opposite of a game

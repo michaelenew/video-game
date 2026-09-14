@@ -48,6 +48,13 @@ const EXEMPT: &[(&str, &str)] = &[
          fighter standing there, and the middle of anything is half of it.",
     ),
     (
+        "ground.y.add(t::body_height().div(Fx::from_int(2))),",
+        "The same halving, in `aim::standing_middle`: where a shot aimed at a \
+         patch of floor actually goes. Not a height with a feel to it -- it is \
+         the middle of whoever is standing on that patch, and the middle of \
+         anything is half of it.",
+    ),
+    (
         ".add(self.to.sub(self.from).scale(Fx::ONE.div(Fx::from_int(2))))",
         "The midpoint of a hit volume. Halving a line, not choosing a length: the middle \
          of anything is half of it, and any other number would stop it being the middle.",

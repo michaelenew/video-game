@@ -871,37 +871,94 @@ fn holding_the_grasp_longer_sends_it_further() {
 }
 
 #[test]
-fn the_marker_is_as_far_out_as_the_hold_and_nothing_else() {
-    // What the channel is *for*. The marker has one job -- say how deep this
-    // cast is going -- and it can only do it if its distance is a function of
-    // the hold and of nothing else.
+fn a_still_mouse_holds_the_line_and_only_the_marker_moves() {
+    // What the channel is *for*, and the one thing it has to do to be readable.
     //
-    // It was a skillshot first, and a skillshot's far end is wherever the
-    // crosshair's ray stops: a wall, the floor, the edge of the range. Looking
-    // a few degrees further down moved the marker metres, so the thing meant to
-    // show the player a depth was mostly showing them the arena. As a swing it
-    // is a ray off the body at a dead-zoned pitch, which has nothing to stop
-    // against -- see `docs/design/aiming.md`.
+    // The aim is solved at the move's **full** reach every frame and the hold
+    // picks a point along the line that comes back. Solving at the wound-up
+    // range instead -- which is what it did first -- means the raycast's own
+    // answer changes as the range grows: the far end walks off the floor and
+    // onto a wall and back, so a player holding the mouse perfectly still
+    // watched the marker jump about while choosing a depth. With the line held
+    // still, the only thing moving is the thing the player is moving.
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    // Level, inside the dead zone, past it, and straight down at the floor --
-    // the last is the case a raycast collapsed to a metre in front of the feet.
-    for pitch in [4096i16, 0, -4096, -8192, -12000, -16384] {
+    for pitch in [4096i16, 0, -4096, -8192, -12000] {
         let mut w = as_class(Class::BloodMage);
+        let mut line: Option<sim::V3> = None;
+        let mut was = sim::fixed::Fx::ZERO;
         for held in 0..=m.channel {
             looking(&mut w, 1, Q, pitch, 0);
-            let Some((_, wound)) = w.players[0].action.channelling() else {
+            if w.players[0].action.channelling().is_none() {
                 continue;
-            };
-            let want = m.reach_after(wound);
-            let got = w.players[0].aim_path.length();
-            assert!(
-                got.sub(want).abs().raw() < sim::fixed::Fx::ratio(1, 100).raw(),
-                "held {held} at pitch {pitch}: the marker is {} m out where the \
-                 hold says {} m",
-                got.to_f32_for_render(),
-                want.to_f32_for_render()
-            );
+            }
+            let path = w.players[0].aim_path;
+            let (dir, far) = (path.dir(), path.length());
+            if let Some(line) = line {
+                // The same line, frame after frame. A hair of rounding is fine;
+                // a surface change is not, and shows up here as a direction
+                // that swings.
+                let swing = dir.sub(line).len();
+                assert!(
+                    swing.raw() < sim::fixed::Fx::ratio(1, 100).raw(),
+                    "held {held} at pitch {pitch}: the line moved by {} while \
+                     the mouse was still",
+                    swing.to_f32_for_render()
+                );
+                // And the marker walks out, never back, never in a jump.
+                assert!(
+                    far.raw() >= was.raw(),
+                    "held {held} at pitch {pitch}: the marker went from {} m \
+                     back to {} m",
+                    was.to_f32_for_render(),
+                    far.to_f32_for_render()
+                );
+                let step = far.sub(was);
+                assert!(
+                    step.raw() < sim::fixed::Fx::ratio(1, 2).raw(),
+                    "held {held} at pitch {pitch}: one frame moved the marker \
+                     {} m, which is a jump rather than a walk",
+                    step.to_f32_for_render()
+                );
+            }
+            line = Some(dir);
+            was = far;
         }
+        assert!(line.is_some(), "the channel never opened at pitch {pitch}");
+    }
+}
+
+#[test]
+fn the_marker_never_reaches_past_what_the_crosshair_is_on() {
+    // The other half of solving the line first: the depth the player picks is a
+    // depth **into the world**. A ray that stopped on a wall six metres away is
+    // as far as the marker can wind, so a fully held Grasp fired at that wall
+    // converges on it rather than three metres inside it.
+    let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
+    for pitch in [0i16, -6000, -12000, -16384] {
+        let mut w = as_class(Class::BloodMage);
+        // Solved at the full reach, which is the line the hold walks along.
+        let full = {
+            let stones = sim::stones::gather(&w.players);
+            let players = w.players;
+            let effects = w.effects;
+            let scene = sim::aim::Scene {
+                stones: &stones,
+                players: &players,
+                effects: &effects,
+                quarry: w.monster.as_ref(),
+            };
+            let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+            sim::aim::skillshot_path(0, look, m.reach, &scene).length()
+        };
+        looking(&mut w, m.channel as u32 + 1, Q, pitch, 0);
+        let far = w.players[0].aim_path.length();
+        assert!(
+            far.raw() <= full.raw() + sim::fixed::Fx::ratio(1, 100).raw(),
+            "at pitch {pitch} a full hold reached {} m along a line that is \
+             only {} m long",
+            far.to_f32_for_render(),
+            full.to_f32_for_render()
+        );
     }
 }
 
@@ -916,17 +973,17 @@ fn the_marker_starts_inside_melee_range() {
     let grasp = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
     let rend = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
     assert!(
-        grasp.reach_after(0).raw() < rend.reach.raw(),
+        grasp.wound_along(0, grasp.reach).raw() < rend.reach.raw(),
         "a tapped Grasp reaches {} m against {} m of Rend, so it does not start \
          at the caster",
-        grasp.reach_after(0).to_f32_for_render(),
+        grasp.wound_along(0, grasp.reach).to_f32_for_render(),
         rend.reach.to_f32_for_render()
     );
     // And the far end is still a long way past it, or the slider has no travel.
     assert!(
         grasp.reach.raw() > rend.reach.raw() * 3,
         "the slider runs {} m to {} m, which is not a range worth choosing",
-        grasp.reach_after(0).to_f32_for_render(),
+        grasp.wound_along(0, grasp.reach).to_f32_for_render(),
         grasp.reach.to_f32_for_render()
     );
 }

@@ -3235,15 +3235,28 @@ const fn channel_button(kind: u8) -> u16 {
     }
 }
 
-/// Re-solve a channelled move's aim at the reach it has wound up to.
+/// Re-solve a channelled move's aim, and cut it back to where the hold has got.
 ///
-/// Straight through the same call the finished move uses, with the range it
-/// currently has. That is the whole trick behind the marker: there is no second
-/// answer to where the ability is going, so the thing the player is looking at
-/// cannot drift from the thing that happens.
+/// **The line is solved at the move's full reach every frame, and the hold only
+/// picks a point along it.** That split is the whole of what makes a marker
+/// readable. Solving at the wound-up range instead -- which is what this did
+/// first -- means the raycast's own answer changes as the range grows: the far
+/// end walks off one surface and onto another, so a player holding the mouse
+/// perfectly still watched the marker jump between the floor, a wall and the
+/// edge of the range while they were choosing a depth. With the line held
+/// still, the only thing moving is the thing the player is moving.
+///
+/// Nothing is decided here: `aim_at` is the same call the finished move uses,
+/// so there is no second answer to where the ability goes and the marker cannot
+/// drift from it.
 fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, scene: &Scene) {
-    let reach = moves::get(p.class, kind).reach_after(held);
-    aim_at(p, who, kind, reach, input, scene);
+    let m = moves::get(p.class, kind);
+    aim_at(p, who, kind, m.reach, input, scene);
+    // Cut back to the hold. Along the solved line, so a wall the ray stopped at
+    // is as far as the marker can ever get -- the depth the player picks is a
+    // depth into the world rather than a number that ignores it.
+    let along = m.wound_along(held, p.aim_path.length());
+    p.aim_path.to = p.aim_path.at(along);
 }
 
 /// Work out where this move goes, and hold it there for the move's duration.

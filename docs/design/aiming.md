@@ -106,14 +106,24 @@ them: a structure, a fire pillar.
 ### Not grounded
 
 Things that fly: the Elementalist's auto, the Bulwark's thrown shield, and the
-Blood mage's Bloodletter — the last throws something that then travels on its
-own, so what the crosshair gives it is the *line* rather than a landing spot.
-(Her Grasp also throws something, but it is aimed as a **swing** and picks its
-distance with a channel — see [Aiming with time](#aiming-with-time).)
+Blood mage's Bloodletter and Grasp — the last two throw something that then
+travels on its own, so what the crosshair gives them is the *line* rather than a
+landing spot. The Grasp then picks a point along that line with a channel — see
+[Aiming with time](#aiming-with-time).
 
-- **Hit the ground** — draw a line straight up from that spot to the height of
-  the character's ability origin. The shot flies level over the place the
-  crosshair is on rather than diving into the dirt.
+- **Hit the ground** — raise that spot to the **middle of a fighter standing on
+  it** (`aim::standing_middle`). The floor is never really the target: bodies
+  are not on the ray, so aiming at somebody puts the crosshair through them and
+  onto the ground behind, and a ground hit means *there*. Sent to the dirt at
+  *there*, the shot would pass under whoever is standing on it.
+
+  **Half a body up from the ground the ray met**, not up to the caster's own
+  cast height, which is what this used to be. The two are the same number on
+  flat ground and nothing like it off it: from the top of a platform the
+  caster's cast height is metres above the arena floor, so every skillshot aimed
+  at somebody below flew out level and over their head, and the only way to land
+  one was to aim at a patch of floor well short of them. Measuring from the
+  ground the ray met makes the rule true from any height.
 - **Hit terrain that is not ground, a structure, or the range sphere** — the
   point of intersection, exactly.
 - Either way the ability follows a **straight line from the caster to that
@@ -221,8 +231,8 @@ swing.
 | Line of effect | Moves |
 | --- | --- |
 | **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
-| **Skillshot** | Bolt, Bloodletter, Lance |
-| **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos — and the Blood mage's Grasp, which is the one that is not melee |
+| **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
+| **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos |
 | **At the mechanic** | Guillotine lotus |
 
 The mechanic inputs are aimed too, through the same two functions: Raise is a
@@ -342,7 +352,7 @@ that is already out is the thing this document is about. See `Effect::home`.
 
 One move is aimed with the *length of a button press*: hold the Blood mage's
 Grasp and the reach it is solved at walks from melee out to its own `reach` over
-a second. A small marker shows where that has got to — it leaves the caster's
+half a second. A small marker shows where that has got to — it leaves the caster's
 chest and travels outward, and where it stops is where the arms will converge.
 
 **The marker is not a second answer.** It is the far end of `Player::aim_path`,
@@ -352,28 +362,30 @@ there. Nothing else is computed anywhere, which is the point: the failure mode
 this whole document exists to prevent is two pieces of arithmetic that agree
 today.
 
-**A channelled move is a swing, not a skillshot, and that is not a detail.** A
-skillshot's far end is wherever the crosshair's ray stops — a wall, the floor,
-the edge of the range — which is exactly right when the player is choosing a
-*point*. It is exactly wrong when they are choosing a *depth*: looking a few
-degrees further down moved the marker by metres, so the thing meant to show how
-far the cast was going mostly showed the shape of the arena, and the depth the
-hold had bought was invisible underneath it. As a swing it is a ray off the body
-along the facing, pitched by the camera through the standing dead zone, and it
-has nothing to stop against. Its length is the hold and only the hold.
+**The line is solved at the move's full reach every frame, and the hold only
+picks a point along it.** That split is the whole of what makes a marker
+readable, and getting it wrong is what the first two attempts did.
 
-The dead zone is what makes that readable rather than fiddly. The camera sits
-above the shoulder, so a player looking at somebody at their own height is
-already looking slightly down; level through the first 45° below the horizon
-means the marker runs flat across the floor at chest height for the whole of the
-range a fight happens in. Past 45° it follows the camera down and the cast can
-be put into the ground, which is a mistake the player can see themselves making.
+Solving the *aim* at the wound-up range means the raycast's own answer changes
+as the range grows: the far end walks off the floor and onto a wall and back, so
+a player holding the mouse perfectly still watches the marker jump about while
+choosing a depth. Fixing that by making the move a **swing** — a ray off the
+body, dead-zoned to stay level while standing — holds the line still, but a
+level line out of a platform passes clean over anybody on the floor below, and
+the only way to land one was to aim well under the target on screen.
+
+Solving the line once, at the full reach, has neither problem. The line is the
+crosshair's, so it converges on what the player is looking at from any height;
+it does not move while the mouse does not; and the hold slides a point along it.
+The far end of that line is also the furthest the marker can wind, so the depth
+being chosen is a depth **into the world** — a Grasp fully held at a wall six
+metres away converges on the wall rather than three metres inside it.
 
 The aim stays live for the whole wind-up — the body turns with the mouse — and
 **locks on the frame the button comes up**, which is the frame the move starts.
 That is where every other move locks it too; a channel does not move the rule,
 it makes the frame later. What is stored across the gap is the solved path's
-*length*, which for a swing is the reach exactly.
+*length*, cut back to wherever the hold had got.
 
 ## What this rules out
 
