@@ -31,6 +31,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Before the build, not after it. This is a two-second API call that
+      # fails when Pages is not switched on for the repository -- and when it
+      # ran last, it failed *after* a fourteen-minute build, which also meant
+      # `actions/cache` never reached its post step and never saved anything.
+      # A cheap precondition belongs in front of an expensive step.
+      - uses: actions/configure-pages@v5
+
       # The toolchain file names the channel and the wasm target, so this is
       # the whole Rust setup.
       - run: rustup show
@@ -59,13 +66,8 @@ jobs:
             cargo install wasm-bindgen-cli --version "$want" --locked --force
           fi
 
-      # Optional in the script; worth having here, where the download size is
-      # somebody else's bandwidth.
-      - run: sudo apt-get update && sudo apt-get install -y binaryen
-
       - run: ./crates/web/build-game.sh
 
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: target/web

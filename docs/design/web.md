@@ -121,41 +121,65 @@ worth having as a *harness* rather than only as a toy.
 It also means the browser build is not a second thing to keep in sync. There is
 no wasm-specific gameplay code to drift.
 
-## Size, measured
+## Size, measured — and why nothing optimises it
 
 The module is the whole cost of a link somebody is not sure they want to click,
 so it is worth having the real numbers rather than a feeling about them.
 
-| | Module | Over a gzipping connection |
-| --- | --- | --- |
-| As the compiler leaves it | 23.9 MB | 6.9 MB |
-| After `wasm-opt -Oz` | **17.8 MB** | 7.1 MB |
+| | Module | Over a gzipping connection | Loads? |
+| --- | --- | --- | --- |
+| **As the compiler leaves it — what is published** | 23.9 MB | **6.9 MB** | yes |
+| `wasm-opt -Oz --all-features` | 17.9 MB | 7.1 MB | **no** |
+| `wasm-opt -Oz`, features named explicitly | 20.0 MB | 7.1 MB | yes |
 
-Plus 108 KB of `wasm-bindgen` glue and a 24 KB page.
+Plus 108 KB of `wasm-bindgen` glue and a 26 KB page.
 
-The surprise is the second column: `-Oz` takes a quarter off the module and
-makes the *compressed* size very slightly worse, because compacting code by
-sharing and reordering leaves gzip less repetition to find. It is kept anyway —
-the module is also what the browser has to hold in memory and hand to the
-compiler, a host that does not compress is a real possibility, and 3% the wrong
-way on the wire is a good trade for 25% the right way everywhere else.
+**`wasm-opt` is not in the build, and the middle row is why.** It shipped once
+and every visitor got `CompileError: WebAssembly.instantiate(): invalid value
+type 0x0 @+198` after downloading eighteen megabytes to find out.
 
-`opt-level = "z"`, `panic = "abort"` and `strip = true` are the `wasm-release`
-profile in the workspace `Cargo.toml` and account for most of the rest. Note
-that stripping also removes the `target_features` section, which is where
-`wasm-opt` would normally read what the module is allowed to use — so the build
-script passes `--all-features` and the first symptom of not doing so is a
-validation error naming bulk memory.
+The mechanism is worth writing down because the mistake is easy to repeat. The
+`wasm-release` profile sets `strip = true`, which removes the `target_features`
+custom section — the compiler's own record of which post-MVP WebAssembly
+features the module uses. Without it `wasm-opt` refuses to touch the module,
+naming the first thing it trips over (bulk memory). Passing `--all-features`
+makes that error go away, and it is the wrong answer to it: it does not say
+"here is what this module uses", it says **"you may use anything you know"** —
+so binaryen enabled GC and typed function references and re-encoded the type
+section in a form browsers reject. The right set was never in doubt; it was
+sitting in the section that got stripped:
 
-**What is actually in it**: about 16 MB of code and 6 MB of data, and almost all
-of both is Bevy, `wgpu` and the shader compiler. The game's own code, the Oven's
-1,225 knobs and the baked animation tables are a rounding error next to that.
-Dropping `bevy_egui` — which would cost the Oven and the animation hub — is the
-one obvious cut left, and on the crate sizes it looks like a few megabytes of
-the twenty-four rather than a step change. That was not worth a browser build
-that is a different program from the desktop one, so it was not tried. If the
-number ever has to come down a lot, the thing to attack is Bevy's feature list,
-not this.
+```
+bulk-memory  bulk-memory-opt  call-indirect-overlong  multivalue
+mutable-globals  nontrapping-fptoint  reference-types  sign-ext
+```
+
+No `gc`. Naming those explicitly works (third row) — and that is the version to
+reinstate if raw size ever matters, because the failure mode is then gone by
+construction rather than by having chosen a good binaryen.
+
+**But the first row is the one to ship, and not only for safety.** Look at the
+second column: optimising makes the *compressed* size slightly **worse**.
+Compacting code by sharing and reordering leaves gzip less repetition to find,
+and the compressed size is what a visitor actually pays on any host that
+compresses. So `wasm-opt` buys 4–6 MB of raw size, costs 3% of wire size, and
+carries a dependency on which binaryen the machine happens to have. That is a
+bad trade for a prototype somebody is following a link to, and dropping it also
+takes two and a half minutes off every build.
+
+The build script now checks what it is about to publish with
+`WebAssembly.compile` — the same validator the browser runs — and refuses to
+write a module that fails. That check, not a better flag, is the actual lesson:
+the broken build passed locally because this machine had binaryen 124 and the
+runner had 108.
+
+**What is actually in the 23.9 MB**: about 16 MB of code and 6 MB of data, and
+almost all of both is Bevy, `wgpu` and the shader compiler. The game's own code,
+the Oven's 1,225 knobs and the baked animation tables are a rounding error next
+to that. Dropping `bevy_egui` — which would cost the Oven and the animation hub
+— is the one obvious cut left, and on the crate sizes it looks like a few
+megabytes rather than a step change. If the number ever has to come down a lot,
+the thing to attack is Bevy's feature list.
 
 ## Publishing
 
