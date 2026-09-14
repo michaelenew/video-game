@@ -167,6 +167,7 @@ pub fn step(
                         dir: V3::new(piece.dir.x, Fx::ZERO, piece.dir.z).normalized(),
                         blocked: guarding,
                         parried,
+                        interrupts: true,
                     },
                 );
                 *slot = None;
