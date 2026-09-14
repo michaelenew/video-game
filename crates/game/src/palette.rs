@@ -48,9 +48,9 @@ impl Default for Palette {
         Palette {
             // `OVEN=1` starts it open, so a headless capture can see it, and
             // `--dev` starts it open because that is the working mode.
-            open: crate::dev_mode() || std::env::var("OVEN").is_ok_and(|v| v == "1"),
+            open: crate::dev_mode() || crate::platform::env("OVEN").as_deref() == Some("1"),
             // Presetting the search lets a headless capture show real rows.
-            search: std::env::var("OVEN_SEARCH").unwrap_or_default(),
+            search: crate::platform::env("OVEN_SEARCH").unwrap_or_default(),
             message: String::new(),
             note: String::new(),
         }

@@ -835,6 +835,16 @@ pub fn collect_bake(mut hub: ResMut<Hub>) {
 /// the arena in the middle of the animation you were judging.
 type Pending = std::sync::Arc<std::sync::Mutex<Option<String>>>;
 
+/// The browser has no clip files to write and no `cargo` to run them through,
+/// so it says so. Everything up to that point -- editing a recipe, re-running
+/// the solver, watching the result on a fighter -- works on the web exactly as
+/// it does on the desktop, which is most of what the hub is for.
+#[cfg(target_arch = "wasm32")]
+fn save(_hub: &Hub) -> (String, Option<Pending>) {
+    (crate::bake::NO_CHECKOUT.to_string(), None)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn save(hub: &Hub) -> (String, Option<Pending>) {
     let file = hub.clip.file();
     let mine: Vec<Recipe> = hub

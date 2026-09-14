@@ -1303,3 +1303,69 @@ fn a_grounded_cast_is_not_tilted_by_the_aim() {
         "the fire pillar's cast followed the camera down"
     );
 }
+
+#[test]
+fn the_opening_pitch_is_inside_the_neutral_zone() {
+    // Where a match opens is the first thing anybody sees, and on this rig it
+    // decides more than which way the camera faces: the eye rides further out
+    // the further below the horizon you look, so the opening angle is what
+    // makes the difference between seeing your own fighter standing in an arena
+    // and seeing a patch of floor with your own shield across it.
+    //
+    // Both boundaries matter and for different reasons. Past `floor_from` the
+    // view starts tilting toward your own feet, so a match would open pointed
+    // at the ground. Above `neutral_to` the sphere starts travelling up to the
+    // head and the eye comes in, so a match would open too close to see
+    // yourself. Between them there is room to steer either way without
+    // crossing anything, which is the whole point of resting in a zone rather
+    // than on an edge.
+    let z = zones();
+    let opening = -z.start_pitch().to_degrees();
+    let (floor, neutral) = (z.floor_from.to_degrees(), z.neutral_to.to_degrees());
+
+    assert!(
+        opening < floor,
+        "a match opens at {opening:.0} degrees below level, past the floor zone at \
+         {floor:.0} -- the view is tilted at your own feet before anybody has moved"
+    );
+    assert!(
+        opening > neutral,
+        "a match opens at {opening:.0} degrees below level, above the neutral zone at \
+         {neutral:.0} -- the eye has come in and you cannot see your own fighter"
+    );
+
+    // Not on either edge, either. A knob nudged one degree should not change
+    // which zone the game starts in.
+    let margin = (floor - neutral) * 0.15;
+    assert!(
+        opening < floor - margin && opening > neutral + margin,
+        "a match opens at {opening:.0} degrees, within a nudge of a zone boundary \
+         ({neutral:.0} to {floor:.0})"
+    );
+}
+
+#[test]
+fn a_match_opens_showing_the_fighter_rather_than_the_floor() {
+    // The property the number is for, rather than the number. At the opening
+    // angle the eye has to be far enough back that the fighter is in front of
+    // it and drawn, which is what "third person" means and is not true at every
+    // pitch this rig allows -- near level the eye is close enough that the body
+    // is faded out of the way.
+    let (f, at) = settled(zones().start_pitch());
+    // Flat distance, not one axis: the eye goes wherever the yaw sends it.
+    let back = (0..3)
+        .step_by(2)
+        .map(|i| (f.eye[i] - at[i]).powi(2))
+        .sum::<f32>()
+        .sqrt();
+    assert!(
+        back > 1.0,
+        "the eye opens {back:.2} m from the fighter, which is not a view of them"
+    );
+    assert_eq!(
+        f.hidden,
+        0.0,
+        "the fighter is {:.0}% faded away at the angle the match opens at",
+        f.hidden * 100.0
+    );
+}

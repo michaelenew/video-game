@@ -24,6 +24,15 @@ pub struct Section {
     pub title: &'static str,
     pub blurb: &'static str,
     pub entries: &'static [Entry],
+    /// Does this section describe something you can do in the browser build?
+    ///
+    /// **Declared, not inferred.** Every section has to answer, the way every
+    /// move has to declare how it is aimed, because the alternative is a rule
+    /// like "sections whose entries start with `cargo`" that is true until
+    /// somebody writes a section it is not true of. What the browser cannot do
+    /// is a short list -- a command line, a file, a peer -- and it is a list
+    /// that changes, so it is written down rather than guessed at.
+    pub in_browser: bool,
 }
 
 const fn e(invocation: &'static str, what: &'static str) -> Entry {
@@ -45,6 +54,7 @@ const fn s(invocation: &'static str, what: &'static str, short: &'static str) ->
 pub const SECTIONS: &[Section] = &[
     Section {
         title: "Running it",
+        in_browser: false,
         blurb: "Rust 1.85+. Everything runs from the workspace root.",
         entries: &[
             e(
@@ -59,7 +69,7 @@ pub const SECTIONS: &[Section] = &[
                 "cargo run -p game -- --dev",
                 "The same, if you would rather not use the script.",
             ),
-            e("cargo run -p game -- --help", "This text."),
+            e("cargo run -p game -- --help", "This text. `-h` also works."),
             e(
                 "cargo run -p game -- --p1 <class> --p2 <class>",
                 "Pick classes. Matched loosely: bulwark, champion, reaver, elementalist, blood, dual.",
@@ -76,10 +86,46 @@ pub const SECTIONS: &[Section] = &[
                 "cargo run -p manual",
                 "This text, without building the game.",
             ),
+            e(
+                "cargo run -p manual -- --html",
+                "The browser build's controls panel, from the same tables. Only the web build script calls it.",
+            ),
+        ],
+    },
+    Section {
+        title: "In a browser",
+        in_browser: true,
+        blurb: "The same build, one player. A page cannot open a UDP socket, so peer-to-peer stays on the desktop; the query string does what the flags do.",
+        entries: &[
+            e(
+                "./crates/web/build-game.sh",
+                "Build the page. Writes target/web, which is what GitHub Pages serves.",
+            ),
+            e(
+                "?p1=<class>&p2=<class>",
+                "Pick classes, the same names the flags take. Tab still cycles player one in game.",
+            ),
+            e(
+                "?hunt",
+                "Start against the Ridgeback. H switches either way in game.",
+            ),
+            e(
+                "?dev",
+                "Hitbox wireframes and the Oven, both open, exactly as --dev does.",
+            ),
+            e(
+                "?shot_frame=<n>",
+                "Any environment variable, spelled in the URL. Upper or lower case, dashes or underscores.",
+            ),
+            e(
+                "Bake, and the hub's Save",
+                "Both say so and stop: there is no checkout behind a web page. Tune live, then bake from a clone.",
+            ),
         ],
     },
     Section {
         title: "Fighting",
+        in_browser: true,
         blurb: "Camera-relative: W is away from the camera, not along a world axis.",
         entries: &[
             s(
@@ -146,6 +192,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "The Champion",
+        in_browser: true,
         blurb: "Three weapons on three clicks, and a dash that changes what all three of them do. The button is the weapon; where your feet are picks the move.",
         entries: &[
             s(
@@ -180,6 +227,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "The Dual mage",
+        in_browser: true,
         blurb: "Two forces, one in each arm, and a bar between them. Which button you attack with is which way you drift, and depth is power -- but past a threshold it burns you.",
         entries: &[
             s(
@@ -227,6 +275,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "The Shadow Reaver",
+        in_browser: true,
         blurb: "Two bodies. The shadow is never away — it is at your shoulder or out on the field — and everything the class does is a function of the line between the two.",
         entries: &[
             e(
@@ -264,6 +313,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Hunting the Ridgeback",
+        in_browser: true,
         blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",
         entries: &[
             s(
@@ -295,6 +345,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Player two, same keyboard",
+        in_browser: true,
         blurb: "For sitting next to someone. Set the training dummy to 4 first.",
         entries: &[
             e("Arrow keys", "Move."),
@@ -307,6 +358,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Practice",
+        in_browser: true,
         blurb: "What the other fighter does while you work on something.",
         entries: &[
             s("1", "Dummy stands still.", "1-4 dummy"),
@@ -333,6 +385,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Looking at it",
+        in_browser: true,
         blurb: "The tools for working out why something happened.",
         entries: &[
             s(
@@ -359,6 +412,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Camera and feel",
+        in_browser: true,
         blurb: "Saved to ~/.config/arena/settings.conf as you change them.",
         entries: &[
             s(
@@ -376,6 +430,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "The Oven",
+        in_browser: true,
         blurb: "F7. Three hundred tuned numbers, grouped by family and searchable.",
         entries: &[
             e(
@@ -399,6 +454,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "The animation hub",
+        in_browser: true,
         blurb: "F9. Every clip in the game, editable while it runs. The kinematics are \
                 handled; what you set is poses, when they happen, and the curve between them.",
         entries: &[
@@ -442,6 +498,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Other binaries",
+        in_browser: false,
         blurb: "",
         entries: &[
             e(
@@ -492,6 +549,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Scripts",
+        in_browser: false,
         blurb: "",
         entries: &[
             e(
@@ -506,12 +564,17 @@ pub const SECTIONS: &[Section] = &[
                 "./crates/web/build-sandbox.sh",
                 "A self-contained browser frame-data tool.",
             ),
+            e(
+                "./crates/web/build-game.sh",
+                "The whole game as a web page, ready to publish.",
+            ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),
         ],
     },
     Section {
         title: "Environment variables",
+        in_browser: false,
         blurb: "Mostly for headless capture and for scripting comparisons.",
         entries: &[
             e(
@@ -546,6 +609,7 @@ pub const SECTIONS: &[Section] = &[
     },
     Section {
         title: "Working on it",
+        in_browser: false,
         blurb: "",
         entries: &[
             e(
@@ -601,6 +665,50 @@ pub fn render() -> String {
     out
 }
 
+/// The controls panel for the browser build, as HTML.
+///
+/// The third rendering of the same tables, after the manual text and the
+/// on-screen legend, and it exists for the same reason they do: the page a link
+/// leads to is the first thing a person who has never seen this game reads, and
+/// a hand-written copy of the controls on that page would be wrong by the next
+/// time a key moves. There is nowhere for it to disagree.
+///
+/// Only the sections marked `in_browser`. A page that offered somebody
+/// `cargo run -p game` would be telling them to do the thing they followed a
+/// link to avoid.
+pub fn browser_help() -> String {
+    let mut out = String::new();
+    for section in SECTIONS.iter().filter(|s| s.in_browser) {
+        out.push_str(&format!("<section>\n<h3>{}</h3>\n", escape(section.title)));
+        if !section.blurb.is_empty() {
+            out.push_str(&format!(
+                "<p class=\"blurb\">{}</p>\n",
+                escape(section.blurb)
+            ));
+        }
+        out.push_str("<dl>\n");
+        for entry in section.entries {
+            out.push_str(&format!(
+                "<dt>{}</dt><dd>{}</dd>\n",
+                escape(entry.invocation),
+                escape(entry.what)
+            ));
+        }
+        out.push_str("</dl>\n</section>\n");
+    }
+    out
+}
+
+/// The three characters that would otherwise close a tag we did not open.
+///
+/// Several entries are written `--p1 <class>` and `SHOT_FRAME=<n>`, so this is
+/// load bearing rather than defensive.
+fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 /// The compact on-screen legend, built from the same tables.
 ///
 /// One group per section that has short forms, which is what stops the legend
@@ -628,4 +736,21 @@ pub fn legend() -> String {
         }
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_entry_with_a_placeholder_in_it_stays_text() {
+        // `--p1 <class>` and `SHOT_FRAME=<n>` are how this manual writes a
+        // placeholder. Dropped into a page unescaped, the browser reads
+        // `<class>` as a tag it does not know and swallows the rest of the
+        // line -- so the entry that says how to pick a class is the entry that
+        // disappears.
+        assert_eq!(escape("--p1 <class>"), "--p1 &lt;class&gt;");
+        assert_eq!(escape("a & b"), "a &amp; b");
+        assert_eq!(escape("plain text"), "plain text");
+    }
 }

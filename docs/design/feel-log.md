@@ -3414,3 +3414,63 @@ jump_and_the_dodge_away` drives real presses through a live `World` and is the o
 retuned, the retuning is free. `feel::hindrance_is_proportional_to_commitment` lost its
 `committed.roots()` assertion, which is why `Move::roots()` is gone: a predicate whose only
 true case the feel harness forbids is a predicate nobody can use.
+
+### 2026-09-14 — a match opens looking at your own fighter
+
+**Reported** The opening view is wrong. Tilt the starting angle down so it reads as an ordinary
+third-person view.
+
+**Changed** The opening pitch is its own Oven knob — *Opening pitch, below level*, **35 degrees**
+— where it used to borrow `Zones::neutral_pitch`, the middle of the neutral zone, which works
+out at 27.5.
+
+**Why the borrowed number was wrong, and it is not that 27.5 is close to 35.** On this rig the
+eye rides further out along the sphere the further below the horizon you look — that is the
+same geometry the 2026-09-11 entry above works through, where the mark on the ground lands at
+`h / tan θ`. So the opening pitch is not only which way the camera faces. It is *how far back
+the camera is*, and therefore whether the first thing anybody sees is their own fighter standing
+in an arena or a patch of floor with their own shield lying across the corner of it.
+
+At 27.5 degrees it was the floor. The fighter sat just below the bottom edge, the opponent was
+pinned against the HUD at the top, and the Bulwark's shield filled a third of the screen because
+the eye was close enough to be inside the arm holding it. Nothing about that reads as a game you
+know how to stand up in, which matters more than usual right now: it is the frame somebody
+following a link sees before they have pressed anything.
+
+**The middle of the neutral zone was never a claim about where to open.** It is a fact about the
+zones — halfway between the boundaries, so there is room to steer either way without crossing
+one. That is a good property for a resting angle to have and it says nothing about framing. The
+two questions wanted two numbers, so they have two now, and `neutral_pitch` goes back to meaning
+only what it says.
+
+**What was looked at.** Rendered stills of the opening frame, Bulwark against Bulwark, at 5.7,
+11.5, 17.2, 27.5, 34.4, 43 and 54.4 degrees below level:
+
+- **Above ~20** — no own fighter at all. The eye has come in toward the head and the body is
+  below the frame or faded.
+- **27.5, where it was** — the floor shot described above.
+- **34.4** — your fighter low-centre, the opponent centred on the dais, both arena walls in
+  frame. This is the one.
+- **43** — works, and is visibly further back and higher. Reads more like a diorama than like
+  standing there, and it is two degrees off the floor boundary, so a nudge of a neighbouring
+  knob would change which zone a match opens in.
+- **54.4** — past `floor_from`, so the view tilts toward your own feet: cropped arena, opponent
+  back up against the HUD. Worse than where it started.
+
+35 rather than 34.4 because a knob wants a round number and the exact value inside that zone is
+not what carries the reading.
+
+**Two tests, in `view/tests/presentation.rs`** rather than one assertion on the number. The
+opening angle sits strictly inside the neutral zone with margin at both ends — past `floor_from`
+a match opens pointed at the ground, above `neutral_to` the eye has come in too close to see
+yourself. And the property the number exists for: at the opening angle the eye is more than a
+metre back from the fighter and the body is not faded. They are in `presentation.rs` and not in
+`camera_knobs.rs` beside the other camera tests, because that file's one test deliberately drags
+the live knobs to nonsense and back, and tests in a file share a process — read these next to it
+and they see a camera mid-retune. That cost twenty minutes and a confusing "the eye opens 0.00 m
+from the fighter".
+
+**Verdict** open — chosen from stills, by someone who has not played it. The reading being
+claimed here (34.4 "reads like standing there", 43 "reads like a diorama") is exactly the kind
+of thing a still cannot settle. It is one slider in the Oven under *camera*, and `?shot_pitch=`
+in the browser build will render any angle without a rebuild.
