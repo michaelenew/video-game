@@ -3032,6 +3032,58 @@ from an aimed cast should do with that aim's pitch, and Cataclysm's tornado is t
 the kit that keeps a cast's direction alive after the cast itself is over. Worth watching for the
 same shape of bug anywhere else a moving effect inherits a beam's raw direction.
 
+### 2026-09-14 — the lotus was a fountain, not a flower
+
+**Changed** The Guillotine's six blades now leave the shadow's **midriff** rather than its
+feet, open in **one horizontal plane** rather than arcing up and back down, and come home on a
+**spiral of their own turning against the way they opened** rather than retracing the arm they
+came out on. `reaver.lotus,_how_high_they_arc` is now
+`reaver.lotus,_height_off_the_shadow's_feet` (1.2 → 0.9); new knob
+`reaver.lotus,_turn_coming_home_(turns)` at 0.28, against an outward curl of 0.14.
+
+**Why** Reported: the balls start at the feet of the shadow and jump up in a spiral. They did,
+and the arc was doing three things none of which anybody asked for.
+
+**The height was a real hitbox bug wearing an animation's clothes.** `arch(out)` is zero at both
+ends, so a blade was at floor level when it left *and* at floor level at full extension, peaking
+only in the middle. The volume is a ball of radius 0.45; at the reach where the ability does its
+work it was centred on the ground and therefore half buried. The blades now sit at 0.9 m — waist
+on a 1.8 m fighter, below the 1.25 m a cast comes out of, because these come out of the shadow's
+middle rather than its hands — for the whole of their life.
+
+**And a flower whose height changes while it turns is hard to read.** The thing a player has to
+judge is whether they are standing in a plane that is sweeping toward them. A volume at a fixed
+height is one you decide about once; one that rises and falls while it rotates has to be
+re-read every frame, and in third person at four metres out that decision is not available.
+
+**The return was a rewind, not a closing.** Bearing was `θ₀ + curl · extension` and the return
+just ran `extension` backwards, so the blade unwound onto the exact bearing it left on and
+retraced its outward arm. That is a hit test problem as much as a look: ground a blade has
+already crossed is ground whose occupants have been cut once and have had the whole 40-frame
+hold to walk off it, so a retraced return could only catch somebody who stepped back into the
+same line. The turn is now its own number and its own direction — out `+curl`, home `−uncurl`
+with `uncurl > curl` — so the blade crosses its starting bearing and the way home sweeps floor
+the way out never touched.
+
+Mechanically that meant splitting reach and bearing out of a single `extension` parameter, since
+extension 0.5 no longer says which way the blade is pointed — it depends on whether you are on
+the way out or the way back. `lotus_head` takes an **age** now and derives both from the phase,
+which also deleted the `lotus_extension_before` trick of cloning the effect with its clock wound
+back a frame.
+
+**Verdict** open, and the number to watch is `uncurl`. At 0.28 each blade sweeps about 100° on
+the way home against 50° on the way out, and with six blades 60° apart that means the return
+covers the full circle with overlap — so a victim near the shadow can be caught by about 1.7
+blades on the way back where they were caught by about one before. Per-blade damage is
+deliberately small and the return is already only 70% of the way out, so this is a change in
+the right direction rather than obviously too much, but it is the first thing to drag if the
+recall reads as a blender. The narrow band that winds past the start *without* full coverage is
+0.14–0.167, which is not much room; the honest alternative if it is too strong is fewer blades
+rather than a smaller turn.
+
+Nothing here touched `lotus_radius`, the three clocks, or the damage, so the ability's timing
+and reach are exactly what they were.
+
 ### 2026-09-14 — the repeat lockout
 
 **Changed** a move you have just thrown cannot be thrown again for 30 frames.
