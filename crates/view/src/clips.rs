@@ -222,23 +222,23 @@ clips! {
     // of whatever came before straight into the next swing; the finishers
     // commit the feet.
     ChampionSword,    "champion_sword",     Moves, "champion", Length::Move(Class::Champion, 0), false,
-        "Sword, first hit: a low horizontal cut. Reads as reaching sideways, not forward.";
+        "Sword, first hit: a descending diagonal off the right shoulder, thrown on a step. Corner to corner, not across the front.";
     ChampionHammer,   "champion_hammer",    Moves, "champion", Length::Move(Class::Champion, 1), false,
         "Hammer, first hit: overhead to the floor. All of the weight above the head, then all of it on the ground.";
     ChampionSpear,    "champion_spear",     Moves, "champion", Length::Move(Class::Champion, 2), false,
-        "Spear, first hit: a lunging thrust behind the weapon, the whole body behind the point.";
+        "Spear, first hit: a one-armed jab off the leading hand, butt of the shaft still at the hip. Feet still.";
     ChampionBackcut,  "champion_backcut",   Moves, "champion", Length::Move(Class::Champion, 3), false,
-        "Sword, second hit: the blade coming back the other way, left to right and a hand higher. Never opens from guard -- it starts where a swing ended.";
+        "Sword, second hit: the same diagonal off the other shoulder, a hand higher. Never opens from guard -- it starts where the first cut ended.";
     ChampionUproot,   "champion_uproot",    Moves, "champion", Length::Move(Class::Champion, 4), false,
         "Hammer, second hit: the head torn back out of the floor and up through them. Rising, and it has to read as the reverse of the slam.";
     ChampionSkewer,   "champion_skewer",    Moves, "champion", Length::Move(Class::Champion, 5), false,
-        "Spear, second hit: a short retracted second thrust from where the first one ended. Quick hands, still feet.";
-    ChampionCrescent, "champion_crescent",  Moves, "champion", Length::Move(Class::Champion, 6), false,
-        "Sword, finisher: a full turning cut all the way round. The widest thing in the game, and the feet turn with it.";
+        "Spear, second hit: both hands on the haft, a long wind-up, then a dash behind the point. The heaviest stagger in the kit.";
+    ChampionUpcut,    "champion_upcut",     Moves, "champion", Length::Move(Class::Champion, 6), false,
+        "Sword, finisher: a rising cut out of a short dash, up the line the second one came down. The feet leave, which is the tell.";
     ChampionEarthbreaker,"champion_earthbreaker",Moves,"champion",Length::Move(Class::Champion, 7), false,
-        "Hammer, finisher: the whole body over the head and into the floor. The guard break -- twenty frames of telegraph that go through a shield.";
-    ChampionImpale,   "champion_impale",    Moves, "champion", Length::Move(Class::Champion, 8), false,
-        "Spear, finisher: the longest reach on the ground. A full-body lunge that ends with the rear foot off the floor.";
+        "Hammer, finisher: a dash, the whole body over the head, and into the floor. The guard break, and it throws them up -- press jump and you go with them.";
+    ChampionWhirl,    "champion_whirl",     Moves, "champion", Length::Move(Class::Champion, 8), false,
+        "Spear, finisher: the shaft swept flat all the way round the body, low. The one move that clears the ring.";
     ChampionAirSword, "champion_air_sword", Moves, "champion", Length::Move(Class::Champion, 9), false,
         "Air sword: the same cut rolled into the vertical -- down across the body, not across the front of it.";
     ChampionAirHammer,"champion_air_hammer",Moves, "champion", Length::Move(Class::Champion, 10), false,

@@ -3993,3 +3993,112 @@ still. Worth remembering the next time "make it bigger than it is" looks like th
 3. **Does the rim read from directly behind, where the player usually is?** The throw tips the
    disc away from face-on for anything but a level shot, which should help exactly in the case
    the last entry worried about — and does nothing for a level shot, which is the common one.
+
+---
+
+### 2026-09-15 — the Champion's three autos became three different shapes of pressure
+
+**Changed** the nine grounded chain links, and three pieces of machinery underneath them.
+
+The class had three weapons that differed in *reach and weight* and swung the same three
+ways: across, down, and straight out. That is a range band, and range bands are what the
+class already had. What it did not have was a reason to reach for one weapon rather than
+another when the range was the same — so each weapon has been given a **job** instead, and
+the frame data, the shapes and the clips have all moved to serve it.
+
+**The sword is the one you throw while moving.** Two descending diagonals, mirrored — down
+from the right shoulder, then down from the left — and then a rising cut up the line the
+second one came down. Lowest startup and lowest recovery in the class by some way (6/5/9
+against the hammer's 15/12/20), and **each of the three steps forward**: 0.55 m, 0.55 m,
+1.2 m. A whole sword string closes 2.3 m of ground, which is the difference between "the
+fast option" and "the option that gets you there".
+
+**The spear is neutral.** A one-armed jab off the leading hand with the pommel still at the
+hip — the only one-armed attack in the class, and the thing that makes it read as a poke
+rather than as a short lunge. Then the odd one: a sixteen-frame wind-up, past reaction,
+that dashes 1.8 m behind the point and hands out the biggest on-hit advantage in the kit
+(+14, which makes the finisher a true combo). Then a spinning sweep, the shaft round the
+whole body at knee height, with real knockback — the class's only answer to somebody who
+has already closed, and the only volume in the game that threatens behind you.
+
+**The hammer is weight.** A heavy overhead slam with the longest stagger in the chain
+(+11 on hit); a short, mid-weight tear back up out of the floor that shoves rather than
+lifts; and a finisher that dashes 1.5 m and **throws them up**. The last of those is the
+new decision: **press jump during the wind-up and the knock-up is 1.6× and you leave the
+floor on the frame it lands**, so the pair of you arrive in the air together and the air
+hammer is waiting. Decline and it is a knock-up and a reset. Paid on contact, not on the
+press, so a whiffed finisher leaves you standing in your own recovery — the rule the aerial
+fan's shove already follows.
+
+**Three pieces of machinery, and each is true of every ability at once rather than of this
+class.**
+
+*A move may carry the body.* `Move::step` is a distance down the facing the move locked,
+spent over `tuning::step_lead` frames of run-up and then the frame the hitbox appears on —
+so the weight arrives with the weapon. It is **added** to the stick rather than replacing
+it, which is what lets a cut thrown while strafing come out diagonally instead of snapping
+to the front. The follow-through afterwards is momentum bleeding off through the hindrance
+ramp, not the step.
+
+The window was the whole active period first, and the hammer's finisher is what found the
+problem: it put its head through the floor on the first active frame and then carried the
+body most of another metre past it, feet skating, for the five frames the volume was still
+out. Ending the drive on contact is the rule that is right for both a cut that sweeps and a
+slam that plants.
+
+*A swing may be rolled off the vertical.* `Plane::Diagonal(Hand)` is the upright plane
+tilted by `tuning::cut_roll`, with the hand naming which shoulder the head starts over —
+one tuned magnitude and the sign from the hand, exactly the way the Dual mage's two wings
+share one span. A cut that is either level or vertical has to choose between owning the
+width of the front and owning the height of a body; a diagonal owns both, which is why a
+swordsman throws one.
+
+*The jump button can be read inside another move's frames.* One move does it. Whether that
+generalises is an open question below.
+
+**Two things this broke, and both were worth breaking.**
+
+`a_weapon_keeps_its_shape_for_the_whole_chain` asserted that a weapon's three links were
+all the *same* volume. They are not any more: the sword's cuts mirror each other, which is
+the whole of why the string flows, and the spear's finisher spends its length swept flat
+instead of thrust. What is actually load-bearing is that **no two weapons ever put out the
+same volume**, so the shape on the screen always names the weapon — that is what the test
+says now, and it is a stronger claim than the one it replaced.
+
+`the_three_weapons_own_three_different_pieces_of_space` probed the sword at 3.2 m and
+expected a miss. It connects now, because the step is real reach. The honest restatement is
+two properties rather than one: the spear still reaches into a band the sword cannot touch
+(4.15 m against 3.40), **and** a spear poke leaves you standing where you were while a
+sword cut does not. Where you end up is half of what a spacing weapon is, and it took a
+move that carries the body to make that visible.
+
+**One bug fell out, and it is the reason the next paragraph exists.** The spinning finisher
+swept one way in the clip and the other way in the hit volume, and nothing in the game
+would have said so — `sim` cannot see an animation and `anim` does not resolve hits. The
+cause was a doc comment: `Move::arc` said a positive arc runs "right to left across the
+body", which is true of an upright swing and backwards for a flat one, because the body is
+authored in a left-handed frame dropped into a right-handed world. The comment is fixed and
+so is the arc, but the fix that matters is
+`the_champion_swings_the_weapon_the_player_can_see` in `view/tests/kinematics.rs`: it reads
+the drawn weapon off the baked clip and the volume off the live simulation and fails if
+they disagree about up or about sideways. It found this the first time it ran.
+
+**Verdict** open — nobody has played it. Things to watch:
+
+1. **Is the sword's step too much pressure?** Each link closes ground whether it lands or
+   not, so a held sword string walks 2.3 m into somebody. The counter is that you finish
+   inside their range having spent your fastest options; whether that is a real cost is
+   the first thing to find out.
+2. **Is the spear's second hit readable enough at sixteen frames?** It is deliberately past
+   reaction, and it closes 1.8 m. If it is not visibly a two-part move — coil, then dash —
+   from across the arena, the wind-up is not doing its job and the answer is the clip
+   rather than the number.
+3. **Does "jump into the finisher" occur to anybody?** There is nothing on the HUD that
+   suggests it and no other move in the game reads a button mid-animation. If it has to be
+   taught, it may want to be the hammer's rule rather than one move's.
+4. **Is +14 on hit too much?** It makes hammer-after-spear-two a guaranteed finisher, which
+   is the point, but a guaranteed finisher off a move that also closed two metres may be
+   the whole class.
+5. **Does the spin's knockback fight the chain?** It is the one link with real knockback
+   and it is a finisher, so nothing follows it — but it also ends with you standing where
+   the string started, which no other finisher does.

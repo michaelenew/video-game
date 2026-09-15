@@ -706,9 +706,9 @@ are**.
 
 | | `L` | `M` | `R` |
 | --- | --- | --- | --- |
-| On foot, hit 1 | Sword — arc across | Hammer — arc down | Spear — a line ahead |
-| On foot, hit 2 | Backcut | Uproot | Skewer |
-| On foot, hit 3 | Crescent | Earthbreaker — unblockable | Impale |
+| On foot, hit 1 | Sword — a diagonal, stepping in | Hammer — arc down | Spear — a one-armed jab |
+| On foot, hit 2 | Backcut — the mirror diagonal | Uproot | Skewer — wind up, then dash |
+| On foot, hit 3 | Upcut — rising | Earthbreaker — unblockable, and it launches | Whirl — swept round the body |
 | Airborne | Air sword | Air hammer — spikes | Air spear — a fan around the aim |
 | Rushing | Rush slash | Rush sweep — along the floor | Rush stab, or Pole vault aimed at the floor |
 | `space` + weapon | Rising cut | Uppercut | Pole drive |
@@ -717,6 +717,7 @@ are**.
 | --- | --- |
 | `E` | **Rush.** One charge. A dash, and it cancels any recovery |
 | `space`, airborne, holding somebody | The uppercut's second leap. Both of you go higher |
+| `space` during Earthbreaker | Go up with them: a bigger knock-up, and you leave the floor on the frame it lands. The only place in the game the jump button is read inside another move's frames — see §Open |
 
 Nineteen moves, three buttons, one modifier key, no chords. The full kit is in
 [kits/champion.md](kits/champion.md).
@@ -920,3 +921,16 @@ aimed at a wall two metres away still reaches ten, through the wall. See
   mirror. Camera-relative is standard in third person and probably correct.
 - **Held versus tapped clicks.** Several mechanics already want hold (Guard, charge attacks,
   Rush). Whether hold is a universal modifier or per-ability is unresolved.
+- ⚠️ **A button pressed *inside* another move's frames — new 2026-09-15.** Jump, during the
+  Champion's hammer finisher, is the only one in the game: it is banked while the move winds
+  up and spent on the frame it connects, and what it buys is a bigger knock-up and both of
+  you leaving the floor together. Everything else in the grammar reads a button when you are
+  free to act; this reads one when you are not.
+
+  It is a good input for what it does — "am I going with this one" is a real question and
+  the move it hangs off is a twenty-frame telegraph with room in it to decide — but it has
+  no precedent and nothing on the HUD suggests it exists. Three ways it could go: it stays
+  the one move's rule and is taught by the kit document; it becomes the *hammer's* rule,
+  applying to the uppercut as well, which is where the second half of the same idea already
+  lives; or it becomes a grammar-wide "commit harder" modifier, which is the ambitious
+  reading and needs four other classes to have something to say with it.

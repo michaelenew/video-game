@@ -135,7 +135,7 @@ pub fn clips() -> Vec<Recipe> {
         skewer(),
         crescent(),
         earthbreaker(),
-        impale(),
+        whirl(),
         air_sword(),
         air_hammer(),
         air_spear(),
@@ -234,6 +234,35 @@ fn stand(pose: Pose, lead_toe: f32, heel: f32) -> Pose {
     }
 }
 
+/// The footwork of a **step**, for the moves the simulation carries forward.
+///
+/// `hold` is how far the rear foot is holding *behind* the guard's footprint, in
+/// metres of the body's own frame -- so the higher it is, the more that foot is
+/// staying where it was while the body travels over it. `lift` is how far the
+/// lead foot is off the floor on its way to the spot it will land on.
+///
+/// **It suggests the push rather than cancelling the translation**, and that is a
+/// decision rather than a shortcut. A step is 0.55 m in four frames, which is
+/// eight metres a second -- faster than this fighter can walk -- so a rear foot
+/// authored to stand *exactly* still would have to slide most of a leg's length
+/// back through the hips inside four frames and would read as the character being
+/// dragged. What reads as a step is a rear foot that gives ground and comes back
+/// and a lead foot that leaves and arrives, which is what these two numbers are
+/// for. The arithmetic that matters -- how far the body actually goes -- is
+/// `moves::Move::step`, and it is the simulation's, not this file's.
+fn step_stance(pose: Pose, hold: f32, lift: f32) -> Pose {
+    let pose = pose.plant_l([LEAD[0], GROUND + lift, LEAD[2]]).plant_r([
+        REAR[0],
+        REAR[1] + 0.04,
+        REAR[2] - hold,
+    ]);
+    if lift > 0.01 {
+        pose.toe_l(-16.0).toe_floor_r()
+    } else {
+        pose.toe_l(0.0).toe_floor_r()
+    }
+}
+
 fn unit(v: V3) -> V3 {
     let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-4);
     [v[0] / len, v[1] / len, v[2] / len]
@@ -290,88 +319,133 @@ impl Score {
 }
 
 // ---------------------------------------------------------------------------
-// Sweep -- the poke
+// Sword -- the opener, and the first of three cuts
 // ---------------------------------------------------------------------------
 
-/// A low horizontal cut, right to left, thrown from inside the guard.
+/// A descending diagonal from over the right shoulder, thrown off a step.
 ///
-/// What this move must not be is a forward poke. Every other class's fast
-/// button goes out along the facing; the Champion's goes *across*, which is
-/// what a wide arc that catches more than one person looks like, and is half of
-/// why Sweep and Drive feel like different options from the same spacing. So
-/// the hands stay at hip height, the hips drive the arc rather than following
-/// it, and the fighter finishes facing somewhere other than where they started.
+/// The simulation swings this on `Plane::Diagonal(Hand::Right)`: the head starts
+/// high and out over the right shoulder, passes level and dead ahead through the
+/// middle of the arc, and finishes low past the left hip. This clip's whole job
+/// is to be that, frame for frame -- the contact key is the *start* of the arc
+/// because that is where the hit volume is on the frame it appears, and the key
+/// on the last live frame is the end of it, so the blade the player sees and the
+/// capsule the hit test uses sweep together.
+///
+/// **It steps.** `Move::step` carries the body a little over half a metre down
+/// its locked facing, beginning three frames before the blade arrives, so the
+/// cut lands with the weight already travelling. The feet are authored against
+/// that (`step_stance`): the rear foot holds its ground while the body crosses
+/// over it, the lead foot is in the air through the cut, and it plants on the
+/// frame the arc bottoms out.
 fn sweep() -> Recipe {
     let clip = Clip::ChampionSword;
     let (windup, contact, through) = clip.phases().expect("sweep animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // Wound to the right, sunk over the rear leg, leaning into it: the weapon
-    // is out at arm's length to the right, level, and everything above the
-    // knees has turned to put it there.
+    // Wound up over the right shoulder with the head tipped back, weight sunk
+    // onto the rear leg about to push. One frame of telegraph is all a
+    // six-frame startup has room for, so it has to be a big one.
     let cocked = {
         let body = Pose::rest()
-            .hips(0.05, -0.10, -0.02)
-            .root(6.0, -3.0, 22.0)
-            .spine(11.0, -6.0, 15.0)
-            .chest(6.0, -4.0, 15.0)
-            .head(2.0, 2.0, -38.0)
+            .hips(0.04, -0.09, -0.02)
+            .root(2.0, -4.0, 26.0)
+            .spine(6.0, -7.0, 18.0)
+            .chest(2.0, -5.0, 18.0)
+            .head(0.0, 3.0, -34.0)
             .wrists(-6.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.30, 1.06, 0.10], [0.92, -0.16, 0.36]),
-            -6.0,
-            0.03,
+            weapon(body, [0.36, 1.46, 0.10], [0.56, 0.74, 0.37]),
+            -8.0,
+            0.05,
         )
     };
 
-    // Through the target and past the middle of the arc. The hips have already
-    // unwound through square and kept going -- they are what swings the weapon,
-    // and a cut whose hips arrive with the hands is a cut thrown with the arms.
-    let cut = {
+    // **The start of the arc.** Head high and out to the right, already coming
+    // down. The lead foot has left the floor: the body is a third of the way
+    // through its step and the cut is riding on it.
+    let high = {
         let body = Pose::rest()
-            .hips(-0.05, -0.14, 0.06)
-            .root(10.0, 2.0, -10.0)
-            .spine(18.0, 4.0, -12.0)
-            .chest(8.0, 3.0, -16.0)
-            .head(4.0, 0.0, 26.0)
+            .hips(0.03, -0.10, 0.04)
+            .root(3.0, -3.0, 22.0)
+            .spine(7.0, -5.0, 15.0)
+            .chest(3.0, -4.0, 15.0)
+            .head(2.0, 2.0, -26.0)
             .wrists(-4.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.02, 1.02, 0.42], [-0.52, -0.10, 0.85]),
+        step_stance(
+            weapon(body, [0.38, 1.36, 0.36], [0.57, 0.57, 0.59]),
+            0.26,
             0.0,
-            0.07,
         )
     };
 
-    // The arc finished out past the lead hip, everything wound the other way.
-    // The rear heel is high: that foot has pivoted on its toe through the whole
-    // cut, which is what lets the hips turn this far without either foot
-    // leaving the spot it started on.
-    let follow = {
+    // The middle of it: level, dead ahead, hips through square. This is the
+    // frame the hit volume is furthest out in front, and it is the only frame
+    // of the cut where the weapon is pointing where the player is looking.
+    let level = {
         let body = Pose::rest()
-            .hips(-0.08, -0.12, 0.02)
-            .root(8.0, 5.0, -26.0)
-            .spine(14.0, 7.0, -22.0)
-            .chest(4.0, 5.0, -24.0)
-            .head(2.0, -2.0, 42.0)
-            .wrists(-6.0, 0.0, 0.0);
-        stand(
-            weapon(body, [-0.28, 1.06, 0.20], [-0.90, -0.10, -0.42]),
-            -2.0,
+            .hips(-0.02, -0.12, 0.06)
+            .root(5.0, 0.0, -2.0)
+            .spine(10.0, 2.0, -6.0)
+            .chest(4.0, 1.0, -8.0)
+            .head(3.0, 0.0, 12.0)
+            .wrists(-3.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.04, 1.20, 0.46], [0.02, 0.04, 1.0]),
+            0.20,
+            0.0,
+        )
+    };
+
+    // **The end of the arc**: low, out past the left hip, blade pointing down
+    // and across. The lead foot has arrived, which is what stops the step being
+    // a glide.
+    let low = {
+        let body = Pose::rest()
+            .hips(-0.07, -0.14, 0.04)
+            .root(8.0, 4.0, -24.0)
+            .spine(13.0, 6.0, -19.0)
+            .chest(5.0, 4.0, -20.0)
+            .head(3.0, -2.0, 34.0)
+            .wrists(-5.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [-0.34, 0.94, 0.36], [-0.57, -0.57, 0.59]),
+            0.12,
+            0.0,
+        )
+    };
+
+    // The push, two frames before the blade arrives: the rear leg driving, the
+    // lead foot off the floor on its way to the spot it will land on. This is
+    // the frame the simulation starts carrying the body, so it is the frame the
+    // feet have to agree to go.
+    let push = {
+        let body = Pose::rest()
+            .hips(0.04, -0.12, 0.0)
+            .root(2.0, -4.0, 25.0)
+            .spine(6.0, -6.0, 17.0)
+            .chest(2.0, -4.0, 17.0)
+            .head(1.0, 3.0, -30.0)
+            .wrists(-5.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.38, 1.42, 0.20], [0.58, 0.68, 0.45]),
+            0.20,
             0.09,
         )
     };
 
-    // Standing up out of the cut and bringing the point back on line.
+    // Standing up out of the cut, bringing the point back on line, and the rear
+    // foot coming up under the body from where it was left behind.
     let settle = {
         let body = Pose::rest()
-            .hips(-0.04, -0.09, 0.0)
-            .root(5.0, 3.0, -8.0)
-            .spine(9.0, 4.0, -4.0)
+            .hips(-0.03, -0.10, 0.0)
+            .root(5.0, 2.0, -8.0)
+            .spine(9.0, 3.0, -4.0)
             .chest(3.0, 2.0, -2.0)
-            .head(-1.0, 0.0, 14.0)
+            .head(-1.0, 0.0, 12.0)
             .wrists(-8.0, 0.0, 0.0);
         stand(
-            weapon(body, [-0.08, 1.14, 0.26], [-0.34, 0.60, 0.72]),
+            weapon(body, [-0.10, 1.14, 0.26], [-0.28, 0.54, 0.79]),
             0.0,
             0.05,
         )
@@ -379,173 +453,163 @@ fn sweep() -> Recipe {
 
     let mut score = Score::new();
     score.key(0, ready(), Ease::OUT);
-    // Linear out of the wind-up, for the same reason a stride is linear. The
-    // blade has ninety degrees to cover in four frames; an ease-in-out on top
-    // of that puts a spike in the middle of the swing that the solver has to
-    // absorb, and what comes out the other side is a pop rather than a fast
-    // cut. The springs do the rounding.
+    // Linear out of the wind-up and linear through the cut, for the reason a
+    // stride is linear: the blade has a hundred degrees to cover in four frames
+    // and an ease on either side of that puts a spike in the middle of the
+    // swing which the solver has to absorb. What comes out the other side is a
+    // pop rather than a cut. The springs do the rounding; the deceleration
+    // belongs at the far end, coming back to guard.
     score.key(tell(windup), cocked, Ease::LINEAR);
-    // And linear on out through the follow-through, for the same reason
-    // again. Contact is not the end of the arc -- the blade has another
-    // metre of hand travel to cover before the body has finished unwinding,
-    // and `OUT` on either of these gaps spends sixty per cent of it in the
-    // first frame, which is the teleport rather than the cut. The
-    // deceleration belongs at the far end, coming back to guard.
-    score.key(contact, cut, Ease::LINEAR);
-    score.key(part(through, last, 0.25), follow, Ease::LINEAR);
-    score.key(part(through, last, 0.8), settle, Ease::OUT);
+    score.key(part(tell(windup), windup, 0.75), push, Ease::LINEAR);
+    score.key(contact, high, Ease::LINEAR);
+    score.key(part(contact, through, 0.5), level, Ease::LINEAR);
+    score.key(through, low, Ease::LINEAR);
+    score.key(part(through, last, 0.55), settle, Ease::OUT);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
         looseness: Looseness::CRISP,
-        notes: "The safe poke, and the one move in the set that goes sideways. \
-                Thrown from inside the guard without standing up out of it: the \
-                hands stay at hip height and the hips drive the arc, so the \
-                weapon crosses the whole front instead of reaching out along the \
-                facing. Six frames of startup is not enough to hold a pose in, \
-                only enough to change one, so the telegraph is a single frame of \
-                winding to the right and the blade is moving from then on. Crisp \
-                rather than martial: a poke that rings is a poke you cannot \
-                throw twice. The recovery is spaced by how far the far hand \
-                has to travel rather than by eye: contact to follow-through \
-                and follow-through to settle are a metre each, they get six \
-                frames each at one speed, and only the last two frames -- \
-                coming back to guard -- ease."
+        notes: "The opener, and the first stroke of a figure the three sword \
+                hits draw together: down from the right, down from the left, \
+                then up. Authored against the hit volume rather than beside it \
+                -- the key on the first active frame is the *start* of the arc, \
+                high and out to the right, and the key on the last one is the \
+                end of it, low past the left hip, so what the player sees and \
+                what the capsule does are the same sweep. Six frames of startup \
+                is not enough to hold a pose in, only enough to change one, so \
+                the telegraph is a single frame of winding over the shoulder and \
+                the blade is moving from then on. Crisp rather than martial: a \
+                poke that rings is a poke you cannot throw twice. The feet are \
+                the step -- rear foot holding the ground the body crosses, lead \
+                foot in the air through the cut and down on the frame it bottoms \
+                out."
             .into(),
         keys: score.0,
     }
 }
 
 // ---------------------------------------------------------------------------
-// Drive -- the committed move
+// Spear -- the opener, and the one attack thrown with one arm
 // ---------------------------------------------------------------------------
 
-/// A lunging thrust: chamber, step, and the whole body behind the point.
+/// A jab off the leading hand, with the butt of the shaft still tucked at the
+/// hip.
 ///
-/// Drive roots you, so every centimetre of the lunge is in the pose -- the hips
-/// travel a quarter of a metre forward over a lead foot that steps out to meet
-/// them, while the rear foot stays on the spot it started on. That is what
-/// commitment looks like from the other side of the arena: a body that has gone
-/// somewhere it cannot easily come back from, and then twenty frames of coming
-/// back from it.
+/// **The only one-armed move in the class**, and the only one whose hit volume
+/// does not leave the body's centre line: `moves::hand` puts it on `Hand::Right`,
+/// so the simulation runs the line from that shoulder, and this clip has to put
+/// that hand there or the two disagree about where a three-metre pole is. The
+/// rear hand keeps the pommel at the hip, which is what a jab with a long weapon
+/// actually is -- the front hand is a guide and the back one is the engine.
+///
+/// **The feet do not move.** The spear is the spacing tool: what it buys is
+/// hitting somebody from where you already are, and a jab that stepped in would
+/// be giving that back. All the travel is in the shoulder and the shaft sliding
+/// through the front hand.
 fn drive() -> Recipe {
     let clip = Clip::ChampionSpear;
-    let (windup, contact, through) = clip.phases().expect("drive animates a move");
+    let (windup, contact, through) = clip.phases().expect("the jab animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // Chambered: hands drawn back past the right hip, point already level and
-    // on line. Aiming during the wind-up is the telegraph -- the opponent is
-    // told exactly where this is going and given eleven frames to leave.
-    let chamber = {
+    // Both hands close, the point already on line and level. The aim *is* the
+    // telegraph: the opponent is told exactly where this is going and given nine
+    // frames to not be there.
+    let set = {
         let body = Pose::rest()
-            .hips(0.05, -0.11, -0.08)
-            .root(2.0, -3.0, 20.0)
-            .spine(6.0, -5.0, 14.0)
-            .chest(2.0, -4.0, 16.0)
-            .head(-2.0, 0.0, -40.0)
-            .wrists(-8.0, 0.0, 0.0);
+            .hips(0.03, -0.08, -0.02)
+            .root(2.0, -2.0, 16.0)
+            .spine(5.0, -3.0, 11.0)
+            .chest(2.0, -2.0, 12.0)
+            .head(-2.0, 0.0, -26.0)
+            .wrists(-6.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.14, 1.12, -0.04], [-0.10, 0.10, 0.99]),
-            -10.0,
+            body.reach_r([0.22, 1.24, 0.36])
+                .reach_l([0.16, 1.04, -0.10]),
+            -4.0,
             0.03,
         )
     };
 
-    // The rear leg starts driving and the lead foot leaves the floor. Second
-    // read: the first said "a thrust", this one says "and it is coming now".
-    let load = {
+    // **The jab.** The right shoulder drives out and the shaft runs through that
+    // hand; the left stays on the pommel at the hip and never goes anywhere. The
+    // volume the simulation puts out starts at that shoulder, which is why the
+    // hand has to be the thing that travels rather than the chest.
+    let out = {
         let body = Pose::rest()
-            .hips(0.03, -0.15, 0.04)
-            .root(6.0, -2.0, 16.0)
-            .spine(10.0, -3.0, 12.0)
-            .chest(4.0, -2.0, 14.0)
-            .head(0.0, 0.0, -34.0)
-            .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.14, 1.12, 0.04], [-0.06, 0.06, 1.0])
-            .plant_l([-0.16, GROUND + 0.10, 0.34])
-            .toe_l(-14.0)
-            .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
-            .toe_floor_r()
-    };
-
-    // Contact: one line from the rear heel to the point. The rear shoulder has
-    // come through behind the weapon, which is where the damage comes from and
-    // is also the only way a two-handed grip reaches this far forward.
-    let thrust = {
-        let body = Pose::rest()
-            .hips(0.0, -0.22, 0.26)
-            .root(14.0, 0.0, -6.0)
-            .spine(16.0, 2.0, -10.0)
-            .chest(6.0, 2.0, -14.0)
-            .head(-4.0, 0.0, 20.0)
+            .hips(0.01, -0.11, 0.10)
+            .root(7.0, -1.0, 6.0)
+            .spine(9.0, -2.0, 2.0)
+            .chest(4.0, -1.0, 2.0)
+            .head(-3.0, 0.0, -10.0)
             .wrists(-2.0, 0.0, 0.0);
-        weapon(body, [0.02, 1.22, 1.00], [-0.02, 0.02, 1.0])
-            .plant_l([-0.17, GROUND, 0.62])
-            .toe_l(0.0)
-            .plant_r([REAR[0], REAR[1] + 0.11, REAR[2]])
-            .toe_floor_r()
+        stand(
+            body.reach_r([0.26, 1.26, 0.72]).reach_l([0.18, 1.06, 0.06]),
+            -2.0,
+            0.05,
+        )
     };
 
-    // The lunge bottoming out. Still extended, but the weight has arrived and
-    // the arms have given: the difference between this and contact is the
-    // difference between a strike and the end of one.
-    let spent = {
+    // The arm at full length with the point out as far as it goes. Held for the
+    // last live frame rather than snapped back: what a defender reads to decide
+    // whether to step in is the extension, and it has to exist for longer than
+    // one frame to be read.
+    let full = {
         let body = Pose::rest()
-            .hips(-0.02, -0.27, 0.30)
-            .root(18.0, 0.0, -2.0)
-            .spine(18.0, 3.0, -6.0)
-            .chest(8.0, 2.0, -10.0)
-            .head(-6.0, 0.0, 14.0)
-            .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.14, 0.92], [-0.06, -0.10, 0.99])
-            .plant_l([-0.17, GROUND, 0.62])
-            .toe_l(0.0)
-            .plant_r([REAR[0], REAR[1] + 0.13, REAR[2]])
-            .toe_floor_r()
+            .hips(0.0, -0.13, 0.14)
+            .root(9.0, -1.0, 2.0)
+            .spine(11.0, -1.0, -2.0)
+            .chest(5.0, -1.0, -2.0)
+            .head(-4.0, 0.0, -4.0)
+            .wrists(0.0, 0.0, 0.0);
+        stand(
+            body.reach_r([0.28, 1.26, 0.84]).reach_l([0.18, 1.06, 0.10]),
+            0.0,
+            0.05,
+        )
     };
 
-    // Hauling back out of it: the lead foot lifts off the far spot and comes
-    // home. A lunge that recovers by sliding its front foot back is a lunge on
-    // ice.
-    let pull = {
+    // Snapped back to the guard's grip. A poke's recovery is the hand coming
+    // home, not the body standing up out of anything -- it never went anywhere.
+    let home = {
         let body = Pose::rest()
-            .hips(0.02, -0.15, 0.08)
-            .root(6.0, -2.0, 8.0)
-            .spine(8.0, -2.0, 6.0)
-            .chest(3.0, -1.0, 8.0)
-            .head(-2.0, 0.0, -14.0)
-            .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.10, 1.14, 0.16], [-0.16, 0.40, 0.90])
-            .plant_l([-0.155, GROUND + 0.06, 0.30])
-            .toe_l(-10.0)
-            .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
-            .toe_floor_r()
+            .hips(0.02, -0.08, 0.02)
+            .root(4.0, 0.0, 12.0)
+            .spine(6.0, -1.0, 9.0)
+            .chest(3.0, -1.0, 9.0)
+            .head(-2.0, 0.0, -18.0)
+            .wrists(-6.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.12, 1.16, 0.22], [-0.10, 0.44, 0.89]),
+            0.0,
+            0.03,
+        )
     };
 
     let mut score = Score::new();
-    score.key(0, ready(), CARRY);
-    score.key(part(tell(windup), windup, 0.3), chamber, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.45), load, CARRY);
-    score.key(contact, thrust, Ease::STRIKE);
-    score.key(through, spent, CARRY);
-    score.key(part(through, last, 0.4), pull, CARRY);
+    score.key(0, ready(), Ease::OUT);
+    score.key(tell(windup), set, Ease::SMOOTH);
+    score.key(contact, out, Ease::STRIKE);
+    score.key(through, full, Ease::OUT);
+    score.key(part(through, last, 0.5), home, CARRY);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
-        looseness: Looseness::MARTIAL,
-        notes: "The lunge. It roots you, so all of the travel is in the pose: \
-                the hips go a quarter of a metre forward over a lead foot that \
-                steps out to meet them, and the rear foot never leaves the spot \
-                it started on. Two reads in the startup rather than one -- the \
-                point comes on line through frame five, the rear leg starts \
-                driving at six -- and no hold between them, because the hands \
-                have two metres to cross before the point lands and eleven \
-                frames to cross them in, which at a swordsman's speed is all \
-                of them. The recovery takes its time on purpose: twenty \
-                frames of pulling yourself back together is the price of the \
-                reach, and it should look like it."
+        looseness: Looseness::CRISP,
+        notes: "The jab, and the one attack in the class thrown with one arm. \
+                The front hand goes and the back one stays: the pommel is at the \
+                hip through the whole thing, which is both what a jab with a long \
+                weapon is and the reason this reads as a poke rather than as a \
+                short version of a lunge. The hit volume leaves that shoulder \
+                rather than the chest -- `moves::hand` says `Right` -- so the \
+                hand is the thing that has to travel, and `kinematics.rs` fails \
+                if the arm the renderer draws and the arm the simulation swings \
+                from ever part company. The feet never move, because the spear's \
+                whole job is reaching somebody from where you already are, and \
+                the extension is held for the last live frame: what a defender \
+                reads before deciding to step in is the arm at full length, and \
+                it has to last longer than one frame to be read."
             .into(),
         keys: score.0,
     }
@@ -1536,258 +1600,296 @@ fn vault() -> Recipe {
 }
 
 // ---------------------------------------------------------------------------
-// Backcut -- the sword's second hit
+// Backcut -- the second cut, the mirror of the first
 // ---------------------------------------------------------------------------
 
-/// The blade coming back the other way, left to right and a hand higher.
+/// The same descending diagonal, off the other shoulder.
 ///
-/// **It never opens from the guard.** The first key is the far side of a swing
-/// -- hands out past the left hip, hips wound that way, weight still travelling
-/// -- because this move only exists as the second half of something, and a
-/// second hit that started from a clean guard would be a first hit played
-/// twice. That is also the whole read for the opponent: a body that did not
-/// come back to guard is a body that is not finished.
+/// `Plane::Diagonal(Hand::Left)`: head high over the left shoulder, level and
+/// ahead through the middle, low past the right hip at the end. The first cut
+/// finished low on the left, so this one starts from where that one left the
+/// blade -- the hands lift up the left side and come down again, and nothing has
+/// to be carried back to a chamber.
 ///
-/// The sim sweeps it with a **negative** arc, which runs the head of the weapon
-/// the other way round the same span, so the hitbox and the pose agree about
-/// which side it comes from.
+/// **It opens on the far side of somebody else's swing.** That is the rule for
+/// every second hit in the chain and it is the whole read: a body that did not
+/// come back to guard is a body that is not finished. Five frames of startup is
+/// one key of lifting the blade and nothing else.
 fn backcut() -> Recipe {
     let clip = Clip::ChampionBackcut;
     let (windup, contact, through) = clip.phases().expect("backcut animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // Where a cut leaves you: everything wound left, the blade out past the
-    // lead hip, the rear heel still up from the pivot that put it there.
+    // Where the first cut left everything: wound left, blade low past that hip,
+    // rear heel still up from the turn that put it there.
     let carried = {
         let body = Pose::rest()
-            .hips(-0.07, -0.12, 0.02)
-            .root(7.0, 4.0, -24.0)
-            .spine(13.0, 6.0, -20.0)
-            .chest(4.0, 4.0, -22.0)
-            .head(2.0, -2.0, 38.0)
-            .wrists(-6.0, 0.0, 0.0);
+            .hips(-0.07, -0.16, 0.04)
+            .root(11.0, 4.0, -22.0)
+            .spine(17.0, 6.0, -18.0)
+            .chest(6.0, 4.0, -20.0)
+            .head(3.0, -2.0, 34.0)
+            .wrists(-5.0, 0.0, 0.0);
         stand(
-            weapon(body, [-0.26, 1.08, 0.22], [-0.88, -0.06, -0.46]),
+            weapon(body, [-0.34, 0.94, 0.36], [-0.57, -0.57, 0.59]),
             -2.0,
             0.08,
         )
     };
 
-    // The only wind-up a chained hit gets: the point snapped up and a little
-    // further round, which loads the blade without stopping the body. Three
-    // frames, because that is all a six-frame startup has.
-    let load = {
+    // The only wind-up a chained hit gets: the blade lifted up the left side to
+    // where it can come down again. The hands travel a short way and the head of
+    // the weapon travels a long one, which is what a re-chamber is.
+    let lifted = {
         let body = Pose::rest()
-            .hips(-0.06, -0.10, -0.02)
-            .root(3.0, 5.0, -28.0)
-            .spine(8.0, 7.0, -24.0)
-            .chest(2.0, 5.0, -26.0)
-            .head(0.0, -2.0, 42.0)
-            .wrists(-2.0, 0.0, 0.0);
-        stand(
-            weapon(body, [-0.24, 1.22, 0.04], [-0.80, 0.42, -0.43]),
-            -4.0,
-            0.07,
-        )
-    };
-
-    // Through the target, a hand higher than the first cut. The hips have
-    // already crossed square, which is what makes this a swing rather than an
-    // arm throwing a blade back.
-    let cut = {
-        let body = Pose::rest()
-            .hips(0.04, -0.13, 0.06)
-            .root(9.0, -3.0, 14.0)
-            .spine(15.0, -5.0, 16.0)
-            .chest(7.0, -3.0, 18.0)
-            .head(4.0, 0.0, -24.0)
+            .hips(-0.05, -0.10, -0.02)
+            .root(2.0, 5.0, -26.0)
+            .spine(6.0, 8.0, -18.0)
+            .chest(2.0, 5.0, -18.0)
+            .head(0.0, -3.0, 32.0)
             .wrists(-4.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.04, 1.18, 0.40], [0.58, -0.06, 0.81]),
-            0.0,
+            weapon(body, [-0.36, 1.46, 0.10], [-0.56, 0.74, 0.37]),
+            -6.0,
             0.06,
         )
     };
 
-    // Finished out past the right shoulder, wound the way the next thing would
-    // come from. The mirror of where it started, which is what makes the two
-    // cuts read as one motion doubling back on itself.
-    let follow = {
+    // The push: rear leg driving, lead foot off the floor. Same frame the
+    // simulation starts carrying the body.
+    let push = {
         let body = Pose::rest()
-            .hips(0.08, -0.11, 0.0)
-            .root(6.0, -5.0, 26.0)
-            .spine(11.0, -7.0, 22.0)
-            .chest(4.0, -5.0, 24.0)
-            .head(2.0, 2.0, -40.0)
-            .wrists(-6.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.30, 1.16, 0.16], [0.90, 0.04, -0.44]),
-            -4.0,
-            0.05,
+            .hips(-0.04, -0.12, 0.0)
+            .root(2.0, 4.0, -25.0)
+            .spine(6.0, 6.0, -17.0)
+            .chest(2.0, 4.0, -17.0)
+            .head(1.0, -3.0, 30.0)
+            .wrists(-5.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [-0.38, 1.42, 0.20], [-0.58, 0.68, 0.45]),
+            0.20,
+            0.09,
+        )
+    };
+
+    // **The start of the arc**, mirrored: high and out to the left, coming down.
+    let high = {
+        let body = Pose::rest()
+            .hips(-0.03, -0.10, 0.04)
+            .root(3.0, 3.0, -22.0)
+            .spine(7.0, 5.0, -15.0)
+            .chest(3.0, 4.0, -15.0)
+            .head(2.0, -2.0, 26.0)
+            .wrists(-4.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [-0.38, 1.36, 0.36], [-0.57, 0.57, 0.59]),
+            0.26,
+            0.0,
+        )
+    };
+
+    // Level and dead ahead, a hand higher than the opener's middle. That gap is
+    // what stops the two cuts looking like the same swing played twice.
+    let level = {
+        let body = Pose::rest()
+            .hips(0.02, -0.11, 0.06)
+            .root(5.0, 0.0, 2.0)
+            .spine(9.0, -2.0, 8.0)
+            .chest(4.0, -1.0, 10.0)
+            .head(3.0, 0.0, -12.0)
+            .wrists(-3.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [-0.04, 1.26, 0.46], [-0.02, 0.04, 1.0]),
+            0.20,
+            0.0,
+        )
+    };
+
+    // **The end of it**: low, out past the right hip, wound the way the third
+    // cut comes out of.
+    let low = {
+        let body = Pose::rest()
+            .hips(0.07, -0.13, 0.04)
+            .root(8.0, -4.0, 24.0)
+            .spine(12.0, -6.0, 19.0)
+            .chest(5.0, -4.0, 20.0)
+            .head(3.0, 2.0, -34.0)
+            .wrists(-5.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.34, 0.96, 0.36], [0.57, -0.57, 0.59]),
+            0.12,
+            0.0,
         )
     };
 
     let mut score = Score::new();
     score.key(0, carried, Ease::LINEAR);
-    score.key(tell(windup), load, Ease::LINEAR);
-    score.key(contact, cut, Ease::LINEAR);
-    score.key(part(through, last, 0.3), follow, Ease::LINEAR);
+    score.key(tell(windup), lifted, Ease::LINEAR);
+    score.key(part(tell(windup), windup, 0.75), push, Ease::LINEAR);
+    score.key(contact, high, Ease::LINEAR);
+    score.key(part(contact, through, 0.5), level, Ease::LINEAR);
+    score.key(through, low, Ease::LINEAR);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
         looseness: Looseness::CRISP,
-        notes: "The second hit of the sword chain, and the clip that decides \
-                whether the chain reads as a chain at all. It opens on the far \
-                side of a swing rather than on the guard -- hands past the left \
-                hip, hips wound that way, the rear heel still up -- so that \
-                whatever preceded it crossfades into something that is plainly \
-                mid-motion. Six frames of startup is one key of loading the \
-                blade and nothing else; the cut itself is a hand higher than \
-                the opener, which is what stops the two looking like the same \
-                swing. It finishes wound right, the mirror of where it started, \
-                and only then comes back to guard: the whole thing is one \
-                figure of eight with a hit at each end of it."
+        notes: "The second stroke, and the clip that decides whether the chain \
+                reads as a chain at all. It opens exactly where the opener \
+                finished -- blade low past the left hip, hips wound that way, \
+                rear heel still up -- so whatever preceded it crossfades into \
+                something plainly mid-motion. Five frames of startup is one key \
+                of lifting the blade up the left side, which is the shortest \
+                honest re-chamber there is: the hands move a hand's width and \
+                the head of the weapon crosses two metres. Then the mirror of \
+                the first cut, a hand higher through the middle so the two do \
+                not read as one swing played twice, and it finishes wound right \
+                -- which is where the third one starts."
             .into(),
         keys: score.0,
     }
 }
 
 // ---------------------------------------------------------------------------
-// Crescent -- the sword's finisher
+// Upcut -- the sword's finisher
 // ---------------------------------------------------------------------------
 
-/// A full turning cut, all the way round.
+/// A rising cut out of a short dash, up the line the second one came down.
 ///
-/// The widest volume in the game: the sim sweeps it most of a half turn, so the
-/// head of the weapon starts pointing squarely to the right and finishes
-/// pointing squarely to the left. A body cannot turn that far -- the root's
-/// yaw runs out at sixty-five degrees -- and it does not need to, because a
-/// swing is mostly *the weapon pointing somewhere else* with the hands near the
-/// sternum. What the body supplies is the drive: a hard wind to the right, both
-/// feet turning, and a rear leg that steps through.
+/// `Plane::Diagonal(Hand::Left)` with the arc reversed: the head starts low past
+/// the right hip -- exactly where Backcut left it -- and finishes high over the
+/// left shoulder. Three strokes, one figure: down from the right, down from the
+/// left, up the same line. The blade never has to be carried back to a chamber
+/// and the player never has to be told which hit they are on.
 ///
-/// **The feet commit**, which is the rule for every finisher in the chain. It
-/// is the only grounded sword move that does not put them back where it found
-/// them, and that is the tell: if you see the feet turn, the string is over one
-/// way or the other.
+/// **The feet commit**, which is the rule for every finisher in the chain, and
+/// here the simulation commits them for you: `Move::step` drives the body better
+/// than a metre while the cut travels, so this is a small dash with a blade
+/// coming up out of it rather than a swing thrown from a standing start. It is
+/// the only grounded sword move that does not put the feet back where it found
+/// them, and that is the tell -- if you see the feet leave, the string is over
+/// one way or the other.
 fn crescent() -> Recipe {
-    let clip = Clip::ChampionCrescent;
-    let (windup, contact, through) = clip.phases().expect("crescent animates a move");
+    let clip = Clip::ChampionUpcut;
+    let (windup, contact, through) = clip.phases().expect("the upcut animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // Wound hard right, weapon out square to that side and tipped back. The
-    // rear foot has already begun to pivot, which is the frame that says this
-    // one is going all the way round.
-    let wind = {
+    // Sunk low over the right hip with the blade dropped almost to the floor and
+    // the point behind. Nine frames of startup, and the whole of it is getting
+    // *under* the cut: a rising strike thrown from chest height has nowhere to
+    // rise from.
+    let sunk = {
         let body = Pose::rest()
-            .hips(0.07, -0.12, -0.06)
-            .root(4.0, -6.0, 34.0)
-            .spine(9.0, -9.0, 24.0)
-            .chest(4.0, -6.0, 26.0)
-            .head(2.0, 3.0, -52.0)
+            .hips(0.06, -0.24, 0.06)
+            .root(16.0, -5.0, 22.0)
+            .spine(20.0, -7.0, 16.0)
+            .chest(9.0, -5.0, 16.0)
+            .head(-6.0, 3.0, -28.0)
             .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.27, 1.14, -0.02], [0.96, 0.05, -0.28])
-            .plant_l([-0.15, GROUND, 0.13])
-            .toe_l(-6.0)
-            .plant_r([0.17, GROUND + 0.05, -0.16])
-            .toe_floor_r()
+        stand(
+            weapon(body, [0.26, 0.82, 0.10], [0.52, -0.68, 0.52]),
+            -12.0,
+            0.06,
+        )
     };
 
-    // The bottom of the coil: the head of the weapon is behind the right
-    // shoulder and the knees have taken the weight. Held for a beat, because
-    // eleven frames of startup is long enough to hold a shape in and a finisher
-    // should be answerable.
-    let coil = {
+    // **The start of the arc**: low and out past the right hip, blade already
+    // climbing, both feet leaving as the dash takes hold. The body is a third of
+    // the way through a metre of ground.
+    let under = {
         let body = Pose::rest()
-            .hips(0.08, -0.18, -0.08)
-            .root(8.0, -7.0, 40.0)
-            .spine(12.0, -11.0, 28.0)
-            .chest(6.0, -7.0, 30.0)
-            .head(4.0, 4.0, -58.0)
+            .hips(0.04, -0.20, 0.14)
+            .root(14.0, -3.0, 16.0)
+            .spine(18.0, -5.0, 12.0)
+            .chest(8.0, -4.0, 12.0)
+            .head(-2.0, 2.0, -20.0)
             .wrists(-2.0, 0.0, 0.0);
-        weapon(body, [0.31, 1.10, -0.08], [0.86, 0.08, -0.50])
-            .plant_l([-0.15, GROUND, 0.13])
-            .toe_l(-8.0)
-            .plant_r([0.18, GROUND + 0.07, -0.18])
-            .toe_floor_r()
+        step_stance(
+            weapon(body, [0.32, 0.88, 0.40], [0.54, -0.54, 0.65]),
+            0.34,
+            0.0,
+        )
     };
 
-    // Through the front, hips already square and still turning. The blade is
-    // level and the arms are long: this is the frame with the most reach in it.
-    let sweep_through = {
+    // Through level and still climbing, hips driving up out of the sink. This is
+    // the frame the volume is furthest out in front.
+    let driving = {
         let body = Pose::rest()
-            .hips(0.0, -0.16, 0.10)
-            .root(11.0, 0.0, 2.0)
-            .spine(16.0, 0.0, 0.0)
-            .chest(7.0, 0.0, 0.0)
-            .head(3.0, 0.0, 0.0)
-            .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.04, 1.06, 0.42], [0.06, -0.10, 0.99])
-            .plant_l([-0.16, GROUND, 0.16])
-            .toe_l(-2.0)
-            .plant_r([0.14, GROUND + 0.09, -0.10])
-            .toe_floor_r()
+            .hips(0.0, -0.10, 0.16)
+            .root(3.0, 0.0, 2.0)
+            .spine(5.0, 0.0, 4.0)
+            .chest(1.0, 0.0, 4.0)
+            .head(2.0, 0.0, -6.0)
+            .wrists(0.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.06, 1.24, 0.50], [0.04, 0.10, 0.99]),
+            0.22,
+            0.0,
+        )
     };
 
-    // Out to the left with the body wound after it, and the rear foot stepping
-    // through: this is the commitment, and it is a whole step of ground given
-    // away if the cut found nothing.
-    let across = {
+    // **The end of it**: the blade overhead and out to the left, the body stood
+    // all the way up and then some. Everything that was sunk is now extended,
+    // which is what a launcher has to look like from the other side of the arena.
+    let over = {
         let body = Pose::rest()
-            .hips(-0.09, -0.14, 0.04)
-            .root(9.0, 6.0, -36.0)
-            .spine(14.0, 9.0, -26.0)
-            .chest(5.0, 6.0, -28.0)
-            .head(2.0, -3.0, 54.0)
-            .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [-0.30, 1.08, 0.16], [-0.96, -0.06, -0.26])
-            .plant_l([-0.18, GROUND, 0.02])
-            .toe_l(-4.0)
-            .plant_r([-0.02, GROUND, 0.34])
-            .toe_r(-10.0)
+            .hips(-0.06, 0.02, 0.10)
+            .root(-8.0, 4.0, -18.0)
+            .spine(-10.0, 6.0, -14.0)
+            .chest(-5.0, 4.0, -16.0)
+            .head(10.0, -2.0, 26.0)
+            .wrists(-2.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [-0.24, 1.66, 0.28], [-0.54, 0.62, 0.57]),
+            0.10,
+            0.0,
+        )
     };
 
-    // Arresting the spin on the new footprint: weight sinking into the foot
-    // that stepped through, blade still out behind.
-    let check = {
+    // Coming down off it. The weight arrives on the lead foot and the rear one
+    // has to be gathered in from where the dash left it behind.
+    let land = {
         let body = Pose::rest()
-            .hips(-0.05, -0.16, 0.0)
-            .root(6.0, 4.0, -22.0)
-            .spine(10.0, 6.0, -16.0)
-            .chest(3.0, 4.0, -16.0)
-            .head(0.0, -2.0, 30.0)
-            .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [-0.22, 1.14, 0.06], [-0.76, 0.28, -0.59])
-            .plant_l([-0.18, GROUND, -0.02])
-            .toe_l(-2.0)
-            .plant_r([0.02, GROUND, 0.30])
-            .toe_r(-6.0)
+            .hips(-0.02, -0.14, 0.04)
+            .root(6.0, 2.0, -10.0)
+            .spine(9.0, 3.0, -8.0)
+            .chest(3.0, 2.0, -6.0)
+            .head(0.0, 0.0, 14.0)
+            .wrists(-7.0, 0.0, 0.0);
+        stand(
+            weapon(body, [-0.08, 1.24, 0.24], [-0.24, 0.72, 0.65]),
+            -4.0,
+            0.07,
+        )
     };
 
     let mut score = Score::new();
-    score.key(0, ready(), Ease::OUT);
-    score.key(tell(windup), wind, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.55), coil, Ease::IN);
-    score.key(contact, sweep_through, Ease::LINEAR);
-    score.key(through, across, Ease::LINEAR);
-    score.key(part(through, last, 0.4), check, CARRY);
+    score.key(0, ready(), Ease::IN);
+    // A real hold at the bottom. Nine frames is enough to be read, and the sink
+    // is the read: this is the one sword move worth blocking, so it is allowed
+    // to say so.
+    score.key(part(tell(windup), windup, 0.55), sunk, Ease::SNAP);
+    score.key(contact, under, Ease::LINEAR);
+    score.key(part(contact, through, 0.5), driving, Ease::LINEAR);
+    score.key(through, over, Ease::LINEAR);
+    score.key(part(through, last, 0.4), land, Ease::OUT);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
         looseness: Looseness::MARTIAL,
-        notes: "The sword's finisher, and the widest thing in the game: the \
-                head of the weapon starts square to the right and ends square \
-                to the left, most of a half turn. The body cannot turn that far \
-                and does not try -- the hands stay near the sternum and it is \
-                the haft that goes round, which is how a real swing works and \
-                why the grip solver is worth having. What the body does supply \
-                is the drive and the commitment: a hard wind to the right with \
-                both knees loaded, then a rear foot that steps all the way \
-                through the cut. That step is the tell. Every finisher in the \
-                chain moves the feet and nothing else in the grounded set does, \
-                so a player who sees the feet go knows the string is over."
+        notes: "The finisher, and the third stroke of the figure: down from the \
+                right, down from the left, then up the line the second one came \
+                down. It starts where Backcut finished -- blade low past the \
+                right hip -- and ends with it overhead and out to the left. The \
+                startup is spent getting *under* the cut rather than winding it \
+                back, because a rising strike thrown from chest height has \
+                nothing to rise from, and the sink is also the telegraph: nine \
+                frames of a body dropping is the most readable thing in the \
+                sword's row and this is the one hit of the three worth blocking. \
+                The simulation dashes the body better than a metre while the \
+                blade climbs, so both feet leave -- which is the chain's tell \
+                that a finisher has been thrown."
             .into(),
         keys: score.0,
     }
@@ -1864,39 +1966,59 @@ fn uproot() -> Recipe {
         )
     };
 
-    // Contact: the head ripped up through the front of them, body long, rear
-    // heel driven into the floor. The arc is still climbing here -- this is the
-    // middle of the swing rather than the end of it.
-    let tear = {
+    // **The start of the arc**: the head still down by the floor and already
+    // travelling, the body beginning to step in behind it. The simulation carries
+    // you half a metre through this, which is what turns a short swing into
+    // something that arrives -- see `step_stance`.
+    let scrape = {
         let body = Pose::rest()
-            .hips(0.0, -0.06, 0.06)
-            .root(-4.0, 0.0, 2.0)
-            .spine(-8.0, 0.0, 0.0)
-            .chest(-6.0, 0.0, 0.0)
-            .head(-18.0, 0.0, -6.0)
-            .wrists(-2.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.04, 1.24, 0.40], [0.02, 0.76, 0.65]),
-            4.0,
-            0.08,
+            .hips(0.02, -0.26, 0.12)
+            .root(26.0, -1.0, 6.0)
+            .spine(28.0, -2.0, 4.0)
+            .chest(12.0, -1.0, 4.0)
+            .head(0.0, 0.0, -12.0)
+            .wrists(-4.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.06, 0.66, 0.44], [0.06, -0.52, 0.85]),
+            0.22,
+            0.0,
         )
     };
 
-    // Finished overhead and slightly behind, both arms up, the whole body
-    // arched under it. The weight has gone all the way past the top, which is
-    // what makes the recovery cost what it costs.
+    // Through the middle of it: the head ripped up through the front of them,
+    // body long, weight arriving. Level and driving forward, which is the frame
+    // that says this hit shoves rather than lifts.
+    let tear = {
+        let body = Pose::rest()
+            .hips(0.0, -0.08, 0.12)
+            .root(4.0, 0.0, 2.0)
+            .spine(2.0, 0.0, 0.0)
+            .chest(0.0, 0.0, 0.0)
+            .head(-10.0, 0.0, -6.0)
+            .wrists(-2.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.04, 1.14, 0.44], [0.04, 0.24, 0.97]),
+            0.16,
+            0.0,
+        )
+    };
+
+    // **The end of it**: the head up and still out in front, both arms high, the
+    // body long under it. It finishes ahead of the shoulders rather than behind
+    // them, which is the difference between a hammer that throws somebody up and
+    // one that throws them back -- and this is the one that throws them back.
     let over = {
         let body = Pose::rest()
-            .hips(0.0, -0.02, -0.06)
-            .root(-12.0, 0.0, 4.0)
-            .spine(-16.0, 0.0, 2.0)
-            .chest(-10.0, 0.0, 2.0)
-            .head(-24.0, 0.0, -4.0)
-            .wrists(4.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.02, 1.68, 0.04], [-0.04, 0.94, -0.34]),
-            -2.0,
-            0.06,
+            .hips(0.0, -0.04, 0.06)
+            .root(-8.0, 0.0, 4.0)
+            .spine(-12.0, 0.0, 2.0)
+            .chest(-8.0, 0.0, 2.0)
+            .head(-20.0, 0.0, -4.0)
+            .wrists(2.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [0.02, 1.48, 0.34], [0.0, 0.75, 0.66]),
+            0.08,
+            0.0,
         )
     };
 
@@ -1921,8 +2043,9 @@ fn uproot() -> Recipe {
     score.key(0, down, CARRY);
     score.key(tell(windup), dig, Ease::SMOOTH);
     score.key(part(tell(windup), windup, 0.65), heave, Ease::IN);
-    score.key(contact, tear, Ease::STRIKE);
-    score.key(through, over, Ease::OUT);
+    score.key(contact, scrape, Ease::LINEAR);
+    score.key(part(contact, through, 0.5), tear, Ease::LINEAR);
+    score.key(through, over, Ease::LINEAR);
     score.key(part(through, last, 0.5), catch, CARRY);
     score.key(last, ready(), Ease::SMOOTH);
 
@@ -1933,14 +2056,17 @@ fn uproot() -> Recipe {
                 chain. It opens exactly where the overhead left the body -- \
                 folded over a weapon lying on the floor -- so the two of them \
                 crossfade into one continuous piece of work, and it climbs from \
-                there to overhead. The startup is a dig rather than a wind-up: \
-                the hands drop and the knees take a few more centimetres, which \
-                is what a person does to lift something rather than to swing it. \
-                Legs, not arms. It is the one chained hit that is easier than \
-                its own opener, and that is the honest reason -- a weight \
-                already at the bottom of its arc wants to come up. Ending it \
-                past the top rather than at it is what makes the recovery read \
-                as a cost."
+                there. The startup is a dig rather than a wind-up: the hands drop \
+                and the knees take a few more centimetres, which is what a person \
+                does to lift something rather than to swing it. Legs, not arms, \
+                and it is the one chained hit that is easier than its own opener \
+                -- a weight already at the bottom of its arc wants to come up. \
+                It is the short one: the shortest reach in the chain, and it \
+                steps half a metre so that the reach is still enough to catch \
+                whoever the slam shoved. And it finishes with the head **ahead \
+                of** the shoulders rather than behind them, because this is the \
+                hammer hit that shoves people back rather than up -- the one \
+                that throws them up is the finisher, and it comes down."
             .into(),
         keys: score.0,
     }
@@ -2030,10 +2156,13 @@ fn earthbreaker() -> Recipe {
             .head(-6.0, 0.0, 2.0)
             .wrists(-4.0, 0.0, 0.0);
         weapon(body, [0.0, 1.30, 0.34], [0.0, 0.42, 0.91])
-            .plant_l([-0.16, GROUND, 0.32])
-            .toe_l(-6.0)
-            .plant_r([REAR[0], REAR[1] + 0.04, REAR[2] - 0.04])
-            .toe_floor_r()
+            // **Both feet off the floor.** The simulation dashes the body a metre
+            // and a half in four frames, ending on the frame the head lands, and
+            // nothing that crosses that much ground that fast is walking.
+            .plant_l([-0.15, GROUND + 0.16, 0.44])
+            .toe_l(-20.0)
+            .plant_r([REAR[0], REAR[1] + 0.20, REAR[2] - 0.22])
+            .toe_r(-30.0)
     };
 
     // Everything into the floor. Knees collapsing under it, the head of the
@@ -2047,10 +2176,13 @@ fn earthbreaker() -> Recipe {
             .head(10.0, 0.0, 10.0)
             .wrists(-16.0, 0.0, 0.0);
         weapon(body, [0.0, 0.46, 0.66], [0.0, -0.80, 0.60])
-            .plant_l([-0.16, GROUND, 0.34])
+            // Landing on the frame the head lands. The dash arrives and the hammer
+            // arrives together, which is the whole of what this move is: the
+            // ground closed is not a separate beat from the hit.
+            .plant_l([-0.16, GROUND, 0.40])
             .toe_l(-2.0)
-            .plant_r([REAR[0], REAR[1], REAR[2] - 0.08])
-            .toe_r(0.0)
+            .plant_r([REAR[0], REAR[1] + 0.04, REAR[2] - 0.30])
+            .toe_floor_r()
     };
 
     // The floor has it. Nothing moving -- the beat that says the arena took the
@@ -2064,9 +2196,9 @@ fn earthbreaker() -> Recipe {
             .head(12.0, 0.0, 6.0)
             .wrists(-12.0, 0.0, 0.0);
         weapon(body, [0.0, 0.36, 0.70], [0.0, -0.42, 0.91])
-            .plant_l([-0.16, GROUND, 0.34])
+            .plant_l([-0.16, GROUND, 0.36])
             .toe_l(0.0)
-            .plant_r([REAR[0], REAR[1], REAR[2] - 0.08])
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.14])
             .toe_r(0.0)
     };
 
@@ -2091,7 +2223,11 @@ fn earthbreaker() -> Recipe {
     score.key(tell(windup), step, Ease::SMOOTH);
     score.key(part(tell(windup), windup, 0.45), wind, Ease::OUT);
     score.key(part(tell(windup), windup, 0.75), hang, Ease::SMOOTH);
-    score.key(part(windup, contact, 0.5), fall, Ease::IN);
+    // Inside the wind-up rather than between it and contact: `part(windup,
+    // contact, 0.5)` rounds up onto the contact frame itself, and a key landing
+    // there drops the contact pose -- which is the one key in a clip that must
+    // not move.
+    score.key(part(tell(windup), windup, 0.95), fall, Ease::IN);
     score.key(contact, crack, Ease::STRIKE);
     score.key(through, crater, Ease::OUT);
     score.key(part(through, last, 0.5), haul, CARRY);
@@ -2110,104 +2246,178 @@ fn earthbreaker() -> Recipe {
                 one. Contact puts the head through the ground line with the \
                 knees collapsing under it, and there is a beat on the floor \
                 before the recovery begins: the arena took that one too. The \
-                lead foot steps in on the wind-up and never steps back, because \
-                every finisher in this chain commits the feet."
+                feet leave entirely on the way in -- the simulation dashes the \
+                body a metre and a half in four frames, finishing on the frame the \
+                head lands, so the ground closed is not a separate beat from the \
+                hit -- and they never come back to where they started, because \
+                every finisher in this chain commits them. What it does *after* \
+                contact is the other half of the move and is not in this clip: it \
+                throws whoever it caught into the air, and if the jump button went \
+                down while this was winding up, the Champion goes up with them and \
+                the airborne clips take it from here."
             .into(),
         keys: score.0,
     }
 }
 
 // ---------------------------------------------------------------------------
-// Skewer -- the spear's second hit
+// Skewer -- the second thrust, and the heaviest stagger in the kit
 // ---------------------------------------------------------------------------
 
-/// A short second thrust out of the end of the first.
+/// A long wind-up, then a dash with everything behind the point.
 ///
-/// **The feet do not move**, and that is the whole difference between this and
-/// the opening lunge. Drive travels a quarter of a metre on a lead foot that
-/// steps out to meet it; Skewer is hands, and the body they are attached to
-/// holding exactly the ground the lunge bought. Eight frames of startup is one
-/// snap back to the chest and one drive out again.
+/// The one link in the chain whose second hit is **slower** than its opener, and
+/// deliberately: sixteen frames of startup is past a human reaction, so this is a
+/// thing you get to see coming and have to answer. What it buys is the biggest
+/// on-hit advantage the class has -- land it and the finisher is guaranteed --
+/// and better than a metre and a half of ground closed while it travels.
 ///
-/// It reaches slightly less far than the opener for the same reason: you are
-/// throwing this one from where you already are.
+/// So the clip is two halves that could not be mistaken for each other. The first
+/// is a coil: both hands back on the haft, the point drawn past the hip, the
+/// weight all on the rear leg, and it *holds* there. The second is the dash --
+/// `Move::step` carries the body and both feet leave the floor, because a body
+/// crossing that much ground in six frames is not walking.
 fn skewer() -> Recipe {
     let clip = Clip::ChampionSkewer;
     let (windup, contact, through) = clip.phases().expect("skewer animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // Where a thrust leaves you: extended, weight forward over the lead leg,
-    // the point still on line and the arms already giving.
+    // Where the jab left it: front hand out, pommel at the hip. The second hand
+    // coming onto the haft is the first thing that changes, and it is the read --
+    // one hand is a poke, two hands is a commitment.
+    let carried = {
+        let body = Pose::rest()
+            .hips(0.0, -0.13, 0.14)
+            .root(9.0, -1.0, 2.0)
+            .spine(11.0, -1.0, -2.0)
+            .chest(5.0, -1.0, -2.0)
+            .head(-4.0, 0.0, -4.0)
+            .wrists(0.0, 0.0, 0.0);
+        stand(
+            body.reach_r([0.28, 1.26, 0.84]).reach_l([0.18, 1.06, 0.10]),
+            0.0,
+            0.05,
+        )
+    };
+
+    // The coil. Both hands drawn right back past the hip, the point still level
+    // and still on line -- a wind-up that re-aims gives the defender two reads
+    // and this one is only allowed to give them one. The weight is entirely on
+    // the rear leg, which is the frame that says a dash is coming.
+    let coiled = {
+        let body = Pose::rest()
+            .hips(0.07, -0.20, -0.14)
+            .root(-2.0, -5.0, 30.0)
+            .spine(2.0, -8.0, 22.0)
+            .chest(0.0, -6.0, 22.0)
+            .head(-4.0, 2.0, -46.0)
+            .wrists(-10.0, 0.0, 0.0);
+        weapon(body, [0.20, 1.10, -0.20], [-0.14, 0.06, 0.99])
+            .plant_l([-0.13, GROUND + 0.02, 0.10])
+            .toe_l(-16.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
+            .toe_r(0.0)
+    };
+
+    // The rear leg fires and the lead foot leaves the floor. Two frames before
+    // the point arrives, which is what makes the dash visible as a dash rather
+    // than as a thrust that happened to move.
+    let fired = {
+        let body = Pose::rest()
+            .hips(0.04, -0.20, 0.06)
+            .root(10.0, -3.0, 20.0)
+            .spine(12.0, -5.0, 14.0)
+            .chest(5.0, -3.0, 14.0)
+            .head(-2.0, 0.0, -30.0)
+            .wrists(-8.0, 0.0, 0.0);
+        weapon(body, [0.16, 1.14, 0.06], [-0.08, 0.04, 1.0])
+            .plant_l([-0.15, GROUND + 0.14, 0.30])
+            .toe_l(-18.0)
+            .plant_r([REAR[0], REAR[1] + 0.10, REAR[2] - 0.20])
+            .toe_floor_r()
+    };
+
+    // Halfway out, mid-flight. The hands cross most of a metre between the coil
+    // and the point landing, and the whole of that gap is authored at one speed
+    // for the reason the sweep's follow-through is: a hand asked to cross forty
+    // centimetres in one interval does not look fast, it looks like a cut in the
+    // film. The dash supplies the acceleration; the arms only have to be honest
+    // about where they are.
+    let flying = {
+        let body = Pose::rest()
+            .hips(0.02, -0.19, 0.18)
+            .root(13.0, -1.0, 12.0)
+            .spine(15.0, -2.0, 6.0)
+            .chest(6.0, -1.0, 4.0)
+            .head(-3.0, 0.0, -12.0)
+            .wrists(-5.0, 0.0, 0.0);
+        weapon(body, [0.06, 1.20, 0.64], [-0.04, 0.03, 1.0])
+            .plant_l([-0.16, GROUND + 0.16, 0.36])
+            .toe_l(-20.0)
+            .plant_r([REAR[0], REAR[1] + 0.18, REAR[2] - 0.28])
+            .toe_r(-26.0)
+    };
+
+    // **Contact.** One line from the rear heel to the point, both feet off the
+    // floor, the shoulders come through behind the shaft. This is the only pose
+    // in the class where the arms are meant to read as straight.
+    let thrust = {
+        let body = Pose::rest()
+            .hips(0.0, -0.18, 0.28)
+            .root(15.0, 0.0, -4.0)
+            .spine(17.0, 2.0, -8.0)
+            .chest(7.0, 2.0, -12.0)
+            .head(-4.0, 0.0, 16.0)
+            .wrists(-2.0, 0.0, 0.0);
+        weapon(body, [0.02, 1.22, 0.92], [-0.02, 0.02, 1.0])
+            .plant_l([-0.16, GROUND + 0.06, 0.40])
+            .toe_l(-8.0)
+            .plant_r([REAR[0], REAR[1] + 0.16, REAR[2] - 0.34])
+            .toe_floor_r()
+    };
+
+    // Arriving. The dash lands and the arms give: the difference between this and
+    // contact is the difference between a strike and the end of one.
     let spent = {
         let body = Pose::rest()
-            .hips(-0.02, -0.25, 0.28)
-            .root(17.0, 0.0, -2.0)
-            .spine(17.0, 3.0, -6.0)
+            .hips(-0.02, -0.26, 0.30)
+            .root(18.0, 0.0, -2.0)
+            .spine(18.0, 3.0, -6.0)
             .chest(8.0, 2.0, -10.0)
-            .head(-6.0, 0.0, 14.0)
+            .head(-6.0, 0.0, 12.0)
             .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.14, 0.90], [-0.06, -0.08, 0.99])
+        weapon(body, [0.0, 1.14, 0.86], [-0.06, -0.10, 0.99])
             .plant_l([-0.17, GROUND, 0.56])
             .toe_l(0.0)
-            .plant_r([REAR[0], REAR[1] + 0.12, REAR[2]])
+            .plant_r([REAR[0], REAR[1] + 0.06, REAR[2] - 0.12])
             .toe_floor_r()
     };
 
-    // The snap back. The hands come to the chest and the point stays exactly
-    // where it was pointing, which is the one thing a second thrust must not
-    // give away -- there is no new aim, only a new push.
-    let chamber = {
-        let body = Pose::rest()
-            .hips(0.02, -0.20, 0.12)
-            .root(10.0, -2.0, 12.0)
-            .spine(12.0, -3.0, 8.0)
-            .chest(5.0, -2.0, 10.0)
-            .head(-2.0, 0.0, -20.0)
-            .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.10, 1.18, 0.10], [-0.06, 0.02, 1.0])
-            .plant_l([-0.17, GROUND, 0.56])
-            .toe_l(-2.0)
-            .plant_r([REAR[0], REAR[1] + 0.10, REAR[2]])
-            .toe_floor_r()
-    };
-
-    // Out again. Shoulders behind the point, feet exactly where the lunge left
-    // them, and the reach comes from the torso rather than from another step.
-    let stab = {
-        let body = Pose::rest()
-            .hips(0.0, -0.24, 0.30)
-            .root(16.0, 0.0, -8.0)
-            .spine(18.0, 2.0, -12.0)
-            .chest(7.0, 2.0, -16.0)
-            .head(-4.0, 0.0, 22.0)
-            .wrists(-2.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.20, 0.96], [-0.02, 0.0, 1.0])
-            .plant_l([-0.17, GROUND, 0.56])
-            .toe_l(0.0)
-            .plant_r([REAR[0], REAR[1] + 0.13, REAR[2]])
-            .toe_floor_r()
-    };
-
-    // Hauling out of it and gathering the front foot back under the body.
+    // Hauling back out of it and gathering the rear foot in from where the dash
+    // left it. A dash that recovers by sliding its feet home is a dash on ice.
     let pull = {
         let body = Pose::rest()
-            .hips(0.02, -0.14, 0.08)
+            .hips(0.02, -0.15, 0.08)
             .root(6.0, -2.0, 8.0)
             .spine(8.0, -2.0, 6.0)
             .chest(3.0, -1.0, 8.0)
             .head(-2.0, 0.0, -14.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.10, 1.14, 0.18], [-0.14, 0.38, 0.91])
-            .plant_l([-0.155, GROUND + 0.05, 0.28])
+        weapon(body, [0.10, 1.14, 0.16], [-0.16, 0.40, 0.90])
+            .plant_l([-0.155, GROUND + 0.06, 0.30])
             .toe_l(-10.0)
             .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
             .toe_floor_r()
     };
 
     let mut score = Score::new();
-    score.key(0, spent, CARRY);
-    score.key(tell(windup), chamber, CARRY);
-    score.key(contact, stab, Ease::STRIKE);
+    score.key(0, carried, CARRY);
+    // A real hold in the coil. Sixteen frames is past a reaction, so the pose is
+    // allowed -- and required -- to sit there and be looked at.
+    score.key(part(tell(windup), windup, 0.25), coiled, Ease::SMOOTH);
+    score.key(part(tell(windup), windup, 0.67), fired, Ease::SNAP);
+    score.key(part(tell(windup), windup, 0.9), flying, Ease::LINEAR);
+    score.key(contact, thrust, Ease::LINEAR);
     score.key(through, spent, CARRY);
     score.key(part(through, last, 0.45), pull, CARRY);
     score.key(last, ready(), Ease::SMOOTH);
@@ -2215,165 +2425,183 @@ fn skewer() -> Recipe {
     Recipe {
         clip,
         looseness: Looseness::MARTIAL,
-        notes: "The second thrust, and the feet are the whole point: they do \
-                not move. Drive travels a quarter of a metre on a lead foot \
-                that steps out to meet it; this one is hands, thrown from \
-                exactly the ground that lunge bought. It opens on the far side \
-                of a thrust -- extended, arms giving, the point still on line \
-                -- and the eight frames of startup are one snap back to the \
-                chest and one drive out again. The point never leaves the line \
-                it was on, because a second thrust that re-aims is a second \
-                first thrust and the opponent would get to read it twice."
+        notes: "Two halves that cannot be mistaken for each other, which is the \
+                whole design of the move: sixteen frames of startup is past a \
+                human reaction, so the opponent gets to see this coming and has \
+                to answer it, and what it pays for that is the biggest on-hit \
+                advantage in the kit. The first half is the coil -- the second \
+                hand arriving on the haft, which is the read, because one hand is \
+                a poke and two is a commitment -- and it *holds*, aimed, without \
+                re-aiming, because a wind-up that re-aims hands the defender two \
+                reads instead of one. The second half is the dash: the simulation \
+                carries the body nearly two metres in six frames, so both feet \
+                leave the floor, and the lead one leaves two frames before the \
+                point arrives so that what you see is a dash rather than a thrust \
+                that happened to travel."
             .into(),
         keys: score.0,
     }
 }
 
 // ---------------------------------------------------------------------------
-// Impale -- the spear's finisher
+// Whirl -- the spear's finisher, and the one move that clears the ring
 // ---------------------------------------------------------------------------
 
-/// The longest reach on the ground: a running lunge that leaves the back foot
-/// behind.
+/// The shaft swept flat all the way round the body, low.
 ///
-/// A fencer's flèche rather than a lunge -- the rear leg drives so hard that it
-/// comes off the floor and lands *in front*, which is the only way a body gets
-/// four and a half metres of reach out of a two-metre weapon. That is also the
-/// commitment: you have passed through the place you were standing and you
-/// cannot be back there for twenty-four frames.
-fn impale() -> Recipe {
-    let clip = Clip::ChampionImpale;
-    let (windup, contact, through) = clip.phases().expect("impale animates a move");
+/// `Shape::Swing(Plane::Flat)` with an arc of nearly three quarters of a turn:
+/// the head starts behind the right shoulder, comes round the whole front at
+/// about knee height, and finishes behind the left. The simulation hangs it off
+/// `tuning::sweep_height`, which is a low cut, so this is a leg sweep with a
+/// three-metre pole -- and it is the only thing in the class that threatens the
+/// ground *behind* you.
+///
+/// That is what the finisher is for. The spear's first two hits are about holding
+/// people at a distance; this is what you throw when one of them has closed
+/// anyway, and the knockback puts them back out where the other two work.
+///
+/// **A body cannot turn that far.** The root's yaw runs out around sixty-five
+/// degrees, and it does not need to go further, because a sweep is mostly *the
+/// weapon pointing somewhere else* with the hands near the sternum. What the body
+/// supplies is the drive: a hard wind to the right, both feet turning on their
+/// toes, and a spine that unwinds through square and keeps going.
+fn whirl() -> Recipe {
+    let clip = Clip::ChampionWhirl;
+    let (windup, contact, through) = clip.phases().expect("the whirl animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // Coiled right back over the rear leg, hands past the hip, point level and
-    // already on the line it is going down.
-    let coil = {
+    // Wound hard right and dropped low, shaft swung back behind that shoulder and
+    // tipped down. The knees are what make this readable: a spin thrown from
+    // standing height is a spin that misses everybody.
+    let wound = {
         let body = Pose::rest()
-            .hips(0.06, -0.16, -0.10)
-            .root(2.0, -4.0, 22.0)
-            .spine(6.0, -6.0, 15.0)
-            .chest(2.0, -4.0, 17.0)
-            .head(-2.0, 0.0, -42.0)
+            .hips(0.08, -0.26, -0.06)
+            .root(10.0, -6.0, 40.0)
+            .spine(14.0, -9.0, 26.0)
+            .chest(6.0, -6.0, 24.0)
+            .head(-2.0, 4.0, -52.0)
             .wrists(-8.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.16, 1.08, -0.10], [-0.12, 0.08, 0.99]),
-            -12.0,
-            0.04,
-        )
-    };
-
-    // The rear leg unloading. The lead foot is already off the floor and the
-    // body is falling forward behind the point -- the frame that says this one
-    // is not going to stop.
-    let drive = {
-        let body = Pose::rest()
-            .hips(0.03, -0.18, 0.10)
-            .root(10.0, -2.0, 16.0)
-            .spine(13.0, -3.0, 11.0)
-            .chest(5.0, -2.0, 13.0)
-            .head(0.0, 0.0, -32.0)
-            .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.14, 1.14, 0.18], [-0.06, 0.05, 1.0])
-            .plant_l([-0.16, GROUND + 0.14, 0.40])
-            .toe_l(-16.0)
-            .plant_r([REAR[0], REAR[1] + 0.06, REAR[2]])
+        weapon(body, [0.22, 0.98, -0.06], [0.70, -0.24, -0.67])
+            .plant_l([LEAD[0] + 0.02, GROUND, LEAD[2] - 0.02])
+            .toe_l(-6.0)
+            .plant_r([REAR[0], REAR[1] + 0.05, REAR[2]])
             .toe_floor_r()
     };
 
-    // Contact, and both feet are off the ground: one line from a trailing rear
-    // toe through the hips and the shoulders to the point. Nothing in the kit
-    // reaches further and nothing is more committed.
-    let impaled = {
+    // **The start of the arc**: the head still behind the right shoulder and
+    // already travelling. Both heels are up -- the turn is on the toes, which is
+    // the only way a body turns this far without a foot leaving the spot it is
+    // standing on.
+    let behind = {
         let body = Pose::rest()
-            .hips(0.0, -0.20, 0.34)
-            .root(19.0, 0.0, -8.0)
-            .spine(19.0, 2.0, -12.0)
-            .chest(9.0, 2.0, -16.0)
-            .head(-4.0, 0.0, 24.0)
-            .wrists(0.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.24, 1.06], [0.0, 0.0, 1.0])
-            .plant_l([-0.16, GROUND + 0.22, 0.52])
-            .toe_l(-24.0)
-            .plant_r([0.15, GROUND + 0.30, -0.44])
-            .toe_r(28.0)
+            .hips(0.06, -0.28, 0.0)
+            .root(11.0, -5.0, 34.0)
+            .spine(15.0, -8.0, 22.0)
+            .chest(6.0, -5.0, 20.0)
+            .head(0.0, 3.0, -44.0)
+            .wrists(-6.0, 0.0, 0.0);
+        weapon(body, [0.20, 0.94, 0.02], [0.78, -0.18, -0.60])
+            .plant_l([LEAD[0] + 0.02, GROUND + 0.03, LEAD[2] - 0.02])
+            .toe_floor_l()
+            .plant_r([REAR[0], REAR[1] + 0.07, REAR[2]])
+            .toe_floor_r()
     };
 
-    // The rear leg swinging under the hips on its way past. A flèche is a
-    // *step*, not a hop, and a leg that went from trailing to planted in one
-    // interval would read as the foot teleporting rather than as a stride.
-    let pass = {
+    // Round to the side, and the lowest the head gets. Knee height and coming
+    // across, which is the frame a crouching opponent finds out about.
+    let side = {
         let body = Pose::rest()
-            .hips(0.0, -0.24, 0.32)
-            .root(20.0, 0.0, -6.0)
-            .spine(19.0, 3.0, -10.0)
-            .chest(9.0, 2.0, -14.0)
-            .head(-5.0, 0.0, 21.0)
-            .wrists(-2.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.20, 1.00], [-0.02, -0.04, 1.0])
-            .plant_l([-0.17, GROUND + 0.08, 0.40])
-            .toe_l(-14.0)
-            .plant_r([0.15, GROUND + 0.22, 0.06])
-            .toe_r(10.0)
-    };
-
-    // The rear foot arriving in front. A flèche passes through the spot it
-    // started from; this is the frame where that becomes visible.
-    let land = {
-        let body = Pose::rest()
-            .hips(-0.02, -0.28, 0.30)
-            .root(20.0, 0.0, -4.0)
-            .spine(19.0, 3.0, -8.0)
-            .chest(9.0, 2.0, -12.0)
-            .head(-6.0, 0.0, 18.0)
+            .hips(0.0, -0.30, 0.06)
+            .root(13.0, 0.0, 6.0)
+            .spine(17.0, 0.0, 0.0)
+            .chest(7.0, 0.0, -2.0)
+            .head(0.0, 0.0, -6.0)
             .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.16, 0.96], [-0.04, -0.10, 0.99])
-            .plant_l([-0.17, GROUND, 0.30])
-            .toe_l(-6.0)
-            .plant_r([0.15, GROUND, 0.56])
-            .toe_r(-4.0)
+        weapon(body, [0.06, 0.92, 0.16], [0.62, -0.20, 0.76])
+            .plant_l([LEAD[0] + 0.02, GROUND + 0.02, LEAD[2] - 0.02])
+            .toe_floor_l()
+            .plant_r([REAR[0], REAR[1] + 0.08, REAR[2]])
+            .toe_floor_r()
     };
 
-    // Gathering back up on the new footprint, point coming off line last.
-    let recover = {
+    // Through the front, dead ahead and low. Hips already past square: the hips
+    // are what swing a pole this long, and a sweep whose hips arrive with the
+    // hands is a sweep thrown with the arms.
+    let front = {
         let body = Pose::rest()
-            .hips(0.0, -0.16, 0.08)
-            .root(8.0, -2.0, 8.0)
-            .spine(9.0, -2.0, 6.0)
-            .chest(4.0, -1.0, 8.0)
-            .head(-2.0, 0.0, -14.0)
+            .hips(-0.06, -0.30, 0.08)
+            .root(13.0, 4.0, -26.0)
+            .spine(17.0, 5.0, -20.0)
+            .chest(7.0, 3.0, -20.0)
+            .head(0.0, -2.0, 30.0)
+            .wrists(-4.0, 0.0, 0.0);
+        weapon(body, [-0.10, 0.94, 0.20], [-0.34, -0.18, 0.92])
+            .plant_l([LEAD[0] + 0.02, GROUND + 0.02, LEAD[2] - 0.02])
+            .toe_floor_l()
+            .plant_r([REAR[0], REAR[1] + 0.08, REAR[2]])
+            .toe_floor_r()
+    };
+
+    // **The end of it**: the head away round to the left and behind, everything
+    // wound the other way, still low. The pole has been most of the way round a
+    // circle and the body has turned as far as a body turns.
+    let past = {
+        let body = Pose::rest()
+            .hips(-0.09, -0.27, 0.0)
+            .root(11.0, 6.0, -40.0)
+            .spine(15.0, 8.0, -26.0)
+            .chest(6.0, 5.0, -24.0)
+            .head(-2.0, -4.0, 50.0)
+            .wrists(-6.0, 0.0, 0.0);
+        weapon(body, [-0.20, 0.96, 0.04], [-0.76, -0.16, -0.62])
+            .plant_l([LEAD[0] + 0.02, GROUND + 0.02, LEAD[2] - 0.04])
+            .toe_floor_l()
+            .plant_r([REAR[0], REAR[1] + 0.06, REAR[2] - 0.02])
+            .toe_floor_r()
+    };
+
+    // Standing up out of it and unwinding. Both heels come back down, which is
+    // the frame the turn is over.
+    let rise = {
+        let body = Pose::rest()
+            .hips(-0.04, -0.16, 0.0)
+            .root(6.0, 3.0, -18.0)
+            .spine(9.0, 4.0, -10.0)
+            .chest(3.0, 2.0, -8.0)
+            .head(-2.0, 0.0, 22.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.08, 1.14, 0.28], [-0.12, 0.32, 0.94])
-            .plant_l([-0.17, GROUND, 0.20])
-            .toe_l(-6.0)
-            .plant_r([0.15, GROUND, 0.36])
-            .toe_r(-2.0)
+        stand(
+            weapon(body, [-0.08, 1.12, 0.18], [-0.40, 0.34, 0.85]),
+            -2.0,
+            0.06,
+        )
     };
 
     let mut score = Score::new();
-    score.key(0, ready(), CARRY);
-    score.key(tell(windup), coil, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.55), drive, CARRY);
-    score.key(contact, impaled, Ease::STRIKE);
-    score.key(through, pass, CARRY);
-    score.key(part(through, last, 0.25), land, CARRY);
-    score.key(part(through, last, 0.6), recover, CARRY);
+    score.key(0, ready(), Ease::IN);
+    score.key(part(tell(windup), windup, 0.5), wound, Ease::SNAP);
+    score.key(contact, behind, Ease::LINEAR);
+    score.key(part(contact, through, 0.34), side, Ease::LINEAR);
+    score.key(part(contact, through, 0.67), front, Ease::LINEAR);
+    score.key(through, past, Ease::LINEAR);
+    score.key(part(through, last, 0.45), rise, Ease::OUT);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
         looseness: Looseness::MARTIAL,
-        notes: "A flèche, not a lunge. The rear leg drives hard enough to come \
-                off the floor and land in front, which is the only honest way a \
-                body gets four and a half metres of reach out of a two-metre \
-                weapon -- and it is the commitment as well: you have passed \
-                through the place you were standing and you cannot be back \
-                there for twenty-four frames. The contact key has both feet in \
-                the air and everything from a trailing toe to the point on one \
-                line. Like every finisher in the chain the feet end up \
-                somewhere new, and on this one they end up somewhere new and \
-                well forward, which is either the best or the worst place to be \
-                depending on whether it landed."
+        notes: "The one move in the class that threatens behind you. Nearly three \
+                quarters of a turn, hung off the low cut height, so it is a leg \
+                sweep with a three-metre pole: the head starts behind the right \
+                shoulder, comes round the whole front at about knee height, and \
+                finishes behind the left. Four keys across the live window rather \
+                than two, because a circle interpolated from its ends is a \
+                straight line through the middle and the whole point of this \
+                volume is that it is a circle. The knees carry the read -- a spin \
+                thrown from standing height misses everybody, and the drop is \
+                what a player sees from across the arena. Both heels come up and \
+                the turn happens on the toes, which is the only way a body turns \
+                this far without a foot leaving the spot it is standing on."
             .into(),
         keys: score.0,
     }

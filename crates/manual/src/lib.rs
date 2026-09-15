@@ -159,15 +159,15 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "Left click",
-                "Sword. Arc across the front. Fast, wide, least commitment — the move you string with.",
+                "Sword. A diagonal cut, corner to corner, and it steps in as it swings. Fastest thing in the class at both ends, and the one you can keep walking during — the move you string with.",
             ),
             e(
                 "Middle click (or U)",
-                "Hammer. Arc down to the floor. Slow, short, and it staggers — the move you start with.",
+                "Hammer. Arc down to the floor. Slow, short, and it staggers longer than anything else — the move you start with.",
             ),
             e(
                 "Right click",
-                "Spear. A line straight ahead. Longest reach, and it goes over anyone crouching.",
+                "Spear. A one-armed jab straight ahead. Longest reach in the game, it goes over anyone crouching, and it leaves you standing exactly where you were.",
             ),
             e(
                 "Keep swinging",
@@ -175,7 +175,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "The third hit",
-                "Crescent is a full turning cut and the widest thing in the game. Earthbreaker goes through a guard. Impale reaches four and a half metres. All three commit your feet.",
+                "Upcut rises and pops them off the floor. Earthbreaker goes through a guard and throws them up. Whirl sweeps the shaft round your whole body, low, and is the only attack in the game that threatens behind you. All three commit your feet.",
+            ),
+            e(
+                "Jump during Earthbreaker",
+                "Press space while the hammer's third hit is winding up and you go up with them: the knock-up is bigger and you leave the floor on the frame it lands, which puts the air hammer in reach off the end of an ordinary string. It is paid on contact, so a whiff costs you the recovery and gives you nothing.",
             ),
             e(
                 "Space and a weapon",

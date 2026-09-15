@@ -1710,22 +1710,33 @@ fn reaches(button: u16, ahead: f32, across: f32, ducking: bool) -> bool {
 #[test]
 fn the_three_weapons_own_three_different_pieces_of_space() {
     // The point of the whole rebuild, as one assertion. A reach number cannot
-    // say any of this -- it takes a shape.
+    // say any of this -- it takes a shape, and since 2026-09-15 it also takes
+    // the ground the move closes: the sword's opener steps in, so what it
+    // threatens is its reach *plus* its step, and the measurements below are of
+    // the threat rather than of the table.
     //
-    // Sword: **across**. It catches somebody standing well off to the side and
-    // it does not reach far in front.
+    // Sword: **across, and it comes to you**. The only one of the three that
+    // catches somebody standing well off the line it was thrown down, and the
+    // only one whose two openers cover opposite sides -- the first cut comes
+    // down from the right shoulder and the second from the left, so a pair of
+    // them covers a fan a single swing could not.
     assert!(
         reaches(LMB, 0.9, 1.4, false),
         "the sword does not cover its own flank"
     );
     assert!(
-        !reaches(LMB, 3.2, 0.0, false),
-        "the sword reaches as far as a spear"
+        reaches(LMB, 0.9, -1.4, false),
+        "the sword covers one flank and not the other"
+    );
+    assert!(
+        !reaches(LMB, 3.8, 0.0, false),
+        "the sword reaches as far as a spear, step and all"
     );
 
     // Spear: **out**. The longest line in the game, and a thin one -- it misses
-    // the same flank the sword owns.
-    assert!(reaches(RMB, 3.2, 0.0, false), "the spear does not reach");
+    // the same flank the sword owns, and it is the band between those two
+    // numbers that is the spear's alone.
+    assert!(reaches(RMB, 3.8, 0.0, false), "the spear does not reach");
     assert!(
         !reaches(RMB, 0.9, 1.8, false),
         "the spear covers the flank too"
@@ -1745,6 +1756,44 @@ fn the_three_weapons_own_three_different_pieces_of_space() {
     assert!(
         reaches(MMB, 1.4, 0.0, true) && !reaches(RMB, 1.4, 0.0, true),
         "the hammer and the spear agree about a crouching opponent"
+    );
+}
+
+#[test]
+fn the_spear_pokes_from_where_it_stands_and_the_sword_has_to_come_in() {
+    // The other half of "the spear owns distance", and the half a reach number
+    // *can* say -- but only now that a move is allowed to carry the body. The
+    // two weapons' threat ranges are a bit under a metre apart and the sword's
+    // step is most of what closes that gap, so the honest difference between
+    // them is no longer only how far they reach: it is **where you are standing
+    // when it is over**.
+    //
+    // A spear poke leaves you exactly where you were, which is the whole of what
+    // a spacing tool is. A sword cut spends better than half a metre of ground
+    // to land, and you are still standing on it afterwards -- inside their reach,
+    // which is the price of being the weapon that closes.
+    use sim::moves::champion as c;
+    let sword = moves::get(Class::Champion, c::SWORD_GROUND);
+    let spear = moves::get(Class::Champion, c::SPEAR_GROUND);
+    assert_eq!(
+        spear.step.raw(),
+        0,
+        "the spear's opener carries you {} m forward, so it is not a poke from \
+         where you stand any more",
+        spear.step.to_f32_for_render()
+    );
+    assert!(
+        sword.step.raw() > 0,
+        "the sword's opener does not step, so the class's close-in weapon does \
+         not close"
+    );
+    assert!(
+        spear.reach.raw() > sword.reach.add(sword.step).raw(),
+        "the spear reaches {:.2} m and the sword reaches {:.2} m and then steps \
+         {:.2} of them, which is not a spacing weapon and a closing one",
+        spear.reach.to_f32_for_render(),
+        sword.reach.to_f32_for_render(),
+        sword.step.to_f32_for_render()
     );
 }
 
@@ -1911,7 +1960,7 @@ fn one_weapon_held_down_walks_the_whole_chain_and_then_starts_again() {
     let seen = strung(&mut w, LMB, 180);
     assert_eq!(
         &seen[..3],
-        &[c::SWORD_GROUND, c::BACKCUT, c::CRESCENT],
+        &[c::SWORD_GROUND, c::BACKCUT, c::UPCUT],
         "holding left click did not walk the sword chain: {seen:?}"
     );
     assert_eq!(
@@ -1946,6 +1995,232 @@ fn every_hit_of_the_chain_is_a_free_choice_of_weapon() {
         &seen[..3],
         &[c::SWORD_GROUND, c::SKEWER, c::EARTHBREAKER],
         "a mixed string did not come out as one chain: {seen:?}"
+    );
+}
+
+#[test]
+fn the_two_sword_openers_cut_opposite_diagonals() {
+    // **The sword owns the diagonal**, and the two openers own opposite ones:
+    // the first comes down from over the right shoulder and the second from over
+    // the left. A player reads which hit they are looking at off where the blade
+    // started, so the two must not be the same stroke played twice -- and a pair
+    // of them covers a fan that one swing could not.
+    //
+    // Measured off the hit volume rather than off the clip, because the volume is
+    // what decides the fight: `hitbox`'s first frame is the start of the arc.
+    let opened = |button: u16, second: bool| {
+        let mut w = engaged(Class::Champion);
+        // Nothing in reach, so the chain is walked by hand: what is being looked
+        // at is the shape, and a victim standing in it would change the spacing.
+        w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
+        if second {
+            if let Mechanic::Forms {
+                chain, chain_left, ..
+            } = &mut w.players[0].mechanic
+            {
+                *chain = 1;
+                *chain_left = 200;
+            }
+        }
+        for _ in 0..40 {
+            w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            if let Some(h) = sim::state::hitbox(&w.players[0]) {
+                let up = h.to.y.sub(h.from.y);
+                // The facing is +x, so its own sides are ±z.
+                let side = h.to.z.sub(h.from.z);
+                return (up.to_f32_for_render(), side.to_f32_for_render());
+            }
+        }
+        panic!("the cut put nothing out");
+    };
+    let (first_up, first_side) = opened(LMB, false);
+    let (second_up, second_side) = opened(LMB, true);
+    assert!(
+        first_up > 0.4 && second_up > 0.4,
+        "a descending cut has to start above the hands: the openers start \
+         {first_up:.2} m and {second_up:.2} m up"
+    );
+    assert!(
+        first_side * second_side < 0.0,
+        "both sword openers start over the same shoulder ({first_side:.2} and \
+         {second_side:.2} off the centre line), so there is no telling them apart"
+    );
+    assert!(
+        first_side.abs() > 0.4 && second_side.abs() > 0.4,
+        "the openers start {:.2} m and {:.2} m off the centre line, which is a \
+         vertical swing rather than a diagonal one",
+        first_side.abs(),
+        second_side.abs()
+    );
+}
+
+#[test]
+fn a_step_is_finished_by_the_time_the_weapon_lands() {
+    // **The rule that makes a stepping attack a step rather than a slide.** The
+    // body covers the move's own `step` down the facing it locked, and it has
+    // covered all of it on the frame the hitbox appears -- so the weight arrives
+    // with the weapon. What happens afterwards is momentum bleeding off through
+    // the recovery, which is the follow-through.
+    //
+    // It used to run for the whole active window, and the hammer's finisher is
+    // what found the difference: it put its head through the floor on the first
+    // active frame and then carried the body most of another metre past it.
+    use moves::champion as c;
+    for (name, button, kind) in [
+        ("the sword's opener", LMB, c::SWORD_GROUND),
+        ("the hammer's finisher", MMB, c::EARTHBREAKER),
+    ] {
+        let m = moves::get(Class::Champion, kind);
+        let want = m.step.to_f32_for_render();
+        assert!(want > 0.0, "{name} does not step at all");
+        // From the spawn rather than from `engaged`, and with nobody in front:
+        // what is being measured is ground covered, so there must be clear floor
+        // to cover it on. `engaged` walks the fighter into the side of a platform,
+        // and a step into a wall is the arena's answer rather than the move's.
+        let mut w = as_class(Class::Champion);
+        w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
+        if let Mechanic::Forms {
+            chain, chain_left, ..
+        } = &mut w.players[0].mechanic
+        {
+            *chain = c::link_of(kind).expect("a chain link");
+            *chain_left = 400;
+        }
+        run(&mut w, 12, 0, 0);
+        let from = w.players[0].pos.x;
+        let mut at_contact = None;
+        for _ in 0..80 {
+            w.advance([Input::aimed(button, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+            let live = matches!(w.players[0].action, sim::state::Action::Active { .. });
+            if live && at_contact.is_none() {
+                at_contact = Some(w.players[0].pos.x.sub(from).to_f32_for_render());
+            }
+        }
+        let gone = at_contact.unwrap_or_else(|| panic!("{name} never came out"));
+        assert!(
+            (gone - want).abs() < 0.08,
+            "{name} says it steps {want:.2} m and had covered {gone:.2} m by the \
+             frame its volume appeared"
+        );
+    }
+}
+
+#[test]
+fn nothing_that_does_not_declare_a_step_moves_on_its_own() {
+    // The other side of it. A move without a `step` must not carry you an inch,
+    // or the field is decorative and every class's spacing has quietly changed.
+    // The spear's opener is the one to check, because the spear is the spacing
+    // weapon and being carried forward is the one thing that would stop it being
+    // one -- see `the_spear_pokes_from_where_it_stands_and_the_sword_has_to_come_in`.
+    let mut w = as_class(Class::Champion);
+    w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
+    run(&mut w, 12, 0, 0);
+    let from = w.players[0].pos;
+    for _ in 0..40 {
+        w.advance([Input::aimed(RMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+    }
+    let gone = w.players[0].pos.sub(from).flat_len().to_f32_for_render();
+    assert!(
+        gone < 0.05,
+        "the spear's opener walked {gone:.2} m on its own"
+    );
+}
+
+#[test]
+fn jumping_into_the_hammer_finisher_takes_both_of_you_up() {
+    // The decision the hammer's finisher offers, and it is a decision because
+    // both halves of it cost something. Throw it and they go up and you stay on
+    // the floor, which is a knock-up and a reset. Press jump while it is winding
+    // up and they go *higher* and you leave the floor on the frame it lands, so
+    // the exchange continues in the air -- where the air hammer is waiting and
+    // where a whiff leaves you falling with nothing.
+    //
+    // Paid on contact rather than on the press, which is the rule the aerial
+    // fan's shove already follows: a whiffed finisher that launched you anyway
+    // would be a free escape bolted to the most punishable move in the kit.
+    let exchange = |jump: bool| {
+        let mut w = engaged(Class::Champion);
+        if let Mechanic::Forms {
+            chain, chain_left, ..
+        } = &mut w.players[0].mechanic
+        {
+            *chain = 2;
+            *chain_left = 400;
+        }
+        let mut theirs = 0.0f32;
+        let mut mine = 0.0f32;
+        for f in 0..90 {
+            // The press lands in the middle of the wind-up, which is where a
+            // player deciding "I am going with this one" would put it.
+            let space = if jump && (8..10).contains(&f) {
+                Input::SPACE
+            } else {
+                0
+            };
+            w.advance([
+                Input::aimed(MMB | space, LOOK_RIGHT),
+                Input::aimed(0, LOOK_LEFT),
+            ]);
+            theirs = theirs.max(w.players[1].vel.y.to_f32_for_render());
+            mine = mine.max(w.players[0].vel.y.to_f32_for_render());
+        }
+        (theirs, mine)
+    };
+    let (up_alone, me_alone) = exchange(false);
+    let (up_together, me_together) = exchange(true);
+    assert!(
+        up_alone > 1.0,
+        "the hammer's finisher does not knock anybody up at all"
+    );
+    assert!(
+        me_alone < 1.0,
+        "the Champion left the floor without asking to: {me_alone:.1} m/s"
+    );
+    assert!(
+        up_together > up_alone,
+        "going up with them knocked them up {up_together:.1} m/s against \
+         {up_alone:.1} alone, so the jump bought nothing for them"
+    );
+    assert!(
+        me_together > 1.0,
+        "the jump was pressed during the finisher and the Champion stayed on the \
+         floor"
+    );
+}
+
+#[test]
+fn the_leap_is_paid_on_contact_and_not_on_the_press() {
+    // The guard on the rule above. A finisher thrown at nobody has to leave you
+    // standing in your own recovery, whatever you pressed during it -- otherwise
+    // the jump is an escape from the whiff punishment rather than a commitment to
+    // the exchange.
+    let mut w = engaged(Class::Champion);
+    // Out of reach entirely, so the finisher connects with nothing.
+    w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
+    if let Mechanic::Forms {
+        chain, chain_left, ..
+    } = &mut w.players[0].mechanic
+    {
+        *chain = 2;
+        *chain_left = 400;
+    }
+    let mut highest = 0.0f32;
+    for f in 0..90 {
+        let space = if (8..10).contains(&f) {
+            Input::SPACE
+        } else {
+            0
+        };
+        w.advance([
+            Input::aimed(MMB | space, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+        highest = highest.max(w.players[0].vel.y.to_f32_for_render());
+    }
+    assert!(
+        highest < 1.0,
+        "a whiffed finisher still threw the Champion into the air at \
+         {highest:.1} m/s"
     );
 }
 
