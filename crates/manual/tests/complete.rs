@@ -64,6 +64,9 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "F3" | "F4" => vec!["F3 and F4"],
         "F5" | "F6" => vec!["F5 and F6"],
         "F7" => vec!["F7"],
+        // Every `F<n>` the game might grow needs a spelling here, so that
+        // `a_documented_function_key_does_something` below can ask the question
+        // in both directions.
         "F8" => vec!["F8"],
         "F9" => vec!["F9"],
         _ => vec![],
@@ -106,6 +109,49 @@ fn every_key_the_game_handles_is_documented() {
     assert!(
         undocumented.is_empty(),
         "the game handles these keys and the manual never mentions them: {undocumented:?}"
+    );
+}
+
+/// And the other way round: the manual must not offer a key the game ignores.
+///
+/// The test above asks whether everything the game answers to is written down.
+/// That is only half of "the manual has to describe the game that exists", and
+/// the half it leaves out is the one that rots quietly: a binding is deleted,
+/// its entry is not, and the help goes on naming a key for the rest of its
+/// life. Nothing fails, because nothing was added.
+///
+/// **Function keys only**, and that is the honest scope rather than a
+/// simplification. `F3` means one thing, so finding it in the game's source is
+/// a real answer. A manual entry reading "Shift" or "1-4" is a phrase the
+/// source spells several ways and a scan for it would be a guess dressed as a
+/// check. The function keys are where the settings, the overlays and the tools
+/// live, which is exactly where a binding gets retired without its paperwork --
+/// camera distance did precisely this, on `F5` and `F6`.
+#[test]
+fn a_documented_function_key_does_something() {
+    let source = game_source();
+    let text = manual::render();
+
+    let mut dead = Vec::new();
+    for n in 1..=12u8 {
+        let key = format!("F{n}");
+        // The manual names them singly ("F7") and in pairs ("F3 and F4"), so
+        // look for the entry either way round.
+        let named = text.contains(&format!("{key} and "))
+            || text.contains(&format!(" and {key}"))
+            || text.contains(&format!("**{key}**"))
+            || text.contains(&format!("{key}."))
+            || text.contains(&format!("{key} "));
+        if named && !source.contains(&format!("KeyCode::{key}")) {
+            dead.push(key);
+        }
+    }
+
+    assert!(
+        dead.is_empty(),
+        "the manual documents these keys and the game never reads them: {dead:?} \
+         -- either the binding went and the entry did not, or the entry is \
+         describing something that was never built"
     );
 }
 

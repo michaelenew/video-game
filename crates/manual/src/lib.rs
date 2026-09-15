@@ -366,10 +366,14 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e("- and =", "Mouse sensitivity, in multiplicative notches."),
             e("F3 and F4", "Field of view, 2 degrees a step."),
-            e(
-                "F5 and F6",
-                "Camera distance -- how big the fighter draws, 0.4 m a step.",
-            ),
+            // Camera distance was on F5 and F6 and is not a setting any more:
+            // it is the framing sphere's radius, the radius decides where the
+            // eye is, and the eye is where the aiming ray starts -- so two
+            // players with different distances would place the same fire pillar
+            // in different spots. It is tuned in the Oven under Camera. The
+            // entry outlived the binding by long enough that the help was
+            // offering a key nothing answered; `a_documented_function_key_does
+            // _something` is what fails next time.
         ],
     },
     Section {
