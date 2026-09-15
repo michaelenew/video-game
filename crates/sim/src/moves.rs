@@ -434,7 +434,7 @@ const NAMES: [&[&str]; 6] = [
     // body and does not care, so it is on the key.
     //   Slash: the auto, on left click.
     //   Executioner: the committed melee, on `E` as well as shift+left.
-    //   Guillotine: six blades erupt from the shadow and come back to it, so it
+    //   Guillotine: twelve blades erupt from the shadow and come back to it, so it
     //     is aimed at the mechanic and the mechanic does all the hitting.
     //   Send shadow: on right click, and a real move rather than a state flip.
     //     It throws the second body out fast and, pressed again, dashes it home
@@ -776,12 +776,15 @@ pub const fn slots(class: Class) -> usize {
 
 /// Which move the `E` key throws, if the class puts one there.
 ///
-/// `E` is the class mechanic, and for five of the six that is an instant change
-/// of state -- throw the shield, Rush, place the shadow, raise a structure --
-/// with no frames of its own and nothing to tune. The Blood mage's mechanic is
+/// `E` is the class mechanic, and for three of the six that is an instant
+/// change of state -- throw the shield, Rush, raise a structure -- with no
+/// frames of its own and nothing to tune. The Blood mage's mechanic is
 /// *health*, which is not a thing you press a button to change, so her `E` is
 /// free to be an ability instead, and an ability needs a startup, a reach and a
-/// cost like any other.
+/// cost like any other. Two more classes arrive at the same place by their own
+/// routes, below, and the Elementalist is an instant standing up and an ability
+/// off the floor -- which is `state::keyed_move`'s business rather than this
+/// function's.
 ///
 /// A function rather than a fixed slot index, because "the fourth slot" stopped
 /// meaning "the `E` key" the moment a class had nineteen of them: the

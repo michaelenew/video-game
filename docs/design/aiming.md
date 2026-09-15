@@ -210,8 +210,8 @@ most of the class.
 
 The volume follows the mechanic **live**, because the Reaver can recall the
 shadow while the blades are out — and doing exactly that is what the ability is
-for. The six blades take their centre from the shadow's position every frame, so
-a recall drags them the length of the arena. An effect that had been pinned to
+for. The twelve blades take their centre from the shadow's position every frame,
+so a recall drags them the length of the arena. An effect that had been pinned to
 the patch of floor it was cast on would have made the class's biggest turn
 impossible to express.
 
@@ -231,9 +231,12 @@ swing.
 | Line of effect | Moves |
 | --- | --- |
 | **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
-| **Skillshot** | Bolt, Bloodletter, Grasp, Lance |
-| **Swing** | every melee attack: Bash, Slam, Grapple, Drive, Uppercut, Slash, Executioner, Rend, the Dual mage's Sweep and both of her autos |
+| **Skillshot** | Bolt, Cataclysm, Air bolt, Gale, Bloodletter, Grasp, Lance |
+| **Swing** | every melee attack: Bash, Slam, Grapple, Slash, Executioner, Rend, Landfall, the Dual mage's Sweep and both of her autos, and all nineteen of the Champion's |
 | **At the mechanic** | Guillotine lotus |
+
+The table is a convenience and the move table is the authority; where they
+disagree, the `aimed` column of the frame table is right and this is stale.
 
 The mechanic inputs are aimed too, through the same two functions: Raise is a
 grounded cast and the Bulwark's thrown shield is a skillshot. The Reaver's is no
@@ -432,7 +435,7 @@ gets the same one.
   the structure it plants at the point of impact are still unbuilt, so today its
   volume simply appears at the target.
 - **The dead zone is one number for every class and every move.** A spear at
-  1.55× reach and a grapple at arm's length plausibly want different answers,
+  three and a half metres and a grapple at arm's length plausibly want different answers,
   and a swing thrown while falling fast plausibly wants a different one again.
   Nobody has played it yet; it is one knob until somebody has.
 - **The Champion's weapons are shapes, not points.** They sweep through a plane

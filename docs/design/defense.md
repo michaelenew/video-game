@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: proposed; audited against the build 2026-09-15
 decided: 2026-09-09
+audited: 2026-09-15
 resolves: the block/parry open question in combat-kernel.md
 ---
 
@@ -8,6 +9,22 @@ resolves: the block/parry open question in combat-kernel.md
 
 The defensive layer. Unblocks the [Bulwark](bulwark.md) and the
 [Champion](champion.md), both of which were waiting on it.
+
+> **Two things in this document are contradicted by what was built, and neither is a
+> drafting slip — both are design decisions somebody has to take deliberately.** They are
+> marked ⚠️ below.
+>
+> 1. **The guard meter.** This document specifies one as the hard bound behind blocking.
+>    [README.md](README.md) §1 says there is none, and the simulation has none.
+> 2. **The shield as an equipped secondary.** This document, and
+>    [gatekeeper-retirement.md](gatekeeper-retirement.md), treat the shield as a loadout
+>    choice any class can take, and build the block layer on top of that. The roster, the
+>    code and [parked.md](parked.md) make it the **Bulwark's class mechanic** and equipment
+>    is parked, so five of six classes have no access to block, parry, or the pushback
+>    resistance trait — and "dodge is universal, block is shield-gated" is a split with one
+>    class on one side of it.
+>
+> Everything else here has been reconciled with the build.
 
 ## The central split
 
@@ -32,25 +49,50 @@ worth having, and it means a shield is a real loadout choice rather than a stric
 
 ## Dodge
 
-Already sketched in the source notes as `shift + jump + direction`, or double-tap
-`jump + direction`. Keep it, with:
+**`shift` plus a direction**, settled 2026-09-11. It was sketched here as
+`shift + jump + direction` or a double-tapped `jump + direction`; space became a plain
+vertical takeoff and dodge moved onto shift alone. See
+[controls.md](controls.md#why-space-stopped-being-clever).
 
-- A brief invulnerability window.
+- A brief invulnerability window — 10 frames of a 22-frame dodge.
 - A committed direction — you go where you pointed.
-- Recovery frames on landing.
+- Recovery frames at the end: the back twelve are vulnerable, which is the punish window.
+- **Airborne it is the airdodge**, once per airtime: 16 frames, and it wipes vertical speed
+  rather than adding to it, so it can never be a second jump.
 
 Dodge is the universal answer to a read you made correctly. It is punished by attacks
 that cover space or arrive late.
 
-The existing crouch-roll (`crouch → jump`) stays as a distinct, slower, lower-commitment
-reposition.
+The crouch-roll (`crouch → jump`) is **not built** and is not currently wanted: crouch is
+its own input and lowers your hurtbox, and a second, slower reposition has nothing to do
+that the dodge's own tail does not already do.
 
 ## Block
 
-Blocking requires a shield, which is already an **equipped secondary** in the weapon
-system ("Shield — equip as secondary to give defense and gain stagger resistance while
-casting"). Bind block to the held secondary-weapon action, which the control notes already
-map to `ctrl+click`.
+**Held right click**, and it is gated on the *mechanic* rather than on the button: `R`
+guards while a shield is in hand and does nothing while it is not, which is why right click
+is free to be an attack on the classes that have no shield. Bound as `ctrl+click` on the
+secondary-weapon action in the original draft; the control grammar settled in 2026-09-11 and
+the secondary-weapon action does not exist.
+
+> ⚠️ **"Requires a shield" means "is the Bulwark" today.** This section was written against a
+> weapon system where a shield is an **equipped secondary** any class could bring — *"Shield —
+> equip as secondary to give defense and gain stagger resistance while casting"*. Equipment is
+> [parked](parked.md), and the shield became the Bulwark's class mechanic instead, so the
+> universal-dodge / gated-block split has exactly one class on the gated side.
+>
+> That is not obviously wrong — a defensive class whose defence is its own is a clean
+> identity — but three things in this document were load-bearing on the other reading and
+> are currently unreachable for five of six classes: **parry**, **pushback resistance as a
+> trait**, and **stagger resistance while casting** as the reason a caster would bring a
+> shield. [gatekeeper-retirement.md](gatekeeper-retirement.md) also closes on *"the secondary
+> slot itself is not parked — the shield occupies it, and shield-or-nothing is already a real
+> choice"*, which is only true under the equipment reading.
+>
+> **The decision is whether parry is universal.** If block stays Bulwark-only, then the
+> parry — the game's one gated-behind-a-read stagger, and the thing
+> [ability-spec.md](ability-spec.md) points at when it says hard stops need hard conditions —
+> belongs to one class, and the other five have dodge timing and nothing else.
 
 ### Facing arc, not a bubble
 
@@ -63,7 +105,7 @@ rather than a flavour note.
 ### The cost of blocking is space, not health
 
 **No chip damage. Pushback instead.** Blocked hits shove you backward, scaled by the
-attack's weight.
+attack's weight, and hold you in blockstun while they do.
 
 This matters more than it sounds:
 
@@ -74,31 +116,47 @@ This matters more than it sounds:
   nowhere left to go. That is the Smash-like "space is the resource" pressure, expressed
   through the defensive system.
 
-A **guard meter** sits underneath as the hard bound. It depletes on blocked hits and
-regenerates out of combat. Emptying it is a guard break: a long, punishable stagger.
+> ⚠️ **A guard meter was specified here and was never built, and the README rules one out.**
+> This document proposed one underneath as the hard bound — depleting on blocked hits,
+> regenerating out of combat, emptying into a guard-break stagger.
+> [README.md](README.md) §1 now reads *"knockback plus stunlock, no chip damage, **no guard
+> meter**"*, and the simulation has no such state. What bounds blocking today is pushback and
+> the guard breakers below, and nothing else.
+>
+> That is a coherent position — the meter was a second hard bound on an option this document
+> argues should already cost space — but it was never written down as a decision, and the
+> two documents have disagreed since. **Pick one.** If the meter comes back it is new
+> simulation state in the snapshot and a new HUD element; if it stays out, this paragraph
+> should say so rather than being deleted, because "why is there no guard meter" is a
+> question that will be asked again.
 
 **The Bulwark resists pushback.** That is the class trait that falls naturally out of this
 system rather than being bolted on — everyone else who blocks gets moved, and the wall
-does not.
+does not. **Not built:** blocked knockback is one number for everybody.
 
 ### Two different things called "the shield"
 
 Worth stating explicitly, because the Bulwark depends on the distinction:
 
-- **The shield as a world volume** stops projectiles by *collision*. No guard meter, no
-  timing. This is why a Bulwark's planted or thrown shield keeps blocking projectiles
-  while the Bulwark is somewhere else entirely.
-- **The shield as a guard state** handles melee — guard meter, pushback, parry timing.
-  This only exists while the character is actively blocking.
+- **The shield as a world volume** stops projectiles by *collision*. No timing, no state.
+  This is why a Bulwark's planted or thrown shield would keep blocking projectiles while the
+  Bulwark is somewhere else entirely. **Not built** — nothing in the simulation collides with
+  a shield, in flight or planted. See [kits/bulwark.md](kits/bulwark.md).
+- **The shield as a guard state** handles melee — pushback, blockstun, parry timing. This
+  only exists while the character is actively blocking, and it is the half that is built.
 
 Same object, two systems. Elementalist structures use the first one, which is the shared
-implementation noted in [elementalist.md](elementalist.md).
+implementation noted in [elementalist.md](elementalist.md) — and structures *do* stop bodies
+and shots, so the shared half exists and the shield is the side that has not been wired into
+it.
 
 ### Stagger resistance while casting
 
-Carried forward from the weapons document unchanged. A shield equipped as secondary makes
-you harder to interrupt mid-cast, whether or not you are actively blocking. This is what
-makes shields attractive to casters and keeps the secondary slot a real decision.
+Carried forward from the weapons document unchanged, and **unbuilt**. A shield equipped as
+secondary makes you harder to interrupt mid-cast, whether or not you are actively blocking.
+This is what makes shields attractive to casters and keeps the secondary slot a real
+decision — and it is squarely inside the equipment question flagged above: there is no
+secondary slot, and the one class with a shield is not a caster.
 
 ## Parry
 
@@ -113,9 +171,16 @@ extra punishment layer is needed.
 
 ### The reward is a stagger
 
-**A successful parry staggers the attacker**, using the stagger system exactly as already
-specified — the attacker enters the recovery mini-game (press to recover, window scaled by
-stagger strength) while the parrying player is free to act.
+**A successful parry staggers the attacker** while the parrying player is free to act. Built:
+the window is 4 frames and the stagger is 34, which `feel.rs` holds long enough to land the
+slowest punish in the game.
+
+> **The recovery mini-game is not built.** This said the attacker *"enters the recovery
+> mini-game — press to recover, window scaled by stagger strength"*. A stagger is a plain
+> countdown; there is nothing to press and nothing that shortens it. Whether the mini-game is
+> still wanted is open — it is the only place in the design where a player acts during a state
+> that has taken their controls away, and the argument in the next bullet ("the staggered
+> player can see themselves recovering") is doing work it cannot currently do.
 
 This is the right reward because:
 

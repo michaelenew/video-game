@@ -2129,13 +2129,15 @@ fn step_player(
                 {
                     begin_move(p, who, SLOT_SPECIAL, input, scene, true)
                 } else if pressed_mechanic {
-                    // `E` is the class mechanic, and on most classes that is an
-                    // instant change of state with no frames to it -- throw the
-                    // shield, Rush, place the shadow, raise a structure. Where the
-                    // class puts an ability there instead -- the Blood mage, whose
-                    // mechanic is health and so has nothing to toggle -- it is
-                    // thrown like any other move, with a startup you can be
-                    // punished during and a cost you pay on the press.
+                    // `E` is the class mechanic, and on half the roster that is
+                    // an instant change of state with no frames to it -- throw
+                    // the shield, Rush, raise a structure. Where the class puts
+                    // an ability there instead -- the Blood mage and the Dual
+                    // mage, whose mechanics have nothing to toggle, and the
+                    // Reaver, whose mechanic went to the mouse because it is
+                    // aimed -- it is thrown like any other move, with a startup
+                    // you can be punished during and a cost you pay on the
+                    // press. See `moves::on_e` and `keyed_move`.
                     match keyed_move(p).filter(|slot| p.can_throw(*slot, &out)) {
                         Some(slot) => begin_move(p, who, slot, input, scene, true),
                         None => {
@@ -3399,7 +3401,8 @@ fn air_accelerate(p: &mut Player, wish: V3, wish_speed: Fx) {
     clamp_air_speed(p);
 }
 
-/// The middle-click mechanic action, per class.
+/// The mechanic key's action, per class -- `E`, and middle click once upon a
+/// time, which is where this used to say the action lived.
 ///
 /// One button means something different on every class, which is where the
 /// identity lives -- see `controls.md`. Everything else about the control
@@ -4197,7 +4200,7 @@ impl World {
             // The frame the blade turns it forgets everyone it cut on the way
             // out, so the way back can cut them again. "Damage on both passes"
             // is only worth saying if the same target can eat both. The lotus
-            // does the same at its own turn, with six blades instead of one.
+            // does the same at its own turn, with twelve blades instead of one.
             if effect.kind == EffectKind::Bloodletter && turning && effect.returning() {
                 effect.forget_hits();
             }

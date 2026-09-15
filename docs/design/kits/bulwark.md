@@ -25,20 +25,46 @@ Three states, and every ability reads differently in each:
 **Traits:** reduced block stunlock, and a shield wide enough to cover an ally. Carrying it
 costs movement speed — which you get back when it is planted.
 
-**Two systems share the object.** As a *world volume* it stops projectiles by collision,
-with no timing or state involved — which is why a planted shield keeps blocking while you
-are elsewhere. As a *guard state* it handles melee, with stunlock and parry timing. Only the
-second requires you to be holding it.
+**Two systems are meant to share the object.** As a *world volume* it stops projectiles by
+collision, with no timing or state involved — which is why a planted shield would keep
+blocking while you are elsewhere. As a *guard state* it handles melee, with stunlock and
+parry timing. Only the second requires you to be holding it.
+
+> ⚠️ **Only the guard state is built.** A shield in flight is a damage source, and a planted
+> one is a marker you can recall and leap to — nothing collides with either. No projectile
+> path in the simulation knows the shield exists, so *"it holds space over there"* is the
+> class's central promise and is currently fiction. It is the largest unbuilt thing in this
+> document, and [../elementalist.md](../elementalist.md)'s "shared blocking implementation"
+> is half-done in the other direction: structures do block bodies and shots.
+
+## What is bound today
+
+Three moves and the mechanic. The shared grammar puts the poke on the bare click and its
+committed version on the modifier, so Bash and Slam sit one rung lower than the six-ability
+sketch below implies.
+
+| Input | Move | Bound |
+| --- | --- | --- |
+| `L` | **Bash** — the shield strike | yes |
+| `shift` + `L` | **Slam** — the overhead | yes |
+| `Q` | **Grapple** — the command grab | yes |
+| `R` (hold) | **Guard**, with the parry in its opening frames | yes |
+| `E` | **Throw** / **Recall** / **leap to it**, by shield state | yes |
+
+`cargo run -p sim --bin frametable` prints the live numbers. There is **no separate off-hand
+auto**: `L` is Bash, which is the shield itself.
 
 Input map in [../controls.md](../controls.md).
 
 ## Auto attack
 
-Short melee with the off hand. Unremarkable on purpose — the class does not win by autoing.
+Intended as a short melee with the off hand — unremarkable on purpose, because the class does
+not win by autoing. **Not built as its own move:** left click is Bash, so the poke and the
+shield strike are one thing today. Whether the class wants both is open.
 
 ## Abilities
 
-### Guard — mechanic input
+### Guard — right click, held
 **Startup** instant · **Recovery** short · **Range** facing arc · **Mechanic** requires the
 shield held
 
@@ -46,38 +72,59 @@ Hold to block. Blocked hits knock you back and stunlock you briefly; the Bulwark
 is short. **The opening frames are a parry** — timed correctly it staggers the attacker
 instead. One input, two outcomes.
 
-### Bash
+### Bash — `L`
 **Startup** fast · **Recovery** short · **Range** melee · **Mechanic** requires the shield
 held
 
 A short forward shield strike. The safe poke, and the natural follow-up to a parry stagger.
 
-### Slam
+> **Implemented**, on the bare click rather than on `shift` + click. 4/3/10, −4 on block and
+> +2 on hit, and it is the one move in the game the repeat lockout actually charges: it costs
+> 17 frames and the lockout is 30, so throwing it twice in a row waits 13. See
+> [../combat-kernel.md](../combat-kernel.md) §"The repeat lockout".
+
+### Slam — `shift` + `L`
 **Startup** slow · **Recovery** committed · **Range** short area · **Mechanic** requires the
-shield held; scales with downward velocity
+shield held
 
-Drive the shield into the ground. Shakes the ground and staggers everything close. Damage
-and stagger strength scale with how fast you were falling — so it rewards using it out of a
-jump or a leap recall.
+Drive the shield into the ground. Shakes the ground and staggers everything close.
 
-### Throw
-**Startup** medium · **Recovery** medium · **Range** medium · **Mechanic** moves the shield
-to planted
+> **Implemented** as a flat overhead — 14/4/24, and a crouching opponent does not duck it.
+>
+> **The velocity scaling is not built.** The intent is that damage and stagger strength scale
+> with how fast you were falling, so the move rewards being thrown out of a jump or a leap
+> recall; today it deals the same wherever it is thrown from. The Champion's aerial hammer has
+> the machinery this wants (`champion::slam_damage_per_m/s` charges a spiked victim for the
+> speed they land at), so it is a knob and a branch rather than a system.
 
-Hurl the shield. It damages along its path and plants where it lands, continuing to block
-projectiles as a volume. You are now faster, exposed, and unable to block.
+### Throw / Recall — `E`, the mechanic
+**Startup** instant · **Recovery** none · **Range** the throw's own reach · **Mechanic**
+cycles the shield through its three states
 
-### Recall
-**Startup** fast · **Recovery** short · **Range** to the shield · **Mechanic** requires the
-shield planted; returns it to held
+One key, and which of three things it does depends on where the shield is.
 
-The shield flies back, damaging everything along the return path. **Reactivate mid-flight to
-leap to it instead**, arriving at its position with the shield in hand.
+- **Held → thrown.** It flies at what the crosshair is on — a skillshot, not a ray from the
+  chest — damaging along its path, and plants where it lands. You are now faster, exposed,
+  and unable to block.
+- **Planted → recalled.** It flies back, damaging everything along the return path.
+- **In flight → leap to it.** Pressed while it travels, you are thrown toward it and arrive
+  where it is.
 
-Recall is the class's mobility and its approach tool — throw to commit, leap to follow. It
-also sets up Slam, since arriving from a leap carries downward velocity.
+> **Implemented**, and **with no frames at all**. The kit above specified a startup and a
+> recovery for Throw and Recall as though they were abilities; they are the class mechanic,
+> and the mechanic fires on the press like every other class's. That is a real difference from
+> the Reaver's Send shadow, which *is* a move in the table precisely because throwing a second
+> body across the arena has a wind-up somebody can punish — see
+> [../controls.md](../controls.md#where-e-is-an-ability). **Whether the shield should pay the
+> same price is open**, and it is the one place this class gets something for nothing.
+>
+> What is not built is the planting: a planted shield stops nothing, per the warning above.
 
-### Grapple
+Recall is the class's mobility and its approach tool — throw to commit, leap to follow. It is
+*meant* to set up Slam, since arriving from a leap carries downward velocity; that only pays
+once Slam scales with it.
+
+### Grapple — `Q`
 **Startup** slow · **Recovery** committed · **Range** melee · **Mechanic** requires the
 shield held
 
@@ -91,16 +138,20 @@ tail — this is the payoff for a read on a turtling opponent, not something to 
 ## Playing it
 
 Hold space with Guard and Bash, aimed so that the only open approach is the one you want
-them to take. Throw and leap to close, land Slam with the leap's velocity, Grapple when they
-start blocking instead of moving.
+them to take. Throw and leap to close, land Slam out of the leap, Grapple when they start
+blocking instead of moving.
 
 In coop, plant the shield in front of the party as cover, or hold it wide to body-block for
-someone who cannot take the hit.
+someone who cannot take the hit — **both of which want the planted volume that is not built
+yet**. Today a thrown shield is a projectile and a landing spot, and nothing more.
 
 ## Open questions
 
+- **Should the mechanic cost frames?** It costs none, which makes the Bulwark the one class
+  whose mechanic press is free. The Reaver's is a move in the table for exactly the opposite
+  reason.
 - **Can the planted shield be destroyed, or only bypassed?** Bypassed is simpler and makes
-  positioning the only counterplay.
+  positioning the only counterplay. Moot until it stops anything.
 - Does the shield block allied projectiles? A real coordination mechanic in coop and
   potentially maddening.
 - Does holding the shield wide for an ally need its own input, or is it just the Guard arc

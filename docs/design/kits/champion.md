@@ -118,8 +118,8 @@ is what makes the decision to commit to a finisher a decision:
 
 Each finisher also does something the first two do not. **Crescent** is the widest volume
 in the game — most of a half turn, and it catches everything in front of you. **Earthbreaker**
-is **unblockable**, which is this class's answer to a turtle. **Impale** reaches four and a
-half metres, which is further than anything else on the ground.
+is **unblockable**, which is this class's answer to a turtle. **Impale** reaches 4.4 m, which
+is further than anything else this class throws.
 
 ## The takeoffs — a weapon on the way off the floor
 
@@ -167,7 +167,7 @@ The openers, which are what a weapon is before you have committed to a string:
 | --- | --- | --- | --- | --- | --- | --- |
 | **Sword** | 2.0 m | 7f | 11f | most | +0 | The combo tool. Small knockback, small hitstun, and you can walk while you swing it. |
 | **Hammer** | 1.6 m | 15f | 22f | least | +7 | The crowd-control tool and the string *starter*. Long stagger, and it slows you to a crawl. |
-| **Spear** | 3.4 m | 10f | 14f | middling | +0 | The spacing tool. Longest reach in the game, thin, and it goes over a crouching opponent. |
+| **Spear** | 3.4 m | 10f | 14f | middling | +0 | The spacing tool. Longest melee reach in the game, thin, and it goes over a crouching opponent. |
 
 The hammer doing the least damage is deliberate and it is what "heavy" means here: it buys
 stagger, not numbers. Its +7 on hit is the whole of its job — it is the move that starts
@@ -270,8 +270,9 @@ the charge is free for the reposition it was always better at.
 
 ### Rush stab — right click, level
 
-The one Rush move that stops. All of the dash goes into the point: the longest reach and
-the biggest single hit in the class, and the longest recovery to pay for it.
+The one Rush move that stops. All of the dash goes into the point: the **biggest single hit
+in the class** at 165, and the longest recovery to pay for it. It reaches 4.2 m, a shade
+short of Impale — the chain finisher is the longer of the two and this is the heavier.
 
 ### Pole vault — right click, aimed at the floor
 
