@@ -136,6 +136,7 @@ impl Class {
                 chain_left: 0,
                 chain_hit: false,
                 takeoff: 0,
+                leap_banked: false,
             },
             Class::ShadowReaver => Mechanic::Shadow(Shadow::attending(V3::ZERO, V3::ZERO)),
             Class::Elementalist => Mechanic::Structures([None; MAX_STRUCTURES]),
@@ -490,6 +491,15 @@ pub enum Mechanic {
         /// same press as jump" survives the two arriving a few frames apart --
         /// which they always do. Zero everywhere else.
         takeoff: u16,
+        /// A jump pressed **during** the hammer's finisher, kept until it lands.
+        ///
+        /// The finisher throws whoever it hits into the air, and the decision
+        /// the player is being offered is whether to go with them: declining is
+        /// a knock-up and a reset, accepting is a bigger knock-up and both of
+        /// you off the floor on the same frame. The press arrives during the
+        /// wind-up and is spent on contact, so it sits here in between -- see
+        /// `state::bank_the_leap`.
+        leap_banked: bool,
     },
     /// The Reaver: a second body, always somewhere. See [`Shadow`].
     Shadow(Shadow),

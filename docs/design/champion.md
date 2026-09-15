@@ -60,11 +60,20 @@ a hammer with 1.35× damage is a sword that hits harder. All three were the same
 same shape, at the same height, and the choice between them was arithmetic. So playing the
 class was arithmetic.
 
-What actually separates weapons is **shape**: a sword goes across, a hammer goes down, a
-spear goes out. Those are three different questions about where the other player is
+What actually separates weapons is **shape**: a sword goes corner to corner, a hammer goes
+down, a spear goes out. Those are three different questions about where the other player is
 standing, and none of them is a number you can multiply. Giving each weapon its own moves
 with their own hit volumes is what the nine multipliers were reaching for and could not
 reach.
+
+**A second thing separates them, found 2026-09-15, and it is the same argument one step
+further on.** Shape answers *where can I reach*; it does not answer *where will I be
+afterwards*, and that turns out to be half of what a weapon is. A move may now carry the
+body forward on its own — `Move::step` — so the sword closes half a metre on every link
+whether it lands or not, the spear's opener leaves you exactly where you were, and its
+second hit crosses nearly two metres in one beat behind a telegraph you are meant to see.
+Three weapons, three answers to "what does throwing this commit my feet to", and none of
+those is a multiplier either.
 
 ## The core addition — mid-animation form swap
 
