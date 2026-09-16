@@ -385,6 +385,28 @@ scalars! {
     // knob below it its neighbour's baked value. The palette groups by family,
     // so it still shows up next to the rest of hers.
     GaleGrow,          "Elementalist", "Gale full size after (m)",              Fixed,  fx(1,1),  fx(40,1);
+    // Appended for the same reason every knob above it is: `tuned::SCALARS` is
+    // read by this enum's own discriminant, so a knob slotted in beside its
+    // family would hand every knob below it its neighbour's baked value. The
+    // palette groups by family, so these still show up where they belong.
+    //
+    // **The step's run-up** is shared across the whole roster, because the
+    // *shape* of a step is a rule and only its size is a per-move decision:
+    // every stepping move drives for this many frames plus its own active
+    // window, and arrives exactly as the weapon does. See `moves::Move::step`.
+    StepLead,         "Movement", "Step, frames of run-up before contact", Frames, 0, 20;
+    // **How far a diagonal cut is rolled off the vertical**, in turns. An
+    // eighth of a turn is corner to corner; nothing is upright and a quarter is
+    // flat, so the two ends of this slider are the other two planes. One
+    // magnitude for both of the sword's mirrored cuts -- the sign is which
+    // shoulder it starts over. See `moves::Plane::Diagonal`.
+    CutRoll,          "Champion", "Diagonal cut, roll off the vertical (turns)", Fixed, 0, fx(1,4);
+    // **Going up with them.** Jump during the hammer's finisher and the
+    // knock-up is worth more and you leave the floor on the frame it lands, so
+    // the pair of you arrive in the air together. Two numbers because they are
+    // two decisions: how much harder they go, and how fast you follow.
+    HammerLeapLaunch, "Champion", "Hammer finisher, knock-up going with them (x)", Fixed, fx(1,1), fx(3,1);
+    HammerLeap,       "Champion", "Hammer finisher, your own leap",         Fixed, 0, fx(25,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -597,6 +619,9 @@ pub enum MoveField {
     // than once per cast: the shortest gap between one activation and the next.
     // See `moves::Move::reactivate`.
     Reactivate,
+    // Appended, like everything above it: how far the move itself carries the
+    // body forward. See `moves::Move::step`.
+    Step,
 }
 
 impl MoveField {
@@ -628,6 +653,7 @@ impl MoveField {
         MoveField::ChannelFrom,
         MoveField::RepeatMul,
         MoveField::Reactivate,
+        MoveField::Step,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -659,6 +685,7 @@ impl MoveField {
             MoveField::ChannelFrom => "Channel, reach at no hold",
             MoveField::RepeatMul => "Repeat lockout (%)",
             MoveField::Reactivate => "Reactivate no sooner than",
+            MoveField::Step => "Steps forward (m)",
         }
     }
 
@@ -695,7 +722,17 @@ impl MoveField {
             MoveField::Launch => (fx(-30, 1), fx(30, 1)),
             // Signed for the same reason in the other axis: the sign is which
             // way the weapon travels. See `moves::Move::arc`.
-            MoveField::Arc => (fx(-1, 2), fx(1, 2)),
+            //
+            // A whole turn either way, because a spin is a real shape: the
+            // spear's finisher carries the pole round past the shoulder it
+            // started on, and a slider that stopped at half a turn could not
+            // express it. Half was the old bound and it was set by the widest
+            // thing in the game at the time, not by anything geometric.
+            MoveField::Arc => (fx(-1, 1), fx(1, 1)),
+            // Signed, and in metres: a move may give ground as well as take it.
+            // The bound is about what a body can cross inside a handful of
+            // frames -- see `moves::Move::step`.
+            MoveField::Step => (fx(-3, 1), fx(4, 1)),
             // A takeoff speed, in the same units the jump is: the pole vault
             // is meant to beat a jump, and a jump is already 17.7.
             MoveField::SelfLift => (0, fx(30, 1)),
@@ -887,7 +924,7 @@ pub const AIR_COUNT: usize = CLASSES * 4;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 27;
+pub const MOVE_FIELDS: usize = 28;
 
 // ---------------------------------------------------------------------------
 // The live store

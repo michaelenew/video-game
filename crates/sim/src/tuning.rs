@@ -1944,3 +1944,59 @@ pub fn landfall_tilt() -> Fx {
 pub fn landfall_erupt() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LandfallErupt))
 }
+
+// --- The step, the diagonal, and going up with them ------------------------
+
+/// How many frames before the hitbox a stepping move starts driving the body.
+///
+/// Shared across the whole roster, because the **shape** of a step is a rule and
+/// only its size is a per-move decision: every stepping move drives for this many
+/// frames and then the frame its hitbox appears on, so the feet always arrive
+/// with the weapon rather than some frames before or after it. A long distance
+/// over that fixed window is a dash and a short one is a step, which is why
+/// [`crate::moves::Move::step`] is one number rather than two.
+///
+/// The run-up is what stops a step being a teleport on the frame of contact: the
+/// body is already travelling when the weapon lands, which is the whole of what
+/// "the body goes with it" looks like from the other side.
+pub fn step_lead() -> u16 {
+    oven::scalar(Scalar::StepLead) as u16
+}
+
+/// How far a diagonal cut's plane is rolled off the vertical, in turns.
+///
+/// Zero is [`crate::moves::Plane::Upright`] and a quarter turn is
+/// [`crate::moves::Plane::Flat`], so this slider's two ends are the other two
+/// planes and everything interesting is in the middle. An eighth of a turn is
+/// corner to corner: the head starts as far to the side as it does above, which
+/// is what makes the cut own the width of the front *and* the height of a body
+/// instead of choosing.
+///
+/// **One magnitude, two mirrored cuts.** The sign lives in
+/// [`crate::moves::Plane::Diagonal`]'s own hand, the same way the Dual mage's
+/// two wings share one span -- so a tuner cannot roll the sword's first cut and
+/// forget its second.
+pub fn cut_roll() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CutRoll))
+}
+
+/// What the hammer finisher's knock-up is multiplied by when the Champion jumps
+/// into it.
+///
+/// Above one, and the whole of what the decision buys: the finisher throws them
+/// up either way, and electing to go with them throws them *higher* as well as
+/// putting you there to meet them. See `state::going_up_with_them`.
+pub fn hammer_leap_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HammerLeapLaunch))
+}
+
+/// The Champion's own upward speed on the frame that finisher connects, when the
+/// jump was pressed during it.
+///
+/// Paid **on contact**, not on the press, which is the same rule the aerial
+/// fan's shove follows and for the same reason: a whiffed finisher that still
+/// launched you into the air would be a free escape attached to the most
+/// punishable move in the kit. You go up because it landed.
+pub fn hammer_leap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HammerLeap))
+}

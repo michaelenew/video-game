@@ -506,3 +506,147 @@ fn both_autos_are_sized_the_same() {
 fn fx(v: f32) -> sim::Fx {
     sim::Fx::from_raw((v * 65536.0).round() as i32)
 }
+
+// ---------------------------------------------------------------------------
+// The blade you see and the volume that hits
+// ---------------------------------------------------------------------------
+//
+// `docs/design/README.md` and `CLAUDE.md` both say it about the debug overlay:
+// an overlay that can drift from the rule it illustrates is worse than no
+// overlay. The same is true of an animation, and more so -- nobody plays with
+// the overlay on. What the player reads is the weapon, and if the weapon goes
+// one way while the capsule goes another, the class stops being learnable and
+// no test in `sim` can tell.
+//
+// The Champion is the only class whose moves have directions worth checking:
+// everything else swings a disc at arm's length.
+
+/// The way the weapon points, as the renderer draws it on this frame of a clip.
+///
+/// Nothing hangs off the hands yet, so the weapon exists only as the line
+/// between the two wrists -- and the **right** hand is the one nearer the head,
+/// which is `clips::champion::weapon`'s own convention. In world axes, with the
+/// fighter facing `+x`.
+fn drawn_weapon(clip: view::Clip, frame: u16) -> [f32; 3] {
+    let s = skeleton::skeleton_for(sim::Class::Champion);
+    let skin = skeleton::solve(&s, &clip.at(frame as u32));
+    let l = skin.origin[Joint::HandL.index()];
+    let r = skin.origin[Joint::HandR.index()];
+    let facing = [1.0, 0.0];
+    let a = view::into_world([r[0] - l[0], r[1] - l[1], r[2] - l[2]], [0.0; 3], facing);
+    let len = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt().max(1e-4);
+    [a[0] / len, a[1] / len, a[2] / len]
+}
+
+/// The way the hit volume points on the same frame of the same move, taken from
+/// the simulation rather than from anything this crate knows.
+///
+/// `frame` is a **clip** frame, and the two clocks are joined the way
+/// `play::attack` joins them rather than by counting frames from the press: a
+/// phase runs for one frame longer than the number the move table prints, so the
+/// clip's frames are the phase boundaries with those spare frames folded out.
+/// Re-deriving that here would be a second copy of the correspondence the
+/// renderer already owns, and the two would eventually disagree -- which is the
+/// exact failure this test exists to catch.
+fn swung_volume(kind: u8, frame: u16) -> Option<[f32; 3]> {
+    let mut w = sim::World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
+    // Out of reach, and the chain walked by hand: what is being compared is two
+    // descriptions of a shape, and a victim standing in it would end the move
+    // early.
+    w.players[1].pos = sim::V3::new(sim::Fx::from_int(11), w.players[1].pos.y, sim::Fx::ZERO);
+    if let sim::class::Mechanic::Forms {
+        chain, chain_left, ..
+    } = &mut w.players[0].mechanic
+    {
+        *chain = sim::moves::champion::link_of(kind).expect("a chain link");
+        *chain_left = 400;
+    }
+    let button = match sim::moves::champion::weapon(kind) {
+        sim::moves::champion::SWORD => sim::Input::LEFT,
+        sim::moves::champion::HAMMER => sim::Input::MIDDLE,
+        _ => sim::Input::RIGHT,
+    };
+    let (startup, active, _) = sim::moves::frames(sim::Class::Champion, kind);
+    for _ in 0..120u16 {
+        w.advance([sim::Input::aimed(button, 0), sim::Input::aimed(0, 1 << 15)]);
+        let elapsed = match w.players[0].action {
+            sim::state::Action::Startup { kind: k, left } if k == kind => {
+                startup.saturating_sub(left)
+            }
+            sim::state::Action::Active { kind: k, left } if k == kind => {
+                startup + active.saturating_sub(left)
+            }
+            _ => continue,
+        };
+        if elapsed != frame {
+            continue;
+        }
+        let Some(h) = sim::state::hitbox(&w.players[0]) else {
+            continue;
+        };
+        let d = h.to.sub(h.from);
+        let a = [
+            d.x.to_f32_for_render(),
+            d.y.to_f32_for_render(),
+            d.z.to_f32_for_render(),
+        ];
+        let len = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
+        if len < 0.01 {
+            return None;
+        }
+        return Some([a[0] / len, a[1] / len, a[2] / len]);
+    }
+    None
+}
+
+#[test]
+fn the_champion_swings_the_weapon_the_player_can_see() {
+    // **Up is up and left is left.** Not the exact angle -- the hit volume hangs
+    // off the chest and the drawn weapon hangs off two wrists a hand's width
+    // apart, and every clip in the file exaggerates on purpose, so the two are
+    // never going to be parallel. What they may never do is disagree about
+    // *which way*: a cut the volume takes from high on the right must not be
+    // drawn coming from low on the left.
+    //
+    // Checked on the frame the volume appears and on the last frame it is out,
+    // which between them are the two ends of every arc in the chain.
+    use sim::moves::champion as c;
+    let links: [(u8, view::Clip); 9] = [
+        (c::SWORD_GROUND, view::Clip::ChampionSword),
+        (c::BACKCUT, view::Clip::ChampionBackcut),
+        (c::UPCUT, view::Clip::ChampionUpcut),
+        (c::HAMMER_GROUND, view::Clip::ChampionHammer),
+        (c::UPROOT, view::Clip::ChampionUproot),
+        (c::EARTHBREAKER, view::Clip::ChampionEarthbreaker),
+        (c::SPEAR_GROUND, view::Clip::ChampionSpear),
+        (c::SKEWER, view::Clip::ChampionSkewer),
+        (c::WHIRL, view::Clip::ChampionWhirl),
+    ];
+    for (kind, clip) in links {
+        let m = sim::moves::get(sim::Class::Champion, kind);
+        let (_, contact, through) = clip.phases().expect("an attack clip");
+        for frame in [contact, through] {
+            let Some(volume) = swung_volume(kind, frame) else {
+                panic!("{} put no volume out on frame {frame}", m.name);
+            };
+            let drawn = drawn_weapon(clip, frame);
+            // Only the components the move actually commits to. A thrust has no
+            // opinion about height and a flat sweep has none about its own
+            // climb, so demanding one would be demanding a number the design
+            // does not have.
+            for (axis, name, floor) in [(1usize, "height", 0.25f32), (2, "side", 0.25)] {
+                if volume[axis].abs() < floor {
+                    continue;
+                }
+                assert!(
+                    drawn[axis] * volume[axis] > 0.0,
+                    "{}: on frame {frame} the volume goes {name} {:+.2} and the \
+                     weapon the player sees goes {:+.2}",
+                    m.name,
+                    volume[axis],
+                    drawn[axis]
+                );
+            }
+        }
+    }
+}

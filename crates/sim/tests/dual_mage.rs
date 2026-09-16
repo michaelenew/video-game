@@ -379,17 +379,33 @@ fn the_wing_sweeps_the_whole_way_round_without_jumping() {
 }
 
 #[test]
-fn nothing_else_in_the_roster_has_a_side() {
+fn a_side_is_always_declared_and_the_list_is_short() {
     // `Hand::Centre` is the default and has to stay the default: a swing that
-    // quietly moved to one shoulder would change the reach of five classes.
+    // quietly moved to one shoulder would change the reach of whichever class it
+    // happened to. So the sided moves are **named here**, and a new one is a
+    // visible one-line change to this list rather than something a reader of the
+    // move table has to go looking for.
+    //
+    // Three, and two of them are the same move mirrored. The Dual mage's autos
+    // are sided because the side *is* the mechanic -- left is dark, right is
+    // light, and a hitbox on the centre line cannot say which one landed. The
+    // Champion's spear opener is sided because it is the one attack in that class
+    // thrown with one arm: a jab off the leading hand with the butt of the shaft
+    // still at the hip, which is most of why it reads as a poke rather than as a
+    // short lunge.
+    let declared: &[(Class, u8)] = &[
+        (Class::DualMage, dual::DARK_AUTO),
+        (Class::DualMage, dual::LIGHT_AUTO),
+        (Class::Champion, sim::moves::champion::SPEAR_GROUND),
+    ];
     for class in sim::class::ALL_CLASSES {
         for slot in 0..sim::moves::slots(class) {
             let m = sim::moves::get(class, slot as u8);
             let sided = m.hand != Hand::Centre;
-            let is_an_auto = class == Class::DualMage && dual::is_an_auto(slot as u8);
+            let named = declared.contains(&(class, slot as u8));
             assert_eq!(
                 sided,
-                is_an_auto,
+                named,
                 "{} {} is thrown from the {} hand",
                 class.name(),
                 m.name,

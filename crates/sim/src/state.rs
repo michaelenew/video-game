@@ -1088,6 +1088,10 @@ impl World {
                 // direction locked at the throw, because the whole point is
                 // that you choose where to go *as* it connects.
                 champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
+                // And the other half of the hammer finisher: the knock-up went
+                // out in `resolve_hit`, and this is the Champion following it
+                // off the floor on the same frame.
+                champion_leap_with_them(&mut self.players[attacker], hit.blocked || hit.parried);
                 // A chain link that actually landed may cut its recovery short
                 // for the next one. Blocked and parried links pay in full, so
                 // the string ends on a defender who answered it -- see
@@ -1801,6 +1805,14 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     } else {
         m.launch
     };
+    // And a knock-up is worth more when the attacker elected to go up with it.
+    // See `bank_the_leap`: the decision was taken during the wind-up and is
+    // being paid for here, on the frame it lands.
+    let launch = if going_up_with_them(attacker, kind) {
+        launch.mul(t::hammer_leap_launch())
+    } else {
+        launch
+    };
 
     Some(Hit {
         damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
@@ -2102,6 +2114,7 @@ fn step_player(
     // reason the Rush cancel does -- a recovery that has been cut short has to
     // reach the input below on the frame it was cut, not the frame after.
     arm_takeoff(p, input);
+    bank_the_leap(p, pressed_space);
     chain_cancel(p, input);
 
     queue_the_shadow(p, input);
@@ -2288,9 +2301,31 @@ fn step_player(
         // In the air, input *accelerates* rather than assigns. Momentum is
         // conserved when you let go, which is the whole difference between a
         // jump being a commitment and a jump being a hover.
+        //
+        // Ahead of the step below, so a move that took you off the floor
+        // partway through its own drive -- the hammer finisher, leaping with
+        // whoever it just launched -- keeps the speed it had and steers with it,
+        // rather than being driven along a line its feet have left.
         if steering {
             air_accelerate(p, move_dir(p.aim(input), ax, az), mob.air_speed);
         }
+    } else if let Some(drive) = attack_step(p) {
+        // **A move carrying the body.** The step is the move's own motion, down
+        // the facing it locked when it started, and the stick is *added* to it
+        // rather than replaced by it: a cut thrown while strafing comes out
+        // diagonally instead of snapping to the front, which is the whole of
+        // what "you can move while you swing it" is worth. Holding back blunts
+        // the step, and that is the same answer -- you chose to give ground.
+        //
+        // Assigned rather than accumulated. The ramp below reads last frame's
+        // speed back off the velocity, so a drive *added* to a velocity that
+        // already contains it compounds into a rocket by the fourth frame.
+        let steer = match (attack_speed, steering) {
+            (Some(allowed), true) => move_dir(p.aim(input), ax, az).scale(dragged(p, allowed)),
+            _ => V3::ZERO,
+        };
+        p.vel.x = drive.x.add(steer.x);
+        p.vel.z = drive.z.add(steer.z);
     } else if p.action.actionable() && steering {
         let speed = if p.crouching {
             t::crouch_move_speed()
@@ -3051,6 +3086,128 @@ fn champion_fan_boost(p: &mut Player, input: Input) {
     clamp_air_speed(p);
 }
 
+/// The drive a **stepping** move is putting under the body this frame.
+///
+/// `None` for almost everything. A move with no [`step`] does not carry you, and
+/// neither do the frames outside its window: that window ends on the last active
+/// frame and runs [`tuning::step_lead`] frames back into the startup, so the feet
+/// always arrive with the weapon rather than some frames before or after it.
+///
+/// **Constant speed across the window**, which is what makes one number enough.
+/// Every stepping move in the game drives for the same shape of window, so a
+/// long distance over it is a dash and a short one is a step -- the character of
+/// the motion falls out of the distance instead of needing a second knob for it.
+/// What happens afterwards is not this function's business: the hindrance ramp
+/// the recovery falls into bleeds the speed off over a few frames, which is the
+/// follow-through.
+///
+/// [`step`]: moves::Move::step
+/// [`tuning::step_lead`]: crate::tuning::step_lead
+fn attack_step(p: &Player) -> Option<V3> {
+    let kind = p.action.attack_kind()?;
+    let m = moves::get(p.class, kind);
+    if m.step.raw() == 0 {
+        return None;
+    }
+    let lead = t::step_lead();
+    // **The step is finished by the time the weapon lands.** `left` is the
+    // startup frames still to come after this one, so the frame the hitbox
+    // appears on is `left + 1` away and the run-up is the last `lead` of them --
+    // and then the first active frame, which is the one the step arrives on.
+    //
+    // It used to run for the whole active window, which is right for a cut that
+    // sweeps and wrong for anything that plants: the hammer's finisher put its
+    // head through the floor on the first active frame and then carried the body
+    // most of another metre past it, feet skating, for the five frames the volume
+    // was still out. Ending it on contact is the rule that is true of both --
+    // a swing still travels afterwards, because the momentum is still there and
+    // the hindrance ramp spends it, which is the follow-through rather than the
+    // step.
+    let driving = match p.action {
+        Action::Startup { left, .. } => left < lead,
+        Action::Active { left, .. } => left == m.active,
+        _ => false,
+    };
+    if !driving {
+        return None;
+    }
+    let frames = Fx::from_int((lead + 1) as i32);
+    let speed = m.step.div(DT.mul(frames));
+    Some(V3::new(
+        p.facing.x.mul(speed),
+        Fx::ZERO,
+        p.facing.z.mul(speed),
+    ))
+}
+
+/// Bank a jump pressed **during** the hammer's finisher, so it can be spent on
+/// the frame the finisher lands.
+///
+/// The one move in the game where the jump button is read inside another move's
+/// frames, and the reason is that the finisher throws somebody into the air and
+/// the interesting question is whether you are going with them. Declining is a
+/// knock-up and a reset; accepting is a knock-up worth more, and the pair of you
+/// leaving the floor on the same frame.
+///
+/// A **press**, not a hold, and it has to happen while the move is still
+/// deciding -- during the startup or the active frames. Holding the button from
+/// before the swing would have thrown the takeoff instead (`arm_takeoff`), and a
+/// press during the recovery is a decision taken after the answer was known.
+///
+/// The bank clears itself the moment the action is anything else, so it cannot
+/// be carried from one finisher into the next.
+fn bank_the_leap(p: &mut Player, pressed_space: bool) {
+    if p.class != Class::Champion {
+        return;
+    }
+    let deciding = matches!(
+        p.action,
+        Action::Startup { kind, .. } | Action::Active { kind, .. }
+            if kind == moves::champion::EARTHBREAKER
+    );
+    if let Mechanic::Forms { leap_banked, .. } = &mut p.mechanic {
+        *leap_banked = deciding && (*leap_banked || pressed_space);
+    }
+}
+
+/// Is this fighter going up with whoever this move is about to launch?
+///
+/// Read by two places that must agree: the knock-up the defender gets, and the
+/// lift the attacker takes. One function so a retune cannot make the launch
+/// bigger without the Champion following it.
+fn going_up_with_them(p: &Player, kind: u8) -> bool {
+    p.class == Class::Champion
+        && kind == moves::champion::EARTHBREAKER
+        && matches!(
+            p.mechanic,
+            Mechanic::Forms {
+                leap_banked: true,
+                ..
+            }
+        )
+}
+
+/// Spend the banked jump: leave the floor on the frame the finisher connects.
+///
+/// **On contact rather than on the press**, which is the same rule the aerial
+/// fan's shove follows and for the same reason -- a whiffed finisher that still
+/// threw you into the air would be a free escape bolted to the most punishable
+/// move in the kit. You go up because it landed.
+fn champion_leap_with_them(p: &mut Player, blocked: bool) {
+    let Some(kind) = p.action.attack_kind() else {
+        return;
+    };
+    if blocked || !going_up_with_them(p, kind) {
+        return;
+    }
+    p.vel.y = t::hammer_leap();
+    p.grounded = false;
+    // Spent. The hit is over and the bank is not a thing you keep.
+    if let Mechanic::Forms { leap_banked, .. } = &mut p.mechanic {
+        *leap_banked = false;
+    }
+}
+
 /// Let a move that keeps hitting hit again.
 ///
 /// `hit_used` is what makes a swing land once. A move with a re-hit interval
@@ -3743,6 +3900,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             chain_left,
             chain_hit,
             takeoff,
+            leap_banked,
         } => {
             h.write_u32(3);
             h.write_u32(*form as u32);
@@ -3753,6 +3911,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*chain_left as u32);
             h.write_u32(*chain_hit as u32);
             h.write_u32(*takeoff as u32);
+            h.write_u32(*leap_banked as u32);
         }
         Mechanic::Shadow(shadow) => {
             h.write_u32(4);

@@ -83,11 +83,24 @@ pub struct Move {
     pub mobility: u8,
     /// How far a swing travels, in turns, and **which way**.
     ///
-    /// Signed: a positive arc runs from the `+` end of its span to the `-` end
-    /// -- right to left across the body, or top to bottom down it -- and a
-    /// negative one reverses, which is what makes an uppercut a rising cut
-    /// rather than a falling one from the same two numbers. Zero is a move
+    /// Signed: a positive arc runs from the `+` end of its span to the `-` end,
+    /// and a negative one reverses -- which is what makes a rising cut a rising
+    /// cut rather than a falling one from the same two numbers. Zero is a move
     /// whose shape does not sweep.
+    ///
+    /// Which way the `+` end *is* depends on the plane, and it is worth being
+    /// exact about because the answer is not the same for both:
+    ///
+    /// * [`Plane::Upright`] and [`Plane::Diagonal`]: positive **comes down**.
+    ///   The head starts at the top of the arc and finishes at the bottom.
+    /// * [`Plane::Flat`]: positive starts on the fighter's **left** and sweeps
+    ///   across to the right. The body is authored in a left-handed frame
+    ///   dropped into a right-handed world (see [`crate::aim::across`]), so
+    ///   which of the two a positive rotation about the vertical actually
+    ///   produces is a fact to read off rather than to reason about -- this
+    ///   sentence used to say the opposite, and the Champion's spinning finisher
+    ///   is what found it out: the clip swept one way and the volume the other.
+    ///   `view/tests/kinematics.rs` is what keeps that honest now.
     pub arc: Fx,
     /// Frames between one connection and the next for a move that keeps
     /// hitting. Zero is the normal rule: a swing lands once.
@@ -149,6 +162,35 @@ pub struct Move {
     /// playing rather than guessed at a desk. Meaningless on a move whose own
     /// button does not reactivate it -- see [`reactivates`].
     pub reactivate: u16,
+    /// How far the move itself carries the body forward, in metres.
+    ///
+    /// **A step is not mobility.** [`mobility`] is how much of your own walk
+    /// you keep while a move runs -- you steering, slowly. This is the move
+    /// steering you: a distance it covers along the facing it locked, whether
+    /// or not the stick is touched, spent over the frames that end with the
+    /// last active one so that the body arrives with the weapon. The two add,
+    /// which is what lets a cut thrown while strafing come out diagonally
+    /// instead of snapping to the front.
+    ///
+    /// Zero on almost everything, and that is the point of it being a column:
+    /// a move that does not step says so, and a move that does says how far.
+    /// Signed, so a swing can also give ground -- nothing does yet.
+    ///
+    /// **It is the distance covered by the time the weapon lands**, which is the
+    /// number that decides spacing. The window is [`tuning::step_lead`] frames of
+    /// run-up and then the frame the hitbox appears on, shared across the whole
+    /// roster, so the *shape* of a step is a rule and only its size is a per-move
+    /// decision: a long distance over that fixed window is a dash and a short one
+    /// is a step, which is why one number covers both.
+    ///
+    /// The body keeps travelling after that, because the momentum is still under
+    /// it and the hindrance ramp spends it over a few frames. That is the
+    /// follow-through rather than the step, and it is what stops a lunge ending
+    /// like a wall.
+    ///
+    /// [`mobility`]: Move::mobility
+    /// [`tuning::step_lead`]: crate::tuning::step_lead
+    pub step: Fx,
     /// The volume this move puts in the world. See [`Shape`].
     pub shape: Shape,
     /// Which arm it comes out of. See [`crate::aim::Hand`].
@@ -241,6 +283,16 @@ impl Shape {
 }
 
 /// Which way a swing sweeps.
+///
+/// All three are the same rotation about a different axis, and every axis is
+/// square to the aim -- so the head of the weapon always travels through the
+/// aim, and what the plane chooses is *which way round it goes*. [`Flat`] turns
+/// about the vertical and [`Upright`] about the horizontal; [`Diagonal`] is the
+/// continuum between them, stopped at one tilt.
+///
+/// [`Flat`]: Plane::Flat
+/// [`Upright`]: Plane::Upright
+/// [`Diagonal`]: Plane::Diagonal
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Plane {
     /// Across the body, turning about the vertical. A cut that catches
@@ -249,6 +301,39 @@ pub enum Plane {
     /// Down the body, turning in the vertical plane that contains the aim. A
     /// slam, a rising cut, and everything the Champion does in the air.
     Upright,
+    /// **Corner to corner**: the upright plane rolled off the vertical by
+    /// [`tuning::cut_roll`], so the head starts high over one shoulder and
+    /// finishes low past the other hip.
+    ///
+    /// ```text
+    ///     Diagonal(Right)        Diagonal(Left)          Upright
+    ///        \                        /                     |
+    ///         \      o               /    o                  |  o
+    ///          \    /|\             /    /|\                 | /|\
+    ///           \                  /                         |
+    /// ```
+    ///
+    /// The [`Hand`] is **which shoulder it starts over**, and that is the whole
+    /// of its sign: one tuned tilt serves both of the sword's mirrored cuts,
+    /// exactly the way one tuned span serves the Dual mage's two wings. See
+    /// [`crate::aim::Hand::outward`].
+    ///
+    /// It is a different question from [`Move::hand`], which is the shoulder the
+    /// volume *leaves from*. A two-handed sword is gripped at the sternum and
+    /// still swung from over the right shoulder, so the two are a centre-line
+    /// origin and a right-handed plane, and collapsing them would be a lie about
+    /// one or the other.
+    ///
+    /// Why it exists at all: a cut that is either level or vertical has to pick
+    /// between owning the width of the front and owning the height of a body,
+    /// and a real sword cut owns both because it is thrown across the diagonal
+    /// of the target. The flat version passes over anything crouched and the
+    /// upright version misses anything that stepped aside; this one is what a
+    /// swordsman actually does.
+    ///
+    /// [`tuning::cut_roll`]: crate::tuning::cut_roll
+    /// [`Hand`]: crate::aim::Hand
+    Diagonal(crate::aim::Hand),
 }
 
 impl Move {
@@ -410,9 +495,9 @@ const NAMES: [&[&str]; 6] = [
         "Backcut",
         "Uproot",
         "Skewer",
-        "Crescent",
+        "Upcut",
         "Earthbreaker",
-        "Impale",
+        "Whirl",
         "Air sword",
         "Air hammer",
         "Air spear",
@@ -507,7 +592,7 @@ pub const SLOTS: usize = 3;
 ///                     left click      middle click    right click
 ///   on foot, hit 1    Sword           Hammer          Spear
 ///   on foot, hit 2    Backcut         Uproot          Skewer
-///   on foot, hit 3    Crescent        Earthbreaker    Impale
+///   on foot, hit 3    Upcut           Earthbreaker    Whirl
 ///   in the air        Air sword       Air hammer      Air spear
 ///   rushing           Rush slash      Rush sweep      Rush stab
 ///   leaving the floor Rising cut      Uppercut        Pole drive
@@ -562,9 +647,9 @@ pub mod champion {
     pub const BACKCUT: u8 = SECOND + SWORD;
     pub const UPROOT: u8 = SECOND + HAMMER;
     pub const SKEWER: u8 = SECOND + SPEAR;
-    pub const CRESCENT: u8 = THIRD + SWORD;
+    pub const UPCUT: u8 = THIRD + SWORD;
     pub const EARTHBREAKER: u8 = THIRD + HAMMER;
-    pub const IMPALE: u8 = THIRD + SPEAR;
+    pub const WHIRL: u8 = THIRD + SPEAR;
     pub const AIR_SWORD: u8 = IN_THE_AIR + SWORD;
     pub const AIR_HAMMER: u8 = IN_THE_AIR + HAMMER;
     pub const AIR_SPEAR: u8 = IN_THE_AIR + SPEAR;
@@ -935,34 +1020,57 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
 /// the spear into a hammer would not be a tuning knob, it would be a second,
 /// worse way of writing the move list.
 pub const fn shape(class: Class, kind: u8) -> Shape {
+    use crate::aim::Hand;
     use champion as c;
     match class {
-        // **Shape is a property of the weapon, not of the move.** Every sword
-        // move in the class cuts across, every hammer move travels up or down
-        // the vertical, every spear move is a line along the aim -- through all
-        // three links of the chain, in the air and out of a Rush. That is what
-        // "each weapon has an identity" means when it is written as code rather
-        // than as prose: a player who has learnt that the hammer owns the
-        // ground under it has learnt something that is true of every hammer
-        // move there is.
+        // **A weapon owns a piece of space, and every one of its moves works
+        // that piece.** The sword cuts corner to corner, the hammer travels up
+        // or down the vertical plane the aim lies in, the spear is a line --
+        // through all three links of the chain, in the air and out of a Rush.
+        // That is what "each weapon has an identity" means when it is written as
+        // code rather than as prose: a player who has learnt that the hammer
+        // owns the ground under it has learnt something that is true of every
+        // hammer move there is. `crates/sim/tests/feel.rs` pins the half of that
+        // which is a design decision -- no two weapons ever put out the same
+        // volume, so the shape on the screen always names the weapon.
         //
-        // The two exceptions are both the air, and both are the same exception:
-        // off the ground there is no floor to cut across, so the sword rolls
-        // its arc into the vertical and the spear sweeps its fan flat around
-        // the aim instead of thrusting down a line nobody is standing on.
+        // Three moves leave their weapon's usual plane, and each of them has the
+        // same excuse: the situation took the plane away. Off the ground there is
+        // no floor to cut across, so the sword rolls its arc into the vertical
+        // and the spear sweeps its fan flat around the aim; and a Rush slash is
+        // thrown at a line of people you are running through, which is a
+        // horizontal cut by definition.
         Class::Champion => match kind {
-            // Across the front. The sword owns the width -- at hip height
-            // opening, coming back the other way, and all the way round on the
-            // finisher.
-            c::SWORD_GROUND | c::BACKCUT | c::CRESCENT | c::RUSH_SLASH => Shape::Swing(Plane::Flat),
+            // **Corner to corner, and the two openers mirror each other.** The
+            // sword owns the diagonal: down from the right shoulder, back down
+            // from the left, and the finisher up the same line the first one
+            // came down. A cut rolled off the vertical owns the width of the
+            // front and the height of a body at once, which is why the sword is
+            // the weapon you throw when you do not know where they will be.
+            c::SWORD_GROUND => Shape::Swing(Plane::Diagonal(Hand::Right)),
+            // And the second and third both hang off the other shoulder, which
+            // is what makes the three of them one continuous form rather than
+            // three swings: the first comes down to the left, so the second
+            // starts from the left, and the third rises out of where the second
+            // finished. Three strokes of a triangle, and the blade never has to
+            // be carried back to a chamber.
+            c::BACKCUT | c::UPCUT => Shape::Swing(Plane::Diagonal(Hand::Left)),
+            // Across the front at chest height, which is what running through a
+            // line of people looks like.
+            c::RUSH_SLASH => Shape::Swing(Plane::Flat),
             // Up and down the vertical plane the aim lies in. The hammer owns
             // the line under it: overhead to the floor, torn back out of it,
             // and driven through it.
             c::HAMMER_GROUND | c::UPROOT | c::EARTHBREAKER | c::RUSH_SWEEP => {
                 Shape::Swing(Plane::Upright)
             }
-            // Straight out along the aim. The spear owns the distance.
-            c::SPEAR_GROUND | c::SKEWER | c::IMPALE | c::RUSH_STAB => Shape::Thrust,
+            // Straight out along the aim. The spear owns the distance -- and its
+            // finisher spends that length the other way round, swept flat all
+            // the way round the body, which is the one thing a three-metre pole
+            // can do that nothing else in the game can. It is still a line; it
+            // is the circle the line draws that is new.
+            c::SPEAR_GROUND | c::SKEWER | c::RUSH_STAB => Shape::Thrust,
+            c::WHIRL => Shape::Swing(Plane::Flat),
             // The air: a sword cut you bring down on somebody, a hammer you
             // drop on them, and a fan the spear sweeps around wherever you are
             // pointing.
@@ -1026,6 +1134,13 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
             dual::LIGHT_AUTO => Hand::Right,
             _ => Hand::Centre,
         },
+        // The spear's opener is the one attack in the class thrown with one
+        // arm: a jab off the leading hand, with the butt of the shaft still
+        // tucked at the hip. Everything else the Champion throws is on the haft
+        // with both hands, so the grip is the body's own centre line -- and the
+        // jab coming out of a shoulder instead is most of why it reads as a
+        // poke rather than as a short version of the lunge it replaced.
+        Class::Champion if kind == champion::SPEAR_GROUND => Hand::Right,
         _ => Hand::Centre,
     }
 }
@@ -1136,6 +1251,7 @@ pub fn get(class: Class, kind: u8) -> Move {
         channel_from: Fx::from_raw(raw(F::ChannelFrom)),
         repeat_mul: raw(F::RepeatMul).clamp(0, 255) as u8,
         reactivate: raw(F::Reactivate).max(0) as u16,
+        step: Fx::from_raw(raw(F::Step)),
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
     }
@@ -1173,7 +1289,9 @@ pub fn frames(class: Class, kind: u8) -> (u16, u16, u16) {
 pub fn swing_hub(pos: V3, facing: V3, plane: Plane, hand: crate::aim::Hand) -> V3 {
     let chest = crate::aim::hand_origin(pos, facing, hand);
     match plane {
-        Plane::Upright => chest,
+        // Both hang off the hands where they are. A diagonal cut is an upright
+        // one rolled over; the grip has not moved.
+        Plane::Upright | Plane::Diagonal(_) => chest,
         Plane::Flat => V3::new(
             chest.x,
             pos.y
@@ -1193,8 +1311,9 @@ pub fn swing_base(facing: V3, aim_dir: V3, plane: Plane, grounded: bool) -> V3 {
         // In the air the fan is thrown *around* the aim, so the climb comes
         // with it and a spear swept at the floor stays at the floor.
         Plane::Flat => aim_dir,
-        // Down the body, in the plane the aim already lies in.
-        Plane::Upright => aim_dir,
+        // Down the body, in the plane the aim already lies in -- and across the
+        // diagonal of it, which is the same plane rolled.
+        Plane::Upright | Plane::Diagonal(_) => aim_dir,
     }
 }
 
@@ -1334,6 +1453,25 @@ pub fn turned(base: V3, by: Fx, plane: Plane) -> V3 {
             let run2 = run.mul(c).sub(base.y.mul(s));
             let climb = base.y.mul(c).add(run.mul(s));
             V3::new(along.x.mul(run2), climb, along.z.mul(run2))
+        }
+        // The same rotation as `Upright`, about an axis rolled off the
+        // horizontal -- so the head travels corner to corner instead of
+        // straight down. Written as "which way is up for this swing" rather
+        // than as an axis, because that is the one line of it worth reading:
+        // the aim is the middle of the arc either way, and all the plane
+        // decides is where the far end of it starts.
+        Plane::Diagonal(hand) => {
+            let aim = base.normalized();
+            let (side, up) = crate::math::frame_about(aim);
+            // `frame_about`'s sideways axis is the one `aim::across` hands out
+            // for the **left** hand, so the roll takes the sign of the hand
+            // directly and a `Diagonal(Right)` cut starts over the right
+            // shoulder. One tuned tilt, two mirrored cuts.
+            let roll = crate::tuning::cut_roll().mul(Fx::from_int(hand.outward()));
+            let high = up
+                .scale(crate::fixed::cos_turns(roll))
+                .add(side.scale(crate::fixed::sin_turns(roll)));
+            aim.scale(c).add(high.scale(s))
         }
     }
 }

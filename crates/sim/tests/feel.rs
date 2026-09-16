@@ -686,26 +686,59 @@ fn a_move_never_snaps_you_to_its_speed() {
         );
 
         // And it gets there, rather than gliding for the length of the move.
+        //
+        // **Except while the move is driving you**, which is a different thing
+        // and has to be excused rather than tolerated: a move with a `step` is
+        // carrying the body forward on purpose, so the speed climbs for the
+        // frames of its window and then has to come back down. What the ramp is
+        // about is the frames where nothing is driving you -- see
+        // `state::attack_step`.
         let mut speed = first;
-        for _ in 0..8 {
+        let mut settled = None;
+        let window = m.step.raw().signum().unsigned_abs() as usize * (t::step_lead() as usize + 1);
+        for _ in 0..8 + window {
             w.advance([Input::aimed(Input::W, LOOKING), Input::default()]);
+            // Read *after* the advance: the countdown runs before the movement
+            // does, so the action standing at the end of a frame is the one that
+            // chose that frame's velocity.
+            let driving = stepping(&w, &m);
             let next = flat_speed(&w);
-            assert!(
-                next <= speed,
-                "{}: the ramp into '{}' went back up",
-                class.name(),
-                m.name
-            );
+            if !driving {
+                assert!(
+                    next <= speed,
+                    "{}: the ramp into '{}' went back up on a frame it was not \
+                     driving the body",
+                    class.name(),
+                    m.name
+                );
+                if (next - target).abs() <= SETTLED {
+                    settled = Some(next);
+                }
+            }
             speed = next;
         }
         assert!(
-            (speed - target).abs() <= SETTLED,
-            "{}: eight frames into '{}' and still not down to its own speed \
+            settled.is_some(),
+            "{}: '{}' is over and the walk never came back down to its own speed \
              ({speed} against {target})",
             class.name(),
             m.name
         );
     }
+}
+
+/// Is this move carrying the body forward on this frame?
+///
+/// The same window `state::attack_step` uses, read from the outside: `step_lead`
+/// frames of the startup, and then the frame the hitbox appears on.
+fn stepping(w: &sim::World, m: &Move) -> bool {
+    use sim::state::Action;
+    m.step.raw() != 0
+        && match w.players[0].action {
+            Action::Startup { left, .. } => left < t::step_lead(),
+            Action::Active { left, .. } => left == m.active,
+            _ => false,
+        }
 }
 
 /// How close to a move's own speed counts as having arrived, in raw 16.16 bits.
@@ -1010,24 +1043,46 @@ fn the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them() {
 }
 
 #[test]
-fn a_weapon_keeps_its_shape_for_the_whole_chain() {
-    // The identity half. A player who has learnt that the hammer owns the
-    // ground under it has learnt something true of every hammer move there is
-    // -- so the three links of one weapon are three swings of the same kind,
-    // and the three weapons at one depth are three different kinds.
+fn no_two_weapons_ever_put_out_the_same_volume() {
+    // **The identity half, and the version of it that is actually a design
+    // decision.** What the player reads off the screen is a shape, and the shape
+    // has to name the weapon -- so the volumes one weapon uses across its chain
+    // are its own, and no other weapon touches them. A player who has learnt
+    // that the hammer owns the ground under it has learnt something true of
+    // every hammer move there is.
+    //
+    // It used to say something stricter: that a weapon's three links were all
+    // the *same* volume. That stopped being true on 2026-09-15 and for good
+    // reasons in both directions -- the sword's cuts mirror each other, which is
+    // the whole of why the string flows, and the spear's finisher spends its
+    // length swept flat instead of thrust, which is the only thing a
+    // three-metre pole can do that nothing else in the game can. Neither of
+    // those blurs which weapon is out; a sword cut and a hammer swing reading
+    // alike would. See `docs/design/feel-log.md`.
     use sim::moves::Shape;
-    for (weapon, links) in chains() {
-        assert!(
-            links.iter().all(|m| m.shape == links[0].shape),
-            "the {weapon} chain changes shape partway through: {:?}",
-            links.map(|m| m.shape)
-        );
-    }
-    let shapes: Vec<Shape> = chains().map(|(_, links)| links[0].shape).collect();
-    for (i, a) in shapes.iter().enumerate() {
-        for b in &shapes[i + 1..] {
-            assert_ne!(a, b, "two of the three weapons swing the same shape");
+    let sets: Vec<(&str, Vec<Shape>)> = chains()
+        .map(|(weapon, links)| {
+            let mut shapes: Vec<Shape> = links.iter().map(|m| m.shape).collect();
+            shapes.dedup();
+            (weapon, shapes)
+        })
+        .collect();
+    for (i, (weapon, mine)) in sets.iter().enumerate() {
+        for (other, theirs) in &sets[i + 1..] {
+            for shape in mine {
+                assert!(
+                    !theirs.contains(shape),
+                    "the {weapon} and the {other} both swing {shape:?}, so the \
+                     volume on the screen does not say which weapon it was"
+                );
+            }
         }
+        // And a weapon may not spend more than two of its three links on
+        // different volumes: three would not be a weapon, it would be three.
+        assert!(
+            mine.len() <= 2,
+            "the {weapon} chain is three different volumes: {mine:?}"
+        );
     }
 }
 

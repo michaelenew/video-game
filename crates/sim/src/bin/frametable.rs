@@ -177,6 +177,34 @@ fn main() {
                 format!("walks {}", tenths(walking_at(m.mobility)))
             };
             notes.push(&feet);
+            // And what it does to your feet on its own account, which is a
+            // different sentence: the walk above is you steering, and this is
+            // the move carrying you whether you steer or not. Printed in metres
+            // rather than as a speed, because the number a player feels is how
+            // much ground the swing closed.
+            let carried = if m.step.raw() > 0 {
+                format!("steps {} m", tenths(m.step))
+            } else if m.step.raw() < 0 {
+                format!("gives {} m", tenths(m.step.abs()))
+            } else {
+                String::new()
+            };
+            if !carried.is_empty() {
+                notes.push(&carried);
+            }
+            // A launch is the difference between a hit and a hit that starts an
+            // air exchange, so it belongs beside the frames rather than only in
+            // the kit document.
+            let vertical = if m.launch.raw() > 0 {
+                format!("knocks up {}", tenths(m.launch))
+            } else if m.launch.raw() < 0 {
+                format!("spikes {}", tenths(m.launch.abs()))
+            } else {
+                String::new()
+            };
+            if !vertical.is_empty() {
+                notes.push(&vertical);
+            }
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
