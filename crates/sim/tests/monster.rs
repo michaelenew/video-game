@@ -10,7 +10,14 @@ use sim::state::{MAX_PLAYERS, Phase};
 use sim::{Class, Input, V3, World};
 
 fn hunt() -> World {
-    World::hunt([Class::Champion; MAX_PLAYERS])
+    hunt_as(Class::Champion)
+}
+
+/// A hunt fought by somebody else. Most of these are about the animal and do
+/// not care who is standing on it; the one that asks where a shot went needs a
+/// class that has one.
+fn hunt_as(class: Class) -> World {
+    World::hunt([class; MAX_PLAYERS])
 }
 
 fn run(w: &mut World, frames: u32, a: Input) {
@@ -231,6 +238,51 @@ fn the_creature_turning_carries_the_riders_aim_with_it() {
     assert!(
         carried.sub(turned).abs().raw() < Fx::ratio(1, 100).raw(),
         "carried {carried:?} of a {turned:?} turn"
+    );
+}
+
+#[test]
+fn the_creature_turning_carries_the_camera_too() {
+    // The other half of the line above, and the half that went missing.
+    // `carry_yaw` is the rider's whole frame of reference turning, not just
+    // their body: the eye, the ray the crosshair draws out of it, the facing
+    // and the direction `W` walks are one angle, and the moment two of them
+    // disagree the character is drawn looking off to one side of the screen
+    // and the crosshair stops meaning what it says.
+    //
+    // Asked through a skillshot, because that is the observable: a shot is
+    // aimed by the camera's ray and the body is turned by the facing, so if
+    // the two are still the same angle after the animal has swung a long way
+    // round, nothing is being added in one place and forgotten in another.
+    let mut w = hunt_as(Class::Elementalist);
+    board(&mut w, monster::BARREL);
+    w.players[1].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(12));
+    walk_only(&mut w, 150);
+    let carried = w.players[0].carry_yaw;
+    assert!(
+        carried.abs().raw() > Fx::ratio(1, 50).raw(),
+        "the creature barely turned ({carried:?}), so this proves nothing"
+    );
+
+    // Her bolt, thrown with the hand perfectly still. The mouse has not moved
+    // all ride; everything the shot knows about where to go came from the
+    // animal turning underneath her.
+    run(&mut w, 1, Input::aimed(Input::LEFT, 0));
+    let me = w.players[0];
+    assert!(me.aboard(), "fell off before the shot went out");
+    let shot = me.aim_path;
+    assert!(
+        shot.length().raw() > 0,
+        "the bolt was never aimed, so this proves nothing"
+    );
+    let dir = shot.dir();
+    let bearing = atan2_turns(dir.z, dir.x);
+    let facing = atan2_turns(me.facing.z, me.facing.x);
+    let apart = wrap_turns(bearing.sub(facing));
+    assert!(
+        apart.abs().raw() < Fx::ratio(1, 200).raw(),
+        "the shot went {apart:?} of a turn away from where she is facing, \
+         which is a camera that has come loose from the fighter"
     );
 }
 

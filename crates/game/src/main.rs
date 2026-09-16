@@ -2157,6 +2157,11 @@ fn drive_camera(
             // Interpolated with everything else the fighter is drawn from, so
             // the framing does not step at the simulation's cadence.
             aloft: frame.players[me].aloft,
+            // Where the ground has turned them. `look.yaw` is the mouse and
+            // only the mouse; the simulation has already added this to their
+            // facing and to the ray the crosshair draws, so the camera has to
+            // have it too or it points somewhere the fighter is not.
+            carried: frame.players[me].carried,
         },
     );
     inside.0 = framing.hidden;

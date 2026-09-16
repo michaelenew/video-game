@@ -148,6 +148,23 @@ than the creature turning away underneath the camera. One mechanism, both
 effects. The raw aim on the wire is never rewritten — `carry_yaw` is simulation
 state, recomputed from the snapshot, so rollback reproduces it.
 
+> **It is folded into the input once, at the top of `World::advance`, and
+> nothing downstream adds it again.** A rider's look is *the mouse plus the
+> ride*, and everything built from a look has to be built from that same sum:
+> the eye, the ray the crosshair draws out of it, the facing, and the direction
+> `W` walks. Added at two of the four and not the other two — which is what it
+> was until 2026-09-16 — the drawn camera sits at the mouse's angle while the
+> fighter stands at the mouse's angle plus the ride, so the character comes out
+> looking off to one side of the screen and the crosshair stops meaning what it
+> says. It does not heal, either: the carry has to survive coming off (zeroing
+> it would whip the view round the moment you landed), and mounting is landing,
+> so a knock that drops you onto the animal for a second leaves you crooked for
+> the rest of the match. `the_creature_turning_carries_the_camera_too` in
+> `crates/sim/tests/monster.rs` is what holds the four together, and
+> `ground_that_turns_under_the_fighter_turns_the_camera_with_them` in
+> `crates/view/tests/presentation.rs` is what carries it across to the drawn
+> camera, which reads `carry_yaw` out of the snapshot like it reads `aloft`.
+
 **Mounting is landing, not a button.** Fall onto a mountable part and you are on
 it, the same way falling onto a platform puts you on the platform.
 

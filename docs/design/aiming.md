@@ -39,6 +39,15 @@ behind the shoulder. A wall the camera happens to be looking through is scenery,
 not a target, and aiming through your own cover is not a mechanic anybody asked
 for.
 
+**The angle the ray is built from is `Input::aim`, and that is the whole look.**
+Usually it is just the mouse. Standing on the creature it is the mouse plus how
+far the animal has turned underneath you, because the ground turning turns your
+whole frame of reference with it — `World::advance` folds that in before
+anything reads it, so there is one angle rather than one per reader. See
+[monsters.md](monsters.md) §3; the failure it prevents is the parallel-ray
+mistake wearing different clothes, a camera and a body describing two different
+people.
+
 ### Bodies are not on that list
 
 Neither other fighters nor the creature. Changed 2026-09-13, and it is the one

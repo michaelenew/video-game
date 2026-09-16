@@ -417,6 +417,17 @@ pub struct Player {
     /// animal instead of turning the animal away underneath it. One mechanism,
     /// both effects. The aim on the wire is never rewritten; this is simulation
     /// state, recomputed from the snapshot, so rollback reproduces it.
+    ///
+    /// **It is added in exactly one place: [`World::advance`], into the input,
+    /// before anything reads one.** A look is used four ways -- the eye, the
+    /// ray the crosshair draws out of it, the facing, and the direction `W`
+    /// walks -- and they have to be the same angle. See `Input::turned`.
+    ///
+    /// **It does not reset when you get off,** and must not: zeroing it would
+    /// spin the view a quarter turn on the frame you landed. So it is not a
+    /// rider's problem alone. Mounting is landing, so a knock that drops you
+    /// across the animal for a second leaves some behind, and whatever is wrong
+    /// with how it is spent is wrong for the rest of the match.
     pub carry_yaw: Fx,
     /// World velocity of the patch of creature under this fighter's feet, last
     /// frame. The buck is the change in this.
@@ -720,12 +731,6 @@ impl Player {
         self.mount != monster::NO_PART
     }
 
-    /// Where this fighter is actually looking, once the creature's turning has
-    /// been carried into it.
-    pub fn aim(&self, input: Input) -> Fx {
-        input.aim_turns().add(self.carry_yaw)
-    }
-
     /// Where the move currently running is aimed: the end of its path.
     pub fn aim_at(&self) -> V3 {
         self.aim_path.to
@@ -916,7 +921,7 @@ impl World {
     ///
     /// Must stay a pure function of `(self, inputs)`: no clocks, no randomness
     /// that is not seeded from state, no iteration over unordered collections.
-    pub fn advance(&mut self, inputs: [Input; MAX_PLAYERS]) {
+    pub fn advance(&mut self, wire: [Input; MAX_PLAYERS]) {
         self.frame = self.frame.wrapping_add(1);
 
         if let Phase::RoundOver { winner, left } = self.phase {
@@ -970,6 +975,30 @@ impl World {
             self.monster = Some(beast);
         }
 
+        // **The creature's turn goes into the look, here and nowhere else.**
+        //
+        // A rider's look angle is the aim on the wire plus whatever the animal
+        // has turned under them (`Player::carry_yaw`), and *everything* that
+        // reads a look has to read the same one: the eye, the aiming ray out of
+        // it, the facing, and the direction `W` walks. Folding it into the
+        // input once, before anybody reads it, is what makes that true by
+        // construction.
+        //
+        // It used to be added at the facing and at the movement and at neither
+        // of the other two, which put the camera at the mouse's angle and the
+        // fighter at the mouse's angle plus the ride. The character came out
+        // drawn looking off to one side of the screen, the crosshair stopped
+        // meaning what it says, and because `carry_yaw` survives coming off --
+        // it has to, or dismounting would whip the view round -- so did the
+        // discrepancy. A brush against the animal was enough to pick some up.
+        let inputs: [Input; MAX_PLAYERS] = std::array::from_fn(|i| {
+            let p = &mut self.players[i];
+            if p.aboard() {
+                p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
+            }
+            wire[i].turned(p.carry_yaw)
+        });
+
         // Everything the aiming ray can meet, as it stood at the top of the
         // frame. Copied rather than borrowed because the loop below takes each
         // fighter mutably -- and snapshotting is right anyway: both players
@@ -985,9 +1014,6 @@ impl World {
                 .any(|v| matches!(v.action, Action::Held { .. }) && v.held_by == i as u8)
         });
         for (i, (p, input)) in self.players.iter_mut().zip(inputs).enumerate() {
-            if p.aboard() {
-                p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
-            }
             let scene = Scene {
                 stones: &field,
                 players: &seen,
@@ -2255,7 +2281,7 @@ fn step_player(
     let pressed_space = input.has(Input::SPACE) && !p.space_held;
     p.space_held = input.has(Input::SPACE);
 
-    let look = V3::from_turns(p.aim(input));
+    let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
     // other action locks the facing -- see `Action::Channel`.
     if p.action.actionable() || p.action.stunned() || p.action.channelling().is_some() {
@@ -2358,7 +2384,7 @@ fn step_player(
                     // the only thing that guard still did was swallow the dodge
                     // on a frame where a click was held and threw nothing,
                     // which is a button press answered with silence.
-                    let dir = move_dir(p.aim(input), ax, az);
+                    let dir = move_dir(input.aim_turns(), ax, az);
                     // On the ground there is nothing to spend; in the air the
                     // commitment is spent once per airtime, because a second one
                     // would turn a jump into flight.
@@ -2492,7 +2518,7 @@ fn step_player(
         // whoever it just launched -- keeps the speed it had and steers with it,
         // rather than being driven along a line its feet have left.
         if steering {
-            air_accelerate(p, move_dir(p.aim(input), ax, az), mob.air_speed);
+            air_accelerate(p, move_dir(input.aim_turns(), ax, az), mob.air_speed);
         }
     } else if let Some(drive) = attack_step(p) {
         // **A move carrying the body.** The step is the move's own motion, down
@@ -2506,7 +2532,7 @@ fn step_player(
         // speed back off the velocity, so a drive *added* to a velocity that
         // already contains it compounds into a rocket by the fourth frame.
         let steer = match (attack_speed, steering) {
-            (Some(allowed), true) => move_dir(p.aim(input), ax, az).scale(dragged(p, allowed)),
+            (Some(allowed), true) => move_dir(input.aim_turns(), ax, az).scale(dragged(p, allowed)),
             _ => V3::ZERO,
         };
         p.vel.x = drive.x.add(steer.x);
@@ -2517,11 +2543,11 @@ fn step_player(
         } else {
             t::move_speed()
         };
-        let dir = move_dir(p.aim(input), ax, az);
+        let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(dragged(p, speed));
         p.vel.z = dir.z.mul(dragged(p, speed));
     } else if p.action.guarding() && steering {
-        let dir = move_dir(p.aim(input), ax, az);
+        let dir = move_dir(input.aim_turns(), ax, az);
         p.vel.x = dir.x.mul(dragged(p, t::guard_move_speed()));
         p.vel.z = dir.z.mul(dragged(p, t::guard_move_speed()));
     } else if let (Some(allowed), true) = (attack_speed, steering) {
@@ -2534,7 +2560,7 @@ fn step_player(
         // Direction follows the stick from the first frame and only the
         // magnitude bleeds, which is what keeps it feeling responsive: you are
         // steering immediately, you are just not going anywhere fast yet.
-        let dir = move_dir(p.aim(input), ax, az);
+        let dir = move_dir(input.aim_turns(), ax, az);
         let floor = dragged(p, allowed);
         let carried = V3::new(p.vel.x, Fx::ZERO, p.vel.z)
             .flat_len()
@@ -3218,7 +3244,7 @@ fn pole_drive_boost(p: &mut Player, input: Input) {
     let dir = if ax == 0 && az == 0 {
         V3::new(p.facing.x, Fx::ZERO, p.facing.z)
     } else {
-        move_dir(p.aim(input), ax, az)
+        move_dir(input.aim_turns(), ax, az)
     };
     let boost = t::pole_drive_boost();
     p.vel.x = p.vel.x.add(dir.x.mul(boost));
@@ -3287,7 +3313,7 @@ fn champion_fan_boost(p: &mut Player, input: Input) {
     let dir = if ax == 0 && az == 0 {
         V3::new(p.facing.x, Fx::ZERO, p.facing.z)
     } else {
-        move_dir(p.aim(input), ax, az)
+        move_dir(input.aim_turns(), ax, az)
     };
     let boost = t::spear_fan_boost();
     p.vel.x = p.vel.x.add(dir.x.mul(boost));
@@ -3457,7 +3483,7 @@ fn start_rush(p: &mut Player, input: Input) -> bool {
     let dir = if ax == 0 && az == 0 {
         p.facing
     } else {
-        move_dir(p.aim(input), ax, az)
+        move_dir(input.aim_turns(), ax, az)
     };
     if let Mechanic::Forms {
         rush,
@@ -3723,7 +3749,7 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     if !fast || (ax == 0 && az == 0) {
         return;
     }
-    let dir = move_dir(p.aim(input), ax, az);
+    let dir = move_dir(input.aim_turns(), ax, az);
     let boost = t::air_attack_boost();
     p.vel.x = p.vel.x.add(dir.x.mul(boost));
     p.vel.z = p.vel.z.add(dir.z.mul(boost));
@@ -5525,7 +5551,7 @@ fn step_rider(
 
     let pressed_mechanic = input.has(Input::MECHANIC) && !p.mechanic_held;
     p.mechanic_held = input.has(Input::MECHANIC);
-    let look = V3::from_turns(p.aim(input));
+    let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
     // other action locks the facing -- see `Action::Channel`.
     if p.action.actionable() || p.action.stunned() || p.action.channelling().is_some() {
@@ -5641,7 +5667,7 @@ fn step_rider(
     // back that it did before it turned.
     let (ax, az) = input.move_axis();
     let speed = rider_speed(p);
-    let wish = rig.dir_to_part(part, move_dir(p.aim(input), ax, az));
+    let wish = rig.dir_to_part(part, move_dir(input.aim_turns(), ax, az));
     let mut next = held;
     next.x = next.x.add(wish.x.mul(speed).mul(DT));
     next.z = next.z.add(wish.z.mul(speed).mul(DT));

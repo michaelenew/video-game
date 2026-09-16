@@ -340,6 +340,10 @@ impl CameraRig {
         around: Surroundings<'_>,
     ) -> Framing {
         let beast = around.beast;
+        // The mouse is only half of where they are looking. The other half is
+        // whatever has turned underneath them, which the simulation has already
+        // spent on their facing and on their aim -- see `Surroundings::carried`.
+        let yaw = yaw + around.carried;
         let target = [player[0], player[1] + self.cfg.look_height, player[2]];
 
         if !self.initialised {
@@ -588,6 +592,22 @@ pub struct Surroundings<'a> {
     /// Zero is the default, which is the grounded framing and is exactly what
     /// every fixture that never leaves the floor wants.
     pub aloft: f32,
+    /// How far the ground has turned under the fighter since the match began,
+    /// in radians -- `sim::state::Player::carry_yaw`, carried across by
+    /// `view::interp`.
+    ///
+    /// **It is part of where they are looking, not part of where they are.**
+    /// Stand on the creature and it walks a curve underneath you, and the
+    /// simulation turns your whole frame of reference with it: the facing, the
+    /// direction `W` walks, and the ray the crosshair draws are all built from
+    /// the mouse *plus this*. So the camera is too, or the drawn fighter and
+    /// the drawn crosshair end up describing two different people.
+    ///
+    /// It arrives beside the mouse rather than added into it because the two
+    /// have different owners -- the mouse is the renderer's, this is the
+    /// simulation's -- and a caller handed one number has no way to be told it
+    /// forgot half of it. Zero is the default, which is the arena floor.
+    pub carried: f32,
 }
 
 /// RENDER-ONLY. Metres to the simulation's fixed point, for asking the
