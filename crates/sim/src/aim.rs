@@ -246,17 +246,24 @@ impl Hand {
         }
     }
 
-    /// Which way is *away from the body* for this hand, as a sign.
+    /// Which way is *away from the body* for this hand, as a sign against the
+    /// strafe-right axis.
     ///
     /// One number, in one place, because everything sided reads it: where the
     /// hand is, and which way a volume thrown from it opens. Two mirrored moves
     /// then share one set of tuned numbers -- the arc of a wing is a magnitude
     /// and this is its direction -- rather than being a sign apart in the Oven,
     /// where a tuner can flip one of them and not the other.
+    ///
+    /// **Left is negative**, because away-from-the-body on the left hand is the
+    /// way opposite to strafing right. The signs were the other way round until
+    /// 2026-09-16, to follow a skeleton that was itself mirrored; both are
+    /// fixed and `view/src/skeleton.rs` carries the account of how the two
+    /// managed to agree with each other while disagreeing with the body.
     pub const fn outward(self) -> i32 {
         match self {
-            Hand::Left => 1,
-            Hand::Right => -1,
+            Hand::Left => -1,
+            Hand::Right => 1,
             Hand::Centre => 0,
         }
     }
@@ -270,14 +277,19 @@ const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
 /// Zero for [`Hand::Centre`], which is what makes an unsided move come out of
 /// the middle of the chest exactly as it always has.
 ///
-/// **The sides are the skeleton's, not the world's.** The body is authored with
-/// `+Z` along the facing and its left arm at `-X` (`view::pose`), which is a
-/// left-handed frame dropped into a right-handed world -- so the arm the
-/// renderer hangs on `Joint::ArmL` is drawn on the side a quarter turn *toward*
-/// the strafe-right axis. Following the skeleton rather than the world is the
-/// only choice that matters here: what an animation and a hitbox have to agree
-/// about is which arm the player can see swinging, and
-/// `view/tests/kinematics.rs` fails if the two ever part company.
+/// **The left hand is where a body's left hand is**: `up` crossed with the
+/// facing, which for a fighter looking down `+X` is `-Z`. The renderer's
+/// `Joint::ArmL` is drawn there too, and `view/tests/kinematics.rs` fails if the
+/// two ever part company.
+///
+/// That sentence used to read the other way round and be defended at length.
+/// The body was authored mirrored -- `Joint::ArmL` at `-X` in a frame where the
+/// left arm is at `+X` -- and this function was written to follow it, on the
+/// reasoning that what a hitbox and an animation have to agree about is which
+/// arm the player can see. The reasoning is right and it was being used to hold
+/// two wrongs in place: both frames agreed with each other and both were the
+/// mirror of the body, so left click came out of the right hand. Fixed on
+/// 2026-09-16 in both places at once; see `view/src/skeleton.rs`.
 pub fn across(facing: V3, hand: Hand) -> V3 {
     match hand.outward() {
         0 => V3::ZERO,

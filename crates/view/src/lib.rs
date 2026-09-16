@@ -56,6 +56,37 @@ pub fn into_world(local: math::V3, pos: [f32; 3], facing: [f32; 2]) -> math::V3 
     math::add(pos, body_turn(facing).rotate(local))
 }
 
+/// Which joint slot a **drawn** pose keeps one of the body's hands in.
+///
+/// **A reflection swaps the sides along with the body.** A pose is authored in a
+/// left-handed frame -- `+Z` forward, `+Y` up, the left arm at `-X`, which is
+/// how a person describes a body -- and `anim::bake::as_drawn` reflects it into
+/// the arena's right-handed one. That moves what the author wrote for the right
+/// arm into the slot named `HandL`, which is the slot the skeleton hangs at
+/// `-X`, which [`body_turn`] puts on the body's right. So the author's right arm
+/// is drawn on the body's right, which is the whole point of the reflection.
+///
+/// What it costs is that `Joint::HandL` is not the body's left hand once a pose
+/// has been drawn. Anything pulling a hand out of a solved skeleton wants this
+/// rather than the enum's own name -- the shield the Bulwark holds, and every
+/// test that asks which arm a move came out of.
+pub const fn hand_joint(left: bool) -> skeleton::Joint {
+    drawn_joint(if left {
+        skeleton::Joint::HandL
+    } else {
+        skeleton::Joint::HandR
+    })
+}
+
+/// The slot a drawn pose keeps an authored joint in, for the rest of the body.
+///
+/// [`hand_joint`] said in general: the reflection swaps every sided joint, so
+/// the author's `arm.l` is drawn from the slot named `arm.r`. A joint on the
+/// centre line is its own answer.
+pub const fn drawn_joint(authored: skeleton::Joint) -> skeleton::Joint {
+    authored.opposite()
+}
+
 /// Convert a look angle in radians to the simulation's aim unit.
 ///
 /// The simulation counts angles in 1/65536 of a turn as an integer, because an

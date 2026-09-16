@@ -94,13 +94,12 @@ pub struct Move {
     /// * [`Plane::Upright`] and [`Plane::Diagonal`]: positive **comes down**.
     ///   The head starts at the top of the arc and finishes at the bottom.
     /// * [`Plane::Flat`]: positive starts on the fighter's **left** and sweeps
-    ///   across to the right. The body is authored in a left-handed frame
-    ///   dropped into a right-handed world (see [`crate::aim::across`]), so
-    ///   which of the two a positive rotation about the vertical actually
-    ///   produces is a fact to read off rather than to reason about -- this
-    ///   sentence used to say the opposite, and the Champion's spinning finisher
-    ///   is what found it out: the clip swept one way and the volume the other.
-    ///   `view/tests/kinematics.rs` is what keeps that honest now.
+    ///   across to the right, and the arithmetic in [`turned`] is written to
+    ///   make that true rather than left to fall out of the axes. It has been
+    ///   got wrong twice, both times because the body was being drawn in a frame
+    ///   nobody had checked against the world: the clip swept one way and the
+    ///   volume the other. `view/tests/kinematics.rs` found it both times and is
+    ///   what keeps it honest.
     pub arc: Fx,
     /// Frames between one connection and the next for a move that keeps
     /// hitting. Zero is the normal rule: a swing lands once.
@@ -1518,10 +1517,17 @@ impl Wing {
 pub fn turned(base: V3, by: Fx, plane: Plane) -> V3 {
     let (c, s) = (crate::fixed::cos_turns(by), crate::fixed::sin_turns(by));
     match plane {
+        // **A positive angle turns toward the body's left**, which is the
+        // negative rotation about the world's vertical: the body's left is `up`
+        // crossed with the facing. The sign was the other way round until
+        // 2026-09-16, when the frame the body is drawn in was corrected -- a
+        // flat swing had been sweeping the way opposite to the clip that drew
+        // it, and `the_champion_swings_the_weapon_the_player_can_see` is what
+        // found it, again. See `view::hand_joint` and `Move::arc`.
         Plane::Flat => V3::new(
-            base.x.mul(c).sub(base.z.mul(s)),
+            base.x.mul(c).add(base.z.mul(s)),
             base.y,
-            base.x.mul(s).add(base.z.mul(c)),
+            base.z.mul(c).sub(base.x.mul(s)),
         ),
         Plane::Upright => {
             let flat = V3::new(base.x, Fx::ZERO, base.z);
@@ -1544,10 +1550,13 @@ pub fn turned(base: V3, by: Fx, plane: Plane) -> V3 {
         Plane::Diagonal(hand) => {
             let aim = base.normalized();
             let (side, up) = crate::math::frame_about(aim);
-            // `frame_about`'s sideways axis is the one `aim::across` hands out
-            // for the **left** hand, so the roll takes the sign of the hand
-            // directly and a `Diagonal(Right)` cut starts over the right
-            // shoulder. One tuned tilt, two mirrored cuts.
+            // `frame_about`'s sideways axis is the strafe-right one, which is
+            // what `aim::across` hands out for the **right** hand, so the roll
+            // takes the sign of the hand directly and a `Diagonal(Right)` cut
+            // starts over the right shoulder. One tuned tilt, two mirrored
+            // cuts. (It said "left" here until 2026-09-16, and was arithmetically
+            // right while being about the mirrored body -- see
+            // `view/src/skeleton.rs`.)
             let roll = crate::tuning::cut_roll().mul(Fx::from_int(hand.outward()));
             let high = up
                 .scale(crate::fixed::cos_turns(roll))

@@ -55,12 +55,16 @@ fn swept(bits: u16) -> Vec<Hitbox> {
     out
 }
 
-/// How far to one side of the body's centre line a point is, in metres.
-/// Positive is the side `Hand::Left` swings from.
-fn sideways(w: &World, at: sim::V3) -> f32 {
+/// How far along one arm's own side of the body a point is, in metres.
+///
+/// Positive is away from the centre line on `hand`'s side. Measured against the
+/// hand being asked about rather than against a fixed one, so a test says which
+/// arm it means instead of carrying a sign to correct for it.
+fn sideways(w: &World, hand: Hand, at: sim::V3) -> f32 {
     let p = &w.players[0];
-    let across = sim::aim::across(p.facing, Hand::Left);
-    at.sub(p.pos).dot(across).to_f32_for_render()
+    at.sub(p.pos)
+        .dot(sim::aim::across(p.facing, hand))
+        .to_f32_for_render()
 }
 
 /// How far in front of the body a point is.
@@ -181,7 +185,7 @@ fn the_two_autos_come_out_of_opposite_arms() {
         step(&mut w, 1, bits);
         let frames = swept(bits);
         let mid = frames[frames.len() / 2];
-        let side = sideways(&w, mid.to) * Fx::from_int(hand.outward()).to_f32_for_render();
+        let side = sideways(&w, hand, mid.to);
         assert!(
             side > 0.5,
             "halfway through, the {name} wing is {side:.2} m along its own arm's side"
@@ -262,7 +266,7 @@ fn she_is_not_the_middle_of_the_ring_and_the_middle_travels_with_her() {
             let off = ring.at.sub(w.players[0].pos);
             seen.push((
                 ahead(&w, ring.at),
-                sideways(&w, ring.at),
+                sideways(&w, Hand::Left, ring.at),
                 V3::new(off.x, Fx::ZERO, off.z)
                     .flat_len()
                     .to_f32_for_render(),
@@ -339,13 +343,12 @@ fn the_wing_starts_behind_her_and_finishes_in_front_of_its_own_fist() {
         let mut w = mage();
         step(&mut w, 1, bits);
         let frames = swept(bits);
-        let out = Fx::from_int(side.outward()).to_f32_for_render();
         let first = ahead(&w, frames[0].to);
         assert!(
             first < 0.0,
             "the {name} wing appears {first:.2} m in front of her, not behind"
         );
-        let from_the_arm = sideways(&w, frames[0].to) * out;
+        let from_the_arm = sideways(&w, side, frames[0].to);
         assert!(
             from_the_arm > 0.5,
             "the {name} wing appears {from_the_arm:.2} m along its own arm's side"
@@ -357,7 +360,7 @@ fn the_wing_starts_behind_her_and_finishes_in_front_of_its_own_fist() {
             "the {name} wing finishes {:.2} m in front of her, of a {reach:.2} m reach",
             ahead(&w, last.to)
         );
-        let finish = sideways(&w, last.to) * out;
+        let finish = sideways(&w, side, last.to);
         assert!(
             finish > hand * 0.5 && finish < hand + 0.5,
             "the {name} wing finishes {finish:.2} m off her centre line and her \
@@ -380,10 +383,10 @@ fn the_two_wings_are_mirror_images() {
             "the two wings are at different distances in front of her"
         );
         assert!(
-            (sideways(&w, a.to) + sideways(&w, b.to)).abs() < 0.01,
+            (sideways(&w, Hand::Left, a.to) + sideways(&w, Hand::Left, b.to)).abs() < 0.01,
             "the two wings are not mirrored: {:.2} against {:.2}",
-            sideways(&w, a.to),
-            sideways(&w, b.to)
+            sideways(&w, Hand::Left, a.to),
+            sideways(&w, Hand::Left, b.to)
         );
     }
 }
@@ -1181,8 +1184,8 @@ fn sweep_reaches_behind_the_shoulders() {
     );
     // And it starts behind one shoulder and ends behind the other, rather than
     // reaching back on one side only.
-    let first = sideways(&w, frames[0].to);
-    let last = sideways(&w, frames[frames.len() - 1].to);
+    let first = sideways(&w, Hand::Left, frames[0].to);
+    let last = sideways(&w, Hand::Left, frames[frames.len() - 1].to);
     assert!(
         first * last < 0.0,
         "the sweep starts at {first:+.2} m and ends at {last:+.2} m -- both on one side"

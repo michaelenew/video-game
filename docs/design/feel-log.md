@@ -4308,3 +4308,53 @@ immediately, and nobody had looked.
 
 **Verdict** kept, obviously. The same change moved a skillshot's origin to the hand that throws
 it, which is what lets the two Lance forms be told apart by the arm as well as the wind-up.
+
+### 2026-09-16 — the whole roster was drawn mirrored
+**Changed** Authored poses are reflected into the arena's frame on the way to
+being baked (`anim::bake::as_drawn`), and `aim::Hand::outward` flips with them so
+the simulation swings from the same side. A positive flat swing arc now sweeps
+toward the body's left, and the strafe clips travel to the side they are named
+after.
+
+**Why** Not a feel decision — a bug, reported as one. Left click came out of the
+Dual mage's right hand.
+
+The cause is one line of arithmetic that was never checked. A pose is written the
+way a person describes a body: `+Z` forward, `+Y` up, left arm at `-X`. That is a
+**left-handed** frame. The arena is right-handed, and `view::body_turn` embeds one
+in the other with a rotation — which cannot change handedness, so `-X` came out on
+the body's *right*. Every clip in the game was drawn as its own mirror image:
+`shoulder_l` moved the arm on the right, `plant_l` put a foot on the right,
+`walk_left` strafed to the right while the body moved left.
+
+**How it survived.** `aim::across` had been deliberately written to follow the
+skeleton rather than the world, with a good argument attached: what a hitbox and
+an animation have to agree about is which arm the player can see swinging. The
+argument is right and it was holding two wrongs in place. The simulation and the
+renderer agreed with each other and both were the mirror of the body, and *every*
+handedness test in the suite compared the two of them to each other. Nobody had
+written the one that checks either against the world's own idea of which side of a
+body is its left. Both exist now — `view/tests/kinematics.rs` and
+`sim/tests/aiming.rs` — and they are the point of the entry.
+
+It took a class where the arms *are* the mechanic to surface it. On everything
+else a mirrored body is just a southpaw and nobody looks twice.
+
+**The reflection is applied at the authoring boundary** rather than by renumbering
+the six hundred lateral coordinates the recipes are written in, because those
+numbers are not wrong: they say what their authors meant, in the frame they were
+told to write in. What was missing was the conversion where the two frames meet.
+`Pose::mirrored` was already there and already tested.
+
+**Verified as an exact mirror**, which is the only way to change every animation in
+the game without being able to look at them: every joint of every frame of all
+eighty clips was solved before and after, and each one is its own reflection to
+within a rounding error — 40,496 samples, zero deviation. Nothing is distorted;
+each clip is the mirror image it should always have been.
+
+**Verdict** kept. Two things fell out that are worth watching. Every character is
+now handed the other way round — a stance mirrored is just the other stance, and
+each clip finally matches the prose in its own recipe, but anyone who had learnt
+the old silhouettes will notice. And the Bulwark's shield now hangs off the body's
+left hand rather than the slot named `HandL`; it was on the right before and
+nobody had said so.

@@ -1922,7 +1922,9 @@ fn apply_poses(
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
         let turn = body_turn(p.facing);
-        let (at, rot) = skins[owner].box_of(&skeletons[owner], Joint::HandL);
+        // The body's **left** hand, which in a drawn pose is not the slot of
+        // that name -- see `view::hand_joint`.
+        let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
         hands.0[owner] = (
             Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
             turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
