@@ -27,6 +27,12 @@ pub struct Input {
     /// Where the player is looking, in 1/65536 of a turn, measured in the
     /// horizontal plane.
     ///
+    /// **On the wire this is the mouse; inside a frame it is the whole look.**
+    /// `state::World::advance` folds the creature's turning into it (see
+    /// [`Input::turned`]) before anything reads it, so every part of the
+    /// simulation that asks where a fighter is looking -- the eye, the ray out
+    /// of it, the facing, the walk -- gets the same angle from the same field.
+    ///
     /// Integer turns rather than radians, for two reasons. It cannot drift or
     /// wrap wrong -- every `u16` is a valid angle and adding past a full turn
     /// wraps exactly, for free. And because `Fx` is 16.16, the raw `u16` *is*
@@ -120,6 +126,27 @@ impl Input {
     /// Pitch as a fraction of a turn. Negative is below the horizon.
     pub const fn pitch_turns(self) -> Fx {
         Fx::from_raw(self.pitch as i32)
+    }
+
+    /// The same look, turned by `by` of a turn.
+    ///
+    /// **One thing turns a look the player did not turn: the ground.** Stand on
+    /// the creature and it walks a curve under you, and the whole frame of
+    /// reference goes with it -- see `state::Player::carry_yaw`. Folding that
+    /// into the input, once, is what keeps the camera, the ray out of it, the
+    /// facing and the movement on the same angle. Adding it at some of those
+    /// and not the others is a camera pointed away from the fighter, which is
+    /// exactly the bug this exists to make unwriteable.
+    ///
+    /// Exact, and it wraps for free: `aim` is the fraction of a turn in its own
+    /// right, so this is an integer addition, and `sin_turns` reads the
+    /// fractional bits and nothing else.
+    pub const fn turned(self, by: Fx) -> Input {
+        Input {
+            bits: self.bits,
+            aim: self.aim.wrapping_add(by.raw() as u16),
+            pitch: self.pitch,
+        }
     }
 
     /// The line the player is looking along, as a unit vector.

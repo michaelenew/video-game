@@ -334,6 +334,56 @@ fn the_eye_stays_on_the_fighters_own_centre_line() {
 }
 
 #[test]
+fn ground_that_turns_under_the_fighter_turns_the_camera_with_them() {
+    // Stand on the creature and it walks a curve underneath you. The
+    // simulation turns your whole frame of reference with it -- the facing, the
+    // direction `W` walks, and the ray the crosshair draws all come off the
+    // mouse *plus* how far the animal has turned (`sim`'s `carry_yaw`).
+    //
+    // The camera was the one that did not, and that is the whole of the
+    // reported bug: the eye stayed on the mouse's angle while the fighter stood
+    // at the mouse's angle plus the ride, so the character was drawn looking
+    // off to one side of the screen and the crosshair stopped being the aim.
+    // It never came back, either, because the carry survives being thrown off.
+    //
+    // The rule, stated so it cannot drift: **a quarter turn of ground frames
+    // exactly like a quarter turn of mouse.**
+    let at = [0.0, 0.0, 8.0];
+    let pitch = -0.2;
+    let quarter = std::f32::consts::FRAC_PI_2;
+
+    let mut by_hand = CameraRig::new(RigConfig::default());
+    let mouse = by_hand.update(0.016, at, quarter, pitch);
+
+    let mut by_ground = CameraRig::new(RigConfig::default());
+    let ground = by_ground.update_around(
+        0.016,
+        at,
+        0.0,
+        pitch,
+        view::Surroundings {
+            carried: quarter,
+            ..Default::default()
+        },
+    );
+
+    assert!(
+        (0..3).all(|i| (mouse.eye[i] - ground.eye[i]).abs() < 0.01),
+        "the ground turned a quarter and the camera did not follow: eye at \
+         {:?} rather than {:?}",
+        ground.eye,
+        mouse.eye
+    );
+    assert!(
+        (0..3).all(|i| (mouse.look_at[i] - ground.look_at[i]).abs() < 0.01),
+        "the ground turned a quarter and the view did not follow: looking at \
+         {:?} rather than {:?}",
+        ground.look_at,
+        mouse.look_at
+    );
+}
+
+#[test]
 fn strafe_is_perpendicular_to_forward() {
     // D should be exactly ninety degrees off W, at every aim angle, or
     // circle-strafing drifts.
@@ -994,6 +1044,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
                 beast: Some(&beast),
                 aboard: false,
                 aloft: 0.0,
+                carried: 0.0,
             },
         );
     }
@@ -1008,6 +1059,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
                 beast: Some(&beast),
                 aboard: false,
                 aloft: 0.0,
+                carried: 0.0,
             },
         );
         let eye = sim::V3::new(
@@ -1044,6 +1096,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
             beast: Some(&beast),
             aboard: true,
             aloft: 0.0,
+            carried: 0.0,
         },
     );
     for _ in 0..60 {
@@ -1056,6 +1109,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
                 beast: Some(&beast),
                 aboard: true,
                 aloft: 0.0,
+                carried: 0.0,
             },
         );
     }

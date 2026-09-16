@@ -66,6 +66,19 @@ pub struct PlayerView {
     /// view does not step at the simulation's cadence -- see
     /// `sim::state::Player::aloft`.
     pub aloft: f32,
+    /// How far the creature has turned under this fighter, in radians, and so
+    /// how far their whole frame of reference has turned with it -- **the
+    /// simulation's own number**, out of `sim::state::Player::carry_yaw`.
+    ///
+    /// The camera needs it because the simulation has already spent it: a
+    /// rider's look angle is the mouse plus this, and the eye, the ray the
+    /// crosshair draws out of it and the body's facing are all built from that
+    /// sum. A camera left on the mouse alone draws the fighter looking off to
+    /// one side of the screen.
+    ///
+    /// It does not reset when you step off -- resetting it would whip the view
+    /// round the moment you landed -- so it is not only a thing riders have.
+    pub carried: f32,
 }
 
 /// The Reaver's second body, ready to draw.
@@ -174,6 +187,15 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
     let pitch_of = |v: &sim::state::Player| fx(v.aim_dir().y).clamp(-1.0, 1.0).asin();
     let aim_pitch = lerp(pitch_of(p), pitch_of(c), a);
     let aloft = lerp(fx(p.aloft), fx(c.aloft), a);
+    // The carried yaw, blended the **short way round**. It is kept wrapped into
+    // half a turn either side, so a rider turning past the back of the animal
+    // steps from just under a half to just over minus a half, and a plain lerp
+    // across that would swing the whole view the long way for one frame.
+    let carried = {
+        let (was, now) = (fx(p.carry_yaw), fx(c.carry_yaw));
+        let step = now - was;
+        (was + (step - step.round()) * a) * std::f32::consts::TAU
+    };
 
     PlayerView {
         pos,
@@ -195,6 +217,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         turn_rate,
         aim_pitch,
         aloft,
+        carried,
     }
 }
 
