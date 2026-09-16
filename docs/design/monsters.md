@@ -77,39 +77,49 @@ prints all of this against the jump the simulation actually produces, because
 geometry arguments conducted in prose go wrong:
 
 ```text
-a full hop reaches 4.14 m off the floor
+a full hop reaches 4.142 m off the floor
 the arena's platforms are 1.5 m, so from one it reaches 5.642 m
 
 standing, the tops of the surfaces you can stand on:
-  shoulders        4.581 m   only from a platform
-  barrel            4.57 m   only from a platform
-  haunch           4.482 m   only from a platform
-  tail             3.915 m   a standing jump
-  tail, middle     3.345 m   a standing jump
+  shoulders       4.581 m   only from a platform
+  barrel           4.57 m   only from a platform
+  haunch          4.482 m   only from a platform
+  tail            3.925 m   a standing jump
+  tail, middle    3.404 m   a standing jump
 
 the weak points, standing:
-  ridge            4.514 m at its foot,  5.194 m at its top, x1.75 damage
-  nape             4.477 m at its foot,  5.057 m at its top, x2.4 damage
+  ridge           4.514 m at its foot,  5.194 m at its top, x1.75 damage
+  nape            4.477 m at its foot,  5.057 m at its top, x2.4 damage
 
 and what opens a way up (lowest the surface gets):
-  the shoulders, stumbling             2.353 m   a standing jump
-  the haunch, stumbling                3.566 m   a standing jump
-  the shoulders, both forefeet broken  3.407 m   a standing jump
-  the barrel, toppled                  2.289 m   a standing jump
-  the shoulders, through a slam        2.344 m   a standing jump
-  the tail, through a sweep            3.811 m   a standing jump
+  the shoulders, stumbling            2.701 m   a standing jump
+  the haunch, stumbling               3.913 m   a standing jump
+  the shoulders, both forefeet broken  3.587 m   a standing jump
+  the barrel, toppled                 2.289 m   a standing jump
+  the shoulders, through a slam       2.995 m   a standing jump
+  the tail, through a sweep            3.82 m   a standing jump
+
+nose to tail: 13.412 m.  clips baked: 13
 ```
 
-1. **The tail, any time.** 3.9 m against a 4.14 m apex — two hundred
+⚠️ **That is the Bulwark's jump**, because `beastcheck` measures `World::new()` and the
+default class is the Bulwark — the heaviest thing on the roster and the worst jumper on it.
+Every "only from a platform" above is a statement about the Bulwark. The Dual mage's full hop
+is 8.7 m and the Reaver's is 7.6 m, both of which clear the barrel from the floor. Whether the
+climb is *meant* to be a Bulwark-shaped problem, or the geometry should be read against the
+whole roster, is open — see §9.
+
+1. **The tail, any time.** 3.93 m against a 4.14 m apex — about twenty
    centimetres of margin, from beside an animal that is turning. Doable, and
    not casually. This is the baseline route and it is deliberately the tightest
-   one.
+   one. (For the Bulwark. For four of the six classes the tail is not a tight
+   hop at all.)
 2. **A platform.** The arena's two 1.5 m platforms put the whole back inside a
    hop. The cost is that you have to fight the creature over to one.
 3. **A broken foot.** It goes down on a knee for nearly two seconds and the
-   shoulders come to 2.35 m. This is what the ground game is *for*.
+   shoulders come to 2.70 m. This is what the ground game is *for*.
 4. **A topple.** The barrel at 2.3 m, and a long window to use it in.
-5. **The slam's recovery.** Its shoulders are at 2.34 m at the bottom of the
+5. **The slam's recovery.** Its shoulders are at 3.00 m at the bottom of the
    crash — which means the answer to the hardest-hitting move in the set is also
    an invitation, if you are quick.
 
@@ -271,14 +281,14 @@ game.
 | State | Cause | Length | What it gives |
 | --- | --- | --- | --- |
 | **Flinch** | one hit past `flinch_threshold`, or a burst past `interrupt_strain` | 18f | a small punish; the interrupt version cancels a live hitbox |
-| **Stumble** | a **foot breaking**, or control landing while susceptible | 110f | the mount window: the shoulders come to 2.35 m |
+| **Stumble** | a **foot breaking**, or control landing while susceptible | 110f | the mount window: the shoulders come to 2.70 m |
 | **Topple** | poise broken by damage to the ridge or the nape | 150f | the big punish, and the reward the climb is for |
 
 A broken foot is not only the moment. The corner **stays** down for the rest of
 the fight: the body pitches toward the missing end, rolls toward the missing
 side, the useless limb folds rather than punching through the floor, and the
 creature turns worse and moves slower on that side. Two broken forefeet bring
-the shoulders to 3.4 m — inside a standing jump, permanently.
+the shoulders to 3.59 m — inside a standing jump, permanently.
 
 ## 6 · The body is a skeleton
 
@@ -490,23 +500,26 @@ no adaptation — so these are the numbers for someone who has just learned the
 fight, not for someone who is good at it.
 
 ```text
-  killed at frame 8003  --  133.4 s
+  killed at frame 6082  --  101.4 s
 
   reactable moves            4/5   answerable on sight, not from memory
-  moves per minute          33.8   the rhythm
-  openings per minute       33.4   how often you get a turn
-  mean opening               46f   long enough to punish?
-  idle share                 12%   doing nothing at all
+  moves per minute          30.2   the rhythm
+  openings per minute       33.1   how often you get a turn
+  mean opening               50f   long enough to punish?
+  shortest opening           19f   the worst case
+  idle share                 11%   doing nothing at all
   move coverage              6/6   moves it ever used
-  favourite move share       30%   one-note?
-  move entropy              0.93   1.00 is an even mix
+  favourite move share       33%   one-note?
+  move entropy              0.87   1.00 is an even mix
 
-  rides                       33   times anyone got on
-  thrown off                  28   ended by a buck, not a jump
-  ridge hits                  36   damage on a weak point
+  rides                       38   times anyone got on
+  ride share                 29%   of the fight spent aboard
+  mean ride                  46f   long enough to reach the ridge?
+  thrown off                  18   ended by a buck, not a jump
+  ridge hits                  44   damage on a weak point
   topples                      3   poise broken
   legs broken                  1
-  damage into feet           596   the ground game
+  damage into feet           500   the ground game
 
   unanswerable hits            0   too fast to read, from outside its range
 ```
@@ -516,9 +529,12 @@ where the first version sat and where a first monster wants to sit: a bot this
 crude losing every time would mean nobody could learn against it, and winning
 every time would mean it is not a monster.
 
-Ride share fell from around 70% to under a fifth, which is the change this
+Ride share fell from around 70% to under a third, which is the change this
 rebuild was most meant to produce: the back used to be where the fight happened,
-and it is now the reward for a phase that happens on the floor.
+and it is now the reward for a phase that happens on the floor. Thirty-eight
+rides in a hundred seconds is still a lot of climbing for a bot with one plan,
+and whether a person would climb that often is one of the things only a person
+can say.
 
 ### Still open
 
@@ -531,9 +547,16 @@ and it is now the reward for a phase that happens on the floor.
   but it is a blunt number and the bot gets thrown far more often than a person
   would. A player who rides well should barely feel it, and whether that is true
   is the sort of thing only a player can say.
-- **Is the tail hop too tight?** Two hundred centimetres of margin on a full hop,
-  beside an animal that is turning. It is meant to be the hardest of the five
-  routes; it may be the *only* one anyone finds.
+- **Is the tail hop too tight, and for whom?** About twenty centimetres of margin
+  on a Bulwark's full hop, beside an animal that is turning. It is meant to be the
+  hardest of the five routes; it may be the *only* one anyone finds. And it is a
+  Bulwark-shaped question: `beastcheck` measures the heaviest class, and the Dual
+  mage clears the whole back from the floor with two and a half metres to spare. So
+  "you cannot reach the thing that kills it from the ground" — §1's first sentence,
+  and the premise of the climb — is **true for one class of six**. Either the
+  creature's geometry is read against the roster rather than against one member of
+  it, or the ground phase is something four classes can simply decline, and that is
+  a decision rather than a tuning pass.
 - **The nape may be a step too far.** It is worth 2.4× damage and it is another
   walk forward past the shoulders, on the part of the back the shake is most
   violent on. Whether anyone chooses it over the ridge is a question for a

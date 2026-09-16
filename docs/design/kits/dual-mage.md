@@ -17,10 +17,10 @@ meaningless without it.
 
 ## Mechanic — the two-pole meter
 
-- **Left click moves you darker, right click moves you lighter.** Only the autos have a side;
-  everything else is made of whichever force she is carrying and pushes her further that way.
-  Middle click and both-click have no side, which is why Lance lives on middle click.
-- **Three tiers of push:** an auto moves her 5, a cast 12, and the finisher 26. The last is
+- **Left click moves you darker, right click moves you lighter — but only the autos have a
+  side.** Every other input pushes further along whichever force she is already carrying.
+  Middle click and both-click have no side either, which is why Lance lives on middle click.
+- **Three tiers of push:** an auto moves the bar 5, a cast 12, and the finisher 26. The last is
   what makes casting Judgement from depth a question about whether you survive the cast.
 - **Power scales continuously with depth.** The same cast is weak at centre and large at
   the edge. Centre is where both forms are available and both are weak.
@@ -239,7 +239,10 @@ closing to centre attractive rather than a chore.
 
 ## Core abilities
 
-Four slots on `shift` + click. Left click casts the dark form, right the light form.
+The intended shape: four abilities, each with a light and a dark form. **Nothing here is
+built as two forms** — Lance and Sweep are one move apiece, and the form split is unbuilt
+across the whole class. Their inputs today are `shift` + `L` for Lance and `E` for Sweep;
+Step and Divide have no input yet.
 
 ### Step
 **Startup** fast · **Recovery** short · **Range** short

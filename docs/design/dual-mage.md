@@ -85,7 +85,9 @@ a thing the player sets deliberately and can read off her own animation.
 All of it **on the press**, whether or not it connects — see the note under "Autos are the
 steering wheel". And she is **always carrying one of the two**, dark to begin with: a vessel
 holding two forces is holding one of them at any moment, and the version where she carried
-neither until her first auto landed meant the first key pressed in a match did nothing.
+neither until her first auto landed meant the first key pressed in a match did nothing. So a
+cast thrown before any auto is a *dark* cast, and it moves the bar; there is no neutral start
+to be stuck at.
 
 Three tiers rather than a number per ability. "Stronger abilities push harder" was a formula
 over damage, which meant a knob nobody could find and a finisher that pushed about as hard as
@@ -98,15 +100,19 @@ is "a deep finisher nearly throws you over the edge" made literal. It is also wh
 depth gate the finisher used to have: its status is power and price now, rather than
 availability.
 
-Before the first auto lands she is carrying neither force, and a cast pushes her further along
-whichever way she was already going — which at dead centre is nowhere. That is the same rule
-this document already states for every input that has no side.
+## Every ability has two forms, and the force she carries picks
 
 ## Every ability has two forms, and the force she is carrying picks
 
-**Left click always moves you darker. Right click always moves you lighter**, and those two are
-the only inputs with a side — see the revision above. What they set is the force she is
-*carrying*, and that is what decides which form everything else comes out in.
+**Which form an ability takes is the force she is carrying**, which is set by the last auto
+she threw — see the section above. It is *not* which button threw it: a cast on a sided button
+would not be a dark cast for being on the left button, it would be a cast of whatever she is
+holding. Only the two autos have a side at all.
+
+> ⚠️ This section used to read *"left click always moves you darker, right click always moves
+> you lighter — every input, not just some of them"*, which is the rule the revision above
+> replaced and could not survive the kit growing keys. Kept as a heading correction rather
+> than a silent edit because the old sentence is quoted elsewhere.
 
 **Built for the first time on 2026-09-16, on Lance.** Middle click throws one of two moves and
 the arm she last punched with decides which: light bursts at the far end of the line, dark
@@ -198,16 +204,19 @@ See [controls.md](controls.md) for the full input map.
 
 ## Coming back
 
-Two return paths at different prices:
+One return path, where there used to be two:
 
 | Path | Cost | Speed |
 | --- | --- | --- |
-| Cast toward the far side | Weak effect — you are casting against the grain | Slow |
-| **Auto attack the far side** | Requires melee range, and requires landing it | Fast |
+| **Auto attack the far side** | It is the only way — an auto is the one input that changes which force she carries | The bar moves 5 a throw |
+| ~~Cast toward the far side~~ | **Not an input any more.** A cast follows the force she is carrying, so there is no casting against the grain | — |
 
-This preserves the melee-mage identity — closing distance is how you recover *quickly*, which
-forces the class into melee exactly when it is most powerful and most fragile — while meaning
-you are never helpless if you cannot get there.
+Only one path survives, and that is the 2026-09-13 revision rather than an omission: casting
+against the grain stopped being expressible when casts lost their sides. It preserves the
+melee-mage identity harder than two paths did — turning round *requires* getting into auto
+range, which forces the class into melee exactly when it is most powerful and most fragile.
+**Whether that leaves her too easily pinned at depth is open**, and it is the one thing the
+old slow path was protecting against.
 
 ## The burn
 

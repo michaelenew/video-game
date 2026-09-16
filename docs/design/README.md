@@ -68,12 +68,12 @@ poke is a design choice in a closed arena, not a gap.
 
 | Class | Mechanic — what abilities spend | Primary buttons | State |
 | --- | --- | --- | --- |
-| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Lotus · `E` Executioner | Rebuilt |
+| [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Guillotine lotus · `E` Executioner | Rebuilt |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep | **Core rebuilt** |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
-| [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
+| [Bulwark](kits/bulwark.md) | Shield position | `L` Bash · `shift`+`L` Slam · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New |
 | ~~Gatekeeper~~ | — | — | Retired |
 
 *Dual mage was Statera. Champion was Bellator, and Shifter before that.*
@@ -183,8 +183,11 @@ world axis; attacks go where you look. Facing locks the moment a move starts, so
 to a direction when you commit to the move. See [controls.md](controls.md).
 
 **Camera settings** save to `~/.config/arena/settings.conf` as you change them: sensitivity on
-`-` / `=`, field of view on `F3` / `F4`, camera distance on `F5` / `F6`. Set `ARENA_SETTINGS`
-to keep separate settings per person on a shared machine.
+`-` / `=` and field of view on `F3` / `F4`. Set `ARENA_SETTINGS` to keep separate settings per
+person on a shared machine. **Camera distance is not one of them** — it is the framing
+sphere's radius, the radius decides where the eye is, and the eye is where the aiming ray
+starts, so it is tuned in the Oven under **Camera** rather than set per player. See
+[architecture.md](architecture.md).
 
 **Send it to somebody:** `./crates/web/build-game.sh` compiles the whole thing to
 WebAssembly and writes `target/web`, which is what GitHub Pages serves — the same

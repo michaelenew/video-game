@@ -29,9 +29,10 @@ Six sentences, and everything else follows:
 4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
 5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
    class does, each on its own key. `E` is usually an instant change of state — throw the
-   shield, cycle the form, raise a structure — but it does not have to be: on two classes it
-   is a fourth ability with a wind-up and a recovery like any other, either because the
-   mechanic has no state to change or because changing it is itself a move. See
+   shield, Rush, raise a structure — but it does not have to be: on three classes it
+   is an ability with a wind-up and a recovery like any other, either because the
+   mechanic has no state to change or because changing it is itself a move, and on a fourth
+   it is an instant standing up and an ability off the floor. See
    [Where `E` is an ability](#where-e-is-an-ability).
 6. **The mouse means *where*.** You look with it, you are pointed where you look, and
    your attacks go where you are pointed — **including up and down.** The crosshair is a
@@ -74,8 +75,10 @@ Putting the class identity behind a modifier on the least reachable button said 
 optional one", and it played that way: people finished a match without ever pressing it.
 `Q` and `E` are two of the three keys a left hand already rests next to.
 
-This costs nothing elsewhere. Shift + click stays the committed attack, and no other input
-moved.
+This cost nothing elsewhere at the time: shift + click stayed the committed attack and no
+other input moved. Shift stopped meaning that on 2026-09-16 — see
+[Shift is one verb now](#shift-is-one-verb-now-2026-09-16) — which is a separate change with a
+separate argument, and not a reversal of this one.
 
 ### Why space stopped being clever
 
@@ -356,8 +359,11 @@ is standing in the way of the shot is worked out along the shot's own line after
 - **Aim at a spot inside your reach and a grounded ability goes there.** Exactly there — this
   is the whole point, and it is what makes an area ability a placement decision rather than a
   step-forward decision.
-- **Aim at the ground with something that flies** and it goes to that spot, at the height it
-  left your hand: level over the place you are pointing rather than into the dirt.
+- **Aim at the ground with something that flies** and it goes to that spot raised to the
+  **middle of a fighter standing on it** — half a body up from the ground the ray met, not up
+  to the height it left your hand. The two are the same number on flat ground and nothing like
+  it off it; measuring from the ground the ray met is what makes the rule true from a
+  platform.
 - **Aim at a wall, a person, or the creature with something that flies** and it goes exactly
   there.
 - **Aim past your reach and it goes as far along that line as it can.** Range means
@@ -409,24 +415,39 @@ how two people on one machine keep separate settings without a profile system.
 | --- | --- | --- |
 | `-` / `=` | mouse sensitivity | multiplicative |
 | `F3` / `F4` | vertical field of view, degrees | 2° |
-| `F5` / `F6` | camera distance, metres | 0.4 m |
 
-Sensitivity steps by a **ratio** and the other two by a fixed amount, because that is how
+Sensitivity steps by a **ratio** and the field of view by a fixed amount, because that is how
 each is perceived: a given ratio of sensitivity feels like the same change at any value,
 whereas two degrees of view is two degrees of view whether you are at 45 or at 90.
 
-Field of view and camera distance are settings rather than constants for a plain reason —
-they are the first numbers anyone reaches for when a camera feels wrong, and a value you have
-to rebuild to try is a value that gets tried once.
+**Camera distance is no longer one of them.** It was, and it stopped being one when the eye
+became the place the aiming ray starts: the distance is the framing sphere's radius, the
+radius decides where the eye is, and the eye decides where your abilities land — so two
+players with different distances would place the same fire pillar in different spots. It is
+tuned in the Oven under **Camera** with the rest of the framing. Field of view survives as a
+setting only because the framing is measured against a tuned field of view of its own, so the
+player's choice changes what is projected and never where the eye is. See
+[architecture.md](architecture.md).
+
+A setting rather than a constant for a plain reason — the field of view is the first number
+anyone reaches for when a camera feels wrong, and a value you have to rebuild to try is a
+value that gets tried once.
 
 Aim is quantised to 1/65536 of a turn and sent over the wire alongside the buttons, because
 where you look decides where you move and what you hit — which makes it gameplay, and
 gameplay has to match on both machines exactly. See [architecture.md](architecture.md).
 
-**Shift beats WASD when both are held.** So holding a direction while pressing shift+click
-still gives you the shift ability, and you keep moving during it (where the ability allows).
-This guarantees a move-while-casting option always exists, and it costs nothing, since
-directional abilities and shift abilities were never going to be used simultaneously anyway.
+**Shift means dodge, and nothing disambiguates it any more** — see
+[Shift is one verb now](#shift-is-one-verb-now-2026-09-16). A click is checked first, so
+holding a direction and clicking gives you the attack and you keep moving during it at
+whatever the move's own hindrance allows; what changed on 2026-09-16 is that the click no
+longer *changes* which attack it is.
+
+⚠️ Twice over. This used to be the rule *"shift beats WASD when both are held"*, which
+guaranteed a move-while-casting option always existed; **dodge moving onto shift retired it**.
+Then it was *"a click is what disambiguates shift"*, which retired itself: a key whose meaning
+depends on what the rest of your hand is doing is a key you cannot teach. What the first rule
+guaranteed has still not been replaced: see [Open](#open-since-the-dodge-moved).
 
 ## The option space
 
@@ -589,7 +610,7 @@ and each is worth stating on its own rather than collapsing into one frame count
 Weight is the most legible difference a character can have. You can read it across the arena
 in the first second of a match, before you know a single one of their moves — so it carries
 identity for free, and every class sharing one jump arc would waste the channel. The Bulwark
-gets 45 frames of airtime and the Dual mage 74.
+gets 54 frames of airtime and the Dual mage 94.
 
 `cargo run -p sim --bin frametable` prints these.
 
@@ -612,7 +633,8 @@ budget and stops; turning the camera while holding it keeps redefining which dir
 as perpendicular, so the budget refills against the new heading. A player who does not turn
 gets one nudge. A player who does can carve.
 
-**One deliberate divergence from Source:** horizontal air speed is capped at 1.5× the walk. In
+**One deliberate divergence from Source:** horizontal air speed is capped at about 2× the
+walk (`air speed cap (x walk)` in the Oven). In
 Source the gain is unbounded and that unboundedness became the genre; in a fighter built on
 spacing, a player who can reach any part of the arena from any other has removed spacing from
 the game. The cap is set high enough that good strafing is still rewarded, and whether it is
@@ -669,39 +691,41 @@ than a sideways shove.
 
 ## The per-class schemes
 
-> **These six sections predate the 2026-09-11 grammar** and are sketches of a twelve-ability
-> kit rather than a record of what is in the game. They put the mechanic on `M` or on `R` and
-> treat `q` and `e` as spare keys, which is exactly the arrangement the grammar above
-> replaced. Read them as intent for the *shape* of each class's full kit; read the kit
-> documents in [`kits/`](kits/) and `cargo run -p sim --bin frametable` for what is bound
-> today.
+> **All six sections now carry the grammar above.** They used to predate it — sketches of a
+> twelve-ability kit that put the mechanic on `M` or on `R` and treated `q` and `e` as spare
+> keys, which is exactly the arrangement the grammar replaced. They were brought up one at a
+> time as each class was finished, the Bulwark last, on 2026-09-15.
 >
-> Two rows have been brought up to date because the abilities behind them were finished and a
-> stale table beside a working implementation is worse than no table: the Elementalist's auto,
-> which is a beam now, and the whole of the Blood mage's. The rest have not.
+> **Rows marked "bound" are what the game does**; everything else is intent for the shape of
+> that class's full kit. `cargo run -p sim --bin frametable` is the authority for the first
+> group, and the kit documents in [`kits/`](kits/) for the second.
 
 ## Dual mage — built 2026-09-13
 
 The mechanic is on the primary buttons, and it is not optional.
 
-**`L` always moves you darker. `R` always moves you lighter.** Every input, not just autos.
+**The autos have sides and nothing else does.** `L` is dark, `R` is light, and throwing one
+sets which force she is *carrying*; every other input pushes the bar further along whichever
+force that is. See [dual-mage.md](dual-mage.md#the-last-auto-is-the-force-you-are-carrying--revised-2026-09-13),
+which is where the rule and the reason for it live.
 
 What is bound today:
 
 | Input | Result |
 | --- | --- |
-| `L` | **Dark auto** — a punch with the left arm. Steers dark **on contact**; a whiff steers nothing |
-| `R` | **Light auto** — the same punch with the right arm. Steers light on contact |
-| `shift` + `L` | **Lance**. Steers dark on the press |
+| `L` | **Dark auto** — a punch with the left arm. Steers dark by 5, **on the press**, and she is now dark |
+| `R` | **Light auto** — the same punch with the right arm. Steers light by 5, and she is now light |
+| `shift` + `L` | **Lance**. Steers 12, in whichever force she is carrying — not dark for being on the left button |
 | `shift` + `R` | The light auto again. The light *form* of the committed cast is not built |
-| `Q` | **Judgement**, the finisher. Gated on depth |
-| `E` | **Sweep**. No side, so it pushes you further along your current path |
+| `Q` | **Judgement**, the finisher. **Not gated** — the depth gate was removed 2026-09-13 |
+| `E` | **Sweep**. Steers 12, in whichever force she is carrying |
 
-**Right click is an attack on this class**, which is the one place the shared grammar bends.
-Everywhere else `R` is guard, and guard is shield-gated — this class has no shield, so the
-button was doing nothing while half of the mechanic had no input. It is not a special case in
-the code either: which move a click asks for is one function
-(`state::clicked_move`), and the Champion's three weapons already needed it.
+**Right click is an attack on this class**, and by now on most of them. `R` is guard only
+where there is a shield to raise, and only the Bulwark has one — so on the three classes with
+no shield the button was doing nothing while half of this class's mechanic had no input. It is
+not a special case in the code either: which move a click asks for is one function
+(`state::clicked_move`), which asks the mechanic rather than the button, and the Champion's
+three weapons already needed it.
 
 The intended full kit, unbuilt:
 
@@ -801,19 +825,30 @@ three rows of three is as much as one class should ask a player to hold.
 
 ## Bulwark
 
+Current as of 2026-09-15, and the four rows marked **bound** are what the game does. This
+table read `M` for the mechanic and `shift` + click for the whole kit until then, which was
+the pre-2026-09-11 scheme rather than anything in the game.
+
 | Input | Result |
 | --- | --- |
-| `L` | Off-hand melee auto |
-| `R` (hold) | **Guard.** Opening frames are the parry |
-| `M` | **Throw** when held, **Recall** when planted. Reactivate mid-flight to leap to it |
-| `shift` + `L` | Bash |
-| `shift` + `R` | Slam |
-| `shift` + `M` | Grapple |
+| `L` | **Bash** — the shield strike, and the safe poke. **Bound** |
+| `shift` + `L` | **Slam** — the overhead, driven into the ground. **Bound** |
+| `Q` | **Grapple** — the command grab, and the answer to a turtle. **Bound** |
+| `R` (hold) | **Guard.** Opening frames are the parry, and it is the mechanic that gates it rather than the button: `R` guards while the shield is in hand and does nothing while it is not. **Bound** |
+| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight. One key, three states, no frames — the mechanic fires on the press. **Bound** |
 | direction + `L` | Basic moves |
 | `LR` | Reserved — the candidate slot for a dedicated ally-cover stance |
 
-Shield position lives on `M`, so the whole three-state mechanic is one button with context.
-Guard on the right button matches every game where alt-fire is the defensive option.
+Shield position lives on `E`, so the whole three-state mechanic is one key with context —
+which is the ordinary arrangement rather than an exception: the shield is a state to change,
+and changing it is free. Guard on the right button matches every game where alt-fire is the
+defensive option. There is no separate off-hand auto: `L` is the shield itself.
+
+> **The auto and the committed slot are one rung lower than this table used to show.** Bash is
+> left click rather than `shift` + left, and Slam is `shift` + left rather than `shift` + right,
+> because the shared grammar gives every class a poke on the bare click and its committed
+> version on the modifier. What the class does *not* have yet is the sixth ability the kit
+> document specifies — see [kits/bulwark.md](kits/bulwark.md).
 
 ## Shadow Reaver
 
@@ -826,7 +861,7 @@ combo-dependent — and the shadow abilities should reward being close and fast.
 | --- | --- |
 | `L` | **Slash** — the melee auto. The shadow throws it too, a beat later, for a quarter. **Bound** |
 | `R` | **Send shadow** — out to the crosshair; pressed again it dashes home through anybody in the way, and drags an open lotus with it. Cuts any recovery short, and the press is remembered for a few frames rather than dropped. **Bound** |
-| `Q` | **Guillotine lotus** — six blades out of the shadow, held open, then chasing it home. **Bound** |
+| `Q` | **Guillotine lotus** — twelve blades out of the shadow, held open, then chasing it home. **Bound** |
 | `E`, or `shift` + `L` | **Executioner** — the committed melee, and an overhead. **Bound** |
 | `shift` + forward, crosshair on the shadow | **The dash to it.** Invulnerable across the gap, and it collects the shadow. Straight to wherever it is standing, up onto a dais included; airborne, it is the airdodge that does it, and it spends the airdodge |
 | `space`, in the frames after a dash lands | **The dash jump.** Takes the speed she arrived with up with her, and cuts the dodge's tail short. A press, and only after a dash |
@@ -862,12 +897,13 @@ is the part that is over — the animation finishing, not the decision. Cancelli
 would let her take a committed swing back after throwing it, which is whiff punishment deleted.
 Being *hit* is not cancellable either: that is the opponent's reward.
 
-**It buys tempo, not safety.** Send shadow costs twenty-five frames and the longest recovery it
-can cut short is Executioner's twenty-six, so the exchange nets her a single frame — she is busy
-for as long either way, and what changes is that the frames do something. A blocked Executioner
-goes from −12 to −11 and stays a punish. That is why the cancel needs no charge behind it the
-way Rush does, and it is pinned as a relationship in `crates/sim/tests/reaver.rs` rather than
-left as an intention.
+**It buys tempo, not safety.** Send shadow costs nineteen frames and the longest recovery it
+can cut short is Executioner's twenty-six, so the exchange nets her seven — she is busy for
+nearly as long either way, and what changes is that the frames do something. A blocked
+Executioner goes from −12 to about −5 and stays a punish. What is *pinned* in
+`crates/sim/tests/reaver.rs` is that relationship rather than either number:
+`cutting_a_recovery_short_does_not_rescue_her_from_the_punish` fails if the cancel ever turns
+a blocked commitment safe, so the two frame counts can be tuned and the rule cannot be lost.
 
 Executioner does not care where anything is — it is a swing off the body, yaw from the facing
 and pitch from the camera — so it can live on a key, and it does. Four of the six classes get

@@ -66,8 +66,10 @@ impl Input {
     /// Crouch. Lowers your hurtbox and slows you -- the answer to a high
     /// attack, and the reason not every whiff is free.
     pub const CROUCH: u16 = 1 << 9;
-    /// The class mechanic -- **E**. Throw the shield, Rush, place the shadow,
-    /// raise a structure. Not an attack, so it is not a click.
+    /// The class mechanic -- **E**. Throw the shield, Rush, raise a structure.
+    /// Not an attack, so it is not a click -- except on the three classes whose
+    /// mechanic is nothing you can press, where the key carries an ability
+    /// instead: see `moves::on_e`.
     pub const MECHANIC: u16 = 1 << 10;
     /// Middle click -- the scroll wheel pressed down.
     ///

@@ -40,12 +40,14 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 > a stone cannot be relayed the length of the arena through a row of them.
 >
 > **Standing on them is the class's floor.** Terrain you cannot get on top of is only cover. A
-> stone still climbing carries whoever is on it at the speed its top is climbing, which is
-> already worth about 2.9 m against a 2.2 m full hop — that is the seed of the mobility the
-> class is meant to get, not the finished thing. It waits on moves that launch stones properly.
+> stone still climbing carries whoever is on it at the speed its top is climbing — that is the
+> seed of the mobility the class is meant to get, not the finished thing. It waits on moves
+> that launch stones properly. (That ride was worth about 2.9 m against a 2.2 m full hop when
+> this was written; the jump has since been rebuilt and her full hop is 7.4 m, so the lift is a
+> step rather than a second jump until something launches the stone.)
 >
 > **They come up where you are pointing.** `structure_ahead` became a *reach*: the stone rises
-> at the spot the crosshair is on, out to 4 m. Look down and it comes up at your own feet,
+> at the spot the crosshair is on, out to 6 m. Look down and it comes up at your own feet,
 > which is what the ability description below has always said and what it could not do while
 > the stone went a fixed distance straight ahead. See [../controls.md](../controls.md).
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
@@ -154,11 +156,12 @@ committed on its own, but landing both in quick succession (left then right,
 or the reverse) chains into a stronger combo that a single button mashed
 twice cannot reach. The two windows would not overlap, so it is a skill
 input — a real read-and-execute — rather than a way to double the DPS of
-spamming one button. Right now `R` is Raise, the mechanic input, so this
-would also mean finding Raise a new home; it is a kit-wide control question,
-not an Elementalist one, and belongs with the rest of [the open control
-questions](../controls.md#open-since-the-dodge-moved) rather than being
-decided here.
+spamming one button. `R` is Cataclysm now and Raise is on `E`, so nothing
+would have to be rehomed to do it; what it would cost is right click's heavy
+and, with it, the reason `shift` + left carries Fissure. It is a kit-wide
+control question, not an Elementalist one, and belongs with the rest of [the
+open control questions](../controls.md#open-since-the-dodge-moved) rather than
+being decided here.
 
 ## Abilities
 
@@ -478,8 +481,11 @@ their cover — the skill is placing them where they serve you more than the opp
 - A fire bolt is stopped by a structure and expires at its range. Whether it should
   instead *kick* one the way the beam does has not been played against: a bolt of fire is
   not a shove, but a stone taking a hit and not moving reads oddly.
-- Raise places a stone 2.5 m ahead, so "cast beneath yourself to launch into the air" above
-  still has no input. The lift exists; the targeting for it does not.
+- ~~Raise places a stone 2.5 m ahead, so "cast beneath yourself to launch into the air" has no
+  input.~~ **Answered.** Raise is a *reach*: the stone comes up on the first thing the
+  crosshair's line meets, out to 6 m, so looking down puts one under your own feet and the
+  eruption carries you with it. What is open is whether that lift is worth anything — see the
+  note on the mechanic above.
 - Do structures block your own projectiles? Almost certainly yes, and that self-obstruction
   is a real cost worth keeping. They block *bodies* now, the Elementalist's included.
 - A stone lifted off centre rides up on the shoulder of the one below rather than sliding off

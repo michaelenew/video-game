@@ -19,6 +19,13 @@ Structures are a **contested resource**, not private property.
 | Destroy them | |
 | Displace them short distances with attacks | |
 
+⚠️ **Only the first row is built.** A stone stops bodies and shots, the Elementalist's own
+included, so cover works and works for everybody. Nothing any *other* class throws touches a
+stone: destroying one is Cataclysm and displacing one is her beam, both hers. Until some other
+class can move or break a structure, "contested, not owned" is a ruling with nothing behind
+it, and the built behaviour is closer to "free cover for the opponent" — which is the
+weakness this section argues for, arriving without the counterplay half.
+
 ## Why this is the right ruling
 
 **The Elementalist's own power generation hands the opponent tools.** Every structure
@@ -37,6 +44,8 @@ rather than ability damage. Those are much finer instruments.
   hard to read in third person.
 - **Shared blocking implementation.** Structures blocking projectiles and the Bulwark's
   shield blocking projectiles should be one system. See [bulwark.md](bulwark.md).
+  **Half built:** a stone stops bodies and shots; a shield stops nothing, thrown or planted.
+  So the shared system exists and the shield has not been wired into it.
 
 ## Remaining work
 

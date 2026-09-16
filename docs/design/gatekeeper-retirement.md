@@ -49,5 +49,11 @@ rather than a gap — most Smash characters have no real projectile. The Element
 covers mid-range control, so no meaningful role is lost.
 
 A bow as a universal secondary was proposed as a fill and is **parked**, leaning against.
-See [parked.md](parked.md) for the reasoning. The secondary slot itself is not parked — the
-shield occupies it, and shield-or-nothing is already a real choice.
+See [parked.md](parked.md) for the reasoning.
+
+⚠️ **This used to close "the secondary slot itself is not parked — the shield occupies it, and
+shield-or-nothing is already a real choice."** That is no longer true: equipment is parked
+entire, and the shield became the **Bulwark's class mechanic** rather than a slot any class
+can fill. So there is no secondary slot for a bow to compete with, and the ranged hole is a
+roster question rather than a loadout one. The same drift is flagged in
+[defense.md](defense.md), which built the whole block layer on the equipment reading.

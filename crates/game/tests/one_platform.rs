@@ -4,7 +4,7 @@
 //! the two is five facts about the world outside the fight: where a run's
 //! settings come from, where a player's settings are kept, whether there is a
 //! peer, whether there is a checkout to write to, and where a panic can be
-//! read. **All five live in `platform.rs` and `online.rs`. Nothing else in the
+//! read. **All five live in the four files in `ALLOWED` below. Nothing else in the
 //! crate may reach the host.**
 //!
 //! The rule needs a test because breaking it is silent in the direction that
