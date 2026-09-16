@@ -120,9 +120,18 @@ fn main() {
                 } else {
                     String::new()
                 };
+                // **Does it leave something behind**, rather than what shape
+                // its own body puts out. The two used to be the same question,
+                // because the only way to say "no volume of my own" was a
+                // radius of zero; `Shape::None` then meant pure movement. The
+                // Dual mage's dark Lance says it the other way -- no shape at
+                // all, and an effect that does every bit of the work -- and was
+                // printed as "movement, no hitbox", which is a table being
+                // confidently wrong about an ability that tethers people.
+                let leaves = sim::effects::EffectKind::from_code(m.effect).is_some();
                 let base = if sim::gust::Gale::thrown_by(class, slot as u8).is_some() {
                     format!("throws something; the thing it threw hits{ignored}{wound}")
-                } else if m.shape.strikes() {
+                } else if leaves || m.shape.strikes() {
                     format!("places something; the thing it placed hits{ignored}{wound}")
                 } else {
                     format!("movement, no hitbox{ignored}{wound}")

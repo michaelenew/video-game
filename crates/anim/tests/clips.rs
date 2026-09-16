@@ -289,9 +289,14 @@ fn travel(clip: Clip) -> Option<([f32; 3], f32)> {
     } else if name.ends_with("back") {
         ([0.0, 0.0, -1.0], stride)
     } else if name.ends_with("left") {
-        ([-1.0, 0.0, 0.0], stride * STRAFE_STRIDE)
-    } else if name.ends_with("right") {
+        // The body's left is `+X`. It was written as `-X` until 2026-09-16,
+        // when the frame was corrected -- and the two together were a real
+        // sideways moonwalk that this test could not see: the feet were planted
+        // correctly in character space while the clip strafed the way opposite
+        // to the body. See `anim::bake::as_drawn`.
         ([1.0, 0.0, 0.0], stride * STRAFE_STRIDE)
+    } else if name.ends_with("right") {
+        ([-1.0, 0.0, 0.0], stride * STRAFE_STRIDE)
     } else if name == "crouch_walk" {
         ([0.0, 0.0, 1.0], stride)
     } else {

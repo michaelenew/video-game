@@ -433,7 +433,9 @@ struct EffectMesh {
 const EFFECT_PARTS: usize = {
     let blades = sim::effects::LOTUS_BLADES;
     let arms = sim::effects::GRASP_ARMS;
-    if blades > arms { blades } else { arms }
+    let beads = sim::effects::TETHER_BEADS;
+    let most = if blades > arms { blades } else { arms };
+    if beads > most { beads } else { most }
 };
 
 /// One of the Elementalist's structures.
@@ -521,6 +523,11 @@ struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
     shade: Handle<StandardMaterial>,
+    /// The Dual mage's two forces. Opposites on purpose -- one burns white and
+    /// the other drinks the light -- because the whole class is which of the
+    /// two you are holding.
+    light: Handle<StandardMaterial>,
+    dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
@@ -716,6 +723,27 @@ fn setup(
             base_color: Color::srgba(0.10, 0.09, 0.16, 0.80),
             emissive: LinearRgba::rgb(0.12, 0.10, 0.30),
             perceptual_roughness: 0.85,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        }),
+        // Hot white with a violet edge: a detonation and the ground it leaves.
+        // Bright enough to read as *the* thing on screen, which is what a
+        // finisher at full depth is supposed to be.
+        light: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.98, 0.95, 1.0, 0.55),
+            emissive: LinearRgba::rgb(5.0, 4.4, 6.4),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        }),
+        // And its opposite. Deep violet, nearly opaque and barely lit: a tether
+        // has to be visible along its whole length against anything it crosses,
+        // and the one thing it must not do is wash out the body on the end of
+        // it, which is what the player is actually looking at.
+        dark: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.16, 0.06, 0.26, 0.88),
+            emissive: LinearRgba::rgb(0.55, 0.12, 0.95),
+            perceptual_roughness: 0.8,
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
@@ -1283,6 +1311,15 @@ enum Skin {
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
+    /// The Dual mage's two forces, and the only pair of skins in the game that
+    /// exist to be told apart from each other rather than from the floor.
+    ///
+    /// Everything she throws is made of one of them, and which one is a thing
+    /// the player sets deliberately and has to be able to read back. The bar on
+    /// the HUD says it in a place nobody is looking during a fight; the thing
+    /// standing in the arena says it where they are.
+    Light,
+    Dark,
 }
 
 impl EffectLook {
@@ -1299,6 +1336,8 @@ impl EffectLook {
             Skin::Fire => self.fire.clone(),
             Skin::Blood => self.blood.clone(),
             Skin::Shade => self.shade.clone(),
+            Skin::Light => self.light.clone(),
+            Skin::Dark => self.dark.clone(),
         }
     }
 }
@@ -1317,9 +1356,14 @@ fn standing(shape: Shape, skin: Skin, at: Vec3, radius: f32, bottom: f32, top: f
 /// A ball in the air, which is exactly what the hit test for a travelling
 /// effect is -- see `World::inside`.
 fn floating(at: Vec3, radius: f32) -> Piece {
+    floating_in(Skin::Blood, at, radius)
+}
+
+/// The same, in a skin of your choosing.
+fn floating_in(skin: Skin, at: Vec3, radius: f32) -> Piece {
     Piece {
         shape: Shape::Ball,
-        skin: Skin::Blood,
+        skin,
         at,
         scale: Vec3::splat(radius * 2.0),
     }
@@ -1395,6 +1439,39 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // everywhere: a short wide cylinder lying in the flower's plane, which
         // is a shuriken thrown flat. It was a ball, and a ball of that radius
         // read as a beach ball rather than a blade.
+        // The light Lance's burst: a ball where the line ran out, and how big
+        // it is is the whole reading of how deep she was when she threw it.
+        // `field_radius` already carries that, which is the point of it being
+        // on the effect -- the thing drawn is the thing the hit test uses.
+        EffectKind::LanceBurst if part == 0 => Some(floating_in(
+            Skin::Light,
+            at,
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The dark Lance, as a **chain of beads** from her hand to the far end
+        // of the throw -- or, once it has hold of somebody, from her hand to
+        // them. A `Piece` has a place and a size and no direction, so a line has
+        // to be drawn as a row of things; it turned out to be the better read
+        // anyway, because a chain visibly stretches as the two of them part and
+        // visibly is not there the frame the leash breaks. The bead size is
+        // presentation, unlike the burst above: nothing is hit by the line
+        // after its one pass, so there is no volume here to be honest about.
+        EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
+            Skin::Dark,
+            fx3(effect.tether_bead(part)),
+            sim::tuning::body_radius().to_f32_for_render() * TETHER_BEAD,
+        )),
+        // Judgement's field: a wide, shallow disc of light on the floor. Drawn
+        // at exactly the radius that burns, because walking to the edge of it
+        // is the decision it offers.
+        EffectKind::JudgementField if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Light,
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            0.14,
+        )),
         EffectKind::GuillotineLotus if part < LOTUS_BLADES => Some(Piece {
             shape: Shape::Column,
             skin: Skin::Shade,
@@ -1408,6 +1485,13 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         _ => None,
     }
 }
+
+/// How big one bead of a tether is against a body.
+///
+/// Presentation, not a rule -- see the tether's arm of [`effect_piece`]. Small:
+/// what has to be read is the line and the thing on the end of it, and a chain
+/// of beads the size of fists would hide the second.
+const TETHER_BEAD: f32 = 0.3;
 
 /// How fat the spike is against the field it stands in.
 ///
@@ -1656,17 +1740,17 @@ fn demo_input(w: &sim::World, frame: u32) -> SimInput {
     let beat = frame % 480;
     let mut v = 0u16;
     match beat {
-        0..=70 => v |= SimInput::W,                         // close the gap
-        75..=78 => v |= SimInput::LEFT,                     // bash
-        110..=126 => v |= SimInput::RIGHT,                  // guard
-        150..=153 => v |= SimInput::SHIFT | SimInput::LEFT, // slam
-        190..=215 => v |= SimInput::CROUCH,                 // duck
-        240..=243 => v |= SimInput::SHIFT | SimInput::S,    // dodge back
-        250..=252 => v |= SimInput::SPACE,                  // jump
-        280..=283 => v |= SimInput::MECHANIC,               // throw the shield
-        300..=303 => v |= SimInput::SPECIAL,                // the class special
-        340..=343 => v |= SimInput::MECHANIC,               // recall it
-        410..=440 => v |= SimInput::S,                      // reset spacing
+        0..=70 => v |= SimInput::W,                      // close the gap
+        75..=78 => v |= SimInput::LEFT,                  // bash
+        110..=126 => v |= SimInput::RIGHT,               // guard
+        150..=153 => v |= SimInput::MIDDLE,              // the third click
+        190..=215 => v |= SimInput::CROUCH,              // duck
+        240..=243 => v |= SimInput::SHIFT | SimInput::S, // dodge back
+        250..=252 => v |= SimInput::SPACE,               // jump
+        280..=283 => v |= SimInput::MECHANIC,            // throw the shield
+        300..=303 => v |= SimInput::SPECIAL,             // the class special
+        340..=343 => v |= SimInput::MECHANIC,            // recall it
+        410..=440 => v |= SimInput::S,                   // reset spacing
         _ => {}
     }
     // The script looks at its opponent, which is what a player would do and
@@ -1689,6 +1773,13 @@ fn read_player_two(keys: &ButtonInput<KeyCode>) -> SimInput {
     if keys.pressed(KeyCode::KeyL) {
         v |= SimInput::MECHANIC;
     }
+    // The third attack button, which player two has no scroll wheel for.
+    // `M` sits under the same finger `,` and `.` do.
+    if keys.pressed(KeyCode::KeyM) {
+        v |= SimInput::MIDDLE;
+    }
+    // Shift is a dodge and nothing else now -- see `docs/design/controls.md` --
+    // so this is the modifier for the arrow keys rather than for the clicks.
     if keys.pressed(KeyCode::ShiftRight) {
         v |= SimInput::SHIFT;
     }
@@ -1831,7 +1922,9 @@ fn apply_poses(
     for owner in 0..MAX_PLAYERS {
         let p = frame.players[owner];
         let turn = body_turn(p.facing);
-        let (at, rot) = skins[owner].box_of(&skeletons[owner], Joint::HandL);
+        // The body's **left** hand, which in a drawn pose is not the slot of
+        // that name -- see `view::hand_joint`.
+        let (at, rot) = skins[owner].box_of(&skeletons[owner], view::hand_joint(true));
         hands.0[owner] = (
             Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
             turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),

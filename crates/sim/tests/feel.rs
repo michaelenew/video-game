@@ -327,10 +327,21 @@ fn best_case(m: &Move) -> i32 {
             kind @ (EffectKind::BlackSpike
             | EffectKind::FirePillar
             | EffectKind::FireTornado
-            | EffectKind::GuillotineLotus),
+            | EffectKind::GuillotineLotus
+            // The Dual mage's two fields answer the same way: the strike
+            // lands and then the ground it left burns for as long as
+            // somebody stands in it. Her tether is the same sum with the
+            // move's own hit set to a catch rather than a blow.
+            | EffectKind::JudgementField
+            | EffectKind::Tether),
         ) => {
             let ticks = kind.life() / t::effect_tick_frames().max(1);
             m.damage * swings + kind.damage(m) * ticks as i32
+        }
+        // The burst is a single detonation at the far end of the line, so it
+        // is the line's own hit plus one of it rather than a number per tick.
+        Some(EffectKind::LanceBurst) => {
+            m.damage * swings + EffectKind::LanceBurst.damage(m)
         }
         None => m.damage * swings,
     }
@@ -499,7 +510,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
             Class::Champion => 19,
             Class::Elementalist => 7,
             Class::BloodMage | Class::ShadowReaver => 4,
-            Class::DualMage => 5,
+            // Six on five inputs: both forms of Lance answer to middle click,
+            // and which one comes out is the force she is carrying. See
+            // `moves::dual`.
+            Class::DualMage => 6,
             _ => 3,
         };
         assert_eq!(

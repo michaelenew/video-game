@@ -94,13 +94,12 @@ pub struct Move {
     /// * [`Plane::Upright`] and [`Plane::Diagonal`]: positive **comes down**.
     ///   The head starts at the top of the arc and finishes at the bottom.
     /// * [`Plane::Flat`]: positive starts on the fighter's **left** and sweeps
-    ///   across to the right. The body is authored in a left-handed frame
-    ///   dropped into a right-handed world (see [`crate::aim::across`]), so
-    ///   which of the two a positive rotation about the vertical actually
-    ///   produces is a fact to read off rather than to reason about -- this
-    ///   sentence used to say the opposite, and the Champion's spinning finisher
-    ///   is what found it out: the clip swept one way and the volume the other.
-    ///   `view/tests/kinematics.rs` is what keeps that honest now.
+    ///   across to the right, and the arithmetic in [`turned`] is written to
+    ///   make that true rather than left to fall out of the axes. It has been
+    ///   got wrong twice, both times because the body was being drawn in a frame
+    ///   nobody had checked against the world: the clip swept one way and the
+    ///   volume the other. `view/tests/kinematics.rs` found it both times and is
+    ///   what keeps it honest.
     pub arc: Fx,
     /// Frames between one connection and the next for a move that keeps
     /// hitting. Zero is the normal rule: a swing lands once.
@@ -565,14 +564,27 @@ const NAMES: [&[&str]; 6] = [
     //     all four and you are rooted.
     //   Black spike: on `E`, because the class has no other use for the key.
     &["Bloodletter", "Rend", "Grasp", "Black spike"],
-    // Dual mage -- melee mage riding between two forces, one in each arm. Five
-    // moves, and the two on the bare clicks are the class: see [`dual`].
+    // Dual mage -- melee mage riding between two forces, one in each arm. Six
+    // moves on five inputs, and the two on the bare clicks are the class: see
+    // [`dual`].
     //   Dark auto / Light auto: the autos, and the steering wheel. Left is
     //     dark, right is light, and each one is a punch that opens into a wing.
+    //     One pulls and one pushes, so which arm you throw is a spacing
+    //     decision as well as a meter one.
+    //   Light lance / Dark lance: both on middle click, which has no side --
+    //     so the form is the force she is carrying. Light detonates at the far
+    //     end of the line; dark tethers what it catches and drains it.
     //   Sweep: on `E`, because the meter is steered by which button attacks
     //     rather than by a key of its own, so the mechanic key is free.
-    //   Judgement: a finisher, only past the deep threshold on its own side.
-    &["Dark auto", "Lance", "Judgement", "Sweep", "Light auto"],
+    //   Judgement: the finisher. No depth gate -- depth is what makes it big.
+    &[
+        "Dark auto",
+        "Light lance",
+        "Judgement",
+        "Sweep",
+        "Light auto",
+        "Dark lance",
+    ],
 ];
 
 /// The slots every class has: poke, committed, special. Two classes have more.
@@ -705,7 +717,7 @@ pub mod champion {
 }
 
 // ---------------------------------------------------------------------------
-// The Dual mage's five
+// The Dual mage's six
 // ---------------------------------------------------------------------------
 
 /// The Dual mage's move list, and **which way each one pushes the meter**.
@@ -717,8 +729,9 @@ pub mod champion {
 ///
 /// ```text
 ///              darker              lighter        whichever she is carrying
-///   click      Dark auto (L)       Light auto (R)
-///   shift                                         Lance (shift+L)
+///   click      Dark auto (L)       Light auto (R)  Lance (M) -- and which
+///                                                  *form* of it is the force
+///                                                  she is carrying
 ///   key                                           Judgement (Q), Sweep (E)
 /// ```
 ///
@@ -734,12 +747,25 @@ pub mod champion {
 /// every input that is neither left nor right.
 pub mod dual {
     pub const DARK_AUTO: u8 = 0;
-    pub const LANCE: u8 = 1;
+    /// Middle click while she is carrying light: the line flies out and
+    /// **detonates at its far end**, so it is a thing you aim *past* somebody.
+    pub const LIGHT_LANCE: u8 = 1;
     pub const JUDGEMENT: u8 = 2;
     pub const SWEEP: u8 = 3;
     pub const LIGHT_AUTO: u8 = 4;
+    /// Middle click while she is carrying dark: the same line, but it
+    /// **tethers** the first thing it hits and drains it until the leash
+    /// breaks on distance.
+    ///
+    /// Slot five rather than slot two, which is the one thing here that is
+    /// about storage rather than about the kit: the Oven's move store is packed
+    /// in class order with the Dual mage last, so a slot appended to her
+    /// leaves every knob index in `tuned.rs` meaning what it was baked with.
+    /// Renumbering to put the two Lances side by side would silently rewrite
+    /// every number on the class.
+    pub const DARK_LANCE: u8 = 5;
 
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 6;
 
     /// Which force this move throws, if it is one of the two autos.
     ///
@@ -763,12 +789,52 @@ pub mod dual {
 
     /// Is this one of the two autos?
     ///
-    /// They are the only moves that steer on **contact** rather than on the
-    /// press. Everything else votes when you commit to it; an auto has to land,
-    /// which is what forces the class into melee range exactly when it is
-    /// strongest and most fragile.
+    /// The two things you press constantly, and the only two with a side of
+    /// their own. Everything else is made of whichever force they left her
+    /// carrying.
+    ///
+    /// It is also the one exception to depth scaling the *size* of what she
+    /// throws -- see `state::depth`. An auto's reach is pinned to the punch
+    /// that throws it (`view/tests/kinematics.rs` checks the blade starts where
+    /// the fist stops), and a volume that grew away from the animation would
+    /// make the one move in the kit thrown every second unreadable. What depth
+    /// does to an auto is what it *does*: the damage, and how hard it pulls or
+    /// shoves.
     pub const fn is_an_auto(kind: u8) -> bool {
         matches!(kind, DARK_AUTO | LIGHT_AUTO)
+    }
+
+    /// Which form of Lance middle click throws, given what she is carrying.
+    ///
+    /// **The one input in the game that is two moves.** Middle click has no
+    /// side, so it cannot pick a direction on the bar -- which is exactly what
+    /// makes it the right home for the cast whose *form* is picked by the arm
+    /// she last punched with. The two are separate rows in the move table
+    /// rather than one row with a flag because the thing that has to differ is
+    /// the **wind-up**: a person standing opposite has to be able to tell a
+    /// burst they should get out from under from a tether they should break,
+    /// and that is frames and a pose, not a damage number.
+    pub const fn lance_for(force: crate::class::Force) -> u8 {
+        match force {
+            crate::class::Force::Light => LIGHT_LANCE,
+            crate::class::Force::Dark => DARK_LANCE,
+        }
+    }
+
+    /// Is this either form of Lance?
+    pub const fn is_a_lance(kind: u8) -> bool {
+        matches!(kind, LIGHT_LANCE | DARK_LANCE)
+    }
+
+    /// Is this the finisher?
+    ///
+    /// Declared rather than inferred from the binding, for the same reason
+    /// everything else on this class is: what makes Judgement the finisher is
+    /// that it **throws the bar harder than anything else she has** -- see
+    /// `tuning::meter_finisher_push` -- and that is a property of the move, not
+    /// of the key it happens to be on.
+    pub const fn is_the_finisher(kind: u8) -> bool {
+        kind == JUDGEMENT
     }
 }
 
@@ -851,9 +917,10 @@ pub const fn slots(class: Class) -> usize {
         // move with a flight, a damage number and a slow needs the same table
         // every other move is in.
         Class::ShadowReaver => SLOTS + 1,
-        // Five: an auto on each click, because the two autos are two different
-        // moves rather than one move with a modifier, plus Sweep on `E`. See
-        // [`dual`].
+        // Six: an auto on each click, because the two autos are two different
+        // moves rather than one move with a modifier; both forms of Lance on
+        // middle click, because the form is the force she is carrying rather
+        // than the button; and Sweep on `E`. See [`dual`].
         Class::DualMage => dual::COUNT,
         _ => SLOTS,
     }
@@ -981,10 +1048,11 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // See [`dual`].
         Class::DualMage => match slot {
             0 => "LMB",
-            1 => "Shift+LMB",
+            1 => "MMB, light",
             2 => "Q",
             3 => "E",
-            _ => "RMB",
+            4 => "RMB",
+            _ => "MMB, dark",
         },
         // Right click is otherwise dead weight on a class with no shield, the
         // same argument the Reaver makes -- Cataclysm takes it instead.
@@ -1107,6 +1175,10 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         Class::DualMage => match kind {
             dual::DARK_AUTO | dual::LIGHT_AUTO => Shape::Wing,
             dual::SWEEP => Shape::Swing(Plane::Flat),
+            // The dark Lance has no volume of its own: the line it throws is
+            // the effect, and the effect is what catches somebody and holds
+            // on. See `effects::EffectKind::Tether`.
+            dual::DARK_LANCE => Shape::None,
             _ => Shape::Cylinder,
         },
         // Every other class is still the original disc at arm's length.
@@ -1129,9 +1201,17 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
     match class {
         // Left is dark, right is light. The class in one line: see
         // `docs/design/dual-mage.md`.
+        //
+        // **And the two Lances follow the same rule**, which is why they are on
+        // the list rather than down at `Hand::Centre` with everything else that
+        // is not an auto. Middle click throws whichever form the force in her
+        // arms decides, so the arm it leaves from is a second reading of the
+        // same fact: the burst comes off the light hand and the tether off the
+        // dark one. A thrust out of the sternum would say nothing at all, and
+        // on this class saying nothing is the bug.
         Class::DualMage => match kind {
-            dual::DARK_AUTO => Hand::Left,
-            dual::LIGHT_AUTO => Hand::Right,
+            dual::DARK_AUTO | dual::DARK_LANCE => Hand::Left,
+            dual::LIGHT_AUTO | dual::LIGHT_LANCE => Hand::Right,
             _ => Hand::Centre,
         },
         // The spear's opener is the one attack in the class thrown with one
@@ -1437,10 +1517,17 @@ impl Wing {
 pub fn turned(base: V3, by: Fx, plane: Plane) -> V3 {
     let (c, s) = (crate::fixed::cos_turns(by), crate::fixed::sin_turns(by));
     match plane {
+        // **A positive angle turns toward the body's left**, which is the
+        // negative rotation about the world's vertical: the body's left is `up`
+        // crossed with the facing. The sign was the other way round until
+        // 2026-09-16, when the frame the body is drawn in was corrected -- a
+        // flat swing had been sweeping the way opposite to the clip that drew
+        // it, and `the_champion_swings_the_weapon_the_player_can_see` is what
+        // found it, again. See `view::hand_joint` and `Move::arc`.
         Plane::Flat => V3::new(
-            base.x.mul(c).sub(base.z.mul(s)),
+            base.x.mul(c).add(base.z.mul(s)),
             base.y,
-            base.x.mul(s).add(base.z.mul(c)),
+            base.z.mul(c).sub(base.x.mul(s)),
         ),
         Plane::Upright => {
             let flat = V3::new(base.x, Fx::ZERO, base.z);
@@ -1463,10 +1550,13 @@ pub fn turned(base: V3, by: Fx, plane: Plane) -> V3 {
         Plane::Diagonal(hand) => {
             let aim = base.normalized();
             let (side, up) = crate::math::frame_about(aim);
-            // `frame_about`'s sideways axis is the one `aim::across` hands out
-            // for the **left** hand, so the roll takes the sign of the hand
-            // directly and a `Diagonal(Right)` cut starts over the right
-            // shoulder. One tuned tilt, two mirrored cuts.
+            // `frame_about`'s sideways axis is the strafe-right one, which is
+            // what `aim::across` hands out for the **right** hand, so the roll
+            // takes the sign of the hand directly and a `Diagonal(Right)` cut
+            // starts over the right shoulder. One tuned tilt, two mirrored
+            // cuts. (It said "left" here until 2026-09-16, and was arithmetically
+            // right while being about the mirrored body -- see
+            // `view/src/skeleton.rs`.)
             let roll = crate::tuning::cut_roll().mul(Fx::from_int(hand.outward()));
             let high = up
                 .scale(crate::fixed::cos_turns(roll))

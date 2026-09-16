@@ -288,7 +288,12 @@ attacks are variants of their grounded counterparts, not a separate move list.* 
 still the cheap thing you throw constantly, right click is still the committed one, `E` is
 still earth. A player who has learnt her standing up has learnt most of her in the air.
 
-**Shift does not reach up there.** Shift plus left click is Fissure, a crack that races along
+**Shift does not reach up there — and does not reach anywhere now.** Shift plus a click
+stopped being an attack input on 2026-09-16, on every class, so Fissure has no button at all
+until it is given one; see [../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16).
+The paragraph below is why it was never going to be the air row's answer either.
+
+Shift plus left click was Fissure, a crack that races along
 the *ground*; there is no airborne version of it to reach for, so the modifier is ignored and
 left click means what left click means. Ignoring it has to come out as the Air bolt rather
 than as silence, or the input is simply eaten.

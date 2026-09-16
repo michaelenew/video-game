@@ -372,11 +372,66 @@ fn a_taller_build_is_taller_everywhere() {
 // Nothing forces them to agree except this.
 
 /// A fighter's hand, as the renderer puts it in the arena.
+///
+/// **The pose has to be a drawn one** -- a baked clip rather than a raw
+/// `Pose::rest()`. An authored pose is written in a left-handed frame and is
+/// reflected into the arena's on the way to being baked (`anim::bake::as_drawn`),
+/// and the reflection swaps the sides along with the body, which is why the slot
+/// is `view::hand_joint` rather than the enum's own name.
 fn drawn_hand(pose: &Pose, facing: [f32; 2], left: bool) -> math::V3 {
     let s = reference();
-    let joint = if left { Joint::HandL } else { Joint::HandR };
-    let local = skeleton::solve(s, pose).origin[joint.index()];
+    let local = skeleton::solve(s, pose).origin[view::hand_joint(left).index()];
     view::into_world(local, [0.0, 0.0, 0.0], facing)
+}
+
+/// A pose as the arena draws it: the idle, baked, which is the one body every
+/// clip starts and ends on.
+fn drawn_rest() -> Pose {
+    view::Clip::Idle.at(0)
+}
+
+/// Which way is a body's own left, in the arena, given where it is facing.
+///
+/// `up` crossed with the facing, and nothing else. A body facing `+X` with `+Y`
+/// up has its left at `-Z`: right is forward crossed with up, so left is the
+/// other one.
+fn a_bodys_left(facing: [f32; 2]) -> [f32; 2] {
+    [facing[1], -facing[0]]
+}
+
+#[test]
+fn the_left_arm_is_drawn_on_the_left_of_the_body() {
+    // **The test that was missing, and the reason a mirrored rig survived.**
+    //
+    // Everything else about handedness in this suite compares the renderer to
+    // the simulation, and until 2026-09-16 the two agreed with each other and
+    // both were the mirror of the body: `Joint::ArmL` was authored at `-X` in a
+    // frame where a body's left arm is at `+X`, and `aim::across` was written to
+    // follow it. Every clip in the game was drawn mirrored from what its author
+    // wrote, and nothing could see it, because nothing checked either frame
+    // against the world's own idea of which side of a body is its left.
+    //
+    // It surfaced as a feel complaint on the one class where the arms *are* the
+    // mechanic: the Dual mage's left click came out of her right hand.
+    //
+    // Every facing, because the two frames are related by a rotation and a sign
+    // error hides at exactly one angle.
+    for eighth in 0..8 {
+        let a = eighth as f32 / 8.0 * std::f32::consts::TAU;
+        let facing = [a.cos(), a.sin()];
+        let left = a_bodys_left(facing);
+        for is_left in [true, false] {
+            let drawn = drawn_hand(&drawn_rest(), facing, is_left);
+            let along = drawn[0] * left[0] + drawn[2] * left[1];
+            let want = if is_left { along } else { -along };
+            assert!(
+                want > 0.05,
+                "at facing {facing:?} the {} hand is drawn {along:+.3} m along the body's \
+                 own left, so the rig is mirrored",
+                if is_left { "left" } else { "right" }
+            );
+        }
+    }
 }
 
 #[test]
@@ -389,7 +444,7 @@ fn the_arm_the_simulation_swings_from_is_the_arm_the_renderer_draws() {
         let facing = [a.cos(), a.sin()];
         let sim_facing = sim::V3::new(fx(facing[0]), sim::Fx::ZERO, fx(facing[1]));
         for (hand, left) in [(Hand::Left, true), (Hand::Right, false)] {
-            let drawn = drawn_hand(&Pose::rest(), facing, left);
+            let drawn = drawn_hand(&drawn_rest(), facing, left);
             let swung = sim::aim::across(sim_facing, hand);
             let across = [swung.x.to_f32_for_render(), swung.z.to_f32_for_render()];
             // Sideways only: the simulation's hand is at the height everything
@@ -414,7 +469,10 @@ fn a_hand_is_about_as_far_out_as_the_shoulder_it_hangs_from() {
     let out = sim::tuning::hand_offset().to_f32_for_render();
     for class in sim::class::ALL_CLASSES {
         let s = skeleton::skeleton_for(class);
-        let shoulder = skeleton::solve(&s, &Pose::rest()).origin[Joint::ArmR.index()][0];
+        // How far off the centre line, not which side of it -- the side is
+        // `the_left_arm_is_drawn_on_the_left_of_the_body`'s question, and this
+        // one is about size.
+        let shoulder = skeleton::solve(&s, &Pose::rest()).origin[Joint::ArmR.index()][0].abs();
         assert!(
             (shoulder - out).abs() < 0.08,
             "{}: shoulders at {shoulder:.3} m, the simulation swings from {out:.3} m",
@@ -453,9 +511,11 @@ fn the_wing_starts_where_the_punch_stops() {
     // window rather than its position on one frame -- "where their hand
     // finishes" is the end of the extension, and which frame that lands on is
     // the animator's business.
-    let elbow = out(1, Joint::ForearmL);
+    // The dark auto is authored on the left arm, and a drawn pose keeps it in
+    // the slot of the other name -- see `view::hand_joint`.
+    let elbow = out(1, view::drawn_joint(Joint::ForearmL));
     let hand = (last_startup..=first_recovery)
-        .map(|f| out(f, Joint::HandL))
+        .map(|f| out(f, view::hand_joint(true)))
         .fold(0.0f32, f32::max);
     assert!(
         hand > elbow + 0.2,
@@ -530,8 +590,8 @@ fn fx(v: f32) -> sim::Fx {
 fn drawn_weapon(clip: view::Clip, frame: u16) -> [f32; 3] {
     let s = skeleton::skeleton_for(sim::Class::Champion);
     let skin = skeleton::solve(&s, &clip.at(frame as u32));
-    let l = skin.origin[Joint::HandL.index()];
-    let r = skin.origin[Joint::HandR.index()];
+    let l = skin.origin[view::hand_joint(true).index()];
+    let r = skin.origin[view::hand_joint(false).index()];
     let facing = [1.0, 0.0];
     let a = view::into_world([r[0] - l[0], r[1] - l[1], r[2] - l[2]], [0.0; 3], facing);
     let len = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt().max(1e-4);
@@ -649,4 +709,155 @@ fn the_champion_swings_the_weapon_the_player_can_see() {
             }
         }
     }
+}
+
+#[test]
+fn the_two_lances_leave_from_the_arm_that_throws_them() {
+    // **Anything that comes out of the middle of her chest is a bug on this
+    // class.** The two arms are the whole readout of the mechanic: middle click
+    // throws one of two moves and the force in her arms picks which, so the
+    // side the line leaves from is the second thing the person opposite has to
+    // go on after the wind-up. A skillshot on the centre line would throw half
+    // of that away.
+    //
+    // Checked against the **baked clip** as well as against the move table, so
+    // the arm the volume comes out of is the arm the player can see reaching.
+    // The simulation has no idea where a hand is and the renderer has no idea
+    // where a hitbox is; this is the only place the two meet.
+    //
+    // It is the arm that *reaches* rather than where the hand ends up, and the
+    // difference matters: both of these are thrusts, and a thrust at full
+    // extension puts the hand near the body's own centre line whichever
+    // shoulder it left. What says which arm threw it is which one is out.
+    use sim::aim::Hand;
+    use sim::moves::dual;
+    let s = skeleton::skeleton_for(sim::Class::DualMage);
+    for (slot, clip, force, name) in [
+        (
+            dual::LIGHT_LANCE,
+            view::Clip::DualLightLance,
+            sim::class::Force::Light,
+            "light",
+        ),
+        (
+            dual::DARK_LANCE,
+            view::Clip::DualDarkLance,
+            sim::class::Force::Dark,
+            "dark",
+        ),
+    ] {
+        // Which arm the clip puts out in front on the frame the volume appears.
+        let (_, contact, _) = clip.phases().expect("an attack clip");
+        let skin = skeleton::solve(&s, &clip.at(contact as u32));
+        let forward = |joint: Joint| {
+            view::into_world(skin.origin[joint.index()], [0.0, 0.0, 0.0], [1.0, 0.0])[0]
+        };
+        let (out_l, out_r) = (
+            forward(view::hand_joint(true)),
+            forward(view::hand_joint(false)),
+        );
+        assert!(
+            (out_l - out_r).abs() > 0.15,
+            "the {name} Lance reaches with both arms equally ({out_l:.2} m and {out_r:.2} m), \
+             so which force threw it cannot be read off the body"
+        );
+        let reaching = if out_r > out_l {
+            Hand::Right
+        } else {
+            Hand::Left
+        };
+        assert_eq!(
+            sim::moves::get(sim::Class::DualMage, slot).hand,
+            reaching,
+            "the {name} Lance's volume comes out of the arm the clip is not reaching with"
+        );
+
+        // And the simulation really does start the line off the centre line,
+        // on that side, when middle click throws this form.
+        let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
+        if let sim::class::Mechanic::Meter { colour, .. } = &mut w.players[0].mechanic {
+            *colour = force;
+        }
+        w.advance([sim::Input::aimed(sim::Input::MIDDLE, 0), sim::Input::new(0)]);
+        assert_eq!(
+            w.players[0].action.attack_kind(),
+            Some(slot),
+            "carrying the {name}, middle click threw the wrong form"
+        );
+        let p = &w.players[0];
+        let across = sim::aim::across(p.facing, reaching);
+        let off = sim::state::beam_of(p)
+            .from
+            .sub(p.pos)
+            .dot(across)
+            .to_f32_for_render();
+        assert!(
+            off > 0.1,
+            "the {name} Lance leaves {off:.2} m along its own arm's side -- from the \
+             sternum, or from the wrong shoulder"
+        );
+    }
+}
+
+#[test]
+fn the_two_lances_do_not_look_alike_while_they_are_winding_up() {
+    // **The load-bearing claim of the whole two-form idea.** Middle click throws
+    // one of two moves and the force she is carrying picks which, so the person
+    // standing opposite gets the wind-up and nothing else to decide between
+    // getting out from under a burst and closing to break a tether. Those are
+    // opposite answers, so a pair of startups that read alike is worse than
+    // having one move.
+    //
+    // Measured where it is actually read: the hands, through the startup,
+    // against the body rather than against the world -- an opponent is looking
+    // at a silhouette, not at a position on the floor.
+    let s = skeleton::skeleton_for(sim::Class::DualMage);
+    let light = view::Clip::DualLightLance;
+    let dark = view::Clip::DualDarkLance;
+
+    let (light_startup, _, _) = light.phases().expect("an attack clip");
+    let (dark_startup, _, _) = dark.phases().expect("an attack clip");
+    assert!(
+        dark_startup > light_startup,
+        "the dark Lance winds up in {dark_startup} frames and the light one in \
+         {light_startup} -- they are the same speed, so the first thing an opponent \
+         could use to tell them apart is missing"
+    );
+
+    // Hands relative to the hips, a matched fraction of the way through each
+    // wind-up, so a difference in length is not what is being measured.
+    let hands = |clip: view::Clip, through: f32| {
+        let (startup, _, _) = clip.phases().expect("an attack clip");
+        let frame = (startup as f32 * through).round() as u32;
+        let skin = skeleton::solve(&s, &clip.at(frame));
+        let hip = skin.origin[Joint::Root.index()];
+        [Joint::HandL, Joint::HandR].map(|j| {
+            let p = skin.origin[j.index()];
+            [p[0] - hip[0], p[1] - hip[1], p[2] - hip[2]]
+        })
+    };
+    let mut worst: f32 = 0.0;
+    for step in 1..=4 {
+        let through = step as f32 / 4.0;
+        let (a, b) = (hands(light, through), hands(dark, through));
+        let apart: f32 = a
+            .iter()
+            .zip(b.iter())
+            .map(|(p, q)| {
+                let d = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+                (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+            })
+            .fold(0.0f32, f32::max);
+        worst = worst.max(apart);
+        assert!(
+            apart > 0.18,
+            "a quarter-{step} of the way through, the two Lances hold their hands \
+             {apart:.2} m apart -- close enough to be the same pose"
+        );
+    }
+    assert!(
+        worst > 0.45,
+        "the two wind-ups never get further apart than {worst:.2} m, which is a \
+         difference you would have to be told about"
+    );
 }

@@ -1,4 +1,4 @@
-//! The Dual mage: two autos, Lance, Judgement, Sweep.
+//! The Dual mage: two autos, two Lances, Judgement, Sweep.
 //!
 //! A melee mage holding two forces apart. The body is the longest and the
 //! slightest in the roster -- `build_for(DualMage)` is tall, thin and
@@ -8,7 +8,7 @@
 //! because it is big. Every one of these clips is authored to be read from the
 //! silhouette's extremities, not from its bulk, because there is no bulk.
 //!
-//! That gives four uses of one vocabulary:
+//! That gives five uses of one vocabulary:
 //!
 //! - **The two autos** are one punch thrown with either arm: left is dark,
 //!   right is light, and which of the two just landed is how the whole class
@@ -25,12 +25,20 @@
 //!   idle put them, or the first frame of every right-hand punch would swap the
 //!   character's footing.
 //!
-//! - **Sweep** is the one thing here thrown with both arms at once. It is on
-//!   `E`, and it is the answer to somebody already inside the punches' arc.
-//! - **Lance** is one straight thing: rear foot, hips, shoulder, point. It
-//!   coils *away* from that line first -- the point hand goes back past the hip
-//!   while the free hand stays out on the target -- so what an opponent reads
-//!   during the startup is the opposite of what arrives.
+//! - **Sweep** is the one thing here thrown with both arms at once, and the one
+//!   that goes round **past both shoulders**. It is on `E`, and it is the answer
+//!   to somebody already inside the punches' arc -- which means it has to reach
+//!   a little behind her, because that is where they are.
+//! - **The light Lance** is one straight thing: rear foot, hips, shoulder,
+//!   point. It coils *away* from that line first -- the point hand goes back
+//!   past the hip while the free hand stays out on the target -- so what an
+//!   opponent reads during the startup is the opposite of what arrives.
+//! - **The dark Lance** is the same input and nothing like the same move, which
+//!   is the whole job of the pair: middle click throws one of the two and the
+//!   force in her arms picks which, so the only thing the person opposite has
+//!   to go on is the wind-up. So one rises off the right shoulder and goes
+//!   early and forward, and the other sinks onto the rear leg, drags the left
+//!   hand down past the hip, and arrives holding rather than striking.
 //! - **Judgement** squares up. The rest are bladed and one-sided; the finisher
 //!   is symmetric front to back and side to side, because it is the only thing
 //!   the class does with both forces *together*, and because symmetry is what
@@ -86,10 +94,11 @@ const PULL_AWAY: Ease = Ease::new(0.45, -0.22, 0.3, 1.0);
 pub fn clips() -> Vec<Recipe> {
     vec![
         punch(Clip::DualDark, Arm::Dark),
-        lance(),
+        light_lance(),
         judgement(),
         sweep(),
         punch(Clip::DualLight, Arm::Light),
+        dark_lance(),
     ]
 }
 
@@ -301,8 +310,16 @@ fn punch(clip: Clip, arm: Arm) -> Recipe {
 }
 
 // ---------------------------------------------------------------------------
-// Lance -- the committed thrust
+// The light Lance -- the committed thrust
 // ---------------------------------------------------------------------------
+//
+// Middle click throws one of two moves and the force in her arms picks which,
+// so these two clips have one job before any of the rest: **they must not look
+// alike.** A person on the other side of the arena gets the wind-up and nothing
+// else to decide between getting out from under a burst and breaking a tether,
+// and the two answers are opposites -- leave, or close. So the light one is
+// high, fast and forward off the right arm, and the dark one is low, slow and
+// settled back off the left. Same input, opposite silhouettes.
 
 /// The free hand goes out onto the target and the point hand starts back.
 /// Early enough to be read, and deliberately the wrong shape: what is extended
@@ -467,8 +484,8 @@ fn haul_up() -> Pose {
         .toe_r(6.0)
 }
 
-fn lance() -> Recipe {
-    let clip = Clip::DualCommitted;
+fn light_lance() -> Recipe {
+    let clip = Clip::DualLightLance;
     let (windup, contact, recovery) = phases(clip);
     let last = clip.length() - 1;
 
@@ -508,7 +525,220 @@ fn lance() -> Recipe {
                 thrust and then comes back, and a point still travelling while \
                 its hitbox is live reads as a swing. The weight in this move is \
                 in how long it takes to leave the pose, not in how far the arm \
-                wobbles once it arrives."
+                wobbles once it arrives. It is thrown off the **right** arm, \
+                which is the arm light lives in: middle click is two moves and \
+                the arm you see is the second reading of which one is coming."
+            .into(),
+        keys: track.done(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The dark Lance -- the tether
+// ---------------------------------------------------------------------------
+//
+// The other half of middle click, and authored against the light one at every
+// point. That one rises, goes early and goes forward; this one **sinks, goes
+// late and stays put**. What it throws is not a point but a hand, and what it
+// does when it arrives is not let go.
+
+/// The sink: weight drops onto the rear leg, the dark hand starts down and back
+/// outside the hip, the free hand comes up across the chest as a counterweight.
+///
+/// Down rather than up is the whole tell. The light Lance's first readable
+/// frame lifts the right hand past the shoulder; this drops the left one below
+/// the belt, and the two are told apart at a glance from across the arena
+/// before either arm has gone anywhere.
+fn sink() -> Pose {
+    stance()
+        .hips(0.01, -0.125, -0.05)
+        .root(-4.0, 6.0, 14.0)
+        .spine(-2.0, 5.0, 10.0)
+        .chest(2.0, 4.0, 16.0)
+        .head(4.0, 0.0, -14.0)
+        .shoulder_l(-34.0, 18.0, 0.0)
+        .elbow_l(24.0)
+        .wrist_l(14.0, 0.0, 0.0)
+        .shoulder_r(38.0, 10.0, 0.0)
+        .elbow_r(84.0)
+        .wrist_r(-8.0, 0.0, 0.0)
+        .plant_l([L, GROUND, 0.13])
+        .plant_r([R, GROUND, -0.21])
+        .toe_l(-4.0)
+        .toe_floor_r()
+}
+
+/// The haul: the deepest the dark hand gets, dragged back past the rear hip
+/// with the whole torso turned away over it. Both knees bent, and nothing has
+/// gone forward yet.
+///
+/// The arm stays nearly straight, unlike the light Lance's chambered elbow.
+/// What has to travel here is not a point that must accelerate but a hand on
+/// the end of a long arm, and the extra length is the point: it is the reach
+/// being wound up, not the speed.
+fn haul() -> Pose {
+    stance()
+        .hips(0.02, -0.165, -0.10)
+        .root(-8.0, 12.0, 26.0)
+        .spine(-4.0, 9.0, 18.0)
+        .chest(2.0, 7.0, 28.0)
+        .head(8.0, 0.0, -26.0)
+        .shoulder_l(-58.0, 12.0, 0.0)
+        .elbow_l(10.0)
+        .wrist_l(22.0, 0.0, 0.0)
+        .shoulder_r(52.0, 8.0, 0.0)
+        .elbow_r(96.0)
+        .wrist_r(-10.0, 0.0, 0.0)
+        .plant_l([L, GROUND, 0.10])
+        .plant_r([R + 0.02, GROUND, -0.24])
+        .toe_l(-6.0)
+        .toe_floor_r()
+}
+
+/// The last startup frame: the hand has come off the bottom of its arc and is
+/// travelling forward low, palm already turned up and open. The hips have
+/// squared but the feet have not moved -- she is reaching, not lunging.
+fn reach_low() -> Pose {
+    stance()
+        .hips(0.01, -0.15, 0.01)
+        .root(-2.0, 4.0, 10.0)
+        .spine(0.0, 3.0, 6.0)
+        .chest(2.0, 2.0, 8.0)
+        .head(2.0, 0.0, -6.0)
+        .shoulder_l(34.0, 16.0, 0.0)
+        .elbow_l(26.0)
+        .wrist_l(16.0, 0.0, 0.0)
+        .shoulder_r(30.0, 14.0, 0.0)
+        .elbow_r(72.0)
+        .wrist_r(-8.0, 0.0, 0.0)
+        .plant_l([L, GROUND, 0.16])
+        .plant_r([R, GROUND, -0.20])
+        .toe_l(-4.0)
+        .toe_floor_r()
+}
+
+/// The contact frame. The dark arm is out low and level with the hip, wrist
+/// cocked back so the hand leads and the palm faces up: the shape of catching
+/// something rather than of hitting it.
+///
+/// **The torso leans away from the arm**, which is the opposite of the light
+/// Lance's dive down its own line. Something on the end of that arm is about to
+/// start pulling, and a body already committed forward has nothing left to
+/// brace with. This is the frame that says the move ends attached.
+fn caught() -> Pose {
+    stance()
+        .hips(0.0, -0.145, 0.03)
+        .root(-10.0, 2.0, 6.0)
+        .spine(-4.0, 2.0, 2.0)
+        .chest(0.0, 1.0, 4.0)
+        .head(6.0, 0.0, -4.0)
+        .shoulder_l(72.0, 20.0, 0.0)
+        .elbow_l(6.0)
+        .wrist_l(24.0, 0.0, 0.0)
+        .shoulder_r(-24.0, 20.0, 0.0)
+        .elbow_r(48.0)
+        .wrist_r(-6.0, 0.0, 0.0)
+        .plant_l([L - 0.01, GROUND, 0.21])
+        .plant_r([R + 0.02, GROUND, -0.23])
+        .toe_l(-2.0)
+        .toe_floor_r()
+}
+
+/// Taking the strain: the free hand comes across onto the same line, both arms
+/// low, weight settling further back. The recovery of a move that caught
+/// something is a fighter holding on, not one rebuilding a guard.
+fn strain() -> Pose {
+    stance()
+        .hips(0.0, -0.17, 0.0)
+        .root(-14.0, 0.0, 2.0)
+        .spine(-6.0, 0.0, 0.0)
+        .chest(-2.0, 0.0, 2.0)
+        .head(10.0, 0.0, -2.0)
+        .shoulder_l(64.0, 16.0, 0.0)
+        .elbow_l(18.0)
+        .wrist_l(20.0, 0.0, 0.0)
+        .shoulder_r(50.0, 12.0, 0.0)
+        .elbow_r(34.0)
+        .wrist_r(12.0, 0.0, 0.0)
+        .plant_l([L - 0.01, GROUND, 0.19])
+        .plant_r([R + 0.02, GROUND, -0.26])
+        .toe_l(-2.0)
+        .toe_floor_r()
+}
+
+/// Letting the line go slack and standing back up out of the sink, guard
+/// gathering low. Still turned slightly along the tether rather than square.
+fn slacken() -> Pose {
+    stance()
+        .hips(0.0, -0.105, -0.01)
+        .root(-4.0, 2.0, 8.0)
+        .spine(0.0, 2.0, 6.0)
+        .chest(0.0, 2.0, 8.0)
+        .head(2.0, 0.0, -6.0)
+        .shoulder_l(30.0, 20.0, 0.0)
+        .elbow_l(62.0)
+        .wrist_l(6.0, 0.0, 0.0)
+        .shoulder_r(26.0, 16.0, 0.0)
+        .elbow_r(70.0)
+        .wrist_r(-4.0, 0.0, 0.0)
+        .plant_l([L, GROUND, 0.16])
+        .plant_r([R, GROUND, -0.19])
+        .toe_l(-3.0)
+        .toe_floor_r()
+}
+
+fn dark_lance() -> Recipe {
+    let clip = Clip::DualDarkLance;
+    let (windup, contact, recovery) = phases(clip);
+    let last = clip.length() - 1;
+
+    let mut track = Track::new(clip);
+    track.key(0, stance(), Ease::OUT);
+    // Later than the light Lance's first tell, and slower into it. The dark
+    // form is the committed one in the sense that matters here: it is the one
+    // an opponent has time to answer, and it is supposed to be.
+    track.key(frac(0, windup, 0.42), sink(), Ease::SMOOTH);
+    track.key(frac(0, windup, 0.62), haul(), Ease::HOLD);
+    track.key(frac(0, windup, 0.82), haul(), GATHER);
+    track.key(windup, reach_low(), Ease::SMOOTH);
+    // The active frames hold the catch, the way the light one holds the
+    // thrust -- except that here the hold is what the move *is* rather than a
+    // concession to the hitbox.
+    track.contact(contact, caught(), Ease::HOLD);
+    track.key(recovery, caught(), Ease::SMOOTH);
+    track.key(frac(recovery, last, 0.4), strain(), Ease::SMOOTH);
+    track.key(frac(recovery, last, 0.75), slacken(), Ease::SMOOTH);
+    track.key(last, stance(), Ease::SMOOTH);
+
+    Recipe {
+        clip,
+        looseness: Looseness {
+            // Heavier everywhere than the light Lance, which is CRISP. This one
+            // is allowed to trail: a hand reaching for something and then
+            // taking its weight is the one move in the kit where an arm still
+            // travelling after the body has stopped is the correct read.
+            root: Feel::new(1.2, 0.9),
+            spine: Feel::new(1.3, 0.85),
+            chest: Feel::new(1.4, 0.8),
+            head: Feel::new(1.8, 0.65),
+            arms: Feel::new(1.6, 0.7),
+            legs: Feel::new(1.1, 0.95),
+        },
+        notes: "The other half of middle click, and authored to be the light \
+                Lance's opposite at every point. That one rises off the right \
+                shoulder, goes early and dives down its own line; this one \
+                sinks onto the rear leg, drags the left hand down and back past \
+                the hip, and comes through low with the palm open. The contact \
+                frame is the shape of catching something rather than of hitting \
+                it -- arm out level with the hip, wrist cocked so the hand \
+                leads, and the torso leaning **away** from the arm, because \
+                something on the end of it is about to start pulling and a body \
+                already committed forward has nothing to brace with. The \
+                recovery does not gather a guard: the free hand comes across \
+                onto the same line and both arms take the strain, which is the \
+                pose that says the move ended attached. Off the left arm, \
+                because dark lives in the left arm on this class and the arm is \
+                the second reading of which of the two forms is coming."
             .into(),
         keys: track.done(),
     }
@@ -787,12 +1017,12 @@ fn spread_wide() -> Pose {
 /// the continuity test measured when it was written that way.
 fn wind_across() -> Pose {
     stance()
-        .hips(-0.03, -0.10, -0.03)
-        .root(4.0, -8.0, -26.0)
-        .spine(6.0, -8.0, -16.0)
-        .chest(2.0, -6.0, -24.0)
-        .head(0.0, -4.0, 20.0)
-        .shoulder_l(-6.0, 48.0, 0.0)
+        .hips(-0.035, -0.10, -0.035)
+        .root(4.0, -8.0, -34.0)
+        .spine(6.0, -8.0, -22.0)
+        .chest(2.0, -6.0, -32.0)
+        .head(0.0, -4.0, 26.0)
+        .shoulder_l(-16.0, 58.0, 0.0)
         .elbow_l(64.0)
         .wrist_l(-14.0, 0.0, 0.0)
         .shoulder_r(44.0, 14.0, 0.0)
@@ -815,12 +1045,12 @@ fn wind_across() -> Pose {
 /// drawing the move in the wrong place for the whole of it.
 fn unwind() -> Pose {
     stance()
-        .hips(-0.02, -0.11, -0.01)
-        .root(5.0, -6.0, -20.0)
-        .spine(7.0, -6.0, -13.0)
-        .chest(2.0, -5.0, -22.0)
-        .head(0.0, -2.0, 16.0)
-        .shoulder_l(0.0, 50.0, 0.0)
+        .hips(-0.025, -0.11, -0.015)
+        .root(5.0, -6.0, -28.0)
+        .spine(7.0, -6.0, -18.0)
+        .chest(2.0, -5.0, -30.0)
+        .head(0.0, -2.0, 22.0)
+        .shoulder_l(-10.0, 60.0, 0.0)
         .elbow_l(58.0)
         .wrist_l(-12.0, 0.0, 0.0)
         .shoulder_r(42.0, 20.0, 0.0)
@@ -832,16 +1062,23 @@ fn unwind() -> Pose {
         .toe_floor_r()
 }
 
-/// The contact frame: the hands have left the hip and are crossing the front on
-/// the character's left, which is where the volume starts.
+/// The contact frame: the hands are still **behind the left shoulder**, which
+/// is where the volume starts.
+///
+/// Behind, and that is the change the arc bought. Sweep runs most of a
+/// half-turn now -- it is the one move of hers that reaches a little past both
+/// shoulders, because it is the answer to somebody who has already got inside
+/// the punches and that is where they are standing. An animation whose hands
+/// were level with the hip on the frame the hitbox appeared would be drawing
+/// the move a shoulder's width in front of where it hits.
 fn entering() -> Pose {
     stance()
-        .hips(-0.005, -0.105, 0.03)
-        .root(6.0, -2.0, -6.0)
-        .spine(8.0, -2.0, -2.0)
-        .chest(2.0, -1.0, -6.0)
-        .head(0.0, 0.0, 6.0)
-        .shoulder_l(26.0, 56.0, 0.0)
+        .hips(-0.01, -0.105, 0.02)
+        .root(6.0, -2.0, -16.0)
+        .spine(8.0, -2.0, -10.0)
+        .chest(2.0, -1.0, -16.0)
+        .head(0.0, 0.0, 12.0)
+        .shoulder_l(14.0, 66.0, 0.0)
         .elbow_l(36.0)
         .wrist_l(-8.0, 0.0, 0.0)
         .shoulder_r(38.0, 34.0, 0.0)
@@ -853,7 +1090,34 @@ fn entering() -> Pose {
         .toe_floor_r()
 }
 
-/// The middle of the active window: both arms out across the front, the torso
+/// A third of the way through the crossing: the hands are coming off the left
+/// shoulder and the torso has squared but not yet turned past it.
+///
+/// **A key that exists because the arc grew.** Sweep runs most of a half-turn
+/// now, so the hands have half again as far to travel in the same six frames,
+/// and three keys across the window put 0.37 m of hand between two of them --
+/// which `anim/tests/clips.rs` calls a teleport, correctly. Four keys is the
+/// same motion at a speed a body could produce.
+fn passing() -> Pose {
+    stance()
+        .hips(0.002, -0.10, 0.04)
+        .root(6.0, 0.0, -3.0)
+        .spine(8.0, 0.0, 0.0)
+        .chest(2.0, 1.0, 0.0)
+        .head(0.0, 0.0, 2.0)
+        .shoulder_l(32.0, 58.0, 0.0)
+        .elbow_l(28.0)
+        .wrist_l(-7.0, 0.0, 0.0)
+        .shoulder_r(32.0, 48.0, 0.0)
+        .elbow_r(34.0)
+        .wrist_r(-8.0, 0.0, 0.0)
+        .plant_l([L - 0.018, GROUND, 0.195])
+        .plant_r([R + 0.035, GROUND + 0.005, -0.15])
+        .toe_l(-3.0)
+        .toe_r(2.0)
+}
+
+/// Two thirds of the way through: both arms out across the front, the torso
 /// square, the hands level with the chest rather than above it.
 fn across() -> Pose {
     stance()
@@ -879,15 +1143,15 @@ fn across() -> Pose {
 /// something rather than as having stopped on someone.
 fn carried_through() -> Pose {
     stance()
-        .hips(0.025, -0.085, 0.04)
-        .root(5.0, 6.0, 28.0)
-        .spine(7.0, 5.0, 22.0)
-        .chest(2.0, 5.0, 32.0)
-        .head(0.0, 2.0, -22.0)
-        .shoulder_l(66.0, 30.0, 0.0)
+        .hips(0.03, -0.085, 0.035)
+        .root(5.0, 6.0, 36.0)
+        .spine(7.0, 5.0, 28.0)
+        .chest(2.0, 5.0, 40.0)
+        .head(0.0, 2.0, -28.0)
+        .shoulder_l(72.0, 26.0, 0.0)
         .elbow_l(28.0)
         .wrist_l(-8.0, 0.0, 0.0)
-        .shoulder_r(10.0, 78.0, 0.0)
+        .shoulder_r(0.0, 88.0, 0.0)
         .elbow_r(30.0)
         .wrist_r(-8.0, 0.0, 0.0)
         .plant_l([L, GROUND + 0.02, 0.19])
@@ -931,13 +1195,17 @@ fn sweep() -> Recipe {
     track.key(frac(0, windup, 0.5), wind_across(), Ease::HOLD);
     track.key(frac(0, windup, 0.72), wind_across(), GATHER);
     track.key(windup, unwind(), Ease::STRIKE);
-    // The active window is the sweep. Three keys across it rather than one,
+    // The active window is the sweep. Four keys across it rather than one,
     // because the arms and the hit volume have to be crossing the front at the
     // same time and at the same rate -- the volume runs its whole arc over
     // these six frames, and a body that arrived early would be swinging at
-    // nothing while the thing that hurts was still behind it.
+    // nothing while the thing that hurts was still behind it. Four rather than
+    // three since the arc went round past both shoulders: the same window with
+    // half again as far to travel needs the travel spread, or a hand covers a
+    // third of a metre in one frame.
     track.contact(contact, entering(), Ease::LINEAR);
-    track.key(frac(contact, recovery, 0.5), across(), Ease::LINEAR);
+    track.key(frac(contact, recovery, 0.34), passing(), Ease::LINEAR);
+    track.key(frac(contact, recovery, 0.67), across(), Ease::LINEAR);
     track.key(recovery, carried_through(), Ease::SMOOTH);
     track.key(frac(recovery, last, 0.5), rebuild(), Ease::SMOOTH);
     track.key(last, stance(), Ease::SMOOTH);
@@ -971,7 +1239,10 @@ fn sweep() -> Recipe {
                 side to leave by. Wide rather than deep: the hands end further \
                 apart than they started and level with the chest, because what \
                 this move is for is moving somebody who is already inside the \
-                punches."
+                punches. **Round past both shoulders**: the wind takes the \
+                hands behind the left one and the follow-through carries them \
+                behind the right, which is what the arc actually sweeps and \
+                therefore what the body has to be doing while it does."
             .into(),
         keys: track.done(),
     }

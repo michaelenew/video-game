@@ -39,14 +39,14 @@ parry timing. Only the second requires you to be holding it.
 
 ## What is bound today
 
-Three moves and the mechanic. The shared grammar puts the poke on the bare click and its
-committed version on the modifier, so Bash and Slam sit one rung lower than the six-ability
-sketch below implies.
+Three moves and the mechanic. The shared grammar puts the poke on the bare click, so Bash sits
+one rung lower than the six-ability sketch below implies — and Slam sat on the modifier until
+shift stopped modifying clicks on 2026-09-16, which left it with no input at all.
 
 | Input | Move | Bound |
 | --- | --- | --- |
 | `L` | **Bash** — the shield strike | yes |
-| `shift` + `L` | **Slam** — the overhead | yes |
+| ~~`shift` + `L`~~ | **Slam** — the overhead | **no button since 2026-09-16** |
 | `Q` | **Grapple** — the command grab | yes |
 | `R` (hold) | **Guard**, with the parry in its opening frames | yes |
 | `E` | **Throw** / **Recall** / **leap to it**, by shield state | yes |
@@ -83,9 +83,15 @@ A short forward shield strike. The safe poke, and the natural follow-up to a par
 > 17 frames and the lockout is 30, so throwing it twice in a row waits 13. See
 > [../combat-kernel.md](../combat-kernel.md) §"The repeat lockout".
 
-### Slam — `shift` + `L`
+### Slam — and it has no input at the moment
 **Startup** slow · **Recovery** committed · **Range** short area · **Mechanic** requires the
 shield held
+
+> **Stranded, 2026-09-16.** Shift plus a click is not an attack input any more, on any class —
+> see [../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16). Slam is still in the
+> table, still tuned and still printed by the frame table, and there is no button that throws
+> it. Finding it a home is its own job: the right answer is different per class, and guessing
+> three of them at once is how a grammar gets worse.
 
 Drive the shield into the ground. Shakes the ground and staggers everything close.
 

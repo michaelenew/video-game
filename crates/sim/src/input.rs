@@ -1,8 +1,11 @@
 //! Player input for one tick.
 //!
 //! Mirrors `docs/design/controls.md`. Click means attack, WASD means move,
-//! space means jump, and shift means an ability when a click comes with it or a
-//! dodge when only a direction does.
+//! space means jump, and **shift means dodge and nothing else**. It used to
+//! also be the attack modifier -- shift plus a click threw the committed
+//! version of that attack -- and the two meanings needed the click to tell them
+//! apart, which is a modifier whose meaning depends on what else your hand is
+//! doing. One key, one verb.
 //!
 //! Buttons are packed into a `u16` because inputs are what cross the wire every
 //! frame, and rollback sends several at once.
@@ -160,18 +163,6 @@ impl Input {
 
     pub const fn any_click(self) -> bool {
         self.bits & (Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL) != 0
-    }
-
-    /// A click is what disambiguates shift: with one it is the committed
-    /// version of that attack, with only a direction it is a dodge. The click
-    /// is checked first, so a heavy thrown while walking does not come out as a
-    /// dodge. See `controls.md`.
-    ///
-    /// This used to be "shift beats WASD when both are held", which guaranteed
-    /// a move-while-casting option existed. Dodge moving onto shift retired
-    /// that, and nothing has replaced what it guaranteed.
-    pub const fn is_ability(self) -> bool {
-        self.has(Input::SHIFT) && self.any_click()
     }
 
     /// Movement axis in {-1, 0, 1} per component, in *stick* space: `x` is

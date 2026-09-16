@@ -335,6 +335,39 @@ fn unwound(keys: &[Key], skeleton: &view::skeleton::Skeleton) -> Vec<Key> {
     out
 }
 
+/// An authored pose, as the arena actually draws it.
+///
+/// **A mirror, and it is owed.** A pose is written the way a person describes a
+/// body: `+Z` is the way it faces, `+Y` is up, and its left arm is at `-X` (see
+/// `view::pose`). That is a *left-handed* frame. The arena is right-handed, and
+/// `view::body_turn` embeds one in the other with a rotation -- which cannot
+/// change handedness, so `-X` comes out on the body's **right**. Every pose in
+/// the game was therefore drawn as its own mirror image: `shoulder_l` moved the
+/// arm on the right, `plant_l` put a foot on the right.
+///
+/// Nothing in the suite could see it, because `aim::across` had been written to
+/// follow the skeleton rather than the world -- so the simulation and the
+/// renderer agreed with each other and both were the mirror of the body, and
+/// every test compared the two of them to each other. It surfaced as a feel
+/// complaint on the one class where the arms *are* the mechanic: the Dual
+/// mage's left click came out of her right hand.
+///
+/// The reflection is applied here rather than by renumbering the six hundred
+/// lateral coordinates the recipes are written in, because the authored numbers
+/// are not wrong -- they say exactly what their authors meant, in the frame they
+/// were told to write in. What was missing is the conversion at the one place
+/// the two frames meet. `Pose::mirrored` is that conversion, and it was already
+/// here: it swaps the sided joints, negates the spread and twist of the ones on
+/// the centre line, and negates the hips' own lateral offset. A pose put through
+/// it is the same body seen the right way round.
+///
+/// Every consumer of an authored pose goes through this -- the bake below, and
+/// the hub's live preview -- so a clip being edited looks like the clip that
+/// ships.
+pub fn as_drawn(pose: Pose) -> Pose {
+    pose.mirrored()
+}
+
 pub fn bake(recipe: &Recipe) -> Baked {
     assert!(!recipe.keys.is_empty(), "{}: no keys", recipe.clip.name());
 
@@ -342,9 +375,20 @@ pub fn bake(recipe: &Recipe) -> Baked {
     let looping = recipe.clip.looping();
     let mut springs = channel_springs(&recipe.looseness);
 
+    // Into the arena's frame before anything else, so the springs settle on the
+    // body that will actually be drawn. See [`as_drawn`].
+    let authored: Vec<Key> = recipe
+        .keys
+        .iter()
+        .map(|k| Key {
+            pose: as_drawn(k.pose),
+            ..*k
+        })
+        .collect();
+
     // Start settled on the first key, so a one-shot does not open with a lurch
     // from an arbitrary rest pose.
-    let keys = unwound(&recipe.keys, reference());
+    let keys = unwound(&authored, reference());
 
     let first = sample(&keys, 0.0, length, looping);
     for (i, s) in springs.iter_mut().enumerate() {

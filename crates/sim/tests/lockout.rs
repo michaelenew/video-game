@@ -24,7 +24,6 @@ use sim::{Class, Fx, Input, V3, World};
 const L: u16 = Input::LEFT;
 const R: u16 = Input::RIGHT;
 const Q: u16 = Input::SPECIAL;
-const SHIFT: u16 = Input::SHIFT;
 
 fn run(w: &mut World, frames: u32, bits: u16) {
     for _ in 0..frames {
@@ -180,12 +179,15 @@ fn the_rest_of_the_kit_is_untouched_while_one_move_is_locked() {
         "Bash should still be locked the frame it finishes"
     );
 
-    // The committed version, on the same click with shift, comes out anyway.
-    run(&mut w, 1, L | SHIFT);
+    // Another move entirely comes out anyway. `Q` rather than shift + left
+    // click, which is what this used to press: shift is only a dodge now, so
+    // the committed slot has no input on this class. The point is unchanged --
+    // one move being locked has to leave the rest of the kit alone.
+    run(&mut w, 1, Q);
     assert_eq!(
         started(&w),
-        Some(sim::state::SLOT_COMMITTED),
-        "the heavy was refused while the poke was locked, which makes this a cooldown"
+        Some(sim::state::SLOT_SPECIAL),
+        "the special was refused while the poke was locked, which makes this a cooldown"
     );
 }
 

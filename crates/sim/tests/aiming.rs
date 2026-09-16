@@ -1189,3 +1189,48 @@ fn a_stone_squarely_between_two_bodies_is_a_total_obstruction() {
         "a stone four metres off the line blocked it anyway"
     );
 }
+
+#[test]
+fn the_left_hand_is_on_the_body_s_left() {
+    // **The test that was missing, and the reason a mirrored body survived.**
+    //
+    // Everything else about sides in this suite is relative -- the two autos
+    // come out of opposite arms, the two wings are mirror images -- and every
+    // check that crossed into the renderer compared the simulation to the
+    // skeleton. Until 2026-09-16 the two agreed with each other and both were
+    // the mirror of the body, because `aim::across` had been deliberately
+    // written to follow the skeleton rather than the world. So the Dual mage's
+    // left click came out of her right hand and nothing could see it.
+    //
+    // A body's left is `up` crossed with its facing. That is the whole of it,
+    // and it is not relative to anything.
+    use sim::aim::Hand;
+    use sim::math::V3;
+    for eighth in 0..8 {
+        let turn = (eighth << 13) as u16;
+        let facing = V3::from_turns(sim::Fx::from_raw(turn as i32));
+        let left = V3::new(facing.z, sim::Fx::ZERO, facing.x.neg());
+        for (hand, want) in [
+            (Hand::Left, left),
+            (Hand::Right, left.scale(sim::Fx::ONE.neg())),
+        ] {
+            let across = sim::aim::across(facing, hand);
+            let along = across.dot(want).to_f32_for_render();
+            assert!(
+                along > 0.9,
+                "facing {:?}, the {} hand reaches {along:+.2} along the body's own {} -- \
+                 the simulation is swinging from the wrong side",
+                (facing.x.to_f32_for_render(), facing.z.to_f32_for_render()),
+                hand.name(),
+                hand.name()
+            );
+        }
+    }
+    assert_eq!(
+        sim::aim::across(
+            V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO),
+            Hand::Centre
+        ),
+        V3::ZERO
+    );
+}

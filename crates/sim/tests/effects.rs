@@ -605,14 +605,20 @@ fn casting_costs_the_blood_mage_health() {
     // on one, because "all of them" is the design and a free ability would be
     // the one everybody pressed.
     use sim::state::{SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
+    // Rend is in the list and has no button: shift stopped being an attack
+    // modifier, so the committed slot is stranded on the three classes that
+    // still keep a move there. The table is still the design -- every one of
+    // her abilities is paid for -- so the cost is asserted on all four and only
+    // the three with an input are thrown. See `docs/design/controls.md`.
     for (slot, button) in [
-        (SLOT_POKE, Input::LEFT),
-        (SLOT_COMMITTED, Input::SHIFT | Input::LEFT),
-        (SLOT_SPECIAL, Q),
-        (SLOT_MECHANIC, E),
+        (SLOT_POKE, Some(Input::LEFT)),
+        (SLOT_COMMITTED, None),
+        (SLOT_SPECIAL, Some(Q)),
+        (SLOT_MECHANIC, Some(E)),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert!(m.cost > 0, "{} is free to cast", m.name);
+        let Some(button) = button else { continue };
 
         // Cast it at nothing, so the only thing that can move the bar is the
         // price of pressing the button.

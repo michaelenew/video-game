@@ -155,7 +155,13 @@ impl Hub {
             return None;
         }
         if self.posing {
-            return self.recipe().keys.get(self.key).map(|k| k.pose);
+            // Through the same reflection the bake applies, so the body being
+            // posed is the body that ships -- see `anim::bake::as_drawn`.
+            return self
+                .recipe()
+                .keys
+                .get(self.key)
+                .map(|k| anim::bake::as_drawn(k.pose));
         }
         if self.baked.is_empty() {
             return None;
@@ -1108,7 +1114,10 @@ mod tests {
         hub.rebake();
         hub.posing = true;
         hub.key = 1;
+        // Through the same reflection the bake applies, so what is posed is
+        // what ships -- an authored pose is written in a left-handed frame and
+        // `anim::bake::as_drawn` puts it into the arena's. See that function.
         let shown = hub.preview_for(hub.on).expect("previewing");
-        assert_eq!(shown, hub.recipe().keys[1].pose);
+        assert_eq!(shown, anim::bake::as_drawn(hub.recipe().keys[1].pose));
     }
 }

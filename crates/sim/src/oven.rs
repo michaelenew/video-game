@@ -407,6 +407,56 @@ scalars! {
     // two decisions: how much harder they go, and how fast you follow.
     HammerLeapLaunch, "Champion", "Hammer finisher, knock-up going with them (x)", Fixed, fx(1,1), fx(3,1);
     HammerLeap,       "Champion", "Hammer finisher, your own leap",         Fixed, 0, fx(25,1);
+    // The Dual mage's depth curve, and everything downstream of it. Appended
+    // for the reason every knob above is: `tuned::SCALARS` is read by this
+    // enum's own discriminant. The palette groups by family, so they sit with
+    // the wing knobs.
+    //
+    // **Two numbers describe the whole class.** Power is a straight line from
+    // the centre of the bar to either end, and these are its two ends: what a
+    // cast is worth standing at zero, and what the same cast is worth standing
+    // at the edge. Everything she throws is multiplied by a point on that line
+    // -- see `state::depth`.
+    DepthFloor,       "Dual mage", "Depth, power at the centre (x)",        Fixed, fx(1,10), fx(1,1);
+    DepthCeiling,     "Dual mage", "Depth, power at the edge (x)",          Fixed, fx(1,1),  fx(4,1);
+    // How much of that same curve the *size* of a volume takes. At nought a
+    // deep cast hits harder and is no bigger; at a hundred it grows exactly as
+    // fast as it hurts. The two autos are exempt whatever this says -- their
+    // reach is pinned to the punch that throws them, see `moves::dual`.
+    DepthSize,        "Dual mage", "Depth, how much of it the size takes (%)", Percent, 0, 100;
+    // The third meter tier, and the one the design has been asking for since
+    // the bar was built: an auto moves you a little, a cast moves you more, and
+    // the finisher very nearly throws you over the edge.
+    MeterFinisherPush,"Dual mage", "Meter, the finisher moves",             Int,   0,        100;
+    // What the wing's tip does to the *shove* rather than to the damage. The
+    // tip is the far edge of the blade, so it is where the light auto's real
+    // knockback lives -- and, on the dark arm, where the pull is worth timing.
+    WingTipShove,     "Dual mage", "Wing, tip knockback (x)",               Fixed, fx(1,1),  fx(4,1);
+    // Sweep's dark form. The light form spends the move's own knockback and
+    // launch; the dark one spends these instead, which is what makes one
+    // button two answers to the same problem.
+    SweepSlow,        "Dual mage", "Sweep, dark: speed while slowed (x)",   Fixed, 0,        fx(1,1);
+    SweepHeal,        "Dual mage", "Sweep, dark: health per target caught", Int,   0,        200;
+    // The light Lance's burst: what detonates where the line ran out. Aimed
+    // *past* somebody rather than at them, which is the whole reading of the
+    // move.
+    LanceBurstRadius, "Dual mage", "Light lance, burst radius",             Fixed, fx(1,2),  fx(8,1);
+    LanceBurstDamage, "Dual mage", "Light lance, burst damage",             Int,   0,        400;
+    LanceBurstLife,   "Dual mage", "Light lance, burst lingers",            Frames, 1,       60;
+    // The dark Lance's tether: how long it can hold, what it takes per tick,
+    // and how far she may stray before the line parts. The leash is the whole
+    // cost of the ability -- it drains for as long as she stays near what she
+    // caught, which on a fragile melee mage is not a free decision.
+    TetherLife,       "Dual mage", "Dark lance, tether holds for",          Frames, 6,       300;
+    TetherDrain,      "Dual mage", "Dark lance, drain per tick",            Int,    0,       120;
+    TetherLeash,      "Dual mage", "Dark lance, leash before it parts",     Fixed,  fx(2,1), fx(24,1);
+    // Judgement's field: the wide, low-damage ground it leaves after the
+    // strike. Its radius and its life are both on the depth curve, so at the
+    // centre it is a puddle that is gone before anyone walks through it.
+    JudgementFieldRadius, "Dual mage", "Judgement, field radius",           Fixed,  fx(1,1), fx(12,1);
+    JudgementFieldDamage, "Dual mage", "Judgement, field damage per tick",  Int,    0,       120;
+    JudgementFieldLife,   "Dual mage", "Judgement, field lasts",            Frames, 1,       300;
+    JudgementFieldSpeed,  "Dual mage", "Judgement, her speed inside it (x)", Fixed, fx(1,1), fx(3,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -743,7 +793,15 @@ impl MoveField {
             // that shoves harder than a thrown shield is a thing somebody
             // should be able to reach for; the Gale, whose whole point is
             // being the heaviest push in its class, is the first that does.
-            MoveField::Knockback => (0, fx(30, 1)),
+            //
+            // **Signed, and the negative half is a pull.** A move with a
+            // knockback below zero drags whoever it caught *toward* the
+            // attacker, along the line between the two bodies rather than down
+            // the attacker's facing -- see `state::resolve_hit`. The Dual
+            // mage's dark auto is the first and the reason: a fragile melee
+            // mage whose left hand pulls and whose right hand pushes has a
+            // spacing decision on the two buttons she presses constantly.
+            MoveField::Knockback => (fx(-30, 1), fx(30, 1)),
             // A reach may be as far as a shot fired corner to corner has to
             // travel, and no further: past that, more range is a number that
             // cannot change anything. That is the **diagonal** rather than the

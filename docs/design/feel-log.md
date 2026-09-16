@@ -115,6 +115,38 @@ as they get tested.
   everywhere, so the Reaver can send the shadow and recall it on consecutive
   frames. That may be fine — the send costs 18 frames of its own — or it may
   make the send-recall pair a single fast button rather than two decisions.
+- **Where do the three stranded committed moves go?** ⚠️ **Newly open,
+  2026-09-16.** Shift stopped modifying clicks, so the Bulwark's Slam, the
+  Elementalist's Fissure and the Blood mage's Rend have no input at all. Each
+  wants a different answer — the Bulwark has a free right click only while the
+  shield is thrown, the Elementalist's is a ground ability that might belong on
+  a crouch, and the Blood mage has `M` untouched — and guessing all three at
+  once is how a grammar gets worse. Watching which of them is *missed* is the
+  cheapest way to find out whether all three should come back.
+
+### The Dual mage's depth curve
+
+⚠️ **All newly open, 2026-09-16.** Depth scales everything she throws now; none
+of these numbers has been played.
+
+- **Is four-to-one the right spread?** Half at the centre, double at the edge.
+  Too wide and the middle of the bar reads as broken rather than weak; too
+  narrow and there is no reason to leave it. Both ends are one knob each
+  (`Depth, power at the centre` / `at the edge`).
+- **Should size ride the whole curve, or less of it?** `Depth, how much of it
+  the size takes` is 100%, so a deep cast is exactly as much bigger as it is
+  harder. More damage is worse to be hit by and more radius is harder to *not*
+  be hit by, and those may not deserve the same slider.
+- **Is a Judgement at full depth too much of a health bar?** The strike alone is
+  about 43% of one, and the field can take it past 80% against somebody who
+  stands in all of it.
+- **Is "the form is the arm you last punched with" findable?** Nothing teaches
+  it but the bar's colour. The two Lance clips are authored so the *opponent*
+  can read which is coming; whether the player can read their own is a
+  different question with a different answer.
+- **Does the pull want to be weaker than the shove?** They are within 10% of
+  each other. Being dragged is worth more than being shoved at the same speed,
+  because you are usually walking into the shove and away from the pull.
 
 ### Defence
 - **Is the 4-frame parry window findable?** This is the single most important
@@ -4102,3 +4134,227 @@ they disagree about up or about sideways. It found this the first time it ran.
 5. **Does the spin's knockback fight the chain?** It is the one link with real knockback
    and it is a finisher, so nothing follows it — but it also ends with you standing where
    the string started, which no other finisher does.
+
+### 2026-09-16 — shift is one verb, and Lance goes to middle click
+**Changed** Shift plus a click stopped being an attack input, on every class. The Dual mage's
+Lance moved to middle click. The Bulwark's Slam, the Elementalist's Fissure and the Blood
+mage's Rend now have no input at all; the Shadow Reaver's Executioner was already on `E` and
+lost nothing.
+
+**Why** Shift meant two things and the way to tell them apart was whether a click happened to
+be held, so what the key did depended on what the rest of your hand was doing. Every other key
+in the game means one thing. It also removed the *Move + heavy attack* collision by removing
+one side of it.
+
+The Dual mage is what made it urgent rather than tidy. Her committed cast wanted a two-form
+split — light and dark, decided by the force she carries — and it could not have one on shift
+plus **left** click, because that input has a side: it pushed her dark whatever she was
+holding, and the light form had nowhere to live. Middle click has no side, so by the class's
+own rule it pushes her further along her current path, and the form is then free to come from
+the arm she last punched with. Two rules stopped fighting.
+
+**Verdict** open. Watch three things. Whether `M` is reliable enough for a cast thrown every
+exchange rather than a once-a-match finisher — `U` stands in, and the answer may be that the
+stand-in has to be the binding. Whether the three stranded moves are missed at all, which is
+useful information either way: a committed move nobody notices the absence of may not have
+been earning its slot. And whether "a click still wins when both are held" is the right
+precedence now that the click is not what the shift is *for*.
+
+### 2026-09-16 — the Dual mage's depth curve, built at last
+**Changed** `state::depth`: one straight line from `depth_floor` (0.5) at the centre of the
+bar to `depth_ceiling` (2.0) at either end. Everything she throws is multiplied by a point on
+it — damage, knockback and pull, launch, leech, what a field drains, how long it lasts, and how
+big what arrives is.
+
+**Why** It is the class's founding idea and none of it existed: a cast at the edge was the same
+cast as one at the middle, so "ride as close to the edge as you can" was a number going up on
+the HUD and nothing else. Built as one function rather than per ability, because the whole
+point is that it is true of everything at once.
+
+**Two exclusions, and they are the interesting part.** Depth does not touch **how far** a move
+is thrown or **how fast** it comes out. Spacing and frame data are what two players read each
+other with, and a class whose range or startup slid continuously along a bar only one of them
+can see is unlearnable from both sides. The first version did scale reach, and it was wrong in
+a way that showed up immediately in the harness: a Judgement thrown level from depth landed
+twelve metres away instead of six, and the light Lance's burst — the thing you aim *past*
+somebody — moved from seven metres to ten and a half depending on a number behind her. So the
+bar changes how much it hurts and how big the thing that arrives is; where you can put it is
+fixed.
+
+**A cast is worth where you were standing when you pressed the button** (`Player::thrown_at`),
+not where its own push has since taken you. Throwing anything moves the bar on the press, and
+the finisher moves it by 26 — so read live, a Judgement from dead centre came out at 0.89
+rather than 0.5, and the one move that is supposed to be embarrassing at the centre was the
+least embarrassing thing there. It would also have meant the bar on the HUD never matched what
+the player got.
+
+**The two autos are exempt from the size half**, and only that half. Their reach is pinned to
+the punch that throws them — `view/tests/kinematics.rs` checks the blade starts where the fist
+stops — and they are thrown every second, so a volume drifting off the animation would make the
+steering wheel unreadable.
+
+**Verdict** open. Half at the centre and double at the edge is a four-to-one spread, chosen so
+the difference is unmistakable rather than because anything says four. The risk in one
+direction is that the middle of the bar reads as broken rather than weak; in the other, that
+nothing below the last quarter is worth casting from. Both knobs are in the Oven under
+`Dual mage`.
+
+### 2026-09-16 — one auto pulls and the other pushes
+**Changed** The dark auto's knockback went negative (a pull, measured along the line between
+the two bodies rather than down her facing) and it leeches 12%; the light auto shoves. The
+tip of the wing now multiplies the *shove* as well as the damage (`wing_tip_shove`).
+`Move::knockback` is signed, which it was not before.
+
+**Why** The two autos are the steering wheel and they were the same punch twice. Giving them
+opposite answers to the question of where the two of you end up standing makes which arm you
+punch with a **spacing** decision at the same time as a meter one — which is the whole argument
+for putting the mechanic on the buttons a player presses constantly. A fragile melee mage stays
+attached with the dark hand and buys herself room with the light one, and cannot ask for either
+without committing to a side of the bar.
+
+**Numbers.** At the centre it moves somebody about 0.2 m, at the deep threshold 0.6 m, at the
+edge 0.7 m — and the tip doubles all of those. Small on purpose: this is a punch, not a
+shoulder charge, and the thing it has to do is change the range you are fighting at by about a
+step.
+
+**Verdict** open, and the number to watch is the pull. Being dragged is worth more than being
+shoved at the same speed, because you are usually walking into the shove and away from the
+pull. The two are within 10% of each other today, which may be a mirror that should not be one.
+
+### 2026-09-16 — Lance is two moves, and the wind-ups are the whole point
+**Changed** Split Lance into **Light lance** (9/4/18, the line pokes and a burst detonates
+where it ran out) and **Dark lance** (16/4/20, no volume of its own; the line catches the first
+thing it crosses and drains it until the leash parts). Two clips, authored against each other.
+
+**Why** The kit has specified both forms since it was written and nothing on the class had a
+split. What made it buildable was middle click — see the entry above.
+
+**The wind-ups are the ability.** A person standing opposite gets the startup and nothing else
+to decide between getting out from under a burst and closing to break a tether, and those are
+opposite answers. So the light one rises off the right shoulder, goes early and dives down its
+own line; the dark one sinks onto the rear leg, drags the left hand down past the hip and comes
+through low with the palm open, and its contact pose leans *away* from the arm because
+something on the end of it is about to start pulling. Same input, opposite silhouettes, and
+opposite arms — dark lives in the left arm on this class.
+
+**The leash is the one number depth does not touch.** Depth buys a harder drain and a longer
+hold; how far she may stray is a rule, and it is the whole ability. A leash that grew with the
+bar would hand the deep version the one thing it is meant to pay for, and at the edge it would
+reach most of the arena.
+
+**Verdict** open. The tether does not pull, on the grounds that the dark *auto* is what pulls
+and two pulls would make one of them redundant — but a leash that never tugs may read as a rope
+rather than a tether. And it holds fighters only: it catches a Ridgeback with its first pass
+and then parts, because nothing holds a ten-metre animal on a leash, which makes the dark form
+strictly the worse of the two in a hunt.
+
+### 2026-09-16 — Sweep goes round past both shoulders
+**Changed** The arc from 0.30 turns to 0.58, the active window from 6 frames to 9 and the
+recovery from 16 to 14. Light throws them off their feet (the launch is the light form's
+alone); dark slows them and heals her per target caught. The clip winds the hands behind the
+left shoulder and carries them through behind the right, with a fourth key across the active
+window.
+
+**Why** It is the answer to somebody who has already got inside the punches, and the punches
+are long and thin and thrown out in front — so the person it exists for is standing beside her
+or past her shoulder, and a cut that only covered her front would miss exactly them.
+
+**The frames moved because the geometry did**, and the animation is what found it. A hand at
+arm's length sweeping 209° in six frames travels a third of a metre a frame, which
+`anim/tests/clips.rs` calls a teleport, correctly. A wider sweep takes longer: nine active
+frames is the same motion at a speed a body could produce, and it costs a frame on block, which
+suits a panic button.
+
+**Verdict** open. Per-target healing rather than a share of the damage is what makes the answer
+to being swarmed the same move as the answer to being cornered; in a duel it is one target and
+may read as a flat refund.
+
+### 2026-09-16 — Judgement earns its status through power
+**Changed** It leaves a **field** now: a wide, low-damage disc that burns anybody in it and
+makes *her* fast while she is in it. Radius, damage and how long the field lasts are all on the
+depth curve. Its meter push got a tier of its own — 26, against 5 for an auto and 12 for a
+cast. Startup 22, recovery 28, repeat lockout 150%.
+
+**Why** The depth gate came off on 2026-09-13 and took the finisher's status with it. The
+class's own principle says the replacement is *power*, and this is that made literal: at the
+centre a small radius, a small number and a field that is over before anybody walks through it;
+at the edge the biggest thing in the game. The 26 is the other half — a Judgement thrown from
+the deep threshold lands her well past it and one cast from the edge, which is what
+"a deep finisher nearly throws you over the edge" was always describing.
+
+**Verdict** open, and the number to watch is the total. At full depth the strike alone is
+about 43% of a health bar and the field can take it past 80% if somebody stands in all of it.
+It is reactable at 22 frames, −14 on block, and thrown from a position that is already burning
+her — but "the biggest thing in the game" and "too much of a health bar" are one tuning pass
+apart.
+
+### 2026-09-16 — a line skillshot was a bubble on the caster's chest
+**Changed** `state::hitbox` reads a skillshot's volume as the whole line from the hand to the
+point the crosshair picked, unless the move is one of the two that resolve themselves the
+instant they fire and stop at whatever they met.
+
+**Why** Not a feel decision — a bug, found by playing the class rather than by a test. The
+capsule was drawn to `beam.at(p.beam_reach)`, and `beam_reach` is set only by the
+Elementalist's two instant beams and is zero for everything else. So the Lance, a four-metre
+line skillshot, had a hitbox that was a ball at her sternum: it could only hit somebody
+standing on top of her, at which range the autos are better in every way.
+
+Worth recording as a feel entry rather than a fix, because of how it hid. Nothing failed. The
+move came out, the animation played, the frame table printed a sensible row, and the only
+symptom was that the ability felt useless — which is indistinguishable from a tuning problem
+until you look at where the volume actually is. The lesson is the debug overlay's own rule
+pointed the other way: it draws what the hit test uses, so it would have shown this
+immediately, and nobody had looked.
+
+**Verdict** kept, obviously. The same change moved a skillshot's origin to the hand that throws
+it, which is what lets the two Lance forms be told apart by the arm as well as the wind-up.
+
+### 2026-09-16 — the whole roster was drawn mirrored
+**Changed** Authored poses are reflected into the arena's frame on the way to
+being baked (`anim::bake::as_drawn`), and `aim::Hand::outward` flips with them so
+the simulation swings from the same side. A positive flat swing arc now sweeps
+toward the body's left, and the strafe clips travel to the side they are named
+after.
+
+**Why** Not a feel decision — a bug, reported as one. Left click came out of the
+Dual mage's right hand.
+
+The cause is one line of arithmetic that was never checked. A pose is written the
+way a person describes a body: `+Z` forward, `+Y` up, left arm at `-X`. That is a
+**left-handed** frame. The arena is right-handed, and `view::body_turn` embeds one
+in the other with a rotation — which cannot change handedness, so `-X` came out on
+the body's *right*. Every clip in the game was drawn as its own mirror image:
+`shoulder_l` moved the arm on the right, `plant_l` put a foot on the right,
+`walk_left` strafed to the right while the body moved left.
+
+**How it survived.** `aim::across` had been deliberately written to follow the
+skeleton rather than the world, with a good argument attached: what a hitbox and
+an animation have to agree about is which arm the player can see swinging. The
+argument is right and it was holding two wrongs in place. The simulation and the
+renderer agreed with each other and both were the mirror of the body, and *every*
+handedness test in the suite compared the two of them to each other. Nobody had
+written the one that checks either against the world's own idea of which side of a
+body is its left. Both exist now — `view/tests/kinematics.rs` and
+`sim/tests/aiming.rs` — and they are the point of the entry.
+
+It took a class where the arms *are* the mechanic to surface it. On everything
+else a mirrored body is just a southpaw and nobody looks twice.
+
+**The reflection is applied at the authoring boundary** rather than by renumbering
+the six hundred lateral coordinates the recipes are written in, because those
+numbers are not wrong: they say what their authors meant, in the frame they were
+told to write in. What was missing was the conversion where the two frames meet.
+`Pose::mirrored` was already there and already tested.
+
+**Verified as an exact mirror**, which is the only way to change every animation in
+the game without being able to look at them: every joint of every frame of all
+eighty clips was solved before and after, and each one is its own reflection to
+within a rounding error — 40,496 samples, zero deviation. Nothing is distorted;
+each clip is the mirror image it should always have been.
+
+**Verdict** kept. Two things fell out that are worth watching. Every character is
+now handed the other way round — a stance mirrored is just the other stance, and
+each clip finally matches the prose in its own recipe, but anyone who had learnt
+the old silhouettes will notice. And the Bulwark's shield now hangs off the body's
+left hand rather than the slot named `HandL`; it was on the right before and
+nobody had said so.

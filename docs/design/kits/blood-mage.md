@@ -90,7 +90,7 @@ Four abilities, and they are the four buttons the control scheme gives a class:
 | Key | Ability | What it does |
 | --- | --- | --- |
 | `LMB` | **Bloodletter** | The auto. A blade out and back, cutting on both passes |
-| `Shift+LMB` | **Rend** | The committed melee. A raking claw at chest range |
+| ~~`Shift+LMB`~~ | **Rend** | The committed melee. A raking claw at chest range. **No input since 2026-09-16** — see below |
 | `Q` | **Grasp** | Hold to choose a depth, then four arms converge there. All four catch |
 | `E` | **Black spike** | A spike in a draining, slowing field, placed at long range |
 
@@ -99,8 +99,11 @@ Four abilities, and they are the four buttons the control scheme gives a class:
 `E` is the class mechanic, and on three of the six classes that is an instant change of state
 — throw the shield, Rush, raise a structure. The Blood mage's mechanic is *health*, which is
 not a thing you press a button to change, so her `E` did nothing at all. Putting the spike
-there costs nothing and buys the class a fourth ability; shift + click, which means "the
-committed version of your attack" on every other class, goes back to meaning that here.
+there costs nothing and buys the class a fourth ability; shift + click, which meant "the
+committed version of your attack" on every other class, went back to meaning that here. It
+means nothing anywhere now — see
+[../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16) — which is why Rend is
+stranded and Black spike is not.
 
 This was the first ability in the game on the mechanic slot, so the move table grew a fourth
 column — see `moves::on_e`. It is no longer the only one: the Dual mage's `E` carries Sweep
@@ -124,7 +127,14 @@ simplest possible statement of the class: give something away, get it back if th
 The move has no hitbox of its own. The blade in the air is the entire threat, and the caster
 standing where they threw it from is harmless.
 
-### Rend — committed, `Shift+LMB`
+### Rend — committed, and currently unbound
+
+> **Stranded, 2026-09-16.** Shift plus a click is not an attack input any more, on any class —
+> see [../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16). This move is still in
+> the table, still tuned and still printed by the frame table, and there is no button that
+> throws it. Finding it a home is its own job: the right answer is different per class, and
+> guessing three of them at once is how a grammar gets worse.
+
 **Startup** medium · **Recovery** medium · **Range** melee · **Mechanic** medium cost; large
 return on hit
 

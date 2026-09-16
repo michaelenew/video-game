@@ -249,6 +249,48 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     gizmos.line(hub, head, FIELD);
                 }
             }
+            // The Dual mage's three. Both of hers that are a volume are
+            // spheres or discs, drawn at `field_radius`, which already carries
+            // how deep she was standing when she threw it -- see
+            // `Effect::power`. That is the whole reason that number lives on
+            // the effect rather than being read off her live: the hit test and
+            // this drawing have to be the same size, and this one cannot see
+            // the caster.
+            EffectKind::LanceBurst => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(at),
+                    effect.field_radius().to_f32_for_render(),
+                    FIELD,
+                );
+            }
+            EffectKind::JudgementField => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    sim::tuning::body_height().to_f32_for_render(),
+                    FIELD,
+                );
+            }
+            // The tether: the line it is, from her hand to the far end of the
+            // throw or to whatever it caught. A beam while it is looking for
+            // something, because that is the volume the catch is tested with; a
+            // bare line once it has hold, because from then on nothing is being
+            // hit by it and the only thing worth drawing is the leash.
+            EffectKind::Tether => {
+                let home = v3(effect.home);
+                if effect.caught().is_some() {
+                    gizmos.line(at, home, FIELD);
+                } else {
+                    beam(
+                        &mut gizmos,
+                        at,
+                        home,
+                        effect.field_radius().to_f32_for_render(),
+                        FIELD,
+                    );
+                }
+            }
         }
     }
 }

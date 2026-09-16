@@ -123,7 +123,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Shift + direction",
-                "Dodge. Airborne, an airdodge — once per jump.",
+                "Dodge, and shift's only job. Airborne, an airdodge — once per jump. It used to also be the attack modifier, and a modifier whose meaning depends on what else your hand is doing is one you cannot trust.",
             ),
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
@@ -131,8 +131,8 @@ pub const SECTIONS: &[Section] = &[
                 "Poke. The fast one. In the air it hangs you and shoves you the way you are holding. On the Champion it is the sword, and held down it walks that weapon's whole three-hit string.",
             ),
             e(
-                "Shift + J",
-                "The committed attack. Slower, hurts, and slows you to a crawl -- you keep the stick, you lose the jump and the dodge until it is over.",
+                "Q",
+                "The committed attack, on most classes: the class special, slower and heavier, and it slows you to a crawl -- you keep the stick, you lose the jump and the dodge until it is over.",
             ),
             e(
                 "K or right click",
@@ -140,7 +140,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "U or middle click",
-                "The third attack button. Only the Champion has one: it is the hammer.",
+                "The third attack button. Two classes use it: the Champion's is the hammer, and the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying.",
             ),
             e(
                 "Q",
@@ -206,27 +206,31 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. Moves you five darker, and makes you dark.",
+                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. It **drags** whoever it catches a short way toward you and gives you a trickle of health back, which is how a fragile melee mage stays attached to somebody. Moves you five darker, and makes you dark.",
             ),
             e(
                 "Right click",
-                "Light auto. The same punch and wing mirrored onto the right arm. Moves you five lighter, and makes you light. There is no guard on this class.",
+                "Light auto. The same punch and wing mirrored onto the right arm, and it **shoves** instead of pulling. Moves you five lighter, and makes you light. There is no guard on this class.",
             ),
             e(
-                "Shift + left click",
-                "Lance. A line at whatever the crosshair is on. Committed, and it moves you darker whether or not it connects.",
+                "Middle click",
+                "Lance, and which of the two you get is whichever force you are carrying. Light: the line flies out and bursts at its far end, so you aim it past somebody rather than at them. Dark: it catches the first thing it hits and drains it until one of you walks out of the leash. Middle click has no side, so it pushes you further along whichever way you were already going -- which is what lets the form come from the arm you last punched with. The wind-ups look nothing alike on purpose.",
             ),
             e(
                 "E",
-                "Sweep. Both arms across the whole front. No side of its own, so it pushes you further along whichever way you were already going.",
+                "Sweep. Both arms round past both shoulders -- the one thing you throw that reaches a little behind you, which is what makes it the panic button. Light throws them back and off their feet; dark slows them and heals you per target caught. No side of its own, so it pushes you further along whichever way you were already going.",
             ),
             e(
                 "Q",
-                "Judgement. The finisher: a delayed strike where the crosshair is.",
+                "Judgement. The finisher: a delayed strike where the crosshair is, and the field it leaves burns them and makes you fast while you stand in it. It throws the bar far harder than anything else you have, so casting it from depth is a question about whether you survive your own cast.",
+            ),
+            e(
+                "Depth is power",
+                "Everything you throw is worth what the bar says, all the way along it: at the centre it is thin and disappointing, at the edge it is the most you can hold. Damage, the pull, the shove, how big it is and how long the ground it leaves burns -- all of it, continuously, with no thresholds. What never changes is the frame data, so a move is the same speed wherever you are standing.",
             ),
             e(
                 "The tip",
-                "The last frame of either auto is the wing's tip, and it hits far harder. It is the only part that reaches straight out in front of you, so landing it is a question of standing at the edge of your range rather than on top of them.",
+                "The last frame of either auto is the wing's tip, and it hits far harder -- and shoves or pulls far harder. It is the only part that reaches straight out in front of you, so landing it is a question of standing at the edge of your range rather than on top of them.",
             ),
             e(
                 "Which force you are",
@@ -261,7 +265,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "E",
-                "Executioner, the committed melee. Shift + left click throws the same move. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim.",
+                "Executioner, the committed melee. It is on the key rather than the mouse because it is a swing off the body -- the mouse is spent on the shadow, which is the thing you actually aim. That also means she is the one class the retirement of shift-plus-click cost nothing.",
             ),
             e(
                 "Shift + forward",
@@ -318,7 +322,11 @@ pub const SECTIONS: &[Section] = &[
             e("; and '", "Turn left and right — player two has no mouse."),
             e(". , /", "Poke, guard, special."),
             e("L", "The class mechanic."),
-            e("Right Shift", "Held with the above, the stronger version."),
+            e(
+                "M",
+                "The third attack button — there is no scroll wheel on this half of the keyboard.",
+            ),
+            e("Right Shift", "Held with a direction, dodge."),
         ],
     },
     Section {
