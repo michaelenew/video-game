@@ -22,7 +22,7 @@ Under no cooldowns, an ability needs a cost. There are two, and neither is a man
 | Elementalist | Structure slots on the field |
 | Blood mage | Health |
 | Dual mage | Meter position |
-| Champion | Rush charge, and which form you are left in |
+| Champion | Rush charge, and how deep into a string you are |
 | Bulwark | Shield position |
 
 **No universal resource bar.** Each class's economy *is* its identity, which means every
@@ -54,6 +54,19 @@ like: it holds one ability, never the kit, and is argued for where it is defined
 playable kit — enough for a real match, few enough to balance and to keep readable in
 third person.
 
+> ⚠️ **The Champion has nineteen, and it is not over budget — it is counted differently.**
+> Its three mouse buttons are three weapons and the *situation* picks the move, so a player
+> learns three things and the grid supplies the rest; see
+> [kits/champion.md](kits/champion.md#the-grid). The Elementalist is doing the same thing
+> one step smaller, with a row of three for the air.
+>
+> That is either an exception for one class or the shape a kit should be, and the two answers
+> lead to different documents. Under "six abilities", the Champion is a special case and this
+> spec stands. Under "a kit is a grid — a small vocabulary times the situations you are in",
+> the count stops being the budget and **readability per button** becomes it, and this section
+> needs rewriting for the whole roster. [README.md](README.md) §4 flags the same question from
+> the other end under **Aerials** and **Attack strings**. Undecided.
+
 The archive's twelve-slot layout is the eventual target, not the prototype target. Slots
 seven through twelve are where intra-class specialisation lives later.
 
@@ -72,7 +85,17 @@ tool**, and something that is **only that class**.
 - **No hard stops without a hard condition.** Slows, roots that still allow attacking,
   pushes and pulls are the default. True staggers are gated behind reads — a parry, a
   telegraphed commitment. See [defense.md](defense.md).
-- **Every class needs an answer to a blocking opponent.** Special attacks are the universal
-  guard breaker; a class with none of its own is relying on that.
+- **Every class needs an answer to a blocking opponent.** Held by
+  `feel::every_class_can_beat_a_turtle`, which accepts either an **unblockable** or an
+  **overhead** that a crouching blocker cannot duck. All six pass.
+
+  ⚠️ **But not via the special, on two of them.** "Special attacks are the universal guard
+  breaker" — the rule this document and [defense.md](defense.md) both state — holds on four
+  classes and not on the Reaver, whose `Q` is the Guillotine lotus and is neither, nor on the
+  Champion, which has no `Q` at all and breaks guard with Earthbreaker, the hammer's chain
+  finisher. Their answers exist; they are just not where the rule says to look. Either the
+  rule is "every class has a guard breaker somewhere" — in which case say that, and the `Q`
+  slot stops carrying a promise — or `Q` is the guard breaker and two classes need one
+  putting there.
 - **Recovery is the balance knob.** When an ability is too strong, lengthen the tail before
   touching the effect. It preserves the fantasy and moves the fight to the right place.

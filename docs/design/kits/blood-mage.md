@@ -96,15 +96,17 @@ Four abilities, and they are the four buttons the control scheme gives a class:
 
 ### Why Black spike is on `E`
 
-`E` is the class mechanic, and on five of the six classes that is an instant change of state
-— throw the shield, cycle the form, place the shadow, raise a structure. The Blood mage's
-mechanic is *health*, which is not a thing you press a button to change, so her `E` did
-nothing at all. Putting the spike there costs nothing and buys the class a fourth ability;
-shift + click, which means "the committed version of your attack" on every other class, goes
-back to meaning that here.
+`E` is the class mechanic, and on three of the six classes that is an instant change of state
+— throw the shield, Rush, raise a structure. The Blood mage's mechanic is *health*, which is
+not a thing you press a button to change, so her `E` did nothing at all. Putting the spike
+there costs nothing and buys the class a fourth ability; shift + click, which means "the
+committed version of your attack" on every other class, goes back to meaning that here.
 
-This is the first ability in the game on the mechanic slot, so the move table grew a fourth
-column. Most classes leave it empty — see `moves::NAMES`.
+This was the first ability in the game on the mechanic slot, so the move table grew a fourth
+column — see `moves::on_e`. It is no longer the only one: the Dual mage's `E` carries Sweep
+for the same reason (a meter has no state to toggle either), the Reaver's carries Executioner
+for a different one (her mechanic went to the mouse because it is aimed), and the
+Elementalist's is an instant standing up and Landfall off the floor.
 
 ## Abilities
 
@@ -396,8 +398,9 @@ half again as much.
 - Health cost as a flat amount or a percentage? Implemented as flat. Percentage is
   self-balancing but makes the class stronger the healthier it is, which inverts the comeback
   fantasy.
-- Are the costs anywhere near right? They are a first pass: 15 for the auto up to 120 for the
-  spike, against a thousand-point bar. Nothing has been played against them.
+- Are the costs anywhere near right? They are a first pass: 8 for the auto, 30 for Rend, 45
+  for Grasp and 60 for the spike, against a thousand-point bar. Nothing has been played
+  against them.
 - **Is half a second the right channel?** It went to a full second while the marker was still
   jumping about, on the theory that it was too fast to read; once the line stopped moving,
   half was enough again. It is two decisions at once: how long the wind-up is, and how far the

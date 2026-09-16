@@ -107,11 +107,16 @@ is the opponent's reward and the only thing in the game that is meant to take th
 away.
 
 **And it buys tempo rather than safety**, which is why it needs no charge behind it the way
-Rush does. Send shadow costs twenty-five frames and the longest recovery it can cut short
-is Executioner's twenty-six, so the exchange nets her a single frame: she is busy for as
-long either way, and what changes is that the frames do something. The trade is a recovery
-for the mechanic, not frames bought back — a blocked Executioner goes from −12 to −11 and
+Rush does. Send shadow costs nineteen frames and the longest recovery it can cut short is
+Executioner's twenty-six, so the exchange nets her seven: she is busy for nearly as long
+either way, and what changes is that the frames do something. The trade is a recovery for
+the mechanic, not frames bought back — a blocked Executioner goes from −12 to about −5 and
 is still a punish.
+
+Those two counts are knobs and the relationship is not:
+`cutting_a_recovery_short_does_not_rescue_her_from_the_punish` in
+`crates/sim/tests/reaver.rs` fails if the cancel ever turns a blocked commitment safe, so a
+tuning pass may move either number and cannot lose the rule.
 
 ### Guillotine lotus — `Q`
 **Startup** fast · **Recovery** short · **Range** at the shadow · **Mechanic** requires
@@ -127,8 +132,8 @@ home**, cutting on the way out and again on the way back.
 - **The flower is flat.** It opens, holds and closes in one horizontal plane at the
   shadow's midriff — chest-high on nobody, waist-high on everybody, and the same height
   for the whole of its life.
-- Out fast, on a spiral: each blade leaves on its own sixth of the circle and keeps
-  turning as it reaches, so the six of them open like petals rather than spokes.
+- Out fast, on a spiral: each blade leaves on its own twelfth of the circle and keeps
+  turning as it reaches, so the twelve of them open like petals rather than spokes.
 - They hang at full extension for about two thirds of a second. That is the window a
   victim has to leave.
 - **Home on a spiral of its own, turning the other way.** Coming back a blade sweeps
@@ -157,7 +162,7 @@ never touched, which is what makes the drag through a crowd the ability's own de
 of itself rather than a second helping of the first pass.
 
 **The blades track the shadow's live position every frame.** Recall the shadow with a
-lotus open and the six of them are dragged the length of the arena after it — a long
+lotus open and the twelve of them are dragged the length of the arena after it — a long
 scything smear through everything in between. That is the class's biggest turn, and it is
 two buttons: `Q`, then right click.
 
@@ -327,5 +332,5 @@ makes with Rush.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
 - The archive's bonus on the first auto after reclaiming the shadow. Reclaiming is a dash
   now, so the trigger exists — nobody has decided whether the bonus should.
-- **Six blades and a quarter-damage copy is a lot of numbers hitting at once.** Nobody has
+- **Twelve blades and a quarter-damage copy is a lot of numbers hitting at once.** Nobody has
   played against it. The per-blade damage is deliberately small for that reason.

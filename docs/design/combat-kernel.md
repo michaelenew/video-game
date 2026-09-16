@@ -170,6 +170,12 @@ block is shield-gated and positional, parry is the opening frames of block and r
 with a stagger, and blocking costs space through pushback rather than health through chip
 damage. Special attacks are the guard breakers.
 
+⚠️ **Three parts of that have drifted from what was built**, and
+[defense.md](defense.md) now carries the detail: there is no guard meter, the shield is one
+class's mechanic rather than an equippable secondary (so block and parry belong to the
+Bulwark alone), and the special is the guard breaker on four classes of six. Each is a
+decision rather than a bug.
+
 ### Other open items
 
 - **Arena size and shape.** Directly determines whether a committed, space-denying class

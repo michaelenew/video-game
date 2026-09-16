@@ -87,7 +87,7 @@ pub enum EffectKind {
     ///
     /// The one effect whose centre **moves**, and it is the point of the
     /// ability rather than a detail: recall the shadow with the blades out and
-    /// the six of them drag across the arena after it. See [`Effect::lotus_at`].
+    /// the twelve of them drag across the arena after it. See [`Effect::lotus_at`].
     GuillotineLotus,
 }
 
@@ -678,11 +678,11 @@ impl Effect {
     ///
     /// **The centre is passed in rather than read from `pos`** because it is
     /// the shadow's live position, and the shadow moves: recall it with the
-    /// blades out and the six of them are dragged across the arena behind it,
+    /// blades out and the twelve of them are dragged across the arena behind it,
     /// which is most of what the ability is for.
     ///
-    /// Each blade leaves on its own sixth of the circle and keeps turning as it
-    /// goes, so the six of them open like petals rather than as spokes of a
+    /// Each blade leaves on its own twelfth of the circle and keeps turning as
+    /// it goes, so the twelve open like petals rather than as spokes of a
     /// wheel -- and they come home turning the other way, past where they
     /// started. See [`Effect::lotus_reach_and_turn`].
     pub fn lotus_at(&self, blade: usize, centre: V3) -> V3 {

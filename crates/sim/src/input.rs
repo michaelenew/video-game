@@ -63,8 +63,10 @@ impl Input {
     /// Crouch. Lowers your hurtbox and slows you -- the answer to a high
     /// attack, and the reason not every whiff is free.
     pub const CROUCH: u16 = 1 << 9;
-    /// The class mechanic -- **E**. Throw the shield, Rush, place the shadow,
-    /// raise a structure. Not an attack, so it is not a click.
+    /// The class mechanic -- **E**. Throw the shield, Rush, raise a structure.
+    /// Not an attack, so it is not a click -- except on the three classes whose
+    /// mechanic is nothing you can press, where the key carries an ability
+    /// instead: see `moves::on_e`.
     pub const MECHANIC: u16 = 1 << 10;
     /// Middle click -- the scroll wheel pressed down.
     ///
@@ -160,8 +162,14 @@ impl Input {
         self.bits & (Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL) != 0
     }
 
-    /// Shift beats WASD when both are held, so a move-while-casting option
-    /// always exists. See `controls.md`.
+    /// A click is what disambiguates shift: with one it is the committed
+    /// version of that attack, with only a direction it is a dodge. The click
+    /// is checked first, so a heavy thrown while walking does not come out as a
+    /// dodge. See `controls.md`.
+    ///
+    /// This used to be "shift beats WASD when both are held", which guaranteed
+    /// a move-while-casting option existed. Dodge moving onto shift retired
+    /// that, and nothing has replaced what it guaranteed.
     pub const fn is_ability(self) -> bool {
         self.has(Input::SHIFT) && self.any_click()
     }

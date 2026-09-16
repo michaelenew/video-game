@@ -17,9 +17,9 @@ meaningless without it.
 
 ## Mechanic — the two-pole meter
 
-- **Left click moves you darker, right click moves you lighter** — every input, not just
-  autos. Stronger abilities push harder. Scroll click and both-click have no side, so they
-  push further along your current path.
+- **Left click moves you darker, right click moves you lighter — but only the autos have a
+  side.** Every other input pushes further along whichever force she is already carrying.
+  Stronger abilities push harder: an auto moves the bar 5, a cast 12.
 - **Power scales continuously with depth.** The same cast is weak at centre and large at
   the edge. Centre is where both forms are available and both are weak.
 - **Coming back:** throw a far-side auto. That is the only way — casts follow the force she is
@@ -174,7 +174,10 @@ closing to centre attractive rather than a chore.
 
 ## Core abilities
 
-Four slots on `shift` + click. Left click casts the dark form, right the light form.
+The intended shape: four abilities, each with a light and a dark form. **Nothing here is
+built as two forms** — Lance and Sweep are one move apiece, and the form split is unbuilt
+across the whole class. Their inputs today are `shift` + `L` for Lance and `E` for Sweep;
+Step and Divide have no input yet.
 
 ### Step
 **Startup** fast · **Recovery** short · **Range** short

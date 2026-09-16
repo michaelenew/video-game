@@ -179,7 +179,8 @@ simulation; that function is the entire integration.
 
 GGRS requires its input type to be `serde`-serialisable, so the wire type `NetInput` lives
 in `net` rather than putting a dependency on `sim` — whose zero-dependency status is a
-guarantee, not an accident. The wire format is **two bytes per player per frame**.
+guarantee, not an accident. The wire format is **eight bytes per player per frame**:
+`NetInput` is a `u64` carrying the buttons, the yaw and the pitch.
 
 **GGRS SyncTest is the strictest determinism check available.** It replays locally with
 forced rollbacks and compares its own checksums across re-simulations. It runs in
@@ -405,9 +406,13 @@ converting to the simulation's angle type is a widening cast with no rounding fo
 to disagree about. Trigonometry goes through the existing `sin_turns` / `cos_turns` lookup
 table, which is already determinism-safe.
 
-**Pitch is deliberately not sent.** It moves the camera and changes nothing in the simulation,
-so it stays renderer-local. Splitting the two along "does this decide anything?" keeps the
-wire format honest: four bytes per player per frame.
+**Pitch is sent too, and used to not be.** It was renderer-local on the grounds that it moved
+the camera and changed nothing in the simulation. That stopped being true the moment abilities
+started landing where the crosshair is: a crosshair is a line, a line needs two angles, and
+where an ability lands is as much gameplay as where you walk. So pitch rides beside the yaw,
+by the same path, predicted and corrected by the same machinery. Splitting inputs along "does
+this decide anything?" still keeps the wire format honest -- it is just that pitch turned out
+to be on the deciding side.
 
 ## Persistent effects
 

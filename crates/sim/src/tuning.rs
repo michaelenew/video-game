@@ -618,8 +618,8 @@ pub fn lotus_height() -> Fx {
 
 /// How far a blade's path bends as it goes, in turns.
 ///
-/// Zero is six spokes. Anything else is what makes it a lotus: each blade
-/// leaves on its own bearing and keeps turning, so the six of them open like
+/// Zero is twelve spokes. Anything else is what makes it a lotus: each blade
+/// leaves on its own bearing and keeps turning, so the twelve of them open like
 /// petals rather than a starburst.
 pub fn lotus_curl() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LotusCurl))
