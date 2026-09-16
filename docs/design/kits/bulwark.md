@@ -52,9 +52,15 @@ held
 
 A short forward shield strike. The safe poke, and the natural follow-up to a parry stagger.
 
-### Slam
+### Slam — and it has no input at the moment
 **Startup** slow · **Recovery** committed · **Range** short area · **Mechanic** requires the
 shield held; scales with downward velocity
+
+> **Stranded, 2026-09-16.** Shift plus a click is not an attack input any more, on any class —
+> see [../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16). Slam is still in the
+> table, still tuned and still printed by the frame table, and there is no button that throws
+> it. Finding it a home is its own job: the right answer is different per class, and guessing
+> three of them at once is how a grammar gets worse.
 
 Drive the shield into the ground. Shakes the ground and staggers everything close. Damage
 and stagger strength scale with how fast you were falling — so it rewards using it out of a

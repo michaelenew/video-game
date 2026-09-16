@@ -90,7 +90,7 @@ Four abilities, and they are the four buttons the control scheme gives a class:
 | Key | Ability | What it does |
 | --- | --- | --- |
 | `LMB` | **Bloodletter** | The auto. A blade out and back, cutting on both passes |
-| `Shift+LMB` | **Rend** | The committed melee. A raking claw at chest range |
+| ~~`Shift+LMB`~~ | **Rend** | The committed melee. A raking claw at chest range. **No input since 2026-09-16** — see below |
 | `Q` | **Grasp** | Hold to choose a depth, then four arms converge there. All four catch |
 | `E` | **Black spike** | A spike in a draining, slowing field, placed at long range |
 
@@ -122,7 +122,14 @@ simplest possible statement of the class: give something away, get it back if th
 The move has no hitbox of its own. The blade in the air is the entire threat, and the caster
 standing where they threw it from is harmless.
 
-### Rend — committed, `Shift+LMB`
+### Rend — committed, and currently unbound
+
+> **Stranded, 2026-09-16.** Shift plus a click is not an attack input any more, on any class —
+> see [../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16). This move is still in
+> the table, still tuned and still printed by the frame table, and there is no button that
+> throws it. Finding it a home is its own job: the right answer is different per class, and
+> guessing three of them at once is how a grammar gets worse.
+
 **Startup** medium · **Recovery** medium · **Range** melee · **Mechanic** medium cost; large
 return on hit
 

@@ -1,7 +1,7 @@
 ---
 status: partly unsettled
 decided: 2026-09-10
-revised: 2026-09-13
+revised: 2026-09-16
 ---
 
 # Controls
@@ -23,8 +23,8 @@ direction is *discretised* — four inputs, not a stick — and modifiers do the
 Six sentences, and everything else follows:
 
 1. **Click means attack.**
-2. **Shift means use an ability** when a click comes with it, and **dodge** when only a
-   direction does.
+2. **Shift means dodge.** Only that, since 2026-09-16 — see
+   [Shift is one verb now](#shift-is-one-verb-now-2026-09-16).
 3. **WASD means move.**
 4. **Space means jump.** A vertical takeoff, every time, whatever your feet are doing.
 5. **`Q` is the class special and `E` is the class mechanic.** The two things only that
@@ -43,12 +43,19 @@ Not a reversal of the section below. The special and the mechanic stayed on `Q` 
 what changed is that **middle click is now the third click**, and the option table at the
 bottom of this document always counted it as one.
 
-Only the Champion uses it: its three mouse buttons are three weapons — sword, hammer, spear
-— so the button that was "the least reachable one" is now a weapon you swing constantly.
+Two classes use it. The Champion's three mouse buttons are three weapons — sword, hammer,
+spear — so the button that was "the least reachable one" is now a weapon you swing constantly.
 That inverts the small problem below. A button nobody presses is found by aim and therefore
 badly; a button you press every second is found by use. `U` stands in for it on a hand or a
 trackpad that cannot press a scroll wheel at all, the same way `J` and `K` stand in for the
 other two.
+
+**And the Dual mage's Lance, since 2026-09-16**, for a reason that is about the button's
+*shape* rather than its reachability: middle click has no side. Left is dark and right is light
+on that class, so a cast on either of them would push her that way whatever force she was
+holding; a cast on the button with no side pushes her further along the path she is already on,
+which leaves the light-or-dark form free to come from the arm she last punched with. It is the
+only place in the roster where one input throws two different moves.
 
 `E` no longer doubles as middle click in the keyboard bindings, because middle click means
 something of its own now.
@@ -80,11 +87,38 @@ happen to be walking is a button you cannot trust.
 
 Shift was already the "stronger version of this" modifier, so dodge went there.
 
-### What disambiguates shift
+### Shift is one verb now — 2026-09-16
 
-**A click.** Shift with a click is the stronger version of that attack. Shift with only a
-direction is a dodge. The click is checked first, so a committed move thrown while walking
-never comes out as a dodge.
+**Shift plus a click is not an attack input any more, on any class.** Shift means dodge and
+nothing else.
+
+The section this replaces was called *What disambiguates shift*, and the fact that it needed
+one is the argument. Shift had two meanings and the way to tell them apart was whether a click
+happened to be held — so what the key did depended on what the rest of your hand was doing,
+which is a modifier you cannot trust and cannot teach. Every other key in the game means one
+thing.
+
+What it costs is real and is being paid deliberately: **three classes have a committed move
+with no input at all** — the Bulwark's Slam, the Elementalist's Fissure and the Blood mage's
+Rend. They are still in the move table, still tuned, still printed by the frame table, and a
+player cannot throw them. Finding each of them a home is a separate job, one kit at a time,
+because the right answer is different per class and guessing three of them at once is how a
+grammar gets worse. The Shadow Reaver loses nothing, because her Executioner was already on
+`E`.
+
+What it bought, immediately, is the Dual mage. Her committed cast moved to **middle click**,
+which has no side — so by that class's own rule it pushes her further along whichever way she
+is already going, and the light-or-dark *form* of the cast is then free to come from the force
+she is carrying. Two rules that had been fighting on shift stopped. See
+[kits/dual-mage.md](kits/dual-mage.md).
+
+It also closes the **Move + heavy attack** gap below by removing one side of it: there is no
+shift-plus-click to collide with shift-plus-direction any more. What is left open is where the
+heavies go.
+
+**A click still wins when both are held.** `w` + shift + click throws the attack rather than
+dodging, which is the same precedence the old rule had; the difference is that the click no
+longer *changes* which attack it is.
 
 ### In the air
 
@@ -107,10 +141,11 @@ Moving dodge onto shift retired **"shift beats WASD when both are held"**, which
 that guaranteed a move-while-casting option always existed. These are consequences, and none
 of them is settled:
 
-- **Move + heavy attack is currently impossible.** This is the sharp edge. Shift + direction is
-  a dodge and shift + click is the heavy version of an attack, so *holding a direction and
-  throwing a heavy* has no input — the dodge takes it. Known and accepted for now; it is the
-  first thing the attack grammar has to solve once movement is settled.
+- **Move + heavy attack — half-answered, 2026-09-16.** The collision is gone, because shift
+  plus a click is not an input at all now: holding a direction and clicking throws the attack.
+  What is not answered is **where the heavies live**, and until that is settled three classes
+  have a committed move with no button. See
+  [Shift is one verb now](#shift-is-one-verb-now-2026-09-16).
 - **Differentiating move + attack.** Directional attacks (`w`/`a`/`d`/`s` + click) still work,
   but the modifier space is tighter than it was and the option table below was written under
   the old rule.
@@ -119,8 +154,9 @@ of them is settled:
   different move — rather than a separate move list, and that is exactly how the Champion is
   built: three buttons, and a row of the move grid per stance. It generalises, and nobody
   else has been given the treatment yet.
-- **Neutral shift.** Shift with no direction and no click does nothing. A spot dodge in place
-  is the obvious candidate.
+- **Neutral shift.** Shift with no direction does nothing. A spot dodge in place is the
+  obvious candidate, and the case for it got stronger on 2026-09-16: shift means one verb now,
+  so the neutral case is a gap in that verb rather than a third meaning.
 - **Double jump.** Space while airborne does nothing. The airdodge is the only air commitment
   at present, which may be too few or exactly right.
 
@@ -425,18 +461,19 @@ same job on every class.
 | --- | --- |
 | **Unmodified `L`/`R`** | Autos. The neutral vocabulary, roughly shared across classes. |
 | **`Q` and `E`** | The class special and the class mechanic. This is where identity lives, and it is different on every class. |
+| **Unmodified `M`** | The third click. The Champion's hammer; the Dual mage's Lance, where "no side" is the point. |
 | **Direction + click** | Basic moves. A shared vocabulary — roughly the same shapes on every class. The two casters are the exception. |
-| **Shift + click** | The six-ability kit. |
+| ~~**Shift + click**~~ | ~~The six-ability kit.~~ **Retired 2026-09-16.** Shift is one verb — see [Shift is one verb now](#shift-is-one-verb-now-2026-09-16). Where the six-ability kit goes instead is open. |
 | **Shift + direction** | Dodge — **or the class's own mobility mechanic, where it has one.** Airborne, the once-per-jump airdodge. |
 
-The prototype binds the first three of these: left click pokes, shift + left click is the
-committed attack, `Q` is the special and `E` is the mechanic. `J`, `K` and `U` stand in for
-the three clicks on keyboards where that is easier.
+The prototype binds the first four of these: left click pokes, middle click is a second attack
+on the two classes that use it, `Q` is the special and `E` is the mechanic. `J`, `K` and `U`
+stand in for the three clicks on keyboards where that is easier.
 
 The Champion does not read that table at all. Its three clicks are three weapons and `E` is
-Rush; shift + click and `Q` are unused on it. That is a deliberate exception rather than a
-drift — the shared grammar is what lets one control scheme drive six kits, and a class whose
-*identity* is which weapon is in its hands has to spend its clicks on the weapons.
+Rush; `Q` is unused on it. That is a deliberate exception rather than a drift — the shared
+grammar is what lets one control scheme drive six kits, and a class whose *identity* is which
+weapon is in its hands has to spend its clicks on the weapons.
 
 That last row does real work. The Reaver's dash to its shadow *is* its dodge rather than an
 extra input — thrown forward with the crosshair on the shadow, the roll becomes the crossing,
@@ -460,8 +497,10 @@ crosshair aims, and a cost. Nothing about the grammar changed: `E` still means "
 only this class does".
 
 What changed is the move table, which grew a **fourth slot** for it. The other three —
-`LMB`, `Shift+LMB`, `Q` — still mean the same thing on every class, which is the property
-that lets one control scheme drive six kits. The fourth means whatever that class's mechanic
+`LMB`, the committed slot and `Q` — still mean the same thing on every class, which is the
+property that lets one control scheme drive six kits. (The committed slot lost its input on
+2026-09-16 and has not got a new one on three of them; see
+[Shift is one verb now](#shift-is-one-verb-now-2026-09-16).) The fourth means whatever that class's mechanic
 means, and most classes leave it empty. `cargo run -p sim --bin frametable` prints the key
 beside every move.
 

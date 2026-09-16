@@ -31,9 +31,13 @@ positional, covering a facing arc rather than a bubble. Blocking costs **space a
 vulnerable window** — knockback plus stunlock, no chip damage, no guard meter. Parry is the
 opening frames of block and rewards with a stagger. Special attacks are the guard breakers.
 
-**Control grammar — ⚠️ shifted 2026-09-11, no longer settled.** Now: *click = attack, shift +
-click = the committed version, shift + direction = dodge, WASD = move, space = jump, `Q` = the
-class special, `E` = the class mechanic, mouse = where.* `E` is usually an instant state
+**Control grammar — ⚠️ shifted 2026-09-11 and again 2026-09-16, no longer settled.** Now:
+*click = attack, **shift = dodge and nothing else**, WASD = move, space = jump, `Q` = the
+class special, `E` = the class mechanic, mouse = where.* Shift used to be the attack modifier
+as well, told apart from the dodge by whether a click happened to be held — a key whose meaning
+depended on the rest of your hand. It is one verb now, which strands the committed move on
+three classes until each is given a new home; see
+[controls.md](controls.md#shift-is-one-verb-now-2026-09-16). `E` is usually an instant state
 change; on three classes the mechanic is an ability instead, because pressing it is not free —
 the Blood mage's since 2026-09-12 and the Dual mage's since 2026-09-13, both because their
 mechanic has no state to toggle, and the Reaver's because moving a second body across the
@@ -45,8 +49,9 @@ contact with the sandbox. **Space now always jumps** — a vertical takeoff and 
 and **shift plus a direction dodges**. Space plus a direction used to dodge, which meant
 pressing jump while moving, which is most of the time, did not jump.
 
-That moves dodge onto shift, where the ability modifier already lived, so the parts of the
-grammar that depended on "shift beats WASD" are **open again** rather than settled. See
+That moved dodge onto shift, where the ability modifier already lived, so the parts of the
+grammar that depended on "shift beats WASD" are **open again** rather than settled — and the
+ability modifier has since left rather than learn to share. See
 [controls.md](controls.md) §Open and §4 below.
 
 **Movement.** Space jumps, and holding it goes higher. Floaty on purpose — a full hop is
@@ -66,7 +71,7 @@ poke is a design choice in a closed arena, not a gap.
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Lotus · `E` Executioner | Rebuilt |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
 | [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
-| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto · `R` light auto · `Q` Judgement · `E` Sweep | Kit built |
+| [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep | **Core rebuilt** |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` auto · `R` Guard · `M` Throw/Recall | New |
 | ~~Gatekeeper~~ | — | — | Retired |
@@ -85,7 +90,7 @@ few enough to balance and to read in third person.
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
-| [dual-mage.md](dual-mage.md) | The two-pole meter and ascension | Decided |
+| [dual-mage.md](dual-mage.md) | The two-pole meter, the depth curve and ascension | Decided |
 | [champion.md](champion.md) | Forms, the three-hit chain, and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
@@ -106,16 +111,16 @@ Nothing here blocks a prototype.
 | **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
 | **The repeat lockout's number** | ⚠️ **Newly open.** 30 frames is a first guess. Which abilities want a multiplier and which way is the other half, and both need somebody to play it — the knobs are in the Oven under `Offence` and in each move's `Repeat lockout (%)`. Whether a reactivation wants gating at all (`Move::reactivate`, zero everywhere) is the third |
-| **`M` and `LR` reliability** | They carry the Dual mage's finishers and are the slowest inputs on most mice |
-| **Move + heavy attack** | ⚠️ **Known gap.** Shift+direction dodges and shift+click is the heavy, so holding a direction while throwing a heavy has no input — the dodge eats it. Deferred deliberately: movement settles first, then the attack grammar is built around it |
-| **Differentiating move+attack** | ⚠️ **Newly open.** Dodge moving onto shift ended "shift beats WASD", which is what used to guarantee a move-while-casting option. Directional attacks (`w`/`a`/`d`/`s` + click) still work, but the modifier space is tighter than it was and wants a fresh look |
+| **`M` and `LR` reliability** | `M` carries the Dual mage's Lance since 2026-09-16 — a cast she throws every exchange rather than a finisher, which sharpens the question. `LR` is still unspent. Both are the slowest inputs on most mice |
+| **Move + heavy attack** | ⚠️ **Half-answered, 2026-09-16.** The collision is gone: shift is only a dodge now, so holding a direction and clicking throws the attack. What is left open is **where the heavies go** — three classes have a committed move with no button at all until each is given one, one kit at a time. See [controls.md](controls.md#shift-is-one-verb-now-2026-09-16) |
+| **Differentiating move+attack** | ⚠️ **Open, and tighter still.** Dodge moving onto shift ended "shift beats WASD", and shift ceasing to modify clicks on 2026-09-16 took the modifier away entirely. Directional attacks (`w`/`a`/`d`/`s` + click) and the third click are what is left |
 | **Aerials** | **Settled on two classes, open on four.** Airborne attacks should be *variants of their grounded counterparts* rather than a separate move list — same identity, different frame data. That is how the Champion is built (the button is the weapon and the row of its grid is the situation) and, since 2026-09-14, how the Elementalist is: left click is still the cheap shot, right click is still the committed one, `E` is still earth, and the row is where her feet are. A claim about one class was a coincidence; two is a pattern, and the four that are left are now behind rather than undecided |
 | **Attack strings** | ⚠️ **Newly open, 2026-09-14.** The Champion's ground attacks now chain three hits deep, and the chain is a *hit confirm* — a connected link cancels its own tail, a blocked one does not. Whether that is a Champion mechanic or the shape every class's offence should take is not decided, and it is the sort of thing that has to be one or the other |
 | **`space` as a modifier** | ⚠️ **Newly open, 2026-09-14, and wider since 2026-09-15.** `space` plus a weapon is a takeoff on the Champion — the first time the jump button has modified anything. It is a whole row of options every class could have, or a precedent that should not spread. It now has a second, different form: `space` pressed *during* the hammer's finisher banks a leap that is spent when the move lands, which is the only place in the game a button is read while you are not free to act. See [controls.md](controls.md) §"Open questions" |
 | **A move that carries the body** | ⚠️ **Newly open, 2026-09-15.** `Move::step` is a distance an attack moves you down its own locked facing, added to whatever the stick asks for and finished by the frame its hitbox appears. Six of the Champion's nine chain links use it and nothing else in the roster does. It is the cleanest answer yet to "what makes two attacks at the same range feel different" — *where you are standing when it is over* — and it is available to every class for free. Whether the other five should reach for it, or whether it is the Champion's texture, is not decided |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
 | **Double jump** | Space while airborne does nothing. The airdodge is currently the only air commitment. ⚠️ **Sharper since 2026-09-14:** `E` off the floor used to raise a stone, which made a stone under your own feet a sort of second jump for one class. It is Landfall now, so the Elementalist has lost the only thing in the game that was answering this question by accident |
-| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. Whether the finisher stays on `Q` or moves to `M`, and what `shift` + right click should be once an ability has two forms |
+| Dual mage | Naming the two forces. Ascension drain, refund, threshold and stun numbers. **Since 2026-09-16** the core is rebuilt — depth scales everything, the autos pull and push, Lance is two moves on middle click and Judgement earns its status through power — so the open questions moved with it: whether a four-to-one spread between the centre and the edge is the right one, whether "the form is the arm you last punched with" is findable by anybody who was not told, and whether a Judgement at full depth is too much of a health bar. See [kits/dual-mage.md](kits/dual-mage.md) |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all. **Since 2026-09-15**, five more, all of them in [feel-log.md](feel-log.md): whether the sword's step is too much free pressure, whether the spear's sixteen-frame second hit reads as a two-part move from across the arena, whether "jump into the finisher" occurs to anybody without being taught, whether +14 on hit is too much, and whether the spinning finisher's knockback fights the chain it ends |
 | Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
@@ -141,7 +146,7 @@ character progression.
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
 least three exemplar moves -- nineteen on the Champion, seven on the
-Elementalist, five on the Dual mage, four
+Elementalist, six on the Dual mage, four
 on the Blood mage and the Shadow Reaver -- there is a monster to fight and
 climb, peer-to-peer rollback play works over real UDP, and the test suite covers
 determinism, combat relationships, aiming, the ride, the camera, kinematics,

@@ -18,7 +18,7 @@ use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
 use crate::camera;
 pub use crate::class::Shield;
-use crate::class::{self, Class, Form, Ghost, Mechanic};
+use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
@@ -254,6 +254,35 @@ pub struct Player {
     /// strongest wins** rather than compounding -- two slows that multiplied
     /// would freeze you, and every new source would make the last one worse.
     pub slow_mul: Fx,
+    /// Frames of **haste** left, and the mirror of `slowed`.
+    ///
+    /// One source in the game: standing in the field a Judgement left, which is
+    /// the half of that ability that is for the caster rather than against
+    /// whoever she threw it at. Refreshed every frame she is in it and given
+    /// the same tail a slow has, so leaving it runs down rather than snapping.
+    ///
+    /// There is no `haste_mul` beside it, unlike the slow, and that asymmetry
+    /// is honest rather than an oversight: a slow can arrive from a spike, a
+    /// lotus, a stone or a Sweep and they are not all worth the same, so the
+    /// strength has to travel with it. There is exactly one thing that hastens
+    /// anybody, so its strength is a knob (`tuning::judgement_field_speed`) and
+    /// this is only how much longer it has.
+    pub hasted: u16,
+    /// What the Dual mage's bar was worth on the frame she committed to the
+    /// move she is in the middle of. [`Fx::ONE`] for everybody else, and
+    /// meaningless while she is not throwing anything.
+    ///
+    /// **A cast is worth where you were standing when you pressed the button**,
+    /// not where the cast's own push has since taken you. The two are different
+    /// numbers because throwing anything at all moves the bar, on the press,
+    /// and a finisher moves it a long way -- so a Judgement read live would be
+    /// worth its own push, and the one place in the kit that is supposed to be
+    /// embarrassing at the centre would be the least embarrassing thing there.
+    /// It would also mean the bar on the HUD never matched what the player got.
+    ///
+    /// See [`depth`], which reads this while she is busy and the live bar when
+    /// she is not.
+    pub thrown_at: Fx,
     /// Frames of root left. Your feet do not carry you, you cannot dodge and
     /// Frames left of a grab's **bind**: caught, and not going anywhere yet.
     ///
@@ -619,6 +648,14 @@ impl Player {
         self.slowed = self.slowed.max(frames);
     }
 
+    /// The mirror: keep this fighter fast for at least `frames` more.
+    ///
+    /// No multiplier argument, because there is one source of haste in the
+    /// game and its strength is a knob -- see [`Player::hasted`].
+    pub fn hasten(&mut self, frames: u16) {
+        self.hasted = self.hasted.max(frames);
+    }
+
     /// Be caught and held by somebody.
     ///
     /// A grab is not knockback. The victim is pinned to the grabber and goes
@@ -731,6 +768,8 @@ impl Default for Player {
             crouching: false,
             slowed: 0,
             slow_mul: Fx::ONE,
+            hasted: 0,
+            thrown_at: Fx::ONE,
             bound: 0,
             mechanic_held: false,
             right_held: false,
@@ -1036,10 +1075,18 @@ impl World {
                 // A channelled move goes as far as it was wound to, not as far
                 // as its row says it could -- see `step_channel`.
                 let reach = if m.channels() { p.channelled } else { m.reach };
-                spawn_effect(
-                    &mut self.effects,
-                    Effect::cast(leaves, i as u8, p.class, kind, from, along, reach),
-                );
+                let mut born = Effect::cast(leaves, i as u8, p.class, kind, from, along, reach);
+                born.power = depth(&p);
+                // **How long a thing she leaves behind lasts is where she was
+                // standing when she threw it.** The one place the depth curve
+                // is allowed to move a frame count -- a move's own startup,
+                // active and recovery never change, because that is the
+                // contract between two players, but how long a field burns
+                // afterwards is the field's business. At the centre Judgement
+                // leaves a puddle that is gone before anyone walks through it.
+                // A no-op for every other class. See [`depth`].
+                born.life = lasting(&p, born.life);
+                spawn_effect(&mut self.effects, born);
             }
         }
 
@@ -1088,6 +1135,20 @@ impl World {
                 // direction locked at the throw, because the whole point is
                 // that you choose where to go *as* it connects.
                 champion_fan_boost(&mut self.players[attacker], inputs[attacker]);
+                // The dark Sweep's half of the form split: their legs, and her
+                // health, per target it caught. A no-op for everybody else.
+                if snapshot[attacker]
+                    .action
+                    .attack_kind()
+                    .is_some_and(|kind| sweeping_dark(&snapshot[attacker], kind))
+                {
+                    dual_sweep_dark(
+                        &mut self.players,
+                        attacker,
+                        defender,
+                        !hit.blocked && !hit.parried,
+                    );
+                }
                 // And the other half of the hammer finisher: the knock-up went
                 // out in `resolve_hit`, and this is the Champion following it
                 // off the floor on the same frame.
@@ -1278,6 +1339,7 @@ impl World {
                     h.write_u32(e.life as u32);
                     h.write_u64(e.struck);
                     h.write_i32(e.banked);
+                    h.write_i32(e.power.raw());
                     h.write_i32(e.reach.raw());
                     hash_v3(&mut h, &e.pos);
                     hash_v3(&mut h, &e.dir);
@@ -1297,6 +1359,8 @@ impl World {
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
             h.write_i32(p.slow_mul.raw());
+            h.write_u32(p.hasted as u32);
+            h.write_i32(p.thrown_at.raw());
             h.write_u32(p.bound as u32);
             h.write_u32(p.mechanic_held as u32);
             h.write_u32(p.right_held as u32);
@@ -1509,7 +1573,11 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     let Action::Active { kind, left } = p.action else {
         return None;
     };
-    let m = moves::get(p.class, kind);
+    let mut m = moves::get(p.class, kind);
+    // **The Dual mage's bar changes how big this is.** One multiply, here,
+    // rather than a branch per ability. Every other class, and both of her
+    // autos, get exactly one back and nothing changes. See [`depth`].
+    m.radius = m.radius.mul(depth_of_size(p, kind));
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -1541,7 +1609,22 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         // wherever the shot actually stopped.
         aim::Kind::Skillshot => {
             let beam = beam_of(p);
-            (beam.from, beam.at(p.beam_reach), false)
+            // **The volume is the whole line it flew**, from the hand to the
+            // point the crosshair picked. `beam_reach` is the exception rather
+            // than the rule: it is set by the two abilities that resolve
+            // themselves the instant they fire and stop at whatever they met
+            // (`fire_the_beam`, `fire_the_cataclysm`), and it is zero for
+            // everything else. Reading it unconditionally made every other
+            // skillshot in the game a bubble at the caster's own chest -- which
+            // is exactly what the Lance was until this line was written, a line
+            // skillshot with a four-metre reach that could only hit somebody
+            // standing on top of her.
+            let stop = if p.beam_reach.raw() > 0 {
+                beam.at(p.beam_reach)
+            } else {
+                beam.to
+            };
+            (beam.from, stop, false)
         }
         // Where the thing was planted. The burst that comes with it has to be
         // there too, or the ability is two abilities pointing different ways.
@@ -1703,9 +1786,20 @@ fn swing_progress(m: &moves::Move, left: u16) -> (Fx, bool) {
 /// but it leaves her hand, and her hand moves: the auto keeps most of her
 /// walking speed, so a line still anchored where she was standing two frames
 /// ago would visibly detach from her.
+///
+/// **And it is her hand, not her sternum**, for a move that declares an arm.
+/// The Dual mage's two Lances are one input told apart by the force she is
+/// carrying, and the arm it leaves from is the second reading of which one is
+/// coming -- so a line that started on the centre line would throw away half of
+/// what the player opposite has to go on. `Hand::Centre` is the body's own line
+/// and is what every other skillshot in the game still gets.
 pub fn beam_of(p: &Player) -> Path {
+    let hand = p
+        .action
+        .attack_kind()
+        .map_or(aim::Hand::Centre, |kind| moves::get(p.class, kind).hand);
     Path {
-        from: aim::origin(p.pos),
+        from: aim::hand_origin(p.pos, p.facing, hand),
         to: p.aim_path.to,
     }
 }
@@ -1752,11 +1846,13 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
 
     // The tip of a wing, on the last frame it is out. Timing it is the one
     // piece of execution in an attack that is otherwise thrown constantly.
-    let damage_mul = preying(attacker.class, defender.disabled()).mul(if box_out.tipper {
-        t::wing_tipper()
-    } else {
-        Fx::ONE
-    });
+    let tipped = box_out.tipper;
+    // How far out on her own bar the Dual mage is standing, as a multiplier on
+    // everything this blow is worth. One for everybody else. See [`depth`].
+    let power = depth(attacker);
+    let damage_mul = preying(attacker.class, defender.disabled())
+        .mul(if tipped { t::wing_tipper() } else { Fx::ONE })
+        .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
     let hit_at_all = if let Some(ring) = box_out.sector {
@@ -1798,12 +1894,42 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     } else {
         Fx::ONE
     };
+    // What the blow does to the space between the two of them, and the sign of
+    // it is which way.
+    //
+    // **A negative knockback is a pull**, and it is measured along the line
+    // between the two bodies rather than down the attacker's facing: the point
+    // of dragging somebody is that they arrive at *you*, and a wing wraps
+    // around her, so a body caught out at the side would otherwise be sent
+    // backwards past her instead of in. A push is still the facing, because
+    // what a shove does is send them the way the blow was travelling.
+    //
+    // The **tip** multiplies it either way. That is what makes which arm she
+    // punches with a spacing decision as well as a meter one: the light auto's
+    // real knockback lives at the far edge of the blade, and on the dark arm
+    // the same frame hauls them that much further in. See
+    // `tuning::wing_tip_shove`.
+    let shove = m
+        .knockback
+        .mul(power)
+        .mul(if tipped { t::wing_tip_shove() } else { Fx::ONE });
+    let (push_dir, speed) = if shove.raw() < 0 {
+        let toward = V3::new(
+            attacker.pos.x.sub(defender.pos.x),
+            Fx::ZERO,
+            attacker.pos.z.sub(defender.pos.z),
+        )
+        .normalized();
+        (toward, shove.neg())
+    } else {
+        (attacker.facing, shove)
+    };
     // A spike is wasted on somebody standing on the floor: they are already
     // there. It reads as an ordinary heavy hit instead.
     let launch = if m.launch.raw() < 0 && !airborne {
         Fx::ZERO
     } else {
-        m.launch
+        m.launch.mul(power)
     };
     // And a knock-up is worth more when the attacker elected to go up with it.
     // See `bank_the_leap`: the decision was taken during the wind-up and is
@@ -1813,20 +1939,70 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     } else {
         launch
     };
+    // **Sweep is one move with two answers**, and taking somebody off their
+    // feet is the light one's. Both forms shove -- it is the panic button, and
+    // what a panic button is for is moving whoever has got inside the punches
+    // -- but light throws them off the floor while dark takes their legs and
+    // pays her for it. The slow and the heal arrive in `advance` beside the
+    // other things a landed blow does; what belongs here is the half of the
+    // split that is a number in this row.
+    let launch = if sweeping_dark(attacker, kind) {
+        Fx::ZERO
+    } else {
+        launch
+    };
 
     Some(Hit {
         damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
-        knockback: m.knockback.mul(air_mul),
+        knockback: speed.mul(air_mul),
         launch,
         grabs: m.grabs,
         by,
-        dir: attacker.facing,
+        dir: push_dir,
         blocked: guarding,
         parried,
         interrupts: true,
     })
+}
+
+/// Is this the Dark form of Sweep?
+///
+/// The form is the force she is carrying, which is the arm she last punched
+/// with -- the same question every other ability on the class asks. Sweep is
+/// one move rather than two because the *shape* is the same either way: both
+/// arms across the whole front, driven from the hips. Only what happens to the
+/// people it caught changes, which is a thing to branch on at the moment of
+/// contact rather than a second move with a second animation.
+fn sweeping_dark(p: &Player, kind: u8) -> bool {
+    p.class == Class::DualMage && kind == moves::dual::SWEEP && carrying(p) == Force::Dark
+}
+
+/// The dark Sweep's payment, on the frame it lands: their legs, and her health.
+///
+/// **Per target caught**, not a share of the damage, which is what makes the
+/// answer to being swarmed the same move as the answer to being cornered. It
+/// is here in the hit loop rather than in `resolve_hit` because both halves of
+/// it act on somebody -- one on the victim and one on the caster -- and
+/// `resolve_hit` is a pure question about what a blow is worth.
+fn dual_sweep_dark(
+    players: &mut [Player; MAX_PLAYERS],
+    attacker: usize,
+    victim: usize,
+    paid: bool,
+) {
+    // Blocked or parried buys nothing. The slow is a hit effect and the heal is
+    // the reward for landing it, which is the same rule leeching already
+    // follows everywhere else in the game.
+    if !paid {
+        return;
+    }
+    players[victim].slow(t::slow_frames(), t::sweep_slow());
+    let owed = Fx::from_int(t::sweep_heal())
+        .mul(depth(&players[attacker]))
+        .to_int();
+    players[attacker].heal(owed);
 }
 
 /// Is this defender guarding against something arriving from `from`, and did
@@ -2166,11 +2342,20 @@ fn step_player(
                     // hand and the dash underneath it are that class's alone.
                     begin_champion(p, kind);
                     begin_move(p, who, kind, input, scene, true)
-                } else if input.has(Input::SHIFT) && !input.any_click() && (ax != 0 || az != 0) {
+                } else if input.has(Input::SHIFT) && (ax != 0 || az != 0) {
                     // Shift plus a direction dodges. It used to be space plus a
                     // direction, which meant that pressing the jump button while
                     // moving -- which is most of the time -- did not jump. Space is
                     // now only ever a vertical takeoff.
+                    //
+                    // **And shift means nothing else.** It used to also be the
+                    // attack modifier, which is why this branch once demanded
+                    // that no click be held: the click was what disambiguated
+                    // the two meanings. There is nothing to disambiguate any
+                    // more -- a click is an attack whatever else is down -- so
+                    // the only thing that guard still did was swallow the dodge
+                    // on a frame where a click was held and threw nothing,
+                    // which is a button press answered with silence.
                     let dir = move_dir(p.aim(input), ax, az);
                     // On the ground there is nothing to spend; in the air the
                     // commitment is spent once per airtime, because a second one
@@ -2561,7 +2746,7 @@ fn step_player(
 fn clicked_move(p: &Player, input: Input) -> Option<u8> {
     match p.class {
         Class::Champion => champion_move(p, input),
-        Class::DualMage => dual_move(input),
+        Class::DualMage => dual_move(p, input),
         // The Reaver breaks it a third way: right click sends the shadow. It is
         // the one thing in her kit the **crosshair aims**, and the mouse is
         // where aiming lives -- so the mechanic is on the mouse and the swing
@@ -2579,13 +2764,14 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // different once her feet leave the floor, which is the *row* rather
         // than a fifth exception: see `elementalist_move`.
         Class::Elementalist => elementalist_move(p, input),
-        _ => input.has(Input::LEFT).then(|| {
-            if input.has(Input::SHIFT) {
-                SLOT_COMMITTED
-            } else {
-                SLOT_POKE
-            }
-        }),
+        // **Shift is only ever a dodge now**, so on the five classes that kept
+        // the shared grammar a click is a poke and nothing modifies it. That
+        // strands `SLOT_COMMITTED` on the three that have one and nowhere else
+        // to put it -- the Bulwark's Slam, the Elementalist's Fissure, the
+        // Blood mage's Rend -- and that is deliberate and temporary: finding
+        // each of them a home is a separate job, one kit at a time, and the
+        // Reaver's is already on `E`. See `docs/design/controls.md`.
+        _ => input.has(Input::LEFT).then_some(SLOT_POKE),
     }
 }
 
@@ -2621,13 +2807,10 @@ fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
     if input.has(Input::RIGHT) {
         return Some(SLOT_HEAVY);
     }
-    input.has(Input::LEFT).then(|| {
-        if input.has(Input::SHIFT) {
-            SLOT_COMMITTED
-        } else {
-            SLOT_POKE
-        }
-    })
+    // Fissure is stranded by the retirement of shift as an attack modifier,
+    // along with the other two committed moves in the roster. See
+    // `clicked_move`.
+    input.has(Input::LEFT).then_some(SLOT_POKE)
 }
 
 /// Which move the mechanic key throws, here and now.
@@ -2681,27 +2864,53 @@ fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
     !p.grounded && p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL
 }
 
-/// Which of the Dual mage's five a click asks for.
+/// Which of the Dual mage's six a click asks for.
 ///
-/// Left first, so that both buttons at once throws the dark auto rather than
-/// nothing. The design has a use for both-click -- a finisher with no side --
-/// and does not have one yet; until it does, an accidental double press should
-/// come out as an attack rather than as silence.
+/// Three buttons, and the middle one is where the whole class comes together:
 ///
-/// **Shift plus right click is the light auto, unmodified.** The kit wants a
-/// light *form* of the committed cast there and there is not one built, so the
-/// modifier is ignored rather than being made to mean something it does not.
-/// See `docs/design/kits/dual-mage.md`.
-fn dual_move(input: Input) -> Option<u8> {
+/// ```text
+///   left click    Dark auto    -- darker, and she is now dark
+///   right click   Light auto   -- lighter, and she is now light
+///   middle click  Lance        -- no side, so it pushes her further along
+///                                 whichever way she is already going, and
+///                                 which *form* comes out is the force she is
+///                                 carrying
+/// ```
+///
+/// **Middle click is the right home for Lance and shift never was.** The two
+/// rules this class is made of used to fight there: shift + left click had a
+/// side, so a committed cast pushed her dark whatever she was carrying, and the
+/// light form of it had nowhere to live at all. Middle click has no side, so by
+/// the class's own rule it pushes her further along her current path -- and
+/// the form is then free to come from the force in her arms, which is the thing
+/// the two autos exist to set. One input, two moves, and the arm you last
+/// punched with is what decides which.
+///
+/// Left before right before middle, so a player mashing buttons gets an attack
+/// rather than silence. The design has a use for both-click -- a finisher with
+/// no side -- and does not have one yet.
+fn dual_move(p: &Player, input: Input) -> Option<u8> {
     use moves::dual as d;
     if input.has(Input::LEFT) {
-        return Some(if input.has(Input::SHIFT) {
-            d::LANCE
-        } else {
-            d::DARK_AUTO
-        });
+        return Some(d::DARK_AUTO);
     }
-    input.has(Input::RIGHT).then_some(d::LIGHT_AUTO)
+    if input.has(Input::RIGHT) {
+        return Some(d::LIGHT_AUTO);
+    }
+    input.has(Input::MIDDLE).then(|| d::lance_for(carrying(p)))
+}
+
+/// Which of the two forces she is holding right now.
+///
+/// Dark for anybody who is not a Dual mage, which never comes up: the only
+/// callers are her own moves. It is here rather than read off `Mechanic::Meter`
+/// at each call site because "what is she made of this frame" is one question
+/// and the number of places asking it grew the moment an ability had two forms.
+pub fn carrying(p: &Player) -> Force {
+    match p.mechanic {
+        Mechanic::Meter { colour, .. } => colour,
+        _ => Force::Dark,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3317,6 +3526,10 @@ fn begin_move(
     aerial: bool,
 ) -> Action {
     p.hit_used = false;
+    // **Before anything else**, and before `throw_move` steers the bar: what
+    // this cast is worth is where she is standing right now. See
+    // [`Player::thrown_at`].
+    p.thrown_at = live_depth(p);
     // Health is spent on the press, never on the hit. Missing is the
     // punishment, which is the whole of the Blood mage's economy -- see
     // `docs/design/kits/blood-mage.md`. Paid here even for a channelled move,
@@ -3810,6 +4023,90 @@ fn step_mechanic(p: &mut Player) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The depth curve
+// ---------------------------------------------------------------------------
+//
+// The Dual mage's founding idea, and until now the largest hole in her:
+// **power scales continuously with distance from the centre of the bar.** Not
+// thresholds, not two versions of a move with a snap between them -- a straight
+// line from `tuning::depth_floor` at zero to `tuning::depth_ceiling` at either
+// end, symmetric, with every point on it reachable.
+//
+// It is one function rather than a rule each ability remembers, which is the
+// whole reason it is worth building at all: "ride as close to the edge as you
+// can" has to be true of everything she throws, or it is a number going up on
+// the HUD.
+//
+// **What it scales, and what it deliberately does not.** Depth moves *force*:
+// damage, knockback and pull, launch, what a thing she leaves behind drains and
+// how long it lasts. It never touches a move's own startup, active or recovery
+// frames, and never its hitstun or blockstun. Frame data is the contract
+// between two players -- it is what the frame table prints and what a punish is
+// read off -- and a class whose moves changed speed with a bar nobody else can
+// see would be unlearnable from the other side. So the bar changes how much it
+// hurts and how big it is, never how fast it comes out.
+
+/// What this fighter's bar is worth, as a multiplier on everything they throw.
+///
+/// [`Fx::ONE`] for every class but one, so it is safe to ask of anybody: five
+/// of the six have no meter, and the arithmetic is a multiply by one.
+///
+/// Read from her position **now** rather than from the position she was in when
+/// a move started, and that is deliberate for the things she leaves behind: a
+/// tether drains harder if she keeps riding outward while it holds, which is
+/// the class's own argument made by an ability that outlives its cast.
+pub fn depth(p: &Player) -> Fx {
+    // Mid-move, it is what the bar said when she committed. Throwing anything
+    // moves the bar on the press and the finisher moves it a long way, so a
+    // cast read live would be worth its own push -- see [`Player::thrown_at`].
+    match p.action.attack_kind() {
+        Some(_) => p.thrown_at,
+        None => live_depth(p),
+    }
+}
+
+/// The curve read off the bar as it is this instant.
+///
+/// The shape of the whole thing: a straight line from `depth_floor` at the
+/// centre to `depth_ceiling` at either end, symmetric, with every point on it
+/// reachable and nothing anywhere that snaps.
+fn live_depth(p: &Player) -> Fx {
+    let Mechanic::Meter { value, .. } = p.mechanic else {
+        return Fx::ONE;
+    };
+    let max = t::meter_max().max(1);
+    let out = Fx::ratio(value.abs().min(max), max);
+    crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+}
+
+/// The same curve as it applies to the **size** of what a move puts in the
+/// world, which is a separate question with a separate knob.
+///
+/// More damage is worse to be hit by; more radius is harder not to be hit by.
+/// `tuning::depth_size` is how much of the one the other takes, so a tuning
+/// session can have a deep cast hit twice as hard and be exactly as big.
+///
+/// **The two autos never grow.** Their reach is pinned to the punch that throws
+/// them -- `view/tests/kinematics.rs` checks that the blade's near edge starts
+/// where the fist stops -- and they are the one move in the kit thrown every
+/// second, so a volume that drifted away from the animation would make the
+/// steering wheel unreadable. What depth does to an auto is what it *does*: how
+/// much it hurts, and how hard it pulls or shoves. See `moves::dual::is_an_auto`.
+pub fn depth_of_size(p: &Player, kind: u8) -> Fx {
+    // **Radius, never reach**, which is the line the caller has to hold: how
+    // big the thing that arrives is, not how far away you can put it. Spacing
+    // is what every judgement in a fight is made from, and a class whose range
+    // changed continuously with a bar the other player cannot see would be
+    // unlearnable from either side of it -- the same argument that keeps depth
+    // off the frame data. A deep Judgement is a far bigger Judgement thrown
+    // exactly as far as a feeble one.
+    if p.class != Class::DualMage || moves::dual::is_an_auto(kind) {
+        return Fx::ONE;
+    }
+    crate::math::lerp(Fx::ONE, depth(p), t::depth_size())
+}
+
 /// Attacking steers the Dual mage's meter: dark darker, light lighter, an auto
 /// a little and a cast more. Nothing else moves it, so every step is a
 /// consequence of a decision the player made.
@@ -3847,11 +4144,17 @@ fn steer_meter(p: &mut Player, kind: u8) {
     if ascending > 0 {
         return;
     }
+    // Three tiers, and the order of the arms is the order of the commitment.
     // An auto is the unit the bar is measured in, and it also *sets* which
-    // force she is carrying. Everything else moves her further, in whichever
-    // direction the last auto left her facing.
+    // force she is carrying. A cast moves her further, in whichever direction
+    // the last auto left her facing. And the **finisher** very nearly throws
+    // her over the edge, which is the tier `docs/design/dual-mage.md` has been
+    // asking for since the bar was built: what makes Judgement the payoff is no
+    // longer that it is gated, it is that casting it deep is a real question
+    // about whether you survive the cast.
     let (push, colour) = match moves::dual::force(kind) {
         Some(thrown) => (t::meter_auto_push(), thrown),
+        None if moves::dual::is_the_finisher(kind) => (t::meter_finisher_push(), colour),
         None => (t::meter_cast_push(), colour),
     };
     let value = (value + push * colour.along()).clamp(-t::meter_max(), t::meter_max());
@@ -4395,6 +4698,25 @@ impl World {
                     effect.home = aim::origin(owner.pos);
                 }
             }
+            // And the one that is a **line between two live things**. A tether
+            // runs from the caster's hand to whatever it caught, and both ends
+            // walk around: `pos` is her hand this frame and `home` is the body
+            // on the other end, or the far end of the throw while the line is
+            // still looking for something. Written before the catch is tested,
+            // so the line that hits is the line that is drawn.
+            //
+            // It is the same argument `state::beam_of` makes about a skillshot
+            // -- locked target, live origin -- with the target also alive.
+            if effect.kind == EffectKind::Tether {
+                let hand = moves::get(effect.class, effect.slot).hand;
+                if let Some(owner) = self.players.get(effect.owner as usize) {
+                    effect.pos = aim::hand_origin(owner.pos, owner.facing, hand);
+                }
+                effect.home = match effect.caught() {
+                    Some(victim) => aim::origin(self.players[victim].pos),
+                    None => effect.pos.add(effect.dir.scale(effect.reach)),
+                };
+            }
             // A tornado's expiry is not its growth's question. `age`/`life`
             // keep answering how grown it is, continuously, from whenever the
             // pillar it came from was first planted -- see
@@ -4429,6 +4751,11 @@ impl World {
             if p.slowed == 0 {
                 p.slow_mul = Fx::ONE;
             }
+            // And its mirror, run down on the same tick and for the same
+            // reason: whatever hastened her gets to refresh it before it
+            // expires, so standing in the field holds it and leaving lets the
+            // tail run.
+            p.hasted = p.hasted.saturating_sub(1);
         }
     }
 
@@ -4459,6 +4786,11 @@ impl World {
     /// Takes the effect by `&mut` because two of them keep books: which arm has
     /// caught whom, and how much blood a blade is carrying home.
     fn apply_effect(&mut self, effect: &mut Effect) {
+        // Nothing here reads the caster's bar directly: what the Dual mage's
+        // depth is worth to a thing she left behind is folded into
+        // `Effect::field_radius` and `Effect::damage` at the moment it was
+        // cast, so that the hit test and the overlay are the same size without
+        // the overlay having to find her. See [`depth`] and `Effect::power`.
         match effect.kind {
             EffectKind::FirePillar => {
                 if effect.ticks_now() {
@@ -4601,7 +4933,7 @@ impl World {
                         continue;
                     }
                     effect.take_hit(pass, i);
-                    effect.banked += self.cut(i, effect, at, Fx::ONE);
+                    effect.banked += self.cut(i, effect, at, effect.source().damage);
                 }
                 effect.banked += self.gore_the_creature(effect, pass, at, radius);
             }
@@ -4635,10 +4967,140 @@ impl World {
                         } else {
                             Fx::ONE
                         };
-                        self.cut(i, effect, at, share);
+                        let blow = Fx::from_int(effect.source().damage).mul(share).to_int();
+                        self.cut(i, effect, at, blow);
                         self.players[i].slow(t::slow_frames(), t::lotus_slow());
                     }
                     self.gore_the_creature(effect, blade, at, radius);
+                }
+            }
+
+            // The light Lance's burst, where the line ran out. One pass: it
+            // catches each body once and then hangs there for a few frames
+            // being looked at, which is the whole of what a detonation is.
+            EffectKind::LanceBurst => {
+                let radius = effect.field_radius();
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, effect.pos, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt =
+                        self.cut(i, effect, effect.pos, effect.kind.damage(&effect.source()));
+                    let owed = effect.leeched(dealt);
+                    self.players[effect.owner as usize].heal(owed);
+                }
+                // And the creature, once. A burst is not a field: it is marked
+                // spent the moment it actually connects, rather than every
+                // frame it exists, so that walking a Ridgeback into one late
+                // still costs it something.
+                let dealt = self.gore_the_creature(effect, 0, effect.pos, radius);
+                if dealt > 0 {
+                    let owed = effect.leeched(dealt);
+                    self.players[effect.owner as usize].heal(owed);
+                    effect.take_hit(0, QUARRY_VICTIM);
+                }
+            }
+
+            // The dark Lance. Two effects in one lifetime: a line looking for
+            // something, and then a leash.
+            //
+            // The catch window is the **move's own active frames**, read off
+            // its row rather than written down here, so the line is live for
+            // exactly as long as the hitbox of any other move would be. Caught
+            // nothing by the end of it and the effect is spent -- the line is
+            // still thrown and still drawn for those frames, because a whiff
+            // you cannot see is a whiff you cannot learn from, but a tether
+            // with nothing on the end of it is a thing the overlay would draw
+            // and the player would believe.
+            EffectKind::Tether => {
+                let thrown_for = effect.source().active.max(1);
+                if effect.caught().is_none() {
+                    let radius = effect.field_radius();
+                    let far = effect.pos.add(effect.dir.scale(effect.reach));
+                    for i in 0..MAX_PLAYERS {
+                        if !self.effects_reach(i, effect.owner)
+                            || !self.on_the_line(i, effect.pos, far, radius)
+                        {
+                            continue;
+                        }
+                        effect.take_hit(0, i);
+                        // **Guard denies the hold.** The line still lands as an
+                        // ordinary blow -- blockstun, the shove, all of it --
+                        // and then goes slack, which is the counterplay a drain
+                        // that lasts two seconds has to have. Asked before
+                        // `cut`, because `cut` answers the same question
+                        // internally and only gives back damage, and a tether
+                        // whose attach condition was "dealt more than nought"
+                        // would also refuse to take hold of somebody at one
+                        // health.
+                        let (guarding, _) = guard_against(
+                            &self.players[i],
+                            effect.pos,
+                            effect.source().unblockable,
+                        );
+                        self.cut(i, effect, effect.pos, effect.source().damage);
+                        if guarding {
+                            effect.forget_hits();
+                            effect.life = effect.age;
+                        }
+                        break;
+                    }
+                    // The one pass it gets at the creature, on the same frames.
+                    self.feed_the_caster(effect, 0, far, radius);
+                    if effect.caught().is_none() && effect.age >= thrown_for {
+                        effect.life = effect.age;
+                    }
+                }
+                if let Some(victim) = effect.caught() {
+                    let owner = effect.owner as usize;
+                    let apart = V3::new(
+                        self.players[victim].pos.x.sub(self.players[owner].pos.x),
+                        Fx::ZERO,
+                        self.players[victim].pos.z.sub(self.players[owner].pos.z),
+                    )
+                    .flat_len();
+                    // **The leash is the cost of the ability, and it is the one
+                    // number on this class the depth curve does not touch.**
+                    // Depth buys her a harder drain and a longer hold, which is
+                    // power; how far she may stray from what she caught is a
+                    // *rule*, and the rule is the whole ability -- a fragile
+                    // melee mage has to stand next to the thing she is draining.
+                    // A leash that grew with the bar would hand the deep version
+                    // of the cast the one thing it is supposed to have to pay
+                    // for, and at the edge it would reach most of the arena.
+                    let leash = t::tether_leash();
+                    if apart.raw() > leash.raw() || self.players[victim].health <= 0 {
+                        effect.life = effect.age;
+                    } else if effect.ticks_now() {
+                        self.drain(victim, effect);
+                    }
+                }
+            }
+
+            // Judgement's field. The strike already happened; this is the
+            // ground it left, and it points two ways at once -- it burns
+            // anybody standing in it and it makes her fast while she is in it.
+            EffectKind::JudgementField => {
+                let radius = effect.field_radius();
+                if effect.ticks_now() {
+                    for i in 0..MAX_PLAYERS {
+                        if self.effects_reach(i, effect.owner) && self.inside(i, effect.pos, radius)
+                        {
+                            self.drain(i, effect);
+                        }
+                    }
+                    self.feed_the_caster(effect, 0, effect.pos, radius);
+                }
+                let owner = effect.owner as usize;
+                if self.inside(owner, effect.pos, radius) {
+                    // Refreshed every frame she is in it and given the same
+                    // tail a slow has, so walking out of it runs down rather
+                    // than snapping off at the edge.
+                    self.players[owner].hasten(t::slow_frames());
                 }
             }
 
@@ -4658,7 +5120,7 @@ impl World {
                             continue;
                         }
                         effect.take_hit(arm, i);
-                        let dealt = self.cut(i, effect, at, Fx::ONE);
+                        let dealt = self.cut(i, effect, at, effect.source().damage);
                         let owed = effect.leeched(dealt);
                         self.players[effect.owner as usize].heal(owed);
                         // Caught by every one of them. The arms close, hold you
@@ -4731,6 +5193,20 @@ impl World {
         p.pos.y.raw() <= hi.raw() && p.pos.y.add(p.hurt_height()).raw() >= lo.raw()
     }
 
+    /// Is this fighter's body on the line between two points?
+    ///
+    /// The capsule test `resolve_hit` uses for a beam, in the shape an effect
+    /// can ask it: measured against the whole standing body rather than flat,
+    /// so a line thrown over somebody's head goes over it.
+    fn on_the_line(&self, victim: usize, from: V3, to: V3, radius: Fx) -> bool {
+        let p = self.players[victim];
+        if p.action.invulnerable() {
+            return false;
+        }
+        let spine = V3::new(p.pos.x, p.pos.y.add(p.hurt_height()), p.pos.z);
+        crate::math::segment_gap(from, to, p.pos, spine).raw() <= radius.add(t::body_radius()).raw()
+    }
+
     /// Is this fighter's body inside a sphere?
     ///
     /// Flat distance for the width, like every other hit test in the game, and
@@ -4787,13 +5263,17 @@ impl World {
     /// thrown blade and a puddle of fire: the blade is an attack, and guard is
     /// an answer to attacks. Knockback runs away from the *thing that hit you*
     /// rather than from the caster, who may be twenty metres behind it.
-    /// `share` is what this particular contact is worth against the move's own
-    /// number. One for almost everything: an effect that hits twice usually
-    /// means the same blow twice. The lotus is the exception -- what it does
-    /// coming home is a fraction of what the eruption did, because the two are
-    /// different events and pricing them the same would make a recall through a
-    /// crowd worth double an execute.
-    fn cut(&mut self, victim: usize, effect: &Effect, from: V3, share: Fx) -> i32 {
+    /// `damage` is what this particular contact is worth, before the caster's
+    /// own power and before any bonus against a disabled target. Almost always
+    /// the move's own number, because for an effect that carries the hit the
+    /// move *is* the ability -- but not always, and the two cases it is not are
+    /// the reason it is an argument rather than read off the move here. The
+    /// lotus coming home is a fraction of what its eruption did, because the
+    /// two are different events and pricing them the same would make a recall
+    /// through a crowd worth double an execute. And the Dual mage's light Lance
+    /// throws a line that pokes and a burst that kills, which are two numbers
+    /// in two places for one cast.
+    fn cut(&mut self, victim: usize, effect: &Effect, from: V3, damage: i32) -> i32 {
         let m = effect.source();
         let p = self.players[victim];
         if p.action.invulnerable() || (p.crouching && !m.hits_crouching) {
@@ -4805,9 +5285,12 @@ impl World {
         let parried = !m.unblockable
             && matches!(p.action, Action::Guard { held } if held < t::parry_window())
             && facing_it;
-        let damage = Fx::from_int(m.damage)
+        // Then the bonus against a target who cannot move, and the caster's own
+        // power -- which is one for everybody but the Dual mage. See
+        // `Effect::power`.
+        let damage = Fx::from_int(damage)
             .mul(preying(effect.class, p.disabled()))
-            .mul(share)
+            .mul(effect.power)
             .to_int();
         let dealt = if guarding || parried {
             0
@@ -4939,6 +5422,19 @@ fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
     }
 }
 
+/// How long a thing this fighter leaves behind gets to last.
+///
+/// The move table's own number for everybody, and that number on the Dual
+/// mage's depth curve. Never below one frame: an effect with no life at all is
+/// one that is removed before it is ever applied, which is a cast that silently
+/// does nothing.
+fn lasting(p: &Player, life: u16) -> u16 {
+    Fx::from_int(life as i32)
+        .mul(depth(p))
+        .to_int()
+        .clamp(1, u16::MAX as i32) as u16
+}
+
 /// Put an effect into the world, replacing the oldest if the board is full.
 fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
     let owner = effect.owner;
@@ -4967,9 +5463,20 @@ fn spawn_effect(effects: &mut [Option<Effect>; MAX_EFFECTS], effect: Effect) {
 /// while you stand in it and makes leaving it take longer, which is what turns
 /// a puddle of damage into a wall.
 fn dragged(p: &Player, speed: Fx) -> Fx {
+    let speed = if p.hasted > 0 {
+        speed.mul(t::judgement_field_speed())
+    } else {
+        speed
+    };
     if p.slowed == 0 {
         return speed;
     }
+    // A slow applies **after** the haste rather than instead of it, so being
+    // slowed inside your own field is the two of them arguing and the slow
+    // winning by however much it is worth. Either order gives the same product;
+    // what matters is that neither cancels the other outright, because a class
+    // that could not be slowed while standing on her own ground would have
+    // written herself an immunity nobody agreed to.
     speed.mul(p.slow_mul)
 }
 

@@ -2000,3 +2000,160 @@ pub fn hammer_leap_launch() -> Fx {
 pub fn hammer_leap() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HammerLeap))
 }
+
+// ---------------------------------------------------------------------------
+// The Dual mage's depth curve
+// ---------------------------------------------------------------------------
+//
+// The class's founding idea, finally built: **power scales continuously with
+// distance from the centre of the bar.** Two numbers describe the whole of it,
+// and one function reads them -- `state::depth` -- so that "a cast at the edge
+// is a bigger cast" is one rule rather than a thing each ability remembers to
+// do. See `docs/design/dual-mage.md`.
+
+/// What a cast from dead centre is worth, as a multiplier.
+///
+/// **Below one, and it has to be.** Centre is where both forms are available
+/// and both are weak -- that is the sentence the whole mechanic hangs off, and
+/// the only way to say it in numbers is to make the middle of the bar cost you
+/// something. Everything she throws standing at zero comes out thin.
+pub fn depth_floor() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DepthFloor))
+}
+
+/// And what the same cast is worth standing at either end.
+///
+/// Above one, by as much as the edge is meant to be frightening. The gap
+/// between this and [`depth_floor`] is the reason to leave the middle; how far
+/// out the burn starts is the reason not to go all the way.
+pub fn depth_ceiling() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DepthCeiling))
+}
+
+/// How much of the depth curve the **size** of a volume takes, as a percentage.
+///
+/// Damage always rides the whole curve. Whether a deep cast is also *bigger* is
+/// a separate question with a separate answer, because the two are different
+/// kinds of threat: more damage is worse to be hit by, more radius is harder to
+/// not be hit by. A hundred is the two moving together.
+///
+/// The two autos never grow whatever this says -- see
+/// `moves::dual::is_an_auto`, which is where that exemption is declared and
+/// why.
+pub fn depth_size() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::DepthSize), 100)
+}
+
+/// How far along the bar throwing the finisher moves her.
+///
+/// The third tier, and the one `docs/design/dual-mage.md` has been asking for
+/// since the bar was built: "a deep finisher nearly throws you over the edge".
+/// An auto is the small unit, a cast is more, and this is the one that makes
+/// casting Judgement from depth a question about whether you survive it rather
+/// than a free payoff.
+pub fn meter_finisher_push() -> i32 {
+    oven::scalar(Scalar::MeterFinisherPush)
+}
+
+/// What landing the wing's **tip** multiplies the shove by.
+///
+/// The tip already hits harder ([`wing_tipper`]); this is the other half of
+/// the same execution, and it is what makes which arm you punch with a
+/// *spacing* decision. The light auto's real knockback lives out at the far
+/// edge of the blade, so a player who wants somebody moved has to stand at the
+/// end of their own range to do it -- and on the dark arm the same frame pulls
+/// them that much further in instead, because the sign of the knockback is what
+/// says which. See `moves::Move::knockback`.
+pub fn wing_tip_shove() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WingTipShove))
+}
+
+/// What Sweep's **dark** form leaves on whoever it caught: their walking speed,
+/// as a multiplier.
+///
+/// Sweep is one move with two answers rather than two moves, because the shape
+/// is the same either way -- both arms across the whole front, driven from the
+/// hips. What changes is what happens to the people it caught: light throws
+/// them off their feet, dark takes their legs out from under them in the other
+/// sense. The light form spends the move's own `knockback` and `launch`; the
+/// dark form spends this and [`sweep_heal`].
+pub fn sweep_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepSlow))
+}
+
+/// And what the dark form gives her back, per target caught.
+///
+/// Per target rather than a share of the damage, which is the point of it being
+/// the panic button: a Sweep that catches two people is worth twice as much as
+/// one that catches one, so the answer to being swarmed is the same move as the
+/// answer to being cornered.
+pub fn sweep_heal() -> i32 {
+    oven::scalar(Scalar::SweepHeal)
+}
+
+/// How wide the light Lance's burst is where the line ran out.
+pub fn lance_burst_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LanceBurstRadius))
+}
+
+/// What that burst deals.
+///
+/// More than the line that carried it, and deliberately: the line is the
+/// delivery and the burst is the ability. That is what makes it a thing you aim
+/// *past* somebody -- the far end of the throw is where the damage is, so
+/// landing it means picking a point behind them rather than on them.
+pub fn lance_burst_damage() -> i32 {
+    oven::scalar(Scalar::LanceBurstDamage)
+}
+
+/// And how long it hangs there.
+pub fn lance_burst_life() -> u16 {
+    oven::scalar(Scalar::LanceBurstLife) as u16
+}
+
+/// How long the dark Lance's tether can hold, at most.
+pub fn tether_life() -> u16 {
+    oven::scalar(Scalar::TetherLife) as u16
+}
+
+/// What it takes out of whatever it caught, per tick.
+pub fn tether_drain() -> i32 {
+    oven::scalar(Scalar::TetherDrain)
+}
+
+/// How far the two of them may get apart before the line parts.
+///
+/// **The whole cost of the ability.** A drain that held at any range would be a
+/// ranged class's tool on a melee class's kit; breaking on distance is what
+/// keeps her standing next to the thing she is draining, which is exactly where
+/// a fragile body does not want to be. It is the same argument as autoing back
+/// toward centre, made by a different ability.
+pub fn tether_leash() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TetherLeash))
+}
+
+/// How wide the field Judgement leaves is.
+pub fn judgement_field_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JudgementFieldRadius))
+}
+
+/// What that field deals per tick. Low: the strike is the damage, and the field
+/// is the ground it leaves behind.
+pub fn judgement_field_damage() -> i32 {
+    oven::scalar(Scalar::JudgementFieldDamage)
+}
+
+/// And how long it lasts before the depth curve gets hold of it.
+pub fn judgement_field_life() -> u16 {
+    oven::scalar(Scalar::JudgementFieldLife) as u16
+}
+
+/// How fast she moves while standing in her own field.
+///
+/// The kit's "moving through it grants you speed", which is the half of the
+/// field that is for her rather than against them. Above one: the field is a
+/// place she wants to be, so that a Judgement thrown at somebody's feet is also
+/// a Judgement thrown at her own next few seconds.
+pub fn judgement_field_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::JudgementFieldSpeed))
+}

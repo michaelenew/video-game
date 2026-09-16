@@ -1,6 +1,7 @@
 ---
 status: mostly decided; ascension is an open proposal
 decided: 2026-09-10
+revised: 2026-09-16
 formerly: Statera
 supersedes: docs/archive/combat-design/statera-skills.md (resource system), docs/archive/combat-design/class-builds.md (Statera section)
 ---
@@ -36,6 +37,23 @@ A single bar with a centre and two ends.
 - There are no discrete zones and no threshold effects. It is a gradient, which is what
   removes the dead-zone problem in the old three-state design.
 
+**Built 2026-09-16, and it is one function.** `state::depth` is a straight line from
+`tuning::depth_floor` at the centre to `tuning::depth_ceiling` at either end, and everything
+she throws is multiplied by a point on it — damage, knockback and pull, launch, leech, what a
+field drains and how long it lasts, and how big what arrives is.
+
+**Two things it deliberately never touches: how far a move is thrown, and how fast it comes
+out.** Spacing and frame data are what two players read each other with, and a class whose
+range or startup changed continuously with a bar only one of them can see would be unlearnable
+from either side. So the bar changes how much it hurts and how big the thing that arrives is;
+where you can put it and how long it takes are fixed at every point on the bar. A deep
+Judgement is a far bigger Judgement thrown exactly as far as a feeble one.
+
+**A cast is worth where you were standing when you pressed the button.** Throwing anything
+moves the bar on the press, and the finisher moves it a long way — so a cast whose power were
+read after its own push would be worth more than the bar said, and the one move that is
+supposed to be embarrassing at the centre would be the least embarrassing thing there.
+
 The original design put human, balanced, and divine on a single axis of *how much damage
 and CDR you get*, which made the middle a strictly worse version of the ends. That could
 not be fixed by tuning, because all three states were the same quantity.
@@ -61,6 +79,7 @@ a thing the player sets deliberately and can read off her own animation.
 | --- | --- | --- |
 | Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
 | Light auto (`R`) | Light, and she is now light | 5 |
+| The finisher (`Q`) | Whichever force she is carrying | `tuning::meter_finisher_push` — 26 |
 | Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 12 |
 
 All of it **on the press**, whether or not it connects — see the note under "Autos are the
@@ -68,20 +87,34 @@ steering wheel". And she is **always carrying one of the two**, dark to begin wi
 holding two forces is holding one of them at any moment, and the version where she carried
 neither until her first auto landed meant the first key pressed in a match did nothing.
 
-Two tiers rather than a number per ability. "Stronger abilities push harder" was a formula
+Three tiers rather than a number per ability. "Stronger abilities push harder" was a formula
 over damage, which meant a knob nobody could find and a finisher that pushed about as hard as
-a poke; two numbers, both in the Oven, are legible and are what a tuning pass can actually
-move. **The finisher's own tier — "a deep finisher nearly throws you over the edge" — is not
-built yet**; today it pushes like any other cast.
+a poke; three numbers, all in the Oven, are legible and are what a tuning pass can actually
+move.
+
+**The finisher's own tier was built 2026-09-16.** At 26 against a bar of 100, a Judgement
+thrown from the deep threshold lands her well past it and one more cast from the edge, which
+is "a deep finisher nearly throws you over the edge" made literal. It is also what replaces the
+depth gate the finisher used to have: its status is power and price now, rather than
+availability.
 
 Before the first auto lands she is carrying neither force, and a cast pushes her further along
 whichever way she was already going — which at dead centre is nowhere. That is the same rule
 this document already states for every input that has no side.
 
-## Every ability has two forms, and the button picks
+## Every ability has two forms, and the force she is carrying picks
 
-**Left click always moves you darker. Right click always moves you lighter.** Every input —
-autos, directional basics, shift abilities — not just some of them.
+**Left click always moves you darker. Right click always moves you lighter**, and those two are
+the only inputs with a side — see the revision above. What they set is the force she is
+*carrying*, and that is what decides which form everything else comes out in.
+
+**Built for the first time on 2026-09-16, on Lance.** Middle click throws one of two moves and
+the arm she last punched with decides which: light bursts at the far end of the line, dark
+tethers what it hits. They are two entries in the move table rather than one with a flag,
+because the thing that has to differ is the **wind-up** — a person standing opposite gets that
+and nothing else to choose between getting out from under a burst and closing to break a
+tether. Sweep has a form split too and did not need a second animation, because its shape is the
+same either way and only what happens to whoever it caught changes.
 
 Power scales with meter depth rather than snapping between states:
 
@@ -93,6 +126,23 @@ Power scales with meter depth rather than snapping between states:
 **Centre is not a third form.** It is the position where both forms are available and both
 are weak — most options, least power. That property falls out of the mechanic instead of
 being asserted.
+
+### One pulls and one pushes — 2026-09-16
+
+The autos got a second job, and it is the same job the mechanic already had, said in space
+instead of on a bar.
+
+**The dark auto drags whoever it catches a short way toward her and returns a trickle of
+health. The light auto shoves, and the real shove is out at the tip of the wing.** Same frames,
+same shape, mirrored arms, opposite answers to the question of where the two of you end up
+standing.
+
+That is what makes which arm she punches with a **spacing decision as well as a meter
+decision** — which is the whole argument for putting the mechanic on the buttons a player
+presses constantly. A fragile melee mage stays attached to somebody with the dark hand and buys
+herself room with the light one, and she cannot ask for either without also committing to a
+side of the bar. Before this, "left or right" was a question about a number going up; now it is
+a question about the fight.
 
 ### Autos are the steering wheel
 
@@ -123,6 +173,13 @@ input the player uses constantly.
 Scroll click and both-click are neither left nor right, so they cannot pick a direction —
 they push you **further along whichever path you are already on**. Direction comes from
 side-ness, and only left and right have it.
+
+**That is what makes middle click the right home for a two-form cast**, and it is why Lance
+moved there on 2026-09-16 when shift stopped being an attack modifier. On shift plus left click
+the two rules were fighting: the input had a side, so the committed cast pushed her dark
+whatever she was holding, and the light form of it had nowhere to live at all. On a button with
+no side the push is settled by the path she is on and the *form* is free to come from the force
+in her arms, which is the thing the two autos exist to set.
 
 ### Why not a neutral form at centre
 
@@ -282,9 +339,14 @@ cosmetic.
 ## Open questions
 
 - **Does the colour want to be visible on the character rather than only in the bar?** It
-  decides what her abilities are made of, and it is currently readable from the HUD and from
-  which arm she last punched with. A caster whose *hands* say it would not need either.
-- **Should the finisher have a tier of its own?** See the table above.
+  decides what her abilities are made of, and it is currently readable from the HUD, from which
+  arm she last punched with, and — since 2026-09-16 — from the colour of everything she leaves
+  in the world: a light burst is white, a tether is violet. A caster whose *hands* said it
+  would not need any of them.
+- **Does the spread between the two ends of the depth curve feel right?** Half at the centre
+  and double at the edge is a four-to-one range, chosen so the difference is unmistakable
+  rather than because anything says it should be four. Too wide and the middle of the bar reads
+  as broken rather than weak; too narrow and there is no reason to leave it.
 - Naming for the two forces. The existing skill lists carry a light/judgement vocabulary
   (Judgement, Eclipse, Dark pulse, Culling, Mark of the Merciful) worth mining.
 - Whether low-tier abilities need a spam check beyond frame data, given they barely move the

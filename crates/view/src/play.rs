@@ -598,10 +598,11 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, 2) => Clip::BloodSpecial,
         (Class::BloodMage, _) => Clip::BloodMechanic,
         (Class::DualMage, 0) => Clip::DualDark,
-        (Class::DualMage, 1) => Clip::DualCommitted,
+        (Class::DualMage, 1) => Clip::DualLightLance,
         (Class::DualMage, 2) => Clip::DualSpecial,
         (Class::DualMage, 3) => Clip::DualSweep,
-        (Class::DualMage, _) => Clip::DualLight,
+        (Class::DualMage, 4) => Clip::DualLight,
+        (Class::DualMage, _) => Clip::DualDarkLance,
     }
 }
 

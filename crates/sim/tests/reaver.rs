@@ -760,15 +760,22 @@ fn the_mechanic_key_throws_her_committed_melee() {
 }
 
 #[test]
-fn shift_and_left_click_still_throws_the_same_melee() {
-    // The shared grammar is untouched: the swap gave Executioner a second home,
-    // it did not move it out of the one every class has.
+fn shift_and_left_click_no_longer_throws_anything_of_its_own() {
+    // Executioner used to answer to shift + left click as well as to `E`, which
+    // was the shared grammar's own binding for the committed slot. Shift is only
+    // a dodge now -- on every class, see `docs/design/controls.md` -- so that
+    // second home is gone and the modifier is simply ignored.
+    //
+    // **The Reaver is the one class that loses nothing by it**, and this test is
+    // where that is recorded: her committed move was already on a key of its
+    // own, so the change strands nobody here. The other three are stranded, and
+    // finding each a home is a separate job.
     let mut w = duel();
     run(&mut w, 2, SHIFT | L, 0);
     assert_eq!(
         w.players[0].action.attack_kind(),
-        Some(SLOT_COMMITTED),
-        "shift + left click stopped throwing the committed move"
+        Some(sim::state::SLOT_POKE),
+        "shift + left click threw something other than the bare left click's move"
     );
 }
 
@@ -1210,13 +1217,14 @@ fn the_recall_does_not_take_an_enemys_frames() {
     );
     w.players[1].pos = midway;
 
-    // He throws his committed move -- the slowest thing he has, so there is
-    // plenty of it left to be robbed of.
-    let his = sim::moves::get(Class::Bulwark, SLOT_COMMITTED);
-    w.advance([Input::default(), Input::new(SHIFT | L)]);
+    // He throws his special -- the slowest thing he has an input for, so there
+    // is plenty of it left to be robbed of. (It was his committed move until
+    // shift stopped being an attack modifier and left that slot with no button.)
+    let his = sim::moves::get(Class::Bulwark, sim::state::SLOT_SPECIAL);
+    w.advance([Input::default(), Input::new(Q)]);
     assert_eq!(
         w.players[1].action.attack_kind(),
-        Some(SLOT_COMMITTED),
+        Some(sim::state::SLOT_SPECIAL),
         "the dummy never started his move"
     );
 

@@ -1,7 +1,7 @@
 //! Combat rules. These encode design decisions, so a failure here means either
 //! a bug or a decision that changed without the documents changing.
 
-use sim::class::ALL_CLASSES;
+use sim::class::{ALL_CLASSES, Class};
 use sim::fixed::Fx;
 use sim::state::{Action, Phase, Shield, max_health};
 use sim::{Input, World};
@@ -196,24 +196,34 @@ fn players_can_stand_on_the_platforms() {
 
 #[test]
 fn crouching_ducks_an_overhead_but_not_a_mid() {
-    // Slam is an overhead; Bash is a mid. Crouch beats one and loses to the
-    // other, which is what stops it being a free defensive option.
-    let mut standing = engaged();
-    run(&mut standing, 45, L | SHIFT, 0);
+    // Executioner is an overhead; Slash is a mid. Crouch beats one and loses to
+    // the other, which is what stops it being a free defensive option.
+    //
+    // The Reaver rather than the Bulwark, whose Slam used to be the overhead
+    // here: shift stopped being an attack modifier, so Slam has no input until
+    // somebody finds it a new one. Hers is on `E`, which is a key of its own
+    // and did not move. See `docs/design/controls.md`.
+    let reavers = || {
+        let mut w = World::with_classes([Class::ShadowReaver, Class::ShadowReaver]);
+        run(&mut w, 90, Input::W, 0);
+        w
+    };
+    let mut standing = reavers();
+    run(&mut standing, 50, E, 0);
     assert!(
         standing.players[1].health < max_health(),
         "setup did not connect while standing"
     );
 
-    let mut mid = engaged();
+    let mut mid = reavers();
     run(&mut mid, 20, L, Input::CROUCH);
     assert!(
         mid.players[1].health < max_health(),
         "a mid was ducked; crouch beats everything"
     );
 
-    let mut ducked = engaged();
-    run(&mut ducked, 45, L | SHIFT, Input::CROUCH);
+    let mut ducked = reavers();
+    run(&mut ducked, 50, E, Input::CROUCH);
     assert_eq!(
         ducked.players[1].health,
         max_health(),
@@ -424,9 +434,13 @@ fn a_committed_move_slows_you_to_a_crawl_and_not_to_a_stop() {
     // heavy is the worst place in the game to do it. Below guarding, which is
     // the slowest thing you can otherwise choose to do, so a heavy is still the
     // most your feet ever cost you.
+    // The class special stands in for "a committed move" now that shift is only
+    // a dodge: `Q` is on its own key, it is committed on every class by
+    // construction, and it is the committed move the shared grammar still has
+    // an input for. See `docs/design/controls.md`.
     let guarding = sim::tuning::guard_move_speed().to_f32_for_render();
     let poking = speed_after(Input::W | L, 20);
-    let slam = speed_after(Input::W | SHIFT | L, 20);
+    let slam = speed_after(Input::W | Q, 20);
     assert!(slam > 0.3, "a committed move still stops you dead: {slam}");
     assert!(
         slam < guarding,
@@ -443,7 +457,7 @@ fn a_committed_move_is_a_commitment() {
     // What rooting was standing in for, and the thing that actually costs you
     // the ground: for the whole of a move, every other button is refused.
     let mut w = World::new();
-    run(&mut w, 1, SHIFT | L, 0);
+    run(&mut w, 1, Q, 0);
     assert!(
         w.players[0].action.attack_kind().is_some(),
         "the fixture never threw the move"
@@ -477,10 +491,7 @@ fn coming_to_rest_inside_a_move_is_not_instant() {
             Input::aimed(0, LOOK_LEFT),
         ]);
     }
-    w.advance([
-        Input::aimed(SHIFT | L, LOOK_RIGHT),
-        Input::aimed(0, LOOK_LEFT),
-    ]);
+    w.advance([Input::aimed(Q, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
     let v = w.players[0].vel;
     let first = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
     assert!(
@@ -489,10 +500,7 @@ fn coming_to_rest_inside_a_move_is_not_instant() {
     );
 
     for _ in 0..8 {
-        w.advance([
-            Input::aimed(SHIFT | L, LOOK_RIGHT),
-            Input::aimed(0, LOOK_LEFT),
-        ]);
+        w.advance([Input::aimed(Q, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
     }
     let v = w.players[0].vel;
     let settled = (v.x.to_f32_for_render().powi(2) + v.z.to_f32_for_render().powi(2)).sqrt();
@@ -528,10 +536,13 @@ fn releasing_a_direction_still_stops_you_crisply() {
 /// has to be pointed at a move that has one.
 fn swings_with(class: sim::class::Class) -> u16 {
     if sim::moves::get(class, sim::state::SLOT_POKE).strikes() {
-        L
-    } else {
-        SHIFT | L
+        return L;
     }
+    // One class's poke does not: the Blood mage's blade is thrown and the blade
+    // does the hitting. `E` is the nearest thing she has to a swing off the
+    // body -- Black spike, which puts a real volume out in front of her.
+    // (It used to be shift + left click, back when that was an input.)
+    E
 }
 
 /// A world with player one mid-swing and player two parked at `gap` past the
@@ -1253,7 +1264,7 @@ fn the_shove_needs_a_direction_and_belongs_to_the_poke() {
     // And the committed move gets none: it is already a commitment, and one
     // that also repositioned you would be strictly better than a poke.
     assert_eq!(
-        airborne_nudge(SHIFT | L | Input::W),
+        airborne_nudge(Q | Input::W),
         airborne_nudge(Input::W),
         "the committed move repositioned you as well"
     );

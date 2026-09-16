@@ -44,6 +44,9 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "KeyJ" => vec!["J"],
         "KeyK" => vec!["K"],
         "KeyL" => vec!["L"],
+        // Player two's third attack button. They have no scroll wheel on their
+        // half of the keyboard, the way they have no mouse at all.
+        "KeyM" => vec!["M"],
         "KeyP" => vec!["P"],
         "KeyQ" => vec!["Q"],
         "KeyR" => vec!["R"],

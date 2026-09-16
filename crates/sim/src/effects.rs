@@ -89,6 +89,33 @@ pub enum EffectKind {
     /// ability rather than a detail: recall the shadow with the blades out and
     /// the six of them drag across the arena after it. See [`Effect::lotus_at`].
     GuillotineLotus,
+    /// Dual mage, light Lance. What detonates where the line ran out.
+    ///
+    /// The line that carried it is the move's own hitbox and is a poke; this is
+    /// the ability. That is what makes the light form a thing you aim **past**
+    /// somebody: the damage is at the far end of the throw, so landing it means
+    /// picking a point behind them rather than on them.
+    LanceBurst,
+    /// Dual mage, dark Lance. A line thrown along the crosshair that catches
+    /// the first body it crosses and then **holds on**.
+    ///
+    /// Two effects in one lifetime, and the second is the ability. For the
+    /// move's own active frames it is a line looking for something; once it has
+    /// something it is a leash, draining what it caught every tick and parting
+    /// the moment the two of them get further apart than
+    /// `tuning::tether_leash`. A tether that held at any range would be a
+    /// ranged tool on a melee kit; breaking on distance is what keeps her
+    /// standing next to the thing she is draining.
+    Tether,
+    /// Dual mage, Judgement. The wide, low-damage ground the strike leaves
+    /// behind it.
+    ///
+    /// Two halves pointing opposite ways, which is why it is one effect rather
+    /// than two: it burns anybody standing in it, and it makes *her* fast while
+    /// she is in it. So a Judgement thrown at somebody's feet is also a
+    /// Judgement thrown at her own next few seconds, and how long either half
+    /// lasts is how far out on the bar she was when she threw it.
+    JudgementField,
 }
 
 /// How many arms a Grasp has, and which corner each one leaves by.
@@ -97,6 +124,18 @@ pub enum EffectKind {
 /// `(sideways, vertical)` against the line the ability was aimed along.
 pub const GRASP_ARMS: usize = 4;
 pub const GRASP_CORNERS: [(i32, i32); GRASP_ARMS] = [(-1, 1), (-1, -1), (1, 1), (1, -1)];
+
+/// How many beads a tether is drawn as.
+///
+/// It is a **line**, and the renderer draws effects as pieces that have a place
+/// and a size but no direction (`game::Piece`), so the line is a row of beads
+/// rather than one long cylinder. That is a presentation decision that turned
+/// out to be the right read as well: a chain visibly stretches as the two of
+/// them part, and visibly is not there any more the frame the leash breaks.
+///
+/// Nothing in the simulation depends on it -- the hit test is a segment, once,
+/// at the catch. See `Effect::tether_bead`.
+pub const TETHER_BEADS: usize = 10;
 
 /// How many blades a Guillotine lotus opens with.
 ///
@@ -133,6 +172,9 @@ impl EffectKind {
             EffectKind::Bloodletter => "bloodletter",
             EffectKind::Grasp => "grasp",
             EffectKind::GuillotineLotus => "guillotine lotus",
+            EffectKind::LanceBurst => "lance burst",
+            EffectKind::Tether => "tether",
+            EffectKind::JudgementField => "judgement field",
         }
     }
 
@@ -157,6 +199,12 @@ impl EffectKind {
             // be standing -- which is the fourth line of effect, and the only
             // move in the game that uses it. See `aim::mechanic_path`.
             EffectKind::GuillotineLotus => false,
+            // The burst goes off where the line stopped, which is a point in
+            // the air rather than a patch of floor, and the tether is a line
+            // through the air by construction. Judgement's field is the ground
+            // the strike left, so it is the one of the three that is.
+            EffectKind::LanceBurst | EffectKind::Tether => false,
+            EffectKind::JudgementField => true,
         }
     }
 
@@ -172,7 +220,10 @@ impl EffectKind {
     /// over on a tick the way the pillar it came from did, not once like a
     /// thrown blade.
     pub const fn travels(self) -> bool {
-        matches!(self, EffectKind::Bloodletter | EffectKind::Grasp)
+        matches!(
+            self,
+            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::Tether
+        )
     }
 
     /// Does a grab in the move table mean anything for this effect?
@@ -218,6 +269,9 @@ impl EffectKind {
             3 => Some(EffectKind::Bloodletter),
             4 => Some(EffectKind::Grasp),
             5 => Some(EffectKind::GuillotineLotus),
+            6 => Some(EffectKind::LanceBurst),
+            7 => Some(EffectKind::Tether),
+            8 => Some(EffectKind::JudgementField),
             _ => None,
         }
     }
@@ -245,6 +299,9 @@ impl EffectKind {
             EffectKind::GuillotineLotus => t::lotus_erupt()
                 .saturating_add(t::lotus_hold())
                 .saturating_add(t::lotus_return()),
+            EffectKind::LanceBurst => t::lance_burst_life(),
+            EffectKind::Tether => t::tether_life(),
+            EffectKind::JudgementField => t::judgement_field_life(),
         }
     }
 
@@ -264,6 +321,15 @@ impl EffectKind {
             EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_damage(),
             EffectKind::BlackSpike => t::spike_drain(),
             EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::GuillotineLotus => m.damage,
+            // All three of the Dual mage's carry a number of their own, for the
+            // same reason a pillar does: the move that threw them hit on its
+            // own and the two are not the same event. The light Lance's line is
+            // a poke and its burst is the ability; Judgement's strike is the
+            // damage and its field is the ground it left; and the dark Lance
+            // has no strike at all, so the drain is all there is.
+            EffectKind::LanceBurst => t::lance_burst_damage(),
+            EffectKind::Tether => t::tether_drain(),
+            EffectKind::JudgementField => t::judgement_field_damage(),
         }
     }
 }
@@ -340,6 +406,20 @@ pub struct Effect {
     /// measure its flight from that moment on rather than from when the
     /// pillar it came from was first planted. See `state::World::fire_the_cataclysm`.
     pub banked: i32,
+    /// What the caster's bar was worth when this was thrown, as a multiplier.
+    ///
+    /// [`Fx::ONE`] for five of the six classes, and the Dual mage's depth curve
+    /// for the sixth -- see `state::depth`. It scales what this deals and how
+    /// big it is, so a Judgement thrown from the centre leaves a puddle and one
+    /// thrown from the edge leaves the biggest thing in the game.
+    ///
+    /// **Fixed at the cast, not read live**, and that is the overlay's rule
+    /// rather than a design preference: `field_radius` is what the hit test
+    /// uses *and* what the renderer draws, so it has to be a number the
+    /// renderer can get at without knowing where the caster is standing this
+    /// frame. A size that changed under a thing already in the world would also
+    /// be a hazard that moved after you decided to walk round it.
+    pub power: Fx,
 }
 
 impl Effect {
@@ -366,6 +446,7 @@ impl Effect {
             reach,
             home: pos,
             banked: 0,
+            power: Fx::ONE,
         }
     }
 
@@ -392,9 +473,11 @@ impl Effect {
         }
     }
 
-    /// What it deals each time it connects.
+    /// What it deals each time it connects, at the power it was thrown with.
     pub fn damage(&self) -> i32 {
-        self.kind.damage(&self.source())
+        Fx::from_int(self.kind.damage(&self.source()))
+            .mul(self.power)
+            .to_int()
     }
 
     /// Percent of what it deals that goes back to the caster.
@@ -500,12 +583,25 @@ impl Effect {
 
     /// Radius of a field effect. Drain fields do not grow; they are a place.
     pub fn field_radius(&self) -> Fx {
+        self.own_radius().mul(self.power)
+    }
+
+    /// The radius before the caster's own power is applied. Split out only
+    /// because the two are one multiply and the match is long.
+    fn own_radius(&self) -> Fx {
         match self.kind {
             EffectKind::BlackSpike => t::spike_radius(),
             EffectKind::FirePillar | EffectKind::FireTornado => self.pillar_volumes().0.radius,
             EffectKind::Bloodletter => t::bloodletter_radius(),
             EffectKind::Grasp => t::grasp_arm_radius(),
             EffectKind::GuillotineLotus => t::lotus_blade_radius(),
+            EffectKind::LanceBurst => t::lance_burst_radius(),
+            // How thick the thrown line is, read off the move's own row -- the
+            // dark Lance puts no volume out of its body (`moves::shape` answers
+            // `None`), so its `radius` is free to be the one thing about the
+            // line that is a size, and it is where a tuner would look for it.
+            EffectKind::Tether => self.source().radius,
+            EffectKind::JudgementField => t::judgement_field_radius(),
         }
     }
 
@@ -769,9 +865,36 @@ impl Effect {
             .count()
     }
 
+    /// Where one bead of a tether is drawn, of [`TETHER_BEADS`] along it.
+    ///
+    /// From `pos` to `home`, both of which are kept live by
+    /// `state::World::step_effects`: `pos` is the caster's hand this frame and
+    /// `home` is either the far end of the throw, while the line is still
+    /// looking for something, or the thing it caught. So the one way to read
+    /// "it took hold" is that the far end stopped being where you aimed and
+    /// started being a person.
+    pub fn tether_bead(&self, i: usize) -> V3 {
+        let last = TETHER_BEADS.saturating_sub(1).max(1);
+        crate::math::lerp3(self.pos, self.home, Fx::ratio(i as i32, last as i32))
+    }
+
     /// Forget everyone hit so far, so the next pass starts clean.
     pub fn forget_hits(&mut self) {
         self.struck = 0;
+    }
+
+    /// Who a tether has hold of, if anything.
+    ///
+    /// The hit mask is doing double duty here and it is the right field for it:
+    /// a tether has one part and catches one body, so "who has this part hit"
+    /// and "who is on the end of the line" are the same question. No extra
+    /// field on an effect that is copied on every rollback frame, and nothing
+    /// to keep in step with the mask.
+    ///
+    /// Fighters only. The creature is caught by the line's first pass like
+    /// anything else, but nothing holds a Ridgeback on a leash.
+    pub fn caught(&self) -> Option<usize> {
+        (0..crate::state::MAX_PLAYERS).find(|i| self.already_hit(0, *i))
     }
 }
 

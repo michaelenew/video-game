@@ -650,3 +650,151 @@ fn the_champion_swings_the_weapon_the_player_can_see() {
         }
     }
 }
+
+#[test]
+fn the_two_lances_leave_from_the_arm_that_throws_them() {
+    // **Anything that comes out of the middle of her chest is a bug on this
+    // class.** The two arms are the whole readout of the mechanic: middle click
+    // throws one of two moves and the force in her arms picks which, so the
+    // side the line leaves from is the second thing the person opposite has to
+    // go on after the wind-up. A skillshot on the centre line would throw half
+    // of that away.
+    //
+    // Checked against the **baked clip** as well as against the move table, so
+    // the arm the volume comes out of is the arm the player can see reaching.
+    // The simulation has no idea where a hand is and the renderer has no idea
+    // where a hitbox is; this is the only place the two meet.
+    //
+    // It is the arm that *reaches* rather than where the hand ends up, and the
+    // difference matters: both of these are thrusts, and a thrust at full
+    // extension puts the hand near the body's own centre line whichever
+    // shoulder it left. What says which arm threw it is which one is out.
+    use sim::aim::Hand;
+    use sim::moves::dual;
+    let s = skeleton::skeleton_for(sim::Class::DualMage);
+    for (slot, clip, force, name) in [
+        (
+            dual::LIGHT_LANCE,
+            view::Clip::DualLightLance,
+            sim::class::Force::Light,
+            "light",
+        ),
+        (
+            dual::DARK_LANCE,
+            view::Clip::DualDarkLance,
+            sim::class::Force::Dark,
+            "dark",
+        ),
+    ] {
+        // Which arm the clip puts out in front on the frame the volume appears.
+        let (_, contact, _) = clip.phases().expect("an attack clip");
+        let skin = skeleton::solve(&s, &clip.at(contact as u32));
+        let forward = |joint: Joint| {
+            view::into_world(skin.origin[joint.index()], [0.0, 0.0, 0.0], [1.0, 0.0])[0]
+        };
+        let (out_l, out_r) = (forward(Joint::HandL), forward(Joint::HandR));
+        assert!(
+            (out_l - out_r).abs() > 0.15,
+            "the {name} Lance reaches with both arms equally ({out_l:.2} m and {out_r:.2} m), \
+             so which force threw it cannot be read off the body"
+        );
+        let reaching = if out_r > out_l {
+            Hand::Right
+        } else {
+            Hand::Left
+        };
+        assert_eq!(
+            sim::moves::get(sim::Class::DualMage, slot).hand,
+            reaching,
+            "the {name} Lance's volume comes out of the arm the clip is not reaching with"
+        );
+
+        // And the simulation really does start the line off the centre line,
+        // on that side, when middle click throws this form.
+        let mut w = sim::World::with_classes([sim::Class::DualMage, sim::Class::Bulwark]);
+        if let sim::class::Mechanic::Meter { colour, .. } = &mut w.players[0].mechanic {
+            *colour = force;
+        }
+        w.advance([sim::Input::aimed(sim::Input::MIDDLE, 0), sim::Input::new(0)]);
+        assert_eq!(
+            w.players[0].action.attack_kind(),
+            Some(slot),
+            "carrying the {name}, middle click threw the wrong form"
+        );
+        let p = &w.players[0];
+        let across = sim::aim::across(p.facing, reaching);
+        let off = sim::state::beam_of(p)
+            .from
+            .sub(p.pos)
+            .dot(across)
+            .to_f32_for_render();
+        assert!(
+            off > 0.1,
+            "the {name} Lance leaves {off:.2} m along its own arm's side -- from the \
+             sternum, or from the wrong shoulder"
+        );
+    }
+}
+
+#[test]
+fn the_two_lances_do_not_look_alike_while_they_are_winding_up() {
+    // **The load-bearing claim of the whole two-form idea.** Middle click throws
+    // one of two moves and the force she is carrying picks which, so the person
+    // standing opposite gets the wind-up and nothing else to decide between
+    // getting out from under a burst and closing to break a tether. Those are
+    // opposite answers, so a pair of startups that read alike is worse than
+    // having one move.
+    //
+    // Measured where it is actually read: the hands, through the startup,
+    // against the body rather than against the world -- an opponent is looking
+    // at a silhouette, not at a position on the floor.
+    let s = skeleton::skeleton_for(sim::Class::DualMage);
+    let light = view::Clip::DualLightLance;
+    let dark = view::Clip::DualDarkLance;
+
+    let (light_startup, _, _) = light.phases().expect("an attack clip");
+    let (dark_startup, _, _) = dark.phases().expect("an attack clip");
+    assert!(
+        dark_startup > light_startup,
+        "the dark Lance winds up in {dark_startup} frames and the light one in \
+         {light_startup} -- they are the same speed, so the first thing an opponent \
+         could use to tell them apart is missing"
+    );
+
+    // Hands relative to the hips, a matched fraction of the way through each
+    // wind-up, so a difference in length is not what is being measured.
+    let hands = |clip: view::Clip, through: f32| {
+        let (startup, _, _) = clip.phases().expect("an attack clip");
+        let frame = (startup as f32 * through).round() as u32;
+        let skin = skeleton::solve(&s, &clip.at(frame));
+        let hip = skin.origin[Joint::Root.index()];
+        [Joint::HandL, Joint::HandR].map(|j| {
+            let p = skin.origin[j.index()];
+            [p[0] - hip[0], p[1] - hip[1], p[2] - hip[2]]
+        })
+    };
+    let mut worst: f32 = 0.0;
+    for step in 1..=4 {
+        let through = step as f32 / 4.0;
+        let (a, b) = (hands(light, through), hands(dark, through));
+        let apart: f32 = a
+            .iter()
+            .zip(b.iter())
+            .map(|(p, q)| {
+                let d = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+                (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+            })
+            .fold(0.0f32, f32::max);
+        worst = worst.max(apart);
+        assert!(
+            apart > 0.18,
+            "a quarter-{step} of the way through, the two Lances hold their hands \
+             {apart:.2} m apart -- close enough to be the same pose"
+        );
+    }
+    assert!(
+        worst > 0.45,
+        "the two wind-ups never get further apart than {worst:.2} m, which is a \
+         difference you would have to be told about"
+    );
+}

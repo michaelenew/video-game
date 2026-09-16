@@ -254,9 +254,11 @@ fn the_shot_takes_the_charge_and_gives_the_frames_straight_back() {
     for _ in 0..40 {
         // Player two winds up their slowest move once, then lets go, so what
         // the beam interrupts is not immediately thrown again.
+        // Their special: the slowest thing they have an input for, now that
+        // shift is only a dodge and the committed slot has no button.
         let them = if !wound_up && w.players[1].action == Action::Free {
             wound_up = true;
-            Input::SHIFT | Input::LEFT
+            Input::SPECIAL
         } else {
             0
         };

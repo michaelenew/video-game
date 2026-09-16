@@ -1,7 +1,7 @@
 ---
 status: proposed; the initial kit is built
 decided: 2026-09-10
-revised: 2026-09-13
+revised: 2026-09-16
 formerly: Statera
 sources: docs/archive/combat-design/statera-skills.md, docs/archive/combat-design/class-builds.md
 depends: ../dual-mage.md
@@ -17,9 +17,11 @@ meaningless without it.
 
 ## Mechanic — the two-pole meter
 
-- **Left click moves you darker, right click moves you lighter** — every input, not just
-  autos. Stronger abilities push harder. Scroll click and both-click have no side, so they
-  push further along your current path.
+- **Left click moves you darker, right click moves you lighter.** Only the autos have a side;
+  everything else is made of whichever force she is carrying and pushes her further that way.
+  Middle click and both-click have no side, which is why Lance lives on middle click.
+- **Three tiers of push:** an auto moves her 5, a cast 12, and the finisher 26. The last is
+  what makes casting Judgement from depth a question about whether you survive the cast.
 - **Power scales continuously with depth.** The same cast is weak at centre and large at
   the edge. Centre is where both forms are available and both are weak.
 - **Coming back:** throw a far-side auto. That is the only way — casts follow the force she is
@@ -32,21 +34,63 @@ meaningless without it.
 
 Full input map in [../controls.md](../controls.md).
 
-## What is bound today — built 2026-09-13
+## What is bound today — rebuilt 2026-09-16
 
-Five moves, and the two on the bare clicks are the class.
+Six moves on five inputs, and the two on the bare clicks are still the class.
 
 | Input | Move | What it is |
 | --- | --- | --- |
-| `L` | **Dark auto** | A punch with the **left** arm. Steers dark by 5, and she is now dark |
-| `R` | **Light auto** | The same punch with the **right** arm. Steers light by 5 |
-| `shift` + `L` | **Lance** | The committed line skillshot. Steers 12, in whichever force she carries |
-| `Q` | **Judgement** | The finisher. **No longer gated** — see below |
-| `E` | **Sweep** | A wide cut across the whole front. Steers 12, in whichever force she carries |
+| `L` | **Dark auto** | A punch with the **left** arm that **pulls**. Steers dark by 5, and she is now dark |
+| `R` | **Light auto** | The same punch with the **right** arm, and it **pushes**. Steers light by 5 |
+| `M` | **Lance** | The committed line skillshot, in **two forms**: light bursts at the far end, dark tethers what it hits. Steers 12, along whichever way she is already going |
+| `Q` | **Judgement** | The finisher. No depth gate; it earns its status through power, and it throws the bar by 26 |
+| `E` | **Sweep** | Both arms round past both shoulders. Light throws them off their feet, dark slows and heals. Steers 12 |
 
-`shift` + `R` throws the light auto unmodified: the kit wants a light *form* of the committed
-cast there and there is not one built, so the modifier is ignored rather than made to mean
-something it does not.
+**Shift is only a dodge now**, on every class — see [../controls.md](../controls.md). That
+took Lance's old home away, and middle click is a better one than shift ever was: it has no
+side, so by the class's own rule it pushes her further along whichever way she is already
+going, while the light-or-dark form of the cast comes from the force she is carrying. The two
+rules stopped fighting.
+
+## Depth is the whole class, and it is in the numbers now — 2026-09-16
+
+**Power scales continuously with distance from the centre of the bar, and it scales
+everything.** One curve, `state::depth`: a straight line from `tuning::depth_floor` at zero to
+`tuning::depth_ceiling` at either end, symmetric, with every point on it reachable. No
+thresholds, no snapping between versions.
+
+At the centre everything she throws is thin and slightly disappointing. At the edge it is the
+most she can hold.
+
+**What it moves, and what it deliberately does not.**
+
+| | On the curve | Never |
+| --- | --- | --- |
+| Damage | ✓ | |
+| Knockback and pull | ✓ | |
+| Launch, leech, what a field drains | ✓ | |
+| How **big** what arrives is — `radius`, a field's radius | ✓ | |
+| How **far** it is thrown — `reach`, a skillshot's range | | ✓ |
+| Startup, active, recovery, hitstun, blockstun | | ✓ |
+
+The two exclusions are one argument made twice: **spacing and timing are what two players
+read each other with**, and a class whose range or frame data changed continuously with a bar
+only one of them can see would be unlearnable from either side. So the bar changes how much it
+hurts and how big the thing that arrives is; where you can put it and how fast it comes out are
+fixed. A deep Judgement is a far bigger Judgement thrown exactly as far as a feeble one.
+
+**A cast is worth where you were standing when you pressed the button**, not where its own push
+has since taken you (`state::Player::thrown_at`). Throwing anything moves the bar on the press
+and the finisher moves it a long way, so a cast read live would be worth its own push — and the
+one move in the kit that is supposed to be embarrassing at the centre would be the least
+embarrassing thing there. It would also mean the number on the HUD never matched what the
+player got.
+
+**The two autos are exempt from the size half of it**, and only that half. Their reach is
+pinned to the punch that throws them — `view/tests/kinematics.rs` checks that the blade's near
+edge starts where the fist stops — and they are the one move in the kit thrown every second, so
+a volume drifting away from the animation would make the steering wheel unreadable. What depth
+does to an auto is what it *does*.
 
 `cargo run -p sim --bin frametable` prints the live numbers, and the HUD draws the bar under
 her health: a two-poled track, filled out from the centre toward whichever end she is on, with
@@ -69,6 +113,27 @@ come back and in what shape.
 
 They carry a slight range boost, powered by the beings inside. The autos are the steering
 wheel, and throwing the far-side one is the way back toward centre.
+
+### One pulls and one pushes — 2026-09-16
+
+**The dark auto drags whoever it catches a short way toward her and returns a trickle of
+health. The light auto shoves.** Same frames, same shape, mirrored arms — and opposite answers
+to the question of where the two of you end up standing.
+
+That is what makes which arm you punch with a **spacing decision as well as a meter decision**,
+which is the whole point of the mechanic living on the buttons you press constantly. A fragile
+melee mage stays attached to somebody with the dark hand and buys herself room with the light
+one, and every time she does either she has also committed to a side.
+
+A pull is a **negative knockback** (`moves::Move::knockback` is signed now) and it is measured
+along the line between the two bodies rather than down her facing — the point of dragging
+somebody is that they arrive at *you*, and the wing wraps around her, so a body caught out at
+the side would otherwise be sent backwards past her instead of in.
+
+**The tip is where the real force is, on both arms.** `tuning::wing_tip_shove` multiplies the
+shove the same way `wing_tipper` already multiplies the damage, so landing the tip pulls them
+that much further in or sends them that much further out. The tip was already the one piece of
+execution in a move thrown constantly; now what it buys is spacing rather than only damage.
 
 ### They come out of the arms, and that is load-bearing
 
@@ -184,29 +249,60 @@ Four slots on `shift` + click. Left click casts the dark form, right the light f
 | **Light** | Forward blink. Damages on arrival; blinds at depth |
 | **Dark** | Drain-dash. Steals health from everything passed through |
 
-### Lance
-**Startup** fast · **Recovery** short · **Range** medium
+### Lance — **built, on `M`, and the first two-form ability in the game**
+**Startup** fast (light) / slow (dark) · **Recovery** short · **Range** medium
+
+One input, two moves, and the arm she last punched with decides which. They are two rows in
+the move table rather than one row with a flag, because **the thing that has to differ is the
+wind-up**: a person standing opposite gets that and nothing else to choose between getting out
+from under a burst and closing to break a tether, and the two answers are opposites.
+
+So the two clips are authored against each other at every point. The light one rises off the
+right shoulder, goes early and dives down its own line. The dark one sinks onto the rear leg,
+drags the left hand down past the hip, and comes through low with the palm open — and its
+contact pose leans *away* from the arm, because something on the end of it is about to start
+pulling. Same input, opposite silhouettes.
 
 | Form | Behaviour |
 | --- | --- |
-| **Light** | Line skillshot that detonates at maximum range for area burst |
-| **Dark** | Line skillshot that tethers the first target hit, draining while it holds |
+| **Light** | The line pokes on the way out and **detonates where it ran out**, so it is a thing you aim *past* somebody. The burst is most of the damage; landing it means picking a point behind them rather than on them |
+| **Dark** | No volume of its own. It throws a line that **catches the first thing it crosses** and drains it every tick until the leash parts — and the leash is the only number on the class that depth does not touch, because staying next to what she caught is the cost rather than the reward |
 
-### Sweep — **built, on `E`**
-**Startup** medium · **Recovery** medium · **Range** short cone
+**The leash is fixed at `tuning::tether_leash` whatever the bar says.** Depth buys a harder
+drain and a longer hold, which is power; how far she may stray is a *rule*, and it is the whole
+ability — a leash that grew with the bar would hand the deep version the one thing it is meant
+to pay for, and at the edge it would reach most of the arena.
+
+**Guard denies the hold.** The line still lands as an ordinary blow and then goes slack, which
+is the counterplay a two-second drain has to have.
+
+### Sweep — **built, on `E`, and it has weight now**
+**Startup** medium · **Recovery** medium · **Range** short, and **round past both shoulders**
 
 Both arms thrown across the whole front at once, driven from the hips, left to right. It is
 the answer to somebody already inside the punches: they are long and thin and lose to anyone
 who has closed, and this is the thing that moves that person.
 
-Built as **one move rather than two forms**, which is true of every ability on this class so
-far — the form split is unbuilt everywhere, not skipped here. Being on a key rather than on a
-click, it has no side, so it pushes you further along the path you are already on.
+**It is the one move of hers that reaches a little behind the shoulders**, and that is a
+geometric claim rather than a mood. Somebody inside the punches is standing beside her or past
+her shoulder, and a cut that only covered her front would miss exactly the person it exists
+for. The arc runs most of a half turn; the clip winds the hands behind the left shoulder and
+carries them through behind the right, because the volume does, and an animation that had
+already thrown the arms across by the time the hitbox appeared would be drawing the move a
+shoulder's width in front of where it hits.
 
-| Form | Not built |
+Still **one move rather than two**, and now for a reason rather than for want of building it:
+the shape is the same either way. Only what happens to whoever it caught changes, which is a
+thing to branch on at the moment of contact rather than a second animation. Being on a key
+rather than on a click it has no side, so it pushes you further along the path you are already
+on.
+
+| Form | Behaviour |
 | --- | --- |
-| **Light** | Pushes back, and staggers anything carrying a Tempest mark |
-| **Dark** | Slows, and heals you per target caught |
+| **Light** | **Built.** Throws them back and off their feet — the move's own knockback plus a launch |
+| **Dark** | **Built.** Slows them and heals her `tuning::sweep_heal` **per target caught**, which is what makes the answer to being swarmed the same move as the answer to being cornered |
+
+The Tempest stagger the light form once carried waits on Tempest, which is unbuilt.
 
 ### Divide
 **Startup** medium · **Recovery** short · **Range** medium
@@ -229,21 +325,31 @@ depth meant the key did **nothing at all** for the opening of every match: a pla
 it had no way to tell an ability from an empty binding. A special you cannot press is not a
 special.
 
-What is lost with the gate is the finisher's status as a payoff, and that has to come back as
-*power* rather than as availability — the class's own principle is that depth scales strength
-continuously, so a Judgement thrown from the centre should be a weak one rather than a refused
-one. Nothing scales with depth yet; that is the next thing this class needs.
+What was lost with the gate was the finisher's status as a payoff, and **that came back as
+power on 2026-09-16** — see "Depth is the whole class" above. A Judgement thrown from the
+centre is a weak one rather than a refused one, and one thrown from the edge is the largest
+thing in the game and very nearly throws her over it.
 
-Eclipse is unbuilt, and `M` and `LR` are still where the design intends the pair of them to
-live if the reservation below resolves that way.
+Eclipse is unbuilt. `M` now carries Lance rather than a finisher, so the reservation below is
+about `LR` alone.
 
-### Judgement — Light
+### Judgement — Light, and **built on `Q`**
 **Startup** slow, delayed · **Recovery** committed · **Range** medium · **Mechanic** pushes
-hard toward Light
+hard toward Light — 26, its own tier, more than twice a cast
 
-A delayed area strike: massive instantaneous damage at the centre, then a wide low-damage
-field. While the field lasts, moving through it grants you speed, bonus damage, and
-lifesteal. Applies only one Tempest mark regardless of how many it hits.
+A delayed area strike where the crosshair is: instantaneous damage at the centre, and then a
+wide low-damage **field** that burns anybody standing in it and makes *her* fast while she is
+in it. So a Judgement thrown at somebody's feet is also a Judgement thrown at her own next few
+seconds.
+
+**Its status is power now, not availability.** At the centre it is a small radius, a small
+number and a field that is over before anybody walks through it — an embarrassing version of
+itself. At the edge it is the biggest thing in the game, and the 26 it throws the bar means
+that a deep one lands her either well into the burn or over the edge into ascension. That is
+the question the finisher is supposed to ask.
+
+The kit's "bonus damage and lifesteal inside the field" is not built; the speed is. One
+Tempest mark regardless of how many it hits waits on Tempest.
 
 ### Eclipse — Dark
 **Startup** medium · **Recovery** committed · **Range** long, channelled · **Mechanic**
@@ -258,6 +364,13 @@ Commit to one side with repeated casts of that form, land the finisher from the 
 position you can survive, then close to melee and auto back toward centre — or cast the far
 side to bleed back slowly if you cannot close.
 
+**And which arm you punch with is now a spacing question at the same time.** The dark hand
+drags them in, which is how a body this fragile stays attached to somebody long enough to
+matter; the light hand shoves, which is how it gets out. So the two buttons that steer the bar
+are also the two that decide the range you are fighting at, and you cannot ask for one without
+answering the other. That is the mechanic doing its job: it is not a bar you manage on the
+side, it is the thing your hands are already doing.
+
 Switching sides means crossing the whole bar, so which edge you commit to is a real
 strategic choice rather than a moment-to-moment one. Oscillating at centre is always
 available and always weak.
@@ -268,15 +381,23 @@ pressing, and you can read your own commitment off your own animation.
 
 ## Open questions
 
-- **Are `M` and `LR` reliable enough to carry the finishers?** They are the slowest inputs on
-  most mice and these are the payoff moves. See [../controls.md](../controls.md). Judgement
-  sits on `Q` until this is answered.
-- **What goes on `shift` + `R`?** The kit wants the light form of the committed cast; nothing
-  is built, so it throws the light auto. The first class to build a two-form ability answers
-  this for the whole kit.
-- **Nothing scales with depth yet.** Power scaling continuously with distance from centre is
-  the class's founding idea and none of it is built: a cast at the edge is the same cast as one
-  at the middle. With the finisher's gate gone this is the largest hole in the class.
+- **Is `M` reliable enough to carry Lance?** It is the slowest input on most mice and this is
+  now the committed cast rather than a finisher, which makes the question sharper rather than
+  softer: it is a button she presses in every exchange. `U` stands in for it, and the answer
+  may be that the keyboard stand-in has to be the real binding. See
+  [../controls.md](../controls.md).
+- **Is "the form is the arm you last punched with" findable?** It is the whole of the two-form
+  idea and there is nothing on the HUD that teaches it beyond the bar's colour. The two Lance
+  clips are authored to be opposites so the *opponent* can read it; whether the player can read
+  their own is a different question and is not answered by the same thing.
+- **Does the depth curve read as continuous in the hand, or only on paper?** `depth_floor` is
+  0.5 and `depth_ceiling` is 2.0, so the edge is four times the centre. That is a big spread
+  and it is deliberately a guess: the risk in one direction is that the middle of the bar feels
+  broken rather than weak, and in the other that nothing below the last quarter of the bar is
+  worth casting from.
+- **Is a Judgement at full depth too much of a health bar?** It is the biggest number in the
+  game by design, and it is thrown from a position that is already burning her and one cast
+  from ascension. Whether that is a fair price is a play question.
 - **Should the wing tilt at all?** Standing, its plane is the floor's and the camera's pitch
   does not touch it — which is the shape as specified, and which means an auto thrown at
   somebody on a ledge above or below misses them by geometry rather than by aim. Airborne it
@@ -286,3 +407,9 @@ pressing, and you can read your own commitment off your own animation.
 - Does Divide's dash-to-impact work with either form of the ability that hits it, or only
   matching forms? Matching-only would be a strong combo constraint worth testing.
 - Naming the two forces.
+- **Should the tether pull?** It does not: the dark *auto* is what pulls, and giving the drain
+  a pull as well would make one of the two redundant. But a leash that never tugs may read as a
+  rope rather than a tether.
+- **Should a tether hold the creature?** It catches a Ridgeback with its first pass and then
+  parts, because nothing holds a ten-metre animal on a leash. In a hunt that makes the dark
+  form strictly the worse of the two, which may or may not be the right answer.
