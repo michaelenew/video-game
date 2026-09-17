@@ -140,6 +140,7 @@ fn main() {
                     place_discs,
                     place_wings,
                     place_wing_tips,
+                    place_pinions,
                     place_marks,
                 ),
                 beast::place,
@@ -506,6 +507,32 @@ struct WingTipMesh(usize);
 /// on the rollback path.
 const WING_SLICES: usize = 12;
 
+/// One feather of the Dual mage's wings: the pair that opens while she is deep
+/// on her own bar or ascended.
+///
+/// **Not [`WingMesh`]**, which draws her auto's hit volume. That one is a
+/// promise about where a blade is and comes straight off `state::hitbox`; this
+/// one is ornament and hits nothing. They are both called a wing because the
+/// class is built out of one image, but only one of them is allowed to lie.
+///
+/// Parented to the fighter's root, so the body's place and yaw come for free
+/// and a feather is a fixed offset in her own space. The anchor is a **fixed**
+/// point at shoulder height rather than the solved chest bone: the float is a
+/// hang, the hang barely moves, and the alternative is a fifth pool inside
+/// `apply_poses` and four more `Without` bounds on its queries. Nothing about
+/// this is a volume, so nothing about it has to agree with the simulation.
+#[derive(Component)]
+struct Pinion {
+    owner: usize,
+    /// -1 for the left wing, +1 for the right.
+    side: f32,
+    index: usize,
+}
+
+/// Feathers per wing. Enough to read as a fan from across the arena; few
+/// enough that eight boxes is the whole cost.
+const PINION_FEATHERS: usize = 5;
+
 /// The aim marker a channelled move is wound out along.
 ///
 /// One per fighter: a channel is an action, and nobody is in two at once. It is
@@ -645,6 +672,22 @@ fn setup(
                         Transform::default(),
                         BodyPart { owner, joint },
                     ));
+                }
+                // Her wings, hidden for everybody. A pool parented to the root
+                // rather than something spawned when the bar goes deep, for the
+                // reason every other pool here is one: the bar can cross its
+                // threshold inside a rollback, and allocating a mesh on that
+                // path is the most expensive thing a frame could do.
+                for side in [-1.0f32, 1.0] {
+                    for index in 0..PINION_FEATHERS {
+                        root.spawn((
+                            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+                            MeshMaterial3d(skin.clone()),
+                            Transform::default(),
+                            Visibility::Hidden,
+                            Pinion { owner, side, index },
+                        ));
+                    }
                 }
             });
 
@@ -1208,6 +1251,96 @@ fn place_wing_tips(
         // teaching the wrong distance.
         tf.scale = Vec3::splat(hb.radius.to_f32_for_render() * 2.0);
     }
+}
+
+/// Open the Dual mage's wings while she is off the floor of her own bar.
+///
+/// **Ethereal, and in the colour of the force she is carrying.** The class is
+/// which of the two you are holding, so the reward for riding the edge says
+/// which edge in the most legible place there is -- on the character, where the
+/// player is already looking, rather than on a bar under the health.
+///
+/// A fan of thin slabs rather than a wing mesh. There is no wing model and this
+/// is a blockout; what a fan of slabs can do that a single quad cannot is
+/// **move**, and the feathers sweep on a slow beat off the simulation frame --
+/// which is in the snapshot, so it survives a rollback like every other clock
+/// the renderer is allowed to read.
+///
+/// Nothing here is a volume. See [`Pinion`] for why that matters and why this
+/// is not the other thing called a wing.
+fn place_pinions(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut feathers: Query<(
+        &Pinion,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut material) in feathers.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        if !sim::state::floating(p) {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        let force = match p.mechanic {
+            sim::class::Mechanic::Meter { colour, .. } => colour,
+            _ => {
+                *vis = Visibility::Hidden;
+                continue;
+            }
+        };
+        let wants = match force {
+            sim::class::Force::Light => &look.light,
+            sim::class::Force::Dark => &look.dark,
+        };
+        if material.0.id() != wants.id() {
+            material.0 = wants.clone();
+        }
+
+        *vis = Visibility::Inherited;
+        let (at, along, length) = feather(tag.side, tag.index, sim.cur.frame);
+        tf.translation = at;
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along);
+        tf.scale = Vec3::new(0.055, length, 0.012);
+    }
+}
+
+/// Where one feather sits, which way it points and how long it is, in her own
+/// space.
+///
+/// Split out of [`place_pinions`] so the geometry can be checked without a
+/// window: a wing drawn on the wrong side, or through the middle of the body,
+/// is the sort of thing nobody notices in a still and everybody notices in
+/// motion.
+///
+/// `frame` is the simulation's own frame counter, which is in the snapshot --
+/// so the beat is deterministic and a rollback redraws the same wing rather
+/// than a different one.
+fn feather(side: f32, index: usize, frame: u32) -> (Vec3, Vec3, f32) {
+    /// Where a wing leaves the body, in her own space: shoulder height, a
+    /// hand's width out, and behind the chest.
+    const ROOT: Vec3 = Vec3::new(0.17, 1.28, -0.12);
+    /// How long a feather is, longest at the top of the fan.
+    const LONGEST: f32 = 1.15;
+    const SHORTEST: f32 = 0.55;
+
+    // The fan: the top feather sweeps up and back, the bottom one out and
+    // down, and they are evenly spread between.
+    let down = index as f32 / (PINION_FEATHERS - 1) as f32;
+    let length = LONGEST + (SHORTEST - LONGEST) * down;
+    // A slow beat, a little out of phase down the fan so the wing ripples
+    // rather than flapping as one board.
+    let beat = ((frame as f32 * 0.035) - down * 0.9).sin();
+    let up = (52.0 - 78.0 * down + beat * 5.0).to_radians();
+    let out = (26.0 + 22.0 * down + beat * 4.0).to_radians() * side;
+
+    // Up and out from the shoulder, and swept back, because a wing that stood
+    // square to the shoulders would read as a signpost.
+    let along = Vec3::new(out.sin(), up.sin(), -0.55).normalize();
+    let root = Vec3::new(ROOT.x * side, ROOT.y, ROOT.z);
+    (root + along * (length * 0.5), along, length)
 }
 
 /// Put each channelling fighter's aim marker where their aim currently lands.
@@ -2461,6 +2594,91 @@ mod tests {
         assert!(
             !idle.pointer && !idle.keyboard,
             "a shut palette claims nothing"
+        );
+    }
+}
+
+#[cfg(test)]
+mod pinions {
+    use super::*;
+
+    /// Every feather of both wings, over a couple of seconds of the beat.
+    fn all() -> Vec<(f32, usize, u32, Vec3, Vec3, f32)> {
+        let mut out = Vec::new();
+        for side in [-1.0f32, 1.0] {
+            for index in 0..PINION_FEATHERS {
+                for frame in [0u32, 17, 43, 90, 137] {
+                    let (at, along, length) = feather(side, index, frame);
+                    out.push((side, index, frame, at, along, length));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_wing_stays_on_its_own_side_and_out_of_the_body() {
+        // The two ways a fan of slabs hung off a shoulder goes wrong, and both
+        // of them are invisible in a still: a wing that crosses the centre line
+        // reads as one wing on the wrong side, and one that sits inside the
+        // torso reads as a rendering fault.
+        let body = sim::tuning::body_radius().to_f32_for_render();
+        for (side, index, frame, at, _, _) in all() {
+            assert!(
+                at.x * side > 0.0,
+                "feather {index} of the {} wing crosses the centre line at frame {frame}: x = {:.2}",
+                if side < 0.0 { "left" } else { "right" },
+                at.x
+            );
+            assert!(
+                at.length_squared() > 0.0 && at.x.abs() > body * 0.3,
+                "feather {index} sits {:.2} m off the centre line at frame {frame}, inside a \
+                 {body:.2} m body",
+                at.x.abs()
+            );
+        }
+    }
+
+    #[test]
+    fn the_fan_opens_downward_and_outward() {
+        // What makes it read as a wing rather than as a bundle: the top feather
+        // is the longest and reaches up and back, and each one below it is
+        // shorter and swings further out.
+        for side in [-1.0f32, 1.0] {
+            let mut last_up = f32::MAX;
+            let mut last_length = f32::MAX;
+            for index in 0..PINION_FEATHERS {
+                let (_, along, length) = feather(side, index, 0);
+                assert!(
+                    along.y < last_up,
+                    "feather {index} does not sit below the one above it"
+                );
+                assert!(
+                    length < last_length,
+                    "feather {index} is not shorter than the one above it"
+                );
+                assert!(
+                    along.z < 0.0,
+                    "feather {index} points forward rather than trailing behind her"
+                );
+                last_up = along.y;
+                last_length = length;
+            }
+        }
+    }
+
+    #[test]
+    fn the_beat_moves_and_is_a_pure_function_of_the_frame() {
+        // It runs on the simulation's frame counter, which is in the snapshot,
+        // so a rollback redraws the same wing rather than a different one. And
+        // it has to actually move, or the pool is five static boards.
+        let (a, _, _) = feather(1.0, 0, 0);
+        let (b, _, _) = feather(1.0, 0, 45);
+        assert_ne!(a, b, "the wings never move");
+        assert_eq!(
+            a,
+            feather(1.0, 0, 0).0,
+            "the beat is not a function of the frame"
         );
     }
 }

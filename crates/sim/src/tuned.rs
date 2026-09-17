@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 272] = [
+pub const SCALARS: [i32; 274] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -280,6 +280,8 @@ pub const SCALARS: [i32; 272] = [
               12, // dual_mage.judgement,_field_damage_per_tick = 12
              100, // dual_mage.judgement,_field_lasts = 100
            95027, // dual_mage.judgement,_her_speed_inside_it_(x) = 1.45
+           36044, // air.aerial_hang,_each_one_after = 0.55
+           88474, // dual_mage.floating,_walk_speed_(x) = 1.35
 ];
 
 #[rustfmt::skip]
@@ -1358,7 +1360,7 @@ pub const MOVES: [i32; 1204] = [
                8, // move.dual_mage.dark_auto.blockstun = 8
          -288359, // move.dual_mage.dark_auto.knockback = -4.4
               60, // move.dual_mage.dark_auto.mobility_(%) = 60
-               6, // move.dual_mage.dark_auto.aerial_hang = 6
+              18, // move.dual_mage.dark_auto.aerial_hang = 18
                0, // move.dual_mage.dark_auto.unblockable = off
                1, // move.dual_mage.dark_auto.hits_crouching = on
                0, // move.dual_mage.dark_auto.needs_mechanic = off
@@ -1375,7 +1377,7 @@ pub const MOVES: [i32; 1204] = [
                0, // move.dual_mage.dark_auto.channel,_reach_at_no_hold = 0
              100, // move.dual_mage.dark_auto.repeat_lockout_(%) = 100
                0, // move.dual_mage.dark_auto.reactivate_no_sooner_than = 0
-               0, // move.dual_mage.dark_auto.steps_forward_(m) = 0
+           85197, // move.dual_mage.dark_auto.steps_forward_(m) = 1.3
                9, // move.dual_mage.light_lance.startup = 9
                4, // move.dual_mage.light_lance.active = 4
               18, // move.dual_mage.light_lance.recovery = 18
@@ -1470,7 +1472,7 @@ pub const MOVES: [i32; 1204] = [
                8, // move.dual_mage.light_auto.blockstun = 8
           314573, // move.dual_mage.light_auto.knockback = 4.8
               60, // move.dual_mage.light_auto.mobility_(%) = 60
-               6, // move.dual_mage.light_auto.aerial_hang = 6
+              18, // move.dual_mage.light_auto.aerial_hang = 18
                0, // move.dual_mage.light_auto.unblockable = off
                1, // move.dual_mage.light_auto.hits_crouching = on
                0, // move.dual_mage.light_auto.needs_mechanic = off
@@ -1487,7 +1489,7 @@ pub const MOVES: [i32; 1204] = [
                0, // move.dual_mage.light_auto.channel,_reach_at_no_hold = 0
              100, // move.dual_mage.light_auto.repeat_lockout_(%) = 100
                0, // move.dual_mage.light_auto.reactivate_no_sooner_than = 0
-               0, // move.dual_mage.light_auto.steps_forward_(m) = 0
+          -85197, // move.dual_mage.light_auto.steps_forward_(m) = -1.3
               16, // move.dual_mage.dark_lance.startup = 16
                4, // move.dual_mage.dark_lance.active = 4
               20, // move.dual_mage.dark_lance.recovery = 20

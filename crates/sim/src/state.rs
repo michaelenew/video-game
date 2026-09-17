@@ -232,6 +232,16 @@ pub struct Player {
     pub jump_hold: u16,
     /// Frames of suspended fall from an aerial attack. See `Move::air_stall`.
     pub air_stall: u16,
+    /// How many aerials have hung this airtime. Reset on landing.
+    ///
+    /// **The air gives you less each time you ask.** A hang is per-move and
+    /// costs nothing but the move, so a class with two interchangeable pokes
+    /// can alternate them and never come down -- the repeat lockout stops one
+    /// move being mashed and has nothing to say about two. The Dual mage's
+    /// autos are exactly that pair, and hers hang longer than anybody's on
+    /// purpose, so the falloff is what keeps the floatiest poke in the game
+    /// from being a hover. See `tuning::air_stall_falloff`.
+    pub air_stalls: u8,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -763,6 +773,7 @@ impl Default for Player {
             grounded: true,
             jump_hold: 0,
             air_stall: 0,
+            air_stalls: 0,
             air_dodged: false,
             hit_used: false,
             repeat_lock: [0; moves::MAX_SLOTS],
@@ -1397,6 +1408,7 @@ impl World {
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
+            h.write_u32(p.air_stalls as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
             h.write_u32(p.stride as u32);
@@ -2740,6 +2752,7 @@ fn step_player(
         p.air_dodged = false;
         p.jump_hold = 0;
         p.air_stall = 0;
+        p.air_stalls = 0;
         p.leap_used = false;
     }
 }
@@ -3733,7 +3746,22 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     if p.grounded {
         return;
     }
-    p.air_stall = moves::get(p.class, kind).air_stall;
+    // **Each successive hang in one airtime is worth less** -- see
+    // `Player::air_stalls`. The first is the move's own number; after that the
+    // falloff compounds, so a pair of pokes alternated forever is a slow
+    // descent rather than a hover, and the sum of everything the air will give
+    // you is bounded before you touch the floor.
+    let full = moves::get(p.class, kind).air_stall;
+    if full > 0 {
+        let mut worth = Fx::from_int(full as i32);
+        for _ in 0..p.air_stalls {
+            worth = worth.mul(t::air_stall_falloff());
+        }
+        p.air_stall = worth.to_int().max(0) as u16;
+        p.air_stalls = p.air_stalls.saturating_add(1);
+    } else {
+        p.air_stall = 0;
+    }
 
     let (ax, az) = input.move_axis();
     // The class's fast button, which for the Champion in the air is the sword.
@@ -4107,6 +4135,29 @@ fn live_depth(p: &Player) -> Fx {
     let max = t::meter_max().max(1);
     let out = Fx::ratio(value.abs().min(max), max);
     crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+}
+
+/// Is the Dual mage off the floor of her own bar: deep, or ascended?
+///
+/// **`false` for every other class**, so it is safe to ask of anybody.
+///
+/// Deep is the same threshold the burn starts at and the same one the HUD
+/// marks, deliberately: "deep" should mean one thing, and one threshold is what
+/// makes the burn and the float two faces of the same decision rather than two
+/// rules that happen to fire near each other. The cost of riding the edge is
+/// that it eats you; the reward is that you stop touching the ground.
+///
+/// Read live rather than from `thrown_at`, unlike [`depth`]. It is not what a
+/// cast is worth -- it is where she *is*, and where she is has to match what
+/// the renderer is drawing on the frame it draws it.
+pub fn floating(p: &Player) -> bool {
+    let Mechanic::Meter {
+        value, ascending, ..
+    } = p.mechanic
+    else {
+        return false;
+    };
+    ascending > 0 || value.abs() > t::meter_deep()
 }
 
 /// The same curve as it applies to the **size** of what a move puts in the
@@ -5497,6 +5548,15 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
     } else {
         speed
     };
+    // **The Dual mage's feet leave the floor at depth**, and a thing that is
+    // not walking is not held to a walk. See [`floating`] and
+    // `tuning::float_move_speed`; the renderer reads the same predicate to stop
+    // driving her legs -- `view::pose`.
+    let speed = if floating(p) {
+        speed.mul(t::float_move_speed())
+    } else {
+        speed
+    };
     if p.slowed == 0 {
         return speed;
     }
@@ -5793,6 +5853,7 @@ fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
     p.air_dodged = false;
     p.jump_hold = 0;
     p.air_stall = 0;
+    p.air_stalls = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }

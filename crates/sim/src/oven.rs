@@ -457,6 +457,18 @@ scalars! {
     JudgementFieldDamage, "Dual mage", "Judgement, field damage per tick",  Int,    0,       120;
     JudgementFieldLife,   "Dual mage", "Judgement, field lasts",            Frames, 1,       300;
     JudgementFieldSpeed,  "Dual mage", "Judgement, her speed inside it (x)", Fixed, fx(1,1), fx(3,1);
+    // **Appended, like the camera's airborne framing above and for the same
+    // reason:** `tuned::SCALARS` is indexed by this enum's own discriminant, so
+    // slotting a knob in beside its relatives hands every knob below it its
+    // neighbour's baked value. New scalars go here, whatever family they show
+    // up under in the palette.
+    //
+    // What each successive aerial hang in one airtime is worth. See
+    // `state::Player::air_stalls`.
+    AirStallFalloff,  "Air",      "Aerial hang, each one after", Fixed,  fx(1,10), fx(1,1);
+    // How much faster the Dual mage moves once she is off the floor of her own
+    // bar -- deep, or ascended. See `tuning::float_move_speed`.
+    FloatMoveSpeed,   "Dual mage", "Floating, walk speed (x)",   Fixed,  fx(1,1),  fx(3,1);
 }
 
 // ---------------------------------------------------------------------------

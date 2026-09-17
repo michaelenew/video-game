@@ -339,6 +339,34 @@ pub fn air_attack_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirAttackBoost))
 }
 
+/// How much faster the Dual mage moves once she is deep or ascended.
+///
+/// The one thing on this class that depth moves which is **not** a force.
+/// Everything else on the curve is how hard she hits and how big it is; this is
+/// how fast she gets there, and it is a step rather than a curve because it is
+/// answering a yes-or-no question -- are her feet on the floor -- rather than a
+/// how-much one. See `state::floating`.
+pub fn float_move_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FloatMoveSpeed))
+}
+
+/// What each successive aerial hang in one airtime is worth.
+///
+/// **The air gives you less each time you ask.** A hang costs nothing but the
+/// move that carries it, and the repeat lockout only stops one move being
+/// thrown twice -- so a class with two interchangeable pokes can alternate them
+/// and simply not come down. The Dual mage is that class by construction: her
+/// two autos are the same punch mirrored, and they are how she steers her
+/// meter, so she throws them alternately as a matter of course.
+///
+/// Compounding rather than a hard cap, because a cap has an edge somebody finds
+/// and plays against, and this has none: the sum of every hang an airtime can
+/// contain is `first / (1 - this)`, which is bounded however long you stay up.
+/// Reset on landing, like the airdodge.
+pub fn air_stall_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirStallFalloff))
+}
+
 /// Fraction of your upward speed kept when you let go of jump while rising.
 ///
 /// The sustain alone cannot give a short hop worth having. Holding reduces
