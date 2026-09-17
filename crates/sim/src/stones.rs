@@ -609,10 +609,27 @@ pub fn resolve_body(
                 // up, and it has to hand over real speed or it is a lift in a
                 // game that is about jumping.
                 vel.y = climb;
-            } else if vel.y.raw() < 0 {
+                grounded = true;
+            } else if vel.y.raw() <= 0 {
                 vel.y = Fx::ZERO;
+                grounded = true;
             }
-            grounded = true;
+            // **Rising faster than the stone is rising: she has left it.**
+            //
+            // Her feet are still inside it -- that is why this branch ran, and
+            // why she is put on top of it, because nothing may be inside a
+            // solid. But a surface she is outrunning is not holding her up, and
+            // calling her grounded there was the whole of the structure jump's
+            // free height. The jump is level-triggered, deliberately, so that
+            // holding space hops again the moment you land; an eruption that
+            // catches up with a fighter who has already jumped off it therefore
+            // handed the still-held button a *second* takeoff, and the double
+            // structure jump chained a third. That is a double jump, which this
+            // game does not have (`docs/design/README.md` §4), arriving through
+            // the one surface in the world that can climb into somebody's feet.
+            //
+            // The structure jump itself is unharmed and is still the point: one
+            // press, stacked on to the carry, as `state::advance` describes.
         } else {
             pos.y = stone.at.y.sub(height);
             if vel.y.raw() > 0 {

@@ -45,8 +45,17 @@ pub fn crouch_move_speed() -> Fx {
 /// and it is over before you have read the situation you jumped into. A beginner
 /// needs long enough in the air to notice where the other player went.
 ///
-/// Full hop apexes around 2.2 m over roughly a second; a short hop is about half
-/// that. Both are relationships the feel tests pin, not numbers to trust.
+/// **Cut from 17.7 to 16.2 on 2026-09-17**, taking about a third off every
+/// apex in the game. Apex goes as the *square* of this and airtime goes as this,
+/// so the height came down by a third while the hang only lost a fifth -- which
+/// is why the height is tuned here rather than by leaning on gravity. A full
+/// hop now runs from 2.7 m on the Bulwark to 6.0 m on the Dual mage, over 0.7 s
+/// to 1.2 s.
+///
+/// The reason is that a jump is the *floor* of this game's movement system
+/// rather than the whole of it. The Elementalist rides a structure up and the
+/// Champion vaults, and both were being reached to within a quarter by pressing
+/// space. See `docs/design/feel-log.md`.
 pub fn jump_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpSpeed))
 }
@@ -66,11 +75,24 @@ pub fn fall_cap() -> Fx {
 /// short one, and everything in between. It is a *sustain* rather than a cut on
 /// release, because a cut makes the short hop feel like the jump was taken away
 /// from you, whereas a sustain makes the tall one feel earned.
+///
+/// **Raised from 0.56 to 0.72 on 2026-09-17, with the window below cut from 26
+/// frames to 18.** Together those two were what made a held jump read as an
+/// elevator. At 0.56 for 26 frames the rise lost only half its speed over four
+/// tenths of a second and covered five of its six metres doing it, so the climb
+/// looked like a constant one and gravity looked like something that switched
+/// on at the top. A sustain has to be a *discount* on gravity rather than a
+/// suspension of it, and you have to be able to see the rise slowing the whole
+/// way up. See `docs/design/feel-log.md`.
 pub fn jump_hold_gravity() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpHoldGravity))
 }
 
 /// How long the sustain can last. Beyond this, gravity is gravity.
+///
+/// Long enough to be a real decision, short enough that most of the rise
+/// happens under ordinary gravity -- see [`jump_hold_gravity`] for why those
+/// are the two things it is balanced between.
 pub fn jump_hold_frames() -> u16 {
     oven::scalar(Scalar::JumpHoldFrames) as u16
 }
@@ -329,6 +351,11 @@ pub fn air_attack_boost() -> Fx {
 /// touching the ceiling: the full hop never releases while rising, so it is
 /// untouched, and the short hop scales with the *square* of this because apex
 /// goes as velocity squared.
+///
+/// Trimmed to 0.52 on 2026-09-17 to hold the short hop at a quarter of the full
+/// one after the sustain was shortened. A stiffer sustain takes more off the
+/// full hop than off the tap, so without this the two would have drifted back
+/// toward each other.
 pub fn jump_release_cut() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpReleaseCut))
 }
@@ -389,8 +416,27 @@ pub fn spike_drain() -> i32 {
     oven::scalar(Scalar::SpikeDrain)
 }
 
-/// Frames a structure takes to climb out of the ground. Cosmetic: it is earth,
-/// so it comes up through the floor rather than appearing in the air.
+/// Frames a structure takes to climb out of the ground.
+///
+/// It was described here as cosmetic -- it is earth, so it comes up through the
+/// floor rather than appearing in the air -- and that stopped being true when a
+/// stone became a solid you can stand on. **How long the rise takes is how fast
+/// the eruption is**, because the burst at the end of the curve is a real
+/// surface speed that a rider keeps ([`stone_lift`]), and it is therefore the
+/// knob that decides how high a structure jump goes.
+///
+/// **Lengthened from 14 frames to 16 on 2026-09-17**, which is a seventh off
+/// the peak of the burst, taking the Elementalist's structure jump to about
+/// three quarters of the height it used to reach. It buys two things at once,
+/// and they are the same thing: the eruption is slower to arrive, so the
+/// telegraph is longer and the escape is less instant. An area-control mage
+/// should be building the ground rather than leaving it. See
+/// `docs/design/feel-log.md`.
+///
+/// Tuned here rather than anywhere nearer the jump on purpose. A structure-jump
+/// multiplier would have been a second rule about eruptions that only applies
+/// when somebody is standing on one, and the first thing it would do is
+/// disagree with this one.
 pub fn structure_rise() -> u16 {
     oven::scalar(Scalar::StructureRise) as u16
 }
@@ -467,6 +513,15 @@ pub fn leap_rise() -> Fx {
 /// send's own reach, and a leash shorter than that would have it turn round on
 /// the frame it landed. The gap between the two is how far she may walk off the
 /// line before the line comes after her.
+///
+/// **Twice the throw since 2026-09-17**, where it used to be a third longer.
+/// The shadow is the Reaver's whole movement game -- she sends it somewhere
+/// useful and then chooses when to cross to it -- and a leash that close to the
+/// throw meant the placement expired while she was still deciding, so the
+/// answer to "when do I take this" was usually "now, before it leaves". Twice
+/// the throw is room to leave it somewhere and go and do something else.
+/// [`shadow_dash_speed`] went up with it, because the dash has to be able to
+/// cross whatever this is.
 pub fn shadow_leash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
 }
@@ -586,6 +641,12 @@ pub fn shadow_carry() -> u16 {
 /// happens to be tuned this week. Fast enough to cross the **whole leash**
 /// inside one dodge, which is the property that makes the dash a reliable
 /// escape rather than a gamble on how far away she left the thing.
+///
+/// That property is `reaver::the_dash_crosses_the_whole_leash`, which did not
+/// exist until 2026-09-17 -- the leash went to twice the throw that day, and
+/// the one thing standing between that and a dash that runs out of dodge
+/// halfway across the arena was a sentence in this comment. The dash ends with
+/// the dodge, so falling short means spending the dodge and arriving nowhere.
 pub fn shadow_dash_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
 }

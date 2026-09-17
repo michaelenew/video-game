@@ -26,14 +26,14 @@ fn m(v: Fx) -> String {
     Unit::Fixed.show(v.raw())
 }
 
-/// Apex of a full hop above the feet.
+/// Apex of a full hop above the feet, for one class.
 ///
 /// **Measured by running the simulation**, not solved. The sustain window makes
 /// the closed form wrong, and a diagnostic that re-derives the physics it is
 /// reporting on is the same mistake as an overlay that rebuilds the geometry it
 /// illustrates: it is confidently wrong exactly when you are relying on it.
-fn jump_apex() -> Fx {
-    let mut w = sim::World::new();
+fn jump_apex(class: sim::Class) -> Fx {
+    let mut w = sim::World::with_classes([class; MAX_PLAYERS]);
     for _ in 0..40 {
         w.advance([sim::Input::default(); MAX_PLAYERS]);
     }
@@ -85,12 +85,37 @@ fn lowest_through(kind: u8, part: usize) -> Fx {
 }
 
 fn main() {
-    let apex = jump_apex();
+    // **Two jumps, not one.** This printed a single apex until 2026-09-17,
+    // which was honest while the cast spanned four metres to seven and a half:
+    // the shortest hop in the game got you most of the way up, so answering for
+    // the heaviest class answered for everybody. The mobility pass took the
+    // whole cast down and left a spread of better than two to one, so a single
+    // number now hides the thing the climb turns on -- which classes can get up
+    // there at all.
+    let mut lowest = (sim::Class::Bulwark, Fx::MAX);
+    let mut highest = (sim::Class::Bulwark, Fx::ZERO);
+    for class in sim::class::ALL_CLASSES {
+        let apex = jump_apex(class);
+        if apex.raw() < lowest.1.raw() {
+            lowest = (class, apex);
+        }
+        if apex.raw() > highest.1.raw() {
+            highest = (class, apex);
+        }
+    }
+    let (short, apex) = lowest;
+    let (tall, best) = highest;
     let platform = sim::arena::WALL_HEIGHT;
-    let from_platform = apex.add(platform);
-    println!("a full hop reaches {} m off the floor", m(apex));
+    let from_platform = best.add(platform);
     println!(
-        "the arena's platforms are {} m, so from one it reaches {} m\n",
+        "a full hop reaches {} m off the floor ({}) to {} m ({})",
+        m(apex),
+        short.name(),
+        m(best),
+        tall.name()
+    );
+    println!(
+        "the arena's platforms are {} m, so from one the best of them reaches {} m\n",
         m(platform),
         m(from_platform)
     );
@@ -98,6 +123,8 @@ fn main() {
     let reach = |h: Fx| {
         if h.raw() <= apex.raw() {
             "a standing jump"
+        } else if h.raw() <= best.raw() {
+            "a standing jump, the floatier classes"
         } else if h.raw() <= from_platform.raw() {
             "only from a platform"
         } else {

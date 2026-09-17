@@ -336,7 +336,7 @@ scalars! {
     ShadowHomeSpeed,  "Reaver",   "Shadow speed, coming home",  Fixed,   fx(1,1),   fx(60,1);
     ShadowRecallSlow, "Reaver",   "Recall slow (x)",            Fixed,   0,         fx(1,1);
     ShadowLockCone,   "Reaver",   "Crosshair lock on the shadow", Fixed, fx(1,10),  fx(6,1);
-    ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(40,1);
+    ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(80,1);
     LotusRadius,      "Reaver",   "Lotus, how far the blades go", Fixed, fx(1,1),   fx(12,1);
     // Was "how high they arc", when the blades left the shadow's feet and rose
     // over the eruption. The flower is flat now and this slot carries the plane
