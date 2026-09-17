@@ -43,8 +43,30 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 > stone still climbing carries whoever is on it at the speed its top is climbing — that is the
 > seed of the mobility the class is meant to get, not the finished thing. It waits on moves
 > that launch stones properly. (That ride was worth about 2.9 m against a 2.2 m full hop when
-> this was written; the jump has since been rebuilt and her full hop is 7.4 m, so the lift is a
-> step rather than a second jump until something launches the stone.)
+> this was written; the jump was rebuilt after that and her full hop reached 7.4 m, which made
+> the lift a step rather than a second jump. Since the mobility pass of 2026-09-17 her full hop
+> is 5.0 m and **riding an eruption and jumping off the top of it reaches 12.5 m** — the
+> structure jump is finally the class technique it was meant to be, and the reason it looks so
+> different is mostly that it used to be *two takeoffs*: see below.)
+>
+> **The structure jump, and what it was — 2026-09-17.** Ride the eruption and press jump on the
+> frame it peaks and the carry stacks on to the takeoff, which is the mobility this note has
+> been promising. It reached 17.5 m from one stone and 43.9 m from two, and most of that was a
+> bug rather than a design: `resolve_body` reported a fighter as grounded whenever a stone's
+> top caught up with her feet, *including* when she had already jumped off it and was
+> outrunning it, so the level-triggered jump button fired again — and a second stone's eruption
+> fired it a third time. One press was reaching twenty-six metres. This game has no double
+> jump. With that fixed, one press reaches 12.5 m and two stones timed so the second erupts
+> while the first still has her reach 16.6 m, on a three-to-five-frame window.
+>
+> **The eruption is two frames slower with it** (the rise 14 → 16), which is the only honest
+> place to take the height from: the rise duration *is* the eruption speed, because the burst
+> at the end of the curve is a real surface speed a rider keeps. A structure-jump multiplier
+> would have been a second rule about eruptions that only applies when somebody is standing on
+> one. The slower burst also lengthens the telegraph and makes the escape less instant, which
+> is what an area-control mage should be — the complaint that started this was that the double
+> structure jump had turned her into a run-and-hit class with several seconds of air time to
+> poke from and set up the ground she was going to land on.
 >
 > **They come up where you are pointing.** `structure_ahead` became a *reach*: the stone rises
 > at the spot the crosshair is on, out to 6 m. Look down and it comes up at your own feet,
