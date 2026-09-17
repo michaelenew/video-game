@@ -161,11 +161,12 @@ of them is settled:
   obvious candidate, and the case for it got stronger on 2026-09-16: shift means one verb now,
   so the neutral case is a gap in that verb rather than a third meaning.
 - **Double jump.** Space while airborne does nothing. The airdodge is the only air commitment
-  at present, which may be too few or exactly right. **The rule is enforced rather than merely
-  intended since 2026-09-17:** an erupting structure was reporting a fighter who had already
-  jumped off it as grounded again, so a held jump button got a second takeoff out of it and a
-  second structure got a third. One press reached twenty-six metres. A surface you are
-  outrunning upward is not holding you up.
+  at present, which may be too few or exactly right. **What "airborne" means got stated on
+  2026-09-17**, because the obvious reading deleted a technique: it means *nothing under you*.
+  A surface under you is a different thing, even a surface that is moving — the Elementalist's
+  erupting stone catches her feet mid-rise and she can jump off it again, and off a second one
+  raised behind it. That is a jump off a surface, not a jump off the air, and it costs
+  structure slots and a one-frame window to set up.
 
 ## Everything is relative to the camera
 

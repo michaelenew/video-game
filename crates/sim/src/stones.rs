@@ -609,27 +609,36 @@ pub fn resolve_body(
                 // up, and it has to hand over real speed or it is a lift in a
                 // game that is about jumping.
                 vel.y = climb;
-                grounded = true;
-            } else if vel.y.raw() <= 0 {
+            } else if vel.y.raw() < 0 {
                 vel.y = Fx::ZERO;
-                grounded = true;
             }
-            // **Rising faster than the stone is rising: she has left it.**
+            // **Grounded even when she is outrunning it, and that is the
+            // structure jump.**
             //
-            // Her feet are still inside it -- that is why this branch ran, and
-            // why she is put on top of it, because nothing may be inside a
-            // solid. But a surface she is outrunning is not holding her up, and
-            // calling her grounded there was the whole of the structure jump's
-            // free height. The jump is level-triggered, deliberately, so that
-            // holding space hops again the moment you land; an eruption that
-            // catches up with a fighter who has already jumped off it therefore
-            // handed the still-held button a *second* takeoff, and the double
-            // structure jump chained a third. That is a double jump, which this
-            // game does not have (`docs/design/README.md` §4), arriving through
-            // the one surface in the world that can climb into somebody's feet.
+            // The obvious-looking rule is that a surface you are rising faster
+            // than is not holding you up, so a fighter who has already jumped
+            // off an erupting stone should read as airborne. It was tried on
+            // 2026-09-17 and reverted the same day, because what it actually
+            // deletes is the technique the class is built around -- see
+            // `docs/design/feel-log.md`.
             //
-            // The structure jump itself is unharmed and is still the point: one
-            // press, stacked on to the carry, as `state::advance` describes.
+            // The stone's top **is** under her feet: that is why this branch
+            // ran. A body standing on a surface can jump off it, and the jump
+            // is level-triggered so that holding space hops the moment you
+            // land. Put those together and an eruption that catches up with a
+            // fighter mid-rise hands her another takeoff -- and a second stone
+            // raised a few frames behind the first hands her a third. That is
+            // the double structure jump, and it is not the double jump
+            // `docs/design/README.md` §4 rules out: that question is about
+            // space doing something with **nothing under you**, and this is a
+            // surface, placed by an ability, that costs structure slots and a
+            // frame-tight read of two eruptions to put there.
+            //
+            // The height is bounded by how fast the eruption climbs -- the
+            // `stones` family in the Oven, and `structure_rise` in particular
+            // -- and that is where it is tuned. Nothing here is an exception
+            // case.
+            grounded = true;
         } else {
             pos.y = stone.at.y.sub(height);
             if vel.y.raw() > 0 {

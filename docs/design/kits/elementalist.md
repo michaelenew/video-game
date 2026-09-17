@@ -43,30 +43,46 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 > stone still climbing carries whoever is on it at the speed its top is climbing — that is the
 > seed of the mobility the class is meant to get, not the finished thing. It waits on moves
 > that launch stones properly. (That ride was worth about 2.9 m against a 2.2 m full hop when
-> this was written; the jump was rebuilt after that and her full hop reached 7.4 m, which made
-> the lift a step rather than a second jump. Since the mobility pass of 2026-09-17 her full hop
-> is 5.0 m and **riding an eruption and jumping off the top of it reaches 12.5 m** — the
-> structure jump is finally the class technique it was meant to be, and the reason it looks so
-> different is mostly that it used to be *two takeoffs*: see below.)
->
-> **The structure jump, and what it was — 2026-09-17.** Ride the eruption and press jump on the
-> frame it peaks and the carry stacks on to the takeoff, which is the mobility this note has
-> been promising. It reached 17.5 m from one stone and 43.9 m from two, and most of that was a
-> bug rather than a design: `resolve_body` reported a fighter as grounded whenever a stone's
-> top caught up with her feet, *including* when she had already jumped off it and was
-> outrunning it, so the level-triggered jump button fired again — and a second stone's eruption
-> fired it a third time. One press was reaching twenty-six metres. This game has no double
-> jump. With that fixed, one press reaches 12.5 m and two stones timed so the second erupts
-> while the first still has her reach 16.6 m, on a three-to-five-frame window.
->
-> **The eruption is two frames slower with it** (the rise 14 → 16), which is the only honest
-> place to take the height from: the rise duration *is* the eruption speed, because the burst
-> at the end of the curve is a real surface speed a rider keeps. A structure-jump multiplier
-> would have been a second rule about eruptions that only applies when somebody is standing on
-> one. The slower burst also lengthens the telegraph and makes the escape less instant, which
-> is what an area-control mage should be — the complaint that started this was that the double
-> structure jump had turned her into a run-and-hit class with several seconds of air time to
-> poke from and set up the ground she was going to land on.
+> this was written, and the jump was rebuilt after that. It is not a step any more; see below.)
+
+### The structure jump, and the double — **the class's movement**, 2026-09-17
+
+**Ride an eruption and press jump while it is still climbing.** The stone's top is under her
+feet and coming up fast, the carry hands her its speed, and the takeoff stacks on to that
+(`state::advance`). One stone reaches **12.8 m** against her own 5.0 m full hop.
+
+**The double is the real technique.** Cast two structures two or three frames apart and time
+the jump while *both* are still coming out of the floor: the first eruption catches her and
+she jumps off it, the second catches her again mid-rise and she jumps off that. **33.0 m**, on
+a one-frame window, for two of her three structure slots and a setup that telegraphs itself
+twice.
+
+There is a gradient behind that headline number and it is the more interesting half. Two or
+three frames apart pays 33 m; four to eight pays 26–30 on a two-frame window; past about nine
+frames the second stone arrives too late to chain at all and the whole thing collapses to
+16 m. Nobody designed that curve — it falls out of the shape of the rise — which is a reason to
+leave it alone until somebody has played against it.
+
+**Both are three quarters of what they were**, and the cut came entirely out of the eruption:
+the rise 14 → 17 frames and the lift a rider keeps 0.40 → 0.44. Two knobs because the two
+techniques do not scale alike — the double compounds the eruption speed and the single only
+adds it once — and no knob anywhere near the jump, because a structure-jump multiplier would
+be a second rule about eruptions that only applies when somebody is standing on one.
+
+The slower rise buys something that is not a height: a longer telegraph and a less instant
+escape. That was the complaint that started it. At 43.9 m the double was a get-out-of-jail
+card she could press at any time, buying several seconds of air to throw long-range attacks
+from *and* to choose the ground she was going to land on — which is a run-and-hit class rather
+than an area-control mage.
+
+> ⚠️ **It was deleted first, and that was the wrong call.** The re-grounding that lets a rising
+> stone hand her another takeoff looks like a bug from inside `resolve_body`, and reading
+> `../README.md` §4 — *space while airborne does nothing* — as covering it takes the double to
+> 38% of its height rather than 75%. The rule is about space doing something with **nothing
+> under you**; a stone still climbing is a surface. Reverted the same day, and the behaviour is
+> specified in `stones::resolve_body` and pinned by three tests now rather than tolerated. The
+> entry in [../feel-log.md](../feel-log.md) is about the general mistake, which is easy to make
+> again: an emergent technique found through implementation is not thereby an accident.
 >
 > **They come up where you are pointing.** `structure_ahead` became a *reach*: the stone rises
 > at the spot the crosshair is on, out to 6 m. Look down and it comes up at your own feet,

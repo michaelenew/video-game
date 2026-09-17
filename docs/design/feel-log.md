@@ -4420,49 +4420,81 @@ that moves every time somebody tunes the jump was measuring the jump.
 2.7 m and 41 frames is the thinnest airtime in the game and the class that can
 least afford a mistake in the air.
 
-### 2026-09-17 — the structure jump was two takeoffs, sometimes three
+### 2026-09-17 — the structure jump, cut to three quarters
 
-**Changed** `stones::resolve_body` no longer reports a fighter as grounded when
-she is rising faster than the stone under her. The eruption slowed with it: the
-rise went 14 → 16 frames.
+**Changed** the eruption's rise 14 → 17 frames and the lift a rider keeps
+0.40 → 0.44.
 
 **Why** a single structure jump reached 17.5 m and a double reached 43.9 — more
-than three times the arena's half-width. That is not a tuning value, and it was
-not tuning: `resolve_body` called a fighter grounded whenever a stone's top
-caught up with her feet, *including* when she had already jumped off it and was
-outrunning it. The ordinary jump is level-triggered on purpose so that holding
-space hops again the moment you land, so an eruption catching up with her handed
-the still-held button a second takeoff, and a second stone's eruption handed a
-third. A player who simply held space got twenty-six metres by accident.
+than three times the arena's half-width. Several seconds of air time to throw
+long-range attacks from, and to pick the ground she was going to land on, off a
+button she can press at any time. That is a run-and-hit class, and this one is
+supposed to be an area-control mage.
 
-This game has no double jump — it is an open question in
-[README.md](README.md) §4, and the airdodge is deliberately the only air
-commitment there is. A surface you are outrunning upward is not holding you up.
+**Where it landed** single 12.8 m, double 33.0 m — 73% and 75% of what they
+were.
 
-With that fixed, one press stacks on to the carry exactly as `state::advance`
-already promised, and the single structure jump came out at 13.6 m — which is
-78% of what it was, near enough on its own to the three quarters that was asked
-for.
+**Two knobs rather than one**, because the two techniques do not scale alike.
+The double compounds the eruption speed and the single only adds it once, so the
+rise on its own moves the double about three times as far; the lift is what
+brings the single back up to its own target. The rise also buys the thing that
+is not a height at all: a slower eruption is a longer telegraph and a less
+instant escape.
 
-The eruption then took the rest, and it was tuned rather than special-cased,
-because a structure-jump multiplier would be a second rule about eruptions that
-only applies when somebody is standing on one. Two frames on the rise is a
-seventh off the peak of the burst: **the rise duration *is* the eruption speed**,
-because the burst at the end of the curve is a real surface speed that a rider
-keeps. It buys two things at once and they are the same thing — the eruption is
-slower to arrive, so the telegraph is longer and the escape is less instant,
-which is what an area-control mage should be.
+**Verdict** open. The gradient is the thing to watch rather than the peak: two
+stones two or three frames apart pay 33 m on a one-frame window, four to eight
+frames apart pay 26–30 on two, and past about nine frames the second stone
+arrives too late to chain and the whole thing collapses to 16. That is a real
+skill curve and it was not designed, it fell out of the eruption's shape — which
+is an argument for leaving it alone until somebody has played against it.
 
-**Where it landed** one structure 12.5 m (72% of the old 17.5), two 16.6 m (38%
-of the old 43.9), against her own 5.0 m full hop.
+### 2026-09-17 — deleting the double structure jump. Reverted the same day
 
-**Verdict** open, and the double is the entry. It came in far under the three
-quarters asked for, because most of its height was a second and a third takeoff
-off one button hold rather than anything anybody designed. What is left is a real
-technique — two stones timed so the second erupts while the first still has her —
-paying about a third more height than one stone does, on a three-to-five-frame
-window. If that reward is too small the knob is the eruption's rise, back the
-other way.
+**Changed** `stones::resolve_body` stopped reporting a fighter as grounded when
+she was rising faster than the stone under her. **Reverted within hours.**
+
+**Why I tried it** it looked like a bug from underneath. A stone's top catching
+up with a fighter's feet re-grounded her; the jump is level-triggered so that
+holding space hops the moment you land; so an eruption reaching a fighter who
+had already jumped off it handed the still-held button another takeoff, and a
+second stone raised a few frames behind the first handed a third. One press
+reached 26 m. Set against `README.md` §4 — *space while airborne does nothing* —
+that reads as a double jump arriving through the one surface in the world that
+can climb into somebody's feet.
+
+**Why it was wrong, and this is the part worth keeping.** Two things.
+
+**The rule was misread.** "No double jump" is a question about space doing
+something with *nothing under you*. There is something under her: the stone's
+top, which is why the branch that grounds her runs at all. A body standing on a
+surface can jump off it. That the surface is moving upward makes the jump
+better, not illegitimate — the same sentence is already written down approvingly
+in `state::advance`, where a jump off an erupting stone *stacks* on to the
+carry.
+
+**And the technique is not the implementation.** What a player does is cast two
+structures two or three frames apart and time a jump while both are still coming
+out of the floor. That costs two of three structure slots, telegraphs itself
+twice, and pays inside a one-frame window. Whatever it looks like from inside
+`resolve_body`, from the outside it is execution, and it is the most interesting
+thing the class does. Deleting it took the double to 38% of its height — which
+was not what was asked for and not a tuning decision at all, because no knob
+would have brought it back.
+
+**The general mistake** is worth naming, because it is easy to make again: an
+emergent technique found through implementation is not thereby an accident.
+Nothing about "this fell out of how the code happens to work" says anything
+about whether it is good, and a house style that treats every surprising
+behaviour as a defect will delete the interesting parts of a fighting game one
+at a time. The question to ask is whether a player can learn it, whether it
+costs something, and whether it can be answered — not where it came from.
+
+**Verdict** reverted, and pinned. The behaviour is now specified in
+`stones::resolve_body` rather than tolerated, and three tests in
+`sim/tests/stones.rs` fail if it goes again: that the double pays double, that
+it needs the two casts close together, and that its window stays inside four
+frames. The height came off the eruption instead, which is where the entry
+above takes it.
 
 ### 2026-09-17 — the Reaver's shadow kept expiring before she used it
 

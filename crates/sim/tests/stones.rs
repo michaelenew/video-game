@@ -724,10 +724,8 @@ fn destroying_a_stone_reports_its_middle_rather_than_its_base() {
 /// Raise stones under the Elementalist's own feet and jump off the eruption.
 ///
 /// `gap` frames between the presses; space goes down on `jump_at` and stays
-/// down, which is what a player actually does. Returns the highest she gets,
-/// the fastest she is ever travelling upward, and the fastest any surface under
-/// her was climbing at while she was on it.
-fn structure_jump(count: usize, gap: u32, jump_at: u32) -> (f32, Fx, Fx) {
+/// down, which is what a player actually does. Returns the highest she gets.
+fn structure_jump(count: usize, gap: u32, jump_at: u32) -> f32 {
     let mut w = elementalist();
     let here = w.players[0].pos;
     // At her own feet: the crosshair is the aim, so "raise one under me" is a
@@ -735,9 +733,7 @@ fn structure_jump(count: usize, gap: u32, jump_at: u32) -> (f32, Fx, Fx) {
     let (yaw, tilt) = look_at(&w, V3::new(here.x, Fx::ZERO, here.z));
     let mut raised = 0;
     let mut apex = 0.0f32;
-    let mut fastest = Fx::ZERO;
-    let mut surface = Fx::ZERO;
-    for i in 0..180u32 {
+    for i in 0..200u32 {
         let mut bits = 0u16;
         if raised < count && i == raised as u32 * gap {
             bits |= E;
@@ -752,67 +748,35 @@ fn structure_jump(count: usize, gap: u32, jump_at: u32) -> (f32, Fx, Fx) {
         if bits & E != 0 {
             raised += 1;
         }
-        for stone in stones_of(&w, 0) {
-            surface = surface.max(stone.surface_speed());
-        }
-        fastest = fastest.max(w.players[0].vel.y);
         apex = apex.max(w.players[0].pos.y.to_f32_for_render());
     }
-    (apex, fastest, surface)
+    apex
 }
 
-/// The best a technique can do, over every frame it could be timed on.
-fn best_structure_jump(count: usize, gap: u32) -> (f32, Fx, Fx) {
-    let mut best = (0.0f32, Fx::ZERO, Fx::ZERO);
-    for jump_at in 0..46 {
-        let got = structure_jump(count, gap, jump_at);
-        if got.0 > best.0 {
-            best = got;
+/// The best a technique can do over every frame it could be timed on, and how
+/// many of those frames get within a tenth of it.
+///
+/// The window is half of what the technique *is*: a double structure jump that
+/// paid out over twenty frames would be a button.
+fn best_structure_jump(count: usize, gap: u32) -> (f32, usize) {
+    let apexes: Vec<f32> = (0..46)
+        .map(|jump_at| structure_jump(count, gap, jump_at))
+        .collect();
+    let top = apexes.iter().copied().fold(0.0f32, f32::max);
+    let window = apexes.iter().filter(|a| **a >= top * 0.9).count();
+    (top, window)
+}
+
+/// The best the double is, over every gap between the two casts as well.
+fn best_double() -> (f32, usize, u32) {
+    let mut best = (0.0f32, 0, 0);
+    for gap in 0..20 {
+        let (apex, window) = best_structure_jump(2, gap);
+        if apex > best.0 {
+            best = (apex, window, gap);
         }
-        // The bound below is about the fastest anything ever goes, so these two
-        // are taken across every timing rather than only the tallest one.
-        best.1 = best.1.max(got.1);
-        best.2 = best.2.max(got.2);
     }
     best
-}
-
-#[test]
-fn one_press_is_one_takeoff_however_many_stones_are_under_it() {
-    // **The structure jump's free height, and a double jump in a game that has
-    // none** (`docs/design/README.md` §4 -- space in the air does nothing, and
-    // the airdodge is the only air commitment there is).
-    //
-    // The ordinary jump is level-triggered on purpose, so that holding space
-    // hops again the moment you land. A stone is the only surface in the world
-    // that climbs into a fighter's feet, and it was reporting a fighter who had
-    // **already jumped off it** as grounded again as soon as its top caught up
-    // with her -- which handed the still-held button a second takeoff, and then
-    // a second stone's eruption handed a third. One press was reaching
-    // twenty-six metres, and a player who simply held space got it by accident.
-    //
-    // What was wrong was the claim rather than the height: a surface you are
-    // outrunning upward is not holding you up.
-    //
-    // Stated as the arithmetic `state::advance` promises: a jump off an erupting
-    // stone **stacks on to the carry**, so the most vertical speed the world can
-    // put into a fighter is the fastest surface she rode, times what a rider
-    // keeps of it, plus exactly one takeoff. Two takeoffs break it and no amount
-    // of retuning the eruption hides that, which is why it is written this way
-    // rather than as a height.
-    let takeoff = t::jump_speed().mul(sim::Class::Elementalist.mobility().jump);
-    for (count, gap) in [(1usize, 0u32), (2, 4), (2, 8), (2, 12)] {
-        let (_, fastest, surface) = best_structure_jump(count, gap);
-        let bound = surface.mul(t::stone_lift()).add(takeoff);
-        assert!(
-            fastest.raw() <= bound.raw(),
-            "{count} stone(s) {gap} frames apart reached {:.2} m/s upward, past the \
-             {:.2} m/s that one takeoff off a {:.2} m/s surface can account for",
-            fastest.to_f32_for_render(),
-            bound.to_f32_for_render(),
-            surface.to_f32_for_render()
-        );
-    }
 }
 
 #[test]
@@ -828,7 +792,7 @@ fn a_structure_jump_goes_where_a_jump_cannot() {
         run(&mut w, 1, Input::SPACE, 0);
         plain = plain.max(w.players[0].pos.y.to_f32_for_render());
     }
-    let (ridden, _, _) = best_structure_jump(1, 0);
+    let (ridden, _) = best_structure_jump(1, 0);
     assert!(
         ridden > plain * 2.0,
         "a structure jump reaches {ridden:.1} m against a {plain:.1} m full hop, \
@@ -837,25 +801,66 @@ fn a_structure_jump_goes_where_a_jump_cannot() {
 }
 
 #[test]
-fn a_second_structure_is_worth_less_than_the_first() {
-    // **What the double structure jump is allowed to be.** Two stones in quick
-    // succession, timed so the second erupts while the first still has hold of
-    // her, is a real technique and should pay. What it must not be is a way to
-    // multiply the height: the reward for the harder input is a bonus on top of
-    // one eruption, not a second one of them.
-    let (single, _, _) = best_structure_jump(1, 0);
-    let mut double = 0.0f32;
-    for gap in 0..20 {
-        double = double.max(best_structure_jump(2, gap).0);
+fn the_double_structure_jump_is_worth_the_second_cast() {
+    // **The most interesting thing this class does, and it is a specified
+    // feature rather than something the code happens to allow.**
+    //
+    // Two structures raised a few frames apart, with a jump timed while both
+    // are still coming out of the floor: the first eruption catches her feet
+    // and she jumps off it, the second catches her again mid-rise and she jumps
+    // off that. Every one of those takeoffs is a jump off a *surface* -- the
+    // stone's top is genuinely under her feet, which is why
+    // `stones::resolve_body` grounds her there -- so this is not the double
+    // jump `docs/design/README.md` §4 rules out. That question is about space
+    // doing something with nothing under you.
+    //
+    // It was deleted on 2026-09-17 on exactly that misreading and restored the
+    // same day. The entry in `docs/design/feel-log.md` is the one worth
+    // reading: a technique that costs two of three structure slots, a
+    // telegraphed setup and a frame-tight read of two eruptions is execution,
+    // whatever the implementation looks like from underneath.
+    let (single, _) = best_structure_jump(1, 0);
+    let (double, _, _) = best_double();
+    assert!(
+        double > single * 2.0,
+        "two structures reach {double:.1} m against one structure's {single:.1} m -- \
+         the second cast is not paying for itself, and the technique the class is \
+         built around has been tuned or refactored out of existence"
+    );
+}
+
+#[test]
+fn the_double_needs_the_two_casts_close_together() {
+    // What makes it a technique rather than a thing that happens. The second
+    // stone has to erupt while the first still has hold of her, so the two
+    // presses are a rhythm with a right answer -- leave it late and the first
+    // eruption is over, and what is left is an ordinary structure jump off
+    // whichever stone happens to be under her.
+    let (tight, _, gap) = best_double();
+    assert!(
+        gap <= 8,
+        "the best double came from casts {gap} frames apart, which is not a rhythm"
+    );
+    let mut late = 0.0f32;
+    for gap in 12..20 {
+        late = late.max(best_structure_jump(2, gap).0);
     }
     assert!(
-        double > single,
-        "the second structure bought nothing: {double:.1} m against {single:.1} m"
+        late < tight * 0.75,
+        "casting the second stone far too late still reached {late:.1} m of the \
+         {tight:.1} m a tight pair does, so the timing is not what is being rewarded"
     );
+}
+
+#[test]
+fn the_double_has_to_be_timed_to_the_frame() {
+    // The other half of it. The reward is large, so the window has to be small
+    // -- and it is the window, not the height, that is the first thing to look
+    // at if this ever needs bringing down again.
+    let (_, window, _) = best_double();
     assert!(
-        double < single * 1.6,
-        "two structures reach {double:.1} m against one structure's {single:.1} m -- \
-         the second one is worth more than the first, which makes the pair a \
-         button rather than a technique"
+        window <= 4,
+        "the double structure jump pays within a tenth of its best over {window} \
+         different jump frames, which is a button rather than a read"
     );
 }

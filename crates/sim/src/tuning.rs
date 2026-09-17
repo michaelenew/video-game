@@ -528,18 +528,29 @@ pub fn spike_drain() -> i32 {
 /// surface speed that a rider keeps ([`stone_lift`]), and it is therefore the
 /// knob that decides how high a structure jump goes.
 ///
-/// **Lengthened from 14 frames to 16 on 2026-09-17**, which is a seventh off
-/// the peak of the burst, taking the Elementalist's structure jump to about
-/// three quarters of the height it used to reach. It buys two things at once,
-/// and they are the same thing: the eruption is slower to arrive, so the
-/// telegraph is longer and the escape is less instant. An area-control mage
-/// should be building the ground rather than leaving it. See
-/// `docs/design/feel-log.md`.
+/// **Lengthened from 14 frames to 17 on 2026-09-17**, which is a sixth off the
+/// peak of the burst, with [`stone_lift`] raised from 0.40 to 0.44 against it.
+/// Together they put both structure jumps at about three quarters of the height
+/// they used to reach: a single at 12.8 m against 17.5, and a **double** -- two
+/// stones two or three frames apart, jumped while both are still coming out --
+/// at 33.0 m against 43.9.
 ///
-/// Tuned here rather than anywhere nearer the jump on purpose. A structure-jump
-/// multiplier would have been a second rule about eruptions that only applies
-/// when somebody is standing on one, and the first thing it would do is
-/// disagree with this one.
+/// The pair of knobs rather than one because the two techniques do not scale
+/// alike. The double compounds the eruption speed and the single only adds it
+/// once, so the rise alone moves the double roughly three times as far, and the
+/// lift is what brings the single back up to its own target.
+///
+/// It buys two more things, and they are the same thing: the eruption is slower
+/// to arrive, so the telegraph is longer and the escape is less instant. An
+/// area-control mage should be building the ground rather than leaving it.
+///
+/// **This is the only place the height is tuned, and that is load-bearing.**
+/// The first pass instead removed the re-grounding that lets a rising stone
+/// hand a fighter another takeoff, which deleted the double structure jump
+/// outright rather than shortening it. Reverted the same day. A structure-jump
+/// multiplier would be the same mistake wearing a knob: a second rule about
+/// eruptions that only applies when somebody is standing on one. See
+/// `docs/design/feel-log.md`.
 pub fn structure_rise() -> u16 {
     oven::scalar(Scalar::StructureRise) as u16
 }
@@ -1279,6 +1290,9 @@ pub fn stone_erupt_stagger() -> u16 {
 /// top of another, so this is the knob that decides whether a stone raised
 /// underneath is a lift or a launch. One, and a rider leaves at exactly the
 /// speed the surface was climbing at.
+///
+/// Raised to 0.44 on 2026-09-17, against a slower rise. See [`structure_rise`]
+/// for why the structure jump is tuned with two knobs rather than one.
 pub fn stone_lift() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StoneLift))
 }
