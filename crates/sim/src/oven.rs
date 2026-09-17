@@ -469,6 +469,21 @@ scalars! {
     // How much faster the Dual mage moves once she is off the floor of her own
     // bar -- deep, or ascended. See `tuning::float_move_speed`.
     FloatMoveSpeed,   "Dual mage", "Floating, walk speed (x)",   Fixed,  fx(1,1),  fx(3,1);
+    // **The Blood mage's two movement experiments, and they are meant to be
+    // played against each other.** Both are off unless the flag says
+    // otherwise, so the four combinations are four settings of two sliders
+    // rather than four builds -- see `docs/design/kits/blood-mage.md`.
+    //
+    // Live rather than a Cargo feature for the reason every other number in
+    // here is live: the question is which of them feels like the class, and
+    // that is answered by flipping one mid-match, not by a rebuild. Both are
+    // folded into the tuning hash like everything else, so two peers running
+    // different combinations desync loudly instead of quietly.
+    GraspHauls,       "Blood mage", "Grasp hauls her to an anchor", Flag, 0,        1;
+    GraspHaulSpeed,   "Blood mage", "Grasp haul, speed",          Fixed,  fx(5,1),  fx(60,1);
+    DodgeBlinks,      "Blood mage", "Dodge is a blink",           Flag,   0,        1;
+    BlinkRange,       "Blood mage", "Blink, how far",             Fixed,  fx(1,1),  fx(20,1);
+    BlinkFrames,      "Blood mage", "Blink, frames to cross",     Frames, 1,        20;
 }
 
 // ---------------------------------------------------------------------------

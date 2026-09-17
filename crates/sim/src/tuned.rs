@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 274] = [
+pub const SCALARS: [i32; 279] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -193,7 +193,7 @@ pub const SCALARS: [i32; 274] = [
               10, // blood_mage.grasp,_held_still_before_the_haul = 10
            91750, // blood_mage.damage_to_the_disabled_(x) = 1.4
             9830, // blood_mage.grasp,_aim_marker_radius = 0.15
-         2621440, // defence.grab_haul_speed = 40
+         2818048, // defence.grab_haul_speed = 43
          1245184, // champion.rush_speed = 19
               20, // champion.rush_length = 20
               70, // champion.rush_recharge = 70
@@ -282,6 +282,11 @@ pub const SCALARS: [i32; 274] = [
            95027, // dual_mage.judgement,_her_speed_inside_it_(x) = 1.45
            36044, // air.aerial_hang,_each_one_after = 0.55
            88474, // dual_mage.floating,_walk_speed_(x) = 1.35
+               1, // blood_mage.grasp_hauls_her_to_an_anchor = on
+         1769472, // blood_mage.grasp_haul,_speed = 27
+               0, // blood_mage.dodge_is_a_blink = off
+          589824, // blood_mage.blink,_how_far = 9
+               4, // blood_mage.blink,_frames_to_cross = 4
 ];
 
 #[rustfmt::skip]
@@ -1297,8 +1302,8 @@ pub const MOVES: [i32; 1204] = [
               16, // move.blood_mage.grasp.startup = 16
                4, // move.blood_mage.grasp.active = 4
               20, // move.blood_mage.grasp.recovery = 20
-              48, // move.blood_mage.grasp.damage = 48
-          655360, // move.blood_mage.grasp.reach = 10
+              40, // move.blood_mage.grasp.damage = 40
+          786432, // move.blood_mage.grasp.reach = 12
                0, // move.blood_mage.grasp.radius = 0
               24, // move.blood_mage.grasp.hitstun = 24
                8, // move.blood_mage.grasp.blockstun = 8

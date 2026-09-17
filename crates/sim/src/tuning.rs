@@ -339,6 +339,81 @@ pub fn air_attack_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirAttackBoost))
 }
 
+// ---------------------------------------------------------------------------
+// The Blood mage's movement, both of it behind a flag
+// ---------------------------------------------------------------------------
+//
+// **This class has no movement at all and cannot stay that way.** Everything
+// else in the roster has one thing it does with the ground: the Reaver crosses
+// to her shadow, the Elementalist rides a structure up, the Champion vaults,
+// the Dual mage floats, the Bulwark leaps to its shield. The Blood mage walks.
+// In a game where jumping was just cut back specifically so that the class
+// techniques matter more, walking is not a position to be in.
+//
+// Two answers are built, both off a flag, because which one is the class is a
+// question for somebody playing it rather than for this file:
+//
+//   * **The Grasp haul.** Four arms that converge on a wall or on the creature
+//     rather than on a person pull *her* instead, which is a grappling hook
+//     made out of an ability she already has. It is the one with a thematic
+//     tie -- the arms are already a thing that closes distance, and this is
+//     the same sentence with the subject swapped -- and it costs her a whiffed
+//     Grasp's worth of health to use as movement.
+//   * **The blink dodge.** Her dodge covers a long flat distance at once
+//     instead of a short one over twenty-two frames. Honest about what it is:
+//     there is no thematic tie, and it leans entirely on the animation to make
+//     it feel like it belongs.
+//
+// The combinations are the point. Both on is a very mobile Blood mage and
+// probably too much; neither is where she is today.
+
+/// Does a Grasp that catches nothing but scenery pull her to it?
+pub fn grasp_hauls() -> bool {
+    oven::scalar(Scalar::GraspHauls) != 0
+}
+
+/// How fast the haul reels her in.
+///
+/// Constant while it runs, like the Reaver's dash and for the same reason: the
+/// distance is whatever the Grasp's own reach and hold chose, so a decaying
+/// pull would cover a distance that depends on how the decay happens to be
+/// tuned rather than on the thing the player aimed.
+///
+/// Constant *speed* rather than constant time, which is the opposite of the
+/// blink below and right for the opposite reason: you are being reeled in on a
+/// rope, so a short pull is quick and a long one is a journey. That difference
+/// is the whole of why `Player::haul_speed` is a field and not a knob.
+pub fn grasp_haul_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspHaulSpeed))
+}
+
+/// Is her dodge a blink?
+pub fn dodge_blinks() -> bool {
+    oven::scalar(Scalar::DodgeBlinks) != 0
+}
+
+/// How far the blink goes.
+///
+/// Longer than a dodge covers, which is the whole of the idea -- an ordinary
+/// dodge is `dodge_speed` decaying over `dodge_frames` and lands a little over
+/// four metres away. **Flat**, and deliberately: what this class is missing is
+/// ground, not height, and a blink that also went up would be a second jump on
+/// the one class that has not earned one.
+pub fn blink_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BlinkRange))
+}
+
+/// How many frames the blink takes to cross that distance.
+///
+/// Not zero. A teleport that resolves inside one frame cannot be read by the
+/// person opposite -- she is simply somewhere else -- and it cannot be drawn
+/// either, which on the answer with no thematic tie is the only thing it has
+/// going for it. A handful of frames is a smear rather than a cut, and it
+/// still lands well inside the dodge's own invulnerability.
+pub fn blink_frames() -> u16 {
+    oven::scalar(Scalar::BlinkFrames).max(1) as u16
+}
+
 /// How much faster the Dual mage moves once she is deep or ascended.
 ///
 /// The one thing on this class that depth moves which is **not** a force.
@@ -1480,6 +1555,13 @@ pub fn grasp_mark() -> Fx {
 /// between the ability landing and the ability *looking* like it landed. One
 /// knob for every grab in the game, because it is a property of being dragged
 /// rather than of the thing doing the dragging.
+///
+/// **Raised with the Grasp's reach on 2026-09-17**, and `feel.rs` is what
+/// noticed: the hold is a fixed number of frames and the haul has to cover the
+/// whole reach inside it, so lengthening the throw without this drops a
+/// full-range catch halfway home -- standing in mid-air, mid-drag, suddenly
+/// able to walk. Invisible at short range and total at long range, which is the
+/// worst way for a number to be wrong.
 pub fn reel_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ReelSpeed))
 }
