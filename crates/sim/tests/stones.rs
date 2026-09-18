@@ -779,6 +779,17 @@ fn best_double() -> (f32, usize, u32) {
     best
 }
 
+/// Her own full hop, which is what every number below is read against.
+fn full_hop() -> f32 {
+    let mut w = elementalist();
+    let mut apex = 0.0f32;
+    for _ in 0..200 {
+        run(&mut w, 1, Input::SPACE, 0);
+        apex = apex.max(w.players[0].pos.y.to_f32_for_render());
+    }
+    apex
+}
+
 #[test]
 fn a_structure_jump_goes_where_a_jump_cannot() {
     // The reason the technique exists. Riding an eruption and jumping off the
@@ -786,12 +797,7 @@ fn a_structure_jump_goes_where_a_jump_cannot() {
     // a different kind of thing from pressing space -- see
     // `crates/sim/tests/combat.rs` and the height nerf of 2026-09-17, which is
     // the same argument from the other end.
-    let mut w = elementalist();
-    let mut plain = 0.0f32;
-    for _ in 0..180 {
-        run(&mut w, 1, Input::SPACE, 0);
-        plain = plain.max(w.players[0].pos.y.to_f32_for_render());
-    }
+    let plain = full_hop();
     let (ridden, _) = best_structure_jump(1, 0);
     assert!(
         ridden > plain * 2.0,
@@ -819,13 +825,29 @@ fn the_double_structure_jump_is_worth_the_second_cast() {
     // reading: a technique that costs two of three structure slots, a
     // telegraphed setup and a frame-tight read of two eruptions is execution,
     // whatever the implementation looks like from underneath.
+    // **Measured against her own full hop, not against the single**, because the
+    // single chains too -- one stone's eruption can catch her twice on its own,
+    // and how many links each of the two techniques gets is a resonance between
+    // how fast she rises and how fast the stone grows. It moves around under
+    // tuning, and it moves *non-monotonically*: making her jump higher can cost
+    // the single a link, because she outruns the stone that was going to catch
+    // her. Pinning the ratio between them would be pinning that resonance.
+    //
+    // What does not move is the gap between having the technique and not. With
+    // it, the double is around nine full hops; delete it and the pair is under
+    // four, because what is left is a stone-sized platform and one jump.
+    let plain = full_hop();
     let (single, _) = best_structure_jump(1, 0);
     let (double, _, _) = best_double();
     assert!(
-        double > single * 2.0,
-        "two structures reach {double:.1} m against one structure's {single:.1} m -- \
-         the second cast is not paying for itself, and the technique the class is \
-         built around has been tuned or refactored out of existence"
+        double > plain * 6.0,
+        "two structures reach {double:.1} m against a {plain:.1} m full hop -- the \
+         chain is gone, and with it the technique the class is built around"
+    );
+    assert!(
+        double > single * 1.5,
+        "two structures reach {double:.1} m against one structure's {single:.1} m, \
+         so the second cast is not paying for itself"
     );
 }
 

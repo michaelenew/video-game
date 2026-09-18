@@ -4420,33 +4420,69 @@ that moves every time somebody tunes the jump was measuring the jump.
 2.7 m and 41 frames is the thinnest airtime in the game and the class that can
 least afford a mistake in the air.
 
-### 2026-09-17 — the structure jump, cut to three quarters
+### 2026-09-17 — the structure jump, cut to three quarters. **Reverted 2026-09-18**
 
-**Changed** the eruption's rise 14 → 17 frames and the lift a rider keeps
-0.40 → 0.44.
+**Changed** the eruption's rise 14 → 16 → 17 frames and the lift a rider keeps
+0.40 → 0.44. **All of it put back on 2026-09-18.**
 
-**Why** a single structure jump reached 17.5 m and a double reached 43.9 — more
-than three times the arena's half-width. Several seconds of air time to throw
-long-range attacks from, and to pick the ground she was going to land on, off a
-button she can press at any time. That is a run-and-hit class, and this one is
-supposed to be an area-control mage.
+**Why it was tried** a single structure jump and a double were both reckoned too
+tall: several seconds of air time to throw long-range attacks from and to pick
+the ground she was going to land on, off a button she can press at any time.
+That is a run-and-hit class, and this one is supposed to be an area-control
+mage. The target was about three quarters.
 
-**Where it landed** single 12.8 m, double 33.0 m — 73% and 75% of what they
-were.
+**Why it came back** it felt much worse to play — the double noticeably lower —
+and underneath that were two mistakes, one of measurement and one of method.
 
-**Two knobs rather than one**, because the two techniques do not scale alike.
-The double compounds the eruption speed and the single only adds it once, so the
-rise on its own moves the double about three times as far; the lift is what
-brings the single back up to its own target. The rise also buys the thing that
-is not a height at all: a slower eruption is a longer telegraph and a less
-instant escape.
+**The measurement.** The baseline for the double was taken as 43.9 m. It was
+58.8 m. The sweep that produced it sampled gaps of 0, 6, 10, 14 and 18 frames
+between the two casts, and the optimum is at **two**, which was never tried. So
+"three quarters" was computed against a number a quarter too low, and every
+number derived from it was wrong in the same direction. A coarse sweep is fine
+for finding out whether something is big; it is not fine for setting a target
+off — and the tell was there to be noticed, because a technique whose payout
+falls off steeply with the gap has its peak at one end of the range rather than
+in the middle of the samples.
 
-**Verdict** open. The gradient is the thing to watch rather than the peak: two
-stones two or three frames apart pay 33 m on a one-frame window, four to eight
-frames apart pay 26–30 on two, and past about nine frames the second stone
-arrives too late to chain and the whole thing collapses to 16. That is a real
-skill curve and it was not designed, it fell out of the eruption's shape — which
-is an argument for leaving it alone until somebody has played against it.
+**The method, which is the part worth keeping.** The chain a structure jump is
+made of is a **resonance**, not a sum. Each link happens because the eruption
+grows upward faster than she is rising, catches her feet, and hands the
+still-held jump button another takeoff. Whether that happens at all depends on
+the margin between two speeds, so how many links each technique gets is
+*discontinuous* in the tuning, and not even monotonic:
+
+| | single | double |
+| --- | --- | --- |
+| as it was | 17.5 m | 58.8 m |
+| rise 16 | 12.5 | 45.1 |
+| rise 17, lift 0.44 | 12.8 | 33.0 |
+| her jump ×1.15 instead | **15.0** | 52.6 |
+| her jump ×1.25 instead | 16.4 | 45.0 |
+
+Three frames on the rise roughly halved the double while the single barely
+moved. Raising *her* jump made the single **fall**, because she outruns the
+stone that was going to catch her and loses a link. Nothing here can be solved
+for a target: every one of those rows is a different technique rather than the
+same technique scaled.
+
+**Verdict** reverted, every knob, and left alone. If these need to come down
+again the way to do it is to play each setting, not to compute one. The knobs
+are `Rise` and `Lift kept (x)` in the Oven under **Stones**, and the table above
+is a map of where the cliffs are.
+
+**What did not come back** is the height the cast-wide jump nerf takes out of
+them, and that is a real effect worth stating on its own: every link of the
+chain is a takeoff, so a smaller takeoff is subtracted once per link. With the
+structures untouched and that nerf in place the double reaches **44.8 m against
+its old 58.8 — about 76%**, which is the three quarters that was being aimed at
+in the first place, arrived at without touching a stone. The single goes the
+other way, **25.9 m against 17.5**, because the slower takeoff lets the eruption
+catch her for an extra link. Measured against her own full hop, which is what
+"special" means, both are further ahead than they were: the double was 7.9 full
+hops and is 8.9.
+
+Whether those absolute heights are right is a play question, and nobody has
+played it.
 
 ### 2026-09-17 — deleting the double structure jump. Reverted the same day
 
@@ -4491,10 +4527,15 @@ costs something, and whether it can be answered — not where it came from.
 
 **Verdict** reverted, and pinned. The behaviour is now specified in
 `stones::resolve_body` rather than tolerated, and three tests in
-`sim/tests/stones.rs` fail if it goes again: that the double pays double, that
-it needs the two casts close together, and that its window stays inside four
-frames. The height came off the eruption instead, which is where the entry
-above takes it.
+`sim/tests/stones.rs` fail if it goes again: that the double is worth six full
+hops and that the second cast pays for itself, that it needs the two casts close
+together, and that its window stays inside four frames.
+
+The guard is read against her **full hop** rather than against the single, and
+that choice is the entry above in miniature: the single chains too, so the ratio
+between them is a reading of the resonance and moves under tuning, while the gap
+between having the technique and not does not — nine full hops against under
+four.
 
 ### 2026-09-17 — the Reaver's shadow kept expiring before she used it
 

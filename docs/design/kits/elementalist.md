@@ -45,49 +45,54 @@ Physical objects you spawn. Every ability has a second behaviour when it hits on
 > that launch stones properly. (That ride was worth about 2.9 m against a 2.2 m full hop when
 > this was written, and the jump was rebuilt after that. It is not a step any more; see below.)
 
-### The structure jump, and the double — **the class's movement**, 2026-09-17
+### The structure jump, and the double — **the class's movement**
 
-**Ride an eruption and press jump while it is still climbing.** The stone's top is under her
-feet and coming up fast, the carry hands her its speed, and the takeoff stacks on to that
-(`state::advance`). One stone reaches **12.8 m** against her own 5.0 m full hop.
+**Ride an eruption and press jump while it is still climbing.** The stone's top
+is under her feet and coming up fast, the carry hands her its speed, and the
+takeoff stacks on to that (`state::advance`). A stone can then catch her *again*
+on the way up and hand her another takeoff, which is what makes this a technique
+rather than a tall jump: **25.9 m** off one stone, against her own 5.0 m full
+hop.
 
-**The double is the real technique.** Cast two structures two or three frames apart and time
-the jump while *both* are still coming out of the floor: the first eruption catches her and
-she jumps off it, the second catches her again mid-rise and she jumps off that. **33.0 m**, on
-a one-frame window, for two of her three structure slots and a setup that telegraphs itself
-twice.
+**The double is the real thing.** Cast two structures two or three frames apart
+and time the jump while *both* are still coming out of the floor, and the
+eruptions catch her in turn: **44.8 m**, on a three-frame window, for two of her
+three structure slots and a setup that telegraphs itself twice.
 
-There is a gradient behind that headline number and it is the more interesting half. Two or
-three frames apart pays 33 m; four to eight pays 26–30 on a two-frame window; past about nine
-frames the second stone arrives too late to chain at all and the whole thing collapses to
-16 m. Nobody designed that curve — it falls out of the shape of the rise — which is a reason to
-leave it alone until somebody has played against it.
+There is a gradient behind that and it is the more interesting half. Two or
+three frames apart is the peak; the payout falls away as the gap opens, and past
+about nine frames the second stone arrives too late to chain at all. Nobody
+designed that curve — it falls out of the shape of the rise.
 
-**Both are three quarters of what they were**, and the cut came entirely out of the eruption:
-the rise 14 → 17 frames and the lift a rider keeps 0.40 → 0.44. Two knobs because the two
-techniques do not scale alike — the double compounds the eruption speed and the single only
-adds it once — and no knob anywhere near the jump, because a structure-jump multiplier would
-be a second rule about eruptions that only applies when somebody is standing on one.
-
-The slower rise buys something that is not a height: a longer telegraph and a less instant
-escape. That was the complaint that started it. At 43.9 m the double was a get-out-of-jail
-card she could press at any time, buying several seconds of air to throw long-range attacks
-from *and* to choose the ground she was going to land on — which is a run-and-hit class rather
-than an area-control mage.
-
-> ⚠️ **It was deleted first, and that was the wrong call.** The re-grounding that lets a rising
-> stone hand her another takeoff looks like a bug from inside `resolve_body`, and reading
-> `../README.md` §4 — *space while airborne does nothing* — as covering it takes the double to
-> 38% of its height rather than 75%. The rule is about space doing something with **nothing
-> under you**; a stone still climbing is a surface. Reverted the same day, and the behaviour is
-> specified in `stones::resolve_body` and pinned by three tests now rather than tolerated. The
-> entry in [../feel-log.md](../feel-log.md) is about the general mistake, which is easy to make
-> again: an emergent technique found through implementation is not thereby an accident.
+> ⚠️ **Two things were done to this on 2026-09-17 and both were undone.**
 >
-> **They come up where you are pointing.** `structure_ahead` became a *reach*: the stone rises
-> at the spot the crosshair is on, out to 6 m. Look down and it comes up at your own feet,
-> which is what the ability description below has always said and what it could not do while
-> the stone went a fixed distance straight ahead. See [../controls.md](../controls.md).
+> It was **deleted**, on the reading that a fighter who has already jumped off a
+> stone should not be re-grounded by it — `../README.md` §4, *space while
+> airborne does nothing*. That rule is about space doing something with
+> **nothing under you**; a stone still climbing is a surface, and a body on a
+> surface can jump off it. Restored the same day and specified in
+> `stones::resolve_body`, with three tests that fail if it goes again.
+>
+> Then its **height** was cut, by slowing the eruption (the rise 14 → 17 frames,
+> the lift kept 0.40 → 0.44). Put back on 2026-09-18: it played much worse, and
+> the target it was tuned to had been computed against a baseline measured a
+> quarter too low.
+>
+> **The stone knobs are not the way to move this.** The chain is a resonance
+> between how fast she rises and how fast the stone grows — the eruption has to
+> outrun her by just enough to catch her feet again — so the number of links is
+> discontinuous in the tuning and not even monotonic. Three frames on the rise
+> roughly halved the double while the single barely moved; raising *her* jump
+> makes the single **fall**, because she outruns the stone that was going to
+> catch her. [../feel-log.md](../feel-log.md) has the measurements. If these need
+> to come down, somebody plays each setting rather than solving for a target.
+
+**The cast-wide jump nerf did move them**, because every link of the chain is a
+takeoff and a smaller takeoff is subtracted once per link. The double went from
+58.8 m to 44.8; the single went the other way, 17.5 to 25.9, because the slower
+takeoff lets the eruption catch her for an extra link. Against her own full hop
+— which is what "special" means — both are further ahead than they were.
+
 - **Contested, not owned.** Enemies can use them as cover, destroy them, and displace them
   short distances with attacks, but cannot combo through them nearly as well. See
   [../elementalist.md](../elementalist.md).
