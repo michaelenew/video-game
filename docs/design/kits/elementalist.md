@@ -59,6 +59,14 @@ and time the jump while *both* are still coming out of the floor, and the
 eruptions catch her in turn: **44.8 m**, on a three-frame window, for two of her
 three structure slots and a setup that telegraphs itself twice.
 
+> **Watching one.** `--dev` and press `G`: it plays the input rather than
+> describing it, and `P`, `[` and `]` step through it in either direction with a
+> readout under the crosshair saying what each frame is doing — where her feet
+> are, how fast she is rising, each stone's age and climb rate, and the one
+> frame that says **CAUGHT**, which is the stone overtaking her feet and handing
+> the still-held jump button another takeoff. That frame is the technique; the
+> rest is a jump.
+
 There is a gradient behind that and it is the more interesting half. Two or
 three frames apart is the peak; the payout falls away as the gap opens, and past
 about nine frames the second stone arrives too late to chain at all. Nobody

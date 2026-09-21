@@ -218,6 +218,67 @@ pub struct Sim {
     /// Useful rather than decorative: it is how you tell "this clip is wrong"
     /// from "this rig is wrong" while looking at the thing, in one keypress.
     bind_pose: bool,
+    /// The last few seconds of simulation, so `[` can step **backwards**.
+    ///
+    /// Stepping forward on its own is not enough to study anything that
+    /// happens on one frame, and the game has at least one of those: the
+    /// Elementalist's structure jump chains because a stone's top catches her
+    /// feet by three and a half centimetres, on exactly one frame of the rise.
+    /// Watching that means going past it and coming back, repeatedly.
+    ///
+    /// A ring rather than a growing log, written in place, so a frame of
+    /// stepping never allocates -- a `World` is a small flat copy by
+    /// construction (`sim/tests/budget.rs`) and the renderer already clones one
+    /// per tick for the interpolator.
+    history: Rewind,
+    /// The scripted double structure jump, if one is playing. See
+    /// [`rehearsal`].
+    rehearsing: Option<u32>,
+}
+
+/// A ring of past snapshots, and how far back through it we have stepped.
+struct Rewind {
+    /// Oldest to newest, written at `next`, wrapping.
+    ring: Vec<World>,
+    next: usize,
+    /// How many of `ring` hold a real frame -- it is short at startup.
+    filled: usize,
+}
+
+/// Rather over two seconds at 60 Hz. A `World` is about 2 KB, so the whole
+/// thing is a third of a megabyte and is allocated once.
+const REWIND_FRAMES: usize = 150;
+
+impl Rewind {
+    fn new(seed: &World) -> Rewind {
+        Rewind {
+            ring: vec![seed.clone(); REWIND_FRAMES],
+            next: 0,
+            filled: 0,
+        }
+    }
+
+    /// Remember the state *before* a tick, so stepping back lands on it.
+    fn push(&mut self, w: &World) {
+        self.ring[self.next].clone_from(w);
+        self.next = (self.next + 1) % REWIND_FRAMES;
+        self.filled = (self.filled + 1).min(REWIND_FRAMES);
+    }
+
+    /// Take the newest frame back off, or `None` once the ring runs dry.
+    fn pop(&mut self) -> Option<World> {
+        if self.filled == 0 {
+            return None;
+        }
+        self.next = (self.next + REWIND_FRAMES - 1) % REWIND_FRAMES;
+        self.filled -= 1;
+        Some(self.ring[self.next].clone())
+    }
+
+    fn clear(&mut self) {
+        self.filled = 0;
+        self.next = 0;
+    }
 }
 
 /// Where each fighter's shield hand ended up this frame, in world space.
@@ -258,6 +319,7 @@ impl Default for Sim {
         } else {
             World::with_classes(chosen_classes())
         };
+        let seed = w.clone();
         Sim {
             prev: w.clone(),
             cur: w,
@@ -270,6 +332,8 @@ impl Default for Sim {
             // captured without a keypress.
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
+            history: Rewind::new(&seed),
+            rehearsing: None,
         }
     }
 }
@@ -277,6 +341,15 @@ impl Default for Sim {
 impl Sim {
     fn local_player(&self) -> usize {
         self.driver.local_player()
+    }
+
+    /// Is the simulation being stepped rather than run?
+    ///
+    /// The HUD reads it to put up the frame readout: stepping without one is
+    /// guessing, and the things worth stepping through are exactly the ones too
+    /// quick to read at speed.
+    pub fn stepping(&self) -> bool {
+        self.paused
     }
 }
 
@@ -1715,6 +1788,40 @@ fn tick_sim(
         sim.step_once = true;
         sim.paused = true;
     }
+    // **Back a frame.** The other half of stepping, and the half that makes it
+    // worth having: anything that happens on a single frame has to be gone past
+    // and returned to before you can see what it did. Local play only -- a peer
+    // is not rewinding with you.
+    if keys.just_pressed(KeyCode::BracketLeft) && matches!(sim.driver, Driver::Local) {
+        sim.paused = true;
+        if let Some(back) = sim.history.pop() {
+            // `prev` as well, or the interpolator spends a frame drawing the
+            // step we just undid.
+            sim.prev = back.clone();
+            sim.cur = back;
+            // A rewind past the start of a rehearsal is a rewind out of it.
+            if sim.rehearsing.is_some_and(|from| sim.cur.frame < from) {
+                sim.rehearsing = None;
+            }
+        }
+    }
+    // **Play the double structure jump.** Not a hint at the timing -- the
+    // timing, performed: two structures three frames apart and a jump nine
+    // frames after the first, which is the only shape that gets a third takeoff
+    // (see `docs/design/kits/elementalist.md`). It is a thirty-three
+    // millisecond double tap and nobody hits it by hand, which is the whole
+    // reason to be able to watch one.
+    //
+    // Dev only, because it takes the controls away from you.
+    if dev_mode() && keys.just_pressed(KeyCode::KeyG) {
+        let classes = [sim::Class::Elementalist, sim.cur.players[1].class];
+        let w = World::with_classes(classes);
+        sim.prev = w.clone();
+        sim.cur = w;
+        sim.history.clear();
+        sim.rehearsing = Some(0);
+        sim.paused = false;
+    }
     if keys.just_pressed(KeyCode::F1) {
         // Toggled here rather than in the debug module so all input reading
         // stays in one place.
@@ -1805,10 +1912,26 @@ fn tick_sim(
                 // whatever the frame rate happened to be -- which makes two
                 // runs of the same script diverge.
                 let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
+                // The rehearsal outranks the demo script and the keyboard, and
+                // ends by handing the controls back rather than looping.
+                let rehearsed = sim.rehearsing.and_then(|from| {
+                    let since = sim.cur.frame.saturating_sub(from);
+                    if since > REHEARSAL_FRAMES {
+                        sim.rehearsing = None;
+                        None
+                    } else {
+                        Some(rehearsal(since, &sim.cur))
+                    }
+                });
                 let pair = [
-                    scripted_or(scripted, held),
+                    rehearsed.unwrap_or_else(|| scripted_or(scripted, held)),
                     dummy_input(sim.dummy, sim.cur.frame, held_two),
                 ];
+                // Remembered before the tick, so one press of `[` lands on the
+                // frame you were just looking at. Split out of the field access
+                // because the ring and the world live on the same struct.
+                let Sim { history, cur, .. } = &mut *sim;
+                history.push(cur);
                 sim.prev = sim.cur.clone();
                 sim.cur.advance(pair);
             }
@@ -1839,6 +1962,64 @@ fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
         Dummy::Attack => SimInput::default(),
         Dummy::Human => live,
     }
+}
+
+/// How long the rehearsal drives for, after which the controls come back.
+const REHEARSAL_FRAMES: u32 = 40;
+
+/// One frame of the double structure jump, `since` frames into it.
+///
+/// **The input, not a description of it.** Two structures raised three frames
+/// apart -- the second press needs the button up in between, because the
+/// mechanic fires on a press edge, which is also why the gap cannot be shorter
+/// than two frames -- and then the jump nine frames after the first, held so
+/// the rise sustains.
+///
+/// Three frames rather than two is deliberate: two is a metre higher at its
+/// best, and three gives five different jump frames that reach a third takeoff
+/// instead of three, so it is the one to *watch* if you are trying to see the
+/// shape of it.
+///
+/// Aimed at her own feet, because Raise puts the stone where the crosshair is
+/// and the technique needs it underfoot.
+fn rehearsal(since: u32, w: &World) -> SimInput {
+    let mut v = 0u16;
+    // Frame 0 and frame 3, with frames 1 and 2 releasing the button.
+    if since == 0 || since == 3 {
+        v |= SimInput::MECHANIC;
+    }
+    if since >= 9 {
+        v |= SimInput::SPACE;
+    }
+    let (yaw, tilt) = looking_at_her_feet(w);
+    SimInput::new(v).looking(yaw, tilt)
+}
+
+/// The yaw and pitch that put the **crosshair** on the patch of floor the
+/// Elementalist is standing on.
+///
+/// **Not straight down**, which is the first thing anybody writes here and is
+/// wrong for the reason `docs/design/aiming.md` exists: the ray starts at the
+/// camera's eye, which sits behind and above the shoulder, so a straight-down
+/// look lands on the floor somewhere behind her. The first version of the
+/// rehearsal did exactly that, raised both stones behind her heels, and reached
+/// eighteen metres on two takeoffs -- a single, which is the very thing the
+/// rehearsal exists to tell apart from a double.
+///
+/// Solved by iteration because the eye's own position depends on the pitch: a
+/// few rounds settle it, the rig being smooth. Floating point is safe here for
+/// the reason [`aim_toward`] gives -- this produces an *input*, and inputs are
+/// transmitted rather than recomputed.
+fn looking_at_her_feet(w: &World) -> (u16, i16) {
+    let stood = w.players[0].pos;
+    let mut tilt = 0i16;
+    for _ in 0..6 {
+        let eye = sim::camera::eye(stood, SimInput::looking_at(0, 0, tilt), sim::Fx::ZERO);
+        let flat = stood.sub(eye).flat_len().to_f32_for_render();
+        let drop = stood.y.sub(eye.y).to_f32_for_render();
+        tilt = view::pitch_from_radians(drop.atan2(flat));
+    }
+    (0, tilt)
 }
 
 /// `DEMO=1` drives player one from a script instead of the keyboard. Used to
@@ -2680,5 +2861,78 @@ mod pinions {
             feather(1.0, 0, 0).0,
             "the beat is not a function of the frame"
         );
+    }
+}
+
+#[cfg(test)]
+mod rehearsing {
+    use super::*;
+
+    /// Run the rehearsal and report the highest she gets, and how many takeoffs
+    /// fired on the way up.
+    fn play() -> (f32, u32) {
+        let mut w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
+        let (mut apex, mut takeoffs, mut climbing) = (0.0f32, 0, true);
+        for i in 0..200u32 {
+            let me = if i <= REHEARSAL_FRAMES {
+                rehearsal(i, &w)
+            } else {
+                SimInput::default()
+            };
+            let before = w.players[0].vel.y;
+            w.advance([me, SimInput::default()]);
+            let p = &w.players[0];
+            if climbing && p.vel.y.sub(before).to_f32_for_render() > 8.0 {
+                takeoffs += 1;
+            }
+            if climbing && i > 9 && p.vel.y.raw() < 0 {
+                climbing = false;
+            }
+            apex = apex.max(p.pos.y.to_f32_for_render());
+        }
+        (apex, takeoffs)
+    }
+
+    #[test]
+    fn the_rehearsal_actually_performs_a_double() {
+        // **The point of it existing.** It is a fixed input sequence standing in
+        // for a thirty-three millisecond double tap nobody can do by hand, so if
+        // it quietly stops landing the technique it is worse than nothing --
+        // somebody would watch it and conclude the double looks like that.
+        //
+        // Three takeoffs is what makes a double a double rather than a single
+        // off whichever stone happened to be bursting: the first eruption
+        // catches her feet after she jumps, and the second catches her again.
+        let (apex, takeoffs) = play();
+        assert_eq!(
+            takeoffs, 3,
+            "the rehearsal reached {apex:.1} m on {takeoffs} takeoffs -- a double is three"
+        );
+        assert!(
+            apex > 35.0,
+            "the rehearsal only reached {apex:.1} m, which is single-structure height"
+        );
+    }
+
+    #[test]
+    fn it_hands_the_controls_back() {
+        // A rehearsal that never ended would be a mode rather than a
+        // demonstration. It drives for `REHEARSAL_FRAMES` and stops, which the
+        // tick loop reads to clear `Sim::rehearsing`.
+        const {
+            assert!(
+                REHEARSAL_FRAMES > 9,
+                "the rehearsal stops before it presses jump"
+            )
+        };
+        // And the shape of the input is the thing the kit document describes:
+        // two presses three frames apart with the button up between them.
+        let w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
+        assert!(rehearsal(0, &w).has(SimInput::MECHANIC));
+        assert!(!rehearsal(1, &w).has(SimInput::MECHANIC));
+        assert!(!rehearsal(2, &w).has(SimInput::MECHANIC));
+        assert!(rehearsal(3, &w).has(SimInput::MECHANIC));
+        assert!(!rehearsal(8, &w).has(SimInput::SPACE));
+        assert!(rehearsal(9, &w).has(SimInput::SPACE));
     }
 }

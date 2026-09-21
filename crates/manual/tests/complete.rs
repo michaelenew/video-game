@@ -54,6 +54,9 @@ fn spoken(key: &str) -> Vec<&'static str> {
         // two. It exists for the Champion's third weapon.
         "KeyU" => vec!["U or middle click", "Middle click (or U)"],
         "BracketRight" => vec!["]"],
+        "BracketLeft" => vec!["["],
+        // The rehearsed double structure jump, `--dev` only.
+        "KeyG" => vec!["G"],
         "Minus" | "NumpadSubtract" => vec!["-"],
         "Equal" | "NumpadAdd" => vec!["="],
         "Semicolon" | "Quote" => vec!["; and '"],
