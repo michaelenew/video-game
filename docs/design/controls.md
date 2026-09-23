@@ -128,9 +128,12 @@ longer *changes* which attack it is.
 - **Airdodge**: shift plus a direction, **once per airtime**. It wipes vertical speed rather
   than adding to it, so it is a sideways commitment and never a second jump. A second one
   would turn a jump into flight.
-- Space while airborne does nothing, **with one exception**: while a Champion's uppercut has
-  hold of somebody, it takes the pair of you higher, once. See
-  [kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor).
+- Space while airborne does nothing, **with two exceptions**, both per class. While a
+  Champion's uppercut has hold of somebody, it takes the pair of you higher, once — see
+  [kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor). And
+  the Dual mage jumps once more while the lower of her two bars holds three quarters, and on
+  every press while she is ascending — earned by the mechanic rather than given by the grammar,
+  see [dual-mage.md](dual-mage.md#the-tiers--what-frenzy-does-to-her-body). Added 2026-09-23.
 - **Space plus a weapon, on the ground, is a takeoff** — again on the Champion only, added
   2026-09-14. Three moves, one per weapon, thrown as the feet leave the floor. It is the
   first time `space` has modified anything, and the section below on that class is where
@@ -711,11 +714,13 @@ What exists today: **space is a vertical takeoff**, and **shift plus a direction
 airdodge, once per airtime**, which wipes vertical speed so it can never be a second jump.
 Airborne attacks are still the grounded ones.
 
-One class spends that airdodge on something else. The Reaver's forward airdodge, thrown with
+Two classes spend that airdodge on something else. The Reaver's forward airdodge, thrown with
 the crosshair on her shadow, is the **dash to it** — added 2026-09-14, because mobility that
 switched off the moment she jumped was mobility in the wrong place. It costs the airdodge
 like any other air commitment; what it buys is the whole distance to the second body rather
-than a sideways shove.
+than a sideways shove. The Dual mage's, while the lower of her bars holds half, is the
+**blink** — added 2026-09-23: the same commitment with the travelling taken out, on the ground
+and in the air alike, and airborne it costs the airdodge the same way.
 
 ---
 

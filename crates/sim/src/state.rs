@@ -20,6 +20,7 @@ use crate::camera;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
+use crate::dual;
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::gust::{self, Gale, MAX_GUSTS};
@@ -304,16 +305,17 @@ pub struct Player {
     /// this is only how much longer it has.
     pub hasted: u16,
     /// What the Dual mage's bar was worth on the frame she committed to the
-    /// move she is in the middle of. [`Fx::ONE`] for everybody else, and
-    /// meaningless while she is not throwing anything.
+    /// move she is in the middle of -- the bar of the force that move is made
+    /// of. [`Fx::ONE`] for everybody else, and meaningless while she is not
+    /// throwing anything.
     ///
     /// **A cast is worth where you were standing when you pressed the button**,
     /// not where the cast's own push has since taken you. The two are different
-    /// numbers because throwing anything at all moves the bar, on the press,
-    /// and a finisher moves it a long way -- so a Judgement read live would be
+    /// numbers because throwing anything at all goads a bar, on the press,
+    /// and a finisher goads it a long way -- so a Judgement read live would be
     /// worth its own push, and the one place in the kit that is supposed to be
-    /// embarrassing at the centre would be the least embarrassing thing there.
-    /// It would also mean the bar on the HUD never matched what the player got.
+    /// embarrassing from empty would be the least embarrassing thing there.
+    /// It would also mean the bars on the HUD never matched what the player got.
     ///
     /// See [`depth`], which reads this while she is busy and the live bar when
     /// she is not.
@@ -571,8 +573,9 @@ impl Player {
             // always satisfied for this class.
             Mechanic::Shadow(_) => true,
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
-            Mechanic::Meter { value, .. } => value.abs() >= t::meter_deep(),
-            Mechanic::Forms { .. } | Mechanic::Blood => true,
+            // Nothing on the class is gated by the bars: what they change is
+            // power and what her body can do, never availability.
+            Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => true,
         }
     }
 
@@ -1198,6 +1201,11 @@ impl World {
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
                 self.players[attacker].hit_used = true;
+                // Landing anything while ascended pulls some health back. A
+                // no-op for everybody else and for her between ascensions.
+                if dealt > 0 {
+                    dual::landed_a_hit(&mut self.players[attacker]);
+                }
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
                 // the way you are holding, so it is a repositioning tool you
@@ -2458,7 +2466,13 @@ fn step_player(
                     // airdodge; what it does not do is take the airdodge's shorter
                     // frames, because the dash has somewhere to *be* and a tail cut
                     // short would strand her halfway there.
-                    if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
+                    if !dual::may_dodge(p) {
+                        // Ascending, the Dual mage has no dodge: she flies
+                        // instead, and loss of control is loss of the option
+                        // to decline. See `docs/design/dual-mage.md`.
+                        Action::Free
+                    } else if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene)
+                    {
                         if !p.grounded {
                             p.air_dodged = true;
                         }
@@ -2468,6 +2482,33 @@ fn step_player(
                         p.vel.y = Fx::ZERO;
                         Action::Dodge {
                             left: t::dodge_frames(),
+                        }
+                    } else if may_commit && dual::may_blink(p) {
+                        // The Dual mage's dodge at the first tier is a **blink**:
+                        // the same commitment, the same invulnerable window and
+                        // the same tail, with the travelling taken out. She is
+                        // put where the dodge would have ended, on its first
+                        // frame, or against the first stone or wall in the way
+                        // -- `aim::blink_to` decides which. In the air it is the
+                        // airdodge and it is spent the same way.
+                        //
+                        // The tail is spent standing still, which is what keeps
+                        // a blink a dodge: the frames after it are the frames a
+                        // whiffed one is punished in.
+                        let grounded = p.grounded;
+                        p.pos = aim::blink_to(p.pos, dir, dual::dodge_travel(grounded), scene);
+                        p.vel.x = Fx::ZERO;
+                        p.vel.z = Fx::ZERO;
+                        if grounded {
+                            Action::Dodge {
+                                left: t::dodge_frames(),
+                            }
+                        } else {
+                            p.air_dodged = true;
+                            p.vel.y = Fx::ZERO;
+                            Action::Dodge {
+                                left: t::air_dodge_frames(),
+                            }
                         }
                     } else if p.grounded && blinks(p) {
                         // **The Blood mage's dodge as a blink**, behind
@@ -2681,6 +2722,23 @@ fn step_player(
     // nothing to stack with -- standing still on it is vertical speed zero --
     // so this changes nothing there.
     //
+    // The second exception to "space in the air does nothing", after the
+    // Champion's uppercut below, and it is per class: the Dual mage's **second
+    // jump**, once per airtime while her lower bar holds the second tier, and
+    // on every press while she is ascending -- the wing beat. A fresh takeoff
+    // rather than an addition, so it works on the way down, which is when a
+    // second jump is worth having; the sustain is not offered on it, because
+    // the height is the tier's to give and not the button's.
+    //
+    // **Before the ordinary takeoff**, which clears `grounded` on the frame
+    // it fires: read after it, the press that left the floor would look like a
+    // press in the air and spend the second jump on the first.
+    if pressed_space && !p.grounded && p.action.actionable() && dual::may_beat_wings(p) {
+        p.vel.y = t::jump_speed().mul(mob.jump).mul(t::second_jump());
+        p.jump_hold = 0;
+        dual::spend_wing_beat(p);
+    }
+
     if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
@@ -2762,7 +2820,8 @@ fn step_player(
                 gravity = gravity.mul(t::jump_hold_gravity());
             }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
-            let floor = t::fall_cap().mul(mob.fall_cap);
+            // Slower at the Dual mage's second tier; one for everybody else.
+            let floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
             if p.vel.y.raw() < floor.raw() {
                 p.vel.y = floor;
             }
@@ -2832,6 +2891,7 @@ fn step_player(
         p.air_stall = 0;
         p.air_stalls = 0;
         p.leap_used = false;
+        dual::feet_down(p);
     }
 }
 
@@ -3759,10 +3819,10 @@ fn begin_move(
     aerial: bool,
 ) -> Action {
     p.hit_used = false;
-    // **Before anything else**, and before `throw_move` steers the bar: what
-    // this cast is worth is where she is standing right now. See
-    // [`Player::thrown_at`].
-    p.thrown_at = live_depth(p);
+    // **Before anything else**, and before `throw_move` steers the bars: what
+    // this cast is worth is where she is standing right now, on the bar of the
+    // force this move is made of. See [`Player::thrown_at`].
+    p.thrown_at = dual::depth_at(p, Some(kind));
     // Health is spent on the press, never on the hit. Missing is the
     // punishment, which is the whole of the Blood mage's economy -- see
     // `docs/design/kits/blood-mage.md`. Paid here even for a channelled move,
@@ -4220,53 +4280,9 @@ fn step_mechanic(p: &mut Player) {
         // See `crate::shadow`.
         Mechanic::Shadow(_) => shadow::step(p),
 
-        // Two different things happen at depth, and they are different on
-        // purpose. Inside the bar, past the deep threshold, the forces **burn**
-        // you and you stop it by coming back inside the line -- relief from
-        // stopping rather than from a reward, which is the containment story.
-        // Driven all the way to an end, that becomes **ascension**, which you
-        // cannot stop: it runs its clock, it costs far more, and it puts you
-        // back at the centre staggered. See `docs/design/dual-mage.md`.
-        Mechanic::Meter {
-            value,
-            colour,
-            ascending,
-        } => {
-            if ascending > 0 {
-                p.health = (p.health - t::ascension_drain().max(1)).max(1);
-                let left = ascending - 1;
-                p.mechanic = Mechanic::Meter {
-                    // Pinned while it runs: the meter is not the operative
-                    // resource during ascension, so nothing steers it.
-                    value,
-                    colour,
-                    ascending: left,
-                };
-                if left == 0 {
-                    // Spat back out at the centre. The stun is what makes
-                    // reaching the end a decision rather than a free ride --
-                    // flat for now, where the design wants it graduated by how
-                    // much damage was dealt.
-                    p.mechanic = Mechanic::Meter {
-                        value: 0,
-                        colour,
-                        ascending: 0,
-                    };
-                    p.stun_total = t::ascension_stun();
-                    p.action = Action::Stagger {
-                        left: t::ascension_stun(),
-                    };
-                }
-                return;
-            }
-            let depth = value.abs();
-            if depth > t::meter_deep() {
-                let over = depth - t::meter_deep();
-                let span = (t::meter_max() - t::meter_deep()).max(1);
-                let burn = (t::meter_burn() * over) / span;
-                p.health = (p.health - burn.max(1)).max(1);
-            }
-        }
+        // Two bars and the hill between them: calm, the drift, the burn, and
+        // the clock while she is ascending. See `crate::dual`.
+        Mechanic::Meter { .. } => dual::step(p),
 
         _ => {}
     }
@@ -4276,11 +4292,12 @@ fn step_mechanic(p: &mut Player) {
 // The depth curve
 // ---------------------------------------------------------------------------
 //
-// The Dual mage's founding idea, and until now the largest hole in her:
-// **power scales continuously with distance from the centre of the bar.** Not
-// thresholds, not two versions of a move with a snap between them -- a straight
-// line from `tuning::depth_floor` at zero to `tuning::depth_ceiling` at either
-// end, symmetric, with every point on it reachable.
+// The Dual mage's founding idea: **power scales continuously with the bar of
+// the force a move is made of.** Not thresholds, not two versions of a move
+// with a snap between them -- a straight line from `tuning::depth_floor` at
+// empty to `tuning::depth_ceiling` at full, with every point on it reachable.
+// Which of her two bars is `dual::depth_at`'s to answer: a cast reads the one
+// she is carrying, an auto its own.
 //
 // It is one function rather than a rule each ability remembers, which is the
 // whole reason it is worth building at all: "ride as close to the edge as you
@@ -4306,8 +4323,8 @@ fn step_mechanic(p: &mut Player) {
 /// tether drains harder if she keeps riding outward while it holds, which is
 /// the class's own argument made by an ability that outlives its cast.
 pub fn depth(p: &Player) -> Fx {
-    // Mid-move, it is what the bar said when she committed. Throwing anything
-    // moves the bar on the press and the finisher moves it a long way, so a
+    // Mid-move, it is what the bars said when she committed. Throwing anything
+    // moves a bar on the press and the finisher moves it a long way, so a
     // cast read live would be worth its own push -- see [`Player::thrown_at`].
     match p.action.attack_kind() {
         Some(_) => p.thrown_at,
@@ -4315,41 +4332,30 @@ pub fn depth(p: &Player) -> Fx {
     }
 }
 
-/// The curve read off the bar as it is this instant.
-///
-/// The shape of the whole thing: a straight line from `depth_floor` at the
-/// centre to `depth_ceiling` at either end, symmetric, with every point on it
-/// reachable and nothing anywhere that snaps.
+/// The curve read off the bars as they are this instant, for whatever she is
+/// carrying. See [`dual::depth_at`].
 fn live_depth(p: &Player) -> Fx {
-    let Mechanic::Meter { value, .. } = p.mechanic else {
-        return Fx::ONE;
-    };
-    let max = t::meter_max().max(1);
-    let out = Fx::ratio(value.abs().min(max), max);
-    crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+    dual::depth_at(p, None)
 }
 
-/// Is the Dual mage off the floor of her own bar: deep, or ascended?
+/// Is the Dual mage off the floor: at the three-quarter tier, or ascended?
 ///
 /// **`false` for every other class**, so it is safe to ask of anybody.
 ///
-/// Deep is the same threshold the burn starts at and the same one the HUD
-/// marks, deliberately: "deep" should mean one thing, and one threshold is what
-/// makes the burn and the float two faces of the same decision rather than two
-/// rules that happen to fire near each other. The cost of riding the edge is
-/// that it eats you; the reward is that you stop touching the ground.
+/// The float used to trigger at *depth*, a position on the one signed bar. The
+/// two bars have no such position, so it lives on the same tier the second jump
+/// and the slow fall do -- the lower bar at three quarters, `tuning::tier_jump`
+/// -- deliberately: that tier is already "her feet stop obeying the floor", and
+/// one threshold is what makes the float, the second jump and the slow fall
+/// three faces of the same decision rather than three rules that happen to fire
+/// near each other. The burn is what riding both bars up costs; this is one of
+/// the things it buys. See `dual::Tier`.
 ///
 /// Read live rather than from `thrown_at`, unlike [`depth`]. It is not what a
 /// cast is worth -- it is where she *is*, and where she is has to match what
 /// the renderer is drawing on the frame it draws it.
 pub fn floating(p: &Player) -> bool {
-    let Mechanic::Meter {
-        value, ascending, ..
-    } = p.mechanic
-    else {
-        return false;
-    };
-    ascending > 0 || value.abs() > t::meter_deep()
+    dual::ascending(p) || dual::tier(p) >= dual::Tier::Jump
 }
 
 /// The same curve as it applies to the **size** of what a move puts in the
@@ -4379,69 +4385,11 @@ pub fn depth_of_size(p: &Player, kind: u8) -> Fx {
     crate::math::lerp(Fx::ONE, depth(p), t::depth_size())
 }
 
-/// Attacking steers the Dual mage's meter: dark darker, light lighter, an auto
-/// a little and a cast more. Nothing else moves it, so every step is a
-/// consequence of a decision the player made.
-///
-/// **On the press, every time, including the autos.** They used to steer on
-/// *contact* -- the design's own rule, and the reason for it is good: landing a
-/// far-side auto is the fast way back toward centre, which is what forces this
-/// class into melee exactly when it is most fragile. It was still wrong, and
-/// obviously so the moment anybody played it: with nothing in reach, **no
-/// button on the class moved the bar at all.** The autos hit nothing, the casts
-/// took their direction from an auto that had never landed, and the whole
-/// mechanic sat at zero. A resource you cannot move without a target is a
-/// resource you cannot learn, cannot tune, and cannot see working.
-///
-/// If the melee pull is wanted back it should return as a **bonus for
-/// landing** rather than as the only way to move -- see the feel log entry for
-/// 2026-09-13.
-///
-/// **Which way comes from the force she is carrying, not from the buttons held
-/// down.** Only the autos have a side of their own, and throwing one is what
-/// sets which force she carries; everything else is made of that force. Reading
-/// the input bits instead meant asking which of `shift` and `left click` won,
-/// and a move already knows what it is made of.
+/// Attacking goads one of the Dual mage's bars. Nothing else moves them up, so
+/// every step is a consequence of a decision the player made. See
+/// [`dual::steer`].
 fn steer_meter(p: &mut Player, kind: u8) {
-    let Mechanic::Meter {
-        value,
-        colour,
-        ascending,
-    } = p.mechanic
-    else {
-        return;
-    };
-    // Nothing steers during ascension. The bar is not the resource then; the
-    // clock is.
-    if ascending > 0 {
-        return;
-    }
-    // Three tiers, and the order of the arms is the order of the commitment.
-    // An auto is the unit the bar is measured in, and it also *sets* which
-    // force she is carrying. A cast moves her further, in whichever direction
-    // the last auto left her facing. And the **finisher** very nearly throws
-    // her over the edge, which is the tier `docs/design/dual-mage.md` has been
-    // asking for since the bar was built: what makes Judgement the payoff is no
-    // longer that it is gated, it is that casting it deep is a real question
-    // about whether you survive the cast.
-    let (push, colour) = match moves::dual::force(kind) {
-        Some(thrown) => (t::meter_auto_push(), thrown),
-        None if moves::dual::is_the_finisher(kind) => (t::meter_finisher_push(), colour),
-        None => (t::meter_cast_push(), colour),
-    };
-    let value = (value + push * colour.along()).clamp(-t::meter_max(), t::meter_max());
-    // Driven all the way to an end, and it takes her. There is no input for it
-    // and there never was -- you got there one cast at a time.
-    let ascending = if value.abs() >= t::meter_max() {
-        t::ascension_frames()
-    } else {
-        0
-    };
-    p.mechanic = Mechanic::Meter {
-        value,
-        colour,
-        ascending,
-    };
+    dual::steer(p, kind);
 }
 
 fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
@@ -4530,14 +4478,22 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
         }
         Mechanic::Blood => h.write_u32(6),
         Mechanic::Meter {
-            value,
+            dark,
+            light,
             colour,
             ascending,
+            jumped,
+            landed,
+            singe,
         } => {
             h.write_u32(7);
-            h.write_i32(*value);
-            h.write_i32(colour.along());
+            h.write_i32(dark.raw());
+            h.write_i32(light.raw());
+            h.write_u32(*colour as u32);
             h.write_u32(*ascending as u32);
+            h.write_u32(*jumped as u32);
+            h.write_u32(*landed as u32);
+            h.write_i32(singe.raw());
         }
     }
 }
@@ -5833,8 +5789,8 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
     } else {
         speed
     };
-    // **The Dual mage's feet leave the floor at depth**, and a thing that is
-    // not walking is not held to a walk. See [`floating`] and
+    // **The Dual mage's feet leave the floor at the three-quarter tier**, and
+    // a thing that is not walking is not held to a walk. See [`floating`] and
     // `tuning::float_move_speed`; the renderer reads the same predicate to stop
     // driving her legs -- `view::pose`.
     let speed = if floating(p) {
@@ -6614,6 +6570,9 @@ impl World {
             });
             self.players[i].heal(m.leeched(dealt));
             self.players[i].hit_used = true;
+            if dealt > 0 {
+                dual::landed_a_hit(&mut self.players[i]);
+            }
         }
 
         // Nothing to stand on any more.

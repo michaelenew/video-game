@@ -119,11 +119,11 @@ pub const SECTIONS: &[Section] = &[
             e("W A S D", "Move, relative to the camera."),
             e(
                 "Space",
-                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial.",
+                "Jump. Hold it to go higher; releasing is final. On the Champion, pressing a weapon inside the first few frames of a jump throws that weapon's takeoff instead of an aerial. On the Dual mage, a second press in the air jumps again while the lower of her two bars is at three quarters, and every press is a wing beat while she is ascended.",
             ),
             e(
                 "Shift + direction",
-                "Dodge, and shift's only job. Airborne, an airdodge — once per jump. It used to also be the attack modifier, and a modifier whose meaning depends on what else your hand is doing is one you cannot trust.",
+                "Dodge, and shift's only job. Airborne, an airdodge — once per jump. It used to also be the attack modifier, and a modifier whose meaning depends on what else your hand is doing is one you cannot trust. On the Dual mage with the lower bar at half it is a blink: you are where the dodge would have ended, at once, and you stand through its tail.",
             ),
             e("Ctrl or C", "Crouch. Ducks overheads, costs you speed."),
             e(
@@ -202,31 +202,43 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Dual mage",
         in_browser: true,
-        blurb: "Two forces, one in each arm, and a bar between them. Which button you attack with is which way you drift, and depth is power -- but past a threshold it burns you.",
+        blurb: "Two forces, one in each arm, and a bar for each. Which button you attack with is which one you feed. Level, nothing moves; apart, the higher one grows, the lower one starves and you burn. The lower bar is what your body can do, and both full is wings.",
         entries: &[
             e(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. It **drags** whoever it catches a short way toward you and gives you a trickle of health back, which is how a fragile melee mage stays attached to somebody. Moves you five darker, and makes you dark.",
+                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. It **drags** whoever it catches a short way toward you and gives you a trickle of health back, which is how a fragile melee mage stays attached to somebody. Feeds the dark bar five, and makes you dark.",
             ),
             e(
                 "Right click",
-                "Light auto. The same punch and wing mirrored onto the right arm, and it **shoves** instead of pulling. Moves you five lighter, and makes you light. There is no guard on this class.",
+                "Light auto. The same punch and wing mirrored onto the right arm, and it **shoves** instead of pulling. Feeds the light bar five, and makes you light. There is no guard on this class.",
             ),
             e(
                 "Middle click",
-                "Lance, and which of the two you get is whichever force you are carrying. Light: the line flies out and bursts at its far end, so you aim it past somebody rather than at them. Dark: it catches the first thing it hits and drains it until one of you walks out of the leash. Middle click has no side, so it pushes you further along whichever way you were already going -- which is what lets the form come from the arm you last punched with. The wind-ups look nothing alike on purpose.",
+                "Lance, and which of the two you get is whichever force you are carrying. Light: the line flies out and bursts at its far end, so you aim it past somebody rather than at them. Dark: it catches the first thing it hits and drains it until one of you walks out of the leash. Middle click has no side, so it feeds whichever bar you are carrying, nine -- which is what lets the form come from the arm you last punched with. The wind-ups look nothing alike on purpose.",
             ),
             e(
                 "E",
-                "Sweep. Both arms round past both shoulders -- the one thing you throw that reaches a little behind you, which is what makes it the panic button. Light throws them back and off their feet; dark slows them and heals you per target caught. No side of its own, so it pushes you further along whichever way you were already going.",
+                "Sweep. Both arms round past both shoulders -- the one thing you throw that reaches a little behind you, which is what makes it the panic button. Light throws them back and off their feet; dark slows them and heals you per target caught. No side of its own, so it feeds whichever bar you are carrying, nine.",
             ),
             e(
                 "Q",
-                "Judgement. The finisher: a delayed strike where the crosshair is, and the field it leaves burns them and makes you fast while you stand in it. It throws the bar far harder than anything else you have, so casting it from depth is a question about whether you survive your own cast.",
+                "Judgement. The finisher: a delayed strike where the crosshair is, and the field it leaves burns them and makes you fast while you stand in it. It feeds the bar you are carrying far harder than anything else you have -- twenty -- so casting it from level throws the two apart, and the other hand has to answer.",
             ),
             e(
-                "Depth is power",
-                "Everything you throw is worth what the bar says, all the way along it: at the centre it is thin and disappointing, at the edge it is the most you can hold. Damage, the pull, the shove, how big it is and how long the ground it leaves burns -- all of it, continuously, with no thresholds. What never changes is the frame data, so a move is the same speed wherever you are standing.",
+                "The bar you carry is power",
+                "Everything you throw is worth what the bar of its force says, all the way along it: empty is thin and disappointing, full is the most you can hold. Damage, the pull, the shove, how big it is and how long the ground it leaves burns -- all of it, continuously, with no thresholds. A cast reads the bar you are carrying; an auto reads its own. What never changes is the frame data, so a move is the same speed wherever the bars are.",
+            ),
+            e(
+                "The hill",
+                "The two bars are compared every frame. Level -- within sixteen of each other -- nothing moves. Further apart than that, the higher one rises and the lower one falls, faster the wider the gap, and you burn. Both bars fall slowly on their own, always, so a height you stop feeding is a height you lose.",
+            ),
+            e(
+                "Blink, second jump, wings",
+                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower. Both full and you ascend: wings, a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and then both bars empty and a stagger -- shorter the more you landed. Climb it with both hands: dark auto, dark Lance, light auto, light Sweep.",
+            ),
+            e(
+                "On your back",
+                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar -- the great wing at half, the lower one at three quarters, the small one floating between the other two at full -- and never grows. Everybody in the arena can count them. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
             ),
             e(
                 "The tip",
@@ -234,15 +246,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Which force you are",
-                "Whichever auto you threw last. Everything else you throw is made of that force and pushes the bar twelve the same way, so the two clicks are the steering and everything else is the accelerator.",
+                "Whichever auto you threw last. Everything else you throw is made of that force and feeds that bar, so the two clicks are the steering and everything else is the accelerator.",
             ),
             e(
-                "Getting back",
-                "Throwing a far-side auto is the only way back toward centre: casts follow whichever force you are carrying, and only an auto changes that.",
-            ),
-            e(
-                "The ends of the bar",
-                "Driven all the way to either end and it takes you: three seconds of heavy drain you cannot steer or stop, and it puts you back at the centre staggered.",
+                "Catching it",
+                "When the bars run apart, the far-side auto is the way back and it is urgent: the low bar is falling while you wait. An auto alone only holds it; the far-side cast -- a light Sweep after a dark Judgement -- wins it.",
             ),
         ],
     },
@@ -471,7 +479,11 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "cargo run -p sim --bin frametable",
-                "Every move's frame data, on-block and on-hit advantage, air stats.",
+                "Every move's frame data, on-block and on-hit advantage, air stats. For the Dual mage, the tiers and the numbers of the hill between her bars too.",
+            ),
+            e(
+                "cargo run -p sim --bin goad",
+                "The Dual mage's two bars, driven by named input scripts -- alternate, one-sided, finisher, idle, ascend -- in an empty arena and against a dummy. Prints when each tier is reached, when the band is left, how long the lower bar lasts outside it, what the burn cost, and whether she ascended. Name one script for it frame by frame.",
             ),
             e(
                 "cargo run -p anim --bin bake",
@@ -553,6 +565,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_FRAME=<n>",
                 "Run to exactly frame n and stop. Makes two captures comparable.",
+            ),
+            e(
+                "SHOT_BARS=<dark>,<light>",
+                "Start a Dual mage with her two bars there, so a capture can look at the wings without playing up to them. Ignored for any other class.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

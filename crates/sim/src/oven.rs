@@ -179,8 +179,6 @@ scalars! {
     StunDecay,        "Defence",  "Hitstun decay",              Fixed,   0,         fx(1,1);
     SettleDecay,      "Match",    "Settle decay",               Fixed,   0,         fx(1,1);
     MeterMax,         "Dual mage","Meter range",                Int,     10,        400;
-    MeterDeep,        "Dual mage","Meter deep threshold",       Int,     1,         400;
-    MeterBurn,        "Dual mage","Burn at full depth",         Int,     0,         100;
     RiseCurveX1,      "Stones",   "Rise, hold",                 Fixed,   0,         fx(1,1);
     RiseCurveY1,      "Stones",   "Rise, hold lift",            Fixed,   0,         fx(1,1);
     RiseCurveX2,      "Stones",   "Rise, burst",                Fixed,   0,         fx(1,1);
@@ -484,6 +482,27 @@ scalars! {
     DodgeBlinks,      "Blood mage", "Dodge is a blink",           Flag,   0,        1;
     BlinkRange,       "Blood mage", "Blink, how far",             Fixed,  fx(1,1),  fx(20,1);
     BlinkFrames,      "Blood mage", "Blink, frames to cross",     Frames, 1,        20;
+    // Two bars and the hill between them -- v2 of the mechanic, 2026-09-23.
+    // Appended after the Blood mage's flags, like everything else, so nothing
+    // above moves. The band is in
+    // whole units of the bar; the rates are per second, in units of the bar
+    // or in health.
+    MeterBand,        "Dual mage", "Band, the gap that still counts as level",  Int,   0,        400;
+    DriftGain,        "Dual mage", "Drift per second, per unit outside the band", Fixed, 0,      fx(20,1);
+    DriftCap,         "Dual mage", "Drift per second, at most",             Fixed, 0,        fx(100,1);
+    BurnGain,         "Dual mage", "Burn per second, per unit outside the band", Fixed, 0,       fx(60,1);
+    BurnCap,          "Dual mage", "Burn per second, at most",              Fixed, 0,        fx(600,1);
+    MeterCalm,        "Dual mage", "Calm, both bars fall per second",       Fixed, 0,        fx(60,1);
+    // The tiers, on the lower bar.
+    TierBlink,        "Dual mage", "Tier, the dodge is a blink from",       Int,   0,        400;
+    TierJump,         "Dual mage", "Tier, second jump and slow fall from",  Int,   0,        400;
+    TierWings,        "Dual mage", "Tier, wings from (both bars)",          Int,   0,        400;
+    SecondJump,       "Dual mage", "Second jump, as a share of the first (x)", Fixed, 0,     fx(2,1);
+    SlowFall,         "Dual mage", "Slow fall, fall cap (x)",               Fixed, fx(1,10), fx(1,1);
+    // Ascension: the refund per hit, and the floor of the graduated stagger.
+    // `AscensionStun` above is its ceiling.
+    AscensionRefund,  "Dual mage", "Ascension, health back per hit landed", Int,   0,        400;
+    AscensionStunFloor, "Dual mage", "Ascension, stun on the way out, at least", Frames, 0,  120;
 }
 
 // ---------------------------------------------------------------------------

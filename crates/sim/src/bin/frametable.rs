@@ -55,6 +55,40 @@ fn main() {
             tenths(mob.fall_cap),
             tenths(mob.air_speed),
         );
+        // The Dual mage's tiers: what her body gains as the lower of her two
+        // bars rises, beside the jump line because two of the three are jumps.
+        // See `sim::dual`.
+        if class == sim::class::Class::DualMage {
+            println!(
+                "  tiers, on the lower bar of {}: blink at {}  |  second jump x{} and fall x{} at {}  |  wings at {}",
+                t::meter_max(),
+                t::tier_blink(),
+                tenths(t::second_jump()),
+                tenths(t::slow_fall()),
+                t::tier_jump(),
+                t::tier_wings(),
+            );
+            println!(
+                "  the hill: band {}  |  drift {}/s per unit outside it, at most {}/s  |  burn {}/s per unit, at most {}/s  |  calm {}/s",
+                t::meter_band(),
+                tenths(t::drift_gain()),
+                tenths(t::drift_cap()),
+                tenths(t::burn_gain()),
+                tenths(t::burn_cap()),
+                tenths(t::meter_calm()),
+            );
+            println!(
+                "  goads: an auto {}, a cast {}, the finisher {}  |  ascension {}f, drains {} a frame, {} back a hit, stagger {}-{}f",
+                t::meter_auto_push(),
+                t::meter_cast_push(),
+                t::meter_finisher_push(),
+                t::ascension_frames(),
+                t::ascension_drain(),
+                t::ascension_refund(),
+                t::ascension_stun_floor(),
+                t::ascension_stun(),
+            );
+        }
         if class.preys_on_the_disabled() {
             println!(
                 "  x{} damage to anything staggered, held or toppled",

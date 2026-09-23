@@ -15,6 +15,7 @@ pub mod camera;
 pub mod class;
 pub mod curve;
 pub mod debris;
+pub mod dual;
 pub mod effects;
 pub mod fixed;
 pub mod gust;
