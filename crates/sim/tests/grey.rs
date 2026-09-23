@@ -96,10 +96,12 @@ fn a_cast_at_full_health_opens_grey_by_its_cost() {
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();
+        let paid = w.players[0].cost_of(m.cost);
+        assert!(paid > 0, "{}: costs nothing at full health", m.name);
         run(&mut w, 2, button, 0);
-        assert_eq!(w.players[0].health, t::max_health() - m.cost, "{}", m.name);
+        assert_eq!(w.players[0].health, t::max_health() - paid, "{}", m.name);
         assert_eq!(
-            w.players[0].grey, m.cost,
+            w.players[0].grey, paid,
             "{}: the cost did not turn grey",
             m.name
         );
@@ -165,7 +167,7 @@ fn a_committed_casts_worth_of_grey_survives_one_exchange() {
     let mut w = mage();
     run(&mut w, 2, Input::RIGHT, 0);
     let opened = w.players[0].grey;
-    assert_eq!(opened, reap.cost);
+    assert_eq!(opened, w.players[0].cost_of(reap.cost).max(opened));
     run(&mut w, exchange, 0, 0);
     assert!(
         w.players[0].grey * 2 > opened,
@@ -284,4 +286,28 @@ fn a_reap_is_the_committed_heavy_and_a_sweep_is_the_auto() {
     let reap = sim::moves::get(Class::BloodMage, b::REAP);
     assert!(reap.unblockable, "the Reap is not the guard breaker");
     assert!(!reap.hits_crouching, "the Reap is not an overhead");
+}
+
+#[test]
+fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
+    // A percentage of current red rather than of the bar: at full health a
+    // cast opens a big wound, which is how she gets reach quickly, and at low
+    // health it opens a small one, so getting back into the fight never costs
+    // the fight. And never the last point.
+    let reap = sim::moves::get(Class::BloodMage, b::REAP);
+    let at = |health: i32| {
+        let mut w = mage();
+        w.players[0].health = health;
+        w.players[0].grey = 0;
+        run(&mut w, 2, Input::RIGHT, 0);
+        health - w.players[0].health
+    };
+    let full = at(t::max_health());
+    let low = at(t::max_health() / 5);
+    assert!(
+        full > low * 3,
+        "a Reap at full health cost {full} and at a fifth {low}"
+    );
+    assert_eq!(full, t::max_health() * reap.cost / 100);
+    assert_eq!(at(1), 0, "a cast at one health took the last point");
 }

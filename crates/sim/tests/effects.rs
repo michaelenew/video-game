@@ -613,17 +613,18 @@ fn casting_costs_the_blood_mage_health() {
         // price of pressing the button.
         let mut w = as_class(Class::BloodMage);
         let before = w.players[0].health;
+        let paid = w.players[0].cost_of(m.cost);
         run(&mut w, 2, button, 0);
         assert_eq!(
             w.players[0].health,
-            before - m.cost,
+            before - paid,
             "{} did not cost what the table says",
             m.name
         );
         // And what was paid is not gone: it is grey, and a pool can bring it
         // back. See `tests/grey.rs`.
         assert_eq!(
-            w.players[0].grey, m.cost,
+            w.players[0].grey, paid,
             "{} took the health off the bar for good",
             m.name
         );
@@ -815,9 +816,14 @@ fn the_bloodletter_brings_back_a_cut_and_not_health() {
         w.players[1].health < sim::tuning::max_health(),
         "fixture: the blade never cut anybody"
     );
+    // What it can bring back is the pool the cut spilled, drunk once on the
+    // way home like any pool the blade crosses -- never more than the pool's
+    // share, and the pool is gone for it.
+    let dealt = sim::tuning::max_health() - w.players[1].health;
     assert!(
-        w.players[0].health <= paid,
-        "the blade came home and brought health with it: {} up from {paid}",
+        w.players[0].health <= paid + m.drinks(dealt),
+        "the blade came home and brought health with it: {} up from {paid}, more than \
+         its share of a pool of {dealt}",
         w.players[0].health
     );
 }

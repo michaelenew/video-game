@@ -39,9 +39,19 @@ second), so a large wound stays open longer than a small one and there is always
 and what was actually paid is what turns grey. Enemy damage lands on red and turns grey by
 what it dealt; nothing erases grey but the fade.
 
-**The more grey she carries, the longer the scythe.** The two scythe moves multiply their
-reach by a straight line from one at no grey to `Scythe reach at full grey` (×1.5) at a full
-bar, and their damage by a second line to `Scythe damage at full grey` (×1.3). This is the
+**A cost is a share of what she has.** Every `Cost` in her move table is a percentage of her
+*current* red, not of the bar: a Reap at full health opens sixty, a Reap at two hundred opens
+twelve. Casting at high health is how she gets power quickly — the wound is the reach — and
+casting at low health opens a small wound, so she is never burning herself to death trying
+to get back into a fight. `Player::cost_of` is the one place it is worked out, and `grey.rs`
+pins that a full-health cast costs more than three times a one-fifth-health cast and that a
+cast at one health costs nothing.
+
+**The more grey she carries, the longer — and the broader — the scythe.** The two scythe
+moves multiply their reach by a straight line from one at no grey to `Scythe reach at full
+grey` (×1.5) at a full bar, and their damage by a second line to `Scythe damage at full
+grey` (×1.3). The blade's breadth across its flat doubles over the same line; that one is
+drawing only, since the hit volume's width is the move's radius. This is the
 one reach in the game that scales with a bar — [../aiming.md](../aiming.md) refuses that
 everywhere else — and it is allowed on one condition: **the blade is drawn at the length it
 hits at.** `view::scythe` reads the same function the hit test lengthens the sweep with, the
@@ -57,15 +67,23 @@ grey. Both players read a weapon, not a number.
 | 750 | 3.3 m | ×1.22 |
 | 999 | 3.6 m | ×1.30 |
 
-**How it is drawn.** A war scythe is a haft with a blade set at the head, and it is drawn
-as two pieces: the haft from her grip to the neck, and the blade — flat, as wide as the arc it
-sweeps — from the neck to the tip. The tip is what the hit test reaches with, and it sits
-exactly at the far end of the hit volume while she swings; the neck bows a little off that
-line so the blade reads as a blade. At rest the weapon stands upright beside her, leaning
-forward, with the tip the live reach from her grip. `view::scythe` is the geometry.
+**How it is drawn.** A war scythe is a haft with a curved blade set at the head, and it is
+drawn as three pieces: the haft from the butt through her hands to the neck, and the blade
+from the neck through a mid point to the tip, so its curve is visible. **It rides her
+hands.** Through a swing both hands are on the haft — the right leads, the left trails, the
+way the clips grip it — and the pole runs from behind the trailing hand through the leading
+one to the tip; while the hit volume is out the tip sits exactly at the volume's far end, and
+through the wind-up and the recovery it lies along the line of the two hands at the live
+reach. So the weapon moves with the arms rather than jumping to a line the arms are not on.
+At rest it is **carried low** in the left hand: the blade forward and to that side, dropped
+to knee height, out of the crosshair so it never sits over what she is aiming at. The blade's
+breadth grows with grey. `view::scythe` is the geometry and `view/tests/kinematics.rs` checks
+the tip against the hit volume and the leading hand against the haft.
 
-> **Was**, for a day: one bar from the hand straight out along the facing at the full reach,
-> which read as a five-metre pole pointed at whoever she was looking at.
+> **Was**: one bar from the hand straight out along the facing at the full reach, which read
+> as a five-metre pole pointed at whoever she was looking at; then, for a day, a haft and
+> flat blade standing upright beside her with the blade over the crosshair, pinned to the
+> world's axes rather than to her, which read as a picket sign and got in the way of aiming.
 
 So grey is risk and power in one segment. A cast at full health opens a wound and lengthens
 the blade; being hit does the same; drinking gives the power back and shortens it. The edge
@@ -104,13 +122,13 @@ creature. Its **essence** is the damage dealt, and the essence decays at a const
 
 Measured, one cast landed on the dummy on bare floor:
 
-| Move | Cost | Dealt | Essence | Radius | Lives |
+| Move | Cost (% of red) | Dealt | Essence | Radius | Lives |
 | --- | --- | --- | --- | --- | --- |
-| Reaping sweep | 3 | 22 | 22 | 0.18 m | 64 f |
-| Reap | 55 | 111 | 111 | 0.50 m | 586 f |
-| Bloodletter | 8 | 40 | 34 | 0.18 m | drunk by its own return |
-| Grasp | 60 | 192 | 192 | 0.50 m | 1102 f |
-| Black spike | 80 | 100 | 100 | 0.45 m | 524 f |
+| Reaping sweep | 1 | 22 | 22 | 0.18 m | 64 f |
+| Reap | 6 | 111 | 111 | 0.50 m | 586 f |
+| Bloodletter | 1 | 40 | 34 | 0.18 m | drunk by its own return |
+| Grasp | 7 | 192 | 192 | 0.50 m | 1102 f |
+| Black spike | 9 | 100 | 100 | 0.45 m | 524 f |
 
 > **Was**, for a day: a disc on the floor with a radius of 0.24 m per root of the essence,
 > which put a Reap's pool across two and a half metres of arena and a Grasp's across three.
@@ -127,15 +145,22 @@ victim is standing against it or the hit volume passes over it; the fullest one 
 **The drink comes before the spill**, so a hit on bare floor returns nothing, and a hit that
 drinks leaves only its own fresh, smaller figure behind.
 
+**The scythe collects without a hit.** On every active frame of a sweep or a Reap, every pool
+of hers the blade's volume passes over is drunk, whether or not anybody was in the way — the
+blade is the thing she puts through the blood. Only pools older than the swing count, so a
+hit does not refund itself through the pool it just spilled; that one is left on the floor
+for the next swing, or the spike. `World::collect_with_the_scythe`; `blink.rs` pins a sweep
+through an empty pool.
+
 | Move | Share of what is left | From a Reap's pool (110), with grey to fill |
 | --- | --- | --- |
-| Reaping sweep | 35% | 38 |
+| Reaping sweep | 50% | 54 |
 | Reap | 100% | 107 |
 | Bloodletter | 30%, on the way home | 42 |
 | Grasp | — | — |
 | Black spike | 100%, and the pool erupts | 105 |
 
-The shares are what make the sweep a bad thing to put through a big pool: it takes a third
+The shares are what make the sweep a bad thing to put through a big pool: it takes half
 and wastes the rest, where a Reap takes all of it. Grey is the ceiling: at full health a Reap
 over a pool gets back exactly its own cost and the pool is gone all the same.
 `crates/sim/tests/essence.rs` pins the two halves of the feel relationship — landed over a
@@ -177,7 +202,7 @@ Rend's row and was retuned rather than replaced — and the sweep was appended a
 
 ### Reaping sweep — auto, `L`
 **Startup** 8 · **Active** 5 · **Recovery** 14 · **Damage** 22 · **Reach** 2.4 m, growing
-with grey · **Cost** 3 · **Drinks** 35% of what is left · −10 on block, 0 on hit ·
+with grey · **Cost** 1% of red · **Drinks** 50% of what is left · −10 on block, 0 on hit ·
 **Repeat lockout** 100%
 
 A flat swing across the front, 0.45 of a turn from the body's left to its right — the Dual
@@ -196,7 +221,7 @@ what tells it from the Dual mage's level Sweep at a glance; the hit volume itsel
 
 ### Reap — committed, `R`
 **Startup** 20 · **Active** 4 · **Recovery** 26 · **Damage** 110 · **Reach** 2.4 m, growing
-with grey · **Cost** 55 · **Drinks** all of what is left · −17 on block, +1 on hit ·
+with grey · **Cost** 6% of red · **Drinks** all of what is left · −17 on block, +1 on hit ·
 unblockable · overhead
 
 The scythe raised over the right shoulder and brought over and down: an upright swing of 0.4
@@ -214,7 +239,7 @@ heavy and a heal. Landing it there is the thing the rest of the kit exists to ar
 
 ### Bloodletter — throw, `M`
 **Startup** 7 · **Active** 3 · **Recovery** 14 · **Damage** 20 a pass · **Reach** 7 m,
-skillshot · **Cost** 8 · **Drinks** 30%, on the way home
+skillshot · **Cost** 1% of red · **Drinks** 30%, on the way home
 
 A blade thrown along the crosshair to a fixed distance and back to her, cutting on the way out
 and on the way home. Unchanged from the built kit except in two ways: it moved off the auto to
@@ -225,7 +250,7 @@ pool in one throw and out-healed the Reap, and was reverted (feel log, 2026-09-2
 
 ### Grasp — special, `Q`
 **Startup** 16 · **Active** 4 · **Recovery** 20 · **Damage** 48 an arm · **Reach** chosen by
-the hold, 1.5–10 m · **Cost** 60 · **Hold** 26 frames, 10 of them bound
+the hold, 1.5–10 m · **Cost** 7% of red · **Hold** 26 frames, 10 of them bound
 
 Kept as built, because the built version is the best-argued ability in the class: hold to
 choose a depth on the crosshair's line, four arms converge there, each arm damages and spills,
@@ -242,18 +267,24 @@ side. A second route up.
 
 ### Black spike — mechanic, `E`
 **Startup** 30 · **Active** 4 · **Recovery** 22 · **Damage** 100 · **Reach** 9 m, grounded ·
-**Cost** 80 · launches 9 m/s · slows
+**Cost** 9% of red · launches 9 m/s · slows
 
 A spike out of the floor where the crosshair is, after the same long delay as before: the cast
 is the telegraph. What erupts depends on the floor, decided the frame it comes up:
 
-- **Bare ground:** a spike. The move's own disc does the damage, the launch and a short slow
-  (`Black spike slow`), and it spills what it hits — how she seeds a pool at range where no
-  scythe reaches. The launch and the spill are ordered so the pool lands under where the
-  victim *stood*, not under where the launch has since put them.
+- **Bare ground:** a spike, and only a spike — drawn without a skirt, so a bare spike and an
+  eruption are told apart from across the arena. The move's own disc does the damage, the
+  launch and a short slow (`Black spike slow`), and it spills what it hits — how she seeds a
+  pool at range where no scythe reaches. The launch and the spill are ordered so the pool
+  lands under where the victim *stood*, not under where the launch has since put them.
 - **A pool of hers:** the whole pool erupts, launching and slowing everything standing in it
   at the move's damage times `Black spike, eruption damage` (×1.5), and **drinks the entire
-  pool** in one go. The eruption is sized by the pool's essence — `Black spike, eruption
+  pool** in one go. **And the eruption chains:** every other pool of hers inside its radius
+  erupts too, at its own size, and each of those sets off whatever *it* covers. A spike on
+  one pool is a bigger spike; a spike on one pool among several is the floor coming up
+  across the whole fight, and arranging the pools for it is the skill curve the mechanic
+  wants. Each eruption drinks its own pool first, so no blood is counted twice and the chain
+  ends when the pools do. `World::erupt_from`; `blink.rs` pins a three-pool chain. The eruption is sized by the pool's essence — `Black spike, eruption
   radius per root of volume` (0.3) times the root of it, so a Reap's worth of blood comes up
   across three metres against the bare spike's 1.6 — and stands `Black spike, eruption
   height` (3.4 m) tall against the bare spike's 2.2. The pool is spent whether or not she
@@ -265,7 +296,7 @@ is the telegraph. What erupts depends on the floor, decided the frame it comes u
 
 **The drain field is gone**, and with it its three knobs (radius, lifetime, drain). Nothing
 ticks. The spike stands for `Black spike, eruption lasts` (20 frames) as the thing you can see
-from across the arena, and is drawn at the disc it hit.
+from across the arena; an eruption is drawn with the disc it hit across, a bare spike without.
 
 ### Blink — the mechanic's movement, `shift` + a direction with the crosshair on a pool
 **Startup** instant · **Recovery** the dodge's own · **Range** wherever a pool of hers is ·
@@ -350,10 +381,11 @@ Carried from the proposal, with what the build found beside each.
   target's own model and coalesces into the figure. It is a column today, body-sized and
   shrinking; a copy of the target's skeleton fading into the floor is the next step and is
   presentation only.
-- **Costs.** 3 / 55 / 8 / 60 / 80 against a thousand-point bar, raised from the built kit's
-  because they are recoverable. The two relationships that bound them — one cast is never a
-  third of the match, and a cast over its own pool returns more than it cost — both hold with
-  the sweep's cost at three; at four the second one is a coin toss on the drain.
+- **Costs.** 1 / 6 / 1 / 7 / 9 percent of current red — at full health 10 / 60 / 10 / 70 /
+  90 against a thousand-point bar, and a quarter of that at a quarter bar. The two
+  relationships that bound them — one cast is never a third of the match, and a cast over
+  its own pool returns more than it cost — both hold; the sweep's drink went to half so the
+  second holds at full health, where its cost is the largest it can be.
 - **The `leech` column stays in the move table.** It was to be removed, but the Dual mage's
   dark auto and tether heal through it and her test pins that; it is zero on every move of
   hers and `feel.rs` keeps it there.

@@ -217,7 +217,7 @@ fn pool_table() {
     println!("Pools: what each move leaves when it lands on the dummy on bare floor");
     println!(
         "  {:<14}{:>7}{:>8}{:>8}{:>10}{:>8}",
-        "move", "cost", "dealt", "volume", "radius m", "lives f"
+        "move", "cost %", "dealt", "volume", "radius m", "lives f"
     );
     for (slot, button) in kit() {
         let m = sim::moves::get(Class::BloodMage, slot);
@@ -262,7 +262,7 @@ fn drink_table() {
     );
     println!(
         "  {:<14}{:>7}{:>9}{:>9}{:>12}",
-        "move", "cost", "share %", "drank", "spilled"
+        "move", "cost %", "share %", "drank", "spilled"
     );
     for (slot, button) in kit() {
         let m = sim::moves::get(Class::BloodMage, slot);
@@ -272,8 +272,9 @@ fn drink_table() {
         let at = w.players[1].pos;
         w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, volume));
         let before = w.players[0].health;
+        let paid = w.players[0].cost_of(m.cost);
         cast(&mut w, slot, button);
-        let drank = w.players[0].health - (before - m.cost);
+        let drank = w.players[0].health - (before - paid);
         let after = w.effects[0].map_or(0, |p| if p.is_a_pool() { p.pool_volume() } else { 0 });
         println!(
             "  {:<14}{:>7}{:>9}{:>9}{:>12}",

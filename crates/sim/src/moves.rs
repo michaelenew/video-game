@@ -124,12 +124,17 @@ pub struct Move {
     /// end of the slider `reach` is the far end of. Meaningless when
     /// [`channel`](Move::channel) is zero.
     pub channel_from: Fx,
-    /// Health the caster pays the moment the move starts.
+    /// Health the caster pays the moment the move starts, **as a percentage
+    /// of her current health**.
     ///
     /// Zero on almost everything. It is the Blood mage's whole economy -- see
     /// `docs/design/kits/blood-mage.md` -- and it is a move field rather than a
     /// class rule because the *spread* is the design: an auto you can throw all
-    /// day costs a trickle, and the committed casts cost real blood.
+    /// day costs a trickle, and the committed casts cost real blood. A share of
+    /// what she has rather than a flat number, so casting at full health opens
+    /// a big wound (which is reach) and casting at low health opens a small
+    /// one: she is never burning herself to death trying to get back in. See
+    /// `state::Player::cost_of`.
     ///
     /// **It can never kill you.** Self-damage clamps at one, the same rule the
     /// Dual mage's meter burn already follows: dying to your own button is not

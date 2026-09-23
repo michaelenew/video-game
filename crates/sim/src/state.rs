@@ -741,11 +741,24 @@ impl Player {
     /// a decision anybody made, and the Dual mage's meter burn already works
     /// this way -- and healing stops at full, so a Blood mage cannot bank
     /// health above the bar by farming a field.
-    pub fn spend_health(&mut self, cost: i32) {
-        // Clamped at one: dying to your own button is not a decision anybody
-        // made. What was actually paid is what turns grey, so a cast at two
-        // health opens a one-point wound rather than the whole cost.
-        let paid = cost.min(self.health - 1).max(0);
+    /// What a cast that costs `percent` of her current health would take
+    /// right now, in points.
+    ///
+    /// **A percentage of current red, not of the bar.** Casting at full health
+    /// opens a big wound -- which is how she gets power quickly, since the
+    /// wound is reach -- and casting at low health opens a small one, so she
+    /// is never burning herself to death trying to get back into the fight.
+    /// Clamped at one: dying to your own button is not a decision anybody
+    /// made.
+    pub fn cost_of(&self, percent: i32) -> i32 {
+        (self.health * percent.max(0) / 100)
+            .min(self.health - 1)
+            .max(0)
+    }
+
+    pub fn spend_health(&mut self, percent: i32) {
+        // What was actually paid is what turns grey.
+        let paid = self.cost_of(percent);
         self.health -= paid;
         if self.class.wounds_go_grey() {
             self.grey += paid;
@@ -1209,26 +1222,23 @@ impl World {
                 // launching and slowing everything in it, and drinks the
                 // pool in one go -- the payoff placement, and the pool is
                 // spent whether or not she had grey to fill.
+                let mut place = true;
                 if leaves == EffectKind::BlackSpike {
                     match self.pool_covering(i as u8, born.pos) {
                         Some(slot) => {
-                            // Sized by the pool's essence, before it is drunk:
-                            // the eruption is the whole pool coming up at once.
-                            let volume = self.effects[slot].map_or(0, |e| e.pool_volume());
-                            born.reach = t::erupt_radius()
-                                .mul(Fx::from_int(volume.max(0)).sqrt())
-                                .max(m.radius);
-                            born.banked = 1;
-                            self.drink_from(slot, i, &m);
-                            self.effects[slot] = None;
-                            // The eruption delivers the hit, at the pool's
-                            // size; the disc must not land a second one.
+                            // The eruption delivers the hit; the disc must
+                            // not land a second one. And the eruption chains
+                            // -- see `erupt_from`.
                             self.players[i].hit_used = true;
+                            self.erupt_from(i, kind, slot);
+                            place = false;
                         }
                         None => born.reach = m.radius,
                     }
                 }
-                spawn_effect(&mut self.effects, born);
+                if place {
+                    spawn_effect(&mut self.effects, born);
+                }
             }
         }
 
@@ -1336,6 +1346,13 @@ impl World {
                     self.players[defender].parried = PARRY_FLOURISH;
                 }
             }
+        }
+
+        // The scythe collects: any pool of hers its volume passes over on an
+        // active frame is drunk, hit or no hit. The blade is the thing she
+        // puts through the blood, and it does not need a body in the way.
+        for i in 0..MAX_PLAYERS {
+            self.collect_with_the_scythe(i);
         }
 
         // A thrown shield is its own threat while it travels.
@@ -5950,6 +5967,95 @@ impl World {
         match best {
             Some((slot, _)) => self.drink_from(slot, owner, m),
             None => 0,
+        }
+    }
+
+    /// A spike came up on the pool in `slot`: the pool erupts, and so does
+    /// every pool of hers the eruption covers, each at its own size.
+    ///
+    /// **The chain is the skill curve.** A spike on one pool is a bigger spike;
+    /// a spike on a pool standing among others is the floor coming up across
+    /// the whole fight, and arranging that is a thing a player learns. Each
+    /// eruption drinks its own pool first, so the chain cannot run twice over
+    /// the same blood, and it is bounded by the pools there are.
+    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
+        let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
+            return;
+        };
+        let m = moves::get(self.players[owner].class, kind);
+        // Sized by the pool's essence, before it is drunk: the eruption is the
+        // whole pool coming up at once.
+        let radius = t::erupt_radius()
+            .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
+            .max(m.radius);
+        self.drink_from(slot, owner, &m);
+        let mut born = Effect::cast(
+            EffectKind::BlackSpike,
+            owner as u8,
+            self.players[owner].class,
+            kind,
+            pool.pos,
+            V3::ZERO,
+            radius,
+        );
+        born.banked = 1;
+        spawn_effect(&mut self.effects, born);
+        for next in 0..MAX_EFFECTS {
+            let covered = self.effects[next].is_some_and(|e| {
+                e.is_a_pool()
+                    && e.owner == owner as u8
+                    && V3::new(e.pos.x.sub(pool.pos.x), Fx::ZERO, e.pos.z.sub(pool.pos.z))
+                        .flat_len()
+                        .raw()
+                        <= radius.add(e.pool_radius()).raw()
+            });
+            if covered {
+                self.erupt_from(owner, kind, next);
+            }
+        }
+    }
+
+    /// Drink every pool of this fighter's that her scythe's volume is passing
+    /// over this frame. Only the two scythe moves, and only while the volume
+    /// is out.
+    ///
+    /// **Only pools that were there before the swing.** A hit spills a pool
+    /// under whoever it cut, and the blade is over that spot on the same
+    /// frame; if the swing collected it, every hit would refund itself on the
+    /// way through and nothing would ever be left on the floor for the next
+    /// swing or the spike. So a pool younger than the swing is left alone --
+    /// the hit itself already drank whatever the blade passed *through*, in
+    /// `drink_over`, before it spilled.
+    fn collect_with_the_scythe(&mut self, who: usize) {
+        let p = self.players[who];
+        let Some(kind) = p.action.attack_kind() else {
+            return;
+        };
+        if !p.class.wounds_go_grey() || !moves::blood::scythe(kind) {
+            return;
+        }
+        let Some(hb) = hitbox(&p) else {
+            return;
+        };
+        let m = moves::get(p.class, kind);
+        let swing_so_far = m.startup + m.active;
+        for slot in 0..MAX_EFFECTS {
+            let over = self.effects[slot].is_some_and(|e| {
+                e.is_a_pool()
+                    && e.owner == who as u8
+                    && e.age > swing_so_far
+                    && crate::math::segment_gap(
+                        V3::new(hb.from.x, e.pos.y, hb.from.z),
+                        V3::new(hb.to.x, e.pos.y, hb.to.z),
+                        e.pos,
+                        e.pos,
+                    )
+                    .raw()
+                        <= hb.radius.add(e.pool_radius()).add(t::body_radius()).raw()
+            });
+            if over {
+                self.drink_from(slot, who, &m);
+            }
         }
     }
 

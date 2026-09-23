@@ -279,9 +279,10 @@ fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_is_gone() {
     w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
     let reap = sim::moves::get(Class::BloodMage, b::REAP);
     let before = w.players[0].health;
+    let paid = w.players[0].cost_of(reap.cost);
     run(&mut w, 2, Input::RIGHT, 0);
     run(&mut w, reap.startup as u32 + 4, 0, 0);
-    let got = w.players[0].health - (before - reap.cost);
+    let got = w.players[0].health - (before - paid);
     let expect = reap.drinks(200);
     assert!(
         got >= expect - 4 && got <= expect,
@@ -323,7 +324,7 @@ fn a_drink_is_capped_by_grey_and_the_pool_is_spent_regardless() {
     run(&mut w, reap.startup as u32 + 4, 0, 0);
     assert!(
         w.players[0].health <= t::max_health()
-            && w.players[0].health >= t::max_health() - reap.cost,
+            && w.players[0].health >= t::max_health() - t::max_health() * reap.cost / 100,
         "she healed past the top of the bar, or not to it: {}",
         w.players[0].health
     );
@@ -433,6 +434,7 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
             m.name
         );
         let before = w.players[0].health;
+        let paid = w.players[0].cost_of(m.cost);
         looking(&mut w, 2, button, pitch, 0);
         looking(
             &mut w,
@@ -441,13 +443,12 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
             pitch,
             0,
         );
-        let returned = w.players[0].health - (before - m.cost);
+        let returned = w.players[0].health - (before - paid);
         assert!(
-            returned > m.cost,
-            "{}: landed over its own pool it returned {returned} and cost {}, so playing \
+            returned > paid,
+            "{}: landed over its own pool it returned {returned} and cost {paid}, so playing \
              well still loses you the fight",
-            m.name,
-            m.cost
+            m.name
         );
     }
 }

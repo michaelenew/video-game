@@ -4482,3 +4482,31 @@ big pool for the Reap.
 is a column; a fading copy of the target's skeleton is presentation and is the next step.
 
 **Verdict** open. Unplayed since the change.
+
+### 2026-09-23 — Blood mage: costs are a share of red, the scythe collects, the spike chains
+**Changed** Four things from the second look. Every `Cost` on the class is now a percentage
+of her *current* health rather than a flat number: 1 / 6 / 1 / 7 / 9, which at full health is
+10 / 60 / 10 / 70 / 90 and at a fifth of a bar a fifth of that. The scythe collects: on every
+active frame a sweep or a Reap drinks any pool of hers the blade passes over, nobody needed
+in the way, except a pool younger than the swing itself. A bare spike is just a spike, drawn
+without a skirt; an eruption keeps the disc, and now sets off every other pool inside its
+radius, each of those setting off what it covers. And the weapon rides the hands the clips
+put on it — the pole through the leading hand and past the trailing one, the tip at the hit
+volume's end while it is out and at the live reach along the hands otherwise — carried low
+in the left hand at rest, and drawn broader across the blade the more grey she carries. The
+sweep's drink went from 35% to 50% so a full-health sweep, whose cost is the largest it can
+be, still returns more than it cost through its own pool.
+
+**Why** At low health a flat cost was the class burning itself to death trying to get back
+into the fight, and at high health it was too slow a way to open reach; a percentage does
+the right thing at both ends. Swinging the scythe through a pool with nobody in it did
+nothing, which is the opposite of what the weapon says. The spike and the eruption looked
+the same, and an eruption that stopped at one pool made pool placement not matter. The
+drawn scythe sat on a line the arms were not on and was pinned to the world's axes, and
+with the blade at chest height it was over the crosshair.
+
+**Watch for** the chain: three pools in a row is 700 essence and a launch across the whole
+floor for one press. It is bounded by the pools there are and by one-and-done, but whether
+a good Grasp-then-spike is a reward or a round is C3's question now.
+
+**Verdict** open. Unplayed since the change.

@@ -788,8 +788,10 @@ impl MoveField {
             MoveField::Grabs | MoveField::Rehit | MoveField::Channel | MoveField::Reactivate => {
                 Unit::Frames
             }
-            MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
-            MoveField::Leech | MoveField::Drink | MoveField::RepeatMul => Unit::Percent,
+            MoveField::Effect | MoveField::Aim => Unit::Int,
+            MoveField::Cost | MoveField::Leech | MoveField::Drink | MoveField::RepeatMul => {
+                Unit::Percent
+            }
             _ => Unit::Fixed,
         }
     }

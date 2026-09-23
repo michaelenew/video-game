@@ -104,6 +104,7 @@ fn main() {
         .init_resource::<Fades>()
         .init_resource::<ShadowFades>()
         .init_resource::<ShieldHands>()
+        .init_resource::<Hands>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -228,6 +229,12 @@ pub struct Sim {
 /// the posing pass and read by the one that places shields, which runs after.
 #[derive(Resource, Default)]
 struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
+
+/// Where both of each fighter's hands are drawn, in the arena: left, right.
+/// Written by the posing pass and read by the one that places the Blood
+/// mage's scythe, which rides the hands the clips put on its haft.
+#[derive(Resource, Default)]
+struct Hands([[Vec3; 2]; MAX_PLAYERS]);
 
 /// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
 /// whatever it was, which is wrong by a few frames of blend weight and
@@ -527,9 +534,12 @@ struct MarkMesh(usize);
 #[derive(Component)]
 struct ScytheMesh {
     owner: usize,
-    /// The blade, set on the head of the haft; otherwise the haft itself.
-    blade: bool,
+    /// Which piece: the haft, or one of the two lengths of the curved blade.
+    piece: usize,
 }
+
+/// A weapon is a haft and a blade in two lengths, so its curve can be seen.
+const SCYTHE_PIECES: usize = 3;
 
 /// How many steps of solidity a pool is drawn in: one material per step,
 /// because a material is shared by everything wearing it and the solidity is
@@ -912,13 +922,13 @@ fn setup(
     // Shade-skinned rather than blood: it is iron, and the blood is what it
     // leaves on the floor.
     for owner in 0..MAX_PLAYERS {
-        for blade in [false, true] {
+        for piece in 0..SCYTHE_PIECES {
             commands.spawn((
                 Mesh3d(unit.clone()),
                 MeshMaterial3d(look.shade.clone()),
                 Transform::default(),
                 Visibility::Hidden,
-                ScytheMesh { owner, blade },
+                ScytheMesh { owner, piece },
             ));
         }
     }
@@ -1283,21 +1293,24 @@ fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut
 /// `apply_poses` already works out in the arena for whatever a hand holds.
 fn place_scythes(
     sim: Res<Sim>,
-    hands: Res<ShieldHands>,
+    hands: Res<Hands>,
     mut meshes: Query<(&ScytheMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let grip = hands.0[tag.owner].0;
-        let Some(scythe) = view::scythe::scythe(&sim.cur.players[tag.owner], grip.into()) else {
+        let [left, right] = hands.0[tag.owner];
+        let Some(scythe) =
+            view::scythe::scythe(&sim.cur.players[tag.owner], left.into(), right.into())
+        else {
             *vis = Visibility::Hidden;
             continue;
         };
-        // Two pieces of one weapon: the haft from the grip to the neck, and
-        // the blade from the neck to the tip.
-        let (from, to) = if tag.blade {
-            (Vec3::from(scythe.neck), Vec3::from(scythe.tip))
-        } else {
-            (Vec3::from(scythe.grip), Vec3::from(scythe.neck))
+        // Three pieces of one weapon: the haft from the butt to the neck, and
+        // the blade from the neck to the mid and the mid to the tip, so its
+        // curve is visible.
+        let (from, to) = match tag.piece {
+            0 => (Vec3::from(scythe.butt), Vec3::from(scythe.neck)),
+            1 => (Vec3::from(scythe.neck), Vec3::from(scythe.mid)),
+            _ => (Vec3::from(scythe.mid), Vec3::from(scythe.tip)),
         };
         let along = to - from;
         let length = along.length();
@@ -1307,15 +1320,23 @@ fn place_scythes(
         }
         *vis = Visibility::Inherited;
         tf.translation = from + along * 0.5;
-        // The unit cylinder stands along Y; turn it on to the piece.
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
-        // The haft is a pole. The blade is flat: thin one way and, across
-        // the other, as wide as the volume it sweeps, so what is drawn is the
-        // plane of the cut and not a sausage.
-        tf.scale = if tag.blade {
-            Vec3::new(0.05, length, scythe.width * 2.0)
+        // A full basis rather than a single axis, so the blade's flat lies in
+        // the plane of the haft and the bow -- the plane of the cut -- and
+        // does not roll to a world direction of its own. Y runs along the
+        // piece; Z is the blade's breadth, in that plane; X is its edge-on
+        // thickness, square to it.
+        let y = along / length;
+        let bow = Vec3::from(scythe.bow);
+        let x = y.cross(bow).try_normalize().unwrap_or(Vec3::X);
+        let z = x.cross(y);
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
+        // The haft is a pole. The blade is a thin band: edge-on it is nearly
+        // nothing, across it is a hand's breadth, and its length is the
+        // reach's last third.
+        tf.scale = if tag.piece == 0 {
+            Vec3::new(0.06, length, 0.06)
         } else {
-            Vec3::new(0.07, length, 0.07)
+            Vec3::new(0.025, length, scythe.breadth)
         };
     }
 }
@@ -1503,6 +1524,10 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // the drain reaches, and the spike is the thing you can see from across
         // the arena and decide to walk around. It was drawn as the disc alone
         // for a while, which is a hazard you find out about by standing in it.
+        // A bare spike is just a spike. Only an eruption -- one that came up
+        // out of a pool -- has the skirt: the disc of floor it came up
+        // through, which is the disc it hit across.
+        EffectKind::BlackSpike if part == 0 && !effect.erupted() => None,
         EffectKind::BlackSpike if part < 2 => {
             let volume = effect.spike_volume();
             let radius = volume.radius.to_f32_for_render();
@@ -1990,6 +2015,7 @@ fn apply_poses(
     mut fades: ResMut<Fades>,
     mut shadow_fades: ResMut<ShadowFades>,
     mut hands: ResMut<ShieldHands>,
+    mut both: ResMut<Hands>,
     hub: Option<Res<crate::hub::Hub>>,
     mut roots: Posed<Fighter, BodyPart, ShadowRoot, ShadowPart>,
     mut parts: Posed<BodyPart, Fighter, ShadowRoot, ShadowPart>,
@@ -2041,6 +2067,12 @@ fn apply_poses(
             Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
             turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
         );
+        // And both hands, for whatever is held in two.
+        for (side, left) in [(0, true), (1, false)] {
+            let (at, _) = skins[owner].box_of(&skeletons[owner], view::hand_joint(left));
+            both.0[owner][side] =
+                Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]);
+        }
     }
 
     for (bp, mut tf) in parts.iter_mut() {
@@ -2377,6 +2409,12 @@ mod tests {
         let mut effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
         // The disc it came out of, as `World::advance` sets it on the spawn.
         effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
+        assert!(
+            effect_piece(&effect, 0).is_none(),
+            "a bare spike is drawn with a skirt"
+        );
+        // Erupted from a pool, it has the skirt: the disc it hit across.
+        effect.banked = 1;
         let field = effect_piece(&effect, 0).expect("the field is drawn");
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert_eq!(field.shape, Shape::Column);
@@ -2398,6 +2436,7 @@ mod tests {
         // you jumped over.
         let mut effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
         effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
+        effect.banked = 1;
         let volume = effect.spike_volume();
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert!(

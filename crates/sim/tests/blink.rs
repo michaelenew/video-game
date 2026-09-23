@@ -227,6 +227,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     w.players[1].pos = V3::new(at.x, Fx::ZERO, at.z.add(radius.sub(t::body_radius())));
     let full = w.players[1].health;
     let before = w.players[0].health;
+    let paid = w.players[0].cost_of(spike.cost);
     looking(&mut w, 2, Input::MECHANIC, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     let erupted = w
@@ -255,7 +256,7 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
         !w.players[1].grounded || w.players[1].vel.y.raw() > 0 || spike.launch.raw() == 0,
         "the eruption did not launch"
     );
-    let got = w.players[0].health - (before - spike.cost);
+    let got = w.players[0].health - (before - paid);
     assert!(got >= 300 - 8, "the eruption drank {got} of a pool of 300");
     // The pool is spent, whatever the hit spilled since.
     assert!(
@@ -291,6 +292,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     w.players[0].grey = 500;
     w.players[1].pos = V3::new(at.x, Fx::ZERO, at.z);
     let before = w.players[0].health;
+    let paid = w.players[0].cost_of(spike.cost);
     looking(&mut w, 2, Input::MECHANIC, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     assert!(
@@ -299,7 +301,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     );
     assert_eq!(
         w.players[0].health,
-        before - spike.cost,
+        before - paid,
         "a spike on bare floor returned health"
     );
     assert!(w.players[1].slowed > 0, "the spike did not slow");
@@ -417,5 +419,99 @@ fn all_four_arms_on_the_creature_haul_her_to_it() {
         crossed.raw() > Fx::from_int(3).raw(),
         "she was hauled only {} m toward the creature",
         crossed.to_f32_for_render()
+    );
+}
+
+#[test]
+fn an_eruption_sets_off_every_pool_it_covers() {
+    // The chain: a spike on one pool among others brings up all of them, each
+    // at its own size. The skill is in arranging the pools; the spike is what
+    // cashes them in at once.
+    let mut w = mage();
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    let mut at = None;
+    for _ in 0..spike.startup as u32 + 4 {
+        run(&mut w, 1, 0, 0);
+        if let Some(e) = w
+            .effects
+            .iter()
+            .flatten()
+            .find(|e| e.kind == EffectKind::BlackSpike)
+        {
+            at = Some(e.pos);
+            break;
+        }
+    }
+    let at = at.expect("the spike never came up");
+    let mut w = mage();
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
+    w.players[0].health = t::max_health() - 600;
+    w.players[0].grey = 600;
+    // Three pools: one under the spike, one a stride away, one further still
+    // -- inside the second's eruption but outside the first's.
+    let first = t::erupt_radius().mul(Fx::from_int(300).sqrt());
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 300));
+    w.effects[1] = Some(Effect::pool(
+        0,
+        Class::BloodMage,
+        b::SWEEP,
+        V3::new(at.x, Fx::ZERO, at.z.add(first.sub(Fx::ratio(1, 2)))),
+        300,
+    ));
+    w.effects[2] = Some(Effect::pool(
+        0,
+        Class::BloodMage,
+        b::SWEEP,
+        V3::new(
+            at.x,
+            Fx::ZERO,
+            at.z.add(first.mul(Fx::from_int(2)).sub(Fx::from_int(1))),
+        ),
+        100,
+    ));
+    let before = w.players[0].health;
+    looking(&mut w, 2, Input::MECHANIC, 0, 0);
+    run(&mut w, spike.startup as u32 + 2, 0, 0);
+    let eruptions = w
+        .effects
+        .iter()
+        .flatten()
+        .filter(|e| e.kind == EffectKind::BlackSpike && e.erupted())
+        .count();
+    assert_eq!(
+        eruptions, 3,
+        "three pools in a chain made {eruptions} eruptions"
+    );
+    assert!(pools(&w).is_empty(), "a pool survived the chain");
+    assert!(
+        w.players[0].health - before > 600 - 20,
+        "the chain drank only {} of 700 across three pools",
+        w.players[0].health - before
+    );
+}
+
+#[test]
+fn the_scythe_collects_a_pool_it_passes_over_with_nobody_in_it() {
+    let mut w = mage();
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
+    w.players[0].health = t::max_health() - 300;
+    w.players[0].grey = 300;
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let ahead = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(sweep.reach.mul(Fx::ratio(1, 2))));
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, ahead, 100));
+    let before = w.players[0].health;
+    let paid = w.players[0].cost_of(sweep.cost);
+    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, sweep.whiff_cost() as u32, 0, 0);
+    assert!(
+        pools(&w).is_empty(),
+        "the sweep passed over the pool and left it"
+    );
+    assert!(
+        w.players[0].health > before - paid,
+        "the sweep collected the pool and drank nothing"
     );
 }

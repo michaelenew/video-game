@@ -890,14 +890,30 @@ fn mage_with_grey(grey: i32) -> sim::state::Player {
 #[test]
 fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
     use sim::moves::blood;
-    let grip = [0.3, 1.0, 0.2];
+    // Where the two hands are drawn: the right leading on the haft.
+    let (left, right) = ([0.3, 1.0, 0.2], [0.55, 1.05, 0.15]);
     let mut reaches = Vec::new();
+    let mut breadths = Vec::new();
     for grey in [0, 300, 600] {
         let mut p = mage_with_grey(grey);
-        let resting = view::scythe::scythe(&p, grip).expect("she carries a scythe");
+        let resting = view::scythe::scythe(&p, left, right).expect("she carries a scythe");
+        // Carried low, and out of the crosshair: the tip below the hand and
+        // above the floor, and well off the line she is facing along.
         assert!(
-            resting.tip[1] > resting.grip[1],
-            "at rest the scythe is not held upright"
+            resting.tip[1] < resting.grip[1] && resting.tip[1] > 0.1,
+            "at rest the blade is carried at {:.2} m, not low",
+            resting.tip[1]
+        );
+        let ahead = math::sub(resting.tip, resting.grip);
+        let facing = [
+            p.facing.x.to_f32_for_render(),
+            0.0,
+            p.facing.z.to_f32_for_render(),
+        ];
+        let off = math::length(math::cross(facing, [ahead[0], 0.0, ahead[2]]));
+        assert!(
+            off > 0.8,
+            "at rest the blade points only {off:.2} m off her line of sight"
         );
 
         // The volume, on the first active frame of each of the two swings.
@@ -908,7 +924,7 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
                 left: m.active,
             };
             let hb = sim::state::hitbox(&p).expect("a swing has a volume");
-            let swung = view::scythe::scythe(&p, grip).expect("the blade is out");
+            let swung = view::scythe::scythe(&p, left, right).expect("the blade is out");
             let hits = hb.to.sub(hb.from).len().to_f32_for_render();
             let tip = [
                 hb.to.x.to_f32_for_render(),
@@ -921,11 +937,28 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
                 "{} at {grey} grey: the drawn tip is {off:.3} m from where the volume ends",
                 m.name
             );
+            // And it is in her hands: the haft runs through the leading one.
+            let on_the_haft = view::math::length(view::math::cross(
+                view::math::sub(swung.tip, swung.butt),
+                view::math::sub(right, swung.butt),
+            )) / view::math::length(view::math::sub(swung.tip, swung.butt));
             assert!(
-                (swung.reach() - hits).abs() < 0.001,
-                "{} at {grey} grey: the blade is drawn {:.2} m and hits at {:.2} m",
+                on_the_haft < 0.001,
+                "{} at {grey} grey: the leading hand is {on_the_haft:.3} m off the haft",
+                m.name
+            );
+            // Through the wind-up nothing is out, and the haft lies along the
+            // hands with the tip the live reach from the leading one.
+            p.action = sim::state::Action::Startup {
+                kind,
+                left: m.startup,
+            };
+            let wound = view::scythe::scythe(&p, left, right).expect("she holds it");
+            assert!(
+                (wound.reach() - hits).abs() < 0.001,
+                "{} at {grey} grey: winding up, the blade is {:.2} m and hits at {:.2} m",
                 m.name,
-                swung.reach(),
+                wound.reach(),
                 hits
             );
             assert!(
@@ -938,7 +971,12 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
             );
         }
         reaches.push(resting.reach());
+        breadths.push(resting.breadth);
     }
+    assert!(
+        breadths[1] > breadths[0] && breadths[2] > breadths[1],
+        "the blade does not broaden with grey"
+    );
     // And it visibly grows: half again as long at full grey is the design's
     // first number, so six hundred of a thousand-point bar is well over a
     // quarter longer.
@@ -959,7 +997,7 @@ fn nobody_else_carries_a_scythe() {
         }
         let p = sim::state::Player::new(class);
         assert!(
-            view::scythe::scythe(&p, [0.0; 3]).is_none(),
+            view::scythe::scythe(&p, [0.0; 3], [0.0; 3]).is_none(),
             "{} is drawn holding the Blood mage's weapon",
             class.name()
         );

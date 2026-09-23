@@ -221,7 +221,7 @@ fn main() {
             // from a pool on the floor. The leech beside it is the Dual mage's
             // dark arm now, and is printed wherever it is set.
             let blood = if m.cost > 0 {
-                format!("costs {} health", m.cost)
+                format!("costs {}% of her health", m.cost)
             } else {
                 String::new()
             };
