@@ -606,6 +606,44 @@ fn a_stone_across_the_line_leaves_her_with_an_ordinary_dodge() {
 }
 
 #[test]
+fn a_planted_shield_across_the_line_leaves_her_with_an_ordinary_dodge() {
+    // The sibling: a Bulwark's planted shield is a solid in the same field a
+    // stone is, so it denies the line exactly the way one does. A full one --
+    // taller than a fighter, as a stone is exactly as tall as one. See
+    // `bulwark::wall`.
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8));
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
+    run(&mut w, 20, 0, 0);
+    let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+
+    w.players[1].mechanic = Mechanic::Shield(sim::class::Shield::Planted {
+        pos: V3::new(Fx::from_int(4), Fx::ZERO, Fx::from_int(8)),
+        weight: t::weight_cap(),
+    });
+
+    let stood = w.players[0].pos;
+    let mut sighted = false;
+    for _ in 0..(t::dodge_frames() as u32 + 4) {
+        run(&mut w, 1, SHIFT | W, pitch);
+        sighted |= w.players[0].action.invulnerable();
+    }
+    assert!(sighted, "she did not dodge at all, so this proves nothing");
+    assert!(
+        shadow(&w).is_out(),
+        "she crossed to a shadow behind a planted shield"
+    );
+    let went = w.players[0].pos.sub(stood).flat_len();
+    assert!(
+        went.raw() > Fx::ONE.raw(),
+        "the dash was refused and so was the dodge -- she did not move at all"
+    );
+}
+
+#[test]
 fn a_jump_inside_the_carry_leaves_with_the_dash_under_her() {
     // Arriving leaves her sliding at the speed she crossed at, and the slide
     // decays. A jump pressed inside that window takes what is left of it up

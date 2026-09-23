@@ -143,9 +143,10 @@ mostly invisible, because the swing's own step pushes both bodies — see the fe
 Worth stating explicitly, because the Bulwark depends on the distinction:
 
 - **The shield as a world volume** stops projectiles by *collision*. No timing, no state.
-  This is why a Bulwark's planted or thrown shield would keep blocking projectiles while the
-  Bulwark is somewhere else entirely. **Not built** — nothing in the simulation collides with
-  a shield, in flight or planted. See [kits/bulwark.md](kits/bulwark.md).
+  This is why a Bulwark's planted shield keeps blocking projectiles while the Bulwark is
+  somewhere else entirely. **Built for a planted shield, 2026-09-23**: it joins the stones'
+  field, so it stops bodies and shots through the same query they do. A shield in flight is
+  still not a solid. See [kits/bulwark.md](kits/bulwark.md).
 - **The shield as a guard state** handles melee — pushback, blockstun, parry timing. This
   only exists while the character is actively blocking, and it is the half that is built.
 

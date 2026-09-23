@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 305] = [
+pub const SCALARS: [i32; 311] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -313,6 +313,12 @@ pub const SCALARS: [i32; 305] = [
                6, // bulwark.slam,_damage_per_m/s_fallen = 6
               90, // bulwark.slam,_staggers_from_(%_of_the_cap) = 90
               45, // bulwark.slam,_stagger_at_the_cap = 45
+           39322, // bulwark.throw,_speed_at_the_cap_(x) = 0.6
+           32768, // bulwark.throw,_damage_per_weight_(x) = 0.5
+              50, // bulwark.throw,_knocks_down_from_(%_of_the_cap) = 50
+              40, // bulwark.throw,_knockdown = 40
+           52429, // bulwark.wall,_size_empty_(x_a_stone) = 0.8
+          104858, // bulwark.wall,_size_full_(x_a_stone) = 1.6
 ];
 
 #[rustfmt::skip]

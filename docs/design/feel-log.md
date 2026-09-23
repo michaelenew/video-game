@@ -5112,3 +5112,61 @@ budget. Whether that is the right trade for the class is a design question, not 
 
 **Verdict** open — built and measured, unplayed. The remaining felt question: whether an empty
 Slam is still worth pressing at 170 over 1.4 m for a 14-frame wind-up.
+
+---
+
+### 2026-09-23 — the loaded throw, and the planted shield as a wall (Bulwark v2, M3)
+
+**Changed** The throw reads weight and a planted shield is a solid. First values: `Throw,
+speed at the cap` ×0.6; `Throw, damage per weight` ×0.5; `Throw, knocks down from` 50 % of the
+cap; `Throw, knockdown` 40 frames; `Wall, size empty` 0.8 of a stone; `Wall, size full` 1.6.
+
+**How the wall is built.** Not a second collision path. `stones::gather` — which every body,
+aiming ray, bolt, gust and piece of debris already walks — puts a Bulwark's planted shield
+into its owner's first slot as a stone standing at full height and scaled by its weight. A
+Bulwark never has stones of his own, so the slot is always free, and because the field is
+rebuilt every frame and only written back into Elementalists' mechanics, nothing can kick,
+carry or erupt it. Stones gained a `scale` (one for all of hers) and every place that read the
+Oven's stone radius or height reads the stone's own now. The renderer draws the stones from
+the same field, so the wall is drawn at the size it is tested at.
+
+Four decisions the milestone forced, each pinned by a test:
+
+1. **Planted means on the floor.** A shield used to plant where its flight ended — at hand
+   height on a level throw, 2.3 m up. As a wall that was a solid everybody walked under.
+2. **A recall goes home through whoever is in the way**, once each. It used to plant where it
+   struck on the way back, which was invisible while planted shields floated; with them on the
+   floor, a recall through anybody never came home — `a_thrown_shield_plants_and_can_be_recalled`
+   found it. The contact also no longer hurts a partner in a hunt, the rule every other blow
+   already follows.
+3. **A wall holds its weight.** Weight drains in hand and in flight, not planted. A solid that
+   shrank over ten seconds would slide out from under whoever stood on it. It makes a wall a
+   bank — recall it and the weight comes home for a Slam — and the price of the bank is having
+   no shield in hand for anything, which on this class is everything.
+4. **Cataclysm does not break it.** It stops against it. The proposal wrote it bypass-only.
+
+**Measured**, `cargo run -p sim --bin weight wall`:
+
+| Weight | Throw arrives | Throw damage | Knocks down | Wall radius | Wall height | Walker | Bolt | Recalled: walker / bolt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 5 f | 85 | no | 0.6 m | 1.4 m | stopped | stopped | through / through |
+| 100 | 6 f | 132 | no | 0.7 m | 1.7 m | stopped | stopped | through / through |
+| 200 | 7 f | 182 | no | 0.8 m | 2.1 m | stopped | stopped | through / through |
+| 300 | 8 f | 232 | yes | 0.9 m | 2.4 m | stopped | stopped | through / through |
+| 400 | 9 f | 281 | yes | 1.1 m | 2.8 m | stopped | stopped | through / through |
+
+Every throw that strikes plants empty. The Bolt is fired at the pitch that reaches the Bulwark
+with the shield recalled, so "stopped" means stopped by the wall and not missed. The Reaver's
+dash is refused across a full planted shield, the sibling of the stone test.
+
+**Seen**, headless captures of the demo: the planted shield as a grey column with the shield
+standing on top of it; and, with the shield loaded to 400 just before the demo's throw (a
+throwaway local patch, not committed), the throw striking the far Bulwark — the HUD reading
+`STAGGER` and the planted shield `weight: 0`.
+
+**Watch** An empty wall is 1.4 m, shorter than a fighter, so it stops a walk and a level shot
+but is a line you can see and hop over; only a loaded one denies the Reaver's line. That is
+the intent — big cover is earned — but it means the "cover for the party" promise needs blows
+taken first.
+
+**Verdict** open — built and measured, unplayed.

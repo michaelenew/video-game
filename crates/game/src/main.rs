@@ -1147,22 +1147,23 @@ fn fade_own_body(
     }
 }
 
-/// Put the structure meshes where the Elementalist's mechanic says they are.
+/// Put the structure meshes where the stones' field says they are.
+///
+/// **The field, not the Elementalist's mechanic**, since 2026-09-23: the same
+/// `stones::gather` every collision reads, so a Bulwark's planted shield --
+/// which joins the field as a wall sized by its weight -- is drawn here at
+/// exactly the size bodies and shots are stopped at. Each at its own size.
 fn place_structures(
     sim: Res<Sim>,
     mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
 ) {
-    use sim::class::Mechanic;
-    let radius = sim::tuning::structure_radius().to_f32_for_render();
+    let field = sim::stones::gather(&sim.cur.players);
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
+        let Some(raised) = field[tag.owner * sim::class::MAX_STRUCTURES + tag.index] else {
             *vis = Visibility::Hidden;
             continue;
         };
-        let Some(raised) = slots[tag.index] else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
+        let radius = raised.radius().to_f32_for_render();
         // It is earth: it climbs out of the floor rather than appearing in the
         // air. The whole column slides up from fully buried, so the visible
         // part grows from the ground and the silhouette is always a slab
@@ -1179,7 +1180,7 @@ fn place_structures(
         // renderer that recomputed it could disagree with the surface the game
         // is holding you up with.
         let rise = raised.risen().to_f32_for_render();
-        let height = sim::tuning::structure_height().to_f32_for_render();
+        let height = raised.height().to_f32_for_render();
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
             raised.at.x.to_f32_for_render(),
@@ -1835,9 +1836,18 @@ fn place_shields(
             Some(pos) => {
                 *vis = Visibility::Inherited;
                 tf.rotation = Quat::IDENTITY;
+                // Planted, it crowns the wall it has become -- the wall itself
+                // is drawn by `place_structures`, from the same field that
+                // stops people -- so it still reads as *his* shield.
+                let lift = match player.mechanic {
+                    sim::Mechanic::Shield(sim::state::Shield::Planted { pos, weight }) => {
+                        sim::bulwark::wall(pos, weight).height().to_f32_for_render()
+                    }
+                    _ => 0.0,
+                };
                 tf.translation = Vec3::new(
                     pos.x.to_f32_for_render(),
-                    pos.y.to_f32_for_render(),
+                    pos.y.to_f32_for_render() + lift,
                     pos.z.to_f32_for_render(),
                 );
             }

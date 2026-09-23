@@ -1273,9 +1273,22 @@ impl World {
         let shields = [self.players[0].shield(), self.players[1].shield()];
         for (owner, shield) in shields.iter().enumerate() {
             let target = 1 - owner;
-            let Some(Shield::Flying { pos, weight, .. }) = *shield else {
+            let Some(Shield::Flying {
+                pos,
+                vel,
+                outbound,
+                travelled,
+                weight,
+                struck,
+            }) = *shield
+            else {
                 continue;
             };
+            // Once a flight, and never a partner: in a hunt the fighters
+            // cannot hurt each other, the same rule every other blow follows.
+            if struck || self.monster.is_some() {
+                continue;
+            }
             {
                 let victim = self.players[target];
                 let d = victim.pos.sub(pos);
@@ -1284,10 +1297,18 @@ impl World {
                 if vertical && d.flat_len().raw() < hit_range.raw() && !victim.action.invulnerable()
                 {
                     let dir = V3::new(d.x, Fx::ZERO, d.z).normalized();
+                    let blocked = victim.action.guarding();
+                    // The weight is the *throw's*. On the way home it is the
+                    // ordinary recall, cutting what it passes through.
+                    let damage = if outbound {
+                        bulwark::throw_damage(weight)
+                    } else {
+                        t::shield_damage()
+                    };
                     apply_hit(
                         &mut self.players[target],
                         Hit {
-                            damage: t::shield_damage(),
+                            damage,
                             hitstun: t::shield_hitstun(),
                             blockstun: t::shield_blockstun(),
                             knockback: t::shield_knockback(),
@@ -1295,14 +1316,43 @@ impl World {
                             grabs: 0,
                             by: owner as u8,
                             dir,
-                            blocked: victim.action.guarding(),
+                            blocked,
                             parried: false,
                             interrupts: true,
                         },
                     );
-                    // Contact drops it where it struck.
-                    self.players[owner].mechanic =
-                        Mechanic::Shield(Shield::Planted { pos, weight });
+                    // A loaded one knocks them down: on the floor, whatever
+                    // it did to their frames. Blocked, it is a blocked hit.
+                    if outbound && !blocked && bulwark::knocks_down(weight) {
+                        self.players[target].action = Action::Stagger {
+                            left: t::knockdown_frames(),
+                        };
+                        self.players[target].stun_total = t::knockdown_frames();
+                    }
+                    // Thrown, contact drops it where it struck -- **and spends
+                    // it.** What it carried went into them, so what plants
+                    // there is an empty shield rather than a wall sized by a
+                    // blow it has already delivered.
+                    //
+                    // Recalled, it goes on home through them. It used to plant
+                    // here too, which did not matter while a planted shield sat
+                    // at hand height and a returning one passed over heads; on
+                    // the floor, a recall through anybody never came back.
+                    self.players[owner].mechanic = Mechanic::Shield(if outbound {
+                        Shield::Planted {
+                            pos: V3::new(pos.x, arena::ground_under(pos), pos.z),
+                            weight: Fx::ZERO,
+                        }
+                    } else {
+                        Shield::Flying {
+                            pos,
+                            vel,
+                            outbound,
+                            travelled,
+                            weight,
+                            struck: true,
+                        }
+                    });
                 }
             }
         }
@@ -4178,23 +4228,26 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                 // the look angle from the chest. Those are parallel lines that
                 // never meet, and the shield is thrown far enough that the gap
                 // between them is most of a body.
+                // Slower the more it holds: see `bulwark::flight_speed`.
                 Shield::Held { weight } => Shield::Flying {
                     pos: from,
                     vel: aim::skillshot_path(who, input, t::shield_range(), scene)
                         .dir()
-                        .scale(t::shield_speed()),
+                        .scale(bulwark::flight_speed(weight)),
                     outbound: true,
                     travelled: Fx::ZERO,
                     weight,
+                    struck: false,
                 },
                 Shield::Planted { pos, weight } => {
                     let to_owner = from.sub(pos);
                     Shield::Flying {
                         pos,
-                        vel: to_owner.normalized().scale(t::shield_speed()),
+                        vel: to_owner.normalized().scale(bulwark::flight_speed(weight)),
                         outbound: false,
                         travelled: Fx::ZERO,
                         weight,
+                        struck: false,
                     }
                 }
                 // **The leap and the shield meet in the middle**, since
@@ -4222,10 +4275,14 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                     }
                     Shield::Flying {
                         pos,
-                        vel: from.sub(pos).normalized().scale(t::shield_speed()),
+                        vel: from
+                            .sub(pos)
+                            .normalized()
+                            .scale(bulwark::flight_speed(weight)),
                         outbound: false,
                         travelled,
                         weight,
+                        struck: false,
                     }
                 }
             });
@@ -4275,18 +4332,21 @@ fn step_mechanic(p: &mut Player) {
             outbound,
             travelled,
             weight,
+            struck,
         }) => {
             let step = vel.scale(DT);
             let next = pos.add(step);
             let gone = travelled.add(step.flat_len());
             p.mechanic = Mechanic::Shield(if outbound {
                 if gone.raw() >= t::shield_range().raw() {
-                    // Thrown downhill it would otherwise plant inside the
-                    // floor, which is a shield you cannot see and cannot walk
-                    // to. Lifted to the surface rather than dropped onto it, so
-                    // a level throw is untouched.
+                    // **Planted means standing on the floor** under where it
+                    // stopped, since 2026-09-23. It used to stay where its
+                    // flight ended -- at hand height on a level throw -- which
+                    // was harmless while a planted shield was a marker, and is
+                    // a wall everybody walks under now that it is a solid.
+                    // See `bulwark::wall`.
                     Shield::Planted {
-                        pos: V3::new(next.x, next.y.max(arena::ground_under(next)), next.z),
+                        pos: V3::new(next.x, arena::ground_under(next), next.z),
                         weight,
                     }
                 } else {
@@ -4296,6 +4356,7 @@ fn step_mechanic(p: &mut Player) {
                         outbound,
                         travelled: gone,
                         weight,
+                        struck,
                     }
                 }
             } else {
@@ -4304,13 +4365,17 @@ fn step_mechanic(p: &mut Player) {
                     Shield::Held { weight }
                 } else {
                     // Home in, so the return does not miss a moving owner.
-                    let dir = hand.sub(next).normalized().scale(t::shield_speed());
+                    let dir = hand
+                        .sub(next)
+                        .normalized()
+                        .scale(bulwark::flight_speed(weight));
                     Shield::Flying {
                         pos: next,
                         vel: dir,
                         outbound,
                         travelled: gone,
                         weight,
+                        struck,
                     }
                 }
             });
@@ -4505,6 +4570,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             outbound,
             travelled,
             weight,
+            struck,
         }) => {
             h.write_u32(2);
             hash_v3(h, pos);
@@ -4512,6 +4578,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*outbound as u32);
             h.write_i32(travelled.raw());
             h.write_i32(weight.raw());
+            h.write_u32(*struck as u32);
         }
         Mechanic::Forms {
             form,
@@ -4573,6 +4640,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                         h.write_u32(s.knock_struck as u32);
                         h.write_u32(s.rise as u32);
                         hash_v3(h, &s.erupt);
+                        h.write_i32(s.scale.raw());
                     }
                     None => h.write_u32(0),
                 }

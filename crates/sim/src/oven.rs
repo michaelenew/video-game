@@ -533,6 +533,16 @@ scalars! {
     SlamFallDamage,   "Bulwark",  "Slam, damage per m/s fallen",          Int,     0,       40;
     SlamStaggerShare, "Bulwark",  "Slam, staggers from (% of the cap)",   Percent, 0,       100;
     SlamStaggerFrames,"Bulwark",  "Slam, stagger at the cap",             Frames,  0,       120;
+    // The throw and the wall -- M3. A loaded shield flies slower and hits
+    // harder, and from a share of the cap it knocks down; where it plants it
+    // is a solid in the stones' own field, sized between these two multiples
+    // of a stone by how full it was.
+    ThrowSpeedFull,   "Bulwark",  "Throw, speed at the cap (x)",          Fixed,   fx(1,10), fx(1,1);
+    ThrowWeightDamage,"Bulwark",  "Throw, damage per weight (x)",         Fixed,   0,       fx(2,1);
+    KnockdownShare,   "Bulwark",  "Throw, knocks down from (% of the cap)", Percent, 0,     100;
+    KnockdownFrames,  "Bulwark",  "Throw, knockdown",                     Frames,  0,       120;
+    WallSizeEmpty,    "Bulwark",  "Wall, size empty (x a stone)",         Fixed,   fx(1,10), fx(3,1);
+    WallSizeFull,     "Bulwark",  "Wall, size full (x a stone)",          Fixed,   fx(1,10), fx(3,1);
 }
 
 // ---------------------------------------------------------------------------

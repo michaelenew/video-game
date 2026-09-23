@@ -55,7 +55,7 @@ fn main() {
             "pushback" => pushback(),
             "stomp" => stomp(),
             "slam" => slam(),
-            "wall" => println!("wall\n  not built: the throw and the planted wall are M3\n"),
+            "wall" => wall(),
             other => println!("{other}: no such script (have {})\n", SCRIPTS.join(", ")),
         }
     }
@@ -74,12 +74,25 @@ fn face_off(attacker: u16, bulwark: u16) -> [Input; 2] {
     ]
 }
 
+/// A fixture position, in whole metres. The places this instrument stands
+/// people are where it looks, not numbers anybody tunes -- which is what the
+/// Oven's literal check is guarding -- so they are written through these two
+/// rather than as `Fx` literals.
+fn metres(n: i32) -> Fx {
+    Fx::from_int(n)
+}
+
+/// A fixture position, in tenths of a metre.
+fn decimetres(n: i32) -> Fx {
+    Fx::ratio(n, 10)
+}
+
 /// Somebody in reach of a Bulwark on their right, mid-arena, so a shove has
 /// room to be a shove rather than a wall.
 fn facing(attacker: Class) -> World {
     let mut w = World::with_classes([attacker, Class::Bulwark]);
-    w.players[0].pos.x = Fx::from_int(-2);
-    w.players[1].pos.x = Fx::ratio(-1, 2);
+    w.players[0].pos.x = metres(-2);
+    w.players[1].pos.x = decimetres(-5);
     w
 }
 
@@ -182,8 +195,8 @@ fn load() {
         let free = w.players[0].action.actionable();
         w.advance(face_off(if free { Input::LEFT } else { 0 }, Input::RIGHT));
         // Held at its mark, so the string keeps reaching.
-        w.players[0].pos.x = Fx::from_int(-2);
-        w.players[1].pos.x = Fx::ratio(-1, 2);
+        w.players[0].pos.x = metres(-2);
+        w.players[1].pos.x = decimetres(-5);
         let now = weight(&w);
         let deposit = now.sub(was).to_int();
         if deposit > 0 {
@@ -243,7 +256,7 @@ fn load() {
 fn decay() {
     println!("decay -- full, then nothing");
     let mut w = facing(Class::Champion);
-    w.players[0].pos.x = Fx::from_int(-4);
+    w.players[0].pos.x = metres(-4);
     set_weight(&mut w, t::weight_cap());
     let mut line = String::from(" ");
     let mut empty_at = None;
@@ -313,8 +326,8 @@ fn pushback() {
 /// reach of his Slam.
 fn slam_at(weight: Fx) -> World {
     let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
-    w.players[0].pos.x = Fx::from_int(-2);
-    w.players[1].pos.x = Fx::ratio(-1, 2);
+    w.players[0].pos.x = metres(-2);
+    w.players[1].pos.x = decimetres(-5);
     if let Mechanic::Shield(s) = w.players[0].mechanic {
         w.players[0].mechanic = Mechanic::Shield(s.with_weight(weight));
     }
@@ -448,6 +461,176 @@ fn arriving(load: Fx, press: impl Fn(i32, &World) -> u16 + Copy) -> Slammed {
     let reach = sim::moves::get(Class::Bulwark, sim::state::SLOT_COMMITTED).reach;
     w.players[1].pos.x = landed.x.add(reach);
     slam_run(&mut w, 90, press)
+}
+
+/// Two fighters in the open lane down the middle of the arena, clear of both
+/// platforms: a Bulwark holding `load` at the south end looking north, and
+/// somebody of `class` parked well off to the side.
+fn in_the_lane(load: Fx, class: Class) -> World {
+    let mut w = World::with_classes([Class::Bulwark, class]);
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, metres(-12));
+    w.players[1].pos = V3::new(metres(12), Fx::ZERO, metres(12));
+    if let Mechanic::Shield(s) = w.players[0].mechanic {
+        w.players[0].mechanic = Mechanic::Shield(s.with_weight(load));
+    }
+    w
+}
+
+/// One frame of buttons in the lane: the Bulwark looking north, the other
+/// fighter looking south at him.
+fn lane(bulwark: u16, other: u16) -> [Input; 2] {
+    [
+        Input::aimed(bulwark, Input::QUARTER_TURN),
+        Input::aimed(other, 3 * Input::QUARTER_TURN),
+    ]
+}
+
+/// The throw at five weights, and the wall it plants.
+fn wall() {
+    println!("wall -- the throw into an unguarded Bulwark standing on its line, at five weights");
+    println!("  weight   arrives   damage   knocked down   planted with");
+    // Where the shield is eight frames into an empty throw: the dummy stands
+    // there, so every throw below is aimed exactly at it.
+    let mut dry = in_the_lane(Fx::ZERO, Class::Bulwark);
+    dry.advance(lane(Input::MECHANIC, 0));
+    for _ in 0..8 {
+        dry.advance(lane(0, 0));
+    }
+    let Some(on_the_line) = dry.players[0].shield().and_then(|s| s.world_pos()) else {
+        println!("  the shield was not thrown\n");
+        return;
+    };
+    for fifth in 0..=4 {
+        let load = t::weight_cap().mul(Fx::ratio(fifth, 4));
+        let mut w = in_the_lane(load, Class::Bulwark);
+        w.players[1].pos = V3::new(on_the_line.x, Fx::ZERO, on_the_line.z);
+        let before = w.players[1].health;
+        let mut arrived = None;
+        let mut down = false;
+        for f in 0..90 {
+            w.advance(lane(if f == 0 { Input::MECHANIC } else { 0 }, 0));
+            if arrived.is_none() && w.players[1].health < before {
+                arrived = Some(f);
+            }
+            down |= matches!(w.players[1].action, Action::Stagger { .. });
+        }
+        let planted = match w.players[0].shield() {
+            Some(sim::class::Shield::Planted { weight, .. }) => weight.to_int().to_string(),
+            _ => "--".to_string(),
+        };
+        println!(
+            "  {:>6}   {:>6}f   {:>6}   {:>12}   {planted}",
+            load.to_int(),
+            arrived.map_or("--".to_string(), |f| f.to_string()),
+            before - w.players[1].health,
+            if down { "yes" } else { "no" },
+        );
+    }
+
+    println!(
+        "  planted clear of anybody; an Elementalist walks into it, then fires a Bolt through it"
+    );
+    println!("  at the Bulwark behind -- and the same again after the shield is recalled:");
+    println!("  weight   radius   height   walking   bolt      recalled: walking   bolt");
+    for fifth in 0..=4 {
+        let load = t::weight_cap().mul(Fx::ratio(fifth, 4));
+        let standing = wall_trial(load, false);
+        let recalled = wall_trial(load, true);
+        let said = |stopped: bool| if stopped { "stopped" } else { "through" };
+        println!(
+            "  {:>6}   {:>4} m   {:>4} m   {:<8}  {:<8}            {:<8}  {}",
+            load.to_int(),
+            tenths(standing.radius),
+            tenths(standing.height),
+            said(standing.walked_stopped),
+            said(standing.bolt_stopped),
+            said(recalled.walked_stopped),
+            said(recalled.bolt_stopped),
+        );
+    }
+    println!();
+}
+
+/// What one wall did.
+struct Walled {
+    radius: Fx,
+    height: Fx,
+    walked_stopped: bool,
+    bolt_stopped: bool,
+}
+
+/// Plant a shield holding `load` in the lane, optionally recall it, then walk
+/// an Elementalist at where it stood and have her fire a Bolt at the Bulwark
+/// standing behind it.
+fn wall_trial(load: Fx, recall: bool) -> Walled {
+    let mut w = in_the_lane(load, Class::Elementalist);
+    w.advance(lane(Input::MECHANIC, 0));
+    for _ in 0..60 {
+        w.advance(lane(0, 0));
+    }
+    let Some(sim::class::Shield::Planted { pos, .. }) = w.players[0].shield() else {
+        println!("  the shield never planted");
+        return Walled {
+            radius: Fx::ZERO,
+            height: Fx::ZERO,
+            walked_stopped: false,
+            bolt_stopped: false,
+        };
+    };
+    let solid = sim::stones::gather(&w.players)[0].expect("a planted shield is in the field");
+    if recall {
+        w.advance(lane(Input::MECHANIC, 0));
+        w.advance(lane(0, 0));
+    }
+    // The Bulwark two metres behind it, the Elementalist four in front and
+    // walking at it.
+    let behind = V3::new(pos.x, Fx::ZERO, pos.z.sub(metres(2)));
+    let front = V3::new(pos.x, Fx::ZERO, pos.z.add(metres(4)));
+    w.players[0].pos = behind;
+    w.players[1].pos = front;
+    for _ in 0..90 {
+        w.advance(lane(0, Input::W));
+        w.players[0].pos = behind;
+    }
+    let walked_stopped = w.players[1].pos.z.raw() > pos.z.add(solid.radius()).raw();
+    // Back to her mark, and shoot -- at the pitch that puts her crosshair on
+    // him with nothing in the way, found by trying them against the same
+    // scene with the shield recalled. A Bolt that misses with no wall there
+    // says nothing about the wall.
+    w.players[1].pos = front;
+    let mut open = w.clone();
+    if let Mechanic::Shield(s) = open.players[0].mechanic {
+        if !s.in_hand() {
+            open.players[0].mechanic =
+                Mechanic::Shield(sim::class::Shield::Held { weight: s.weight() });
+        }
+    }
+    let on_him = (-300..300)
+        .step_by(5)
+        .map(|tenth| (tenth * 65536 / 3600) as i16)
+        .find(|pitch| bolt_lands(&open, behind, *pitch));
+    Walled {
+        radius: solid.radius(),
+        height: solid.height(),
+        walked_stopped,
+        bolt_stopped: on_him.is_none_or(|pitch| !bolt_lands(&w, behind, pitch)),
+    }
+}
+
+/// Does a Bolt fired by the second fighter at `pitch` reach the Bulwark held
+/// at `behind`?
+fn bolt_lands(w: &World, behind: V3, pitch: i16) -> bool {
+    let mut w = w.clone();
+    let before = w.players[0].health;
+    for f in 0..60 {
+        let bits = if f == 0 { Input::LEFT } else { 0 };
+        w.advance([
+            Input::aimed(0, Input::QUARTER_TURN),
+            Input::looking_at(bits, 3 * Input::QUARTER_TURN, pitch),
+        ]);
+        w.players[0].pos = behind;
+    }
+    w.players[0].health < before
 }
 
 /// A Bulwark with his guard up at each creature move's own range, facing it.

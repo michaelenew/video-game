@@ -682,6 +682,38 @@ pub fn slam_full_stagger() -> u16 {
     oven::scalar(Scalar::SlamStaggerFrames) as u16
 }
 
+/// A full shield's flight speed, as a share of an empty one's: a loaded throw
+/// is a boulder, and a boulder is slower to arrive and easier to read.
+pub fn throw_speed_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrowSpeedFull))
+}
+
+/// What each unit of weight adds to the thrown shield's damage.
+pub fn throw_weight_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrowWeightDamage))
+}
+
+/// How full a thrown shield must be to knock down what it hits, as a share of
+/// the cap.
+pub fn knockdown_share() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::KnockdownShare), 100)
+}
+
+/// How long a loaded throw leaves its victim on the floor.
+pub fn knockdown_frames() -> u16 {
+    oven::scalar(Scalar::KnockdownFrames) as u16
+}
+
+/// The planted shield's size as a wall, empty and full, as multiples of the
+/// Elementalist's stone. Between the two by how full it landed.
+pub fn wall_size_empty() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSizeEmpty))
+}
+
+pub fn wall_size_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSizeFull))
+}
+
 /// Blocked knockback at a full shield, as a share of it empty. The more it has
 /// taken, the less it moves -- the pushback resistance `defense.md` promised.
 pub fn heavy_pushback() -> Fx {

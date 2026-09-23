@@ -12,7 +12,9 @@ depends: ../bulwark.md, ../defense.md
 > structure sized by it. **Built so far (M1):** weight itself — loading, the drain, the
 > pushback it resists, drawn on the shield — and the Bulwark's health, highest on the roster.
 > See [Weight](#weight--built-m1) below. **M2:** Slam is on middle click and spends it — see
-> [Slam](#slam--m-and-it-spends-the-weight). The throw and the planted wall (M3) are not built.
+> [Slam](#slam--m-and-it-spends-the-weight). **M3:** a loaded throw is slower, harder and
+> knocks down, and a planted shield is a real wall sized by its weight — see
+> [Throw / Recall](#throw--recall--e-the-mechanic).
 
 **Identity.** The wall. Wins by denying space and funnelling the opponent into where you are
 already aimed. Committed, not slow.
@@ -38,20 +40,24 @@ collision, with no timing or state involved — which is why a planted shield wo
 blocking while you are elsewhere. As a *guard state* it handles melee, with stunlock and
 parry timing. Only the second requires you to be holding it.
 
-> ⚠️ **Only the guard state is built.** A shield in flight is a damage source, and a planted
-> one is a marker you can recall and leap to — nothing collides with either. No projectile
-> path in the simulation knows the shield exists, so *"it holds space over there"* is the
-> class's central promise and is currently fiction. It is the largest unbuilt thing in this
-> document, and [../elementalist.md](../elementalist.md)'s "shared blocking implementation"
-> is half-done in the other direction: structures do block bodies and shots.
+> **Both are built, since 2026-09-23 (v2, M3).** A planted shield is a solid in the *same*
+> field as the Elementalist's stones — `stones::gather` puts it in its owner's first slot, a
+> Bulwark having no stones of his own — so everything that walks the stones walks it: bodies
+> stop against it and stand on it, the crosshair's ray and every shot meet it, the Reaver's
+> dash is refused across it. It is sized by the weight it landed with, from 0.8 of a stone
+> empty (0.56 m across, 1.4 m tall — shorter than a fighter) to 1.6 of one full (1.1 m, 2.8 m
+> — taller than a full hop), and it holds that weight until it is recalled. Nothing moves it
+> and Cataclysm does not break it: it is bypass-only. Drawn by the same code that draws the
+> stones, from the same field, at the size it is tested at.
 
 ## Weight — built (M1)
 
 **Every blow taken on the shield is stored in it**, in health: a blocked hit stores its damage,
 a parried one `Weight, a parry loads` times that, up to `Weight, the most the shield holds`.
 It drains on its own, a full shield emptying in `Weight, a full shield empties in`, so it is
-about the current exchange. It rides on every shield state — held, in flight, planted — so a
-shield thrown with three hits in it lands with them. All of it is `crate::bulwark`, and the
+about the current exchange — in hand and in flight, but **not planted**: a wall keeps the
+weight it landed with until it is recalled (M3). It rides on every shield state, so a shield
+thrown with three hits in it lands with them. All of it is `crate::bulwark`, and the
 only place that loads it is the one place a blocked blow is resolved (`state::apply_hit`, plus
 the Elementalist's poke), which is why the creature's blows load it with no code of their own.
 
@@ -67,8 +73,8 @@ the four knobs under the Bulwark.
 **Health**: 1250 against everyone else's 1000, from the `Health` family in the Oven — one
 multiplier per class, shared with the Reaver's v2.
 
-**What spends it**: Slam, since M2 — see below. The throw and the planted wall (M3) do not
-yet.
+**What spends it**: Slam (M2), and the throw on impact (M3). A throw that misses plants as a
+wall sized by what it carried, and the wall keeps that weight until it is recalled.
 
 ## What is bound today
 
@@ -152,9 +158,16 @@ cycles the shield through its three states
 One key, and which of three things it does depends on where the shield is.
 
 - **Held → thrown.** It flies at what the crosshair is on — a skillshot, not a ray from the
-  chest — damaging along its path, and plants where it lands. You are now faster, exposed,
-  and unable to block.
-- **Planted → recalled.** It flies back, damaging everything along the return path.
+  chest — damaging along its path, and plants where it lands, **standing on the floor** under
+  where it stopped. You are now faster, exposed, and unable to block. **Loaded, it is a
+  boulder** (M3): slower (`Throw, speed at the cap` ×0.6), harder (`Throw, damage per weight`
+  ×0.5 on top of its own 85), and from half the cap it knocks down what it hits for
+  `Throw, knockdown` frames. Striking somebody spends everything it carried, so it plants
+  there empty; missing, it plants as a wall sized by what it still holds.
+- **Planted → recalled.** It flies back, damaging everything along the return path — **once
+  each, and on through them**. It used to plant where it struck on the way home too, which did
+  not matter while a planted shield sat at hand height and passed over heads; on the floor, a
+  recall through anybody never came back.
 - **In flight → leap to it.** Pressed while it travels, you are thrown toward it **and it turns
   to meet you**, homing like a recall, so you arrive with it in hand and still in the air — which
   is what lets a Slam come out of the leap. Since 2026-09-23: before, the leap was slower than the
@@ -169,7 +182,7 @@ One key, and which of three things it does depends on where the shield is.
 > [../controls.md](../controls.md#where-e-is-an-ability). **Whether the shield should pay the
 > same price is open**, and it is the one place this class gets something for nothing.
 >
-> What is not built is the planting: a planted shield stops nothing, per the warning above.
+> The planting is built: see the note under *Two systems are meant to share the object*.
 
 Recall is the class's mobility and its approach tool — throw to commit, leap to follow. It
 sets up Slam: the leap brings the shield back in the air, and a Slam thrown there lands with
@@ -194,16 +207,18 @@ them to take. Throw and leap to close, land Slam out of the leap, Grapple when t
 blocking instead of moving.
 
 In coop, plant the shield in front of the party as cover, or hold it wide to body-block for
-someone who cannot take the hit — **both of which want the planted volume that is not built
-yet**. Today a thrown shield is a projectile and a landing spot, and nothing more.
+someone who cannot take the hit. The planted volume is built (M3): a shield planted heavy is
+cover taller than anybody, and one planted empty is a waist-high post. A blow taken on the
+guard, then a throw that misses on purpose, is how the cover gets big.
 
 ## Open questions
 
 - **Should the mechanic cost frames?** It costs none, which makes the Bulwark the one class
   whose mechanic press is free. The Reaver's is a move in the table for exactly the opposite
   reason.
-- **Can the planted shield be destroyed, or only bypassed?** Bypassed is simpler and makes
-  positioning the only counterplay. Moot until it stops anything.
+- **Can the planted shield be destroyed, or only bypassed?** Bypassed, as built (M3):
+  Cataclysm stops against it and does not break it. Revisit if a broken wall ever wants to
+  spend the Bulwark's weight for him.
 - Does the shield block allied projectiles? A real coordination mechanic in coop and
   potentially maddening.
 - Does holding the shield wide for an ally need its own input, or is it just the Guard arc

@@ -177,6 +177,10 @@ pub enum Shield {
         outbound: bool,
         travelled: Fx,
         weight: Fx,
+        /// Has this flight already struck somebody? A shield thrown out
+        /// plants where it strikes, so only the way home needs to know: a
+        /// recall passes through whoever is in the way, once.
+        struck: bool,
     },
 }
 
@@ -211,6 +215,7 @@ impl Shield {
                 vel,
                 outbound,
                 travelled,
+                struck,
                 ..
             } => Shield::Flying {
                 pos,
@@ -218,6 +223,7 @@ impl Shield {
                 outbound,
                 travelled,
                 weight,
+                struck,
             },
         }
     }
@@ -464,6 +470,11 @@ pub struct Structure {
     /// and a push aimed from where she is *now* would point somewhere nobody
     /// chose. See `crate::stones` and `tuning::landfall_tilt`.
     pub erupt: V3,
+    /// Its size, as a multiple of the Oven's stone: radius and height both.
+    /// One on every stone the Elementalist raises. The one solid that is not
+    /// one is the Bulwark's planted shield, which joins the field as a stone
+    /// sized by the weight it landed with -- see `stones::gather`.
+    pub scale: Fx,
 }
 
 // ---------------------------------------------------------------------------

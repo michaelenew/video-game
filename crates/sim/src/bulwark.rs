@@ -15,8 +15,9 @@
 //! blockable thing that does not go through it. The creature's blows do go
 //! through it, so a blocked stomp loads the shield with no code of its own.
 
-use crate::class::{Class, Mechanic, Shield};
+use crate::class::{Class, Mechanic, Shield, Structure};
 use crate::fixed::Fx;
+use crate::math::V3;
 use crate::state::{Action, Player, SLOT_COMMITTED};
 use crate::tuning as t;
 
@@ -36,11 +37,21 @@ pub fn weight(p: &Player) -> Fx {
 /// How full the shield is, from zero to one. What the pushback curve and the
 /// drawing both read, so a knob that moves the cap moves both at once.
 pub fn fullness(p: &Player) -> Fx {
+    fullness_of(weight(p))
+}
+
+/// How full a shield holding `weight` is, from zero to one.
+pub fn fullness_of(weight: Fx) -> Fx {
     let cap = t::weight_cap();
     if cap.raw() <= 0 {
         return Fx::ZERO;
     }
-    weight(p).div(cap).clamp(Fx::ZERO, Fx::ONE)
+    weight.div(cap).clamp(Fx::ZERO, Fx::ONE)
+}
+
+/// A straight line from `empty` to `full`, by how full a shield is.
+fn by_fullness(weight: Fx, empty: Fx, full: Fx) -> Fx {
+    empty.add(full.sub(empty).mul(fullness_of(weight)))
 }
 
 /// A blow landed on the guard: store it.
@@ -62,8 +73,14 @@ pub fn load(p: &mut Player, damage: i32, parried: bool) {
 }
 
 /// One frame of the slow leak, so weight is about the current exchange rather
-/// than the whole round. A full shield empties in `weight_drain_frames`
-/// whatever state it is in -- a planted wall runs down like a held one.
+/// than the whole round. A full shield empties in `weight_drain_frames`, in
+/// hand or in flight.
+///
+/// **Not planted.** A wall is sized by the weight it landed with and holds it
+/// until it is recalled: a solid that shrank over ten seconds would be a wall
+/// nobody could rely on, and would slide out from under whoever was standing
+/// on it. The cost of parking weight in a wall is that there is no shield in
+/// hand for anything else -- every Bulwark move needs it.
 ///
 /// **Paused while Slam is out.** The weight is in the swing from the press to
 /// the last active frame, so what the shake is worth -- and how wide it is
@@ -76,7 +93,7 @@ pub fn drain(p: &mut Player) {
     let Some(s) = shield(p) else {
         return;
     };
-    if s.weight().raw() <= 0 {
+    if s.weight().raw() <= 0 || matches!(s, Shield::Planted { .. }) {
         return;
     }
     let per_frame = t::weight_cap().div(Fx::from_int(t::weight_drain_frames().max(1)));
@@ -157,5 +174,47 @@ pub fn spend_on_slam(p: &mut Player, kind: u8) {
         if let Some(s) = shield(p) {
             p.mechanic = Mechanic::Shield(s.with_weight(Fx::ZERO));
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The throw and the wall: M3
+// ---------------------------------------------------------------------------
+
+/// How fast a shield holding `weight` flies, out and back. A loaded one is a
+/// boulder: slower to arrive, and easier to read coming.
+pub fn flight_speed(weight: Fx) -> Fx {
+    t::shield_speed().mul(by_fullness(weight, Fx::ONE, t::throw_speed_full()))
+}
+
+/// What the thrown shield deals: its own damage, plus a share of its weight.
+pub fn throw_damage(weight: Fx) -> i32 {
+    t::shield_damage() + weight.mul(t::throw_weight_damage()).to_int()
+}
+
+/// Does a thrown shield holding `weight` knock down what it hits?
+pub fn knocks_down(weight: Fx) -> bool {
+    weight.raw() > 0 && fullness_of(weight).raw() >= t::knockdown_share().raw()
+}
+
+/// The planted shield as a solid: a stone standing at full height the moment
+/// it lands, sized between `wall_size_empty` and `wall_size_full` by the
+/// weight it landed with.
+///
+/// **One more source for the stones' field, not a second collision path.**
+/// `stones::gather` puts it in its owner's first slot -- a Bulwark has no
+/// stones of his own, so the slots are always free -- and from there it
+/// stops bodies, stops shots and stands under the crosshair exactly as a
+/// stone does, through the same functions. It is rebuilt from the shield
+/// every frame and never written back, so nothing can kick it, carry it or
+/// break it: Cataclysm's `stones::destroy` refuses it. Recalled, it is gone,
+/// because the shield it was built from is no longer planted.
+pub fn wall(at: V3, weight: Fx) -> Structure {
+    Structure {
+        // Out of the floor already: a shield is planted, not grown.
+        age: 1,
+        rise: 1,
+        scale: by_fullness(weight, t::wall_size_empty(), t::wall_size_full()),
+        ..Structure::raised(at)
     }
 }

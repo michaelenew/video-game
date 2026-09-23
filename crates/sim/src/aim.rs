@@ -735,7 +735,7 @@ fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
             a,
             dir,
             stone.at,
-            t::structure_radius(),
+            stone.radius(),
             stone.standing_height(),
         ));
     }
@@ -766,7 +766,7 @@ fn nothing_between(a: V3, b: V3, scene: &Scene) -> bool {
             a,
             dir,
             stone.at,
-            t::structure_radius(),
+            stone.radius(),
             stone.standing_height(),
         )) {
             return false;
@@ -974,7 +974,7 @@ pub fn first_along(
                 from,
                 dir,
                 stone.at,
-                t::structure_radius().add(girth),
+                stone.radius().add(girth),
                 stone.standing_height(),
             ) {
                 keep(Contact::Stone { index, dist });
@@ -1033,7 +1033,7 @@ pub fn settle(at: V3, stones: &Field) -> V3 {
     let mut floor = arena::ground_under(at);
     for stone in stones.iter().flatten() {
         let apart = V3::new(at.x.sub(stone.at.x), Fx::ZERO, at.z.sub(stone.at.z)).flat_len();
-        if apart.raw() < t::structure_radius().raw() && stone.top().raw() > floor.raw() {
+        if apart.raw() < stone.radius().raw() && stone.top().raw() > floor.raw() {
             floor = stone.top();
         }
     }
@@ -1076,7 +1076,7 @@ fn stone_hit(from: V3, dir: V3, stone: &Structure) -> Option<Fx> {
         from,
         dir,
         stone.at,
-        t::structure_radius(),
+        stone.radius(),
         // Still buried, so there is nothing there to hit.
         stone.standing_height(),
     )

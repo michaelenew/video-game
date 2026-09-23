@@ -466,3 +466,216 @@ fn the_leap_catches_the_shield_in_the_air() {
     );
     assert!(weight(&w, 0).raw() > 0, "the shield came back empty");
 }
+
+// ---------------------------------------------------------------------------
+// The throw and the wall: M3
+// ---------------------------------------------------------------------------
+
+/// A Bulwark holding `load` in the open lane down the middle of the arena,
+/// looking north, and a second fighter of `class` parked well off it.
+fn lane(load: Fx, class: Class) -> World {
+    let mut w = World::with_classes([Class::Bulwark, class]);
+    w.players[0].pos = V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(-12));
+    w.players[1].pos = V3::new(Fx::from_int(12), Fx::ZERO, Fx::from_int(12));
+    set_weight(&mut w, 0, load);
+    w
+}
+
+const NORTH: u16 = Input::QUARTER_TURN;
+const SOUTH: u16 = 3 * Input::QUARTER_TURN;
+
+fn step_lane(w: &mut World, frames: u32, a: u16, b: u16) {
+    for _ in 0..frames {
+        w.advance([Input::aimed(a, NORTH), Input::aimed(b, SOUTH)]);
+    }
+}
+
+/// Throw a shield holding `load` at a Bulwark standing on its line. Frames to
+/// arrive, damage, knocked down, and what it planted with.
+fn throw_at_a_body(load: Fx) -> (i32, i32, bool, Fx) {
+    let mut dry = lane(Fx::ZERO, Class::Bulwark);
+    step_lane(&mut dry, 1, Input::MECHANIC, 0);
+    step_lane(&mut dry, 8, 0, 0);
+    let on_the_line = dry.players[0].shield().and_then(|s| s.world_pos()).unwrap();
+    let mut w = lane(load, Class::Bulwark);
+    w.players[1].pos = V3::new(on_the_line.x, Fx::ZERO, on_the_line.z);
+    let before = w.players[1].health;
+    let mut arrived = -1;
+    let mut down = false;
+    for f in 0..90 {
+        step_lane(&mut w, 1, if f == 0 { Input::MECHANIC } else { 0 }, 0);
+        if arrived < 0 && w.players[1].health < before {
+            arrived = f;
+        }
+        down |= matches!(w.players[1].action, Action::Stagger { .. });
+    }
+    let Some(Shield::Planted { weight, .. }) = w.players[0].shield() else {
+        panic!("the thrown shield did not plant");
+    };
+    (arrived, before - w.players[1].health, down, weight)
+}
+
+#[test]
+fn a_loaded_throw_is_slower_hits_harder_knocks_down_and_is_spent() {
+    let (empty_at, empty_damage, empty_down, empty_left) = throw_at_a_body(Fx::ZERO);
+    let (full_at, full_damage, full_down, full_left) = throw_at_a_body(t::weight_cap());
+    assert!(
+        empty_at >= 0 && full_at >= 0,
+        "a throw missed the body on its line"
+    );
+    assert!(
+        full_at > empty_at,
+        "a full throw arrived at {full_at}, an empty one at {empty_at}"
+    );
+    assert!(
+        full_damage > empty_damage,
+        "{full_damage} full against {empty_damage} empty"
+    );
+    assert!(
+        full_down && !empty_down,
+        "knockdowns: full {full_down}, empty {empty_down}"
+    );
+    assert_eq!(empty_left, Fx::ZERO);
+    assert_eq!(
+        full_left,
+        Fx::ZERO,
+        "the throw planted still holding what it delivered"
+    );
+}
+
+/// Plant a shield holding `load` in the lane with nobody near it.
+fn planted(load: Fx, class: Class) -> (World, V3) {
+    let mut w = lane(load, class);
+    step_lane(&mut w, 1, Input::MECHANIC, 0);
+    step_lane(&mut w, 60, 0, 0);
+    let Some(Shield::Planted { pos, .. }) = w.players[0].shield() else {
+        panic!("the shield never planted: {:?}", w.players[0].shield());
+    };
+    (w, pos)
+}
+
+#[test]
+fn a_planted_shield_stands_on_the_floor() {
+    let (_, pos) = planted(Fx::ZERO, Class::Bulwark);
+    assert_eq!(pos.y, Fx::ZERO, "planted at {pos:?}, off the floor");
+}
+
+#[test]
+fn the_wall_grows_with_the_weight_it_landed_with() {
+    let mut last = Fx::ZERO;
+    for quarter in 0..=4 {
+        let load = t::weight_cap().mul(Fx::ratio(quarter, 4));
+        let (w, _) = planted(load, Class::Bulwark);
+        let wall = sim::stones::gather(&w.players)[0].expect("no wall in the field");
+        assert!(
+            wall.radius().raw() > last.raw() || quarter == 0,
+            "a wall from {load:?} is {:?} across, no wider than {last:?}",
+            wall.radius()
+        );
+        last = wall.radius();
+    }
+}
+
+/// Walk the second fighter from four metres north of the shield at it, with
+/// the shield planted or recalled. Did she end up short of where it stood?
+fn walks_short(recall: bool) -> bool {
+    let (mut w, pos) = planted(t::weight_cap(), Class::Elementalist);
+    let radius = sim::stones::gather(&w.players)[0].unwrap().radius();
+    if recall {
+        step_lane(&mut w, 1, Input::MECHANIC, 0);
+        step_lane(&mut w, 1, 0, 0);
+    }
+    let behind = V3::new(pos.x, Fx::ZERO, pos.z.sub(Fx::from_int(3)));
+    w.players[1].pos = V3::new(pos.x, Fx::ZERO, pos.z.add(Fx::from_int(4)));
+    for _ in 0..90 {
+        step_lane(&mut w, 1, 0, Input::W);
+        w.players[0].pos = behind;
+    }
+    w.players[1].pos.z.raw() > pos.z.add(radius).raw()
+}
+
+#[test]
+fn a_planted_shield_stops_a_body_and_a_recalled_one_does_not() {
+    assert!(walks_short(false), "she walked through a planted shield");
+    assert!(!walks_short(true), "a recalled shield still stopped her");
+}
+
+/// Does an Elementalist four metres north of the shield, with her crosshair
+/// on the Bulwark two metres south of it, reach him with a Bolt?
+fn bolt_reaches(recall: bool) -> bool {
+    let (mut w, pos) = planted(t::weight_cap(), Class::Elementalist);
+    if recall {
+        step_lane(&mut w, 1, Input::MECHANIC, 0);
+        step_lane(&mut w, 1, 0, 0);
+    }
+    let behind = V3::new(pos.x, Fx::ZERO, pos.z.sub(Fx::from_int(2)));
+    w.players[1].pos = V3::new(pos.x, Fx::ZERO, pos.z.add(Fx::from_int(4)));
+    w.players[0].pos = behind;
+    // The pitch that puts her crosshair on him with nothing in the way.
+    let mut open = w.clone();
+    set_weight(&mut open, 0, Fx::ZERO);
+    open.players[0].mechanic = Mechanic::Shield(Shield::Held { weight: Fx::ZERO });
+    let lands = |w: &World, pitch: i16| {
+        let mut w = w.clone();
+        let before = w.players[0].health;
+        for f in 0..60 {
+            let bits = if f == 0 { L } else { 0 };
+            w.advance([
+                Input::aimed(0, NORTH),
+                Input::looking_at(bits, SOUTH, pitch),
+            ]);
+            w.players[0].pos = behind;
+        }
+        w.players[0].health < before
+    };
+    let pitch = (-300..300)
+        .step_by(5)
+        .map(|tenth| (tenth * 65536 / 3600) as i16)
+        .find(|p| lands(&open, *p))
+        .expect("no pitch reached him with nothing in the way");
+    lands(&w, pitch)
+}
+
+#[test]
+fn a_planted_shield_stops_a_shot_and_a_recalled_one_does_not() {
+    assert!(!bolt_reaches(false), "a Bolt went through a planted shield");
+    assert!(
+        bolt_reaches(true),
+        "a recalled shield still stopped the Bolt"
+    );
+}
+
+#[test]
+fn cataclysm_cannot_break_a_planted_shield() {
+    let (mut w, _) = planted(t::weight_cap(), Class::Bulwark);
+    assert_eq!(sim::stones::destroy(&mut w.players, 0), None);
+    assert!(
+        matches!(w.players[0].shield(), Some(Shield::Planted { .. })),
+        "destroying the wall took the shield with it"
+    );
+}
+
+#[test]
+fn a_recall_goes_home_through_whoever_is_in_the_way() {
+    let (mut w, pos) = planted(Fx::ZERO, Class::Bulwark);
+    // Standing on the line home.
+    w.players[1].pos = V3::new(pos.x, Fx::ZERO, pos.z.sub(Fx::from_int(4)));
+    let before = w.players[1].health;
+    step_lane(&mut w, 1, Input::MECHANIC, 0);
+    step_lane(&mut w, 90, 0, 0);
+    assert!(w.players[1].health < before, "the recall did not cut them");
+    assert!(
+        w.players[0].shield().is_some_and(|s| s.in_hand()),
+        "the recall stopped at them: {:?}",
+        w.players[0].shield()
+    );
+}
+
+#[test]
+fn a_planted_wall_holds_its_weight_until_recalled() {
+    let (mut w, _) = planted(t::weight_cap(), Class::Bulwark);
+    let landed = weight(&w, 0);
+    step_lane(&mut w, 600, 0, 0);
+    assert_eq!(weight(&w, 0), landed, "the wall shrank while it stood");
+    assert!(landed.raw() > 0, "the fixture's wall landed empty");
+}
