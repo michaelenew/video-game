@@ -7,7 +7,9 @@
 
 use sim::class::{Class, Force, Mechanic};
 use sim::{Fx, World};
-use view::wings::{self, ORDER, OUTLINE, OUTLINE_CENTRE, PER_SIDE, Slot};
+use view::wings::{
+    self, COVERTS, FEATHERS, ORDER, PER_SIDE, PRIMARIES, Slot, WRIST, feather_outline,
+};
 
 fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
     let mut w = World::with_classes([Class::DualMage, Class::Bulwark]);
@@ -160,37 +162,72 @@ fn dark_is_on_her_left_and_light_on_her_right_and_the_vanes_face_the_players() {
 }
 
 #[test]
-fn the_silhouette_is_a_wing_and_fills_from_its_centre() {
-    // A real outline: longer than it is deep, its tip at full length, its
-    // trailing edge cut into feathers -- and star-shaped about the centre the
-    // renderer fans it from, or the fan would fold over itself.
-    let tip = OUTLINE.iter().map(|p| p[0]).fold(0.0f32, f32::max);
+fn the_wing_is_an_arm_with_primaries_fanning_from_the_wrist() {
+    // What tells a bird's wing from an insect's: the leading edge rises from
+    // the shoulder to a wrist well short of the tip, the primaries fan from
+    // that wrist like fingers -- the outermost reaching the full span, each
+    // next one shorter and hung lower, the last hanging down -- and the
+    // secondaries hang from the arm behind them, overlapping.
+    let wrist = FEATHERS[0].base;
     assert!(
-        (tip - 1.0).abs() < 1e-6,
-        "the tip is not at the wing's length"
+        wrist[1] > 0.2 && wrist[0] < 0.5,
+        "the wrist is not up and short of the tip"
     );
-    let depth = OUTLINE.iter().map(|p| p[1]).fold(f32::MIN, f32::max)
-        - OUTLINE.iter().map(|p| p[1]).fold(f32::MAX, f32::min);
+    let primaries = &FEATHERS[..PRIMARIES];
+    let tip = |f: &view::wings::Feather| {
+        [
+            f.base[0] + f.length * f.angle.cos(),
+            f.base[1] + f.length * f.angle.sin(),
+        ]
+    };
     assert!(
-        depth > 0.5 && depth < 1.0,
-        "the wing is {depth:.2} deep for 1.0 long: a paddle, or a blade"
+        primaries.iter().all(|f| f.base == WRIST),
+        "a primary does not root at the wrist"
     );
-    let notches = OUTLINE[5..]
-        .windows(3)
-        .filter(|w| w[1][1] > w[0][1] && w[1][1] > w[2][1])
-        .count();
-    assert!(notches >= 3, "only {notches} feathers on the trailing edge");
-    // Star-shaped: every edge's winding about the centre has the same sign.
-    let (cx, cy) = (OUTLINE_CENTRE[0], OUTLINE_CENTRE[1]);
-    let mut signs = OUTLINE
-        .iter()
-        .zip(OUTLINE.iter().cycle().skip(1))
-        .map(|(a, b)| ((a[0] - cx) * (b[1] - cy) - (a[1] - cy) * (b[0] - cx)).signum());
-    let first = signs.next().unwrap();
+    let reach = primaries.iter().map(|f| tip(f)[0]).fold(0.0f32, f32::max);
     assert!(
-        signs.all(|s| s == first),
-        "the outline is not star-shaped about its centre; a fan from there folds"
+        (reach - 1.0).abs() < 0.05,
+        "the outermost primary reaches {reach:.2} of the span"
     );
+    for pair in primaries.windows(2) {
+        assert!(
+            pair[1].angle < pair[0].angle,
+            "the primaries do not fan downward in order"
+        );
+        assert!(
+            pair[1].length < pair[0].length,
+            "the primaries do not shorten inward"
+        );
+    }
+    assert!(
+        primaries.last().unwrap().angle < -1.5,
+        "the last primary does not hang down"
+    );
+    let secondaries = &FEATHERS[PRIMARIES..];
+    assert!(secondaries.len() >= 4);
+    for f in secondaries {
+        assert!(f.angle < -1.6, "a secondary does not hang down");
+        assert!(
+            f.base[0] < WRIST[0] && f.base[1] <= WRIST[1],
+            "a secondary roots past the wrist"
+        );
+    }
+    // Every part is convex, so the renderer's fan from its middle cannot fold.
+    let convex = |pts: &[[f32; 2]]| {
+        let n = pts.len();
+        let turn = |i: usize| {
+            let (a, b, c) = (pts[i], pts[(i + 1) % n], pts[(i + 2) % n]);
+            (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
+        };
+        (0..n).all(|i| turn(i) >= -1e-6) || (0..n).all(|i| turn(i) <= 1e-6)
+    };
+    assert!(convex(&COVERTS), "the coverts are not convex");
+    for f in FEATHERS.iter() {
+        assert!(
+            convex(&feather_outline(f)),
+            "a feather's outline is not convex"
+        );
+    }
 }
 
 #[test]

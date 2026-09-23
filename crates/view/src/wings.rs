@@ -99,38 +99,103 @@ impl Slot {
 /// How far behind her centre line the roots sit, in metres.
 const ROOT_BACK: f32 = 0.10;
 
-/// The silhouette of one wing, in its own plane at unit length: `u` out along
-/// the wing from the root, `v` across it. A bird's wing spread: a leading edge
-/// that runs nearly straight out to the tip, and the long primaries hanging
-/// from the outer half, shortening toward the root, each cut from the next by
-/// a notch.
-///
-/// Star-shaped about [`OUTLINE_CENTRE`], so a triangle fan from there fills it
-/// without a triangulator: each notch sits at the angular midpoint of the two
-/// feather tips beside it, seen from that centre, and well inside them.
-pub const OUTLINE: [[f32; 2]; 18] = [
-    [0.00, 0.00],
-    [0.28, 0.11],
-    [0.58, 0.19],
-    [0.84, 0.20],
-    [1.00, 0.12],
-    [0.99, -0.30],
-    [0.84, -0.29],
-    [0.90, -0.58],
-    [0.77, -0.46],
-    [0.76, -0.66],
-    [0.64, -0.45],
-    [0.58, -0.60],
-    [0.52, -0.39],
-    [0.40, -0.48],
-    [0.38, -0.32],
-    [0.22, -0.34],
-    [0.28, -0.19],
-    [0.04, -0.16],
+/// One feather, in the wing's own plane at unit span: `u` out along the wing
+/// from the shoulder, `v` across it, up. A rounded slat -- a narrow rectangle
+/// with a half-round tip -- so each part is convex and fans from its own
+/// middle, and the wing is the overlap of many rather than one sheet.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Feather {
+    /// Where its quill roots.
+    pub base: [f32; 2],
+    /// Which way it points, in radians from `+u`. Negative is down.
+    pub angle: f32,
+    /// Quill to tip, as a share of the span.
+    pub length: f32,
+    /// Across the vane.
+    pub width: f32,
+}
+
+const fn feather(base: [f32; 2], degrees: f32, length: f32, width: f32) -> Feather {
+    Feather {
+        base,
+        angle: degrees * (core::f32::consts::PI / 180.0),
+        length,
+        width,
+    }
+}
+
+/// The shoulder, where the arm roots. The origin of the wing's plane.
+pub const SHOULDER: [f32; 2] = [0.0, 0.0];
+
+/// The wrist: where the arm stops rising and the primaries fan out from.
+/// The highest point of the leading edge, well short of the tip -- that bend
+/// is the whole difference between a bird's wing and a butterfly's.
+pub const WRIST: [f32; 2] = [0.42, 0.30];
+
+/// The feathers, primaries first. **The primaries fan from the wrist** like
+/// fingers, the outermost nearly along the arm's line and reaching the full
+/// span, each next one shorter and hung lower, the last hanging straight
+/// down. **The secondaries hang from the arm** between wrist and shoulder,
+/// overlapping, shorter toward the body. Seen from behind that is an eagle's
+/// wing spread; a fan of blades from one point is an insect's.
+pub const FEATHERS: [Feather; 12] = [
+    feather(WRIST, -8.0, 0.62, 0.085),
+    feather(WRIST, -22.0, 0.60, 0.085),
+    feather(WRIST, -36.0, 0.57, 0.085),
+    feather(WRIST, -50.0, 0.53, 0.085),
+    feather(WRIST, -64.0, 0.48, 0.085),
+    feather(WRIST, -78.0, 0.43, 0.085),
+    feather(WRIST, -92.0, 0.38, 0.085),
+    feather([0.36, 0.26], -100.0, 0.36, 0.10),
+    feather([0.28, 0.20], -102.0, 0.34, 0.10),
+    feather([0.20, 0.14], -104.0, 0.31, 0.10),
+    feather([0.12, 0.09], -106.0, 0.27, 0.10),
+    feather([0.05, 0.04], -108.0, 0.22, 0.10),
 ];
 
-/// The point the outline is filled from. See [`OUTLINE`].
-pub const OUTLINE_CENTRE: [f32; 2] = [0.60, -0.04];
+/// How many of [`FEATHERS`] are primaries, fanning from the wrist.
+pub const PRIMARIES: usize = 7;
+
+/// The coverts: the body of the arm from shoulder to wrist, covering the
+/// quills. Convex, so it fans from any interior point.
+pub const COVERTS: [[f32; 2]; 5] = [
+    [0.00, 0.03],
+    [0.42, 0.36],
+    [0.58, 0.32],
+    [0.48, 0.12],
+    [0.14, -0.08],
+];
+
+/// How many points a feather's half-round tip is drawn with.
+pub const TIP_POINTS: usize = 5;
+
+/// A feather's outline, counter-clockwise: the two long edges and the rounded
+/// tip. Convex, so a fan from any interior point fills it.
+pub fn feather_outline(f: &Feather) -> [[f32; 2]; 4 + TIP_POINTS] {
+    let (sin, cos) = f.angle.sin_cos();
+    let d = [cos, sin];
+    let n = [-sin, cos];
+    let half = f.width * 0.5;
+    let shaft = (f.length - half).max(0.0);
+    let at = |along: f32, across: f32| {
+        [
+            f.base[0] + d[0] * along + n[0] * across,
+            f.base[1] + d[1] * along + n[1] * across,
+        ]
+    };
+    let mut out = [[0.0; 2]; 4 + TIP_POINTS];
+    out[0] = at(0.0, -half);
+    out[1] = at(shaft, -half);
+    for (i, slot) in out[2..2 + TIP_POINTS].iter_mut().enumerate() {
+        // From the right edge round to the left, through the tip.
+        let a = -core::f32::consts::FRAC_PI_2
+            + core::f32::consts::PI * (i as f32 + 1.0) / (TIP_POINTS as f32 + 1.0);
+        *slot = at(shaft + half * a.cos(), half * a.sin());
+    }
+    out[2 + TIP_POINTS] = at(shaft, half);
+    out[3 + TIP_POINTS] = at(0.0, half);
+    out
+}
 
 /// One wing's place in the arena.
 #[derive(Clone, Copy, PartialEq, Debug)]

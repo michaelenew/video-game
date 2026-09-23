@@ -210,9 +210,14 @@ the biggest, the middle one — the seraph's proportions, with the great wing wh
 blades are. They arrive biggest first: the first third of a bar puts the great wing out, the
 second the lower one, the third the small one above. So a mage at a third already has a wing
 you can see across the arena, and the last one is a flourish rather than the thing you are
-waiting for. Each is a spread bird's wing — a leading edge running out to the tip, the long
-primaries hanging from the outer half — standing in the vertical plane through its own length
-so that from the front and from behind, where the two players are, it is seen face-on. The
+waiting for. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
+wrist well short of the tip, seven primaries fanning from that wrist like fingers — the
+outermost reaching the full span, each next one shorter and hung lower, the last hanging down
+— and secondaries hanging from the arm behind them, every feather a rounded slat and the wing
+the translucent overlap of them. That bend at the wrist is the whole difference between an
+eagle's wing and a butterfly's; the first cut was one sheet with a sawtoothed edge, and it read
+as an insect's. Each wing stands in the vertical plane through its own length so that from the
+front and from behind, where the two players are, it is seen face-on. The
 great wing is 2.3 m, the lower 1.7, the small one 1.1; they are translucent, so they never hide
 the fight behind them. `view::wings` decides the count, each wing's root, axes and length and
 the silhouette, and `view/tests/wings.rs` holds the count, the order and the sizes to the bar

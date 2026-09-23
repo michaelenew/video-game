@@ -543,33 +543,39 @@ struct WingSpanMesh {
 /// How long a wing takes to unfold once its third of the bar is reached.
 const WING_UNFOLD_SECONDS: f32 = 0.22;
 
-/// The wing silhouette `view::wings::OUTLINE` describes, as a two-sided mesh
-/// in the wing's own plane at unit length: `x` out along the wing, `y` across
-/// it. Scaled to each wing's own length when it is placed. Fanned from the
-/// outline's centre, which the view promises it is star-shaped about.
+/// The wing `view::wings` describes, as one two-sided mesh in the wing's own
+/// plane at unit span: `x` out along the wing, `y` across it. The coverts and
+/// every feather are convex, so each is fanned from its own middle and the
+/// wing is their overlap -- translucent, so the overlaps read as depth.
+/// Scaled to each wing's own length when it is placed.
 fn wing_mesh() -> Mesh {
     use bevy::asset::RenderAssetUsages;
     use bevy::render::mesh::{Indices, PrimitiveTopology};
-    let n = view::wings::OUTLINE.len() as u32;
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n as usize + 1);
-    positions.push([
-        view::wings::OUTLINE_CENTRE[0],
-        view::wings::OUTLINE_CENTRE[1],
-        0.0,
-    ]);
-    for p in view::wings::OUTLINE {
-        positions.push([p[0], p[1], 0.0]);
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    let mut fan = |outline: &[[f32; 2]]| {
+        let n = outline.len();
+        let centre = outline.iter().fold([0.0f32, 0.0f32], |c, p| {
+            [c[0] + p[0] / n as f32, c[1] + p[1] / n as f32]
+        });
+        let first = positions.len() as u32;
+        positions.push([centre[0], centre[1], 0.0]);
+        for p in outline {
+            positions.push([p[0], p[1], 0.0]);
+        }
+        for i in 0..n as u32 {
+            let a = first + 1 + i;
+            let b = first + 1 + (i + 1) % n as u32;
+            // Both faces, so it reads from the front and from behind: the two
+            // places the two players are.
+            indices.extend_from_slice(&[first, a, b, first, b, a]);
+        }
+    };
+    fan(&view::wings::COVERTS);
+    for f in view::wings::FEATHERS.iter() {
+        fan(&view::wings::feather_outline(f));
     }
     let uvs: Vec<[f32; 2]> = positions.iter().map(|p| [p[0], 0.5 - p[1]]).collect();
-    // Both faces, so it reads from the front and from behind: the two places
-    // the two players are.
-    let mut indices = Vec::with_capacity(n as usize * 6);
-    for i in 0..n {
-        let a = 1 + i;
-        let b = 1 + (i + 1) % n;
-        indices.extend_from_slice(&[0, a, b]);
-        indices.extend_from_slice(&[0, b, a]);
-    }
     let normals: Vec<[f32; 3]> = positions.iter().map(|_| [0.0, 0.0, 1.0]).collect();
     Mesh::new(
         PrimitiveTopology::TriangleList,
