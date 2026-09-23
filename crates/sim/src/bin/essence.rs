@@ -23,12 +23,13 @@ fn main() {
     println!("The Blood mage's essence, measured.\n");
     println!(
         "grey fades {}/s  |  scythe x{} reach, x{} damage at full grey  |  pools drain {}/s, \
-         radius {} per root of volume, cap {}",
+         a full figure at {} essence, never under x{} of a body, cap {}",
         t::grey_fade(),
         tenths(t::grey_reach()),
         tenths(t::grey_damage()),
         t::pool_drain(),
-        hundredths(t::pool_radius()),
+        t::pool_full(),
+        hundredths(t::pool_least()),
         t::pool_cap()
     );
     println!();
@@ -256,11 +257,12 @@ fn drink_table() {
     let reap = sim::moves::get(Class::BloodMage, b::REAP);
     let volume = reap.damage;
     println!(
-        "Drinks: each move landed on the dummy standing in a pool of {volume} (a Reap's), with 500 grey open"
+        "Drinks: each move landed on the dummy standing in a pool of {volume} (a Reap's), with 500 grey open. \
+         A drink takes what is left and the pool is gone"
     );
     println!(
         "  {:<14}{:>7}{:>9}{:>9}{:>12}",
-        "move", "cost", "share %", "drank", "pool after"
+        "move", "cost", "share %", "drank", "spilled"
     );
     for (slot, button) in kit() {
         let m = sim::moves::get(Class::BloodMage, slot);

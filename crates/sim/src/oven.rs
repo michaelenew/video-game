@@ -465,12 +465,23 @@ scalars! {
     GreyDamage,       "Blood mage", "Scythe damage at full grey (x)",         Fixed, fx(1,1),  fx(4,1);
     SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
     SweepTipDamage,   "Blood mage", "Sweep, tip damage (x)",                  Fixed, fx(1,1),  fx(4,1);
-    PoolRadius,       "Blood mage", "Pool radius per root of volume",         Fixed, fx(1,100), fx(2,1);
     PoolDrain,        "Blood mage", "Pool drains (volume per second)",        Int,   0,        600;
-    PoolHeight,       "Blood mage", "Pool height",                            Fixed, fx(1,20), fx(2,1);
     PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        8;
     PoolLock,         "Blood mage", "Crosshair lock on a pool",               Fixed, 0,        fx(6,1);
     SpikeErupt,       "Blood mage", "Black spike, eruption lasts",            Frames, 1,       120;
+    // A pool is a shadowy figure the size of the body it came out of, and it
+    // shrinks as it drains: full-sized at this much volume, never smaller
+    // than this share of a body. Replaced a radius-per-root-of-volume and a
+    // fixed slab height, which spread a Reap's pool across two and a half
+    // metres of floor.
+    PoolFull,         "Blood mage", "Pool, full-sized at volume",             Int,   1,        1000;
+    PoolLeast,        "Blood mage", "Pool, smallest share of a body (x)",     Fixed, fx(1,20), fx(1,1);
+    // What a spike cast on a pool becomes: an eruption with its own size and
+    // its own weight, so that the placement the whole kit exists to arrange
+    // is a different event from a spike on bare floor.
+    EruptRadius,      "Blood mage", "Black spike, eruption radius per root of volume", Fixed, fx(1,100), fx(2,1);
+    EruptHeight,      "Blood mage", "Black spike, eruption height",           Fixed, fx(1,2),  fx(10,1);
+    EruptDamage,      "Blood mage", "Black spike, eruption damage (x)",       Fixed, fx(1,1),  fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

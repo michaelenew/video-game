@@ -154,38 +154,43 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
 }
 
 #[test]
-fn five_hits_on_one_spot_make_one_pool() {
+fn hits_that_land_on_one_spot_make_one_pool() {
+    // Four arms of a Grasp converge on one point and each spills there. One
+    // figure, not four -- and the Grasp is the move to ask, because it drinks
+    // nothing: any move that drinks spends the pool it lands over before it
+    // spills, so a sweep repeated on one spot leaves one fresh pool each
+    // time rather than a growing one, by design.
     let mut w = mage();
-    in_reach(&mut w);
-    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
+    // At the reach a tap converges on, so no hold is needed.
+    w.players[1].pos = w.players[0]
+        .pos
+        .add(V3::new(grasp.channel_from, Fx::ZERO, Fx::ZERO));
+    let pitch = pitch_at(&w, w.players[1].pos);
     let full = w.players[1].health;
-    for _ in 0..5 {
-        run(&mut w, 2, Input::LEFT, 0);
-        run(
-            &mut w,
-            sweep.whiff_cost() as u32 + sweep.repeat_idle() as u32,
-            0,
-            0,
-        );
-        // The dummy is knocked back a little each time; walk it home.
-        in_reach(&mut w);
-        w.players[1].vel = V3::ZERO;
-    }
+    looking(&mut w, 2, Input::SPECIAL, pitch, 0);
+    looking(
+        &mut w,
+        grasp.whiff_cost() as u32 + t::grasp_flight() as u32,
+        0,
+        pitch,
+        0,
+    );
     let dealt = full - w.players[1].health;
     assert!(
-        dealt > sweep.damage * 3,
-        "fixture: only {dealt} landed over five sweeps"
+        dealt > grasp.damage * 2,
+        "fixture: only {dealt} landed of four arms"
     );
     let made = pools(&w);
     assert_eq!(
         made.len(),
         1,
-        "five hits on one spot made {} pools",
+        "four arms on one spot made {} pools",
         made.len()
     );
     assert!(
-        made[0].pool_volume() > sweep.damage * 2,
-        "the pool did not gather the hits: {} after {dealt} dealt",
+        made[0].pool_volume() > grasp.damage * 2,
+        "the pool did not gather the arms: {} after {dealt} dealt",
         made[0].pool_volume()
     );
 }
@@ -266,7 +271,7 @@ fn nobody_else_spills_anybody() {
 }
 
 #[test]
-fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_loses_what_she_got() {
+fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_is_gone() {
     let mut w = mage();
     in_reach(&mut w);
     wounded(&mut w, 300);
@@ -279,20 +284,23 @@ fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_loses_what_she_got() 
     let got = w.players[0].health - (before - reap.cost);
     let expect = reap.drinks(200);
     assert!(
-        got >= expect - 3 && got <= expect,
+        got >= expect - 4 && got <= expect,
         "the Reap drank {got} of a pool of 200 at {}%",
         reap.drink
     );
-    // The pool lost what she got -- and then the Reap it was drunk through
-    // spilled its own damage back into it, since the hit landed on the same
-    // floor: the drink comes first, the spill second, and both show.
+    // One and done: the pool she drank is gone. What is on the floor now is
+    // only what the Reap spilled after it, which is a fresh, smaller figure.
     let dealt = t::max_health() - w.players[1].health;
-    let pool = w.effects[0].expect("the pool is still there");
-    let want = 200 - got + dealt;
+    let left = pools(&w);
+    assert_eq!(
+        left.len(),
+        1,
+        "the pool she drank is still there beside the one she spilled"
+    );
     assert!(
-        pool.pool_volume() <= want && pool.pool_volume() >= want - 4,
-        "the pool went from 200 to {} for a drink of {got} and a spill of {dealt}",
-        pool.pool_volume()
+        left[0].pool_volume() <= dealt && left[0].pool_volume() > dealt - 4,
+        "the drunk pool survived: {} on the floor after a spill of {dealt}",
+        left[0].pool_volume()
     );
     // Red plus grey is still the bar, less what the fade took meanwhile.
     let bar = w.players[0].health + w.players[0].grey;
@@ -303,7 +311,7 @@ fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_loses_what_she_got() 
 }
 
 #[test]
-fn a_drink_is_capped_by_grey_and_the_pool_keeps_the_rest() {
+fn a_drink_is_capped_by_grey_and_the_pool_is_spent_regardless() {
     let mut w = mage();
     in_reach(&mut w);
     let at = w.players[1].pos;
@@ -323,13 +331,15 @@ fn a_drink_is_capped_by_grey_and_the_pool_keeps_the_rest() {
         w.players[0].grey, 0,
         "there was grey left with a pool to drink"
     );
+    // And the pool is spent all the same: what she could not fill is lost
+    // with it. Only the Reap's own spill is left on the floor.
     let dealt = t::max_health() - w.players[1].health;
-    let pool = w.effects[0].expect("the pool is still there");
+    let left = pools(&w);
+    assert_eq!(left.len(), 1);
     assert!(
-        pool.pool_volume() >= 200 + dealt - reap.cost - 4,
-        "the pool was charged {} for a drink worth at most {}",
-        200 + dealt - pool.pool_volume(),
-        reap.cost
+        left[0].pool_volume() <= dealt,
+        "the pool kept what she could not drink: {} on the floor",
+        left[0].pool_volume()
     );
 }
 
@@ -376,6 +386,10 @@ fn the_blade_drinks_from_pools_it_crosses_on_the_way_home() {
     assert!(
         got <= m.drinks(100),
         "the blade drank {got} from one pool, which is more than its share"
+    );
+    assert!(
+        pools(&w).is_empty(),
+        "the pool the blade drank is still there"
     );
 }
 

@@ -614,10 +614,15 @@ impl Effect {
     pub fn spike_volume(&self) -> Pillar {
         Pillar {
             // The disc it came out of: the move's own radius on bare floor,
-            // the pool's when it erupted from one. See `state::World::advance`.
+            // the eruption's when it came up out of a pool. See
+            // `state::World::advance`.
             radius: self.reach,
             bottom: Fx::ZERO,
-            top: t::spike_height(),
+            top: if self.erupted() {
+                t::erupt_height()
+            } else {
+                t::spike_height()
+            },
         }
     }
 
@@ -966,29 +971,43 @@ impl Effect {
         self.banked
     }
 
-    /// How wide a pool of this volume is: `tuning::pool_radius` per root of
-    /// the volume, because a puddle spreads by area.
-    pub fn pool_radius(&self) -> Fx {
-        t::pool_radius().mul(Fx::from_int(self.banked.max(0)).sqrt())
+    /// How much of a body this pool is, nought to one: a full figure at
+    /// `tuning::pool_full` of essence, never less than `tuning::pool_least`.
+    /// It shrinks as it drains, and the renderer draws it more solid the more
+    /// is left -- which is the whole of how a pool is read.
+    pub fn pool_share(&self) -> Fx {
+        Fx::ratio(self.banked.clamp(0, t::pool_full()), t::pool_full()).max(t::pool_least())
     }
 
-    /// The slab a pool is tested as: its disc, from the floor up to
-    /// `tuning::pool_height`. Drawn at exactly this.
+    /// How wide the figure is: a body's radius, by its share.
+    pub fn pool_radius(&self) -> Fx {
+        t::body_radius().mul(self.pool_share())
+    }
+
+    /// How tall it stands: a body's height, by its share.
+    pub fn pool_height(&self) -> Fx {
+        t::body_height().mul(self.pool_share())
+    }
+
+    /// The column a pool is tested as: a shadowy figure standing on the floor
+    /// where the blood was spilled, a body's size at most and shrinking as it
+    /// drains. Drawn at exactly this.
     pub fn pool_slab(&self) -> Pillar {
         Pillar {
             radius: self.pool_radius(),
             bottom: Fx::ZERO,
-            top: t::pool_height(),
+            top: self.pool_height(),
         }
     }
 
-    /// Is a point on the floor -- a pair of feet, the centre of a hit -- inside
-    /// this pool's disc?
+    /// Is a body standing at `at` -- a pair of feet, the centre of a hit --
+    /// touching this figure? A body's radius of slack, so *in* a pool means
+    /// against it, not inside a column narrower than a foot.
     pub fn covers(&self, at: V3) -> bool {
         let flat = V3::new(at.x.sub(self.pos.x), Fx::ZERO, at.z.sub(self.pos.z)).flat_len();
-        flat.raw() <= self.pool_radius().raw()
-            && at.y.raw() >= self.pos.y.sub(t::pool_height()).raw()
-            && at.y.raw() <= self.pos.y.add(t::pool_height()).raw()
+        flat.raw() <= self.pool_radius().add(t::body_radius()).raw()
+            && at.y.raw() >= self.pos.y.sub(self.pool_height()).raw()
+            && at.y.raw() <= self.pos.y.add(self.pool_height()).raw()
     }
 
     /// How much this pool loses this frame: `tuning::pool_drain` a second,

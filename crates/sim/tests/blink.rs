@@ -212,13 +212,18 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     }
     let at = where_.expect("the spike never came up");
 
-    // Now a big pool there, the dummy standing at its edge, and grey to fill.
+    // Now a big pool there, the dummy standing where the eruption reaches
+    // but the spike's own disc does not, and grey to fill.
     let mut w = mage();
     w.players[0].health = t::max_health() - 500;
     w.players[0].grey = 500;
     let pool = Effect::pool(0, Class::BloodMage, b::SWEEP, at, 300);
-    let radius = pool.pool_radius();
     w.effects[0] = Some(pool);
+    let radius = t::erupt_radius().mul(Fx::from_int(300).sqrt());
+    assert!(
+        radius.raw() > spike.radius.add(t::body_radius()).raw(),
+        "fixture: the eruption is no wider than the bare spike"
+    );
     w.players[1].pos = V3::new(at.x, Fx::ZERO, at.z.add(radius.sub(t::body_radius())));
     let full = w.players[1].health;
     let before = w.players[0].health;
@@ -233,9 +238,13 @@ fn a_spike_on_a_pool_erupts_at_the_pools_radius_and_drinks_all_of_it() {
     assert!(erupted.erupted(), "the spike on a pool did not erupt");
     assert!(
         (erupted.spike_volume().radius.sub(radius)).abs().raw() < Fx::ratio(1, 10).raw(),
-        "erupted at {} m against a pool of {} m",
+        "erupted at {} m against {} m for a pool of 300",
         erupted.spike_volume().radius.to_f32_for_render(),
         radius.to_f32_for_render()
+    );
+    assert!(
+        erupted.spike_volume().top.raw() > t::spike_height().raw(),
+        "the eruption stands no taller than a bare spike"
     );
     assert!(
         w.players[1].health < full,

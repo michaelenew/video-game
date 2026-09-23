@@ -4451,3 +4451,34 @@ who trades, and its questions — do the pools vanish before you can use them, a
 feel like counterplay or like the class not working; do you out-heal a trader, by how much;
 do you bank grey for the reach or heal as soon as you can — are the ones this entry cannot
 answer.
+
+### 2026-09-23 — Blood mage: the pool is a figure, a drink is one and done, the scythe stands up
+**Changed** Three things from the first look at it, all presentation-and-rule pairs, since
+the rule is that what is drawn is what is tested. A pool is a shadowy column the size of the
+body it came out of — full at 110 essence, never under a third of a body, shrinking as it
+drains and drawn more solid the more is left — instead of a disc 0.24 m per root of essence
+across the floor. A drink **spends the pool**: the move's share of what is left comes back,
+the rest is lost with it, and the pool is gone. The scythe is drawn as a haft and a flat
+blade, the tip exactly at the hit volume's end while she swings and standing upright beside
+her at rest; its base reach went from 2.8 m to 2.4 m. And a spike cast on a pool erupts at
+0.3 m per root of the pool's essence, 3.4 m tall, at ×1.5 damage, where before it was the
+pool's own radius at the spike's own damage — which on a small pool was *smaller* than the
+bare spike and looked the same.
+
+**Why** The blood spatters were far too big and spread over the ground; a pool could be hit
+over and over for health, which is a heal with no decision in it; the scythe read as a
+five-metre pole straight out along the facing; and there was no visible or numerical
+difference between a spike on bare floor and one on a pool, which was the coolest idea in
+the kit.
+
+**What one-and-done changes underneath:** a sweep repeated on one spot no longer builds a
+pool — each sweep drinks the last one's figure and leaves its own. Only the moves that do
+not drink (the Grasp's four arms) pile essence on one spot, and the test that said five
+hits make one pool now asks the Grasp. The shares stay meaningful the other way round: a
+sweep through a Reap's pool takes a third and wastes the rest, which is a reason to save a
+big pool for the Reap.
+
+**Not done:** the figure starting as a shadow of the target's own model and coalescing. It
+is a column; a fading copy of the target's skeleton is presentation and is the next step.
+
+**Verdict** open. Unplayed since the change.

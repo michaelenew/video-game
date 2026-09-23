@@ -1212,7 +1212,12 @@ impl World {
                 if leaves == EffectKind::BlackSpike {
                     match self.pool_covering(i as u8, born.pos) {
                         Some(slot) => {
-                            born.reach = self.effects[slot].map_or(m.radius, |e| e.pool_radius());
+                            // Sized by the pool's essence, before it is drunk:
+                            // the eruption is the whole pool coming up at once.
+                            let volume = self.effects[slot].map_or(0, |e| e.pool_volume());
+                            born.reach = t::erupt_radius()
+                                .mul(Fx::from_int(volume.max(0)).sqrt())
+                                .max(m.radius);
                             born.banked = 1;
                             self.drink_from(slot, i, &m);
                             self.effects[slot] = None;
@@ -5221,7 +5226,8 @@ impl World {
                             continue;
                         }
                         effect.take_hit(0, i);
-                        self.cut(i, effect, effect.pos, m.damage);
+                        let blow = Fx::from_int(m.damage).mul(t::erupt_damage()).to_int();
+                        self.cut(i, effect, effect.pos, blow);
                         self.players[i].slow(t::slow_frames(), t::spike_slow());
                     }
                     self.gore_the_creature(effect, 0, effect.pos, volume.radius);
@@ -5775,7 +5781,8 @@ fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene)
             continue;
         }
         let wide = e.pool_radius().add(t::body_radius());
-        if !aim::pointing_at_disc(who, input, e.pos, wide, t::pool_lock(), scene)
+        let tall = e.pool_height().add(t::pool_lock());
+        if !aim::pointing_at_disc(who, input, e.pos, wide, tall, scene)
             || !aim::clear_between(p.pos, e.pos, scene)
         {
             continue;
@@ -5857,10 +5864,15 @@ impl World {
             e.is_some_and(|e| {
                 e.is_a_pool()
                     && e.owner == owner
+                    // Within a body of each other: a figure spilled where
+                    // one already stands joins it rather than crowding it.
                     && V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z))
                         .flat_len()
                         .raw()
-                        <= e.pool_radius().add(born.pool_radius()).raw()
+                        <= e.pool_radius()
+                            .add(born.pool_radius())
+                            .add(t::body_radius())
+                            .raw()
             })
         });
         if let Some(i) = overlapping {
@@ -5930,7 +5942,7 @@ impl World {
             let standing_in = feet.is_some_and(|f| e.covers(f));
             let flat = |v: V3| V3::new(v.x, e.pos.y, v.z);
             let passes_over = crate::math::segment_gap(flat(from), flat(to), e.pos, e.pos).raw()
-                <= e.pool_radius().raw();
+                <= e.pool_radius().add(t::body_radius()).raw();
             if (standing_in || passes_over) && best.is_none_or(|(_, v)| e.banked > v) {
                 best = Some((slot, e.banked));
             }
@@ -5941,15 +5953,21 @@ impl World {
         }
     }
 
-    /// Drink `m`'s share of the pool in `slot`. Grey is the ceiling, and the
-    /// pool is charged only for what actually came back.
+    /// Drink the pool in `slot`: `m`'s share of what is left in it comes back
+    /// as red, grey is the ceiling, and **the pool is gone**. One and done: a
+    /// pool is a heal you take once, worth what it has left, and what she
+    /// could not fill is lost with it -- a pool she could stand in and hit
+    /// forever would be a heal with no decision in it.
     fn drink_from(&mut self, slot: usize, owner: usize, m: &moves::Move) -> i32 {
-        let Some(pool) = self.effects[slot].as_mut() else {
+        let Some(pool) = self.effects[slot] else {
             return 0;
         };
+        if !pool.is_a_pool() {
+            return 0;
+        }
         let take = m.drinks(pool.banked);
         let got = self.players[owner].drink(take);
-        pool.banked -= got;
+        self.effects[slot] = None;
         got
     }
 }

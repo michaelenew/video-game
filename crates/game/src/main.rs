@@ -525,7 +525,16 @@ struct MarkMesh(usize);
 /// while she is not -- the one condition under which a reach is allowed to
 /// grow with a bar is that the blade is drawn at the length it hits at.
 #[derive(Component)]
-struct ScytheMesh(usize);
+struct ScytheMesh {
+    owner: usize,
+    /// The blade, set on the head of the haft; otherwise the haft itself.
+    blade: bool,
+}
+
+/// How many steps of solidity a pool is drawn in: one material per step,
+/// because a material is shared by everything wearing it and the solidity is
+/// per pool. Six is enough to watch one fade and few enough to make once.
+const ESSENCE_STEPS: usize = 6;
 
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
@@ -534,6 +543,9 @@ struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
     shade: Handle<StandardMaterial>,
+    /// A pool of essence, from faint to nearly solid: the more essence is
+    /// left in it, the more solid the figure.
+    essence: [Handle<StandardMaterial>; ESSENCE_STEPS],
     /// The Dual mage's two forces. Opposites on purpose -- one burns white and
     /// the other drinks the light -- because the whole class is which of the
     /// two you are holding.
@@ -737,6 +749,16 @@ fn setup(
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
+        essence: std::array::from_fn(|step| {
+            let solid = 0.18 + 0.72 * step as f32 / (ESSENCE_STEPS - 1) as f32;
+            materials.add(StandardMaterial {
+                base_color: Color::srgba(0.30, 0.04, 0.06, solid),
+                emissive: LinearRgba::rgb(0.25 * solid, 0.02, 0.04),
+                perceptual_roughness: 0.9,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            })
+        }),
         // Hot white with a violet edge: a detonation and the ground it leaves.
         // Bright enough to read as *the* thing on screen, which is what a
         // finisher at full depth is supposed to be.
@@ -890,13 +912,15 @@ fn setup(
     // Shade-skinned rather than blood: it is iron, and the blood is what it
     // leaves on the floor.
     for owner in 0..MAX_PLAYERS {
-        commands.spawn((
-            Mesh3d(unit.clone()),
-            MeshMaterial3d(look.shade.clone()),
-            Transform::default(),
-            Visibility::Hidden,
-            ScytheMesh(owner),
-        ));
+        for blade in [false, true] {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.shade.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                ScytheMesh { owner, blade },
+            ));
+        }
     }
     commands.insert_resource(look);
 }
@@ -1263,12 +1287,18 @@ fn place_scythes(
     mut meshes: Query<(&ScytheMesh, &mut Transform, &mut Visibility)>,
 ) {
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let grip = hands.0[tag.0].0;
-        let Some(blade) = view::scythe::blade(&sim.cur.players[tag.0], grip.into()) else {
+        let grip = hands.0[tag.owner].0;
+        let Some(scythe) = view::scythe::scythe(&sim.cur.players[tag.owner], grip.into()) else {
             *vis = Visibility::Hidden;
             continue;
         };
-        let (from, to) = (Vec3::from(blade.from), Vec3::from(blade.to));
+        // Two pieces of one weapon: the haft from the grip to the neck, and
+        // the blade from the neck to the tip.
+        let (from, to) = if tag.blade {
+            (Vec3::from(scythe.neck), Vec3::from(scythe.tip))
+        } else {
+            (Vec3::from(scythe.grip), Vec3::from(scythe.neck))
+        };
         let along = to - from;
         let length = along.length();
         if length < 0.01 {
@@ -1277,20 +1307,16 @@ fn place_scythes(
         }
         *vis = Visibility::Inherited;
         tf.translation = from + along * 0.5;
-        // The unit cylinder stands along Y; turn it on to the blade.
+        // The unit cylinder stands along Y; turn it on to the piece.
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
-        // Drawn at the volume's own thickness when it is out, and thinner at
-        // rest: a haft is not as fat as the arc the blade sweeps.
-        let swinging = sim.cur.players[tag.0]
-            .action
-            .attack_kind()
-            .is_some_and(sim::moves::blood::scythe);
-        let width = if swinging {
-            blade.width
+        // The haft is a pole. The blade is flat: thin one way and, across
+        // the other, as wide as the volume it sweeps, so what is drawn is the
+        // plane of the cut and not a sausage.
+        tf.scale = if tag.blade {
+            Vec3::new(0.05, length, scythe.width * 2.0)
         } else {
-            blade.width * 0.3
+            Vec3::new(0.07, length, 0.07)
         };
-        tf.scale = Vec3::new(width, length, width);
     }
 }
 
@@ -1377,6 +1403,8 @@ enum Skin {
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
+    /// A pool of essence, at a step of solidity from faint to nearly solid.
+    Essence(u8),
     /// The Dual mage's two forces, and the only pair of skins in the game that
     /// exist to be told apart from each other rather than from the floor.
     ///
@@ -1402,6 +1430,7 @@ impl EffectLook {
             Skin::Fire => self.fire.clone(),
             Skin::Blood => self.blood.clone(),
             Skin::Shade => self.shade.clone(),
+            Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
         }
@@ -1530,14 +1559,17 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // Judgement's field: a wide, shallow disc of light on the floor. Drawn
         // at exactly the radius that burns, because walking to the edge of it
         // is the decision it offers.
-        // A pool: the slab it is tested as, on the floor, at the disc the hit
-        // test reads. Its width is its volume, so the picture on the floor is
+        // A pool: a shadowy figure the size the hit test reads, standing where
+        // the blood was spilled, shrinking as it drains and drawn more solid
+        // the more essence is left in it -- so the figure on the floor is
         // the heal it is worth.
         EffectKind::Pool if part == 0 => {
             let slab = effect.pool_slab();
+            let step = (effect.pool_share().to_f32_for_render() * (ESSENCE_STEPS - 1) as f32)
+                .round() as u8;
             Some(standing(
                 Shape::Column,
-                Skin::Blood,
+                Skin::Essence(step),
                 at,
                 slab.radius.to_f32_for_render(),
                 slab.bottom.to_f32_for_render(),
@@ -2440,7 +2472,9 @@ mod tests {
         let slab = effect.pool_slab();
         let drawn = effect_piece(&effect, 0).expect("the pool is drawn");
         assert_eq!(drawn.shape, Shape::Column);
-        assert_eq!(drawn.skin, Skin::Blood);
+        let Skin::Essence(step) = drawn.skin else {
+            panic!("a pool is not drawn as essence");
+        };
         assert!(
             (drawn.scale.x * 0.5 - slab.radius.to_f32_for_render()).abs() < 0.001,
             "drawn {} wide, tested at {}",
@@ -2448,12 +2482,22 @@ mod tests {
             slab.radius.to_f32_for_render()
         );
         assert!((drawn.scale.y - slab.top.to_f32_for_render()).abs() < 0.001);
-        assert!(effect_piece(&effect, 1).is_none(), "a pool is one disc");
-        // And a bigger pool is a wider disc.
-        let mut more = effect;
-        more.banked = 400;
-        let bigger = effect_piece(&more, 0).expect("drawn");
-        assert!(bigger.scale.x > drawn.scale.x);
+        assert!(effect_piece(&effect, 1).is_none(), "a pool is one figure");
+        // A pool never stands taller or wider than a body, and a fuller one
+        // is bigger and more solid than an emptier one.
+        assert!(drawn.scale.y <= sim::tuning::body_height().to_f32_for_render() + 0.001);
+        assert!(drawn.scale.x * 0.5 <= sim::tuning::body_radius().to_f32_for_render() + 0.001);
+        let mut less = effect;
+        less.banked = 20;
+        let smaller = effect_piece(&less, 0).expect("drawn");
+        assert!(smaller.scale.x < drawn.scale.x && smaller.scale.y < drawn.scale.y);
+        let Skin::Essence(faint) = smaller.skin else {
+            panic!("a pool is not drawn as essence");
+        };
+        assert!(
+            faint < step,
+            "an emptier pool is drawn as solid as a fuller one"
+        );
     }
 
     /// The same, for a class other than the Blood mage.

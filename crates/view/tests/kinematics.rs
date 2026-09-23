@@ -891,10 +891,14 @@ fn mage_with_grey(grey: i32) -> sim::state::Player {
 fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
     use sim::moves::blood;
     let grip = [0.3, 1.0, 0.2];
-    let mut lengths = Vec::new();
+    let mut reaches = Vec::new();
     for grey in [0, 300, 600] {
         let mut p = mage_with_grey(grey);
-        let resting = view::scythe::blade(&p, grip).expect("she carries a scythe");
+        let resting = view::scythe::scythe(&p, grip).expect("she carries a scythe");
+        assert!(
+            resting.tip[1] > resting.grip[1],
+            "at rest the scythe is not held upright"
+        );
 
         // The volume, on the first active frame of each of the two swings.
         for kind in [blood::SWEEP, blood::REAP] {
@@ -904,35 +908,46 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
                 left: m.active,
             };
             let hb = sim::state::hitbox(&p).expect("a swing has a volume");
-            let swung = view::scythe::blade(&p, grip).expect("the blade is out");
+            let swung = view::scythe::scythe(&p, grip).expect("the blade is out");
             let hits = hb.to.sub(hb.from).len().to_f32_for_render();
+            let tip = [
+                hb.to.x.to_f32_for_render(),
+                hb.to.y.to_f32_for_render(),
+                hb.to.z.to_f32_for_render(),
+            ];
+            let off = view::math::length(view::math::sub(swung.tip, tip));
             assert!(
-                (swung.length() - hits).abs() < 0.001,
+                off < 0.001,
+                "{} at {grey} grey: the drawn tip is {off:.3} m from where the volume ends",
+                m.name
+            );
+            assert!(
+                (swung.reach() - hits).abs() < 0.001,
                 "{} at {grey} grey: the blade is drawn {:.2} m and hits at {:.2} m",
                 m.name,
-                swung.length(),
+                swung.reach(),
                 hits
             );
             assert!(
-                (resting.length() - hits).abs() < 0.001,
-                "{} at {grey} grey: the blade she carries is {:.2} m and the one she \
+                (resting.reach() - hits).abs() < 0.001,
+                "{} at {grey} grey: the scythe she carries is {:.2} m and the one she \
                  swings is {:.2} m",
                 m.name,
-                resting.length(),
+                resting.reach(),
                 hits
             );
         }
-        lengths.push(resting.length());
+        reaches.push(resting.reach());
     }
     // And it visibly grows: half again as long at full grey is the design's
     // first number, so six hundred of a thousand-point bar is well over a
     // quarter longer.
-    assert!(lengths[1] > lengths[0] && lengths[2] > lengths[1]);
+    assert!(reaches[1] > reaches[0] && reaches[2] > reaches[1]);
     assert!(
-        lengths[2] > lengths[0] * 1.25,
+        reaches[2] > reaches[0] * 1.25,
         "the blade grew from {:.2} m to only {:.2} m over most of a bar of grey",
-        lengths[0],
-        lengths[2]
+        reaches[0],
+        reaches[2]
     );
 }
 
@@ -944,7 +959,7 @@ fn nobody_else_carries_a_scythe() {
         }
         let p = sim::state::Player::new(class);
         assert!(
-            view::scythe::blade(&p, [0.0; 3]).is_none(),
+            view::scythe::scythe(&p, [0.0; 3]).is_none(),
             "{} is drawn holding the Blood mage's weapon",
             class.name()
         );

@@ -1361,14 +1361,20 @@ pub fn sweep_tip_damage() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SweepTipDamage))
 }
 
-/// How wide a pool is, per square root of its volume.
+/// The volume at which a pool is a full body's size.
 ///
-/// A puddle spreads by area, so its radius goes with the root of what was
-/// spilled: a Reap's pool is wider than a sweep's, but not four times wider.
-/// The first value puts a sweep's smear at about a metre and a Reap's floor at
-/// a little over two.
-pub fn pool_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::PoolRadius))
+/// A pool is a shadowy figure of the fighter it came out of, not a puddle: as
+/// wide and as tall as a body at this much volume, and shrinking toward
+/// `pool_least` as it drains. A Reap's worth, so one committed hit leaves a
+/// whole figure and a sweep leaves a small one.
+pub fn pool_full() -> i32 {
+    oven::scalar(Scalar::PoolFull).max(1)
+}
+
+/// The smallest a pool is drawn and tested at, as a share of a body. A pool
+/// that shrank to nothing before it drained would be a heal you cannot see.
+pub fn pool_least() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PoolLeast))
 }
 
 /// How fast a pool drains, in volume per second.
@@ -1378,12 +1384,6 @@ pub fn pool_radius() -> Fx {
 /// apart, and by the time she has forced anybody onto one it has gone.
 pub fn pool_drain() -> i32 {
     oven::scalar(Scalar::PoolDrain)
-}
-
-/// How tall the slab a pool is tested as stands. Low: it is on the floor, and
-/// standing in it is the point. Drawn at exactly this height.
-pub fn pool_height() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::PoolHeight))
 }
 
 /// How many pools one Blood mage can have on the floor. A further one merges
@@ -1407,6 +1407,26 @@ pub fn pool_lock() -> Fx {
 /// rest is the thing you can see from across the arena.
 pub fn spike_erupt() -> u16 {
     oven::scalar(Scalar::SpikeErupt) as u16
+}
+
+/// How wide a spike cast on a pool erupts, per square root of the pool's
+/// volume: the bigger the pool, the bigger the eruption. Sized by the volume
+/// rather than by the pool's own radius, which is a body's width at most --
+/// the eruption is the pool spent all at once, and a Reap's worth of blood
+/// coming up out of the floor covers more than one figure's footprint.
+pub fn erupt_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EruptRadius))
+}
+
+/// How tall the eruption stands, against `spike_height` for a bare spike.
+pub fn erupt_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EruptHeight))
+}
+
+/// What the eruption multiplies the spike's damage by. The other half of what
+/// makes a spike on a pool the payoff placement rather than the same spike.
+pub fn erupt_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EruptDamage))
 }
 
 /// How tall the black spike stands out of the ground.

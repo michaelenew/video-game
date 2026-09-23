@@ -51,11 +51,21 @@ grey. Both players read a weapon, not a number.
 
 | Grey | Reach | Damage |
 | --- | --- | --- |
-| 0 | 2.8 m | ×1.00 |
-| 250 | 3.1 m | ×1.07 |
-| 500 | 3.5 m | ×1.15 |
-| 750 | 3.8 m | ×1.22 |
-| 999 | 4.2 m | ×1.30 |
+| 0 | 2.4 m | ×1.00 |
+| 250 | 2.7 m | ×1.07 |
+| 500 | 3.0 m | ×1.15 |
+| 750 | 3.3 m | ×1.22 |
+| 999 | 3.6 m | ×1.30 |
+
+**How it is drawn.** A war scythe is a haft with a blade set at the head, and it is drawn
+as two pieces: the haft from her grip to the neck, and the blade — flat, as wide as the arc it
+sweeps — from the neck to the tip. The tip is what the hit test reaches with, and it sits
+exactly at the far end of the hit volume while she swings; the neck bows a little off that
+line so the blade reads as a blade. At rest the weapon stands upright beside her, leaning
+forward, with the tip the live reach from her grip. `view::scythe` is the geometry.
+
+> **Was**, for a day: one bar from the hand straight out along the facing at the full reach,
+> which read as a five-metre pole pointed at whoever she was looking at.
 
 So grey is risk and power in one segment. A cast at full health opens a wound and lengthens
 the blade; being hit does the same; drinking gives the power back and shortens it. The edge
@@ -67,25 +77,25 @@ with more than half of it left. `grey.rs` pins that relationship, not the number
 
 ### Essence pools
 
-**Every hit she lands spills the target.** A pool of the other fighter's blood on the floor
-under their feet, with a volume equal to the damage dealt — under the fighter on a direct hit,
-under the struck part's floor projection on the creature. A scythe poke leaves a smear and a
-Reap leaves a floor.
+**Every hit she lands spills the target.** What is left on the floor is not a puddle but a
+**figure**: a shadowy column the size of the body it came out of, standing where their feet
+were — under the fighter on a direct hit, under the struck part's floor projection on the
+creature. Its **essence** is the damage dealt, and the essence decays at a constant rate
+(`Pool drains`, 10 a second) until it is gone.
 
-- **Radius** is `Pool radius per root of volume` (0.24) times the square root of the volume,
-  since a puddle spreads by area: a sweep's 22 is a disc 1.1 m across, a Reap's 110 is 2.5 m,
-  a Reap on a toppled Ridgeback (153) is nearly 3 m.
-- **Pools drain** at `Pool drains` (10 a second), volume rather than seconds, so a big pool
-  outlives a small one: a sweep's lasts about a second, a Reap's eleven. That is the
-  counterplay knob. A mobile opponent leaves small pools far apart, and by the time she has
-  forced anybody onto one it has gone.
-- **They merge.** A hit onto a pool of hers adds to it rather than stacking a second disc on
-  the same floor. Five sweeps on one spot make one pool.
+- **Size follows essence.** A full body's width and height at `Pool, full-sized at volume`
+  (110, a Reap's worth), shrinking as it drains and never below `Pool, smallest share of a
+  body` (×0.35). It never stands taller or wider than the mage, and it does not spread over
+  the ground.
+- **Solidity follows essence too.** The renderer draws the figure faint when little is left
+  and nearly solid when it is full, in six steps, so the figure on the floor *is* the heal it
+  is worth.
+- **They merge.** A hit onto a spot within a body of a pool of hers adds to it rather than
+  standing a second figure beside it.
 - **Cap of four** per Blood mage (`Pools at once`); a fifth merges into the newest.
 - **They are effects**, in the fixed effect array — which grew from eight slots to twelve to
-  make room for them beside a blade, a Grasp and a spike. A slab on the floor, `Pool height`
-  tall, drawn at exactly the disc it is tested at, in the arena and in the overlay. Nothing
-  collides with them.
+  make room for them beside a blade, a Grasp and a spike. Drawn at exactly the column they are
+  tested at, in the arena and in the overlay. Nothing collides with them.
 - **Her own blood never pools.** A cost is paid into the ability, not onto the floor. A hit
   on somebody in the air spills nowhere — the simpler of the two answers in the proposal's
   open question, kept until somebody plays it.
@@ -94,36 +104,47 @@ Reap leaves a floor.
 
 Measured, one cast landed on the dummy on bare floor:
 
-| Move | Cost | Dealt | Pool | Radius | Lives |
+| Move | Cost | Dealt | Essence | Radius | Lives |
 | --- | --- | --- | --- | --- | --- |
-| Reaping sweep | 3 | 22 | 22 | 1.13 m | 64 f |
-| Reap | 55 | 111 | 111 | 2.53 m | 586 f |
-| Bloodletter | 8 | 40 | 34 | 1.40 m | 174 f |
-| Grasp | 60 | 192 | 192 | 3.33 m | 1102 f |
-| Black spike | 80 | 100 | 100 | 2.40 m | 524 f |
+| Reaping sweep | 3 | 22 | 22 | 0.18 m | 64 f |
+| Reap | 55 | 111 | 111 | 0.50 m | 586 f |
+| Bloodletter | 8 | 40 | 34 | 0.18 m | drunk by its own return |
+| Grasp | 60 | 192 | 192 | 0.50 m | 1102 f |
+| Black spike | 80 | 100 | 100 | 0.45 m | 524 f |
+
+> **Was**, for a day: a disc on the floor with a radius of 0.24 m per root of the essence,
+> which put a Reap's pool across two and a half metres of arena and a Grasp's across three.
+> Too big, and it spread; the figure replaced it on 2026-09-23.
 
 ### Double duty — the drink
 
-An ability that **lands over a pool** does its ordinary job and *also* drinks: a share of
-the pool's volume (`Drinks of a pool (%)`, a column in the move table) comes back as red,
-converted out of grey and never past it, and the pool shrinks by what she actually got. A
-pool counts if the victim is standing in it or the hit volume passes over its disc; the
-fullest one is drunk. **The drink comes before the spill**, so a hit on bare floor returns
-nothing and the smear it leaves is for the next one.
+An ability that **lands over a pool** does its ordinary job and *also* drinks — and **a
+drink is one and done.** The pool is spent the moment a move is put through it, whatever
+came back: what she gets is the move's share (`Drinks of a pool (%)`, a column in the move
+table) of the essence *remaining* in the pool, converted out of grey and never past it, and
+anything the share or the grey did not take is lost with the pool. A pool counts if the
+victim is standing against it or the hit volume passes over it; the fullest one is drunk.
+**The drink comes before the spill**, so a hit on bare floor returns nothing, and a hit that
+drinks leaves only its own fresh, smaller figure behind.
 
-| Move | Drinks | From a Reap's pool (110), with grey to fill |
+| Move | Share of what is left | From a Reap's pool (110), with grey to fill |
 | --- | --- | --- |
 | Reaping sweep | 35% | 38 |
-| Reap | 60% | 64 |
-| Bloodletter | 30%, on the way home, once per pool | 36 |
+| Reap | 100% | 107 |
+| Bloodletter | 30%, on the way home | 42 |
 | Grasp | — | — |
-| Black spike | the whole pool, when cast on one | 105 |
+| Black spike | 100%, and the pool erupts | 105 |
 
-Grey is the ceiling: at full health a Reap over a pool gets back exactly its own cost and the
-pool is charged only that. `crates/sim/tests/essence.rs` pins the two halves of the feel
-relationship — landed over a pool of its own making, each of the sweep, the Reap and the
-Bloodletter returns more than it cost; landed on bare floor it returns nothing on the frame
-it lands.
+The shares are what make the sweep a bad thing to put through a big pool: it takes a third
+and wastes the rest, where a Reap takes all of it. Grey is the ceiling: at full health a Reap
+over a pool gets back exactly its own cost and the pool is gone all the same.
+`crates/sim/tests/essence.rs` pins the two halves of the feel relationship — landed over a
+pool of its own making, each of the sweep, the Reap and the Bloodletter returns more than it
+cost; landed on bare floor it returns nothing on the frame it lands — and that a drunk pool
+is gone.
+
+> **Was**, for a day: a drink took its share and the pool kept the rest, so a pool could be
+> hit over and over for health. One and done since 2026-09-23.
 
 ### Naturally deals increased damage to disabled enemies
 
@@ -155,8 +176,9 @@ Rend's row and was retuned rather than replaced — and the sweep was appended a
 ## Abilities
 
 ### Reaping sweep — auto, `L`
-**Startup** 8 · **Active** 5 · **Recovery** 14 · **Damage** 22 · **Reach** 2.8 m, growing
-with grey · **Cost** 3 · **Drinks** 35% · −10 on block, 0 on hit · **Repeat lockout** 100%
+**Startup** 8 · **Active** 5 · **Recovery** 14 · **Damage** 22 · **Reach** 2.4 m, growing
+with grey · **Cost** 3 · **Drinks** 35% of what is left · −10 on block, 0 on hit ·
+**Repeat lockout** 100%
 
 A flat swing across the front, 0.45 of a turn from the body's left to its right — the Dual
 mage's wing reasoning with the shape turned into a weapon: a blade on a long haft covers width,
@@ -173,8 +195,9 @@ what tells it from the Dual mage's level Sweep at a glance; the hit volume itsel
 `sweep height`, because `Plane::Flat` is the one that owns the width of the front.
 
 ### Reap — committed, `R`
-**Startup** 20 · **Active** 4 · **Recovery** 26 · **Damage** 110 · **Reach** 2.8 m, growing
-with grey · **Cost** 55 · **Drinks** 60% · −17 on block, +1 on hit · unblockable · overhead
+**Startup** 20 · **Active** 4 · **Recovery** 26 · **Damage** 110 · **Reach** 2.4 m, growing
+with grey · **Cost** 55 · **Drinks** all of what is left · −17 on block, +1 on hit ·
+unblockable · overhead
 
 The scythe raised over the right shoulder and brought over and down: an upright swing of 0.4
 of a turn. Unblockable — the class's guard breaker, on the special's neighbour — and an
@@ -228,10 +251,17 @@ is the telegraph. What erupts depends on the floor, decided the frame it comes u
   (`Black spike slow`), and it spills what it hits — how she seeds a pool at range where no
   scythe reaches. The launch and the spill are ordered so the pool lands under where the
   victim *stood*, not under where the launch has since put them.
-- **A pool of hers:** the whole pool erupts at the pool's radius, launching and slowing
-  everything standing in it at the move's damage, and **drinks the entire pool** in one go.
-  The pool is spent whether or not she had grey to fill. The bigger the pool, the bigger the
-  eruption and the bigger the heal.
+- **A pool of hers:** the whole pool erupts, launching and slowing everything standing in it
+  at the move's damage times `Black spike, eruption damage` (×1.5), and **drinks the entire
+  pool** in one go. The eruption is sized by the pool's essence — `Black spike, eruption
+  radius per root of volume` (0.3) times the root of it, so a Reap's worth of blood comes up
+  across three metres against the bare spike's 1.6 — and stands `Black spike, eruption
+  height` (3.4 m) tall against the bare spike's 2.2. The pool is spent whether or not she
+  had grey to fill. The bigger the pool, the bigger the eruption, the harder it hits and the
+  bigger the heal.
+
+  > **Was**, for a day: the eruption was the pool's own radius and the spike's own damage,
+  > which on a sweep's pool was *smaller* than the bare spike and looked identical to it.
 
 **The drain field is gone**, and with it its three knobs (radius, lifetime, drain). Nothing
 ticks. The spike stands for `Black spike, eruption lasts` (20 frames) as the thing you can see
@@ -316,6 +346,10 @@ Carried from the proposal, with what the build found beside each.
 - **Pools on slopes and platforms.** A pool is spilled where the victim stands; a victim in
   the air spills nowhere, and a creature's blood falls to the arena floor whatever it stood
   on.
+- **The figure.** The proposal's idea is that the essence starts as a shadow of the
+  target's own model and coalesces into the figure. It is a column today, body-sized and
+  shrinking; a copy of the target's skeleton fading into the floor is the next step and is
+  presentation only.
 - **Costs.** 3 / 55 / 8 / 60 / 80 against a thousand-point bar, raised from the built kit's
   because they are recoverable. The two relationships that bound them — one cast is never a
   third of the match, and a cast over its own pool returns more than it cost — both hold with

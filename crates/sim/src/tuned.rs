@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 280] = [
+pub const SCALARS: [i32; 283] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -282,12 +282,15 @@ pub const SCALARS: [i32; 280] = [
            85197, // blood_mage.scythe_damage_at_full_grey_(x) = 1.3
            42598, // blood_mage.sweep,_tip_as_a_share_of_the_reach = 0.65
            98304, // blood_mage.sweep,_tip_damage_(x) = 1.5
-           15729, // blood_mage.pool_radius_per_root_of_volume = 0.24
               10, // blood_mage.pool_drains_(volume_per_second) = 10
-           19661, // blood_mage.pool_height = 0.3
                4, // blood_mage.pools_at_once = 4
            98304, // blood_mage.crosshair_lock_on_a_pool = 1.5
               20, // blood_mage.black_spike,_eruption_lasts = 20
+             110, // blood_mage.pool,_full-sized_at_volume = 110
+           22938, // blood_mage.pool,_smallest_share_of_a_body_(x) = 0.35
+           19661, // blood_mage.black_spike,_eruption_radius_per_root_of_volume = 0.3
+          222822, // blood_mage.black_spike,_eruption_height = 3.4
+           98304, // blood_mage.black_spike,_eruption_damage_(x) = 1.5
 ];
 
 #[rustfmt::skip]
@@ -1310,7 +1313,7 @@ pub const MOVES: [i32; 1276] = [
                4, // move.blood_mage.reap.active = 4
               26, // move.blood_mage.reap.recovery = 26
              110, // move.blood_mage.reap.damage = 110
-          183501, // move.blood_mage.reap.reach = 2.8
+          157286, // move.blood_mage.reap.reach = 2.4
            32768, // move.blood_mage.reap.radius = 0.5
               30, // move.blood_mage.reap.hitstun = 30
               12, // move.blood_mage.reap.blockstun = 12
@@ -1334,7 +1337,7 @@ pub const MOVES: [i32; 1276] = [
              100, // move.blood_mage.reap.repeat_lockout_(%) = 100
                0, // move.blood_mage.reap.reactivate_no_sooner_than = 0
                0, // move.blood_mage.reap.steps_forward_(m) = 0
-              60, // move.blood_mage.reap.drinks_of_a_pool_(%) = 60
+             100, // move.blood_mage.reap.drinks_of_a_pool_(%) = 100
               16, // move.blood_mage.grasp.startup = 16
                4, // move.blood_mage.grasp.active = 4
               20, // move.blood_mage.grasp.recovery = 20
@@ -1397,7 +1400,7 @@ pub const MOVES: [i32; 1276] = [
                5, // move.blood_mage.reaping_sweep.active = 5
               14, // move.blood_mage.reaping_sweep.recovery = 14
               22, // move.blood_mage.reaping_sweep.damage = 22
-          183501, // move.blood_mage.reaping_sweep.reach = 2.8
+          157286, // move.blood_mage.reaping_sweep.reach = 2.4
            29491, // move.blood_mage.reaping_sweep.radius = 0.45
               18, // move.blood_mage.reaping_sweep.hitstun = 18
                8, // move.blood_mage.reaping_sweep.blockstun = 8
