@@ -12,13 +12,13 @@
 //! arena by both players; three and three is a mage about to ascend, and
 //! ascension is all six.
 //!
-//! **Three sizes, and the biggest comes first.** From the top of her back
-//! down: the smallest, the biggest, the middle one -- the seraph's proportions,
-//! with the great wing in the middle where the shoulder blades are. They
-//! arrive biggest first: the blink puts the great wing out, the second jump
-//! the lower one, the top the small one above. So a mage at half already has a
-//! wing you can see across the arena, and the last one is a flourish rather
-//! than the thing you are waiting for.
+//! **Three sizes, and the biggest comes first.** The great wing rises from the
+//! shoulder blade, the middle-sized one hangs below it, and the smallest
+//! floats between the two, bound to nothing, its quills sunk into their
+//! feathers. They arrive biggest first: the blink puts the great wing out, the
+//! second jump the lower one, the top the small one between. So a mage at half
+//! already has a wing you can see across the arena, and the last one is a
+//! flourish rather than the thing you are waiting for.
 //!
 //! Counting rather than stretching because a wing half a metre long is not a
 //! wing, it is a line, and the thing the opponent has to read from across the
@@ -42,22 +42,23 @@ pub const PER_SIDE: usize = 3;
 /// Where on her back a wing sits.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Slot {
-    /// The smallest, reaching up. The last to appear.
-    Top,
-    /// The great wing, reaching out and a little up. The first to appear.
+    /// The smallest, floating between the other two. The last to appear.
+    Small,
+    /// The great wing, reaching up and out from the shoulder blade. The first
+    /// to appear.
     Middle,
     /// The middle size, reaching down. The second to appear.
     Bottom,
 }
 
 /// The three slots in the order they **appear** as the bar rises.
-pub const ORDER: [Slot; PER_SIDE] = [Slot::Middle, Slot::Bottom, Slot::Top];
+pub const ORDER: [Slot; PER_SIDE] = [Slot::Middle, Slot::Bottom, Slot::Small];
 
 impl Slot {
     /// Root to tip, in metres. Fixed: a wing does not grow.
     pub const fn length(self) -> f32 {
         match self {
-            Slot::Top => 1.1,
+            Slot::Small => 1.1,
             Slot::Middle => 2.3,
             Slot::Bottom => 1.7,
         }
@@ -65,24 +66,26 @@ impl Slot {
 
     /// Where it roots, as a share of her height.
     ///
-    /// The small one **floats**, above her head and clear of the great wing,
-    /// bound to nothing: it is the highest presence of that being, not a limb,
-    /// and a binding that is not physical is the point of it. The other two
+    /// The small one **floats**, bound to nothing: it is the highest presence
+    /// of that being, not a limb, and a binding that is not physical is the
+    /// point of it. It sits between the great wing and the lower one, out off
+    /// the shoulder, its quills sunk into their feathers -- the gap between
+    /// those two was the emptiest part of the spread, and a floating wing is
+    /// the one that can fill it without a shoulder to hang from. The other two
     /// root on the back where the shoulder blades are.
     const fn root_height(self) -> f32 {
         match self {
-            Slot::Top => 1.30,
+            Slot::Small => 0.73,
             Slot::Middle => 0.79,
             Slot::Bottom => 0.66,
         }
     }
 
     /// How far out to its own side it roots, in metres. The floating one
-    /// starts off the shoulder rather than on the spine, so it hovers over
-    /// the great wing instead of over her head.
+    /// starts well off the shoulder, inside the other two wings' feathers.
     const fn root_out(self) -> f32 {
         match self {
-            Slot::Top => 0.45,
+            Slot::Small => 0.55,
             Slot::Middle => 0.0,
             Slot::Bottom => 0.0,
         }
@@ -91,14 +94,14 @@ impl Slot {
     /// Pitch of the wing's own line above the horizontal, in radians. The arm
     /// rises another thirty-five degrees inside the wing before the wrist, so
     /// these are lower than the wings look: the great one's wrist ends up
-    /// about sixty degrees up, the floating one's about fifty, the lower one's
-    /// level with the shoulder with its primaries hanging. The first cut had
-    /// the small one rooted on the back at seventy, which put its wrist past
-    /// vertical and its feathers over her head onto the other side; floating
-    /// off the shoulder it can lie lower and still sit clear of the great one.
+    /// about sixty degrees up, the lower one's level with the shoulder with
+    /// its primaries hanging, and the floating one lies between them, its
+    /// wrist a little above level. The first cut had the small one rooted on
+    /// the back at seventy, which put its wrist past vertical and its feathers
+    /// over her head onto the other side.
     const fn pitch(self) -> f32 {
         match self {
-            Slot::Top => 0.35,
+            Slot::Small => 0.05,
             Slot::Middle => 0.45,
             Slot::Bottom => -0.40,
         }
@@ -110,7 +113,7 @@ impl Slot {
     /// foreshortened away.
     const fn sweep(self) -> f32 {
         match self {
-            Slot::Top => 0.15,
+            Slot::Small => 0.15,
             Slot::Middle => 0.10,
             Slot::Bottom => 0.08,
         }

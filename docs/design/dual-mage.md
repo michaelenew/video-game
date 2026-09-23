@@ -210,15 +210,14 @@ other from a shared middle, but the wings are the display, and the thing the tie
 the thing everyone is already looking at. That answers the old open question about colour on
 the body by making the body the meter.
 
-**Three sizes, and the biggest comes first.** From the top of her back down: the smallest,
-the biggest, the middle one — the seraph's proportions, with the great wing where the shoulder
-blades are. They arrive biggest first: the blink puts the great wing out, the second jump the
-lower one, the top the small one above. So a mage at half already has a wing you can see
-across the arena, and the last one is a flourish rather than the thing you are waiting for.
-The great wing reaches up and out from the shoulder blade, the lower one out with its
-primaries hanging, and the small one **floats** above the great wing, off her shoulder and
-above her head, bound to nothing — it is the highest presence of that being, not a limb, and a
-binding that is not physical is the point of it. None crosses her centre line. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
+**Three sizes, and the biggest comes first.** The great wing rises up and out from the
+shoulder blade, the middle-sized one hangs below it with its primaries down, and the smallest
+**floats** level between the two, out off the shoulder with its quills sunk into their feathers,
+bound to nothing — it is the highest presence of that being, not a limb, and a binding that is
+not physical is the point of it. They arrive biggest first: the blink puts the great wing out,
+the second jump the lower one, the top the small one between. So a mage at half already has a
+wing you can see across the arena, and the last one fills the spread rather than being the
+thing you are waiting for. None crosses her centre line. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
 wrist well short of the tip, seven primaries fanning from that wrist like fingers — the
 outermost reaching the full span, each next one shorter and hung lower, the last hanging down
 — and secondaries hanging from the arm behind them, every feather a rounded slat and the wing

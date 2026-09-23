@@ -238,7 +238,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "On your back",
-                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar -- the great wing at half, the lower one at three quarters, the small one floating above the great wing at full -- and never grows. Everybody in the arena can count them. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
+                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar -- the great wing at half, the lower one at three quarters, the small one floating between the other two at full -- and never grows. Everybody in the arena can count them. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
             ),
             e(
                 "The tip",

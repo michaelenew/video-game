@@ -86,8 +86,8 @@ fn the_biggest_comes_first_then_the_lower_then_the_small_one_on_top() {
     // arrive biggest first, so a third of a bar already reads across the
     // arena.
     assert!(Slot::Middle.length() > Slot::Bottom.length());
-    assert!(Slot::Bottom.length() > Slot::Top.length());
-    assert_eq!(ORDER, [Slot::Middle, Slot::Bottom, Slot::Top]);
+    assert!(Slot::Bottom.length() > Slot::Small.length());
+    assert_eq!(ORDER, [Slot::Middle, Slot::Bottom, Slot::Small]);
     let (blink, jump) = (sim::tuning::tier_blink(), sim::tuning::tier_jump());
     assert_eq!(
         shown(&mage_with(blink, 0, 0), Force::Dark),
@@ -104,27 +104,23 @@ fn the_biggest_comes_first_then_the_lower_then_the_small_one_on_top() {
             .unwrap()
             .root[1]
     };
-    assert!(height(Slot::Top) > height(Slot::Middle));
-    assert!(height(Slot::Middle) > height(Slot::Bottom));
-    // The small one floats: above her head, off to its own side, bound to
-    // nothing. The other two root on the back.
-    let head = sim::tuning::body_height().to_f32_for_render();
-    let top = all
+    // The small one floats between the other two: rooted between their
+    // roots in height, well out to its own side, bound to nothing. The other
+    // two root on the back.
+    assert!(height(Slot::Middle) > height(Slot::Small));
+    assert!(height(Slot::Small) > height(Slot::Bottom));
+    let small = all
         .iter()
-        .find(|w| w.force == Force::Dark && w.slot == Slot::Top)
+        .find(|w| w.force == Force::Dark && w.slot == Slot::Small)
         .unwrap();
-    assert!(
-        top.root[1] > head,
-        "the floating wing is not above her head"
-    );
     let across = sim::aim::across(low_facing(), wings::hand_of(Force::Dark));
-    let out = top.root[0] * across.x.to_f32_for_render()
-        + top.root[2] * across.z.to_f32_for_render()
+    let out = small.root[0] * across.x.to_f32_for_render()
+        + small.root[2] * across.z.to_f32_for_render()
         - (all[0].root[0] * across.x.to_f32_for_render()
             + all[0].root[2] * across.z.to_f32_for_render());
     assert!(
-        out > 0.2,
-        "the floating wing sits over her spine rather than over the great wing"
+        out > 0.3,
+        "the floating wing roots on her spine rather than out among the others"
     );
 }
 
@@ -197,7 +193,7 @@ fn dark_is_on_her_left_and_light_on_her_right_and_the_vanes_face_the_players() {
             n[1]
         );
         match wing.slot {
-            Slot::Top => assert!(wing.along[1] > 0.3, "the top wing does not reach up"),
+            Slot::Small => assert!(wing.along[1].abs() < 0.3, "the floating wing is not level"),
             Slot::Bottom => assert!(wing.along[1] < -0.2, "the bottom wing does not reach down"),
             Slot::Middle => assert!(wing.along[1] > 0.3 && wing.along[1] < 0.6),
         }

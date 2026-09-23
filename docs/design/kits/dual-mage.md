@@ -45,14 +45,15 @@ drift never delivers it. See [../dual-mage.md](../dual-mage.md).
 | Below half | The dodge is a dodge; space in the air does nothing | Nothing on that side |
 | Half | The dodge blinks: she is where it would have ended, on its first frame, and stands through the tail | The great wing of that side is there |
 | Three quarters | Space in the air jumps once more, and she falls slower | The lower wing, under the great one |
-| Both full | Every press of space is a wing beat; no dodge | All six: the small one floating above the great wing completes each side |
+| Both full | Every press of space is a wing beat; no dodge | All six: the small one floating between the great wing and the lower one fills each side |
 
 The wings are the two bars, three a side, dark on the left and light on the right, and each
 one is there or is not — a bar is read as a count, not a length, and **a wing is a tier**: a
 side's wings arrive at the same three marks the HUD ticks on that side of the track, so the
 thing on her back and the thing her body can do change on the same frame. (The tiers read the
-lower bar, so what she *holds* is the side with fewer wings.) Top to bottom they are the
-smallest, the biggest and the middle one, and they arrive biggest first. Lopsided wings are a
+lower bar, so what she *holds* is the side with fewer wings.) The great wing rises from the
+shoulder blade, the middle-sized one hangs below it, and the smallest floats between them; they
+arrive biggest first. Lopsided wings are a
 mage about to burn; three and three is a mage about to fly. `cargo run -p sim --bin frametable`
 prints the tiers under the class, and `cargo run -p sim --bin goad` runs the climb.
 
