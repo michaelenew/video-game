@@ -70,7 +70,7 @@ poke is a design choice in a closed arena, not a gap.
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Guillotine lotus · `E` Executioner | Rebuilt |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
-| [Blood mage](kits/blood-mage.md) | Health | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked |
+| [Blood mage](kits/blood-mage.md) | Health — **grey health and essence pools, proposed** | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked; [v1 kit proposed](blood-mage.md) |
 | [Dual mage](kits/dual-mage.md) | Meter position | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep | **Core rebuilt** |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` Bash · `shift`+`L` Slam · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New |
@@ -90,6 +90,7 @@ few enough to balance and to read in third person.
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
+| [blood-mage.md](blood-mage.md) | v1 kit: grey health, essence pools, the scythe, the blink | **Proposed** |
 | [dual-mage.md](dual-mage.md) | The two-pole meter, the depth curve and ascension | Decided |
 | [champion.md](champion.md) | Forms, the three-hit chain, and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed |
@@ -125,7 +126,7 @@ Nothing here blocks a prototype.
 | Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all. **Since 2026-09-15**, five more, all of them in [feel-log.md](feel-log.md): whether the sword's step is too much free pressure, whether the spear's sixteen-frame second hit reads as a two-part move from across the arena, whether "jump into the finisher" occurs to anybody without being taught, whether +14 on hit is too much, and whether the spinning finisher's knockback fights the chain it ends |
 | Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
 | Elementalist | Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
-| Blood mage | Health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
+| Blood mage | ⚠️ **A v1 rebuild is proposed** — [blood-mage.md](blood-mage.md). The open questions there replace these two: health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
 
 ## 5 · Parked — not slated for initial implementation
 
