@@ -419,12 +419,35 @@ type StateQuery<'w, 's> = Query<
     'w,
     's,
     (&'static StateText, &'static mut Text),
-    (Without<RoundText>, Without<Banner>, Without<ClassLabel>),
+    (
+        Without<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
 >;
-type RoundQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<ClassLabel>)>;
-type StepQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<StepText>, Without<Banner>, Without<StateText>)>;
+type RoundQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
+>;
+type StepQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<StepText>,
+        Without<Banner>,
+        Without<StateText>,
+        Without<RoundText>,
+    ),
+>;
 
 /// What a stepped frame is doing, in the terms the thing being stepped through
 /// is made of.
@@ -483,8 +506,17 @@ pub fn step_lines(w: &sim::World) -> String {
     out
 }
 
-type BannerQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<ClassLabel>)>;
+type BannerQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<Banner>,
+        Without<RoundText>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
+>;
 // A Bevy system's parameter list *is* its dependency declaration: every entry
 // is something the scheduler has to know this system touches. Splitting one to
 // get under a count would split the system, which is the opposite of the point.
@@ -876,6 +908,21 @@ pub fn toggle_class_buttons(keys: Res<ButtonInput<KeyCode>>, mut show: ResMut<Sh
 mod tests {
     use super::*;
     use sim::class::{ALL_CLASSES, Class};
+
+    #[test]
+    fn the_hud_systems_touch_nothing_twice() {
+        // Every text query in `update` writes `Text`, and Bevy refuses a system
+        // whose queries it cannot prove disjoint -- at run time, on the first
+        // frame, which is the first anybody hears of it. It shipped that way
+        // once: the step readout's query forgot the round counter, and the
+        // game panicked on launch with every test green. Initialising the
+        // system is where Bevy checks, so this does exactly that.
+        let mut world = bevy::ecs::world::World::new();
+        let mut system = IntoSystem::into_system(update);
+        system.initialize(&mut world);
+        let mut buttons = IntoSystem::into_system(update_class_buttons);
+        buttons.initialize(&mut world);
+    }
 
     #[test]
     fn a_picker_moves_only_its_own_player() {
