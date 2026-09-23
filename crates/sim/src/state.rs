@@ -1214,6 +1214,25 @@ impl World {
                     .map(|kind| moves::get(snapshot[attacker].class, kind).leeched(dealt))
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
+                // The Blood mage's double duty: a hit over one of her pools
+                // drinks from it, and then spills what it dealt onto the
+                // floor. In that order, so a hit on bare floor returns
+                // nothing -- the smear it leaves is for the next one.
+                if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                    let m = moves::get(snapshot[attacker].class, kind);
+                    if dealt > 0 {
+                        if let Some(hb) = hitbox(&snapshot[attacker]) {
+                            self.drink_over(attacker, &m, hb.from, hb.to, Some(defender));
+                        }
+                        self.spill_under(
+                            attacker as u8,
+                            snapshot[attacker].class,
+                            kind,
+                            defender,
+                            dealt,
+                        );
+                    }
+                }
                 self.players[attacker].hit_used = true;
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
@@ -4904,9 +4923,19 @@ impl World {
             // the one thing a planted effect never has to check: whether it
             // has wandered off the map, the one effect whose centre actually
             // can.
+            // A pool drains rather than ages out: a fixed volume a second,
+            // so a big one outlives a small one, and it is gone when it is
+            // dry. The drain is taken here, before the frame's drinks, so a
+            // pool that is about to vanish cannot be drunk from on the frame
+            // it does.
+            if effect.is_a_pool() {
+                effect.banked -= effect.pool_drained_this_frame();
+            }
             let expired = if effect.kind == EffectKind::FireTornado {
                 let flying = effect.age.saturating_sub(effect.banked as u16);
                 flying >= t::tornado_travel_life() || !arena::inside(effect.tornado_pos())
+            } else if effect.is_a_pool() {
+                effect.banked <= 0
             } else {
                 effect.age >= effect.life
             };
@@ -5114,6 +5143,27 @@ impl World {
                     effect.banked += self.cut(i, effect, at, effect.source().damage);
                 }
                 effect.banked += self.gore_the_creature(effect, pass, at, radius);
+                // The return leg crossing pools on the floor is a small drink
+                // on the way back -- each pool once per blade. Only on the way
+                // home: the throw is a cut, and the health is where the cut
+                // lands.
+                if effect.returning() {
+                    let m = effect.source();
+                    for slot in 0..MAX_EFFECTS {
+                        if effect.drank_from(slot) {
+                            continue;
+                        }
+                        let over = self.effects[slot].is_some_and(|pool| {
+                            pool.is_a_pool()
+                                && pool.owner == effect.owner
+                                && pool.covers(V3::new(at.x, pool.pos.y, at.z))
+                        });
+                        if over {
+                            effect.mark_drank(slot);
+                            self.drink_from(slot, effect.owner as usize, &m);
+                        }
+                    }
+                }
             }
 
             // Six blades out of the shadow and six back into it. Each is its
@@ -5286,6 +5336,10 @@ impl World {
             // of the root. Every arm is tested separately and remembers who it
             // has already caught, because "hit by all four" is a question about
             // *different* arms and one shared mask could not tell them apart.
+            // A pool does nothing to anybody on its own. It is read by the
+            // moves put through it -- see `drink_over` -- and by the dodge.
+            EffectKind::Pool => {}
+
             EffectKind::Grasp => {
                 let radius = effect.field_radius();
                 for arm in 0..GRASP_ARMS {
@@ -5493,6 +5547,17 @@ impl World {
         if parried {
             self.players[victim].parried = PARRY_FLOURISH;
         }
+        // The Blood mage's double duty, for a hit her effects deliver: drink
+        // from a pool the victim stands in, then spill what was dealt. See the
+        // melee loop in `advance` for the order. **Not for the blade**: it
+        // drinks on its way home, from each pool it crosses, once -- a cut
+        // that also drank would take three shares of one pool in one throw.
+        if dealt > 0 {
+            if !effect.kind.comes_home() {
+                self.drink_over(effect.owner as usize, &m, from, from, Some(victim));
+            }
+            self.spill_under(effect.owner, effect.class, effect.slot, victim, dealt);
+        }
         dealt
     }
 
@@ -5541,6 +5606,20 @@ impl World {
         if effect.kind.travels() {
             effect.take_hit(part, QUARRY_VICTIM);
         }
+        // The creature bleeds too: under the struck part, projected to the
+        // floor, which is what makes the pool under a toppled Ridgeback a
+        // door onto its back.
+        if dealt > 0 {
+            let m = effect.source();
+            self.drink_over(effect.owner as usize, &m, at, at, None);
+            self.spill(
+                effect.owner,
+                effect.class,
+                effect.slot,
+                floor_under(at),
+                dealt,
+            );
+        }
         dealt
     }
 }
@@ -5563,6 +5642,140 @@ impl World {
 /// left of the hold, which is the Bulwark's Grapple unchanged: its catch is
 /// already at arm's length, so there is nothing to haul and the two phases
 /// collapse into the behaviour it always had.
+/// The patch of floor under a point in the air: the arena's ground, and the
+/// creature's contact points are always over it. Stones are not consulted --
+/// a pool spilled onto a raised structure is an open question in the design,
+/// and until it is answered blood falls to the floor.
+fn floor_under(at: V3) -> V3 {
+    V3::new(at.x, GROUND_Y, at.z)
+}
+
+impl World {
+    /// Spill `volume` of `victim`'s blood under their feet, for a hit `owner`
+    /// landed on them.
+    ///
+    /// Only the Blood mage spills anybody (`Class::wounds_go_grey` is the
+    /// same predicate read the other way: she is the one class with a use for
+    /// blood on the floor), and only a fighter on the ground leaves a pool.
+    /// One hit in the air spills nowhere: whether it should land where they
+    /// do is an open question in `docs/design/blood-mage.md`, and the simpler
+    /// answer is the one built until somebody plays it.
+    fn spill_under(&mut self, owner: u8, class: Class, slot: u8, victim: usize, volume: i32) {
+        let v = self.players[victim];
+        if !v.grounded {
+            return;
+        }
+        self.spill(owner, class, slot, v.pos, volume);
+    }
+
+    /// Put `volume` of blood on the floor at `at`, owned by `owner`.
+    ///
+    /// Three rules, and they are the whole of what keeps four pools readable:
+    /// a spill onto a pool of hers merges into it rather than stacking a
+    /// second disc on the same floor; a spill past `tuning::pool_cap` merges
+    /// into the newest; and her own costs never come through here at all --
+    /// a cost is paid into the ability, not onto the floor, or every cast
+    /// would leave a free heal at her own feet.
+    fn spill(&mut self, owner: u8, class: Class, slot: u8, at: V3, volume: i32) {
+        if volume <= 0 || !class.wounds_go_grey() {
+            return;
+        }
+        let born = Effect::pool(owner, class, slot, at, volume);
+        // Onto one of hers already there: merge.
+        let overlapping = self.effects.iter().position(|e| {
+            e.is_some_and(|e| {
+                e.is_a_pool()
+                    && e.owner == owner
+                    && V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z))
+                        .flat_len()
+                        .raw()
+                        <= e.pool_radius().add(born.pool_radius()).raw()
+            })
+        });
+        if let Some(i) = overlapping {
+            if let Some(pool) = self.effects[i].as_mut() {
+                pool.banked += volume;
+            }
+            return;
+        }
+        // Past the cap: into the newest.
+        let mut count = 0;
+        let mut newest: Option<(usize, u16)> = None;
+        for (i, e) in self.effects.iter().enumerate() {
+            let Some(e) = e else { continue };
+            if !e.is_a_pool() || e.owner != owner {
+                continue;
+            }
+            count += 1;
+            if newest.is_none_or(|(_, age)| e.age < age) {
+                newest = Some((i, e.age));
+            }
+        }
+        if count >= t::pool_cap() {
+            if let Some((i, _)) = newest {
+                if let Some(pool) = self.effects[i].as_mut() {
+                    pool.banked += volume;
+                }
+            }
+            return;
+        }
+        spawn_effect(&mut self.effects, born);
+    }
+
+    /// A move of `owner`'s landed with its volume between `from` and `to`,
+    /// on `victim` if it hit a fighter: drink from a pool of hers under the
+    /// hit, if there is one.
+    ///
+    /// **The one rule of the heal**: it is where the blood is, and she has to
+    /// put something through it. A pool counts if the victim is standing in
+    /// it or the hit volume passes over its disc; the fullest one is drunk.
+    /// What comes back is the move's own share of the pool, converted out of
+    /// grey and never past it, and the pool loses exactly what she got.
+    fn drink_over(
+        &mut self,
+        owner: usize,
+        m: &moves::Move,
+        from: V3,
+        to: V3,
+        victim: Option<usize>,
+    ) -> i32 {
+        if m.drink == 0 {
+            return 0;
+        }
+        let feet = victim.map(|v| self.players[v].pos);
+        let mut best: Option<(usize, i32)> = None;
+        for (slot, e) in self.effects.iter().enumerate() {
+            let Some(e) = e else { continue };
+            if !e.is_a_pool() || e.owner != owner as u8 {
+                continue;
+            }
+            let standing_in = feet.is_some_and(|f| e.covers(f));
+            let flat = |v: V3| V3::new(v.x, e.pos.y, v.z);
+            let passes_over = crate::math::segment_gap(flat(from), flat(to), e.pos, e.pos).raw()
+                <= e.pool_radius().raw();
+            if (standing_in || passes_over) && best.is_none_or(|(_, v)| e.banked > v) {
+                best = Some((slot, e.banked));
+            }
+        }
+        match best {
+            Some((slot, _)) => self.drink_from(slot, owner, m),
+            None => 0,
+        }
+    }
+
+    /// Drink `m`'s share of the pool in `slot`. Grey is the ceiling, and the
+    /// pool is charged only for what actually came back.
+    fn drink_from(&mut self, slot: usize, owner: usize, m: &moves::Move) -> i32 {
+        let Some(pool) = self.effects[slot].as_mut() else {
+            return 0;
+        };
+        let take = m.drinks(pool.banked);
+        let got = self.players[owner].drink(take);
+        pool.banked -= got;
+        got
+    }
+}
+
 fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
     let snapshot = *players;
     for victim in players.iter_mut() {
@@ -6353,6 +6566,18 @@ impl World {
                 .mul(preying(attacker.class, beast.disabled()))
                 .to_int();
             let dealt = beast.take_hit(part, raw);
+            // Her double duty, against the creature: drink over the pool the
+            // blade passes through, then spill under the part it struck.
+            if dealt > 0 {
+                self.drink_over(i, &m, box_out.from, box_out.to, None);
+                self.spill(
+                    i as u8,
+                    attacker.class,
+                    kind,
+                    floor_under(box_out.centre()),
+                    dealt,
+                );
+            }
             // An uppercut does not put thirteen metres of animal in the air and
             // a grab does not drag it anywhere, but throwing one at a creature
             // that is already reeling should still be a decision -- so the move

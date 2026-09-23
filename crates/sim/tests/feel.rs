@@ -343,7 +343,10 @@ fn best_case(m: &Move) -> i32 {
         Some(EffectKind::LanceBurst) => {
             m.damage * swings + EffectKind::LanceBurst.damage(m)
         }
-        None => m.damage * swings,
+        // A pool is what a hit leaves, not what a cast places, and it deals
+        // nothing on its own. No move's row says it; listed so the match is
+        // complete.
+        Some(EffectKind::Pool) | None => m.damage * swings,
     }
 }
 
@@ -371,10 +374,11 @@ fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
             );
             if blood {
                 // The return is a place on the floor now, not a share of the
-                // hit: `a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost`
-                // is the other half of this test. What is pinned here is that
-                // nothing of hers pays out on the hit itself any more -- a
-                // leech that survived on one move would be a heal she never
+                // hit: `tests/essence.rs` pins that an ability landed over a
+                // pool of its own making returns more than it cost, and one
+                // landed on bare floor returns nothing. What is pinned here is
+                // that nothing of hers pays out on the hit itself any more --
+                // a leech that survived on one move would be a heal she never
                 // has to go anywhere for.
                 assert_eq!(
                     m.leech, 0,

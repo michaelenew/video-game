@@ -1530,6 +1530,20 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // Judgement's field: a wide, shallow disc of light on the floor. Drawn
         // at exactly the radius that burns, because walking to the edge of it
         // is the decision it offers.
+        // A pool: the slab it is tested as, on the floor, at the disc the hit
+        // test reads. Its width is its volume, so the picture on the floor is
+        // the heal it is worth.
+        EffectKind::Pool if part == 0 => {
+            let slab = effect.pool_slab();
+            Some(standing(
+                Shape::Column,
+                Skin::Blood,
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
             Skin::Light,
@@ -2406,6 +2420,37 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_pool_is_drawn_at_the_disc_it_is_tested_at() {
+        // A pool is a place she wants the fight to be, and both players have
+        // to be able to read it at a glance. Drawn as the slab the hit test
+        // and the blink read, and nothing else: one piece, on the floor.
+        let effect = Effect::pool(
+            0,
+            sim::Class::BloodMage,
+            sim::state::SLOT_POKE,
+            sim::V3::new(sim::Fx::from_int(2), sim::Fx::ZERO, sim::Fx::from_int(-1)),
+            100,
+        );
+        let slab = effect.pool_slab();
+        let drawn = effect_piece(&effect, 0).expect("the pool is drawn");
+        assert_eq!(drawn.shape, Shape::Column);
+        assert_eq!(drawn.skin, Skin::Blood);
+        assert!(
+            (drawn.scale.x * 0.5 - slab.radius.to_f32_for_render()).abs() < 0.001,
+            "drawn {} wide, tested at {}",
+            drawn.scale.x * 0.5,
+            slab.radius.to_f32_for_render()
+        );
+        assert!((drawn.scale.y - slab.top.to_f32_for_render()).abs() < 0.001);
+        assert!(effect_piece(&effect, 1).is_none(), "a pool is one disc");
+        // And a bigger pool is a wider disc.
+        let mut more = effect;
+        more.banked = 400;
+        let bigger = effect_piece(&more, 0).expect("drawn");
+        assert!(bigger.scale.x > drawn.scale.x);
     }
 
     /// The same, for a class other than the Blood mage.
