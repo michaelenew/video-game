@@ -19,7 +19,8 @@ nothing to *go to*, and a class whose sentence is "sustain through aggression" s
 three tools that reward standing back. See [Why this shape](#why-this-shape) for the argument.
 
 Input map in [controls.md](controls.md). The built kit, and what it got right, is still
-[kits/blood-mage.md](kits/blood-mage.md).
+[kits/blood-mage.md](kits/blood-mage.md). **The action plan for building this is
+[plans/blood-mage-v1.md](plans/blood-mage-v1.md).**
 
 ## The three things a mechanic has to pay
 

@@ -9,6 +9,10 @@ depends: ../dual-mage.md
 
 # Dual mage — kit
 
+> ⚠️ **The mechanic under this kit has a proposed v2, 2026-09-23** — see
+> [../dual-mage-v2.md](../dual-mage-v2.md). The six moves below do not change; what changes is
+> the bar they steer, and what the class's body can do as the bars rise. Nothing of it is built.
+
 **Identity.** Melee mage containing two forces. Power comes from riding as close to an edge
 as you can while still able to pull back.
 
