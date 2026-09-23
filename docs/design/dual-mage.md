@@ -194,15 +194,21 @@ vulnerable, not by reaching it as fast as possible.
 
 ### On her back
 
-**The two bars are two wings**, dark on the left and light on the right — the same sides as
-the arms that goad them — each as long as its bar. Lopsided wings are the gap, readable across
-the arena by both players; full span is ascension. The HUD carries the two bars too, growing
-away from each other from a shared middle, but the wings are the display, and the thing the
-tiers unlock is the thing everyone is already looking at. That answers the old open question
-about colour on the body by making the body the meter.
+**The two bars are six wings**, three a side, dark on the left and light on the right — the
+same sides as the arms that goad them. A wing does not grow: it **materialises**, whole, when
+its bar reaches its third — none at empty, one at a third, two at two thirds, and the third at
+the same "full" that ascension reads. So a bar is read as a count, one, two or three, which is
+what can be read from across the arena; a wing half a metre long is a line, not a wing.
+Lopsided wings are the gap, readable by both players; three and three is a mage about to
+ascend, and ascension is all six. The HUD carries the two bars too, growing away from each
+other from a shared middle, but the wings are the display, and the thing the tiers unlock is
+the thing everyone is already looking at. That answers the old open question about colour on
+the body by making the body the meter.
 
-`view::wings` decides the root, the tip and the span, and `view/tests/wings.rs` holds the drawn
-span to the bar the way `kinematics.rs` holds the blade to the fist. The wings are drawn and
+The three fan like a seraph's: the top pair reaches up and sweeps back, the middle pair out,
+the bottom pair down. `view::wings` decides the count, each wing's root and axes and the
+silhouette — a feathered vane, longer than it is deep — and `view/tests/wings.rs` holds the
+count to the bar the way `kinematics.rs` holds the blade to the fist. The wings are drawn and
 not tested against.
 
 ## The last auto is the force you are carrying — revised 2026-09-13

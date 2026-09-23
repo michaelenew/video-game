@@ -499,17 +499,65 @@ struct WingMesh {
 #[derive(Component)]
 struct WingTipMesh(usize);
 
-/// One of the two wings on the Dual mage's **back**: her two bars, drawn.
+/// One of the six wings on the Dual mage's **back**: her two bars, drawn.
 ///
-/// Not the swept blade above, which is an attack. These are the meter: dark on
-/// her left and light on her right, each as long as its bar, so the gap
-/// between the two is readable across the arena by both players and full span
-/// is ascension. `view::wings` decides the root, the tip and the span, and
-/// `view/tests/wings.rs` holds the span to the bar.
+/// Not the swept blade above, which is an attack. These are the meter: three
+/// a side, dark on her left and light on her right, one materialising at each
+/// third of its bar, so the gap between the two is readable across the arena
+/// by both players and six is ascension. `view::wings` decides the root, the
+/// axes and the count, and `view/tests/wings.rs` holds the count to the bar.
 #[derive(Component)]
 struct WingSpanMesh {
     owner: usize,
     force: sim::class::Force,
+    index: usize,
+    /// Seconds since it appeared, while it is unfolding -- a wing
+    /// materialises over a few frames rather than popping. Presentation only.
+    unfolding: f32,
+}
+
+/// How long a wing takes to unfold once its third of the bar is reached.
+const WING_UNFOLD_SECONDS: f32 = 0.22;
+
+/// The wing silhouette `view::wings::OUTLINE` describes, as a two-sided mesh
+/// in the wing's own plane: `x` out along the wing, `y` across it, both in
+/// metres. Fanned from the outline's centre, which the view promises it is
+/// star-shaped about.
+fn wing_mesh() -> Mesh {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::render::mesh::{Indices, PrimitiveTopology};
+    let n = view::wings::OUTLINE.len() as u32;
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n as usize + 1);
+    positions.push([
+        view::wings::OUTLINE_CENTRE[0] * view::wings::LENGTH,
+        view::wings::OUTLINE_CENTRE[1] * view::wings::LENGTH,
+        0.0,
+    ]);
+    for p in view::wings::OUTLINE {
+        positions.push([p[0] * view::wings::LENGTH, p[1] * view::wings::LENGTH, 0.0]);
+    }
+    let uvs: Vec<[f32; 2]> = positions
+        .iter()
+        .map(|p| [p[0] / view::wings::LENGTH, 0.5 - p[1] / view::wings::LENGTH])
+        .collect();
+    // Both faces, so it reads from the front and from behind: the two places
+    // the two players are.
+    let mut indices = Vec::with_capacity(n as usize * 6);
+    for i in 0..n {
+        let a = 1 + i;
+        let b = 1 + (i + 1) % n;
+        indices.extend_from_slice(&[0, a, b]);
+        indices.extend_from_slice(&[0, b, a]);
+    }
+    let normals: Vec<[f32; 3]> = positions.iter().map(|_| [0.0, 0.0, 1.0]).collect();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+    .with_inserted_indices(Indices::U32(indices))
 }
 
 /// How many bars the wing is drawn with.
@@ -817,6 +865,7 @@ fn setup(
         ));
     }
     let pellet = meshes.add(Sphere::new(0.5));
+    let wing = meshes.add(wing_mesh());
     for slot in 0..sim::bolt::MAX_BOLTS {
         commands.spawn((
             Mesh3d(pellet.clone()),
@@ -878,18 +927,25 @@ fn setup(
             Visibility::Hidden,
             WingTipMesh(owner),
         ));
-        // And the two on her back, in the colour of the force each one is.
+        // And the six on her back, in the colour of the force each one is.
         for (force, material) in [
             (sim::class::Force::Dark, look.dark.clone()),
             (sim::class::Force::Light, look.light.clone()),
         ] {
-            commands.spawn((
-                Mesh3d(unit.clone()),
-                MeshMaterial3d(material),
-                Transform::default(),
-                Visibility::Hidden,
-                WingSpanMesh { owner, force },
-            ));
+            for index in 0..view::wings::PER_SIDE {
+                commands.spawn((
+                    Mesh3d(wing.clone()),
+                    MeshMaterial3d(material.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    WingSpanMesh {
+                        owner,
+                        force,
+                        index,
+                        unfolding: 0.0,
+                    },
+                ));
+            }
         }
     }
     // The aim marker a channelled move is wound out along.
@@ -1237,7 +1293,8 @@ fn place_wing_tips(
     }
 }
 
-/// The two wings on the Dual mage's back, each as long as its bar.
+/// The six wings on the Dual mage's back: three a side, one per third of its
+/// bar, each a wing-shaped vane in a fixed place that is there or is not.
 ///
 /// Drawn from the *interpolated* frame like the body rather than from the
 /// latest snapshot like the attack volumes, because they hang off her and a
@@ -1245,10 +1302,11 @@ fn place_wing_tips(
 /// detach every time she turned.
 fn place_wingspans(
     sim: Res<Sim>,
-    mut meshes: Query<(&WingSpanMesh, &mut Transform, &mut Visibility)>,
+    time: Res<Time>,
+    mut meshes: Query<(&mut WingSpanMesh, &mut Transform, &mut Visibility)>,
 ) {
     let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+    for (mut tag, mut tf, mut vis) in meshes.iter_mut() {
         // The bars are read off the current snapshot -- they are the meter,
         // and a meter is not a thing to blend -- and the body they hang off is
         // read off the blended frame, which is where the body is drawn.
@@ -1266,25 +1324,31 @@ fn place_wingspans(
         );
         let Some(wings) = view::wings::wings(&p) else {
             *vis = Visibility::Hidden;
+            tag.unfolding = 0.0;
             continue;
         };
         let wing = wings
             .iter()
-            .find(|w| w.force == tag.force)
+            .find(|w| w.force == tag.force && w.index == tag.index)
             .copied()
-            .expect("both wings are always answered for");
-        if wing.span < 0.02 {
+            .expect("all six wings are always answered for");
+        if !wing.shown {
             *vis = Visibility::Hidden;
+            tag.unfolding = 0.0;
             continue;
         }
         *vis = Visibility::Inherited;
-        let root = Vec3::from_array(wing.root);
-        let tip = Vec3::from_array(wing.tip);
-        let along = tip - root;
-        tf.translation = root + along * 0.5;
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / wing.span);
-        // A thin vane: the length is the bar and nothing else about it moves.
-        tf.scale = Vec3::new(0.06, wing.span, 0.22);
+        // Materialise: unfold from the root over a few frames, then hold. The
+        // shape never changes with the bar; only whether it is there.
+        tag.unfolding = (tag.unfolding + time.delta_secs()).min(WING_UNFOLD_SECONDS);
+        let t = tag.unfolding / WING_UNFOLD_SECONDS;
+        let unfold = t * t * (3.0 - 2.0 * t);
+        let along = Vec3::from_array(wing.along);
+        let across = Vec3::from_array(wing.across);
+        let normal = along.cross(across);
+        tf.translation = Vec3::from_array(wing.root);
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(along, across, normal));
+        tf.scale = Vec3::new(unfold.max(0.01), 1.0, 1.0);
     }
 }
 

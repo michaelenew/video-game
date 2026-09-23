@@ -42,13 +42,16 @@ drift never delivers it. See [../dual-mage.md](../dual-mage.md).
 
 | The lower bar | Reads as | On her back |
 | --- | --- | --- |
-| Below half | The dodge is a dodge; space in the air does nothing | Two short wings, or none |
-| Half | The dodge blinks: she is where it would have ended, on its first frame, and stands through the tail | Wings to the elbow |
-| Three quarters | Space in the air jumps once more, and she falls slower | Wings past the shoulder |
-| Both full | Wings full span; every press of space is a wing beat; no dodge | Full span |
+| Below a third | The dodge is a dodge; space in the air does nothing | Nothing on that side |
+| A third | — | The first wing of that side is there |
+| Half | The dodge blinks: she is where it would have ended, on its first frame, and stands through the tail | One wing a side |
+| Two thirds | — | The second wing |
+| Three quarters | Space in the air jumps once more, and she falls slower | Two wings a side |
+| Both full | Every press of space is a wing beat; no dodge | All six |
 
-The wings are the two bars, dark on the left and light on the right. Lopsided wings are a mage
-about to burn; two full wings are a mage about to fly. `cargo run -p sim --bin frametable`
+The wings are the two bars, three a side, dark on the left and light on the right, and each
+one is there or is not — a bar is read as a count, not a length. Lopsided wings are a mage
+about to burn; three and three is a mage about to fly. `cargo run -p sim --bin frametable`
 prints the tiers under the class, and `cargo run -p sim --bin goad` runs the climb.
 
 Full input map in [../controls.md](../controls.md).
