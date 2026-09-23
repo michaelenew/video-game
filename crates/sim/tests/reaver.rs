@@ -65,7 +65,7 @@ fn duel() -> World {
 }
 
 fn hurt(w: &World) -> i32 {
-    sim::state::max_health() - w.players[1].health
+    w.players[1].max_health() - w.players[1].health
 }
 
 /// Ask `aim` something about a world as it stands. The scene is everything a

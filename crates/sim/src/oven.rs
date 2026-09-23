@@ -503,6 +503,25 @@ scalars! {
     // `AscensionStun` above is its ceiling.
     AscensionRefund,  "Dual mage", "Ascension, health back per hit landed", Int,   0,        400;
     AscensionStunFloor, "Dual mage", "Ascension, stun on the way out, at least", Frames, 0,  120;
+    // The Bulwark's weight -- v2 of the mechanic, 2026-09-23. Every blow taken
+    // on the shield is stored in it; see `crate::bulwark`. The cap and the
+    // parry's deposit are in health, because weight is the damage it
+    // absorbed. The drain is a clock: how long a full shield takes to empty
+    // with nothing landing on it.
+    WeightCap,        "Bulwark",  "Weight, the most the shield holds",    Int,     1,       3000;
+    WeightDrain,      "Bulwark",  "Weight, a full shield empties in",     Frames,  1,       3600;
+    ParryLoad,        "Bulwark",  "Weight, a parry loads (x its damage)", Fixed,   0,       fx(4,1);
+    HeavyPushback,    "Bulwark",  "Weight, pushback at the cap (x)",      Fixed,   0,       fx(1,1);
+    // Health per class, as a multiplier on `Match · Max health` -- the way
+    // jump and gravity are per class. Shared with the Reaver's v2, which wants
+    // the same table pointed the other way. One scalar per class rather than a
+    // fifth `AirField`, so adding it moves no slot anywhere else in the file.
+    HealthBulwark,    "Health",   "Bulwark (x)",                          Fixed,   fx(1,2), fx(2,1);
+    HealthChampion,   "Health",   "Champion (x)",                         Fixed,   fx(1,2), fx(2,1);
+    HealthReaver,     "Health",   "Shadow Reaver (x)",                    Fixed,   fx(1,2), fx(2,1);
+    HealthElementalist, "Health", "Elementalist (x)",                     Fixed,   fx(1,2), fx(2,1);
+    HealthBloodMage,  "Health",   "Blood mage (x)",                       Fixed,   fx(1,2), fx(2,1);
+    HealthDualMage,   "Health",   "Dual mage (x)",                        Fixed,   fx(1,2), fx(2,1);
 }
 
 // ---------------------------------------------------------------------------

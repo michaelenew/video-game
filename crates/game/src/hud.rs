@@ -508,7 +508,7 @@ pub fn update(
     }
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
-        node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
+        node.width = Val::Percent(100.0 * hp / sim.cur.players[bar.0].max_health() as f32);
     }
 
     // The Dual mage's two bars. Three things at once, and each of them is a

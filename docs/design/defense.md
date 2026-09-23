@@ -132,7 +132,11 @@ This matters more than it sounds:
 
 **The Bulwark resists pushback.** That is the class trait that falls naturally out of this
 system rather than being bolted on — everyone else who blocks gets moved, and the wall
-does not. **Not built:** blocked knockback is one number for everybody.
+does not. **Built 2026-09-23, as a function of weight** ([bulwark-v2.md](bulwark-v2.md)):
+blocked knockback is multiplied by a line from one at an empty shield to
+`Bulwark · Weight, pushback at the cap` at a full one, so the more it has taken the less it
+moves. An empty shield is shoved like anybody. Against the Champion's sword the difference is
+mostly invisible, because the swing's own step pushes both bodies — see the feel log.
 
 ### Two different things called "the shield"
 

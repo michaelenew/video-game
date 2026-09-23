@@ -4989,3 +4989,53 @@ the bars now, and two sets of wings on one back said two different things. **Not
 Whether the walk-speed step feels right at three quarters, or wants to be at half, is a play
 question on the same list as the rest of the two-bar work.
 
+
+---
+
+### 2026-09-23 — the Bulwark's shield stores what it blocks, and the health table (Bulwark v2, M1)
+
+**Changed** Every hit taken on the shield is now stored in it as **weight**
+([bulwark-v2.md](bulwark-v2.md), `crate::bulwark`). A blocked hit stores its damage; a parried
+one stores twice that. Weight is capped, drains on a clock, and a heavy guard is pushed back
+less. Health is per class now, through a `Health` family in the Oven, and the Bulwark's is
+highest. First values:
+
+| Knob | Value | Why |
+| --- | --- | --- |
+| Bulwark · Weight, the most the shield holds | 400 | A little over two committed blows, so a blocked string reads as full and a blocked poke does not |
+| Bulwark · Weight, a full shield empties in | 600 f | Ten seconds: about one exchange, so a first-minute block does not pay out at the end |
+| Bulwark · Weight, a parry loads | ×2 | The proposal's "more". Open: it may make the four-frame read worth too much |
+| Bulwark · Weight, pushback at the cap | ×0.4 | Enough that the number moves visibly; see below for how little it moves the body |
+| Health · Bulwark | ×1.25 (1250) | "Highest on the roster". Everyone else ×1, and the Reaver's row is the Reaver thread's to move |
+
+**Measured**, by `cargo run -p sim --bin weight`:
+
+- *Openers.* Every class's `L` blocked stores its damage exactly (Champion 64, Bulwark 60,
+  Elementalist 45, Dual mage 16) and parried stores double. Two show *guard took damage*: the
+  Reaver's shadow copy and the Blood mage's opener each have a part the guard does not cover.
+  That is existing behaviour, not this change, but it means those two load the shield with
+  only part of what they deal.
+- *Load.* A Champion's sword string, five blocked: deposits 64, 71, 99, 63, 71 → weight 306,
+  which is the deposits less 62 drained over 106 frames. A parry on top deposits 124. Never
+  past the cap.
+- *Decay.* A full shield loses 40 a second and is empty on frame 601 of a 600-frame clock.
+- *Stomp.* Bite (190) and Stomp (140) blocked from in front load the shield by their full
+  damage — a blocked bite is half the cap on its own. Rear-and-slam is unblockable and does
+  not load it, which is right. The tail sweep, charge, shake and back kick did not reach a
+  Bulwark standing at their ideal range in front, so this script says nothing about them yet.
+- *Pushback.* The curve takes a blocked sword swing's knockback from 1.4 m/s at empty to
+  0.6 m/s at the cap — but the body moves **18 cm at empty and 16 cm full**. Most of the shove
+  is the Champion's own step walking into the guard, which moves both bodies whatever the
+  shield weighs. **Finding:** against the sword, "a heavy shield resists pushback" is true of
+  the number and barely visible on the screen. Heavier knockback (the hammer, the creature)
+  should show it better; if it still reads as nothing, the trait wants to act on the
+  attacker's step as well, which is a change to the body-push rule and not a knob.
+
+**Why** Blocking produced not-being-hit, which a dodge produces for less. This is the first
+half of making it produce something: the deposit. The withdrawal — Slam and Throw spending
+it, the planted wall sized by it — is M2 and M3, so today weight is visible and changes
+pushback, and nothing spends it.
+
+**Verdict** open — **built, unverified**. Awaiting the first play (checkpoint C1 in
+[plans/bulwark-v2.md](plans/bulwark-v2.md)): *can you see the shield loading, does the parry
+feel like a bigger deposit, does the decay feel like a clock or a leak.*

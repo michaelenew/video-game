@@ -14,6 +14,7 @@
 //! values. Move a number freely; if a relationship test fails, either it is a
 //! bug or a design decision changed and the documents need updating with it.
 
+use crate::class::Class;
 use crate::fixed::Fx;
 use crate::oven::{self, Scalar};
 
@@ -246,6 +247,23 @@ pub fn knockback_decay() -> Fx {
 /// untested against a real match.
 pub fn max_health() -> i32 {
     oven::scalar(Scalar::MaxHealth)
+}
+
+/// A class's whole bar: `max_health` scaled by its row in the Health table.
+///
+/// Per class the way jump and gravity are, because after weight in the air,
+/// health is the most legible difference a character can have. The Bulwark
+/// is highest: committed, not slow, and now with a reason to stand in a hit.
+pub fn class_health(class: Class) -> i32 {
+    let scale = oven::scalar(match class {
+        Class::Bulwark => Scalar::HealthBulwark,
+        Class::Champion => Scalar::HealthChampion,
+        Class::ShadowReaver => Scalar::HealthReaver,
+        Class::Elementalist => Scalar::HealthElementalist,
+        Class::BloodMage => Scalar::HealthBloodMage,
+        Class::DualMage => Scalar::HealthDualMage,
+    });
+    Fx::from_int(max_health()).mul(Fx::from_raw(scale)).to_int()
 }
 
 /// Pause after a knockout before the next round starts.
@@ -610,6 +628,33 @@ pub fn leap_speed() -> Fx {
 
 pub fn leap_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LeapRise))
+}
+
+/// The most weight the shield holds, in health: what it can be holding at once.
+/// A guess at a little over two committed blows, so a Bulwark who has blocked a
+/// string is visibly full and one who blocked a poke is visibly not.
+pub fn weight_cap() -> Fx {
+    Fx::from_int(oven::scalar(Scalar::WeightCap))
+}
+
+/// How long a full shield takes to empty with nothing landing on it. A clock
+/// rather than a rate, so the knob reads the way the play script asks the
+/// question: ten seconds and the exchange is over.
+pub fn weight_drain_frames() -> i32 {
+    oven::scalar(Scalar::WeightDrain)
+}
+
+/// A parried blow's deposit, as a multiple of its damage. The four-frame read
+/// already pays a stagger; this is how much more it pays. Open -- see
+/// `bulwark-v2.md`.
+pub fn parry_load() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ParryLoad))
+}
+
+/// Blocked knockback at a full shield, as a share of it empty. The more it has
+/// taken, the less it moves -- the pushback resistance `defense.md` promised.
+pub fn heavy_pushback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HeavyPushback))
 }
 
 /// How far the Reaver may stray from a shadow standing out on the field before

@@ -486,6 +486,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Dual mage's two bars, driven by named input scripts -- alternate, one-sided, finisher, idle, ascend -- in an empty arena and against a dummy. Prints when each tier is reached, when the band is left, how long the lower bar lasts outside it, what the burn cost, and whether she ascended. Name one script for it frame by frame.",
             ),
             e(
+                "cargo run -p sim --bin weight",
+                "The Bulwark's shield weight, driven by named scripts -- openers, load, decay, pushback, stomp, slam, wall. What each class's opener deposits blocked and parried, a sword string loading it, a full shield draining on its clock, the shove at five weights, and each creature move into a raised guard. Name scripts to run only those.",
+            ),
+            e(
                 "cargo run -p anim --bin bake",
                 "Re-bake the animation clips from their recipes.",
             ),

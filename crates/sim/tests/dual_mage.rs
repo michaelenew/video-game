@@ -1007,8 +1007,8 @@ fn against_a_dummy(frames: u32, mut next: impl FnMut(u32) -> u16) -> (i32, i32) 
             0
         };
         step(&mut w, 1, bits);
-        dealt += sim::state::max_health() - w.players[1].health;
-        w.players[1].health = sim::state::max_health();
+        dealt += w.players[1].max_health() - w.players[1].health;
+        w.players[1].health = w.players[1].max_health();
         w.players[1].pos = stand;
     }
     (dealt, before - w.players[0].health)
@@ -1641,7 +1641,7 @@ fn ride(bits: u16) -> (i32, u16) {
             0
         };
         step(&mut w, 1, press);
-        w.players[1].health = sim::state::max_health();
+        w.players[1].health = w.players[1].max_health();
         // Held where the autos land, so the shove does not walk them out of
         // the measurement.
         w.players[1].pos = w.players[0]
@@ -1758,7 +1758,7 @@ fn gap_change(bits: u16, hand: Hand, at: i32) -> f32 {
     step(&mut w, 1, bits);
     step(&mut w, 24, 0);
     assert!(
-        w.players[1].health < sim::state::max_health(),
+        w.players[1].health < w.players[1].max_health(),
         "the auto did not connect, so this proves nothing"
     );
     gap(&w) - before

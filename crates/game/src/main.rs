@@ -1783,16 +1783,36 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
 }
 
 /// A shield in hand rides on the character; a thrown one sits in the world.
+///
+/// **Its weight is drawn on it**: it thickens and darkens as it fills, so the
+/// person on the other side can read how loaded the wall is from across the
+/// arena -- see `bulwark-v2.md`. Read straight off the snapshot's number, per
+/// the overlay rule, so what you see is what a slam would spend.
 fn place_shields(
     sim: Res<Sim>,
     hands: Res<ShieldHands>,
-    mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut shields: Query<(
+        &ShieldMesh,
+        &mut Transform,
+        &mut Visibility,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
-    for (tag, mut tf, mut vis) in shields.iter_mut() {
+    for (tag, mut tf, mut vis, look) in shields.iter_mut() {
+        let player = &sim.cur.players[tag.0];
         let held = matches!(
-            sim.cur.players[tag.0].mechanic,
-            sim::Mechanic::Shield(sim::state::Shield::Held)
+            player.mechanic,
+            sim::Mechanic::Shield(sim::state::Shield::Held { .. })
         );
+        let full = sim::bulwark::fullness(player).to_f32_for_render();
+        tf.scale = Vec3::new(1.0 + 0.2 * full, 1.0 + 0.2 * full, 1.0 + 1.5 * full);
+        if let Some(m) = materials.get_mut(&look.0) {
+            let empty = Vec3::new(0.92, 0.76, 0.38);
+            let heavy = Vec3::new(0.30, 0.20, 0.10);
+            let c = empty.lerp(heavy, full);
+            m.base_color = Color::srgb(c.x, c.y, c.z);
+        }
         match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
             // Thrown or planted: it is somewhere in the arena on its own.
             Some(pos) => {

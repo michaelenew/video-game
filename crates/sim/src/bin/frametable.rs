@@ -40,14 +40,28 @@ fn main() {
         let (full_apex, full_time) = jump_shape(class, 60);
         let mob = class.mobility();
         println!("{}  --  spends {}", class.name(), class.resource());
+        // Health beside the jump, because after weight in the air it is the
+        // most legible thing a class can differ in.
         println!(
-            "  jump: short {}m {}f  |  full {}m {}f  |  {} body heights",
+            "  jump: short {}m {}f  |  full {}m {}f  |  {} body heights  |  health {}",
             tenths(short_apex),
             short_time,
             tenths(full_apex),
             full_time,
             tenths(full_apex.div(t::body_height())),
+            t::class_health(class),
         );
+        // The shield's weight: what it holds, how fast it leaks, what a parry
+        // is worth and what a full one does to a shove. `--bin weight` runs it.
+        if class == sim::class::Class::Bulwark {
+            println!(
+                "  weight: holds {}  |  full empties in {}f  |  parry loads x{}  |  pushback at the cap x{}",
+                t::weight_cap().to_int(),
+                t::weight_drain_frames(),
+                tenths(t::parry_load()),
+                tenths(t::heavy_pushback()),
+            );
+        }
         println!(
             "  air: jump x{}  gravity x{}  fall cap x{}  steering {}",
             tenths(mob.jump),

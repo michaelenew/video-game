@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 290] = [
+pub const SCALARS: [i32; 300] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -298,6 +298,16 @@ pub const SCALARS: [i32; 290] = [
            39321, // dual_mage.slow_fall,_fall_cap_(x) = 0.6
               40, // dual_mage.ascension,_health_back_per_hit_landed = 40
               10, // dual_mage.ascension,_stun_on_the_way_out,_at_least = 10
+             400, // bulwark.weight,_the_most_the_shield_holds = 400
+             600, // bulwark.weight,_a_full_shield_empties_in = 600
+          131072, // bulwark.weight,_a_parry_loads_(x_its_damage) = 2
+           26214, // bulwark.weight,_pushback_at_the_cap_(x) = 0.4
+           81920, // health.bulwark_(x) = 1.25
+           65536, // health.champion_(x) = 1
+           65536, // health.shadow_reaver_(x) = 1
+           65536, // health.elementalist_(x) = 1
+           65536, // health.blood_mage_(x) = 1
+           65536, // health.dual_mage_(x) = 1
 ];
 
 #[rustfmt::skip]

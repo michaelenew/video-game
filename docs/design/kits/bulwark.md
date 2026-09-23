@@ -6,10 +6,12 @@ depends: ../bulwark.md, ../defense.md
 
 # Bulwark — kit
 
-> ⚠️ **A v2 of the mechanic is proposed, 2026-09-23** — see [../bulwark-v2.md](../bulwark-v2.md).
-> Every hit taken on the shield is stored as **weight**; Slam (on middle click) and Throw spend
-> it, and a planted shield becomes a real structure sized by it. Health goes highest on the
-> roster. Nothing of it is built. This document is still what is in the game.
+> ⚠️ **A v2 of the mechanic is being built, 2026-09-23** — see [../bulwark-v2.md](../bulwark-v2.md)
+> and [../plans/bulwark-v2.md](../plans/bulwark-v2.md). Every hit taken on the shield is stored as
+> **weight**; Slam (on middle click) and Throw spend it, and a planted shield becomes a real
+> structure sized by it. **Built so far (M1):** weight itself — loading, the drain, the
+> pushback it resists, drawn on the shield — and the Bulwark's health, highest on the roster.
+> See [Weight](#weight--built-m1) below. Nothing spends it yet, and Slam still has no button.
 
 **Identity.** The wall. Wins by denying space and funnelling the opponent into where you are
 already aimed. Committed, not slow.
@@ -41,6 +43,31 @@ parry timing. Only the second requires you to be holding it.
 > class's central promise and is currently fiction. It is the largest unbuilt thing in this
 > document, and [../elementalist.md](../elementalist.md)'s "shared blocking implementation"
 > is half-done in the other direction: structures do block bodies and shots.
+
+## Weight — built (M1)
+
+**Every blow taken on the shield is stored in it**, in health: a blocked hit stores its damage,
+a parried one `Weight, a parry loads` times that, up to `Weight, the most the shield holds`.
+It drains on its own, a full shield emptying in `Weight, a full shield empties in`, so it is
+about the current exchange. It rides on every shield state — held, in flight, planted — so a
+shield thrown with three hits in it lands with them. All of it is `crate::bulwark`, and the
+only place that loads it is the one place a blocked blow is resolved (`state::apply_hit`, plus
+the Elementalist's poke), which is why the creature's blows load it with no code of their own.
+
+**What it does today, unspent:** a heavy guard is pushed back less — blocked knockback times a
+line from one at empty to `Weight, pushback at the cap` at full. That is the trait
+[../defense.md](../defense.md) promised and never built.
+
+**Drawn**: the shield thickens and darkens as it fills, and the HUD's mechanic line reads
+`shield held, weight: N`. `cargo run -p sim --bin weight` prints what each class's opener and
+each creature move deposits, the drain, and the shove at five weights; the frame table prints
+the four knobs under the Bulwark.
+
+**Health**: 1250 against everyone else's 1000, from the `Health` family in the Oven — one
+multiplier per class, shared with the Reaver's v2.
+
+**What does not spend it yet**: Slam (M2) and the throw and the planted wall (M3). Until then
+weight is a number you can see that changes one thing.
 
 ## What is bound today
 

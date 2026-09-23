@@ -16,6 +16,7 @@ use crate::DT;
 use crate::aim::{self, Contact, Path, Scene};
 use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
+use crate::bulwark;
 use crate::camera;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
@@ -541,6 +542,7 @@ impl Player {
     pub fn new(class: Class) -> Player {
         Player {
             class,
+            health: t::class_health(class),
             mechanic: class.starting_mechanic(),
             ..Player::default()
         }
@@ -764,8 +766,14 @@ impl Player {
 
     pub fn heal(&mut self, amount: i32) {
         if amount > 0 && self.health > 0 {
-            self.health = (self.health + amount).min(t::max_health());
+            self.health = (self.health + amount).min(self.max_health());
         }
+    }
+
+    /// This fighter's whole bar: the match's, scaled by their class's row in
+    /// the Health table. See `tuning::class_health`.
+    pub fn max_health(&self) -> i32 {
+        t::class_health(self.class)
     }
 
     /// Standing on the creature.
@@ -800,7 +808,7 @@ impl Default for Player {
             pos: V3::ZERO,
             vel: V3::ZERO,
             facing: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
-            health: 1000,
+            health: t::class_health(Class::Bulwark),
             action: Action::Free,
             grounded: true,
             jump_hold: 0,
@@ -814,7 +822,7 @@ impl Default for Player {
             repeat_lock: [0; moves::MAX_SLOTS],
             reactivate_lock: [0; moves::MAX_SLOTS],
             class: Class::Bulwark,
-            mechanic: Mechanic::Shield(Shield::Held),
+            mechanic: Mechanic::Shield(Shield::Held { weight: Fx::ZERO }),
             rounds_won: 0,
             crouching: false,
             slowed: 0,
@@ -1250,7 +1258,7 @@ impl World {
         let shields = [self.players[0].shield(), self.players[1].shield()];
         for (owner, shield) in shields.iter().enumerate() {
             let target = 1 - owner;
-            let Some(Shield::Flying { pos, .. }) = *shield else {
+            let Some(Shield::Flying { pos, weight, .. }) = *shield else {
                 continue;
             };
             {
@@ -1278,7 +1286,8 @@ impl World {
                         },
                     );
                     // Contact drops it where it struck.
-                    self.players[owner].mechanic = Mechanic::Shield(Shield::Planted { pos });
+                    self.players[owner].mechanic =
+                        Mechanic::Shield(Shield::Planted { pos, weight });
                 }
             }
         }
@@ -2111,6 +2120,12 @@ pub(crate) fn guard_against(defender: &Player, from: V3, unblockable: bool) -> (
 }
 
 pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
+    // Taken on the shield, either way: stored as weight. A parry stores more.
+    // See `crate::bulwark` -- this is the one place a blocked blow is
+    // resolved, which is why the creature's blows load it without asking.
+    if hit.blocked || hit.parried {
+        bulwark::load(defender, hit.damage, hit.parried);
+    }
     if hit.parried {
         // The parry itself costs the defender nothing. The attacker eats the
         // stagger, which the caller applies.
@@ -2125,8 +2140,10 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
                 left: hit.blockstun,
             };
         }
-        defender.vel.x = hit.dir.x.mul(hit.knockback);
-        defender.vel.z = hit.dir.z.mul(hit.knockback);
+        // A heavy shield moves less. One at empty, `heavy_pushback` at the cap.
+        let knockback = hit.knockback.mul(bulwark::pushback(defender));
+        defender.vel.x = hit.dir.x.mul(knockback);
+        defender.vel.z = hit.dir.z.mul(knockback);
     } else {
         defender.health = (defender.health - hit.damage).max(0);
         defender.vel.x = hit.dir.x.mul(hit.knockback);
@@ -4099,21 +4116,23 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                 // the look angle from the chest. Those are parallel lines that
                 // never meet, and the shield is thrown far enough that the gap
                 // between them is most of a body.
-                Shield::Held => Shield::Flying {
+                Shield::Held { weight } => Shield::Flying {
                     pos: from,
                     vel: aim::skillshot_path(who, input, t::shield_range(), scene)
                         .dir()
                         .scale(t::shield_speed()),
                     outbound: true,
                     travelled: Fx::ZERO,
+                    weight,
                 },
-                Shield::Planted { pos } => {
+                Shield::Planted { pos, weight } => {
                     let to_owner = from.sub(pos);
                     Shield::Flying {
                         pos,
                         vel: to_owner.normalized().scale(t::shield_speed()),
                         outbound: false,
                         travelled: Fx::ZERO,
+                        weight,
                     }
                 }
                 Shield::Flying {
@@ -4121,6 +4140,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                     vel,
                     outbound,
                     travelled,
+                    weight,
                 } => {
                     let to_shield = pos.sub(p.pos);
                     if to_shield.flat_len().raw() > Fx::ONE.raw() {
@@ -4135,6 +4155,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                         vel,
                         outbound,
                         travelled,
+                        weight,
                     }
                 }
             });
@@ -4176,12 +4197,14 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
 /// Per-tick mechanic upkeep: shields in flight, shadows on a leash, the meter
 /// burning at depth.
 fn step_mechanic(p: &mut Player) {
+    bulwark::drain(p);
     match p.mechanic {
         Mechanic::Shield(Shield::Flying {
             pos,
             vel,
             outbound,
             travelled,
+            weight,
         }) => {
             let step = vel.scale(DT);
             let next = pos.add(step);
@@ -4194,6 +4217,7 @@ fn step_mechanic(p: &mut Player) {
                     // a level throw is untouched.
                     Shield::Planted {
                         pos: V3::new(next.x, next.y.max(arena::ground_under(next)), next.z),
+                        weight,
                     }
                 } else {
                     Shield::Flying {
@@ -4201,12 +4225,13 @@ fn step_mechanic(p: &mut Player) {
                         vel,
                         outbound,
                         travelled: gone,
+                        weight,
                     }
                 }
             } else {
                 let hand = aim::origin(p.pos);
                 if next.sub(hand).flat_len().raw() < Fx::ONE.raw() {
-                    Shield::Held
+                    Shield::Held { weight }
                 } else {
                     // Home in, so the return does not miss a moving owner.
                     let dir = hand.sub(next).normalized().scale(t::shield_speed());
@@ -4215,6 +4240,7 @@ fn step_mechanic(p: &mut Player) {
                         vel: dir,
                         outbound,
                         travelled: gone,
+                        weight,
                     }
                 }
             });
@@ -4394,22 +4420,28 @@ fn steer_meter(p: &mut Player, kind: u8) {
 
 fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
     match m {
-        Mechanic::Shield(Shield::Held) => h.write_u32(0),
-        Mechanic::Shield(Shield::Planted { pos }) => {
+        Mechanic::Shield(Shield::Held { weight }) => {
+            h.write_u32(0);
+            h.write_i32(weight.raw());
+        }
+        Mechanic::Shield(Shield::Planted { pos, weight }) => {
             h.write_u32(1);
             hash_v3(h, pos);
+            h.write_i32(weight.raw());
         }
         Mechanic::Shield(Shield::Flying {
             pos,
             vel,
             outbound,
             travelled,
+            weight,
         }) => {
             h.write_u32(2);
             hash_v3(h, pos);
             hash_v3(h, vel);
             h.write_u32(*outbound as u32);
             h.write_i32(travelled.raw());
+            h.write_i32(weight.raw());
         }
         Mechanic::Forms {
             form,

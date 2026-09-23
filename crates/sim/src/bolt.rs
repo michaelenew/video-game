@@ -88,6 +88,11 @@ pub fn targets(versus: bool) -> Targets {
 /// committing to a long telegraph in front of an Elementalist a decision.
 pub fn poke(defender: &mut Player, from: V3, damage: i32) -> Poked {
     let (guarding, parried) = guard_against(defender, from, false);
+    // Taken on the shield, so stored -- the same deposit `apply_hit` makes,
+    // for the one blockable blow that does not go through it.
+    if guarding || parried {
+        crate::bulwark::load(defender, damage, parried);
+    }
     if parried {
         return Poked::Parried;
     }
