@@ -2,19 +2,23 @@
 //!
 //! **The body is the meter.** Dark on her left and Light on her right -- the
 //! same sides as the arms that goad them -- **three wings a side**, and a bar
-//! is read by how many of its three are there. Empty is none; a third of the
-//! bar and the first wing is there; two thirds, the second; full, the third.
-//! They do not grow: a wing is a wing, and it materialises whole. Lopsided
-//! wings are the gap, readable across the arena by both players; three and
-//! three is a mage about to ascend, and ascension is all six.
+//! is read by how many of its three are there. **A wing is a tier**: the
+//! first arrives when the bar reaches the blink's threshold, the second at
+//! the second jump's, the third at the top the wings read. Those are the
+//! marks the HUD's track already carries, so a wing appearing on her back and
+//! a tick passing on the bar are the same moment -- the moment something
+//! about what her body can do changes. They do not grow: a wing is a wing,
+//! and it materialises whole. Lopsided wings are the gap, readable across the
+//! arena by both players; three and three is a mage about to ascend, and
+//! ascension is all six.
 //!
 //! **Three sizes, and the biggest comes first.** From the top of her back
 //! down: the smallest, the biggest, the middle one -- the seraph's proportions,
 //! with the great wing in the middle where the shoulder blades are. They
-//! arrive biggest first: the first third of a bar puts the great wing out, the
-//! second the lower one, the third the small one above. So a mage at a third
-//! already has a wing you can see across the arena, and the last one is a
-//! flourish rather than the thing you are waiting for.
+//! arrive biggest first: the blink puts the great wing out, the second jump
+//! the lower one, the top the small one above. So a mage at half already has a
+//! wing you can see across the arena, and the last one is a flourish rather
+//! than the thing you are waiting for.
 //!
 //! Counting rather than stretching because a wing half a metre long is not a
 //! wing, it is a line, and the thing the opponent has to read from across the
@@ -68,12 +72,17 @@ impl Slot {
         }
     }
 
-    /// Pitch above the horizontal, in radians: the small one reaches up past
-    /// the shoulders, the great one up and out, the lower one out and down.
+    /// Pitch of the wing's own line above the horizontal, in radians. The arm
+    /// rises another thirty-five degrees inside the wing before the wrist, so
+    /// these are lower than the wings look: the small one's wrist ends up
+    /// about sixty-five degrees up, the great one's about forty-five, the
+    /// lower one's level with the shoulder with its primaries hanging. The
+    /// first cut had the small one at seventy, which put its wrist past
+    /// vertical and its feathers over her head onto the other side.
     const fn pitch(self) -> f32 {
         match self {
-            Slot::Top => 1.20,
-            Slot::Middle => 0.45,
+            Slot::Top => 0.52,
+            Slot::Middle => 0.16,
             Slot::Bottom => -0.40,
         }
     }
@@ -90,7 +99,7 @@ impl Slot {
         }
     }
 
-    /// Which third of the bar puts it out: zero is the first.
+    /// Which tier of the bar puts it out: zero is the first, the blink's.
     pub fn order(self) -> usize {
         ORDER.iter().position(|s| *s == self).unwrap_or(0)
     }
@@ -216,22 +225,21 @@ pub struct Wing {
     pub across: V3,
 }
 
-/// How many of a side's three wings a bar of `bar` shows.
+/// How many of a side's three wings a bar of `bar` shows: how many of the
+/// three tiers that bar has reached on its own.
 ///
-/// The first at a third of the top, the second at two thirds, and the third at
-/// `tuning::tier_wings` -- the same "full" ascension reads, so three and three
-/// on her back means exactly what it looks like. A bar between the top and
-/// that threshold shows three too.
+/// The blink's threshold, the second jump's and the top the wings read -- the
+/// same three numbers `sim::dual::Tier` reads off the *lower* bar and the
+/// HUD's track ticks on each side. So a side's wings say how far that being
+/// has been fed, and the tier she actually holds is whichever side has fewer.
+/// The first cut put them at thirds of the bar, which was a fourth set of
+/// marks nobody else used.
 pub fn shown_for(bar: sim::Fx) -> usize {
-    let top = sim::tuning::meter_max().max(1);
-    let full = sim::tuning::tier_wings().min(top);
-    let bar = fx(bar);
-    let third = top as f32 / PER_SIDE as f32;
-    if bar >= full as f32 {
-        PER_SIDE
-    } else {
-        ((bar / third).floor() as usize).min(PER_SIDE - 1)
-    }
+    use sim::dual::Tier;
+    [Tier::Blink, Tier::Jump, Tier::Wings]
+        .into_iter()
+        .filter(|tier| bar.raw() >= sim::Fx::from_int(tier.threshold()).raw())
+        .count()
 }
 
 /// All six, the dark side first and each side in the order it appears, if

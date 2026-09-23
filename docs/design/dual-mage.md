@@ -195,9 +195,13 @@ vulnerable, not by reaching it as fast as possible.
 ### On her back
 
 **The two bars are six wings**, three a side, dark on the left and light on the right — the
-same sides as the arms that goad them. A wing does not grow: it **materialises**, whole, when
-its bar reaches its third — none at empty, one at a third, two at two thirds, and the third at
-the same "full" that ascension reads. So a bar is read as a count, one, two or three, which is
+same sides as the arms that goad them. A wing does not grow: it **materialises**, whole, and
+**a wing is a tier** — a side's first wing arrives when that bar reaches the blink's threshold,
+its second at the second jump's, its third at the top the wings read. Those are the three marks
+the HUD's track already carries, so a wing appearing on her back and a tick passing on the bar
+are one moment, the moment something about what her body can do changes. (The first cut put
+them at thirds of the bar, a fourth set of marks nothing else used, and it read as wings
+arriving in the middle of nowhere.) So a bar is read as a count, one, two or three, which is
 what can be read from across the arena; a wing half a metre long is a line, not a wing.
 Lopsided wings are the gap, readable by both players; three and three is a mage about to
 ascend, and ascension is all six. The HUD carries the two bars too, growing away from each
@@ -207,10 +211,11 @@ the body by making the body the meter.
 
 **Three sizes, and the biggest comes first.** From the top of her back down: the smallest,
 the biggest, the middle one — the seraph's proportions, with the great wing where the shoulder
-blades are. They arrive biggest first: the first third of a bar puts the great wing out, the
-second the lower one, the third the small one above. So a mage at a third already has a wing
-you can see across the arena, and the last one is a flourish rather than the thing you are
-waiting for. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
+blades are. They arrive biggest first: the blink puts the great wing out, the second jump the
+lower one, the top the small one above. So a mage at half already has a wing you can see
+across the arena, and the last one is a flourish rather than the thing you are waiting for.
+The great wing reaches out and a little up, the small one up at about sixty-five degrees, the
+lower one out with its primaries hanging; none crosses her centre line. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
 wrist well short of the tip, seven primaries fanning from that wrist like fingers — the
 outermost reaching the full span, each next one shorter and hung lower, the last hanging down
 — and secondaries hanging from the arm behind them, every feather a rounded slat and the wing

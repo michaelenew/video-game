@@ -35,17 +35,21 @@ fn shown(w: &World, force: Force) -> Vec<Slot> {
 }
 
 #[test]
-fn a_side_shows_one_wing_per_third_of_its_bar() {
-    // Five bar values including empty, full and lopsided, the way the plan
-    // asks. A count, not a length: a wing is there or it is not, and the third
-    // appears at the same "full" that ascension reads.
+fn a_side_shows_one_wing_per_tier_its_bar_has_reached() {
+    // A wing is a tier. The first arrives with the blink's threshold, the
+    // second with the second jump's, the third at the top the wings read --
+    // the marks the HUD already ticks -- so a wing appearing and something
+    // changing about her body are one moment. Five bar values including empty,
+    // full and lopsided, the way the plan asks. A count, not a length.
+    let blink = sim::tuning::tier_blink();
+    let jump = sim::tuning::tier_jump();
     let full = sim::tuning::tier_wings();
     for (dark, light, want_dark, want_light) in [
         (0, 0, 0, 0),
         (100, 100, 3, 3),
-        (50, 20, 1, 0),
-        (70, full, 2, 3),
-        (33, 34, 0, 1),
+        (blink, blink - 1, 1, 0),
+        (jump, full, 2, 3),
+        (blink - 1, jump - 1, 0, 1),
     ] {
         let w = mage_with(dark, light, 0);
         assert_eq!(
@@ -59,6 +63,17 @@ fn a_side_shows_one_wing_per_third_of_its_bar() {
             "light bar {light} shows the wrong number of wings"
         );
     }
+    // And the same three numbers the tiers read: a mage level at each
+    // threshold holds that tier and shows that many wings a side.
+    for (bar, tier, count) in [
+        (blink, sim::dual::Tier::Blink, 1),
+        (jump, sim::dual::Tier::Jump, 2),
+        (full, sim::dual::Tier::Wings, 3),
+    ] {
+        let w = mage_with(bar, bar, 0);
+        assert_eq!(sim::dual::tier(&w.players[0]), tier);
+        assert_eq!(shown(&w, Force::Dark).len(), count);
+    }
 }
 
 #[test]
@@ -69,9 +84,13 @@ fn the_biggest_comes_first_then_the_lower_then_the_small_one_on_top() {
     assert!(Slot::Middle.length() > Slot::Bottom.length());
     assert!(Slot::Bottom.length() > Slot::Top.length());
     assert_eq!(ORDER, [Slot::Middle, Slot::Bottom, Slot::Top]);
-    assert_eq!(shown(&mage_with(34, 0, 0), Force::Dark), vec![Slot::Middle]);
+    let (blink, jump) = (sim::tuning::tier_blink(), sim::tuning::tier_jump());
     assert_eq!(
-        shown(&mage_with(67, 0, 0), Force::Dark),
+        shown(&mage_with(blink, 0, 0), Force::Dark),
+        vec![Slot::Middle]
+    );
+    assert_eq!(
+        shown(&mage_with(jump, 0, 0), Force::Dark),
         vec![Slot::Middle, Slot::Bottom]
     );
     let all = wings::wings(&mage_with(100, 100, 0).players[0]).unwrap();
@@ -87,9 +106,9 @@ fn the_biggest_comes_first_then_the_lower_then_the_small_one_on_top() {
 
 #[test]
 fn the_wings_materialise_and_never_grow() {
-    // The same wing at a third of the bar and at the top: same root, same
-    // direction, same length. What changes with the bar is how many.
-    let low = mage_with(34, 34, 0);
+    // The same wing at half a bar and at the top: same root, same direction,
+    // same length. What changes with the bar is how many.
+    let low = mage_with(sim::tuning::tier_blink(), sim::tuning::tier_blink(), 0);
     let high = mage_with(100, 100, 0);
     let a = wings::wings(&low.players[0]).unwrap();
     let b = wings::wings(&high.players[0]).unwrap();
@@ -154,9 +173,9 @@ fn dark_is_on_her_left_and_light_on_her_right_and_the_vanes_face_the_players() {
             n[1]
         );
         match wing.slot {
-            Slot::Top => assert!(wing.along[1] > 0.5, "the top wing does not reach up"),
+            Slot::Top => assert!(wing.along[1] > 0.4, "the top wing does not reach up"),
             Slot::Bottom => assert!(wing.along[1] < -0.2, "the bottom wing does not reach down"),
-            Slot::Middle => assert!(wing.along[1] > 0.2 && wing.along[1] < 0.7),
+            Slot::Middle => assert!(wing.along[1] > 0.05 && wing.along[1] < 0.5),
         }
     }
 }
