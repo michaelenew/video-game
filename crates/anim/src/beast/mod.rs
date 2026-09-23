@@ -547,6 +547,20 @@ impl Looseness {
         legs: Feel::new(4.0, 0.40),
     };
 
+    /// Going down and getting back up, with the legs kept honest.
+    ///
+    /// The body, neck and tail are as loose as `LIMP`. The legs are not: on a
+    /// collapse the hips fall further than a leg is long, and a leg that lags
+    /// and rings behind a fall of that size is a leg through the floor for
+    /// a dozen frames. `Feel`'s own note says it -- a trailing foot is a foot
+    /// in the ground -- and a metre and a half of drop is where it bites.
+    pub const COLLAPSE: Looseness = Looseness {
+        body: Feel::new(3.6, 0.55),
+        neck: Feel::new(5.0, 0.32),
+        tail: Feel::new(6.0, 0.28),
+        legs: Feel::new(2.0, 0.80),
+    };
+
     pub fn group(&self, g: Group) -> Feel {
         match g {
             Group::Body => self.body,
@@ -681,6 +695,7 @@ fn move_of(clip: Clip) -> Option<u8> {
         Clip::Charge => CHARGE,
         Clip::Slam => SLAM,
         Clip::Shake => SHAKE,
+        Clip::Kick => KICK,
         _ => return None,
     })
 }

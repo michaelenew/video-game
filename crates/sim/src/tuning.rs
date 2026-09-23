@@ -1609,10 +1609,12 @@ pub fn swing_level_to() -> i32 {
 /// in `beast::REST` and `beast::SHAPES` are constants and this is not.
 ///
 /// At one the creature is about thirteen metres nose to tail with its back
-/// three and a half metres up. That height is chosen against the jump: a
-/// standing full hop apexes around 2.2 m and cannot reach it, and a hop thrown
-/// from one of the arena's 1.5 m platforms can. **The climb is a positioning
-/// problem before it is a timing one**, and this is the number that decides it.
+/// five and a half metres up. That height is chosen against the jump: the
+/// lowest thing on the standing animal is out of every class's hop but the
+/// Dual mage's, and the ways up are the ones the ground game earns. **The
+/// climb is a positioning problem before it is a timing one**, and this is
+/// the number that decides it -- though the shape itself is `beast::REST`,
+/// and the height is in the legs. See `cargo run -p sim --bin beastcheck`.
 pub fn monster_scale() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterScale))
 }
@@ -1636,9 +1638,10 @@ pub fn monster_margin() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterMargin))
 }
 
-/// Walking, backing off, and how quickly it changes between them. Below the
-/// player's own walk on purpose: it catches you by cornering you, not by
-/// outrunning you.
+/// Walking, backing off, and how quickly it changes between them. The walk is
+/// below the player's own on purpose: inside striking distance it catches you
+/// by cornering you, not by outrunning you. The walk is also where the gait
+/// has fully changed over from standing; above it, it blends to the gallop.
 pub fn monster_walk() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterWalk))
 }
@@ -1649,16 +1652,20 @@ pub fn monster_accel() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterAccel))
 }
 
-/// The speed the gait has fully changed over to a gallop at. Between this and
-/// the walk the two cycles are blended, which is what stops a creature
-/// accelerating out of a walk from planting two feet at once.
+/// The speed the gait has fully changed over to a gallop at, **and the fastest
+/// it goes**: wanting to close a long gap runs it up to this. Above the
+/// player's walk on purpose, since 2026-09-23 -- a fight you could walk away
+/// from at leisure was not a hunt. Between this and the walk the two cycles
+/// are blended, which is what stops a creature accelerating out of a walk from
+/// planting two feet at once.
 pub fn gallop_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GallopSpeed))
 }
 
 /// The distance it tries to hold, and how hard it corrects toward it. Set near
 /// the middle of the move set's range band so that most of what it wants to do
-/// is available most of the time.
+/// is available most of the time. The correction is scaled by how squarely it
+/// faces the target -- it turns before it runs -- see `Monster::walk`.
 pub fn prowl_range() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ProwlRange))
 }

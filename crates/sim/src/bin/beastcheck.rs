@@ -94,8 +94,10 @@ fn main() {
     // there at all.
     let mut lowest = (sim::Class::Bulwark, Fx::MAX);
     let mut highest = (sim::Class::Bulwark, Fx::ZERO);
+    let mut apexes: Vec<(sim::Class, Fx)> = Vec::new();
     for class in sim::class::ALL_CLASSES {
         let apex = jump_apex(class);
+        apexes.push((class, apex));
         if apex.raw() < lowest.1.raw() {
             lowest = (class, apex);
         }
@@ -105,6 +107,7 @@ fn main() {
     }
     let (short, apex) = lowest;
     let (tall, best) = highest;
+    let _ = apex;
     let platform = sim::arena::WALL_HEIGHT;
     let from_platform = best.add(platform);
     println!(
@@ -120,15 +123,26 @@ fn main() {
         m(from_platform)
     );
 
-    let reach = |h: Fx| {
-        if h.raw() <= apex.raw() {
-            "a standing jump"
-        } else if h.raw() <= best.raw() {
-            "a standing jump, the floatier classes"
+    // **Who can get there from the floor, by name.** "The floatier classes"
+    // was the label for anything between the shortest hop and the tallest,
+    // and once the animal grew a metre that band held every surface on it
+    // while the honest answer for most of them was "the Dual mage". A route
+    // is a route for the classes that can jump it, and the climb turns on
+    // which those are.
+    let reach = |h: Fx| -> String {
+        let can: Vec<&str> = apexes
+            .iter()
+            .filter(|(_, a)| h.raw() <= a.raw())
+            .map(|(c, _)| c.name())
+            .collect();
+        if can.len() == apexes.len() {
+            "a standing jump, every class".to_string()
+        } else if !can.is_empty() {
+            format!("a standing jump for {}", can.join(", "))
         } else if h.raw() <= from_platform.raw() {
-            "only from a platform"
+            "only from a platform".to_string()
         } else {
-            "out of reach"
+            "out of reach".to_string()
         }
     };
 

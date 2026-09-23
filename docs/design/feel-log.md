@@ -4646,3 +4646,109 @@ riding the Bloodletter home (the cost is the leech itself, which is the purest
 statement of this class there is) and giving the leech a positional pull. Both
 built answers are **flat**: what she is short of is ground rather than height,
 and whether that is the right read is the first thing to find out.
+
+### 2026-09-23 — the hunt was easy, four ways at once
+
+**Changed** the Ridgeback stands five and a half metres at the back (was four
+and a half), the metre in its legs and the tail carried level; it gallops at
+12 m/s when you run and comes about before it runs; it has a seventh move, a
+**back kick** aimed at the patch directly astern; the tail sweep's cone runs to
+dead astern and the whip goes to whichever side you are on; every hit is bigger
+and harder (bite 150 → 190, stomp 105 → 140, sweep 125 → 160, charge 160 → 210
+at 20 m/s, slam 230 → 290; radii up by about a fifth); it glances every 8
+frames rather than 11, leads by 1.0 rather than 0.85, and pauses 8 frames
+between moves rather than 12. The shake's whip is 36 frames rather than 56.
+Every collapse pose is a metre deeper. The scripted hunter climbs what it can
+reach rather than the tail, stands beside the hind leg rather than behind it,
+pokes then watches, and unloads only into recoveries it can see are long enough.
+
+**Why** a report from play, in four parts: it is not fast enough to catch you;
+approaching it has very little risk because its hits are telegraphed and small;
+getting on its back is too easy because it is short; and there is a safe spot at
+the base of its tail where nothing can hit you and you wail on it. All four were
+true, and two of them were bugs rather than tuning.
+
+**The bug under "its hits are small".** A move carried by a bone had the bone's
+*whole rest offset* added to an anchor that was already authored in body space.
+The bite is chosen for a target at three to nine metres and its volume started
+at nine; the sweep is a tail that reaches seven metres back and its volume began
+at five. So the bite whiffed at its own ideal range on every throw, and the
+sweep could not touch anybody standing at the tail root — which is the whole of
+the safe spot, and the design document had called that patch the ground game's
+station. `it_can_still_reach_somebody_standing_where_it_is_looking` did not
+catch it because it placed the fighter *at the anchor* rather than at the ideal
+range, with a comment rationalising the discrepancy. The volume now rides the
+bone's motion from rest, and the test could be trusted to fail.
+
+**The metre.** At 3.95 m hips the tail's middle was 3.4 m and four of six
+classes walked up it from the floor; the premise of the climb was true for one
+class of six, which §9 had already said. The metre went half into each leg
+segment, and every earned route was deepened by a metre so it lands where it
+did (stumbling shoulder 2.67 m, toppled barrel 2.2 m, slam's crash 3.2 m, two
+forefeet gone 3.8 m). What that cost: the collapse clips put feet through the
+floor, twice over. Once because a kneeling leg keyed as angles is a leg two
+metres longer than when the angles were chosen — fixed by folding the shin to
+horizontal. Once because the legs of a collapse rang 40% past the planted pose
+on a drop of a metre and a half, so a `COLLAPSE` looseness keeps the legs stiff
+while the body stays limp. And the sound legs of a lamed animal stood through
+the ground: a broken corner drops the hips, and the legs that are left had no
+rule for getting shorter. They fold now by exactly the angle that takes the
+drop out of their height — `math::crouch_turns`, the small-angle inverse of
+`len(1 − cos c)`, which needs no table and is off by four centimetres at the
+deepest drop the animal makes.
+
+**The kick, rather than widening the sweep.** The tail root was safe because a
+whip about the hips is calm at the hips; making the sweep's volume reach the
+pivot would have been lying about the animation. A quadruped kicking backward
+is a move a person can name from behind, where they cannot see its head, so the
+tell is authored for that view — tail up, rump down — and its answer is a
+sidestep, which is not the sweep's answer. Behind it is now two reads; beside
+the hind leg it is one; in front it is the rest of the kit.
+
+**Reverted: nine reversals over a thirty-six frame whip.** The sweep and the
+shake are the ride's cost, and the shake was documented as jumpable from any
+frame of its startup. It was not: a hop is about 55 frames, the whip began at 40
+and ran 56, so every early jump landed inside it and was thrown — and a thrown
+rider, kicked along the surface's own velocity, which at a reversal is nothing,
+went straight up and straight back down onto the same back and stayed. The read
+worked through a fall taken every time, for 45 health. Shortening the whip to 36
+so that a hop begun late in the tell clears it was the fix; the first version
+kept the nine reversals, which at four frames a swing threw braced riders off
+the hips, the place the gradient says is calm. Six reversals is the same six
+frames a swing it had before.
+
+**Three more bugs the per-hit trace found, none of which a person would have
+called a bug.** They would have said the ride feels random.
+
+- *Five throws in a second.* See above: thrown up rather than off, re-landed,
+  thrown again. Now: thrown off the side in the creature's heading (not the
+  part's frame, which is fifty degrees over at the top of a shake), and a body
+  in the stun of a throw does not land back on the thing that threw it.
+- *Every ride ended with its first good hit.* A flinch is a change of clip, a
+  change of clip is a step in the pose, and the grip test read the step as an
+  acceleration. The rider who caused the flinch was the one thrown. A rider's
+  feet are planted again on a cut, as on landing.
+- *The rider walked off the front.* The scripted hunter's "to the ridge" was a
+  spot in the barrel's frame, forward from the tail and also forward from the
+  shoulders — so a rider who came up a stumbling shoulder, which is now the
+  route, walked off the nose. It steers at the ridge as a place.
+
+**Turning before running.** The first gallop overshot every test of the turn:
+told the target was behind it, it ran forward at seven metres a second while
+coming about and ended up beside the target rather than facing it. Forward speed
+is scaled by how squarely it faces the target; a creature that has been got
+behind turns on the spot.
+
+**The instrument.** `landed` beside `thrown` per move, `swings` beside
+`connected`, a `left under a buck` count, and a trace line per hit naming what
+the hunter was doing. Two of the day's bugs were invisible without them and
+obvious with them.
+
+**Verdict** kept. The scripted hunter wins two of six at a mean of five minutes,
+where it won one of six inside a hundred seconds before the pass and five of six
+before the tail was raised; a bot that could not lose was the state §9 had
+already flagged. Seven hits is a dead hunter and every one of the seven is a move
+it could have seen. What only a person can say: whether the kick's twenty-two
+frame tell is a read or a tax; whether "beside the hind leg" is findable
+without being told; and whether the Dual mage floating onto a back nobody else
+can reach is her identity or a hole in the premise.

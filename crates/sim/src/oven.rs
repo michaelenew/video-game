@@ -237,7 +237,7 @@ scalars! {
     LegDrop,          "Ridgeback · legs","Corner drop per break", Fixed, 0,         fx(2,1);
     LegPitch,         "Ridgeback · legs","Pitch per break",     Fixed,   0,         fx(1,8);
     LegRoll,          "Ridgeback · legs","Roll per break",      Fixed,   0,         fx(1,8);
-    LegFold,          "Ridgeback · legs","Broken leg, knee fold", Fixed, 0,         fx(1,4);
+    LegFold,          "Ridgeback · legs","Broken leg, knee fold", Fixed, 0,         fx(1,2);
     LegBuckle,        "Ridgeback · legs","Broken leg, hip share (x)", Fixed, 0,    fx(2,1);
     LegSpeedHurt,     "Ridgeback · legs","Speed per break (x)", Fixed,   0,         fx(1,1);
     StrainDecay,      "Ridgeback · nerve","Strain bled per frame (%)", Percent, 1,  50;
@@ -993,7 +993,7 @@ impl MonsterField {
     }
 }
 
-pub const MONSTER_MOVES: usize = 6;
+pub const MONSTER_MOVES: usize = 7;
 pub const MONSTER_FIELDS: usize = 23;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 

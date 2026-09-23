@@ -256,10 +256,12 @@ decision, and belongs in a test.
 
 1. **Play it against a person.** Everything else is downstream of that — and the
    Ridgeback needs it twice over. The browser build exists to make the asking
-   cheap: a link instead of a clone, [web.md](web.md). The climb now costs something to reach, and
-   whether the reward is worth the trip, whether anyone finds the tail hop, and
-   whether the ground game reads as a phase or as a toll are not things the
-   harness can answer. See [monsters.md](monsters.md) §9.
+   cheap: a link instead of a clone, [web.md](web.md). The climb now has to be
+   earned by five classes of six, the animal gallops, and the place behind it
+   that used to be safe has a kick aimed at it; whether the reward is worth the
+   trip, whether anyone finds the flank beside the hind leg, and whether the
+   ground game reads as a phase or as a toll are not things the harness can
+   answer. See [monsters.md](monsters.md) §9.
 2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
    whether the 4-frame parry window is findable by a human.
 3. Fill out the kits beyond three moves per class.
