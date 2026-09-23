@@ -373,20 +373,10 @@ pub fn pillar_life() -> u16 {
     oven::scalar(Scalar::PillarLife) as u16
 }
 
-pub fn spike_radius() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::SpikeRadius))
-}
-pub fn spike_life() -> u16 {
-    oven::scalar(Scalar::SpikeLife) as u16
-}
-
-/// Movement multiplier while standing in a drain field.
+/// Movement multiplier for anything a Black spike caught, on bare floor or
+/// in an eruption. The slow is what makes leaving cost time.
 pub fn spike_slow() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SpikeSlow))
-}
-
-pub fn spike_drain() -> i32 {
-    oven::scalar(Scalar::SpikeDrain)
 }
 
 /// Frames a structure takes to climb out of the ground. Cosmetic: it is earth,
@@ -1403,10 +1393,11 @@ pub fn pool_cap() -> usize {
     oven::scalar(Scalar::PoolCap).clamp(1, crate::effects::MAX_EFFECTS as i32) as usize
 }
 
-/// How far off a pool the crosshair may be and still count as on it, for the
-/// blink. The Reaver's `shadow_lock_cone`, pointed at a puddle instead of a
+/// How high above a pool the crosshair may be and still count as on it, for
+/// the blink: the pool's disc is the width, and this is the slack standing on
+/// it. The Reaver's `shadow_lock_cone`, pointed at a puddle instead of a
 /// body; separate because a disc on the floor and a standing figure are not
-/// the same size to aim at.
+/// the same shape to aim at. See `aim::pointing_at_disc`.
 pub fn pool_lock() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::PoolLock))
 }

@@ -619,6 +619,27 @@ pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) ->
     .is_some()
 }
 
+/// Is the crosshair on a **disc on the floor** -- an essence pool?
+///
+/// The same question as [`pointing_at`], asked about the Blood mage's object
+/// rather than the Reaver's: the ray from the eye through the crosshair,
+/// against a short cylinder standing on the disc. The disc's own radius is
+/// the width, because a pool is drawn at exactly that and a player aims at
+/// what they can see; `height` is the slack above it, since a reticle that
+/// had to be on the floor itself would make a blink at anything past a few
+/// metres a pixel-hunt. Bodies are not on the ray here either.
+pub fn pointing_at_disc(
+    who: usize,
+    look: Input,
+    at: V3,
+    radius: Fx,
+    height: Fx,
+    scene: &Scene,
+) -> bool {
+    let eye = crate::camera::eye(scene.players[who].pos, look, scene.players[who].aloft);
+    crate::math::ray_hits_cylinder(eye, look.look_dir(), at, radius, height).is_some()
+}
+
 /// Is there a straight line from one body to another that nothing solid
 /// crosses?
 ///

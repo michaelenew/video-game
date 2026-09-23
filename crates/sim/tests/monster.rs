@@ -781,23 +781,35 @@ fn beast_health(w: &World) -> i32 {
 }
 
 #[test]
-fn a_drain_field_hurts_the_creature() {
-    // It did not, for a long time, and the bug was invisible because it only
-    // showed up in a hunt: effects were applied to fighters and nobody else, so
-    // a Blood mage hunting alone put a spike in the ground, drained an empty
-    // patch of arena and got nothing back. Half a kit doing nothing in one of
-    // the game's two modes.
+fn a_spike_on_bare_floor_hits_the_creature_and_spills_under_it() {
+    // Effects used to be applied to fighters and nobody else, so a Blood mage
+    // hunting alone put a spike in the ground and it did nothing. The spike
+    // is one event now rather than a field, and the event has to reach the
+    // creature the same way it reaches a fighter: damage, and a pool of its
+    // blood on the floor under the part it struck.
     let mut w = parked();
     let full = beast_health(&w);
     for _ in 0..2 {
         w.advance([Input::new(Input::MECHANIC), Input::default()]);
     }
-    for _ in 0..200 {
+    for _ in 0..60 {
         w.advance([Input::default(), Input::default()]);
     }
     assert!(
         beast_health(&w) < full,
-        "the field never touched the creature"
+        "the spike never touched the creature"
+    );
+    let pools: Vec<_> = w
+        .effects
+        .iter()
+        .flatten()
+        .filter(|e| e.is_a_pool())
+        .collect();
+    assert_eq!(pools.len(), 1, "the hit left {} pools", pools.len());
+    assert_eq!(pools[0].owner, 0);
+    assert!(
+        pools[0].pos.y.raw() == 0,
+        "the creature's pool is not on the floor"
     );
 }
 

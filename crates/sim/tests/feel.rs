@@ -304,8 +304,7 @@ fn the_dodge_outruns_a_walk() {
 /// The most damage one cast of a move can do to one target.
 ///
 /// Every ability the Blood mage has is a *several* rather than a one: the blade
-/// cuts on the way out and again on the way back, the Grasp is four arms, the
-/// spike is a field that ticks for as long as somebody is standing in it, and
+/// cuts on the way out and again on the way back, the Grasp is four arms, and
 /// any move at all can be given a re-hit interval. A cost weighed against a
 /// single connection would say all four are a losing trade, and the class would
 /// be unplayable by its own numbers.
@@ -323,9 +322,12 @@ fn best_case(m: &Move) -> i32 {
         // by code, Cataclysm only ever turns an existing fire pillar into
         // one at runtime. It is grouped here anyway, for the day something
         // does ask a Move for its best case against a tornado's own numbers.
+        // The spike is one event now: on bare floor the move's own disc is
+        // the whole hit, and the thing standing in the floor afterwards is
+        // only to look at.
+        Some(EffectKind::BlackSpike) => m.damage * swings,
         Some(
-            kind @ (EffectKind::BlackSpike
-            | EffectKind::FirePillar
+            kind @ (EffectKind::FirePillar
             | EffectKind::FireTornado
             | EffectKind::GuillotineLotus
             // The Dual mage's two fields answer the same way: the strike
@@ -1161,4 +1163,104 @@ fn every_weapon_has_its_own_way_off_the_ground_and_they_are_three_decisions() {
         holder.name, "Uppercut",
         "the hammer's takeoff does not hold on to anybody"
     );
+}
+
+// ---------------------------------------------------------------------------
+// The body
+// ---------------------------------------------------------------------------
+
+#[test]
+fn every_class_has_a_move_that_carries_the_body() {
+    // The roster-wide relationship the Blood mage's rebuild argued for: a
+    // class's mechanic pays movement as well as damage and utility, and it
+    // pays it out of the thing already on the field rather than out of a move
+    // added to fill the slot. The Champion's step, the Reaver's dash to her
+    // shadow, the Elementalist's Landfall, the Bulwark's leap to her shield
+    // and the Blood mage's blink to a pool all pass; **the Dual mage does not
+    // today**, and her row is marked pending rather than asserted -- the v2
+    // rebuild in `docs/design/dual-mage-v2.md` is what answers it.
+    //
+    // Per class rather than one sweep, so that a class failing names itself.
+    use sim::Class;
+    use sim::state::Player;
+    let walks_in = |frames: u16| t::move_speed().mul(Fx::ratio(frames as i32, 60));
+    for class in ALL_CLASSES {
+        match class {
+            Class::Champion => assert!(
+                moves::table(class).iter().any(|m| m.step.raw() > 0),
+                "the Champion has no move that steps"
+            ),
+            Class::ShadowReaver => assert!(
+                t::shadow_dash_speed().raw() > t::dodge_speed().raw(),
+                "the Reaver's dash is no faster than a dodge"
+            ),
+            Class::Elementalist => assert!(
+                t::landfall_dive().raw() > t::fall_cap().abs().raw(),
+                "Landfall falls no faster than falling"
+            ),
+            Class::Bulwark => assert!(
+                t::leap_speed().raw() > t::move_speed().raw(),
+                "the leap to the shield is no faster than a walk"
+            ),
+            Class::BloodMage => {
+                // A dodge with the crosshair on a pool: she is there. Measured
+                // against what a dodge of the same length covers.
+                let mut w = sim::World::with_classes([Class::BloodMage, Class::Bulwark]);
+                let far = Fx::from_int(8);
+                let at = w.players[0].pos.add(w.players[0].facing.scale(far));
+                w.effects[0] = Some(sim::effects::Effect::pool(
+                    0,
+                    Class::BloodMage,
+                    moves::blood::SWEEP,
+                    at,
+                    200,
+                ));
+                // The crosshair on the pool: the pitch that lands the
+                // floor ray nearest it, scanned rather than typed.
+                let pitch = {
+                    let stones = sim::stones::gather(&w.players);
+                    let players = w.players;
+                    let effects = w.effects;
+                    let scene = sim::aim::Scene {
+                        stones: &stones,
+                        players: &players,
+                        effects: &effects,
+                        quarry: None,
+                    };
+                    (-40..=80)
+                        .map(|step| -(step * 200) as i16)
+                        .min_by_key(|pitch| {
+                            let look = sim::Input::looking_at(0, 0, *pitch);
+                            sim::aim::grounded_path(0, look, Fx::from_int(20), &scene)
+                                .to
+                                .sub(at)
+                                .len()
+                                .raw()
+                        })
+                        .expect("the scan is not empty")
+                };
+                let start = w.players[0].pos;
+                for _ in 0..t::dodge_frames() as u32 {
+                    w.advance([
+                        sim::Input::looking_at(sim::Input::SHIFT | sim::Input::W, 0, pitch),
+                        sim::Input::default(),
+                    ]);
+                }
+                let crossed = w.players[0].pos.sub(start).flat_len();
+                let dodge = t::dodge_speed().mul(Fx::ratio(t::dodge_frames() as i32, 60));
+                assert!(
+                    crossed.raw() > dodge.raw()
+                        && crossed.raw() > walks_in(t::dodge_frames()).raw(),
+                    "the blink covered {} m, which a dodge ({} m) could have",
+                    crossed.to_f32_for_render(),
+                    dodge.to_f32_for_render()
+                );
+            }
+            // Pending: the meter has no movement in it yet. See the Dual mage
+            // thread, which owns this row.
+            Class::DualMage => {
+                let _ = Player::new(class);
+            }
+        }
+    }
 }

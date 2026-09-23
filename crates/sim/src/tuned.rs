@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 283] = [
+pub const SCALARS: [i32; 280] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -49,10 +49,7 @@ pub const SCALARS: [i32; 283] = [
           163840, // effects.pillar_height,_new = 2.5
           393216, // effects.pillar_height,_grown = 6
              180, // effects.pillar_lifetime = 180
-          163840, // effects.black_spike_radius = 2.5
-             240, // effects.black_spike_lifetime = 240
            29491, // effects.black_spike_slow_(x) = 0.45
-              11, // effects.black_spike_drain = 11
            45875, // stones.stone_radius = 0.7
               18, // effects.slow_duration = 18
               26, // effects.fire_pillar_tick = 26
@@ -1381,7 +1378,7 @@ pub const MOVES: [i32; 1276] = [
                0, // move.blood_mage.black_spike.unblockable = off
                1, // move.blood_mage.black_spike.hits_crouching = on
                0, // move.blood_mage.black_spike.needs_mechanic = off
-               0, // move.blood_mage.black_spike.launch = 0
+          589824, // move.blood_mage.black_spike.launch = 9
                0, // move.blood_mage.black_spike.self_lift = 0
                0, // move.blood_mage.black_spike.grab_hold = 0
                2, // move.blood_mage.black_spike.leaves_behind = 2

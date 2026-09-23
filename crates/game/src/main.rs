@@ -2342,7 +2342,9 @@ mod tests {
         // It was a twelve-centimetre stain on the floor for a while, which is a
         // hazard you find out about by standing in it. The field is the disc;
         // the spike is what you can see from across the arena.
-        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let mut effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        // The disc it came out of, as `World::advance` sets it on the spawn.
+        effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
         let field = effect_piece(&effect, 0).expect("the field is drawn");
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert_eq!(field.shape, Shape::Column);
@@ -2358,11 +2360,12 @@ mod tests {
     }
 
     #[test]
-    fn the_drawn_spike_is_exactly_as_tall_as_the_volume_that_drains() {
+    fn the_drawn_spike_is_exactly_as_tall_as_the_volume_that_hits() {
         // The rule for every effect in the game: what you see is what catches
         // you. A field drawn shorter than it tests would be a hazard you think
         // you jumped over.
-        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let mut effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
         let volume = effect.spike_volume();
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert!(

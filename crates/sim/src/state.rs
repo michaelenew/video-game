@@ -41,6 +41,9 @@ const GROUND_Y: Fx = Fx::ZERO;
 /// `held_by` when nobody is holding you.
 pub const NOBODY: u8 = u8::MAX;
 
+/// `Player::blinked` when she did not blink this frame.
+pub const NO_POOL: u8 = u8::MAX;
+
 /// `Phase::RoundOver::winner` when the creature is the one still standing.
 /// Player indices and `u8::MAX` for a double knockout are already spoken for.
 pub const QUARRY: u8 = 200;
@@ -336,6 +339,20 @@ pub struct Player {
     /// The uppercut's extra leap has been spent this carry. Cleared when an
     /// uppercut starts and whenever the feet are back on the floor.
     pub leap_used: bool,
+    /// Which effect slot the Blood mage blinked to this frame, or [`NO_POOL`].
+    ///
+    /// The dodge branch places her in the pool and cannot delete it -- it
+    /// only has her body -- so it leaves the slot here for `advance` to spend
+    /// on the same frame. In the snapshot for the same reason every edge is:
+    /// a frame re-simulated must consume the same pool.
+    pub blinked: u8,
+    /// Frames left of being **hauled** somewhere by her own Grasp: all four
+    /// arms landed on the creature, and the heavier body wins, so she is the
+    /// one pulled across the gap to the contact point. Zero for everybody and
+    /// almost always for her. See `haul_drive`.
+    pub haul: u16,
+    /// Where the haul is taking her.
+    pub haul_to: V3,
     /// Downward speed banked by a spike, cashed in when this fighter lands.
     ///
     /// The Champion's aerial hammer drives an airborne target into the ground,
@@ -841,6 +858,9 @@ impl Default for Player {
             held_by: NOBODY,
             space_held: false,
             leap_used: false,
+            blinked: NO_POOL,
+            haul: 0,
+            haul_to: V3::ZERO,
             slam: Fx::ZERO,
             stride: 0,
             air_frames: 0,
@@ -1085,6 +1105,15 @@ impl World {
             step_aloft(p, &field);
             fade_grey(p, frame);
         }
+        // A blink spends its pool. Done here rather than in the dodge branch
+        // because the branch only has her body, and the pool is an effect.
+        for i in 0..MAX_PLAYERS {
+            let slot = self.players[i].blinked as usize;
+            if slot < MAX_EFFECTS && self.effects[slot].is_some_and(|e| e.is_a_pool()) {
+                self.effects[slot] = None;
+            }
+            self.players[i].blinked = NO_POOL;
+        }
 
         // What a move does *as it comes out*, on its first active frame: the
         // leap of a leaping move, and whatever it leaves standing in the world.
@@ -1173,6 +1202,27 @@ impl World {
                 // leaves a puddle that is gone before anyone walks through it.
                 // A no-op for every other class. See [`depth`].
                 born.life = lasting(&p, born.life);
+                // The Black spike reads the floor. On bare ground it is a
+                // spike: the move's own disc does the damage, the launch and
+                // the slow, and this is only the thing you can see. On one
+                // of her pools the whole pool erupts at the pool's radius,
+                // launching and slowing everything in it, and drinks the
+                // pool in one go -- the payoff placement, and the pool is
+                // spent whether or not she had grey to fill.
+                if leaves == EffectKind::BlackSpike {
+                    match self.pool_covering(i as u8, born.pos) {
+                        Some(slot) => {
+                            born.reach = self.effects[slot].map_or(m.radius, |e| e.pool_radius());
+                            born.banked = 1;
+                            self.drink_from(slot, i, &m);
+                            self.effects[slot] = None;
+                            // The eruption delivers the hit, at the pool's
+                            // size; the disc must not land a second one.
+                            self.players[i].hit_used = true;
+                        }
+                        None => born.reach = m.radius,
+                    }
+                }
                 spawn_effect(&mut self.effects, born);
             }
         }
@@ -1220,6 +1270,15 @@ impl World {
                 // nothing -- the smear it leaves is for the next one.
                 if let Some(kind) = snapshot[attacker].action.attack_kind() {
                     let m = moves::get(snapshot[attacker].class, kind);
+                    // A spike on bare floor is a spike: damage, a launch, and
+                    // a short slow. The slow is what makes leaving cost time.
+                    if snapshot[attacker].class == Class::BloodMage
+                        && kind == moves::blood::BLACK_SPIKE
+                        && !hit.blocked
+                        && !hit.parried
+                    {
+                        self.players[defender].slow(t::slow_frames(), t::spike_slow());
+                    }
                     if dealt > 0 {
                         if let Some(hb) = hitbox(&snapshot[attacker]) {
                             self.drink_over(attacker, &m, hb.from, hb.to, Some(defender));
@@ -1228,7 +1287,7 @@ impl World {
                             attacker as u8,
                             snapshot[attacker].class,
                             kind,
-                            defender,
+                            &snapshot[defender],
                             dealt,
                         );
                     }
@@ -1474,6 +1533,9 @@ impl World {
             h.write_u32(p.shadow_queued as u32);
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
+            h.write_u32(p.blinked as u32);
+            h.write_u32(p.haul as u32);
+            hash_v3(&mut h, &p.haul_to);
             h.write_i32(p.slam.raw());
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
@@ -2270,6 +2332,7 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             *rush = 0;
         }
         shadow::broken_by_a_hit(defender);
+        defender.haul = 0;
     }
 }
 
@@ -2555,7 +2618,27 @@ fn step_player(
                     // airdodge; what it does not do is take the airdodge's shorter
                     // frames, because the dash has somewhere to *be* and a tail cut
                     // short would strand her halfway there.
-                    if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene) {
+                    if let Some(pool) = may_commit
+                        .then(|| pool_under_the_crosshair(p, who, input, scene))
+                        .flatten()
+                    {
+                        // The Blood mage's blink: a dodge thrown with the
+                        // reticle on one of her pools puts her in it, and the
+                        // pool is spent. The Reaver's dash pointed at the
+                        // class's object instead of at a body -- and with
+                        // nothing to cross, the crossing is instant. The
+                        // airborne one spends the airdodge, like hers.
+                        if !p.grounded {
+                            p.air_dodged = true;
+                        }
+                        p.pos = scene.effects[pool].map_or(p.pos, |e| e.pos);
+                        p.vel = V3::ZERO;
+                        p.blinked = pool as u8;
+                        Action::Dodge {
+                            left: t::dodge_frames(),
+                        }
+                    } else if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene)
+                    {
                         if !p.grounded {
                             p.air_dodged = true;
                         }
@@ -2626,6 +2709,7 @@ fn step_player(
     let steering = ax != 0 || az != 0;
 
     let dashing = shadow::dash_drive(p);
+    let hauled = haul_drive(p);
     if let Some(drive) = dashing {
         // A dash has somewhere to be, so it holds its speed rather than
         // decaying like the dodge it rides on: a decaying shove covers whatever
@@ -2639,6 +2723,12 @@ fn step_player(
         p.vel.x = drive.x;
         p.vel.y = drive.y;
         p.vel.z = drive.z;
+    } else if let Some(drive) = hauled {
+        // Her Grasp hauling *her*: a straight line to the creature's flank at
+        // the reel speed every grab hauls at, with the arena and the creature
+        // still solid under her -- unlike the Reaver's dash, this ends by
+        // arriving against a body.
+        p.vel = drive;
     } else if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(t::dodge_decay());
         p.vel.z = p.vel.z.mul(t::dodge_decay());
@@ -5105,23 +5195,36 @@ impl World {
             // makes a puddle you step out of, and the slow is what makes leaving
             // cost time -- which is what turns it into something you put
             // *between* yourself and someone else.
+            // The spike standing out of the floor. On bare ground it has
+            // already done its work -- the move's own disc hit on the frame
+            // it appeared -- and this is the thing you can see from across
+            // the arena. Erupted from a pool it is the hit: everything
+            // standing in the pool's disc, on its first frame, launched and
+            // slowed at the move's damage. Nothing ticks and nothing drains;
+            // the spike either seeds a pool or cashes one in, and both are
+            // one event the other player can watch happen.
             EffectKind::BlackSpike => {
-                let volume = effect.spike_volume();
-                let ticking = effect.ticks_now();
-                for i in 0..MAX_PLAYERS {
-                    let p = self.players[i];
-                    if !self.effects_reach(i, effect.owner)
-                        || !volume.contains(effect.pos, p.pos, t::body_radius(), p.hurt_height())
-                    {
-                        continue;
+                if effect.erupted() && effect.age == 1 {
+                    let volume = effect.spike_volume();
+                    let m = effect.source();
+                    for i in 0..MAX_PLAYERS {
+                        let p = self.players[i];
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(0, i)
+                            || !volume.contains(
+                                effect.pos,
+                                p.pos,
+                                t::body_radius(),
+                                p.hurt_height(),
+                            )
+                        {
+                            continue;
+                        }
+                        effect.take_hit(0, i);
+                        self.cut(i, effect, effect.pos, m.damage);
+                        self.players[i].slow(t::slow_frames(), t::spike_slow());
                     }
-                    self.players[i].slow(t::slow_frames(), t::spike_slow());
-                    if ticking {
-                        self.drain(i, effect);
-                    }
-                }
-                if ticking {
-                    self.feed_the_caster(effect, 0, effect.pos, volume.radius);
+                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
                 }
             }
 
@@ -5375,6 +5478,21 @@ impl World {
                     let dealt = self.gore_the_creature(effect, arm, at, radius);
                     let owed = effect.leeched(dealt);
                     self.players[effect.owner as usize].heal(owed);
+                    // Against something that cannot be hauled, the catch hauls
+                    // *her*: all four arms on a Ridgeback's flank pull her
+                    // across the gap to the contact point. The same ability
+                    // doing the same thing, with the heavier body winning.
+                    if effect.parts_landed(QUARRY_VICTIM, GRASP_ARMS) == GRASP_ARMS {
+                        let owner = effect.owner as usize;
+                        if self.players[owner].haul == 0 {
+                            let far = at.sub(self.players[owner].pos).len();
+                            // The reel speed's slider does not reach zero, so
+                            // a frame's step is never nothing to divide by.
+                            let frames = far.div(t::reel_speed().mul(DT)).to_int().max(0) + 2;
+                            self.players[owner].haul = frames.min(u16::MAX as i32) as u16;
+                            self.players[owner].haul_to = at;
+                        }
+                    }
                 }
             }
         }
@@ -5556,7 +5674,7 @@ impl World {
             if !effect.kind.comes_home() {
                 self.drink_over(effect.owner as usize, &m, from, from, Some(victim));
             }
-            self.spill_under(effect.owner, effect.class, effect.slot, victim, dealt);
+            self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
         }
         dealt
     }
@@ -5642,6 +5760,55 @@ impl World {
 /// left of the hold, which is the Bulwark's Grapple unchanged: its catch is
 /// already at arm's length, so there is nothing to haul and the two phases
 /// collapse into the behaviour it always had.
+/// Which of this fighter's pools the crosshair is on, with a clear line to
+/// it -- the two questions the Reaver's dash asks about her shadow, pointed
+/// at the class's object instead. Both are `aim`'s to answer; this only
+/// decides which pool, and the nearest is the one a player means.
+fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene) -> Option<usize> {
+    if !p.class.wounds_go_grey() {
+        return None;
+    }
+    let mut best: Option<(usize, Fx)> = None;
+    for (slot, e) in scene.effects.iter().enumerate() {
+        let Some(e) = e else { continue };
+        if !e.is_a_pool() || e.owner != who as u8 {
+            continue;
+        }
+        let wide = e.pool_radius().add(t::body_radius());
+        if !aim::pointing_at_disc(who, input, e.pos, wide, t::pool_lock(), scene)
+            || !aim::clear_between(p.pos, e.pos, scene)
+        {
+            continue;
+        }
+        let far = e.pos.sub(p.pos).len();
+        if best.is_none_or(|(_, seen)| far.raw() < seen.raw()) {
+            best = Some((slot, far));
+        }
+    }
+    best.map(|(slot, _)| slot)
+}
+
+/// Being hauled by her own Grasp: the velocity that takes her there this
+/// frame, or `None` if she is not.
+///
+/// Arrives exactly rather than overshooting -- the last step is the gap --
+/// and counts the frames down so a haul that meets something solid on the
+/// way still ends.
+fn haul_drive(p: &mut Player) -> Option<V3> {
+    if p.haul == 0 {
+        return None;
+    }
+    p.haul -= 1;
+    let gap = p.haul_to.sub(p.pos);
+    let far = gap.len();
+    let step = t::reel_speed().mul(DT);
+    if far.raw() <= step.raw() {
+        p.haul = 0;
+        return Some(gap.scale(Fx::ONE.div(DT)));
+    }
+    Some(gap.normalized().scale(t::reel_speed()))
+}
+
 /// The patch of floor under a point in the air: the arena's ground, and the
 /// creature's contact points are always over it. Stones are not consulted --
 /// a pool spilled onto a raised structure is an open question in the design,
@@ -5660,12 +5827,16 @@ impl World {
     /// One hit in the air spills nowhere: whether it should land where they
     /// do is an open question in `docs/design/blood-mage.md`, and the simpler
     /// answer is the one built until somebody plays it.
-    fn spill_under(&mut self, owner: u8, class: Class, slot: u8, victim: usize, volume: i32) {
-        let v = self.players[victim];
-        if !v.grounded {
+    ///
+    /// `victim` is the body **as it stood when the hit landed**, not as it is
+    /// afterwards: a spike launches what it hits, and a victim read after the
+    /// launch is airborne and spills nowhere, which would make the one move
+    /// meant to seed a pool at range the one move that never does.
+    fn spill_under(&mut self, owner: u8, class: Class, slot: u8, victim: &Player, volume: i32) {
+        if !victim.grounded {
             return;
         }
-        self.spill(owner, class, slot, v.pos, volume);
+        self.spill(owner, class, slot, victim.pos, volume);
     }
 
     /// Put `volume` of blood on the floor at `at`, owned by `owner`.
@@ -5720,6 +5891,13 @@ impl World {
             return;
         }
         spawn_effect(&mut self.effects, born);
+    }
+
+    /// The pool of `owner`'s that a point on the floor is inside, if any.
+    fn pool_covering(&self, owner: u8, at: V3) -> Option<usize> {
+        self.effects
+            .iter()
+            .position(|e| e.is_some_and(|e| e.is_a_pool() && e.owner == owner && e.covers(at)))
     }
 
     /// A move of `owner`'s landed with its volume between `from` and `to`,

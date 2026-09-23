@@ -322,7 +322,7 @@ impl EffectKind {
     pub fn life(self) -> u16 {
         match self {
             EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_life(),
-            EffectKind::BlackSpike => t::spike_life(),
+            EffectKind::BlackSpike => t::spike_erupt(),
             EffectKind::Bloodletter => t::bloodletter_flight(),
             EffectKind::Grasp => t::grasp_flight(),
             // Out, held open, and home again. Three knobs rather than one
@@ -356,7 +356,7 @@ impl EffectKind {
     pub fn damage(self, m: &Move) -> i32 {
         match self {
             EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_damage(),
-            EffectKind::BlackSpike => t::spike_drain(),
+            EffectKind::BlackSpike => m.damage,
             EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::GuillotineLotus => m.damage,
             // All three of the Dual mage's carry a number of their own, for the
             // same reason a pillar does: the move that threw them hit on its
@@ -613,10 +613,19 @@ impl Effect {
     /// certain size, and the hit test should agree with your eyes.
     pub fn spike_volume(&self) -> Pillar {
         Pillar {
-            radius: t::spike_radius(),
+            // The disc it came out of: the move's own radius on bare floor,
+            // the pool's when it erupted from one. See `state::World::advance`.
+            radius: self.reach,
             bottom: Fx::ZERO,
             top: t::spike_height(),
         }
+    }
+
+    /// Did this spike come up out of a pool, at the pool's size? A bare-floor
+    /// spike did its hitting through the move's own disc and is only a thing
+    /// to look at; an erupted one delivers the hit itself, once.
+    pub const fn erupted(&self) -> bool {
+        matches!(self.kind, EffectKind::BlackSpike) && self.banked > 0
     }
 
     /// Radius of a field effect. Drain fields do not grow; they are a place.
@@ -628,7 +637,7 @@ impl Effect {
     /// because the two are one multiply and the match is long.
     fn own_radius(&self) -> Fx {
         match self.kind {
-            EffectKind::BlackSpike => t::spike_radius(),
+            EffectKind::BlackSpike => self.reach,
             EffectKind::FirePillar | EffectKind::FireTornado => self.pillar_volumes().0.radius,
             EffectKind::Bloodletter => t::bloodletter_radius(),
             EffectKind::Grasp => t::grasp_arm_radius(),

@@ -155,10 +155,10 @@ scalars! {
     PillarHeightStart,"Effects",  "Pillar height, new",     Fixed,   fx(1,10),  fx(20,1);
     PillarHeight,     "Effects",  "Pillar height, grown",   Fixed,   fx(1,10),  fx(20,1);
     PillarLife,       "Effects",  "Pillar lifetime",        Frames,  10,        600;
-    SpikeRadius,      "Effects",  "Black spike radius",     Fixed,   fx(1,10),  fx(8,1);
-    SpikeLife,        "Effects",  "Black spike lifetime",   Frames,  10,        600;
+    // The spike's radius, lifetime and drain went with the drain field: it
+    // is a one-event spike now, sized by the move's own disc or the pool it
+    // erupts from, standing for `SpikeErupt` frames under *Blood mage*.
     SpikeSlow,        "Effects",  "Black spike slow (x)",   Fixed,   0,         fx(1,1);
-    SpikeDrain,       "Effects",  "Black spike drain",      Int,     0,         200;
     StructureRadius,  "Stones",   "Stone radius",           Fixed,   fx(1,10),  fx(4,1);
     SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
     PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
