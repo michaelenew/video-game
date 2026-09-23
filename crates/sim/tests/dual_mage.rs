@@ -1,19 +1,25 @@
-//! The Dual mage's kit: two arms, two forces, one meter.
+//! The Dual mage's kit: two arms, two forces, two bars and the hill between.
 //!
 //! Everything here is a property the class stops working without. She holds two
 //! forces apart, one in each arm, and the *only* information the player has
-//! about which one they just threw is which arm it came out of and which way
-//! the meter moved. So: the two autos must sweep opposite sides of her, they
-//! must be mirror images of each other, and the button pressed has to be the
-//! thing that decides.
+//! about which one they just threw is which arm it came out of and which bar
+//! rose. So: the two autos must sweep opposite sides of her, they must be
+//! mirror images of each other, and the button pressed has to be the thing
+//! that decides. Then the two bars: inside the band nothing moves, outside it
+//! the higher rises and the lower falls and she burns, the lower bar gates
+//! what her body can do, and both full is wings.
 //!
 //! See `docs/design/dual-mage.md` for the mechanic and
-//! `docs/design/kits/dual-mage.md` for the kit.
+//! `docs/design/kits/dual-mage.md` for the kit. The measured criteria in
+//! `docs/design/plans/dual-mage-v2.md` are the tests from "Goading the bars"
+//! down, and `cargo run -p sim --bin goad` prints the same numbers.
 
 use sim::aim::Hand;
 use sim::class::{Class, Force, Mechanic};
+use sim::dual::Tier;
 use sim::moves::dual;
 use sim::state::{Action, Hitbox};
+use sim::tuning as t;
 use sim::{Fx, Input, V3, World};
 
 const L: u16 = Input::LEFT;
@@ -140,7 +146,7 @@ fn middle_click_throws_the_lance_the_force_she_carries_decides() {
         (Force::Dark, dual::DARK_LANCE, "dark"),
     ] {
         let mut w = mage();
-        w.players[0].mechanic = meter_at(0, force);
+        w.players[0].mechanic = meter_at(0, 0, force);
         step(&mut w, 1, M);
         assert_eq!(
             w.players[0].action.attack_kind(),
@@ -191,12 +197,12 @@ fn nothing_in_the_kit_is_locked_at_the_centre() {
         (Q, "judgement"),
         (M, "lance"),
     ] {
-        w.players[0].mechanic = meter_at(0, Force::Dark);
+        w.players[0].mechanic = meter_at(0, 0, Force::Dark);
         w.players[0].action = Action::Free;
         step(&mut w, 1, bits);
         assert!(
             w.players[0].action.attack_kind().is_some(),
-            "{name} cannot be thrown from centre"
+            "{name} cannot be thrown with both bars empty"
         );
         w.players[0].action = Action::Free;
     }
@@ -489,14 +495,20 @@ fn a_side_is_always_declared_and_the_list_is_short() {
 }
 
 // ---------------------------------------------------------------------------
-// Steering the meter
+// Goading the bars
 // ---------------------------------------------------------------------------
 
-fn meter(w: &World) -> i32 {
-    match w.players[0].mechanic {
-        Mechanic::Meter { value, .. } => value,
-        other => panic!("not a meter: {other:?}"),
-    }
+fn dark(w: &World) -> Fx {
+    sim::dual::bar(&w.players[0], Force::Dark)
+}
+
+fn light(w: &World) -> Fx {
+    sim::dual::bar(&w.players[0], Force::Light)
+}
+
+/// Both bars together, in whole units -- what one press was worth.
+fn goaded(w: &World) -> i32 {
+    dark(w).add(light(w)).to_int()
 }
 
 fn colour(w: &World) -> Force {
@@ -513,16 +525,70 @@ fn ascending(w: &World) -> u16 {
     }
 }
 
-fn meter_at(value: i32, colour: Force) -> Mechanic {
+fn tier(w: &World) -> Tier {
+    sim::dual::tier(&w.players[0])
+}
+
+fn meter_at(dark: i32, light: i32, colour: Force) -> Mechanic {
     Mechanic::Meter {
-        value,
+        dark: Fx::from_int(dark),
+        light: Fx::from_int(light),
         colour,
         ascending: 0,
+        jumped: false,
+        landed: 0,
+        singe: Fx::ZERO,
     }
 }
 
+/// Ascending, with the bars wherever they were.
+fn ascended(dark: i32, light: i32, colour: Force) -> Mechanic {
+    Mechanic::Meter {
+        dark: Fx::from_int(dark),
+        light: Fx::from_int(light),
+        colour,
+        ascending: t::ascension_frames(),
+        jumped: false,
+        landed: 0,
+        singe: Fx::ZERO,
+    }
+}
+
+/// The top of the bars short of the wings: the highest both can stand, level,
+/// without the next frame being ascension. Where "from the edge" is measured.
+fn high() -> i32 {
+    t::tier_wings() - 1
+}
+
+/// A bar value that **holds** a tier through a few frames of calm. A bar set
+/// exactly on the threshold is below it on the first frame, which is the rule
+/// working -- a tier is held, not reached -- and not what a fixture means.
+fn held(tier: Tier) -> i32 {
+    tier.threshold() + 5
+}
+
+/// The frames a real exchange takes: a Judgement from its first startup frame
+/// to the end of its recovery, twice. The unit the plan measures the calm and
+/// the climb against.
+fn exchange() -> u32 {
+    let m = sim::moves::get(Class::DualMage, dual::JUDGEMENT);
+    2 * (m.startup as u32 + m.active as u32 + m.recovery as u32)
+}
+
+/// Press `bits` on the next frame she is free to act, stepping until then.
+fn when_free(w: &mut World, bits: u16) {
+    for _ in 0..200 {
+        if w.players[0].action.actionable() {
+            step(w, 1, bits);
+            return;
+        }
+        step(w, 1, 0);
+    }
+    panic!("never free to act");
+}
+
 #[test]
-fn every_attack_moves_the_bar_with_nothing_in_range() {
+fn every_attack_goads_a_bar_with_nothing_in_range() {
     // **The bug this class shipped with.** The autos only steered on contact
     // and the casts took their direction from an auto that had never landed, so
     // a player standing where they spawn -- eight metres from anybody -- could
@@ -543,25 +609,31 @@ fn every_attack_moves_the_bar_with_nothing_in_range() {
             .to_f32_for_render();
         assert!(gap > 4.0, "the fixture is in range, so it proves nothing");
         step(&mut w, 1, bits);
-        step(&mut w, 60, 0);
-        assert_ne!(
-            meter(&w),
-            0,
-            "{name} thrown at nothing moved the bar not at all"
+        assert!(
+            goaded(&w) > 0,
+            "{name} thrown at nothing moved neither bar at all"
         );
     }
 }
 
 #[test]
-fn an_auto_moves_the_bar_by_exactly_one_step() {
-    // The bar is calibrated in autos: the thing you throw constantly is the
-    // unit everything else is measured against.
-    let one = sim::tuning::meter_auto_push();
+fn an_auto_goads_its_own_bar_by_exactly_one_step() {
+    // The bars are calibrated in autos: the thing you throw constantly is the
+    // unit everything else is measured against. And an auto raises **its own**
+    // bar -- the dark hand feeds the dark being -- whatever she was carrying.
+    let one = Fx::from_int(t::meter_auto_push());
     for (bits, force, name) in [(L, Force::Dark, "dark"), (R, Force::Light, "light")] {
-        let mut w = mage();
-        step(&mut w, 1, bits);
-        step(&mut w, 30, 0);
-        assert_eq!(meter(&w), one * force.along(), "the {name} auto");
+        for carrying in [Force::Dark, Force::Light] {
+            let mut w = mage();
+            w.players[0].mechanic = meter_at(0, 0, carrying);
+            step(&mut w, 1, bits);
+            let (own, other) = match force {
+                Force::Dark => (dark(&w), light(&w)),
+                Force::Light => (light(&w), dark(&w)),
+            };
+            assert_eq!(own.raw(), one.raw(), "the {name} auto's own bar");
+            assert_eq!(other.raw(), 0, "the {name} auto moved the other bar");
+        }
     }
 }
 
@@ -580,56 +652,839 @@ fn the_last_auto_she_threw_is_the_force_she_is_carrying() {
 
 #[test]
 fn she_is_carrying_a_force_before_she_has_thrown_anything() {
-    // Otherwise the first key pressed in a match has no direction to push in,
-    // which is half of how the bar came to be unmovable.
+    // Otherwise the first key pressed in a match has no bar to push, which is
+    // half of how the bar came to be unmovable.
     let w = mage();
     assert_eq!(colour(&w), Force::Dark);
-    assert_eq!(meter(&w), 0);
+    assert_eq!(goaded(&w), 0);
+    assert_eq!(tier(&w), Tier::None);
 }
 
 #[test]
-fn a_cast_moves_her_further_than_an_auto_does_and_in_the_force_she_carries() {
-    // Committing to a move is committing harder to a side than poking is. And
-    // it goes the way the *last auto* left her, not the way the button that
-    // threw it faces -- a Lance thrown by a mage carrying the light is light.
-    let cast = sim::tuning::meter_cast_push();
+fn a_cast_goads_the_carried_bar_and_further_than_an_auto_does() {
+    // Committing to a move is committing harder to a being than poking is. And
+    // it feeds the bar of the force the *last auto* left her carrying, not the
+    // one the button that threw it faces -- a Lance thrown by a mage carrying
+    // the light feeds the light.
+    let cast = t::meter_cast_push();
     assert!(
-        cast > sim::tuning::meter_auto_push(),
+        cast > t::meter_auto_push(),
         "a cast moves her no further than an auto"
     );
-    for (force, bits, name) in [(Force::Dark, M, "Lance"), (Force::Light, E, "Sweep")] {
+    for (bits, name) in [(M, "Lance"), (E, "Sweep")] {
         for carrying in [Force::Dark, Force::Light] {
             let mut w = mage();
-            w.players[0].mechanic = meter_at(0, carrying);
+            w.players[0].mechanic = meter_at(0, 0, carrying);
             step(&mut w, 1, bits);
-            step(&mut w, 40, 0);
+            let (own, other) = match carrying {
+                Force::Dark => (dark(&w), light(&w)),
+                Force::Light => (light(&w), dark(&w)),
+            };
             assert_eq!(
-                meter(&w),
-                cast * carrying.along(),
-                "{name} thrown while carrying the {} went the wrong way",
+                own.to_int(),
+                cast,
+                "{name} thrown while carrying the {} fed the wrong bar",
                 carrying.name()
             );
+            assert_eq!(other.raw(), 0);
             assert_eq!(colour(&w), carrying, "a cast changed her force");
         }
-        let _ = force;
     }
 }
 
 #[test]
-fn the_meter_burns_at_depth_and_stops_when_you_come_back() {
-    // The containment story: relief comes from stopping, not from a reward.
+fn steering_cannot_push_a_bar_past_its_top() {
     let mut w = mage();
-    w.players[0].mechanic = meter_at(sim::tuning::meter_deep() + 20, Force::Light);
-    let before = w.players[0].health;
-    step(&mut w, 30, 0);
-    assert!(w.players[0].health < before, "the edge costs nothing");
+    for _ in 0..40 {
+        w.players[0].action = Action::Free;
+        step(&mut w, 1, M);
+    }
+    assert!(dark(&w).raw() <= Fx::from_int(t::meter_max()).raw());
+    assert!(w.players[0].health > 0, "she burned herself to death");
+}
 
-    w.players[0].mechanic = meter_at(0, Force::Dark);
-    let inside = w.players[0].health;
-    step(&mut w, 30, 0);
+// ---------------------------------------------------------------------------
+// The hill
+// ---------------------------------------------------------------------------
+
+#[test]
+fn inside_the_band_nothing_moves_but_the_calm_and_nothing_burns() {
+    // The band is the flat top of the hill: a small lead is stable. Both bars
+    // fall by exactly the calm and by nothing else, and health is untouched
+    // however high both of them are.
+    let band = t::meter_band();
+    let calm_a_frame = t::meter_calm().mul(sim::DT);
+    for (d, l) in [(60, 60), (60, 60 - band), (high(), high() - band), (5, 0)] {
+        let mut w = mage();
+        w.players[0].mechanic = meter_at(d, l, Force::Dark);
+        let health = w.players[0].health;
+        let (mut last_d, mut last_l) = (dark(&w), light(&w));
+        for frame in 0..120 {
+            step(&mut w, 1, 0);
+            let (now_d, now_l) = (dark(&w), light(&w));
+            let want_d = last_d.sub(calm_a_frame).max(Fx::ZERO);
+            let want_l = last_l.sub(calm_a_frame).max(Fx::ZERO);
+            assert!(
+                (now_d.raw() - want_d.raw()).abs() <= 1 && (now_l.raw() - want_l.raw()).abs() <= 1,
+                "from {d}/{l}, frame {frame}: the bars went {last_d:?}/{last_l:?} to \
+                 {now_d:?}/{now_l:?}, which is more than the calm"
+            );
+            assert_eq!(
+                w.players[0].health, health,
+                "from {d}/{l}, level inside the band, she burned"
+            );
+            (last_d, last_l) = (now_d, now_l);
+        }
+    }
+}
+
+#[test]
+fn outside_the_band_the_higher_bar_rises_and_the_lower_falls_until_it_is_empty() {
+    // The hill itself. From a finisher out of level the gap is outside the band
+    // and it runs away: every frame the higher bar is higher and the lower is
+    // lower, until the lower one is empty. The gap can never come back inside
+    // on its own -- that is what the other hand is for.
+    //
+    // A finisher rather than two casts, because the higher bar's rise is net
+    // of the calm: just outside the band the drift is smaller than the calm
+    // and the higher bar holds rather than rises, while the gap still widens.
+    // A Judgement's push puts her past that.
+    let finisher = 50 + t::meter_finisher_push();
+    assert!(
+        finisher - 50 > t::meter_band(),
+        "a finisher does not leave the band"
+    );
+    for (d, l, name) in [(finisher, 50, "dark ahead"), (50, finisher, "light ahead")] {
+        let mut w = mage();
+        w.players[0].mechanic = meter_at(d, l, Force::Dark);
+        let health = w.players[0].health;
+        let (mut last_hi, mut last_lo) = if d > l {
+            (dark(&w), light(&w))
+        } else {
+            (light(&w), dark(&w))
+        };
+        let mut emptied_at = None;
+        for frame in 0..1200 {
+            step(&mut w, 1, 0);
+            let (hi, lo) = if d > l {
+                (dark(&w), light(&w))
+            } else {
+                (light(&w), dark(&w))
+            };
+            assert!(
+                !sim::dual::level(&w.players[0]),
+                "{name}: the gap came back inside the band on its own at frame {frame}"
+            );
+            if lo.raw() == 0 {
+                emptied_at.get_or_insert(frame);
+                break;
+            }
+            assert!(
+                hi.raw() > last_hi.raw(),
+                "{name}, frame {frame}: the higher bar went {last_hi:?} to {hi:?} -- it did not rise"
+            );
+            assert!(
+                lo.raw() < last_lo.raw(),
+                "{name}, frame {frame}: the lower bar went {last_lo:?} to {lo:?} -- it did not fall"
+            );
+            (last_hi, last_lo) = (hi, lo);
+        }
+        let emptied = emptied_at.expect("the lower bar never emptied");
+        assert!(
+            emptied > 30,
+            "{name}: the lower bar was gone in {emptied} frames, which is a cliff rather than a hill"
+        );
+        assert!(
+            w.players[0].health < health,
+            "{name}: she rode the runaway to the bottom and it cost no health"
+        );
+    }
+}
+
+#[test]
+fn the_drift_alone_can_never_fill_a_bar_or_deliver_the_wings() {
+    // The higher bar gains exactly what the lower one lost, so with no input
+    // the two together can only fall. The only way to the top is to goad both
+    // while holding them level, which is the hardest thing the class can do
+    // and is meant to be.
+    for (d, l) in [(90, 40), (99, 60), (94, 94), (60, 99), (100, 0)] {
+        let mut w = mage();
+        w.players[0].mechanic = meter_at(d, l, Force::Dark);
+        let mut last = dark(&w).add(light(&w));
+        for frame in 0..900 {
+            step(&mut w, 1, 0);
+            let sum = dark(&w).add(light(&w));
+            assert!(
+                sum.raw() <= last.raw(),
+                "from {d}/{l}, frame {frame}: the bars summed to {last:?} and then {sum:?}"
+            );
+            assert_eq!(
+                ascending(&w),
+                0,
+                "from {d}/{l}, the drift delivered the wings"
+            );
+            last = sum;
+        }
+    }
+}
+
+#[test]
+fn one_cast_from_level_stays_inside_the_band_two_do_not_and_a_finisher_never_does() {
+    // The cadence the band's width is chosen against, and the first thing to
+    // play. A cast is a lead you can sit on; a second one is the hill.
+    let band = t::meter_band();
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    step(&mut w, 1, M);
+    assert!(
+        sim::dual::level(&w.players[0]),
+        "one cast from level left the band"
+    );
+    when_free(&mut w, E);
+    assert!(
+        !sim::dual::level(&w.players[0]),
+        "two casts from level are still inside the band"
+    );
+
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Light);
+    step(&mut w, 1, Q);
+    assert!(
+        !sim::dual::level(&w.players[0]),
+        "a finisher from level stayed inside the band"
+    );
+
+    // And from the band's edge -- the last place it is a question.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50 + band, 50, Force::Dark);
+    assert!(sim::dual::level(&w.players[0]));
+    step(&mut w, 1, Q);
+    assert!(!sim::dual::level(&w.players[0]));
+}
+
+#[test]
+fn alternating_hands_climbs_without_ever_leaving_the_band() {
+    // Dark auto, dark Lance, light auto, light Sweep: the rhythm the tiers are
+    // meant to be climbed with. It has to stay inside the band the whole way --
+    // if the climb itself started the runaway, the class would be unclimbable
+    // -- and it has to actually climb, or the calm has won.
+    let mut w = mage();
+    let mut presses = 0;
+    let mut peak = Tier::None;
+    for frame in 0..1200 {
+        let bits = if w.players[0].action.actionable() {
+            let b = [L, M, R, E][presses % 4];
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        assert!(
+            sim::dual::level(&w.players[0]),
+            "alternating left the band on frame {frame}: {:?} / {:?}",
+            dark(&w),
+            light(&w)
+        );
+        peak = peak.max(tier(&w));
+    }
+    assert!(
+        peak >= Tier::Jump,
+        "twenty seconds of alternating reached {peak:?} and never the second tier"
+    );
+}
+
+#[test]
+fn stopping_loses_the_second_tier_and_keeps_the_first_for_a_while() {
+    // Benchmark B5. The calm: a tier is something she holds by fighting. Stop
+    // goading at three quarters and the second tier is gone almost at once,
+    // and the first follows -- but slowly enough that two exchanges of not
+    // pressing buttons do not take the blink away, and surely inside seven.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(t::tier_jump(), t::tier_jump(), Force::Dark);
+    assert_eq!(tier(&w), Tier::Jump);
+    step(&mut w, exchange(), 0);
     assert_eq!(
-        w.players[0].health, inside,
-        "the burn followed her back to centre"
+        tier(&w),
+        Tier::Blink,
+        "one exchange of stillness and the second jump survived, or the blink went too"
+    );
+    step(&mut w, exchange(), 0);
+    assert_eq!(
+        tier(&w),
+        Tier::Blink,
+        "two exchanges of stillness and the blink is gone"
+    );
+    step(&mut w, 5 * exchange(), 0);
+    assert_eq!(
+        tier(&w),
+        Tier::None,
+        "seven exchanges of stillness and she still holds the blink"
+    );
+}
+
+#[test]
+fn a_bar_left_fully_one_sided_burns_most_of_a_health_bar_in_half_a_round_and_never_all_of_it() {
+    // Benchmark B7. The burn is the price of ignoring the hill, and it has to
+    // be one a player feels: fully one-sided and uncorrected for thirty
+    // seconds costs between half and four fifths of a health bar. Over a whole
+    // round it still cannot be all of it, and it stops the moment the calm
+    // brings the gap back inside the band.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(t::meter_max(), 0, Force::Dark);
+    let before = w.players[0].health;
+    step(&mut w, 60, 0);
+    let after_a_second = w.players[0].health;
+    assert!(
+        after_a_second < before,
+        "a full one-sided bar burns nothing"
+    );
+    step(&mut w, 1800 - 60, 0);
+    let half_round = before - w.players[0].health;
+    let bar = sim::state::max_health();
+    assert!(
+        half_round * 2 >= bar && half_round * 5 <= bar * 4,
+        "thirty seconds fully one-sided cost {half_round} of {bar}"
+    );
+    step(&mut w, 1800, 0);
+    let lost = before - w.players[0].health;
+    assert!(lost < bar, "the burn alone took a health bar ({lost})");
+    assert!(sim::dual::level(&w.players[0]));
+    let settled = w.players[0].health;
+    step(&mut w, 60, 0);
+    assert_eq!(
+        settled, w.players[0].health,
+        "the burn followed her inside the band"
+    );
+}
+
+#[test]
+fn neither_the_burn_nor_ascension_can_be_what_kills_her() {
+    // The same rule the Blood mage's costs follow: dying to your own button is
+    // not a decision anybody made.
+    for mechanic in [
+        meter_at(t::meter_max(), 0, Force::Light),
+        ascended(t::meter_max(), t::meter_max(), Force::Light),
+    ] {
+        let mut w = mage();
+        w.players[0].mechanic = mechanic;
+        w.players[0].health = 2;
+        step(&mut w, 600, 0);
+        assert_eq!(w.players[0].health, 1);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Benchmarks -- player actions and their outcomes, 2026-09-23
+// ---------------------------------------------------------------------------
+//
+// The first tuning came back overtuned from play: too much damage, too little
+// burn, bars that drained too fast, spells that fed them too much. These pin
+// the numbers it was re-tuned to, stated the way the person stated the
+// complaint -- as what a player does and what happens -- and
+// `cargo run -p sim --bin goad` prints the same numbers. The full list is in
+// `docs/design/dual-mage.md` under "Benchmarks".
+
+/// Run a script of presses against a dummy standing where the autos land,
+/// healed every frame so the round never ends, and give back what she dealt
+/// and what it cost her. The instrument's dummy, in a test.
+fn against_a_dummy(frames: u32, mut next: impl FnMut(u32) -> u16) -> (i32, i32) {
+    let mut w = mage();
+    let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO).reach;
+    let stand = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(reach.sub(t::body_radius())));
+    w.players[1].pos = stand;
+    let before = w.players[0].health;
+    let mut dealt = 0;
+    let mut presses = 0;
+    for _ in 0..frames {
+        let bits = if w.players[0].action.actionable() && w.players[0].grounded {
+            let b = next(presses);
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        dealt += sim::state::max_health() - w.players[1].health;
+        w.players[1].health = sim::state::max_health();
+        w.players[1].pos = stand;
+    }
+    (dealt, before - w.players[0].health)
+}
+
+#[test]
+fn b1_alternating_on_a_dummy_for_half_a_round_deals_about_a_health_bar_and_a_half() {
+    // Everything landing on a target that never moves, for thirty seconds,
+    // climbing from empty: between one and two and a quarter health bars,
+    // the last quarter being the six seconds of ascension the climb reaches
+    // near the end, cast at the top of the curve. Against a person a third of
+    // it lands, which is one kill a round from the sustained game.
+    let (dealt, _) = against_a_dummy(1800, |n| [L, M, R, E][(n % 4) as usize]);
+    let bar = sim::state::max_health();
+    assert!(
+        dealt >= bar && dealt * 4 <= 9 * bar,
+        "alternating for half a round dealt {dealt} of a {bar} health bar"
+    );
+}
+
+#[test]
+fn b2_one_sided_spam_on_a_dummy_deals_at_most_three_and_a_half_bars_and_costs_her_half_of_one() {
+    // The burst play: one dark auto, then dark casts only, a Judgement every
+    // time it is up, on a target that stands in all of it. It is allowed to be
+    // the biggest number the class can produce, and it has to cost her.
+    let (dealt, cost) = against_a_dummy(1800, |n| {
+        if n == 0 {
+            L
+        } else {
+            [M, E, Q][((n - 1) % 3) as usize]
+        }
+    });
+    let bar = sim::state::max_health();
+    assert!(
+        dealt >= 2 * bar && dealt * 2 <= 7 * bar,
+        "one-sided spam for half a round dealt {dealt} of a {bar} health bar"
+    );
+    assert!(
+        cost * 2 >= bar,
+        "one-sided spam for half a round cost her only {cost} of {bar}"
+    );
+}
+
+#[test]
+fn b3_a_judgement_from_a_full_bar_is_at_most_a_quarter_of_a_health_bar() {
+    // The biggest single strike in the kit, and the one that was too big. A
+    // quarter from a full bar; still a real hit -- not under eight per cent --
+    // from an empty one. Measured over the strike and its field on somebody
+    // standing where it lands.
+    let bar = sim::state::max_health();
+    let full = dealt_from(Q, high());
+    let empty = dealt_from(Q, 0);
+    assert!(
+        full * 4 <= bar,
+        "a Judgement from a full bar took {full} of {bar}, more than a quarter"
+    );
+    assert!(
+        empty * 100 >= bar * 8,
+        "a Judgement from an empty bar took {empty} of {bar}, under eight per cent"
+    );
+}
+
+#[test]
+fn b4_the_climb_takes_a_third_of_a_round_to_the_wings() {
+    // Clean alternating from empty, in an empty arena: the blink in ten to
+    // fourteen seconds, the second jump in sixteen to twenty-one, the wings in
+    // twenty to twenty-six. So the wings are once a round, with commitment.
+    let mut w = mage();
+    w.players[1].pos = V3::new(fx(-12.0), Fx::ZERO, fx(-12.0));
+    let mut presses = 0;
+    let (mut blink, mut jump, mut wings) = (None, None, None);
+    for frame in 1..=1800u32 {
+        let bits = if w.players[0].action.actionable() {
+            let b = [L, M, R, E][presses % 4];
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        let now = tier(&w);
+        if now >= Tier::Blink {
+            blink.get_or_insert(frame);
+        }
+        if now >= Tier::Jump {
+            jump.get_or_insert(frame);
+        }
+        if now == Tier::Wings {
+            wings.get_or_insert(frame);
+            break;
+        }
+    }
+    let seconds = |f: Option<u32>| f.map(|f| f as f32 / 60.0);
+    let (blink, jump, wings) = (seconds(blink), seconds(jump), seconds(wings));
+    assert!(
+        blink.is_some_and(|s| (10.0..=14.0).contains(&s)),
+        "the blink came at {blink:?} s"
+    );
+    assert!(
+        jump.is_some_and(|s| (16.0..=21.0).contains(&s)),
+        "the second jump came at {jump:?} s"
+    );
+    assert!(
+        wings.is_some_and(|s| (20.0..=26.0).contains(&s)),
+        "the wings came at {wings:?} s"
+    );
+}
+
+#[test]
+fn b6_a_finisher_from_level_is_caught_by_the_other_hand_inside_an_exchange() {
+    // The hill, and the answer to it. A Judgement from level leaves the band.
+    // Uncorrected, the lower bar is empty in eight to twelve seconds. Answered
+    // -- a far-side auto, the far-side cast, and an auto or two more -- it is
+    // back inside the band within one exchange of the finisher recovering.
+    // Far-side autos alone hold it or claw it back, slowly.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    step(&mut w, 1, Q);
+    assert!(!sim::dual::level(&w.players[0]));
+    let mut idle = w.clone();
+    let mut emptied = None;
+    for frame in 1..=900u32 {
+        step(&mut idle, 1, 0);
+        if sim::dual::lower(&idle.players[0]).raw() == 0 {
+            emptied = Some(frame);
+            break;
+        }
+    }
+    assert!(
+        emptied.is_some_and(|f| (480..=720).contains(&f)),
+        "uncorrected, the lower bar emptied at {emptied:?} frames"
+    );
+
+    // Answered with the light hand, from the frame the finisher recovers.
+    let mut presses = 0;
+    let mut recovered_at = None;
+    let mut caught_at = None;
+    for frame in 1..=600u32 {
+        let free = w.players[0].action.actionable();
+        if free && recovered_at.is_none() {
+            recovered_at = Some(frame);
+        }
+        let bits = if free {
+            let b = [R, E, R, R, R, R][presses.min(5)];
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        if sim::dual::level(&w.players[0]) {
+            caught_at = Some(frame);
+            break;
+        }
+    }
+    let recovered = recovered_at.expect("the finisher never recovered");
+    let caught = caught_at.expect("the other hand never caught it");
+    assert!(
+        caught - recovered <= exchange(),
+        "caught {} frames after the finisher recovered; an exchange is {}",
+        caught - recovered,
+        exchange()
+    );
+
+    // Autos alone: the gap does not grow.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    step(&mut w, 1, Q);
+    step(&mut w, 60, 0);
+    let gap_before = sim::dual::gap(&w.players[0]);
+    for _ in 0..300 {
+        let bits = if w.players[0].action.actionable() {
+            R
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+    }
+    assert!(
+        sim::dual::gap(&w.players[0]).raw() <= gap_before.raw(),
+        "far-side autos alone lost ground: the gap went {gap_before:?} to {:?}",
+        sim::dual::gap(&w.players[0])
+    );
+}
+
+#[test]
+fn b7_ignoring_a_runaway_for_ten_seconds_costs_about_a_judgement() {
+    // The burn as a consequence: a Judgement from level, and then nothing for
+    // ten seconds, costs her between fifteen and twenty-five per cent of a
+    // health bar -- roughly what the Judgement did to them.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    let before = w.players[0].health;
+    step(&mut w, 1, Q);
+    step(&mut w, 600, 0);
+    let lost = before - w.players[0].health;
+    let bar = sim::state::max_health();
+    assert!(
+        lost * 100 >= bar * 15 && lost * 100 <= bar * 25,
+        "ten seconds of ignoring the runaway cost {lost} of {bar}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The tiers -- what frenzy does to her body
+// ---------------------------------------------------------------------------
+
+/// Shift plus forward: the dodge, or the blink.
+const DODGE: u16 = Input::SHIFT | Input::W;
+
+/// How far she moved on one frame, flat.
+fn moved(before: V3, w: &World) -> f32 {
+    w.players[0].pos.sub(before).flat_len().to_f32_for_render()
+}
+
+#[test]
+fn the_tiers_are_on_the_lower_bar() {
+    // A sum can be reached one-sided; the lower bar cannot. Both beings have
+    // to be fed, which is what makes the climb a rhythm of alternating hands.
+    let blink = t::tier_blink();
+    let jump = t::tier_jump();
+    assert!(0 < blink && blink < jump && jump < t::tier_wings());
+    let held = |d: i32, l: i32| {
+        let mut w = mage();
+        w.players[0].mechanic = meter_at(d, l, Force::Dark);
+        tier(&w)
+    };
+    assert_eq!(held(blink, blink), Tier::Blink);
+    assert_eq!(held(t::meter_max(), blink - 1), Tier::None);
+    assert_eq!(held(blink - 1, t::meter_max()), Tier::None);
+    assert_eq!(held(jump, jump), Tier::Jump);
+    assert_eq!(held(jump, jump - 1), Tier::Blink);
+}
+
+#[test]
+fn below_the_first_tier_the_dodge_is_a_dodge() {
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(t::tier_blink() - 1, t::tier_blink() - 1, Force::Dark);
+    let before = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    assert!(matches!(w.players[0].action, Action::Dodge { .. }));
+    let first_frame = moved(before, &w);
+    let whole = sim::dual::dodge_travel(true).to_f32_for_render();
+    assert!(
+        first_frame < whole * 0.2,
+        "below the tier she moved {first_frame:.2} m of {whole:.2} m on the first frame"
+    );
+}
+
+#[test]
+fn at_the_first_tier_the_dodge_is_a_blink() {
+    // The whole dodge's distance on its first frame, and then the dodge's own
+    // invulnerable window and vulnerable tail spent standing there. A blink
+    // that kept moving would be a longer dodge; one with no tail would be an
+    // escape nobody could punish.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(held(Tier::Blink), held(Tier::Blink), Force::Dark);
+    let before = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    let whole = sim::dual::dodge_travel(true).to_f32_for_render();
+    let jumped = moved(before, &w);
+    assert!(
+        (jumped - whole).abs() < 0.1,
+        "at the tier she moved {jumped:.2} m on the first frame and the dodge covers {whole:.2} m"
+    );
+    assert!(
+        w.players[0].action.invulnerable(),
+        "the blink has no window"
+    );
+    let landed = w.players[0].pos;
+    step(&mut w, (t::dodge_frames() - t::dodge_iframes()) as u32, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Dodge { .. }) && !w.players[0].action.invulnerable(),
+        "the blink has no vulnerable tail"
+    );
+    assert!(
+        moved(landed, &w) < 0.05,
+        "she kept travelling through the tail"
+    );
+}
+
+#[test]
+fn a_blink_carries_the_body_further_than_a_walk_would() {
+    // The roster-wide relationship every class is meant to satisfy -- a move
+    // that carries the body -- met here by the blink: one frame of it covers
+    // more ground than a whole dodge's worth of walking.
+    let walk = t::move_speed()
+        .mul(sim::DT)
+        .mul(Fx::from_int(t::dodge_frames() as i32))
+        .to_f32_for_render();
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(held(Tier::Blink), held(Tier::Blink), Force::Dark);
+    let before = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    assert!(moved(before, &w) > walk);
+}
+
+#[test]
+fn a_blink_stops_at_the_arena_rather_than_passing_through_it() {
+    // She never passes through terrain: aimed at a platform's side, the blink
+    // ends against it. The eastern platform's near face is at x = 5.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(held(Tier::Blink), held(Tier::Blink), Force::Dark);
+    let face = 5.0f32;
+    let whole = sim::dual::dodge_travel(true).to_f32_for_render();
+    w.players[0].pos = V3::new(fx(face - whole * 0.5), Fx::ZERO, Fx::ZERO);
+    // The other fighter spawns at x = 4, in the way: bodies are not on the
+    // line, but two bodies standing in one place shove each other apart, and
+    // that shove is not what is being measured.
+    w.players[1].pos = V3::new(fx(face), Fx::ZERO, fx(6.0));
+    step(&mut w, 1, DODGE);
+    let x = w.players[0].pos.x.to_f32_for_render();
+    assert!(
+        x <= face - t::body_radius().to_f32_for_render() + 0.05,
+        "the blink ended at x = {x:.2}, inside the platform whose face is at {face}"
+    );
+    assert!(
+        x > face - whole * 0.5 + 0.2,
+        "the blink went nowhere at all: x = {x:.2}"
+    );
+}
+
+#[test]
+fn a_blink_passes_through_a_body_to_the_ground_behind_it() {
+    // Bodies are not on the line, as ever: a fighter is a thing standing in a
+    // place, and the blink goes to the place.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(held(Tier::Blink), held(Tier::Blink), Force::Dark);
+    let whole = sim::dual::dodge_travel(true);
+    w.players[1].pos = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(whole.mul(Fx::ratio(1, 2))));
+    let before = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    assert!((moved(before, &w) - whole.to_f32_for_render()).abs() < 0.1);
+}
+
+#[test]
+fn in_the_air_the_blink_is_the_airdodge_and_spends_it() {
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(held(Tier::Blink), held(Tier::Blink), Force::Dark);
+    // A full hop, held: the blink and its tail both have to happen in the air.
+    step(&mut w, 10, Input::SPACE);
+    assert!(!w.players[0].grounded);
+    let before = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    let whole = sim::dual::dodge_travel(false).to_f32_for_render();
+    assert!((moved(before, &w) - whole).abs() < 0.1);
+    assert!(
+        w.players[0].air_dodged,
+        "the airborne blink did not spend the airdodge"
+    );
+    step(&mut w, t::air_dodge_frames() as u32, 0);
+    assert!(
+        !w.players[0].grounded,
+        "she landed before the tail ran out, so the fixture measures a walk"
+    );
+    let again = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    assert!(
+        moved(again, &w) < 0.05,
+        "a second airborne blink was granted"
+    );
+}
+
+/// Jump, then press space again in the air and give back the change in
+/// vertical speed the second press made.
+fn second_press(mechanic: Mechanic) -> f32 {
+    let mut w = mage();
+    w.players[0].mechanic = mechanic;
+    step(&mut w, 1, Input::SPACE);
+    step(&mut w, 20, 0);
+    assert!(!w.players[0].grounded);
+    let before = w.players[0].vel.y;
+    step(&mut w, 1, Input::SPACE);
+    w.players[0].vel.y.sub(before).to_f32_for_render()
+}
+
+#[test]
+fn space_in_the_air_does_nothing_below_the_second_tier() {
+    let blink = held(Tier::Blink);
+    let lift = second_press(meter_at(blink, blink, Force::Dark));
+    assert!(
+        lift <= 0.0,
+        "at the first tier a second press of space lifted her by {lift:.2}"
+    );
+}
+
+#[test]
+fn at_the_second_tier_space_in_the_air_jumps_once() {
+    // The first class to answer the README's open double-jump row, and once
+    // per airtime, because a second one would turn a jump into flight.
+    let jump = held(Tier::Jump);
+    let lift = second_press(meter_at(jump, jump, Force::Dark));
+    assert!(
+        lift > 1.0,
+        "at the second tier space in the air lifted her by only {lift:.2}"
+    );
+
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(jump, jump, Force::Dark);
+    step(&mut w, 1, Input::SPACE);
+    step(&mut w, 20, 0);
+    step(&mut w, 1, Input::SPACE);
+    step(&mut w, 5, 0);
+    let before = w.players[0].vel.y;
+    step(&mut w, 1, Input::SPACE);
+    assert!(
+        w.players[0].vel.y.raw() < before.raw(),
+        "a third press of space jumped again in the same airtime"
+    );
+    // And it is back once her feet are down.
+    for _ in 0..300 {
+        step(&mut w, 1, 0);
+        if w.players[0].grounded {
+            break;
+        }
+    }
+    assert!(w.players[0].grounded);
+    assert!(
+        sim::dual::may_beat_wings(&w.players[0]) || {
+            // She may have fallen below the tier while airborne; top it back up
+            // before asking.
+            w.players[0].mechanic = meter_at(jump, jump, Force::Dark);
+            sim::dual::may_beat_wings(&w.players[0])
+        }
+    );
+}
+
+#[test]
+fn the_tier_is_lost_the_frame_the_lower_bar_drops_below_it_even_mid_air() {
+    let jump = t::tier_jump();
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(jump + 10, jump + 10, Force::Dark);
+    step(&mut w, 1, Input::SPACE);
+    step(&mut w, 20, 0);
+    // A Judgement's worth of collapse on the light bar, mid-air.
+    w.players[0].mechanic = meter_at(jump + 10, jump - 1, Force::Dark);
+    assert_eq!(tier(&w), Tier::Blink);
+    let before = w.players[0].vel.y;
+    step(&mut w, 1, Input::SPACE);
+    assert!(
+        w.players[0].vel.y.raw() <= before.raw(),
+        "the second jump survived losing the tier"
+    );
+}
+
+#[test]
+fn she_falls_slower_at_the_second_tier() {
+    let fastest_fall = |mechanic: Mechanic| {
+        let mut w = mage();
+        w.players[0].mechanic = mechanic;
+        w.players[0].pos.y = Fx::from_int(30);
+        w.players[0].grounded = false;
+        let mut fastest = Fx::ZERO;
+        for _ in 0..90 {
+            step(&mut w, 1, 0);
+            if w.players[0].vel.y.raw() < fastest.raw() {
+                fastest = w.players[0].vel.y;
+            }
+            // The bars calm while she falls; hold the tier for the measurement.
+            w.players[0].mechanic = mechanic;
+        }
+        fastest.to_f32_for_render()
+    };
+    let jump = held(Tier::Jump);
+    let low = fastest_fall(meter_at(
+        t::tier_jump() - 1,
+        t::tier_jump() - 1,
+        Force::Dark,
+    ));
+    let high_tier = fastest_fall(meter_at(jump, jump, Force::Dark));
+    assert!(low < 0.0 && high_tier < 0.0);
+    assert!(
+        high_tier.abs() < low.abs() * 0.9,
+        "she falls at {high_tier:.1} at the tier and {low:.1} below it"
     );
 }
 
@@ -638,42 +1493,44 @@ fn the_meter_burns_at_depth_and_stops_when_you_come_back() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn driving_the_bar_to_an_end_starts_ascension() {
-    // There is no ascend button and there never was: you got there one cast at
-    // a time. Reaching the end *is* the input.
-    for force in [Force::Dark, Force::Light] {
+fn goading_both_bars_to_the_top_together_starts_ascension_and_nothing_else_does() {
+    // There is no ascend button and there never was: you got there one press
+    // at a time, with both hands. One bar at the top is a runaway, not wings.
+    let top = t::meter_max();
+    let wings = t::tier_wings();
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(wings + 1, wings - 1, Force::Light);
+    step(&mut w, 1, R);
+    step(&mut w, 1, 0);
+    assert!(
+        ascending(&w) > 0,
+        "both bars at the top and nothing happened"
+    );
+
+    for (d, l) in [(top, wings - 1), (wings - 1, top), (top, 0)] {
         let mut w = mage();
-        let brink = (sim::tuning::meter_max() - 1) * force.along();
-        w.players[0].mechanic = meter_at(brink, force);
-        step(&mut w, 1, E);
-        assert!(
-            ascending(&w) > 0,
-            "the {} end of the bar did nothing",
-            force.name()
-        );
+        w.players[0].mechanic = meter_at(d, l, Force::Dark);
+        step(&mut w, 30, 0);
+        assert_eq!(ascending(&w), 0, "{d}/{l} ascended");
     }
 }
 
 #[test]
-fn ascension_ends_on_its_own_clock() {
-    // The thing it did not do before. It drained until she was nearly dead and
-    // then went on draining, with nothing she could do about it and no way to
-    // tell it had happened.
+fn ascension_ends_on_its_own_clock_with_both_bars_empty_and_a_stagger() {
+    // The vent. Then she climbs again.
     let mut w = mage();
-    w.players[0].mechanic = meter_at(sim::tuning::meter_max() - 1, Force::Light);
-    step(&mut w, 1, E);
+    w.players[0].mechanic = meter_at(t::meter_max(), t::meter_max(), Force::Light);
+    step(&mut w, 1, 0);
     let clock = ascending(&w);
-    assert_eq!(meter(&w), sim::tuning::meter_max(), "she is not at the end");
     assert!(clock > 0);
-
-    // Right up to the last frame it is still running.
     step(&mut w, clock as u32 - 1, 0);
     assert!(ascending(&w) > 0, "it ended early");
     step(&mut w, 1, 0);
     assert_eq!(ascending(&w), 0, "it did not end");
-    assert_eq!(meter(&w), 0, "it did not put her back at the centre");
+    assert_eq!(dark(&w).raw(), 0, "it did not empty the dark bar");
+    assert_eq!(light(&w).raw(), 0, "it did not empty the light bar");
     assert!(
-        matches!(w.players[0].action, Action::Stagger { .. }),
+        matches!(w.players[0].action, Action::Stagger { left } if left <= t::ascension_stun()),
         "she walked out of it as though nothing had happened"
     );
 }
@@ -683,8 +1540,8 @@ fn ascension_costs_between_half_and_all_of_the_health_bar() {
     // The design's own number, and the reason it can be a clock at all: **the
     // drain is the timer**. Under half and there is nothing at stake; over the
     // whole bar and it would be a suicide button rather than a gamble.
-    let cost = sim::tuning::ascension_drain() * sim::tuning::ascension_frames() as i32;
-    let bar = sim::tuning::max_health();
+    let cost = t::ascension_drain() * t::ascension_frames() as i32;
+    let bar = t::max_health();
     assert!(
         cost * 2 >= bar && cost <= bar,
         "ascension costs {cost} of a {bar} health bar"
@@ -692,74 +1549,134 @@ fn ascension_costs_between_half_and_all_of_the_health_bar() {
 }
 
 #[test]
-fn ascension_drains_faster_than_the_edge_burns() {
-    // Two different things happen at depth and they have to feel different, or
-    // there is no reason to fear the end of the bar over merely leaning on it.
+fn ascension_drains_faster_than_the_widest_gap_burns() {
+    // Two different things happen at the top and they have to feel different,
+    // or there is no reason to fear the wings over merely running away.
     let mut edge = mage();
-    edge.players[0].mechanic = meter_at(sim::tuning::meter_max() - 1, Force::Light);
+    edge.players[0].mechanic = meter_at(t::meter_max(), 0, Force::Light);
     let before = edge.players[0].health;
     step(&mut edge, 60, 0);
     let burned = before - edge.players[0].health;
 
     let mut gone = mage();
-    gone.players[0].mechanic = Mechanic::Meter {
-        value: sim::tuning::meter_max(),
-        colour: Force::Dark,
-        ascending: sim::tuning::ascension_frames(),
-    };
+    gone.players[0].mechanic = ascended(t::meter_max(), t::meter_max(), Force::Dark);
     let before = gone.players[0].health;
     step(&mut gone, 60, 0);
     let drained = before - gone.players[0].health;
 
     assert!(
         drained > burned,
-        "ascension took {drained} where the edge took {burned}"
+        "ascension took {drained} where the widest gap took {burned}"
     );
 }
 
 #[test]
-fn nothing_steers_the_bar_while_she_is_ascended() {
-    // The meter is not the operative resource then -- the clock is.
+fn nothing_steers_the_bars_while_she_is_ascended() {
+    // The bars are not the operative resource then -- the clock is.
     let mut w = mage();
-    w.players[0].mechanic = Mechanic::Meter {
-        value: sim::tuning::meter_max(),
-        colour: Force::Dark,
-        ascending: sim::tuning::ascension_frames(),
-    };
+    w.players[0].mechanic = ascended(t::meter_max(), t::meter_max(), Force::Dark);
     step(&mut w, 1, R);
     step(&mut w, 20, 0);
-    assert_eq!(meter(&w), sim::tuning::meter_max());
+    assert_eq!(dark(&w).to_int(), t::meter_max());
+    assert_eq!(light(&w).to_int(), t::meter_max());
 }
 
 #[test]
-fn steering_cannot_be_pushed_past_the_ends_of_the_bar() {
+fn while_ascending_the_dodge_is_refused_and_every_press_of_space_is_a_wing_beat() {
+    // No dodge: she flies instead. Loss of control is loss of the option to
+    // decline.
     let mut w = mage();
-    for _ in 0..40 {
-        w.players[0].action = Action::Free;
-        step(&mut w, 1, M);
+    w.players[0].mechanic = ascended(t::meter_max(), t::meter_max(), Force::Dark);
+    let before = w.players[0].pos;
+    step(&mut w, 1, DODGE);
+    assert!(
+        !matches!(w.players[0].action, Action::Dodge { .. }),
+        "she dodged while ascended"
+    );
+    // The press falls through to a walk, which is what a refused dodge is --
+    // the floating walk, since ascended is off the floor. See `state::floating`.
+    let walk = t::move_speed()
+        .mul(t::float_move_speed())
+        .mul(sim::DT)
+        .to_f32_for_render();
+    assert!(moved(before, &w) <= walk + 0.01);
+
+    step(&mut w, 1, Input::SPACE);
+    step(&mut w, 10, 0);
+    for press in 0..4 {
+        let before = w.players[0].vel.y;
+        step(&mut w, 1, Input::SPACE);
+        assert!(
+            w.players[0].vel.y.raw() > before.raw(),
+            "wing beat {press} was refused"
+        );
+        step(&mut w, 6, 0);
     }
-    assert!(meter(&w).abs() <= sim::tuning::meter_max());
-    assert!(w.players[0].health > 0, "she burned herself to death");
 }
 
 #[test]
-fn neither_the_burn_nor_ascension_can_be_what_kills_her() {
-    // The same rule the Blood mage's costs follow: dying to your own button is
-    // not a decision anybody made.
-    for mechanic in [
-        meter_at(sim::tuning::meter_max(), Force::Light),
-        Mechanic::Meter {
-            value: sim::tuning::meter_max(),
-            colour: Force::Light,
-            ascending: sim::tuning::ascension_frames(),
-        },
-    ] {
-        let mut w = mage();
-        w.players[0].mechanic = mechanic;
-        w.players[0].health = 2;
-        step(&mut w, 600, 0);
-        assert_eq!(w.players[0].health, 1);
+fn casts_thrown_while_ascending_read_the_top_of_the_curve() {
+    let mut w = mage();
+    w.players[0].mechanic = ascended(0, 0, Force::Dark);
+    assert_eq!(
+        sim::state::depth(&w.players[0]).raw(),
+        t::depth_ceiling().raw()
+    );
+}
+
+/// Ride the whole ascension against somebody standing where the autos land,
+/// pressing `bits` every time she is free, and give back the health she ended
+/// with and the stagger she came out into.
+fn ride(bits: u16) -> (i32, u16) {
+    let mut w = mage();
+    w.players[0].mechanic = ascended(t::meter_max(), t::meter_max(), Force::Dark);
+    let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO).reach;
+    w.players[1].pos = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(reach.sub(t::body_radius())));
+    while ascending(&w) > 0 {
+        let press = if bits != 0 && w.players[0].action.actionable() {
+            bits
+        } else {
+            0
+        };
+        step(&mut w, 1, press);
+        w.players[1].health = sim::state::max_health();
+        // Held where the autos land, so the shove does not walk them out of
+        // the measurement.
+        w.players[1].pos = w.players[0]
+            .pos
+            .add(w.players[0].facing.scale(reach.sub(t::body_radius())));
     }
+    assert!(
+        matches!(w.players[0].action, Action::Stagger { .. }),
+        "came out of ascension into {:?}",
+        w.players[0].action
+    );
+    (w.players[0].health, w.players[0].stun_total)
+}
+
+#[test]
+fn landing_hits_while_ascending_pulls_health_back_and_shortens_the_stagger() {
+    // The refund the old design wrote and never built, and the graduated exit
+    // it asked for: a near miss is a short stagger, and you are staying alive
+    // one connection at a time.
+    let (idle_health, idle_stagger) = ride(0);
+    let (fighting_health, fighting_stagger) = ride(L);
+    assert!(
+        fighting_health > idle_health,
+        "landing hits refunded nothing: {fighting_health} against {idle_health} idle"
+    );
+    assert!(
+        fighting_stagger < idle_stagger,
+        "the stagger was {fighting_stagger}f after landing hits and {idle_stagger}f after none"
+    );
+    assert_eq!(
+        idle_stagger,
+        t::ascension_stun(),
+        "landing nothing is the ceiling"
+    );
+    assert!(fighting_stagger >= t::ascension_stun_floor());
 }
 
 // ---------------------------------------------------------------------------
@@ -825,7 +1742,7 @@ fn one_auto_pulls_and_the_other_pushes() {
 /// see `the_two_autos_come_out_of_opposite_arms`.
 fn gap_change(bits: u16, hand: Hand, at: i32) -> f32 {
     let mut w = mage();
-    w.players[0].mechanic = meter_at(at, Force::Dark);
+    w.players[0].mechanic = meter_at(at, at, Force::Dark);
     let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO).reach;
     let out = w.players[0].facing.scale(reach.mul(Fx::ratio(3, 5)));
     let side = sim::aim::across(w.players[0].facing, hand).scale(reach.mul(Fx::ratio(3, 5)));
@@ -882,10 +1799,9 @@ fn depth_is_in_the_hands_and_not_only_on_the_bar() {
     // -- their reach is pinned to the animation -- so what depth does to them
     // is purely what they *do*, which is the half of the rule that has to be
     // true everywhere.
-    let deep = sim::tuning::meter_deep();
     for (bits, hand, name) in [(L, Hand::Left, "dark"), (R, Hand::Right, "light")] {
         let centre = gap_change(bits, hand, 0).abs();
-        let edge = gap_change(bits, hand, -deep).abs();
+        let edge = gap_change(bits, hand, high()).abs();
         assert!(
             edge > centre * 1.2,
             "the {name} auto moved them {centre:.2} m from the centre and {edge:.2} m from \
@@ -924,7 +1840,7 @@ fn stand_for(bits: u16, w: &World) -> Option<V3> {
 /// What one of her moves takes off somebody, thrown from `at` on the bar.
 fn dealt_from(bits: u16, at: i32) -> i32 {
     let mut w = mage();
-    w.players[0].mechanic = meter_at(at, Force::Dark);
+    w.players[0].mechanic = meter_at(at, at, Force::Dark);
     if let Some(offset) = stand_for(bits, &w) {
         w.players[1].pos = w.players[0].pos.add(offset);
     }
@@ -947,7 +1863,6 @@ fn a_cast_at_the_centre_is_a_weaker_cast_than_one_at_the_edge() {
     // edge it is the most she can hold. Measured end to end -- health actually
     // taken off somebody -- rather than off the multiplier, because the point is
     // that the curve reaches all the way through to the thing that hurts.
-    let deep = sim::tuning::meter_deep();
     for (bits, name) in [
         (L, "dark auto"),
         (R, "light auto"),
@@ -956,7 +1871,7 @@ fn a_cast_at_the_centre_is_a_weaker_cast_than_one_at_the_edge() {
         (Q, "judgement"),
     ] {
         let centre = dealt_from(bits, 0);
-        let edge = dealt_from(bits, -deep);
+        let edge = dealt_from(bits, high());
         assert!(centre > 0, "{name} never connected at the centre");
         assert!(
             edge > centre,
@@ -967,47 +1882,71 @@ fn a_cast_at_the_centre_is_a_weaker_cast_than_one_at_the_edge() {
 }
 
 #[test]
-fn the_curve_is_continuous_and_symmetric() {
-    // No thresholds, no snapping between versions, and the two sides of the bar
-    // worth exactly the same -- which is what stops one edge being the good one.
+fn the_curve_is_continuous_and_the_two_bars_are_worth_the_same() {
+    // No thresholds, no snapping between versions, and the two bars worth
+    // exactly the same -- which is what stops one force being the good one.
     // Read off `state::depth` directly, because what is being asserted is the
     // shape of the curve rather than any one move's use of it.
-    let max = sim::tuning::meter_max();
-    let power = |at: i32| {
+    let max = t::meter_max();
+    let power = |at: i32, carrying: Force| {
         let mut w = mage();
-        w.players[0].mechanic = meter_at(at, Force::Dark);
+        w.players[0].mechanic = meter_at(at, at, carrying);
         sim::state::depth(&w.players[0]).to_f32_for_render()
     };
     assert!(
-        power(0) < 1.0,
-        "a cast from dead centre is not weaker than an ordinary one, so the middle of the \
-         bar costs nothing"
+        power(0, Force::Dark) < 1.0,
+        "a cast from empty is not weaker than an ordinary one, so the bottom of the bar costs \
+         nothing"
     );
     assert!(
-        power(max) > 1.0,
-        "a cast from the edge is not stronger than an ordinary one"
+        power(max, Force::Dark) > 1.0,
+        "a cast from a full bar is not stronger than an ordinary one"
     );
-    // Out from the centre, one step of the bar at a time. Never falling, never
-    // jumping: a tenth of the whole range in a single step would be a threshold
-    // wearing a gradient's clothes.
-    let span = power(max) - power(0);
-    let mut last = power(0);
-    for out in 1..=max {
-        let now = power(out);
-        assert!(now >= last - 0.001, "the curve goes backwards at {out}");
+    // Up the bar one unit at a time. Never falling, never jumping: a tenth of
+    // the whole range in a single step would be a threshold wearing a
+    // gradient's clothes.
+    let span = power(max, Force::Dark) - power(0, Force::Dark);
+    let mut last = power(0, Force::Dark);
+    for at in 1..=max {
+        let now = power(at, Force::Dark);
+        assert!(now >= last - 0.001, "the curve goes backwards at {at}");
         let jump = now - last;
         assert!(
             jump < span * 0.1,
-            "the curve jumps {jump:.3} at {out}, which is a threshold rather than a slope"
+            "the curve jumps {jump:.3} at {at}, which is a threshold rather than a slope"
         );
         last = now;
     }
     for at in [1, max / 3, max / 2, max - 1, max] {
         assert!(
-            (power(at) - power(-at)).abs() < 0.001,
-            "the two sides of the bar are not worth the same at {at}"
+            (power(at, Force::Dark) - power(at, Force::Light)).abs() < 0.001,
+            "the two bars are not worth the same at {at}"
         );
     }
+}
+
+#[test]
+fn a_cast_reads_the_bar_she_carries_and_an_auto_reads_its_own() {
+    // Three quantities fall out of two bars and this is the first: the
+    // **carried** bar is what a cast is worth. An auto is made of its own
+    // force whatever she is carrying, so it reads its own bar -- which is what
+    // lets the far-side auto be thrown from strength when the far side is the
+    // high one.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(high(), 0, Force::Light);
+    let p = &w.players[0];
+    let light_cast = sim::dual::depth_at(p, Some(dual::SWEEP)).to_f32_for_render();
+    let dark_auto = sim::dual::depth_at(p, Some(dual::DARK_AUTO)).to_f32_for_render();
+    let light_auto = sim::dual::depth_at(p, Some(dual::LIGHT_AUTO)).to_f32_for_render();
+    assert!(
+        light_cast < 1.0,
+        "carrying an empty light bar, a cast is worth {light_cast:.2}"
+    );
+    assert!(
+        dark_auto > 1.0,
+        "the dark auto reads the carried bar rather than its own: {dark_auto:.2}"
+    );
+    assert!((light_auto - light_cast).abs() < 0.001);
 }
 
 // ---------------------------------------------------------------------------
@@ -1203,6 +2142,10 @@ fn landing_the_tip_hurts_more_than_landing_the_wing() {
     );
 }
 
+fn fx(v: f32) -> Fx {
+    Fx::from_raw((v * 65536.0).round() as i32)
+}
+
 // ---------------------------------------------------------------------------
 // Sweep, and the two Lances
 // ---------------------------------------------------------------------------
@@ -1246,10 +2189,9 @@ fn sweep_is_one_move_with_two_answers() {
     // Light throws them off their feet; dark takes their legs and pays her for
     // it. Same shape, same frames -- the form is the force she is carrying, and
     // the only thing that changes is what happens to whoever it caught.
-    let deep = sim::tuning::meter_deep();
     let cast = |colour: Force| {
         let mut w = mage();
-        w.players[0].mechanic = meter_at(-deep * colour.along().abs(), colour);
+        w.players[0].mechanic = meter_at(high(), high(), colour);
         w.players[1].pos = w.players[0]
             .pos
             .add(w.players[0].facing.scale(Fx::ratio(6, 5)));
@@ -1284,7 +2226,7 @@ fn the_light_lance_is_a_thing_you_aim_past_somebody() {
     let mut far = 0;
     for (gap, out) in [(Fx::from_int(2), &mut near), (Fx::from_int(7), &mut far)] {
         let mut w = mage();
-        w.players[0].mechanic = meter_at(0, Force::Light);
+        w.players[0].mechanic = meter_at(0, 0, Force::Light);
         w.players[1].pos = w.players[0].pos.add(w.players[0].facing.scale(gap));
         let before = w.players[1].health;
         step(&mut w, 1, M);
@@ -1315,7 +2257,7 @@ fn the_dark_lance_holds_on_and_the_leash_is_what_ends_it() {
 
     // Standing still: it holds until its own clock runs out.
     let mut w = mage();
-    w.players[0].mechanic = meter_at(-sim::tuning::meter_deep(), Force::Dark);
+    w.players[0].mechanic = meter_at(high(), high(), Force::Dark);
     w.players[1].pos = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(3)));
@@ -1336,7 +2278,7 @@ fn the_dark_lance_holds_on_and_the_leash_is_what_ends_it() {
     // Walking out of the leash ends it early. Sideways, because the arena has a
     // platform behind where she spawns.
     let mut w = mage();
-    w.players[0].mechanic = meter_at(-sim::tuning::meter_deep(), Force::Dark);
+    w.players[0].mechanic = meter_at(high(), high(), Force::Dark);
     w.players[1].pos = w.players[0]
         .pos
         .add(w.players[0].facing.scale(Fx::from_int(3)));
@@ -1371,7 +2313,7 @@ fn judgement_leaves_a_field_and_the_bar_decides_how_much_of_one() {
     use sim::effects::EffectKind;
     let field = |at: i32| {
         let mut w = mage();
-        w.players[0].mechanic = meter_at(at, Force::Light);
+        w.players[0].mechanic = meter_at(at, at, Force::Light);
         step(&mut w, 1, Q);
         let mut radius = 0.0f32;
         let mut life = 0;
@@ -1387,7 +2329,7 @@ fn judgement_leaves_a_field_and_the_bar_decides_how_much_of_one() {
         (radius, life)
     };
     let (thin, brief) = field(0);
-    let (wide, long) = field(sim::tuning::meter_max());
+    let (wide, long) = field(high());
     assert!(brief > 0, "Judgement leaves nothing behind at the centre");
     assert!(
         wide > thin * 1.5 && long > brief * 3 / 2,
@@ -1400,12 +2342,12 @@ fn judgement_leaves_a_field_and_the_bar_decides_how_much_of_one() {
 fn the_finisher_throws_the_bar_harder_than_anything_else_she_has() {
     // The tier the design has been asking for since the bar was built. What
     // makes Judgement the payoff is no longer that it is gated -- it is that
-    // casting it deep is a real question about whether you survive the cast.
+    // casting it from high is a real question about what the other bar does
+    // next.
     let moved = |bits: u16| {
         let mut w = mage();
         step(&mut w, 1, bits);
-        step(&mut w, 60, 0);
-        meter(&w).abs()
+        goaded(&w)
     };
     let auto = moved(L);
     let cast = moved(M);
@@ -1540,10 +2482,11 @@ fn alternating_autos_in_the_air_is_a_slow_fall_and_not_a_hover() {
 }
 
 #[test]
-fn deep_or_ascended_she_stops_walking_and_moves_faster() {
-    // The reward for riding the edge, and the one thing depth moves that is not
-    // a force. The burn is what it costs; this is what it buys. One threshold
-    // for both, so "deep" means one thing -- see `state::floating`.
+fn at_three_quarters_or_ascended_she_stops_walking_and_moves_faster() {
+    // The reward for riding both bars up, and the one thing the tiers move that
+    // is not a force. The float lives on the same tier as the second jump and
+    // the slow fall, so "her feet leave the floor" means one thing -- see
+    // `state::floating`.
     let crossed = |mechanic| {
         let mut w = mage();
         w.players[0].mechanic = mechanic;
@@ -1553,24 +2496,26 @@ fn deep_or_ascended_she_stops_walking_and_moves_faster() {
         }
         w.players[0].pos.sub(from).flat_len().to_f32_for_render()
     };
-    let centre = crossed(meter_at(0, Force::Dark));
-    let deep = crossed(meter_at(sim::tuning::meter_max(), Force::Dark));
-    let ascended = crossed(Mechanic::Meter {
-        value: sim::tuning::meter_max(),
-        colour: Force::Light,
-        ascending: sim::tuning::ascension_frames(),
-    });
+    let centre = crossed(meter_at(0, 0, Force::Dark));
+    let blink = crossed(meter_at(held(Tier::Blink), held(Tier::Blink), Force::Dark));
+    let jump = crossed(meter_at(held(Tier::Jump), held(Tier::Jump), Force::Dark));
+    let ascending = crossed(ascended(high(), high(), Force::Light));
     assert!(
-        deep > centre * 1.1,
-        "at the edge of the bar she covered {deep:.1} m against {centre:.1} m at the centre"
+        (blink - centre).abs() < centre * 0.05,
+        "at the blink tier she covered {blink:.1} m against {centre:.1} m at the centre -- \
+         the float fired a tier early"
     );
     assert!(
-        ascended > centre * 1.1,
-        "ascended she covered {ascended:.1} m against {centre:.1} m at the centre"
+        jump > centre * 1.1,
+        "at three quarters she covered {jump:.1} m against {centre:.1} m at the centre"
+    );
+    assert!(
+        ascending > centre * 1.1,
+        "ascended she covered {ascending:.1} m against {centre:.1} m at the centre"
     );
     assert!(
         !sim::state::floating(&mage().players[0]),
-        "she is floating at the centre of her own bar"
+        "she is floating with both bars empty"
     );
 }
 

@@ -124,29 +124,33 @@ as they get tested.
   once is how a grammar gets worse. Watching which of them is *missed* is the
   cheapest way to find out whether all three should come back.
 
-### The Dual mage's depth curve
+### The Dual mage's two bars
 
-⚠️ **All newly open, 2026-09-16.** Depth scales everything she throws now; none
-of these numbers has been played.
+⚠️ **All newly open, 2026-09-23.** The single bar became two, with a hill between
+them and three tiers on the lower one; none of these numbers has been played.
+The play scripts are in the dated entries for that day.
 
-- **Is four-to-one the right spread?** Half at the centre, double at the edge.
-  Too wide and the middle of the bar reads as broken rather than weak; too
-  narrow and there is no reason to leave it. Both ends are one knob each
-  (`Depth, power at the centre` / `at the edge`).
+- **Calm against the climb.** `Calm, both bars fall per second` is 6, and it is
+  pulled two ways: the plan wanted stopping at three quarters to lose the blink
+  inside one exchange (calm above 13) *and* alternating to reach the blink
+  inside one exchange (calm under 4). If play wants both, the calm scales with
+  the bar rather than being flat.
+- **Is the band's cadence right?** One cast from level stays inside it, two do
+  not, a finisher never does. `Band, the gap that still counts as level` is 30.
+- **Is the burn a consequence or a footnote?** Fifteen a second at the cap, a
+  tenth of the old one-sided burn at full depth. The low bar collapsing is
+  meant to be the real cost.
+- **Is four-to-one the right spread on the depth curve?** Half at empty, double
+  at full. Unchanged from the single bar, and still unplayed.
 - **Should size ride the whole curve, or less of it?** `Depth, how much of it
-  the size takes` is 100%, so a deep cast is exactly as much bigger as it is
-  harder. More damage is worse to be hit by and more radius is harder to *not*
-  be hit by, and those may not deserve the same slider.
-- **Is a Judgement at full depth too much of a health bar?** The strike alone is
-  about 43% of one, and the field can take it past 80% against somebody who
-  stands in all of it.
-- **Is "the form is the arm you last punched with" findable?** Nothing teaches
-  it but the bar's colour. The two Lance clips are authored so the *opponent*
-  can read which is coming; whether the player can read their own is a
-  different question with a different answer.
+  the size takes` is 100%.
+- **Is a Judgement from a full bar too much of a health bar?** The strike alone
+  is about 43% of one.
+- **Is "the form is the arm you last punched with" findable?** The wings and
+  the track's border both say it now; whether either teaches it is a different
+  question.
 - **Does the pull want to be weaker than the shove?** They are within 10% of
-  each other. Being dragged is worth more than being shoved at the same speed,
-  because you are usually walking into the shove and away from the pull.
+  each other.
 
 ### Defence
 - **Is the 4-frame parry window findable?** This is the single most important
@@ -4752,3 +4756,236 @@ it could have seen. What only a person can say: whether the kick's twenty-two
 frame tell is a read or a tax; whether "beside the hind leg" is findable
 without being told; and whether the Dual mage floating onto a back nobody else
 can reach is her identity or a hole in the premise.
+
+---
+
+### 2026-09-23 — the Dual mage's two bars, and the hill between them (M1)
+**Changed** `Mechanic::Meter` is two bars, Dark and Light, each from empty to the old
+`Meter range` (100), and the signed value, its centre and the deep threshold are gone. Every
+frame the two are compared: inside `Band, the gap that still counts as level` (30) nothing
+moves; outside it the higher bar rises and the lower falls by
+`min(Drift per unit × excess, Drift at most)` a second (2 per unit, cap 10), the higher gaining
+exactly what the lower lost, and health falls by `min(Burn per unit × excess, Burn at most)` a
+second (1.5 per unit, cap 15), never past one. Both bars fall by `Calm` (6) a second, always.
+The three pushes grew from 5/12/26 to 8/18/38 so the band could sit between an auto plus a cast
+and two casts. `state::depth` reads the bar of the force a move is made of — an auto its own,
+everything else the carried one. The HUD's one track holds two fills growing away from the
+middle. `cargo run -p sim --bin goad` runs the plan's five scripts and prints the numbers
+below; every measured criterion in the plan is a test in `crates/sim/tests/dual_mage.rs`.
+
+**Why** The single bar conflated how powerful she is with how unstable she is, and nothing on
+it moved on its own, so "containment" was a word in the fantasy paragraph and not a thing the
+hands did. See `docs/design/dual-mage.md`, and its "Was" section for what it replaced.
+
+**What the instrument says**, with the first values, in an empty arena:
+
+| Script | Blink | Second jump | Wings | Leaves the band | Lower bar empty | Health lost in 30 s |
+| --- | --- | --- | --- | --- | --- | --- |
+| `alternate` | 486f (4.4 exchanges) | 748f (6.8) | 918f (8.4) | never | — | 720, all of it the ascension it reached |
+| `one-sided` | never | never | never | 69f | 1f after (light was never fed) | 427 |
+| `finisher` from the band's edge | — | — | — | 1f | 188f after | 209, before the calm brought her back |
+| `idle` from three quarters | falls below it at 251f (2.3 exchanges) | — | — | never | — | 0 |
+| `ascend` (greedy, lower bar first) | 442f | 670f | 859f (7.8) | never | — | 720 |
+
+An exchange is a Judgement's startup to the end of its recovery, twice: 110 frames.
+
+**What could not be had.** The plan asked for `idle` to fall below the first tier inside one
+exchange and for `alternate` to reach it inside one; the first wants the calm above 13 a second
+and the second under 4, and the climb per bar per cycle is a fixed 26 against a cycle of 115
+frames. It was set at 6 — where fifteen seconds of clean alternating reaches the wings, which
+is the design's own "roughly once per match", and the idle fall takes two and a quarter
+exchanges. Recorded as the first knob to move, and if play wants both a fast climb and a
+fragile plateau the honest answer is a calm proportional to the bar, which is a shape and not a
+number.
+
+**Verdict** open — built, unverified. **Play script C1:** *Dummy on. Alternate hands for ten
+seconds and watch the two bars. Then throw two Judgements from level and watch what happens.
+Catch it with the other hand. Then do not catch it.* Questions: Do you feel the hill — that the
+one-sided cast started something you have to answer? Is the band wide enough to fight in and
+narrow enough to fall off? Does the burn arrive as a consequence or as a surprise?
+
+### 2026-09-23 — the tiers: a blink at half, a second jump at three quarters (M2)
+**Changed** The lower bar gates what her body can do. At `Tier, the dodge is a blink from`
+(50) shift plus a direction puts her where the dodge would have ended, on its first frame, and
+she spends the dodge's own invulnerable window and tail standing there; `aim::blink_to` ends
+it against the first stone or wall any part of her body would meet, less her own radius, and
+airborne it is the airdodge and spends it. At `Tier, second jump and slow fall from` (75) a
+press of space in the air jumps once more, at `Second jump` (0.8) of the first, and the fall
+cap is multiplied by `Slow fall` (0.6). A tier is held while the lower bar is at or above it
+and lost the frame it drops below, mid-air included. The frame table prints the tiers under
+the class.
+
+**Why** The third leg this class never had, and it comes from the object rather than from a
+button: the Champion vaults on the spear, the Reaver crosses to the shadow, the Dual mage moves
+on what she has goaded. On the lower bar so that both beings have to be fed.
+
+**Two things the brief said that the build did not do, and why.** The blink has no
+invulnerability knob of its own: `Action::invulnerable` reads one number for every dodge in the
+game, and a second one would be a second dodge; the blink is the roll with the travelling
+taken out, and it keeps the roll's window. And the blink does **not** share the dash's "any of
+the four lines clear" rule — a low platform her head would clear is still a wall to her feet,
+so it stops at the nearest hit on any of the four. The first cut used the dash's rule and put
+her inside a platform.
+
+**Verdict** open — built, unverified. `goad alternate` reaches the blink in 8 seconds and the
+second jump in 12. **Play script C2:** *Alternate to half. Dodge. Alternate to three quarters.
+Jump twice and fall. Then throw a Judgement while at three quarters and watch what you lose.*
+Questions: Did you notice the dodge became a blink before you were told? Is the second jump and
+the float worth holding the bars for? When the low bar collapsed after the Judgement, did losing
+the tier feel like a price you chose to pay?
+
+### 2026-09-23 — ascension on both full, and the wings (M3)
+**Changed** Ascension triggers when the lower bar reaches `Tier, wings from` (95) — both
+bars, level, at the top — and nothing else triggers it; the drift never can, because it only
+pulls the two apart. While it runs: the dodge is refused, every press of space in the air is a
+wing beat, casts read the top of the curve, `Ascension, health a frame` (4) comes off for
+`Ascension, how long` (180 frames), and every hit landed returns `Ascension, health back per
+hit landed` (40). It ends with both bars empty and a stagger between `Ascension, stun on the
+way out, at least` (10) and `Ascension, stun on the way out` (40), shorter the more of the drain
+her hits paid back. Two wings on her back, dark on the left and light on the right, each as
+long as its bar and full span while ascending — `view::wings`, with `view/tests/wings.rs`
+holding the drawn span to the bar at five values including empty, full and lopsided.
+
+**Why** The nova the original design accepted in shape, with the refund and the graduated exit
+it wrote and never built. And the body as the meter: the thing the tiers unlock is the thing
+everyone is already looking at.
+
+**Why 95 and not 100.** The calm runs every frame and the two bars are pushed by two different
+presses, so both can never be at exactly the top on the same frame; the first cut asked for
+100 and was unreachable by construction. Ninety-five is what the other bar keeps through one
+move's worth of calm with room to spare, and it makes the third tier a threshold on the lower
+bar like the other two.
+
+**Verdict** open — built, unverified. `goad alternate` reaches the wings at 918 frames and
+`ascend` at 859; against the dummy the same ride ends with 379 lost instead of 720, which is the
+refund working. **Play script C3:** *Climb to both full — it should be hard. Fly. Cast. Come
+down.* Questions: Was the ride worth the climb? Could you read your own bars off the wings
+without looking at the HUD? When it ended, did the empty bars and the stagger feel like the
+vent the design describes, or like a punishment for succeeding?
+
+**Waiting on C1–C3 before M4.** The knob pass is a person's to drive; the first candidates,
+in order, are the calm, the band, the drift cap and the burn cap. **Play script C4**, for
+after: *One versus round against a Champion, then one as the Champion against a Dual mage.*
+As the mage: did you spend the round managing the hill or ignoring it? Did you ever ascend, and
+was it the right moment? As the Champion: could you read the wings — did a lopsided mage look
+like a mage about to burn, and did full wings look like something to avoid or something to
+punish?
+
+### 2026-09-23 — the two bars came back overtuned, and were rebuilt to benchmarks (M4, first pass)
+**Changed** After the first play of the two bars: "less damage, more health drain, slower drain
+on the bars, lower resource adds for the spells". The class was restated as **benchmarks** —
+player actions and their outcomes, eight of them, in `docs/design/dual-mage.md` under
+"Benchmarks" — and the knobs were moved until `cargo run -p sim --bin goad` printed numbers
+inside them. Each benchmark is now a test in `crates/sim/tests/dual_mage.rs`, named `b1_` to
+`b7_`, and the goad prints what she dealt to the dummy alongside what it cost her.
+
+| Knob | Was | Now | Benchmark |
+| --- | --- | --- | --- |
+| Pushes: auto / cast / finisher | 8 / 18 / 38 | 5 / 9 / 20 | B4, B8 |
+| Band | 30 | 16 | B8 |
+| Calm | 6 a second | 2 | B4, B5 |
+| Drift, per unit / at most | 2 / 10 a second | 1 / 3 | B6 |
+| Burn, per unit / at most | 1.5 / 15 a second | 4 / 25 | B7 |
+| Depth curve, empty → full | 0.5 → 2.0 | 0.6 → 1.4 | B1–B3 |
+| Autos / Lance / burst | 52 / 58 / 150 | 30 / 32 / 60 | B1, B2 |
+| Judgement / its field a tick | 215 / 12 | 140 / 5 | B2, B3 |
+| Sweep / dark Lance / tether a tick | 95 / 35 / 9 | 55 / 28 / 2 | B1, B2 |
+| Dark Sweep's heal, a target | 22 | 5 | B2 |
+
+**What the instrument says now** against what it said before, half a round on a dummy that
+never moves: alternating deals 1.96 health bars (was 2.6, measured against a dummy the light
+hand had shoved out of range; held in place the first pass was over 5) and reaches the blink
+at 10.9 s, the second jump at 16.8 s and the wings at 21.2 s (were 8.1, 12.5, 15.3); one-sided
+spam deals 2.24 bars (was 9.9) and costs her 0.64 of one; a Judgement from a full bar is 25%
+of a bar with its field (was 40% for the strike alone); stopping at three quarters keeps the
+blink for 6.8 exchanges (was 2.3); a Judgement from level ignored empties the lower bar in
+10 s (was 3.1) and costs 20% in ten seconds; fully one-sided for half a round costs 75%.
+
+**Two things found on the way.** The instrument's dummy was being shoved out of range by the
+light auto on the second press, so it read half of what the same script did in a test that
+held the target still; it is held still now, and the benchmarks say so. And the first cut of
+the damage pass left one-sided spam costing her 160 health in half a round instead of 600:
+the dark Sweep's heal, 22 a target, and the tether's leech against a target standing in
+everything were paying the burn back. The heal came down to 5 with the damage. Sustain on the
+dark side is the kit's identity and it stays; it cannot be the thing that makes the hill free.
+
+**What could not be had.** The plan's wish for the blink to go inside one exchange of
+stillness is gone with the slower calm; the person asked for slower bars, and the benchmark
+now says two to seven exchanges. And one-sided spam is still the biggest number the class can
+make because a Judgement is up every 55 frames and its lockout cannot grow without breaking
+the lockout rule in `feel.rs`; if B2 still reads as too much, the answer is the finisher's own
+frames.
+
+**Verdict** open — rebuilt to benchmarks, unverified. **Play script, same as C1 with one
+addition:** *Dummy on. Alternate hands for ten seconds and watch the two bars. Throw two
+Judgements from level; catch it with the other hand; then do not catch it. Then spam dark
+casts at the dummy for fifteen seconds and watch your own health.* Questions: Which of the
+eight benchmark rows is wrong, and in which direction? Does a Judgement from a full bar still
+read as too much? Is the burn a consequence now?
+
+### 2026-09-23 — ascension lasts six seconds, not three
+**Changed** `Ascension, how long` 180 → 360 frames, and `Ascension, health a frame` 4 → 2,
+so the whole ride still costs the same 720 of a 1000 health bar.
+
+**Why** Played: at three seconds there was time for two or three abilities and it was over
+before it had registered as having begun, unless the player was watching the bar rather than
+the fight. Six seconds is time to notice the wings, cast, and choose the last cast. The drain
+halved with it because the cost of the ride was not the complaint; the length was.
+
+**Verdict** open — halved and doubled, unplayed at the new length. Nothing else moved: the
+refund per hit is unchanged, so a longer ride lands more hits and pays more back, and the
+stagger on the way out is graduated against the same total drain. Two numbers moved with it.
+Benchmark B1 rose from 1.96 to 2.09 health bars, the extra being three more seconds at the
+top of the curve, and its ceiling went from two bars to two and a quarter rather than the
+ride being weakened — the ride is the payoff. And against a target that stands in everything,
+the longer ride nearly pays for itself: the goad's alternating run now loses 236 health over
+half a round where it lost 501, because six seconds of hits refund most of the 720 drained.
+Against a person who moves that will not happen; against one who does not, the refund per hit
+is the knob to watch.
+
+---
+
+### 2026-09-23 — the light auto's step back lands its tip
+
+**Changed** both autos 30 → 27 and `Wing, tip damage (x)` 1.75 → 1.5. Benchmark B1 is 2.20
+health bars, from 2.41.
+
+**Why** the two-bar branch was tuned to its benchmarks before the 1.3 m auto step from
+2026-09-17 was merged under it, and the step changed one of them. Against the pinned dummy the
+light auto steps *back* during its startup, which puts a target that was standing at the wing's
+body onto its **tip** — and the tip is worth 1.75×. Same thirty-six frames of contact, seventy
+per cent more damage from that one move, and B1 went from 2.09 bars to 2.41 against a ceiling
+of two and a quarter. Nothing else in the script moved; the dark auto, both Lances and Sweep
+dealt exactly what they did before.
+
+The step stays: it is the class's own argument (dark closes, light opens) carried to her feet,
+and it is the light auto finding its tip on purpose rather than by accident that makes the
+mechanic legible. So the fix is that landing the tip is worth a bit less and both autos are
+worth a bit less, rather than the benchmark's ceiling moving a second time. **Not played**: the
+tip at 1.5× is still the best single frame she has, and whether it still *feels* like the
+frame worth waiting for is the question. Against a person who moves, the step back will leave
+them out of the tip's reach as often as in it.
+
+---
+
+### 2026-09-23 — the float moves to the three-quarter tier
+
+**Changed** `state::floating` — her feet leave the floor and she walks 1.35× — used to fire at
+*depth* on the signed bar (past the old `meter_deep`). It now fires when the lower of the two
+bars is at three quarters (`tier_jump`), or while ascending. Nothing else about the float
+changed; the "deep" knob it read is gone with the signed bar.
+
+**Why** the v2 mechanic replaced the axis the trigger sat on, and the kit document had already
+said the reward for being at the far end should survive whatever v2 called the far end. The
+candidates were half (with the blink) and three quarters (with the second jump and the slow
+fall). Three quarters, because that tier is already the one where her relationship with the
+floor changes — a second jump and a slower fall are the same sentence as "her feet leave the
+floor" — and putting the float there makes it one threshold with two more faces rather than a
+fourth rule firing somewhere between the others. Half would have made the blink tier carry
+two rewards and the jump tier one.
+
+The ethereal fan of slabs that opened with the old float is gone: the six counted wings are
+the bars now, and two sets of wings on one back said two different things. **Not played.**
+Whether the walk-speed step feels right at three quarters, or wants to be at half, is a play
+question on the same list as the rest of the two-bar work.
+

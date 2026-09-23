@@ -140,7 +140,7 @@ fn main() {
                     place_discs,
                     place_wings,
                     place_wing_tips,
-                    place_pinions,
+                    place_wingspans,
                     place_marks,
                 ),
                 beast::place,
@@ -314,11 +314,12 @@ enum Dummy {
 
 impl Default for Sim {
     fn default() -> Self {
-        let w = if hunting() {
+        let mut w = if hunting() {
             World::hunt(chosen_classes())
         } else {
             World::with_classes(chosen_classes())
         };
+        shot_bars(&mut w);
         let seed = w.clone();
         Sim {
             prev: w.clone(),
@@ -334,6 +335,29 @@ impl Default for Sim {
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
             rehearsing: None,
+        }
+    }
+}
+
+/// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
+/// headless capture can look at the wings without playing up to them. A
+/// sibling of `SHOT_FRAME`: a way of landing a screenshot on a state rather
+/// than a moment. Ignored for any other class, and read once at start.
+fn shot_bars(w: &mut World) {
+    let Some(spec) = platform::env("SHOT_BARS") else {
+        return;
+    };
+    let mut parts = spec.split(',').map(|s| s.trim().parse::<i32>().ok());
+    let (Some(Some(dark)), Some(Some(light))) = (parts.next(), parts.next()) else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Meter {
+            dark: d, light: l, ..
+        } = &mut p.mechanic
+        {
+            *d = sim::Fx::from_int(dark);
+            *l = sim::Fx::from_int(light);
         }
     }
 }
@@ -572,6 +596,70 @@ struct WingMesh {
 #[derive(Component)]
 struct WingTipMesh(usize);
 
+/// One of the six wings on the Dual mage's **back**: her two bars, drawn.
+///
+/// Not the swept blade above, which is an attack. These are the meter: three
+/// a side, dark on her left and light on her right, one materialising at each
+/// third of its bar, so the gap between the two is readable across the arena
+/// by both players and six is ascension. `view::wings` decides the root, the
+/// axes and the count, and `view/tests/wings.rs` holds the count to the bar.
+#[derive(Component)]
+struct WingSpanMesh {
+    owner: usize,
+    force: sim::class::Force,
+    slot: view::wings::Slot,
+    /// Seconds since it appeared, while it is unfolding -- a wing
+    /// materialises over a few frames rather than popping. Presentation only.
+    unfolding: f32,
+}
+
+/// How long a wing takes to unfold once its third of the bar is reached.
+const WING_UNFOLD_SECONDS: f32 = 0.22;
+
+/// The wing `view::wings` describes, as one two-sided mesh in the wing's own
+/// plane at unit span: `x` out along the wing, `y` across it. The coverts and
+/// every feather are convex, so each is fanned from its own middle and the
+/// wing is their overlap -- translucent, so the overlaps read as depth.
+/// Scaled to each wing's own length when it is placed.
+fn wing_mesh() -> Mesh {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::render::mesh::{Indices, PrimitiveTopology};
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    let mut fan = |outline: &[[f32; 2]]| {
+        let n = outline.len();
+        let centre = outline.iter().fold([0.0f32, 0.0f32], |c, p| {
+            [c[0] + p[0] / n as f32, c[1] + p[1] / n as f32]
+        });
+        let first = positions.len() as u32;
+        positions.push([centre[0], centre[1], 0.0]);
+        for p in outline {
+            positions.push([p[0], p[1], 0.0]);
+        }
+        for i in 0..n as u32 {
+            let a = first + 1 + i;
+            let b = first + 1 + (i + 1) % n as u32;
+            // Both faces, so it reads from the front and from behind: the two
+            // places the two players are.
+            indices.extend_from_slice(&[first, a, b, first, b, a]);
+        }
+    };
+    fan(&view::wings::COVERTS);
+    for f in view::wings::FEATHERS.iter() {
+        fan(&view::wings::feather_outline(f));
+    }
+    let uvs: Vec<[f32; 2]> = positions.iter().map(|p| [p[0], 0.5 - p[1]]).collect();
+    let normals: Vec<[f32; 3]> = positions.iter().map(|_| [0.0, 0.0, 1.0]).collect();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+    .with_inserted_indices(Indices::U32(indices))
+}
+
 /// How many bars the wing is drawn with.
 ///
 /// Enough that consecutive bars overlap at the arc the autos are tuned for, so
@@ -579,32 +667,6 @@ struct WingTipMesh(usize);
 /// other mesh pool here: spawning as a move comes and goes would put allocation
 /// on the rollback path.
 const WING_SLICES: usize = 12;
-
-/// One feather of the Dual mage's wings: the pair that opens while she is deep
-/// on her own bar or ascended.
-///
-/// **Not [`WingMesh`]**, which draws her auto's hit volume. That one is a
-/// promise about where a blade is and comes straight off `state::hitbox`; this
-/// one is ornament and hits nothing. They are both called a wing because the
-/// class is built out of one image, but only one of them is allowed to lie.
-///
-/// Parented to the fighter's root, so the body's place and yaw come for free
-/// and a feather is a fixed offset in her own space. The anchor is a **fixed**
-/// point at shoulder height rather than the solved chest bone: the float is a
-/// hang, the hang barely moves, and the alternative is a fifth pool inside
-/// `apply_poses` and four more `Without` bounds on its queries. Nothing about
-/// this is a volume, so nothing about it has to agree with the simulation.
-#[derive(Component)]
-struct Pinion {
-    owner: usize,
-    /// -1 for the left wing, +1 for the right.
-    side: f32,
-    index: usize,
-}
-
-/// Feathers per wing. Enough to read as a fan from across the arena; few
-/// enough that eight boxes is the whole cost.
-const PINION_FEATHERS: usize = 5;
 
 /// The aim marker a channelled move is wound out along.
 ///
@@ -628,6 +690,12 @@ struct EffectLook {
     /// two you are holding.
     light: Handle<StandardMaterial>,
     dark: Handle<StandardMaterial>,
+    /// The wings on the Dual mage's back, one per force. Translucent and
+    /// two-sided where the tether and the burst are not: they hang off the
+    /// body the player is looking at, and a solid vane the size of her would
+    /// hide the fight behind it.
+    wing_light: Handle<StandardMaterial>,
+    wing_dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
@@ -746,22 +814,6 @@ fn setup(
                         BodyPart { owner, joint },
                     ));
                 }
-                // Her wings, hidden for everybody. A pool parented to the root
-                // rather than something spawned when the bar goes deep, for the
-                // reason every other pool here is one: the bar can cross its
-                // threshold inside a rollback, and allocating a mesh on that
-                // path is the most expensive thing a frame could do.
-                for side in [-1.0f32, 1.0] {
-                    for index in 0..PINION_FEATHERS {
-                        root.spawn((
-                            Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-                            MeshMaterial3d(skin.clone()),
-                            Transform::default(),
-                            Visibility::Hidden,
-                            Pinion { owner, side, index },
-                        ));
-                    }
-                }
             });
 
         // The Reaver's second body. A full skeleton's worth of parts, hidden
@@ -856,6 +908,24 @@ fn setup(
         // has to be visible along its whole length against anything it crosses,
         // and the one thing it must not do is wash out the body on the end of
         // it, which is what the player is actually looking at.
+        wing_light: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.95, 0.78, 0.34),
+            emissive: LinearRgba::rgb(1.8, 1.5, 0.9),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        wing_dark: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.38, 0.14, 0.62, 0.34),
+            emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
         dark: materials.add(StandardMaterial {
             base_color: Color::srgba(0.16, 0.06, 0.26, 0.88),
             emissive: LinearRgba::rgb(0.55, 0.12, 0.95),
@@ -919,6 +989,7 @@ fn setup(
         ));
     }
     let pellet = meshes.add(Sphere::new(0.5));
+    let wing = meshes.add(wing_mesh());
     for slot in 0..sim::bolt::MAX_BOLTS {
         commands.spawn((
             Mesh3d(pellet.clone()),
@@ -980,6 +1051,26 @@ fn setup(
             Visibility::Hidden,
             WingTipMesh(owner),
         ));
+        // And the six on her back, in the colour of the force each one is.
+        for (force, material) in [
+            (sim::class::Force::Dark, look.wing_dark.clone()),
+            (sim::class::Force::Light, look.wing_light.clone()),
+        ] {
+            for slot in view::wings::ORDER {
+                commands.spawn((
+                    Mesh3d(wing.clone()),
+                    MeshMaterial3d(material.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    WingSpanMesh {
+                        owner,
+                        force,
+                        slot,
+                        unfolding: 0.0,
+                    },
+                ));
+            }
+        }
     }
     // The aim marker a channelled move is wound out along.
     for owner in 0..MAX_PLAYERS {
@@ -1326,94 +1417,64 @@ fn place_wing_tips(
     }
 }
 
-/// Open the Dual mage's wings while she is off the floor of her own bar.
+/// The six wings on the Dual mage's back: three a side, one per third of its
+/// bar, each a wing-shaped vane in a fixed place that is there or is not.
 ///
-/// **Ethereal, and in the colour of the force she is carrying.** The class is
-/// which of the two you are holding, so the reward for riding the edge says
-/// which edge in the most legible place there is -- on the character, where the
-/// player is already looking, rather than on a bar under the health.
-///
-/// A fan of thin slabs rather than a wing mesh. There is no wing model and this
-/// is a blockout; what a fan of slabs can do that a single quad cannot is
-/// **move**, and the feathers sweep on a slow beat off the simulation frame --
-/// which is in the snapshot, so it survives a rollback like every other clock
-/// the renderer is allowed to read.
-///
-/// Nothing here is a volume. See [`Pinion`] for why that matters and why this
-/// is not the other thing called a wing.
-fn place_pinions(
+/// Drawn from the *interpolated* frame like the body rather than from the
+/// latest snapshot like the attack volumes, because they hang off her and a
+/// wing that lagged the back it grows from by half a frame would visibly
+/// detach every time she turned.
+fn place_wingspans(
     sim: Res<Sim>,
-    look: Res<EffectLook>,
-    mut feathers: Query<(
-        &Pinion,
-        &mut Transform,
-        &mut Visibility,
-        &mut MeshMaterial3d<StandardMaterial>,
-    )>,
+    time: Res<Time>,
+    mut meshes: Query<(&mut WingSpanMesh, &mut Transform, &mut Visibility)>,
 ) {
-    for (tag, mut tf, mut vis, mut material) in feathers.iter_mut() {
-        let p = &sim.cur.players[tag.owner];
-        if !sim::state::floating(p) {
+    let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    for (mut tag, mut tf, mut vis) in meshes.iter_mut() {
+        // The bars are read off the current snapshot -- they are the meter,
+        // and a meter is not a thing to blend -- and the body they hang off is
+        // read off the blended frame, which is where the body is drawn.
+        let mut p = sim.cur.players[tag.owner];
+        let drawn = frame.players[tag.owner];
+        p.pos = sim::V3::new(
+            sim::Fx::from_raw((drawn.pos[0] * 65536.0) as i32),
+            sim::Fx::from_raw((drawn.pos[1] * 65536.0) as i32),
+            sim::Fx::from_raw((drawn.pos[2] * 65536.0) as i32),
+        );
+        p.facing = sim::V3::new(
+            sim::Fx::from_raw((drawn.facing[0] * 65536.0) as i32),
+            sim::Fx::ZERO,
+            sim::Fx::from_raw((drawn.facing[2] * 65536.0) as i32),
+        );
+        let Some(wings) = view::wings::wings(&p) else {
             *vis = Visibility::Hidden;
+            tag.unfolding = 0.0;
+            continue;
+        };
+        let wing = wings
+            .iter()
+            .find(|w| w.force == tag.force && w.slot == tag.slot)
+            .copied()
+            .expect("all six wings are always answered for");
+        if !wing.shown {
+            *vis = Visibility::Hidden;
+            tag.unfolding = 0.0;
             continue;
         }
-        let force = match p.mechanic {
-            sim::class::Mechanic::Meter { colour, .. } => colour,
-            _ => {
-                *vis = Visibility::Hidden;
-                continue;
-            }
-        };
-        let wants = match force {
-            sim::class::Force::Light => &look.light,
-            sim::class::Force::Dark => &look.dark,
-        };
-        if material.0.id() != wants.id() {
-            material.0 = wants.clone();
-        }
-
         *vis = Visibility::Inherited;
-        let (at, along, length) = feather(tag.side, tag.index, sim.cur.frame);
-        tf.translation = at;
-        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along);
-        tf.scale = Vec3::new(0.055, length, 0.012);
+        // Materialise: unfold from the root over a few frames, then hold. The
+        // shape never changes with the bar; only whether it is there.
+        tag.unfolding = (tag.unfolding + time.delta_secs()).min(WING_UNFOLD_SECONDS);
+        let t = tag.unfolding / WING_UNFOLD_SECONDS;
+        let unfold = t * t * (3.0 - 2.0 * t);
+        let along = Vec3::from_array(wing.along);
+        let across = Vec3::from_array(wing.across);
+        let normal = along.cross(across);
+        tf.translation = Vec3::from_array(wing.root);
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(along, across, normal));
+        // The mesh is unit length; the slot says how long this wing is.
+        tf.scale = Vec3::new(unfold.max(0.01) * wing.length, wing.length, 1.0);
     }
-}
-
-/// Where one feather sits, which way it points and how long it is, in her own
-/// space.
-///
-/// Split out of [`place_pinions`] so the geometry can be checked without a
-/// window: a wing drawn on the wrong side, or through the middle of the body,
-/// is the sort of thing nobody notices in a still and everybody notices in
-/// motion.
-///
-/// `frame` is the simulation's own frame counter, which is in the snapshot --
-/// so the beat is deterministic and a rollback redraws the same wing rather
-/// than a different one.
-fn feather(side: f32, index: usize, frame: u32) -> (Vec3, Vec3, f32) {
-    /// Where a wing leaves the body, in her own space: shoulder height, a
-    /// hand's width out, and behind the chest.
-    const ROOT: Vec3 = Vec3::new(0.17, 1.28, -0.12);
-    /// How long a feather is, longest at the top of the fan.
-    const LONGEST: f32 = 1.15;
-    const SHORTEST: f32 = 0.55;
-
-    // The fan: the top feather sweeps up and back, the bottom one out and
-    // down, and they are evenly spread between.
-    let down = index as f32 / (PINION_FEATHERS - 1) as f32;
-    let length = LONGEST + (SHORTEST - LONGEST) * down;
-    // A slow beat, a little out of phase down the fan so the wing ripples
-    // rather than flapping as one board.
-    let beat = ((frame as f32 * 0.035) - down * 0.9).sin();
-    let up = (52.0 - 78.0 * down + beat * 5.0).to_radians();
-    let out = (26.0 + 22.0 * down + beat * 4.0).to_radians() * side;
-
-    // Up and out from the shoulder, and swept back, because a wing that stood
-    // square to the shoulders would read as a signpost.
-    let along = Vec3::new(out.sin(), up.sin(), -0.55).normalize();
-    let root = Vec3::new(ROOT.x * side, ROOT.y, ROOT.z);
-    (root + along * (length * 0.5), along, length)
 }
 
 /// Put each channelling fighter's aim marker where their aim currently lands.
@@ -2775,91 +2836,6 @@ mod tests {
         assert!(
             !idle.pointer && !idle.keyboard,
             "a shut palette claims nothing"
-        );
-    }
-}
-
-#[cfg(test)]
-mod pinions {
-    use super::*;
-
-    /// Every feather of both wings, over a couple of seconds of the beat.
-    fn all() -> Vec<(f32, usize, u32, Vec3, Vec3, f32)> {
-        let mut out = Vec::new();
-        for side in [-1.0f32, 1.0] {
-            for index in 0..PINION_FEATHERS {
-                for frame in [0u32, 17, 43, 90, 137] {
-                    let (at, along, length) = feather(side, index, frame);
-                    out.push((side, index, frame, at, along, length));
-                }
-            }
-        }
-        out
-    }
-
-    #[test]
-    fn a_wing_stays_on_its_own_side_and_out_of_the_body() {
-        // The two ways a fan of slabs hung off a shoulder goes wrong, and both
-        // of them are invisible in a still: a wing that crosses the centre line
-        // reads as one wing on the wrong side, and one that sits inside the
-        // torso reads as a rendering fault.
-        let body = sim::tuning::body_radius().to_f32_for_render();
-        for (side, index, frame, at, _, _) in all() {
-            assert!(
-                at.x * side > 0.0,
-                "feather {index} of the {} wing crosses the centre line at frame {frame}: x = {:.2}",
-                if side < 0.0 { "left" } else { "right" },
-                at.x
-            );
-            assert!(
-                at.length_squared() > 0.0 && at.x.abs() > body * 0.3,
-                "feather {index} sits {:.2} m off the centre line at frame {frame}, inside a \
-                 {body:.2} m body",
-                at.x.abs()
-            );
-        }
-    }
-
-    #[test]
-    fn the_fan_opens_downward_and_outward() {
-        // What makes it read as a wing rather than as a bundle: the top feather
-        // is the longest and reaches up and back, and each one below it is
-        // shorter and swings further out.
-        for side in [-1.0f32, 1.0] {
-            let mut last_up = f32::MAX;
-            let mut last_length = f32::MAX;
-            for index in 0..PINION_FEATHERS {
-                let (_, along, length) = feather(side, index, 0);
-                assert!(
-                    along.y < last_up,
-                    "feather {index} does not sit below the one above it"
-                );
-                assert!(
-                    length < last_length,
-                    "feather {index} is not shorter than the one above it"
-                );
-                assert!(
-                    along.z < 0.0,
-                    "feather {index} points forward rather than trailing behind her"
-                );
-                last_up = along.y;
-                last_length = length;
-            }
-        }
-    }
-
-    #[test]
-    fn the_beat_moves_and_is_a_pure_function_of_the_frame() {
-        // It runs on the simulation's frame counter, which is in the snapshot,
-        // so a rollback redraws the same wing rather than a different one. And
-        // it has to actually move, or the pool is five static boards.
-        let (a, _, _) = feather(1.0, 0, 0);
-        let (b, _, _) = feather(1.0, 0, 45);
-        assert_ne!(a, b, "the wings never move");
-        assert_eq!(
-            a,
-            feather(1.0, 0, 0).0,
-            "the beat is not a function of the frame"
         );
     }
 }

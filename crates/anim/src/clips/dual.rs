@@ -108,11 +108,11 @@ pub fn clips() -> Vec<Recipe> {
 // Off the floor
 // ---------------------------------------------------------------------------
 //
-// **The one class in the game whose locomotion has two states.** Deep on her
-// own bar, or ascended, her feet leave the ground -- `sim::state::floating` --
-// and these two replace the idle and the walk for as long as that holds. The
-// bar is what it costs her (the burn) and this is what it buys, which is why
-// the two share one threshold.
+// **The one class in the game whose locomotion has two states.** With the
+// lower of her two bars at three quarters, or ascended, her feet leave the
+// ground -- `sim::state::floating` -- and these two replace the idle and the
+// walk for as long as that holds. It is the same tier the second jump and the
+// slow fall arrive on, which is why the three share one threshold.
 //
 // The reference is a renaissance angel rather than a superhero: **the body
 // hangs**. Feet pointed and together-ish, knees softly bent rather than
