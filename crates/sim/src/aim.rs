@@ -750,6 +750,17 @@ pub struct Targets {
     pub stones: bool,
     pub fire: bool,
     pub quarry: bool,
+    /// The arena itself -- walls, the sides and tops of platforms.
+    ///
+    /// **Off for every ability that existed before 2026-09-17**, and that is
+    /// not an oversight being preserved: the crosshair's ray already stops on
+    /// terrain ([`sight`]), so a shot is aimed at a point the geometry allows
+    /// and asking a second time along its own path would only ever agree. What
+    /// wants this is an ability asking *whether there is something to pull on*,
+    /// which is a question about the anchor rather than about the flight -- the
+    /// Blood mage's Grasp, and her blink looking for the wall it must not go
+    /// through.
+    pub terrain: bool,
 }
 
 impl Targets {
@@ -759,7 +770,13 @@ impl Targets {
             stones: false,
             fire: false,
             quarry: false,
+            terrain: false,
         }
+    }
+
+    pub const fn terrain(mut self) -> Targets {
+        self.terrain = true;
+        self
     }
 
     pub const fn fighters(mut self, yes: bool) -> Targets {
@@ -786,10 +803,26 @@ impl Targets {
 /// What a travelling ability meets, and how far along its path it sits.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Contact {
-    Fighter { index: usize, dist: Fx },
-    Stone { index: usize, dist: Fx },
-    Fire { dist: Fx },
-    Quarry { part: usize, dist: Fx },
+    Fighter {
+        index: usize,
+        dist: Fx,
+    },
+    Stone {
+        index: usize,
+        dist: Fx,
+    },
+    Fire {
+        dist: Fx,
+    },
+    Quarry {
+        part: usize,
+        dist: Fx,
+    },
+    /// A wall, or the side or top of a platform. Only ever reported when
+    /// [`Targets::terrain`] asked for it.
+    Terrain {
+        dist: Fx,
+    },
 }
 
 impl Contact {
@@ -798,8 +831,22 @@ impl Contact {
             Contact::Fighter { dist, .. }
             | Contact::Stone { dist, .. }
             | Contact::Fire { dist }
-            | Contact::Quarry { dist, .. } => dist,
+            | Contact::Quarry { dist, .. }
+            | Contact::Terrain { dist } => dist,
         }
+    }
+
+    /// Is this something a thrown rope could hold on to?
+    ///
+    /// Terrain, a structure and the creature are anchors; a fighter and a fire
+    /// are not -- one of them moves and the other is not there. It is a
+    /// question about the world rather than about the Blood mage, so it is
+    /// answered here beside the enum rather than beside her ability.
+    pub fn is_an_anchor(self) -> bool {
+        matches!(
+            self,
+            Contact::Terrain { .. } | Contact::Stone { .. } | Contact::Quarry { .. }
+        )
     }
 }
 
@@ -883,6 +930,19 @@ pub fn first_along(
             .and_then(|b| b.part_struck_along(from, dir, limit, girth))
         {
             keep(Contact::Quarry { part, dist });
+        }
+    }
+    if targets.terrain {
+        // The blockout's own boxes, grown by the travelling thing's girth in
+        // all three axes -- the same trick the stones use, so "do these two
+        // volumes touch" stays one ray against one shape.
+        let fat = V3::new(girth, girth, girth);
+        for solid in arena::SOLIDS.iter() {
+            if let Some(dist) =
+                crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
+            {
+                keep(Contact::Terrain { dist });
+            }
         }
     }
     best

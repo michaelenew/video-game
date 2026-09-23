@@ -45,8 +45,17 @@ pub fn crouch_move_speed() -> Fx {
 /// and it is over before you have read the situation you jumped into. A beginner
 /// needs long enough in the air to notice where the other player went.
 ///
-/// Full hop apexes around 2.2 m over roughly a second; a short hop is about half
-/// that. Both are relationships the feel tests pin, not numbers to trust.
+/// **Cut from 17.7 to 16.2 on 2026-09-17**, taking about a third off every
+/// apex in the game. Apex goes as the *square* of this and airtime goes as this,
+/// so the height came down by a third while the hang only lost a fifth -- which
+/// is why the height is tuned here rather than by leaning on gravity. A full
+/// hop now runs from 2.7 m on the Bulwark to 6.0 m on the Dual mage, over 0.7 s
+/// to 1.2 s.
+///
+/// The reason is that a jump is the *floor* of this game's movement system
+/// rather than the whole of it. The Elementalist rides a structure up and the
+/// Champion vaults, and both were being reached to within a quarter by pressing
+/// space. See `docs/design/feel-log.md`.
 pub fn jump_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpSpeed))
 }
@@ -66,11 +75,24 @@ pub fn fall_cap() -> Fx {
 /// short one, and everything in between. It is a *sustain* rather than a cut on
 /// release, because a cut makes the short hop feel like the jump was taken away
 /// from you, whereas a sustain makes the tall one feel earned.
+///
+/// **Raised from 0.56 to 0.72 on 2026-09-17, with the window below cut from 26
+/// frames to 18.** Together those two were what made a held jump read as an
+/// elevator. At 0.56 for 26 frames the rise lost only half its speed over four
+/// tenths of a second and covered five of its six metres doing it, so the climb
+/// looked like a constant one and gravity looked like something that switched
+/// on at the top. A sustain has to be a *discount* on gravity rather than a
+/// suspension of it, and you have to be able to see the rise slowing the whole
+/// way up. See `docs/design/feel-log.md`.
 pub fn jump_hold_gravity() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpHoldGravity))
 }
 
 /// How long the sustain can last. Beyond this, gravity is gravity.
+///
+/// Long enough to be a real decision, short enough that most of the rise
+/// happens under ordinary gravity -- see [`jump_hold_gravity`] for why those
+/// are the two things it is balanced between.
 pub fn jump_hold_frames() -> u16 {
     oven::scalar(Scalar::JumpHoldFrames) as u16
 }
@@ -317,6 +339,109 @@ pub fn air_attack_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirAttackBoost))
 }
 
+// ---------------------------------------------------------------------------
+// The Blood mage's movement, both of it behind a flag
+// ---------------------------------------------------------------------------
+//
+// **This class has no movement at all and cannot stay that way.** Everything
+// else in the roster has one thing it does with the ground: the Reaver crosses
+// to her shadow, the Elementalist rides a structure up, the Champion vaults,
+// the Dual mage floats, the Bulwark leaps to its shield. The Blood mage walks.
+// In a game where jumping was just cut back specifically so that the class
+// techniques matter more, walking is not a position to be in.
+//
+// Two answers are built, both off a flag, because which one is the class is a
+// question for somebody playing it rather than for this file:
+//
+//   * **The Grasp haul.** Four arms that converge on a wall or on the creature
+//     rather than on a person pull *her* instead, which is a grappling hook
+//     made out of an ability she already has. It is the one with a thematic
+//     tie -- the arms are already a thing that closes distance, and this is
+//     the same sentence with the subject swapped -- and it costs her a whiffed
+//     Grasp's worth of health to use as movement.
+//   * **The blink dodge.** Her dodge covers a long flat distance at once
+//     instead of a short one over twenty-two frames. Honest about what it is:
+//     there is no thematic tie, and it leans entirely on the animation to make
+//     it feel like it belongs.
+//
+// The combinations are the point. Both on is a very mobile Blood mage and
+// probably too much; neither is where she is today.
+
+/// Does a Grasp that catches nothing but scenery pull her to it?
+pub fn grasp_hauls() -> bool {
+    oven::scalar(Scalar::GraspHauls) != 0
+}
+
+/// How fast the haul reels her in.
+///
+/// Constant while it runs, like the Reaver's dash and for the same reason: the
+/// distance is whatever the Grasp's own reach and hold chose, so a decaying
+/// pull would cover a distance that depends on how the decay happens to be
+/// tuned rather than on the thing the player aimed.
+///
+/// Constant *speed* rather than constant time, which is the opposite of the
+/// blink below and right for the opposite reason: you are being reeled in on a
+/// rope, so a short pull is quick and a long one is a journey. That difference
+/// is the whole of why `Player::haul_speed` is a field and not a knob.
+pub fn grasp_haul_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspHaulSpeed))
+}
+
+/// Is her dodge a blink?
+pub fn dodge_blinks() -> bool {
+    oven::scalar(Scalar::DodgeBlinks) != 0
+}
+
+/// How far the blink goes.
+///
+/// Longer than a dodge covers, which is the whole of the idea -- an ordinary
+/// dodge is `dodge_speed` decaying over `dodge_frames` and lands a little over
+/// four metres away. **Flat**, and deliberately: what this class is missing is
+/// ground, not height, and a blink that also went up would be a second jump on
+/// the one class that has not earned one.
+pub fn blink_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BlinkRange))
+}
+
+/// How many frames the blink takes to cross that distance.
+///
+/// Not zero. A teleport that resolves inside one frame cannot be read by the
+/// person opposite -- she is simply somewhere else -- and it cannot be drawn
+/// either, which on the answer with no thematic tie is the only thing it has
+/// going for it. A handful of frames is a smear rather than a cut, and it
+/// still lands well inside the dodge's own invulnerability.
+pub fn blink_frames() -> u16 {
+    oven::scalar(Scalar::BlinkFrames).max(1) as u16
+}
+
+/// How much faster the Dual mage moves once she is deep or ascended.
+///
+/// The one thing on this class that depth moves which is **not** a force.
+/// Everything else on the curve is how hard she hits and how big it is; this is
+/// how fast she gets there, and it is a step rather than a curve because it is
+/// answering a yes-or-no question -- are her feet on the floor -- rather than a
+/// how-much one. See `state::floating`.
+pub fn float_move_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FloatMoveSpeed))
+}
+
+/// What each successive aerial hang in one airtime is worth.
+///
+/// **The air gives you less each time you ask.** A hang costs nothing but the
+/// move that carries it, and the repeat lockout only stops one move being
+/// thrown twice -- so a class with two interchangeable pokes can alternate them
+/// and simply not come down. The Dual mage is that class by construction: her
+/// two autos are the same punch mirrored, and they are how she steers her
+/// meter, so she throws them alternately as a matter of course.
+///
+/// Compounding rather than a hard cap, because a cap has an edge somebody finds
+/// and plays against, and this has none: the sum of every hang an airtime can
+/// contain is `first / (1 - this)`, which is bounded however long you stay up.
+/// Reset on landing, like the airdodge.
+pub fn air_stall_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirStallFalloff))
+}
+
 /// Fraction of your upward speed kept when you let go of jump while rising.
 ///
 /// The sustain alone cannot give a short hop worth having. Holding reduces
@@ -329,6 +454,11 @@ pub fn air_attack_boost() -> Fx {
 /// touching the ceiling: the full hop never releases while rising, so it is
 /// untouched, and the short hop scales with the *square* of this because apex
 /// goes as velocity squared.
+///
+/// Trimmed to 0.52 on 2026-09-17 to hold the short hop at a quarter of the full
+/// one after the sustain was shortened. A stiffer sustain takes more off the
+/// full hop than off the tap, so without this the two would have drifted back
+/// toward each other.
 pub fn jump_release_cut() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpReleaseCut))
 }
@@ -389,8 +519,30 @@ pub fn spike_drain() -> i32 {
     oven::scalar(Scalar::SpikeDrain)
 }
 
-/// Frames a structure takes to climb out of the ground. Cosmetic: it is earth,
-/// so it comes up through the floor rather than appearing in the air.
+/// Frames a structure takes to climb out of the ground.
+///
+/// It was described here as cosmetic -- it is earth, so it comes up through the
+/// floor rather than appearing in the air -- and that stopped being true when a
+/// stone became a solid you can stand on. **How long the rise takes is how fast
+/// the eruption is**, because the burst at the end of the curve is a real
+/// surface speed that a rider keeps ([`stone_lift`]), and it is therefore the
+/// knob that decides how high a structure jump goes.
+///
+/// **Left at 14, and that is a decision rather than an oversight.** It was
+/// moved to 16 and then 17 on 2026-09-17 to bring the structure jumps down, and
+/// put back the next day.
+///
+/// The chain a structure jump is made of turns out to be a **resonance**
+/// between how fast she rises and how fast the stone grows: the eruption has to
+/// outrun her by just enough to catch her feet again, and how many takeoffs
+/// each technique gets out of one stone therefore moves around under tuning --
+/// and moves *non-monotonically*. Raising her jump can cost the single a link,
+/// because she outruns the stone that was going to catch her. Three frames on
+/// this knob roughly halved the double while the single barely noticed.
+///
+/// A knob with that shape is not one to turn on a calculation. If the structure
+/// jumps need to come down again, somebody has to play each setting rather than
+/// solve for a target. See `docs/design/feel-log.md`.
 pub fn structure_rise() -> u16 {
     oven::scalar(Scalar::StructureRise) as u16
 }
@@ -467,6 +619,15 @@ pub fn leap_rise() -> Fx {
 /// send's own reach, and a leash shorter than that would have it turn round on
 /// the frame it landed. The gap between the two is how far she may walk off the
 /// line before the line comes after her.
+///
+/// **Twice the throw since 2026-09-17**, where it used to be a third longer.
+/// The shadow is the Reaver's whole movement game -- she sends it somewhere
+/// useful and then chooses when to cross to it -- and a leash that close to the
+/// throw meant the placement expired while she was still deciding, so the
+/// answer to "when do I take this" was usually "now, before it leaves". Twice
+/// the throw is room to leave it somewhere and go and do something else.
+/// [`shadow_dash_speed`] went up with it, because the dash has to be able to
+/// cross whatever this is.
 pub fn shadow_leash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
 }
@@ -586,6 +747,12 @@ pub fn shadow_carry() -> u16 {
 /// happens to be tuned this week. Fast enough to cross the **whole leash**
 /// inside one dodge, which is the property that makes the dash a reliable
 /// escape rather than a gamble on how far away she left the thing.
+///
+/// That property is `reaver::the_dash_crosses_the_whole_leash`, which did not
+/// exist until 2026-09-17 -- the leash went to twice the throw that day, and
+/// the one thing standing between that and a dash that runs out of dodge
+/// halfway across the arena was a sentence in this comment. The dash ends with
+/// the dodge, so falling short means spending the dodge and arriving nowhere.
 pub fn shadow_dash_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
 }
@@ -1115,6 +1282,10 @@ pub fn stone_erupt_stagger() -> u16 {
 /// top of another, so this is the knob that decides whether a stone raised
 /// underneath is a lift or a launch. One, and a rider leaves at exactly the
 /// speed the surface was climbing at.
+///
+/// Moved to 0.44 on 2026-09-17 and put back the next day, with the rise. See
+/// [`structure_rise`] for why neither of them is a knob to turn on a
+/// calculation.
 pub fn stone_lift() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StoneLift))
 }
@@ -1391,6 +1562,13 @@ pub fn grasp_mark() -> Fx {
 /// between the ability landing and the ability *looking* like it landed. One
 /// knob for every grab in the game, because it is a property of being dragged
 /// rather than of the thing doing the dragging.
+///
+/// **Raised with the Grasp's reach on 2026-09-17**, and `feel.rs` is what
+/// noticed: the hold is a fixed number of frames and the haul has to cover the
+/// whole reach inside it, so lengthening the throw without this drops a
+/// full-range catch halfway home -- standing in mid-air, mid-drag, suddenly
+/// able to walk. Invisible at short range and total at long range, which is the
+/// worst way for a number to be wrong.
 pub fn reel_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ReelSpeed))
 }

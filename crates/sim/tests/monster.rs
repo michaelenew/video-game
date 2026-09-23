@@ -1108,8 +1108,26 @@ fn you_can_jump_the_shake_if_you_commit_before_the_whip() {
     };
     let early = mean(0..startup);
     let late = mean(startup..startup + 12);
+    // **Two bars, and the absolute one is the real one.** A late jump must not
+    // earn the fifty frames the first half of this test calls long enough to be
+    // worth having; that is what "no longer a plan" means, and it is stated
+    // against this test's own definition rather than against the early jump.
+    //
+    // The ratio was four to one until the mobility pass of 2026-09-17, which
+    // cut the takeoff across the cast: a full hop is now a little *shorter*
+    // than the whip rather than a little longer, so an early commit clears
+    // slightly less of it and the gap narrowed to 3.7 without anything about
+    // the read changing. A margin that moves every time somebody tunes the jump
+    // is measuring the jump rather than the timing. See
+    // `docs/design/feel-log.md`.
     assert!(
-        late * 4 < early,
+        late < 50,
+        "jumping once the whip had started still earned {late} frames back on \
+         the animal -- long enough to throw something committed at the ridge, \
+         so reading the startup buys nothing"
+    );
+    assert!(
+        late * 3 < early,
         "jumping once the whip had started still earned {late} frames back on \
          the animal on average, against {early} for jumping before it -- so \
          there is no timing in it"

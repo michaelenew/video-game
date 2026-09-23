@@ -716,3 +716,173 @@ fn destroying_a_stone_reports_its_middle_rather_than_its_base() {
         "destroy() reported the stone's base instead of its middle"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The structure jump
+// ---------------------------------------------------------------------------
+
+/// Raise stones under the Elementalist's own feet and jump off the eruption.
+///
+/// `gap` frames between the presses; space goes down on `jump_at` and stays
+/// down, which is what a player actually does. Returns the highest she gets.
+fn structure_jump(count: usize, gap: u32, jump_at: u32) -> f32 {
+    let mut w = elementalist();
+    let here = w.players[0].pos;
+    // At her own feet: the crosshair is the aim, so "raise one under me" is a
+    // look straight down at the floor she is standing on.
+    let (yaw, tilt) = look_at(&w, V3::new(here.x, Fx::ZERO, here.z));
+    let mut raised = 0;
+    let mut apex = 0.0f32;
+    for i in 0..200u32 {
+        let mut bits = 0u16;
+        if raised < count && i == raised as u32 * gap {
+            bits |= E;
+        }
+        if i >= jump_at {
+            bits |= Input::SPACE;
+        }
+        w.advance([
+            Input::looking_at(bits, yaw, tilt),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
+        if bits & E != 0 {
+            raised += 1;
+        }
+        apex = apex.max(w.players[0].pos.y.to_f32_for_render());
+    }
+    apex
+}
+
+/// The best a technique can do over every frame it could be timed on, and how
+/// many of those frames get within a tenth of it.
+///
+/// The window is half of what the technique *is*: a double structure jump that
+/// paid out over twenty frames would be a button.
+fn best_structure_jump(count: usize, gap: u32) -> (f32, usize) {
+    let apexes: Vec<f32> = (0..46)
+        .map(|jump_at| structure_jump(count, gap, jump_at))
+        .collect();
+    let top = apexes.iter().copied().fold(0.0f32, f32::max);
+    let window = apexes.iter().filter(|a| **a >= top * 0.9).count();
+    (top, window)
+}
+
+/// The best the double is, over every gap between the two casts as well.
+fn best_double() -> (f32, usize, u32) {
+    let mut best = (0.0f32, 0, 0);
+    for gap in 0..20 {
+        let (apex, window) = best_structure_jump(2, gap);
+        if apex > best.0 {
+            best = (apex, window, gap);
+        }
+    }
+    best
+}
+
+/// Her own full hop, which is what every number below is read against.
+fn full_hop() -> f32 {
+    let mut w = elementalist();
+    let mut apex = 0.0f32;
+    for _ in 0..200 {
+        run(&mut w, 1, Input::SPACE, 0);
+        apex = apex.max(w.players[0].pos.y.to_f32_for_render());
+    }
+    apex
+}
+
+#[test]
+fn a_structure_jump_goes_where_a_jump_cannot() {
+    // The reason the technique exists. Riding an eruption and jumping off the
+    // top of it is the Elementalist's signature movement, and it has to read as
+    // a different kind of thing from pressing space -- see
+    // `crates/sim/tests/combat.rs` and the height nerf of 2026-09-17, which is
+    // the same argument from the other end.
+    let plain = full_hop();
+    let (ridden, _) = best_structure_jump(1, 0);
+    assert!(
+        ridden > plain * 2.0,
+        "a structure jump reaches {ridden:.1} m against a {plain:.1} m full hop, \
+         which is a jump with extra steps"
+    );
+}
+
+#[test]
+fn the_double_structure_jump_is_worth_the_second_cast() {
+    // **The most interesting thing this class does, and it is a specified
+    // feature rather than something the code happens to allow.**
+    //
+    // Two structures raised a few frames apart, with a jump timed while both
+    // are still coming out of the floor: the first eruption catches her feet
+    // and she jumps off it, the second catches her again mid-rise and she jumps
+    // off that. Every one of those takeoffs is a jump off a *surface* -- the
+    // stone's top is genuinely under her feet, which is why
+    // `stones::resolve_body` grounds her there -- so this is not the double
+    // jump `docs/design/README.md` §4 rules out. That question is about space
+    // doing something with nothing under you.
+    //
+    // It was deleted on 2026-09-17 on exactly that misreading and restored the
+    // same day. The entry in `docs/design/feel-log.md` is the one worth
+    // reading: a technique that costs two of three structure slots, a
+    // telegraphed setup and a frame-tight read of two eruptions is execution,
+    // whatever the implementation looks like from underneath.
+    // **Measured against her own full hop, not against the single**, because the
+    // single chains too -- one stone's eruption can catch her twice on its own,
+    // and how many links each of the two techniques gets is a resonance between
+    // how fast she rises and how fast the stone grows. It moves around under
+    // tuning, and it moves *non-monotonically*: making her jump higher can cost
+    // the single a link, because she outruns the stone that was going to catch
+    // her. Pinning the ratio between them would be pinning that resonance.
+    //
+    // What does not move is the gap between having the technique and not. With
+    // it, the double is around nine full hops; delete it and the pair is under
+    // four, because what is left is a stone-sized platform and one jump.
+    let plain = full_hop();
+    let (single, _) = best_structure_jump(1, 0);
+    let (double, _, _) = best_double();
+    assert!(
+        double > plain * 6.0,
+        "two structures reach {double:.1} m against a {plain:.1} m full hop -- the \
+         chain is gone, and with it the technique the class is built around"
+    );
+    assert!(
+        double > single * 1.5,
+        "two structures reach {double:.1} m against one structure's {single:.1} m, \
+         so the second cast is not paying for itself"
+    );
+}
+
+#[test]
+fn the_double_needs_the_two_casts_close_together() {
+    // What makes it a technique rather than a thing that happens. The second
+    // stone has to erupt while the first still has hold of her, so the two
+    // presses are a rhythm with a right answer -- leave it late and the first
+    // eruption is over, and what is left is an ordinary structure jump off
+    // whichever stone happens to be under her.
+    let (tight, _, gap) = best_double();
+    assert!(
+        gap <= 8,
+        "the best double came from casts {gap} frames apart, which is not a rhythm"
+    );
+    let mut late = 0.0f32;
+    for gap in 12..20 {
+        late = late.max(best_structure_jump(2, gap).0);
+    }
+    assert!(
+        late < tight * 0.75,
+        "casting the second stone far too late still reached {late:.1} m of the \
+         {tight:.1} m a tight pair does, so the timing is not what is being rewarded"
+    );
+}
+
+#[test]
+fn the_double_has_to_be_timed_to_the_frame() {
+    // The other half of it. The reward is large, so the window has to be small
+    // -- and it is the window, not the height, that is the first thing to look
+    // at if this ever needs bringing down again.
+    let (_, window, _) = best_double();
+    assert!(
+        window <= 4,
+        "the double structure jump pays within a tenth of its best over {window} \
+         different jump frames, which is a button rather than a read"
+    );
+}

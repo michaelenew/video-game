@@ -232,6 +232,41 @@ pub struct Player {
     pub jump_hold: u16,
     /// Frames of suspended fall from an aerial attack. See `Move::air_stall`.
     pub air_stall: u16,
+    /// Frames left of a Grasp haul, and where it is pulling her.
+    ///
+    /// **The Blood mage's movement, behind `tuning::grasp_hauls`.** A Grasp
+    /// whose four arms converge on a wall, a structure or the creature rather
+    /// than on a person has nothing to drag, so it drags *her* -- a grappling
+    /// hook made out of an ability she already owns. Driven rather than
+    /// thrown: gravity and the arena are off for the duration, the way they are
+    /// for the Reaver's dash, so the line she travels is the line the arms
+    /// went out along.
+    ///
+    /// Zero for everybody else, always, and zero for her whenever the flag is
+    /// off.
+    pub haul: u16,
+    pub haul_to: V3,
+    /// How fast that haul reels, in metres a second.
+    ///
+    /// Per haul rather than one knob, because the two things that arm one want
+    /// opposite guarantees. The Grasp wants a constant **speed**: you are being
+    /// reeled in, and how long it takes is however far away the wall was. The
+    /// blink wants a constant **time**: it is a fixed distance crossed in a
+    /// fixed handful of frames, and a blink whose duration depended on how much
+    /// of its range the geometry allowed would be a different move at every
+    /// wall. One field answers both -- see `begin_blink` and
+    /// `World::haul_to_the_grasp`.
+    pub haul_speed: Fx,
+    /// How many aerials have hung this airtime. Reset on landing.
+    ///
+    /// **The air gives you less each time you ask.** A hang is per-move and
+    /// costs nothing but the move, so a class with two interchangeable pokes
+    /// can alternate them and never come down -- the repeat lockout stops one
+    /// move being mashed and has nothing to say about two. The Dual mage's
+    /// autos are exactly that pair, and hers hang longer than anybody's on
+    /// purpose, so the falloff is what keeps the floatiest poke in the game
+    /// from being a hover. See `tuning::air_stall_falloff`.
+    pub air_stalls: u8,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -763,6 +798,10 @@ impl Default for Player {
             grounded: true,
             jump_hold: 0,
             air_stall: 0,
+            haul: 0,
+            haul_to: V3::ZERO,
+            haul_speed: Fx::ZERO,
+            air_stalls: 0,
             air_dodged: false,
             hit_used: false,
             repeat_lock: [0; moves::MAX_SLOTS],
@@ -1397,6 +1436,10 @@ impl World {
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
+            h.write_u32(p.haul as u32);
+            hash_v3(&mut h, &p.haul_to);
+            h.write_i32(p.haul_speed.raw());
+            h.write_u32(p.air_stalls as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
             h.write_u32(p.stride as u32);
@@ -2120,6 +2163,10 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             *rush = 0;
         }
         shadow::broken_by_a_hit(defender);
+        // And the Blood mage's haul, for the same reason: a pull you can be
+        // hit out of and keep is a commitment with nothing on the other side of
+        // it. The arms let go.
+        defender.haul = 0;
     }
 }
 
@@ -2416,6 +2463,25 @@ fn step_player(
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
+                    } else if p.grounded && blinks(p) {
+                        // **The Blood mage's dodge as a blink**, behind
+                        // `tuning::dodge_blinks`. The frames, the
+                        // invulnerability and the commitment are the ordinary
+                        // dodge's; the only thing that changes is that she
+                        // covers `blink_range` instead of whatever
+                        // `dodge_speed` decaying happens to reach, and covers it
+                        // in `blink_frames`.
+                        //
+                        // **Flat, and it stops at the wall.** What this class is
+                        // short of is ground rather than height, and the range
+                        // is cut back to whatever the arena allows along the
+                        // line -- a dodge that went through geometry would be a
+                        // different and much worse ability, and the one honest
+                        // thing about this answer is that it is only a distance.
+                        begin_blink(p, who, dir, scene);
+                        Action::Dodge {
+                            left: t::dodge_frames(),
+                        }
                     } else if p.grounded {
                         p.vel.x = dir.x.mul(t::dodge_speed());
                         p.vel.z = dir.z.mul(t::dodge_speed());
@@ -2475,8 +2541,22 @@ fn step_player(
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
 
+    // **A Grasp reeling her in**, or a blink, which is the same machinery
+    // pointed along the stick. Stepped rather than read, because arriving is
+    // something it *does*: she lands on the point rather than near it.
+    let hauling = step_haul(p);
+
     let dashing = shadow::dash_drive(p);
-    if let Some(drive) = dashing {
+    if hauling {
+        // Ahead of the dash and of everything below it, and it ignores the
+        // stick outright: the arms have hold of a wall and she is on the end of
+        // them. Like the dash it drives all three axes, so a Grasp thrown up on
+        // to a platform's lip takes her up on to it rather than into the side
+        // of it -- and like the dash it turns gravity and the arena off for the
+        // duration, further down, so the line she travels is the line the arms
+        // went out along.
+        // The velocity is already under her; `step_haul` set it.
+    } else if let Some(drive) = dashing {
         // A dash has somewhere to be, so it holds its speed rather than
         // decaying like the dodge it rides on: a decaying shove covers whatever
         // distance the decay happens to be tuned for, and the shadow is at a
@@ -2629,7 +2709,7 @@ fn step_player(
         p.leap_used = true;
     }
 
-    if !p.grounded && dashing.is_none() {
+    if !p.grounded && dashing.is_none() && !hauling {
         if plunging(p) {
             // **The descent.** Driven rather than fallen: gravity would make
             // the plunge take longer the lower she started, which is backwards
@@ -2696,7 +2776,11 @@ fn step_player(
     //
     // She arrives at the shadow's own spot, which is somewhere a body can stand,
     // and the frame after the dash ends resolves her there normally.
-    if dashing.is_some() {
+    // The Grasp haul is the same argument: the arms chose a point on a surface
+    // (`haul_to_the_grasp` stops her a body's width short of it), so resolving
+    // her against the geometry halfway along would catch her feet on the thing
+    // she is being pulled on to.
+    if dashing.is_some() || hauling {
         return;
     }
 
@@ -2740,6 +2824,7 @@ fn step_player(
         p.air_dodged = false;
         p.jump_hold = 0;
         p.air_stall = 0;
+        p.air_stalls = 0;
         p.leap_used = false;
     }
 }
@@ -3321,6 +3406,120 @@ fn champion_fan_boost(p: &mut Player, input: Input) {
     clamp_air_speed(p);
 }
 
+/// Is this fighter's dodge a blink?
+///
+/// The Blood mage's, and only while the flag is on. Grounded only: the airdodge
+/// is already a commitment bought once per airtime, and a blink that also
+/// worked off the floor would be the second jump this class has not earned.
+fn blinks(p: &Player) -> bool {
+    p.class == Class::BloodMage && t::dodge_blinks()
+}
+
+/// Arm the blink: the same haul machinery, pointed along the stick.
+///
+/// Reusing the haul rather than teleporting is what makes it drawable and
+/// readable -- a body that is simply somewhere else cannot be reacted to and
+/// cannot be animated -- and it means the two experiments on this class share
+/// one piece of state instead of each growing their own. Four frames of smear
+/// against a twenty-two-frame dodge, well inside the invulnerability.
+///
+/// **Stopped at the geometry.** `aim::first_along` against the arena and the
+/// structures, the same question the Grasp's anchor asks, so a blink into a
+/// wall arrives at the wall.
+fn begin_blink(p: &mut Player, who: usize, dir: V3, scene: &aim::Scene) {
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+    let from = aim::origin(p.pos);
+    let path = aim::Path {
+        from,
+        to: from.add(flat.scale(t::blink_range())),
+    };
+    let blocked = aim::first_along(
+        path,
+        t::body_radius(),
+        who as u8,
+        scene,
+        aim::Targets::none().terrain().stones(),
+    );
+    let reach = match blocked {
+        Some(c) => c.dist().sub(t::body_radius()),
+        None => t::blink_range(),
+    };
+    if reach.raw() <= 0 {
+        return;
+    }
+    // Back down to her feet: the ray was cast from her chest so that it meets
+    // the same geometry an ability would, and where she *stands* is the floor
+    // under the far end of it.
+    let land = p.pos.add(flat.scale(reach));
+    let frames = t::blink_frames();
+    // **Constant time, not constant speed**, which is the opposite of the
+    // Grasp's haul and correct for the opposite reason. The blink's distance is
+    // whatever the wall allows, so a fixed speed would make a blink into a
+    // corner a shorter move than a blink across the arena -- and how long she
+    // is a smear for is the one thing the person opposite has to read it by.
+    let speed = t::blink_range().div(Fx::from_int(frames as i32).mul(DT));
+    begin_haul(p, aim::settle(land, scene.stones), speed, frames);
+}
+
+/// The velocity a Grasp haul is driving this frame, or `None` if she is not on
+/// one.
+///
+/// Constant speed, like the Reaver's dash and for the same reason: the distance
+/// was chosen by the ability -- the Grasp's reach and the length of the hold --
+/// so a decaying pull would cover whatever distance the decay happens to be
+/// tuned for rather than the distance the player aimed at. See
+/// `Player::haul`.
+///
+/// Ends on arrival, and gravity and the arena are off while it runs, so the
+/// line she travels is the line the arms went out along. Getting hit ends it,
+/// because a commitment you can be hit out of and keep is not one.
+fn step_haul(p: &mut Player) -> bool {
+    if p.haul == 0 {
+        return false;
+    }
+    p.haul -= 1;
+    let gap = p.haul_to.sub(p.pos);
+    let far = gap.len();
+    let step = p.haul_speed.mul(DT);
+    // **The frames ran out without arriving.** Nothing should get here -- the
+    // bound is worked out from the distance and the speed -- so the answer is
+    // to stop dead and let the world have her back rather than to snap her to a
+    // point the pull never reached.
+    if p.haul == 0 && far.raw() > step.raw() {
+        p.vel = V3::ZERO;
+        return false;
+    }
+    if far.raw() <= step.raw() {
+        // **She lands on it, not near it**, which is the Reaver's dash arrival
+        // word for word and for the same reason: the point was chosen as
+        // somewhere a body can stand, and stopping half a metre short of it
+        // leaves her inside whatever she was being pulled on to -- or, worse,
+        // still carrying the pull's whole speed with nothing left to spend it
+        // on. The first draft returned early here and let momentum finish the
+        // job, and she sailed past the wall and oscillated around it.
+        p.pos = p.haul_to;
+        p.vel = V3::ZERO;
+        p.haul = 0;
+        return false;
+    }
+    p.vel = gap.scale(p.haul_speed.div(far));
+    p.grounded = false;
+    true
+}
+
+/// Arm a haul: where it is pulling to, and how fast.
+///
+/// The `frames` are a bound rather than the duration -- the drive ends on
+/// arrival, and this only stops a haul running forever if something displaces
+/// her mid-pull. Generous on purpose: a bound that cut a pull short would be a
+/// second, invisible rule about how far a Grasp reaches.
+fn begin_haul(p: &mut Player, to: V3, speed: Fx, frames: u16) {
+    p.haul_to = to;
+    p.haul_speed = speed;
+    p.haul = frames;
+    p.vel = V3::ZERO;
+}
+
 /// The drive a **stepping** move is putting under the body this frame.
 ///
 /// `None` for almost everything. A move with no [`step`] does not carry you, and
@@ -3733,7 +3932,22 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     if p.grounded {
         return;
     }
-    p.air_stall = moves::get(p.class, kind).air_stall;
+    // **Each successive hang in one airtime is worth less** -- see
+    // `Player::air_stalls`. The first is the move's own number; after that the
+    // falloff compounds, so a pair of pokes alternated forever is a slow
+    // descent rather than a hover, and the sum of everything the air will give
+    // you is bounded before you touch the floor.
+    let full = moves::get(p.class, kind).air_stall;
+    if full > 0 {
+        let mut worth = Fx::from_int(full as i32);
+        for _ in 0..p.air_stalls {
+            worth = worth.mul(t::air_stall_falloff());
+        }
+        p.air_stall = worth.to_int().max(0) as u16;
+        p.air_stalls = p.air_stalls.saturating_add(1);
+    } else {
+        p.air_stall = 0;
+    }
 
     let (ax, az) = input.move_axis();
     // The class's fast button, which for the Champion in the air is the sword.
@@ -4107,6 +4321,29 @@ fn live_depth(p: &Player) -> Fx {
     let max = t::meter_max().max(1);
     let out = Fx::ratio(value.abs().min(max), max);
     crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+}
+
+/// Is the Dual mage off the floor of her own bar: deep, or ascended?
+///
+/// **`false` for every other class**, so it is safe to ask of anybody.
+///
+/// Deep is the same threshold the burn starts at and the same one the HUD
+/// marks, deliberately: "deep" should mean one thing, and one threshold is what
+/// makes the burn and the float two faces of the same decision rather than two
+/// rules that happen to fire near each other. The cost of riding the edge is
+/// that it eats you; the reward is that you stop touching the ground.
+///
+/// Read live rather than from `thrown_at`, unlike [`depth`]. It is not what a
+/// cast is worth -- it is where she *is*, and where she is has to match what
+/// the renderer is drawing on the frame it draws it.
+pub fn floating(p: &Player) -> bool {
+    let Mechanic::Meter {
+        value, ascending, ..
+    } = p.mechanic
+    else {
+        return false;
+    };
+    ascending > 0 || value.abs() > t::meter_deep()
 }
 
 /// The same curve as it applies to the **size** of what a move puts in the
@@ -4801,6 +5038,10 @@ impl World {
     /// life runs out. The one way not to be paid is not to be there -- a dead
     /// caster catches nothing, which `Player::heal` enforces on its own.
     fn pay_out(&mut self, effect: &Effect) {
+        if effect.kind == EffectKind::Grasp {
+            self.haul_to_the_grasp(effect);
+            return;
+        }
         if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
             return;
         }
@@ -4808,6 +5049,92 @@ impl World {
         if let Some(caster) = self.players.get_mut(effect.owner as usize) {
             caster.heal(owed);
         }
+    }
+
+    /// **A Grasp that closed on scenery pulls her to it** -- the Blood mage's
+    /// movement, behind `tuning::grasp_hauls`.
+    ///
+    /// The ability already exists to close a gap: four arms converge on a point
+    /// and whatever they catch is hauled back to her. This is the same sentence
+    /// with the subject swapped. Catch a person and it works as it always has;
+    /// catch a wall, a structure or the creature and the arms have something to
+    /// pull against and nothing to pull, so what moves is her.
+    ///
+    /// Asked on the frame the arms are done, which is the only frame it can be
+    /// asked on: "all four and nobody in them" is not knowable until the fourth
+    /// has landed or failed to, and the arms land a frame apart.
+    ///
+    /// **Whiffing it is still whiffing it.** The health went on the press and
+    /// none of it comes back -- nothing was cut -- so using the Grasp as a
+    /// grappling hook costs her the full price of a missed cast every time. That
+    /// is the whole reason it is allowed to be this strong: it is movement she
+    /// pays for out of the resource she is made of.
+    fn haul_to_the_grasp(&mut self, effect: &Effect) {
+        if !t::grasp_hauls() {
+            return;
+        }
+        let owner = effect.owner as usize;
+        // Somebody in the arms means there was something to pull. The arms do
+        // not do both jobs at once.
+        if (0..MAX_PLAYERS).any(|i| effect.parts_landed(i, GRASP_ARMS) == GRASP_ARMS) {
+            return;
+        }
+        let Some(caster) = self.players.get(owner) else {
+            return;
+        };
+        if caster.health <= 0 {
+            return;
+        }
+        // Where the arms met. `pos`, `dir` and `reach` were fixed on the frame
+        // she let go, so this is the point she was promised rather than a
+        // second guess at it.
+        let met = effect.pos.add(effect.dir.scale(effect.reach));
+        let stones = stones::gather(&self.players);
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &self.players,
+            effects: &self.effects,
+            quarry: self.monster.as_ref(),
+        };
+        // **Is there anything to pull on?** Asked along the arms' own path with
+        // the shared question `aim::first_along` already answers for every
+        // thrown thing in the game -- see `aim::Contact::is_an_anchor`. A
+        // fighter is not an anchor and neither is a fire: one of them moves and
+        // the other is not there.
+        let path = aim::Path {
+            from: effect.pos,
+            to: met,
+        };
+        let found = aim::first_along(
+            path,
+            t::grasp_arm_radius(),
+            effect.owner,
+            &scene,
+            aim::Targets::none()
+                .terrain()
+                .stones()
+                .quarry(self.monster.is_some()),
+        );
+        let Some(anchor) = found.filter(|c| c.is_an_anchor()) else {
+            return;
+        };
+        // To the anchor rather than to the point the arms converged on, which
+        // may be a long way behind it: the Grasp's reach is the hold and the
+        // hold does not shorten itself against the scenery (see the kit
+        // document), so a full wind-up at a near wall converges metres inside
+        // it. She arrives at the surface, not inside it.
+        // Dropped on to whatever is underneath it. The ray was cast from her
+        // chest so that it meets the same geometry an ability would, and where
+        // she *stands* is the floor -- or the platform top -- under the far end
+        // of it.
+        let stop = aim::settle(path.at(anchor.dist().sub(t::body_radius())), &stones);
+        let speed = t::grasp_haul_speed();
+        // Long enough to cover the whole of the Grasp's reach at that speed,
+        // with a frame in hand. Worked out rather than written down, so
+        // retuning either the reach or the speed cannot leave a pull that stops
+        // in mid-air.
+        let frames = effect.reach.div(speed.mul(DT)).to_int().clamp(1, 240) as u16 + 1;
+        begin_haul(&mut self.players[owner], stop, speed, frames);
     }
 
     /// What one effect does to everything standing in it this frame.
@@ -5167,6 +5494,9 @@ impl World {
                             if caught > 0 {
                                 self.players[i].seized(effect.owner, caught, t::grasp_bind());
                             }
+                            // Somebody is in the arms, so they are not free to
+                            // pull on anything else.
+                            self.players[effect.owner as usize].haul = 0;
                         }
                     }
                     let dealt = self.gore_the_creature(effect, arm, at, radius);
@@ -5497,6 +5827,15 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
     } else {
         speed
     };
+    // **The Dual mage's feet leave the floor at depth**, and a thing that is
+    // not walking is not held to a walk. See [`floating`] and
+    // `tuning::float_move_speed`; the renderer reads the same predicate to stop
+    // driving her legs -- `view::pose`.
+    let speed = if floating(p) {
+        speed.mul(t::float_move_speed())
+    } else {
+        speed
+    };
     if p.slowed == 0 {
         return speed;
     }
@@ -5793,6 +6132,7 @@ fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
     p.air_dodged = false;
     p.jump_hold = 0;
     p.air_stall = 0;
+    p.air_stalls = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -5935,7 +6275,11 @@ impl World {
                     self.players[i].hit_used = true;
                 }
             }
-            None => {}
+            // `Terrain` cannot arrive: the beam does not ask for it, and the
+            // arena is where the crosshair's own ray already stopped. The arm
+            // is spelled out rather than wildcarded so that whatever is added
+            // to `Contact` next is a compile error here instead of silence.
+            Some(Contact::Terrain { .. }) | None => {}
         }
     }
 
@@ -6061,7 +6405,11 @@ impl World {
                     self.players[i].hit_used = true;
                 }
             }
-            None => {}
+            // `Terrain` cannot arrive: the beam does not ask for it, and the
+            // arena is where the crosshair's own ray already stopped. The arm
+            // is spelled out rather than wildcarded so that whatever is added
+            // to `Contact` next is a compile error here instead of silence.
+            Some(Contact::Terrain { .. }) | None => {}
         }
     }
 }

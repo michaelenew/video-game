@@ -4358,3 +4358,291 @@ each clip finally matches the prose in its own recipe, but anyone who had learnt
 the old silhouettes will notice. And the Bulwark's shield now hangs off the body's
 left hand rather than the slot named `HandL`; it was on the right before and
 nobody had said so.
+
+---
+
+### 2026-09-17 — the jump was the movement system, not the floor of one
+
+**Changed** takeoff 17.7 → 16.2 m/s; the hold's gravity 0.56 → 0.72 and its window
+26 → 18 frames; the release cut 0.6 → 0.52. Gravity itself untouched.
+
+**Why** two complaints, and they turned out to be about different knobs.
+
+A full hop reached from 4.1 m on the Bulwark to 8.7 m on the Dual mage. The
+Champion's pole vault reaches 7.4 m and the Elementalist's structure jump was
+reaching 17. So the vault — a committed move on a Rush charge, aimed at the floor
+— was worth a quarter more height than pressing space, and the structure jump was
+the only class technique in the game that clearly beat the universal one. A jump
+this good makes every class's signature movement a flourish rather than a
+technique.
+
+Apex goes as the **square** of the takeoff speed and airtime goes as the takeoff
+speed, so cutting one knob by a twelfth took a third off the height and only a
+fifth off the hang. That is why the height came off here rather than out of
+gravity: leaning on gravity would have kept the airtime and *raised* the vault and
+the structure jump, which is the wrong direction for the thing this was for.
+
+The second complaint was that a held jump read as an elevator — visibly climbing
+at a constant rate with gravity switching on at the top. That was the sustain,
+and the numbers say so plainly: at 0.56 gravity for 26 frames the rise lost only
+half its speed over four tenths of a second and covered five of its six metres
+doing it. A sustain has to be a *discount* on gravity rather than a suspension of
+it. At 0.72 for 18 the rise visibly slows the whole way up, and the slope change
+when the window closes went from 0.39 → 0.70 m/s per frame to 0.50 → 0.70.
+
+Stiffening the sustain takes more off the full hop than off the tap, so the
+release cut came down to hold the short hop at a quarter of the full one, which is
+the band `combat.rs` pins.
+
+**Where it landed** full hops of 2.7 m (Bulwark), 4.0 (Champion), 4.0 (Blood
+mage), 5.0 (Elementalist), 5.1 (Reaver), 6.0 (Dual mage), over 0.7 s to 1.2 s.
+Everybody still clears a standing fighter and the arena's 1.5 m platforms, and
+the vault is now worth 1.9 full hops rather than 1.2.
+
+**Two knock-ons worth watching, neither of them asked for.**
+
+`beastcheck` printed a single apex, which was honest while the shortest hop in
+the game got you most of the way up and is not now. It prints the spread, and the
+spread changes the climb: the Ridgeback's tail at 3.9 m and every surface a
+stumble or a broken foot opens is still a standing jump **for the floaty
+classes**, and for the Bulwark it is now a topple or a platform. That was
+partly true before and the diagnostic was hiding it — the Dual mage could always
+reach the shoulders unaided — but the Bulwark genuinely lost the tail.
+
+And `monster.rs` had the shake-jump's margin at four to one. A full hop is now a
+little shorter than the whip rather than a little longer, so committing early
+clears slightly less of it and the gap narrowed to 3.7 without anything about
+the read changing. The assertion is stated against the fifty frames that test
+already calls a usable window, with the ratio kept behind it at three; a margin
+that moves every time somebody tunes the jump was measuring the jump.
+
+**Verdict** open. Nobody has played it. The number to watch is the Bulwark:
+2.7 m and 41 frames is the thinnest airtime in the game and the class that can
+least afford a mistake in the air.
+
+### 2026-09-17 — the structure jump, cut to three quarters. **Reverted 2026-09-18**
+
+**Changed** the eruption's rise 14 → 16 → 17 frames and the lift a rider keeps
+0.40 → 0.44. **All of it put back on 2026-09-18.**
+
+**Why it was tried** a single structure jump and a double were both reckoned too
+tall: several seconds of air time to throw long-range attacks from and to pick
+the ground she was going to land on, off a button she can press at any time.
+That is a run-and-hit class, and this one is supposed to be an area-control
+mage. The target was about three quarters.
+
+**Why it came back** it felt much worse to play — the double noticeably lower —
+and underneath that were two mistakes, one of measurement and one of method.
+
+**The measurement.** The baseline for the double was taken as 43.9 m. It was
+58.8 m. The sweep that produced it sampled gaps of 0, 6, 10, 14 and 18 frames
+between the two casts, and the optimum is at **two**, which was never tried. So
+"three quarters" was computed against a number a quarter too low, and every
+number derived from it was wrong in the same direction. A coarse sweep is fine
+for finding out whether something is big; it is not fine for setting a target
+off — and the tell was there to be noticed, because a technique whose payout
+falls off steeply with the gap has its peak at one end of the range rather than
+in the middle of the samples.
+
+**The method, which is the part worth keeping.** The chain a structure jump is
+made of is a **resonance**, not a sum. Each link happens because the eruption
+grows upward faster than she is rising, catches her feet, and hands the
+still-held jump button another takeoff. Whether that happens at all depends on
+the margin between two speeds, so how many links each technique gets is
+*discontinuous* in the tuning, and not even monotonic:
+
+| | single | double |
+| --- | --- | --- |
+| as it was | 17.5 m | 58.8 m |
+| rise 16 | 12.5 | 45.1 |
+| rise 17, lift 0.44 | 12.8 | 33.0 |
+| her jump ×1.15 instead | **15.0** | 52.6 |
+| her jump ×1.25 instead | 16.4 | 45.0 |
+
+Three frames on the rise roughly halved the double while the single barely
+moved. Raising *her* jump made the single **fall**, because she outruns the
+stone that was going to catch her and loses a link. Nothing here can be solved
+for a target: every one of those rows is a different technique rather than the
+same technique scaled.
+
+**Verdict** reverted, every knob, and left alone. If these need to come down
+again the way to do it is to play each setting, not to compute one. The knobs
+are `Rise` and `Lift kept (x)` in the Oven under **Stones**, and the table above
+is a map of where the cliffs are.
+
+**What did not come back** is the height the cast-wide jump nerf takes out of
+them, and that is a real effect worth stating on its own: every link of the
+chain is a takeoff, so a smaller takeoff is subtracted once per link. With the
+structures untouched and that nerf in place the double reaches **44.8 m against
+its old 58.8 — about 76%**, which is the three quarters that was being aimed at
+in the first place, arrived at without touching a stone. The single goes the
+other way, **25.9 m against 17.5**, because the slower takeoff lets the eruption
+catch her for an extra link. Measured against her own full hop, which is what
+"special" means, both are further ahead than they were: the double was 7.9 full
+hops and is 8.9.
+
+Whether those absolute heights are right is a play question, and nobody has
+played it.
+
+### 2026-09-17 — deleting the double structure jump. Reverted the same day
+
+**Changed** `stones::resolve_body` stopped reporting a fighter as grounded when
+she was rising faster than the stone under her. **Reverted within hours.**
+
+**Why I tried it** it looked like a bug from underneath. A stone's top catching
+up with a fighter's feet re-grounded her; the jump is level-triggered so that
+holding space hops the moment you land; so an eruption reaching a fighter who
+had already jumped off it handed the still-held button another takeoff, and a
+second stone raised a few frames behind the first handed a third. One press
+reached 26 m. Set against `README.md` §4 — *space while airborne does nothing* —
+that reads as a double jump arriving through the one surface in the world that
+can climb into somebody's feet.
+
+**Why it was wrong, and this is the part worth keeping.** Two things.
+
+**The rule was misread.** "No double jump" is a question about space doing
+something with *nothing under you*. There is something under her: the stone's
+top, which is why the branch that grounds her runs at all. A body standing on a
+surface can jump off it. That the surface is moving upward makes the jump
+better, not illegitimate — the same sentence is already written down approvingly
+in `state::advance`, where a jump off an erupting stone *stacks* on to the
+carry.
+
+**And the technique is not the implementation.** What a player does is cast two
+structures two or three frames apart and time a jump while both are still coming
+out of the floor. That costs two of three structure slots, telegraphs itself
+twice, and pays inside a one-frame window. Whatever it looks like from inside
+`resolve_body`, from the outside it is execution, and it is the most interesting
+thing the class does. Deleting it took the double to 38% of its height — which
+was not what was asked for and not a tuning decision at all, because no knob
+would have brought it back.
+
+**The general mistake** is worth naming, because it is easy to make again: an
+emergent technique found through implementation is not thereby an accident.
+Nothing about "this fell out of how the code happens to work" says anything
+about whether it is good, and a house style that treats every surprising
+behaviour as a defect will delete the interesting parts of a fighting game one
+at a time. The question to ask is whether a player can learn it, whether it
+costs something, and whether it can be answered — not where it came from.
+
+**Verdict** reverted, and pinned. The behaviour is now specified in
+`stones::resolve_body` rather than tolerated, and three tests in
+`sim/tests/stones.rs` fail if it goes again: that the double is worth six full
+hops and that the second cast pays for itself, that it needs the two casts close
+together, and that its window stays inside four frames.
+
+The guard is read against her **full hop** rather than against the single, and
+that choice is the entry above in miniature: the single chains too, so the ratio
+between them is a reading of the resonance and moves under tuning, while the gap
+between having the technique and not does not — nine full hops against under
+four.
+
+### 2026-09-17 — the Reaver's shadow kept expiring before she used it
+
+**Changed** the leash 12 m → 18 m, twice the 9 m throw. The dash 34 → 50 m/s
+with it.
+
+**Why** a leash only a third longer than the throw meant a shadow placed at full
+range came home almost as soon as it arrived, so the answer to "when do I take
+this" was always "now, before it leaves". The shadow is this class's movement,
+and movement you have to spend immediately is not a decision.
+
+The dash had to move with it. It ends when the dodge does — it does not outlive
+it — so a dash that cannot cover the distance spends the dodge and arrives
+nowhere, in the open, out of invulnerability. That property was written down in
+`tuning::shadow_dash_speed` and nowhere else; it is a test now.
+
+**Verdict** open. Two things to watch. Fifty metres a second over twenty-two
+frames is the same *duration* as before, so it is no harder to react to, but the
+slide the dash leaves behind scales with the speed and the overshoot past a
+near shadow is now several metres. And an 18 m leash lets her leave the shadow
+most of the way across the arena, which is the point and may also be too much
+room.
+
+### 2026-09-17 — the Dual mage stops walking
+
+**Changed** a 1.3 m step on both autos, forward on the dark one and backward on
+the light one. Their aerial hang 6 → 18 frames, the longest in the game, with a
+new falloff so each hang in one airtime is worth 0.55 of the last. Deep or
+ascended she moves 1.35× and is drawn floating.
+
+**Why** she is a melee mage who has to get in to steer her own meter, and she
+had nothing to get in with.
+
+**The step going the way the force goes is the entry.** Forward on both was the
+first version and it made the light auto's push worth nothing — she walked into
+the space she had just made and the net distance between the two bodies went the
+wrong way. The two autos already disagree about everything, so the step is that
+disagreement carried down to her feet: dark closes the gap from both ends, light
+opens it from both ends. One rule, mirrored, which is how the rest of the class
+is built.
+
+**The falloff is the other entry, and it is a rule the game did not have.** A
+hang costs nothing but the move that carries it, and the repeat lockout only
+stops one move being thrown twice — so a class with two interchangeable pokes can
+alternate them and simply not come down. She is that class by construction. The
+falloff compounds rather than capping, because a cap has an edge somebody finds
+and plays against: the sum of every hang an airtime can contain is
+`first / (1 - falloff)`, bounded however long you stay up, and reset on landing
+like the airdodge. It applies to everybody, so the Champion's multi-aerial
+strings are mildly nerfed by it too, which is correct for the same reason.
+
+18 rather than 20 because `feel.rs` requires a hang to be shorter than the move
+that rides it — a hang longer than its move is a float with an attack attached,
+and it would let a whiffed aerial stay safe by remaining out of reach. The auto
+is 20 frames long, so 18 is the ceiling and the margin is thin.
+
+**One threshold for the float, not two.** Deep is the same number the burn starts
+at and the same one the HUD already marks: it eats you, and you stop touching the
+ground. The cost and the reward are two faces of one decision rather than two
+rules that fire near each other. The renderer reads the same predicate rather
+than the meter, so the pose and the speed cannot disagree about whether she is
+walking.
+
+**Verdict** open. The float's speed bonus is a guess and the wings are a blockout
+— five slabs per shoulder on a slow beat, in the colour of the force she is
+carrying, with no wing model behind them. The number most likely to be wrong is
+the step: 1.3 m on a punch thrown every second is a lot of ground, and the light
+auto's backward version may simply feel like being pushed around by your own
+attack.
+
+### 2026-09-17 — the Blood mage had no movement
+
+**Changed** two answers, both behind live flags in the Oven. The Grasp hauls her
+to a wall, a structure or the creature when its four arms catch nobody (**on**);
+her dodge becomes a flat blink (**off**). The Grasp's throw 10 → 12 m and its
+damage 48 → 40; the reel speed up with the throw.
+
+**Why** every other class has one thing it does with the ground and she walks.
+That was survivable while a full hop reached seven and a half metres. The jump
+nerf above was specifically to make class techniques matter more, and it left her
+as the one character with nothing to be good at.
+
+**The generator is the entry, and it is worth reusing.** Movement should be a
+re-reading of an ability she already has, paid for in health. The Grasp already
+exists to close a gap; the haul is the same sentence with the subject swapped,
+and the price is already right — the health went on the press and none of it comes
+back, because nothing was cut, so using it as a grappling hook costs a whiffed
+cast every time. The blink fails the test on both halves and is built anyway,
+because "does she just need the distance?" is a real question and trying it is
+cheaper than arguing about it.
+
+Two flags rather than one setting because what is wanted is a judgement about
+each and about the pair. Live rather than Cargo features because the question is
+answered by flipping one mid-match.
+
+**What the implementation cost.** `aim::first_along` knew about fighters, stones,
+fire and the creature and not about walls, and both features ask the same question
+of the arena — is there anything to pull on, is there a wall in the way. It is
+answered once in the shared model. And `feel.rs` caught the Grasp's longer throw
+dropping a full-range *catch* halfway home, mid-drag and suddenly able to walk,
+because the hold is a fixed number of frames; the reel speed went up with the
+reach.
+
+**Verdict** open, and this is the entry most in need of somebody playing it.
+Six more ideas the generator produces are written down in
+[kits/blood-mage.md](kits/blood-mage.md) and none are built — the two best are
+riding the Bloodletter home (the cost is the leech itself, which is the purest
+statement of this class there is) and giving the leech a positional pull. Both
+built answers are **flat**: what she is short of is ground rather than height,
+and whether that is the right read is the first thing to find out.

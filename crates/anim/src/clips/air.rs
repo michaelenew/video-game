@@ -14,18 +14,28 @@
 //!
 //! ## The jump these are attached to
 //!
-//! Takeoff is 17.7 m/s against 42 m/s² of gravity, with a sustain window of 26
-//! frames at 56% gravity while the button is held. So a full hop climbs for
-//! something like thirty-seven frames and the whole flight is over a second,
-//! while a tapped one is airborne for about half of that. The jump is
-//! deliberately floaty -- verticality is meant to be part of the positioning
+//! Takeoff is 16.2 m/s against 42 m/s² of gravity, with a sustain window of 18
+//! frames at 72% gravity while the button is held. So a full hop climbs for
+//! something like twenty-seven frames and the whole flight runs from two thirds
+//! of a second on the heaviest class to a little over a second on the
+//! floatiest, while a tapped one is airborne for about half of that. The jump
+//! is deliberately floaty -- verticality is meant to be part of the positioning
 //! game -- and floaty means these poses are *stared at*. Nothing in the air can
 //! be a pose that only works in passing.
 //!
-//! It also means the body is already travelling at nearly a third of a metre a
-//! frame by the time `jump_takeoff` gets its first look at it. The clip cannot
-//! lift anybody. What it can do is look like the thing that threw them, which
-//! is why the coil is a full crouch and the extension is done inside four
+//! **Those three numbers moved on 2026-09-17** and the paragraph above is the
+//! second place in the repository that states them, which is the kind of thing
+//! that goes stale silently: the authoritative ones are in `sim::tuning` and
+//! `cargo run -p sim --bin frametable` prints the apex and the airtime per
+//! class. The nerf took about a third off every apex and shortened the sustain,
+//! so the rise is a shorter and more decelerating thing than it was -- which
+//! these clips are indexed against by *vertical speed* rather than by a
+//! timeline, so none of them needed reauthoring for it.
+//!
+//! It also means the body is already travelling at better than a quarter of a
+//! metre a frame by the time `jump_takeoff` gets its first look at it. The clip
+//! cannot lift anybody. What it can do is look like the thing that threw them,
+//! which is why the coil is a full crouch and the extension is done inside four
 //! frames.
 //!
 //! ## Two things that are easy to miss

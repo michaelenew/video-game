@@ -32,7 +32,8 @@ and tail are armoured. There are two soft places, both on top:
   another walk forward past the shoulders to reach.
 
 Its height is in its legs rather than in its bulk, and both halves of that are
-load-bearing. A standing full hop apexes at 4.14 m, so its back is out of reach;
+load-bearing. A standing full hop apexes at 2.7 m on the heaviest class and
+6.0 m on the floatiest, so its back is out of reach for most of the roster;
 and its **feet are the only part of it a fighter on the floor can touch at all**,
 which is what makes the ground game a route up rather than a chore.
 
@@ -77,43 +78,57 @@ prints all of this against the jump the simulation actually produces, because
 geometry arguments conducted in prose go wrong:
 
 ```text
-a full hop reaches 4.142 m off the floor
-the arena's platforms are 1.5 m, so from one it reaches 5.642 m
+a full hop reaches 2.681 m off the floor (Bulwark) to 5.968 m (Dual mage)
+the arena's platforms are 1.5 m, so from one the best of them reaches 7.468 m
 
 standing, the tops of the surfaces you can stand on:
-  shoulders       4.581 m   only from a platform
-  barrel           4.57 m   only from a platform
-  haunch          4.482 m   only from a platform
-  tail            3.925 m   a standing jump
-  tail, middle    3.404 m   a standing jump
+  shoulders       4.581 m   a standing jump, the floatier classes
+  barrel           4.57 m   a standing jump, the floatier classes
+  haunch          4.482 m   a standing jump, the floatier classes
+  tail            3.925 m   a standing jump, the floatier classes
+  tail, middle    3.404 m   a standing jump, the floatier classes
 
 the weak points, standing:
   ridge           4.514 m at its foot,  5.194 m at its top, x1.75 damage
   nape            4.477 m at its foot,  5.057 m at its top, x2.4 damage
 
 and what opens a way up (lowest the surface gets):
-  the shoulders, stumbling            2.701 m   a standing jump
-  the haunch, stumbling               3.913 m   a standing jump
-  the shoulders, both forefeet broken  3.587 m   a standing jump
+  the shoulders, stumbling            2.701 m   a standing jump, the floatier classes
+  the haunch, stumbling               3.913 m   a standing jump, the floatier classes
+  the shoulders, both forefeet broken  3.587 m   a standing jump, the floatier classes
   the barrel, toppled                 2.289 m   a standing jump
-  the shoulders, through a slam       2.995 m   a standing jump
-  the tail, through a sweep            3.82 m   a standing jump
+  the shoulders, through a slam       2.995 m   a standing jump, the floatier classes
+  the tail, through a sweep            3.82 m   a standing jump, the floatier classes
 
 nose to tail: 13.412 m.  clips baked: 13
 ```
 
-⚠️ **That is the Bulwark's jump**, because `beastcheck` measures `World::new()` and the
-default class is the Bulwark — the heaviest thing on the roster and the worst jumper on it.
-Every "only from a platform" above is a statement about the Bulwark. The Dual mage's full hop
-is 8.7 m and the Reaver's is 7.6 m, both of which clear the barrel from the floor. Whether the
-climb is *meant* to be a Bulwark-shaped problem, or the geometry should be read against the
-whole roster, is open — see §9.
+⚠️ **It prints a spread, and that is new — 2026-09-17.** It printed one apex, the Bulwark's,
+because the default class is the heaviest thing on the roster and the worst jumper on it. That
+was honest while the shortest hop in the game got you most of the way up; it is not now the
+jump has been cut back across the cast ([feel-log.md](feel-log.md)), because the roster's hops
+now span better than two to one and which classes can get up there at all is the thing the
+climb turns on.
 
-1. **The tail, any time.** 3.93 m against a 4.14 m apex — about twenty
-   centimetres of margin, from beside an animal that is turning. Doable, and
-   not casually. This is the baseline route and it is deliberately the tightest
-   one. (For the Bulwark. For four of the six classes the tail is not a tight
-   hop at all.)
+**What the nerf did to the climb.** The floaty end is unchanged — the Dual mage at 5.97 m and
+the Reaver at 5.11 m still clear every surface on the animal from the floor, as they always
+could; the old single-number report was hiding that rather than the nerf creating it. What
+changed is the Bulwark. Its 2.68 m hop no longer reaches the tail at 3.93 m, and the only
+thing that opens from the floor for it is the **toppled barrel** at 2.29 m. For the heaviest
+class the climb is now a platform or a topple, where it used to be a tight tail hop.
+
+Whether that is right is open, and it is the sharper version of the question §9 already
+asks. It makes the ground game genuinely load-bearing for the class whose identity is holding
+ground, which is either the best thing the nerf did here or an accident that needs a
+Bulwark-shaped answer.
+
+1. **The tail, for most of the roster.** 3.93 m, against apexes running from
+   2.68 m to 5.97 m. This was the baseline route and the tightest one; since the
+   jump nerf it is a comfortable hop for the Reaver and the Dual mage, a near
+   miss for the Elementalist, and **out of reach for the Bulwark, the Champion
+   and the Blood mage** from the floor. The baseline route is now a route three
+   classes do not have, which is the open question above wearing its most
+   concrete face.
 2. **A platform.** The arena's two 1.5 m platforms put the whole back inside a
    hop. The cost is that you have to fight the creature over to one.
 3. **A broken foot.** It goes down on a knee for nearly two seconds and the

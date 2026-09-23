@@ -240,7 +240,11 @@ pub fn step(
                 *slot = None;
                 continue;
             }
-            Some(Contact::Fire { .. }) | None => {}
+            // `Terrain` cannot arrive: this does not ask for it, and the
+            // arena is what stops the thing rather than what it hits. The arm
+            // is here because the enum is exhaustive and the alternative is a
+            // wildcard that would also swallow whatever is added next.
+            Some(Contact::Fire { .. }) | Some(Contact::Terrain { .. }) | None => {}
         }
 
         shot.pos = leg.to;
