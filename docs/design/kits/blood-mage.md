@@ -479,6 +479,15 @@ and it leans entirely on the animation to make it feel like it belongs — which
 saying the design is hoping to be rescued later. It is built anyway, because "does she just
 need the distance?" is a real question and the cheapest way to answer it is to try it.
 
+> **The v1 proposal passes the test where this fails it.**
+> [../blood-mage.md](../blood-mage.md) has a blink of its own: `shift` plus a direction with
+> the crosshair on an **essence pool**, which puts her at the pool and consumes it. That is a
+> re-reading of the mechanic — a pool is her only heal — and it is paid for in the currency the
+> class is made of, because a blink eats a heal. It is this same movement wearing the thematic
+> tie this one could not find, which is what makes the flag worth keeping while the proposal is
+> unbuilt: what a flag can still settle is the *distance*, and that answer carries over
+> whatever the blink ends up being attached to.
+
 ### What changed with the haul
 
 The Grasp's throw went from 10 m to 12 m and its damage from 48 to 40, which is the balance
