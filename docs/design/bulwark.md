@@ -53,6 +53,11 @@ archetype stops being cursed. Do not give the Bulwark a movement speed penalty.
 
 ## The shield is a volume, not a stat
 
+> **Built, 2026-09-23** — the planted half: a planted shield is a solid in the stones' own
+> field, sized by the weight it landed with. See [kits/bulwark.md](kits/bulwark.md) and
+> [bulwark-v2.md](bulwark-v2.md). A shield *in flight* is still a damage source and not a
+> solid, and holding it wide for an ally is still the guard arc.
+
 The shield is **a physical space nothing can enter** — not damage reduction. Projectiles
 stop. Bodies stop. Elementalist structures already establish that the game has
 world-objects that block; the shield is a mobile one the player aims.

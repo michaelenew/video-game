@@ -119,7 +119,7 @@ impl Class {
 
     pub fn starting_mechanic(self) -> Mechanic {
         match self {
-            Class::Bulwark => Mechanic::Shield(Shield::Held),
+            Class::Bulwark => Mechanic::Shield(Shield::Held { weight: Fx::ZERO }),
             Class::Champion => Mechanic::Forms {
                 form: Form::Sword,
                 rush: 0,
@@ -156,29 +156,75 @@ impl Class {
 
 /// The shield has a position independent of the character. That *is* the
 /// mechanic -- see `bulwark.md`.
+///
+/// **Every state carries its weight** -- the blows taken on it, stored, in
+/// health units (see `bulwark-v2.md`). On every variant rather than beside the
+/// enum, so it travels with the object: a shield thrown with three hits in it
+/// is still holding three hits where it lands. Fixed point so a slow drain
+/// needs no remainder kept anywhere else.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Shield {
-    Held,
+    Held {
+        weight: Fx,
+    },
     Planted {
         pos: V3,
+        weight: Fx,
     },
     Flying {
         pos: V3,
         vel: V3,
         outbound: bool,
         travelled: Fx,
+        weight: Fx,
+        /// Has this flight already struck somebody? A shield thrown out
+        /// plants where it strikes, so only the way home needs to know: a
+        /// recall passes through whoever is in the way, once.
+        struck: bool,
     },
 }
 
 impl Shield {
     pub const fn in_hand(self) -> bool {
-        matches!(self, Shield::Held)
+        matches!(self, Shield::Held { .. })
     }
 
     pub const fn world_pos(self) -> Option<V3> {
         match self {
-            Shield::Held => None,
-            Shield::Planted { pos } | Shield::Flying { pos, .. } => Some(pos),
+            Shield::Held { .. } => None,
+            Shield::Planted { pos, .. } | Shield::Flying { pos, .. } => Some(pos),
+        }
+    }
+
+    /// What the shield is holding, in whatever state it is in.
+    pub const fn weight(self) -> Fx {
+        match self {
+            Shield::Held { weight }
+            | Shield::Planted { weight, .. }
+            | Shield::Flying { weight, .. } => weight,
+        }
+    }
+
+    /// The same shield, holding `weight` instead.
+    pub const fn with_weight(self, weight: Fx) -> Shield {
+        match self {
+            Shield::Held { .. } => Shield::Held { weight },
+            Shield::Planted { pos, .. } => Shield::Planted { pos, weight },
+            Shield::Flying {
+                pos,
+                vel,
+                outbound,
+                travelled,
+                struck,
+                ..
+            } => Shield::Flying {
+                pos,
+                vel,
+                outbound,
+                travelled,
+                weight,
+                struck,
+            },
         }
     }
 }
@@ -430,6 +476,11 @@ pub struct Structure {
     /// and a push aimed from where she is *now* would point somewhere nobody
     /// chose. See `crate::stones` and `tuning::landfall_tilt`.
     pub erupt: V3,
+    /// Its size, as a multiple of the Oven's stone: radius and height both.
+    /// One on every stone the Elementalist raises. The one solid that is not
+    /// one is the Bulwark's planted shield, which joins the field as a stone
+    /// sized by the weight it landed with -- see `stones::gather`.
+    pub scale: Fx,
 }
 
 // ---------------------------------------------------------------------------
@@ -630,9 +681,15 @@ pub mod alloc_free {
     impl Summary {
         pub fn of(m: &Mechanic) -> Summary {
             match m {
-                Mechanic::Shield(Shield::Held) => Summary::Text("shield: held"),
-                Mechanic::Shield(Shield::Planted { .. }) => Summary::Text("shield: planted"),
-                Mechanic::Shield(Shield::Flying { .. }) => Summary::Text("shield: in flight"),
+                // The weight, in whole health: what a slam would spend now.
+                Mechanic::Shield(s) => Summary::Value(
+                    match s {
+                        Shield::Held { .. } => "shield held, weight",
+                        Shield::Planted { .. } => "shield planted, weight",
+                        Shield::Flying { .. } => "shield in flight, weight",
+                    },
+                    s.weight().to_int(),
+                ),
                 // Three things want saying and there is one line to say them
                 // in, so they are ranked by how soon they stop being true. A
                 // dash lasts twenty frames, a live chain a little longer, and

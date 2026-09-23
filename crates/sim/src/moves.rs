@@ -1067,6 +1067,13 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             5 => "RMB air",
             _ => "E air",
         },
+        // Slam on the third click, since 2026-09-23: it spends the shield's
+        // weight, and the button was free. See `bulwark-v2.md`.
+        Class::Bulwark => match slot {
+            0 => "LMB",
+            1 => "MMB",
+            _ => "Q",
+        },
         _ => match slot {
             0 => "LMB",
             1 => "Shift+LMB",

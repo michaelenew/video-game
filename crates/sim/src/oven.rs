@@ -528,6 +528,36 @@ scalars! {
     // What a jump out of the dash keeps of the dash's speed. The dash stops
     // dead on the shadow now; this is the only way its speed carries on.
     DashJumpKeep,     "Reaver",    "Dash jump, keeps of the dash speed (%)", Percent, 0,       100;
+    // The Bulwark's weight -- v2 of the mechanic, 2026-09-23. Every blow taken
+    // on the shield is stored in it; see `crate::bulwark`. The cap and the
+    // parry's deposit are in health, because weight is the damage it
+    // absorbed. The drain is a clock: how long a full shield takes to empty
+    // with nothing landing on it.
+    WeightCap,        "Bulwark",  "Weight, the most the shield holds",    Int,     1,       3000;
+    WeightDrain,      "Bulwark",  "Weight, a full shield empties in",     Frames,  1,       3600;
+    ParryLoad,        "Bulwark",  "Weight, a parry loads (x its damage)", Fixed,   0,       fx(4,1);
+    HeavyPushback,    "Bulwark",  "Weight, pushback at the cap (x)",      Fixed,   0,       fx(1,1);
+    // Slam spends the weight -- M2 of the Bulwark's v2. What each unit of it
+    // adds to the blow and to the width of the shake, what falling into it
+    // adds, and the area stagger a nearly full shield buys. The stagger's
+    // threshold is a share of the cap rather than the cap itself, because the
+    // shield drains between the last block and the press and a threshold of
+    // exactly full would be a number nobody ever reaches.
+    SlamWeightDamage, "Bulwark",  "Slam, damage per weight (x)",          Fixed,   0,       fx(2,1);
+    SlamWeightRadius, "Bulwark",  "Slam, shake radius added when full",   Fixed,   0,       fx(4,1);
+    SlamFallDamage,   "Bulwark",  "Slam, damage per m/s fallen",          Int,     0,       40;
+    SlamStaggerShare, "Bulwark",  "Slam, staggers from (% of the cap)",   Percent, 0,       100;
+    SlamStaggerFrames,"Bulwark",  "Slam, stagger at the cap",             Frames,  0,       120;
+    // The throw and the wall -- M3. A loaded shield flies slower and hits
+    // harder, and from a share of the cap it knocks down; where it plants it
+    // is a solid in the stones' own field, sized between these two multiples
+    // of a stone by how full it was.
+    ThrowSpeedFull,   "Bulwark",  "Throw, speed at the cap (x)",          Fixed,   fx(1,10), fx(1,1);
+    ThrowWeightDamage,"Bulwark",  "Throw, damage per weight (x)",         Fixed,   0,       fx(2,1);
+    KnockdownShare,   "Bulwark",  "Throw, knocks down from (% of the cap)", Percent, 0,     100;
+    KnockdownFrames,  "Bulwark",  "Throw, knockdown",                     Frames,  0,       120;
+    WallSizeEmpty,    "Bulwark",  "Wall, size empty (x a stone)",         Fixed,   fx(1,10), fx(3,1);
+    WallSizeFull,     "Bulwark",  "Wall, size full (x a stone)",          Fixed,   fx(1,10), fx(3,1);
 }
 
 // ---------------------------------------------------------------------------

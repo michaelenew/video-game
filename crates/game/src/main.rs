@@ -321,6 +321,7 @@ impl Default for Sim {
             World::with_classes(chosen_classes())
         };
         shot_bars(&mut w);
+        shot_weight(&mut w);
         let seed = w.clone();
         Sim {
             prev: w.clone(),
@@ -359,6 +360,22 @@ fn shot_bars(w: &mut World) {
         {
             *d = sim::Fx::from_int(dark);
             *l = sim::Fx::from_int(light);
+        }
+    }
+}
+
+/// `SHOT_WEIGHT=n` starts every Bulwark's shield holding `n`, so a capture can
+/// look at a loaded shield without blocking up to it. The same kind of hook as
+/// `SHOT_BARS`, for the same reason. It drains like any weight, so pair it with
+/// an early `SHOT_FRAME`.
+fn shot_weight(w: &mut World) {
+    let Some(weight) = platform::env("SHOT_WEIGHT").and_then(|s| s.trim().parse::<i32>().ok())
+    else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Shield(s) = p.mechanic {
+            p.mechanic = sim::Mechanic::Shield(s.with_weight(sim::Fx::from_int(weight)));
         }
     }
 }
@@ -1161,22 +1178,23 @@ fn fade_own_body(
     }
 }
 
-/// Put the structure meshes where the Elementalist's mechanic says they are.
+/// Put the structure meshes where the stones' field says they are.
+///
+/// **The field, not the Elementalist's mechanic**, since 2026-09-23: the same
+/// `stones::gather` every collision reads, so a Bulwark's planted shield --
+/// which joins the field as a wall sized by its weight -- is drawn here at
+/// exactly the size bodies and shots are stopped at. Each at its own size.
 fn place_structures(
     sim: Res<Sim>,
     mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
 ) {
-    use sim::class::Mechanic;
-    let radius = sim::tuning::structure_radius().to_f32_for_render();
+    let field = sim::stones::gather(&sim.cur.players);
     for (tag, mut tf, mut vis) in meshes.iter_mut() {
-        let Mechanic::Structures(slots) = sim.cur.players[tag.owner].mechanic else {
+        let Some(raised) = field[tag.owner * sim::class::MAX_STRUCTURES + tag.index] else {
             *vis = Visibility::Hidden;
             continue;
         };
-        let Some(raised) = slots[tag.index] else {
-            *vis = Visibility::Hidden;
-            continue;
-        };
+        let radius = raised.radius().to_f32_for_render();
         // It is earth: it climbs out of the floor rather than appearing in the
         // air. The whole column slides up from fully buried, so the visible
         // part grows from the ground and the silhouette is always a slab
@@ -1193,7 +1211,7 @@ fn place_structures(
         // renderer that recomputed it could disagree with the surface the game
         // is holding you up with.
         let rise = raised.risen().to_f32_for_render();
-        let height = sim::tuning::structure_height().to_f32_for_render();
+        let height = raised.height().to_f32_for_render();
         *vis = Visibility::Inherited;
         tf.translation = Vec3::new(
             raised.at.x.to_f32_for_render(),
@@ -1850,24 +1868,53 @@ fn mechanic_world_pos(m: &sim::class::Mechanic) -> Option<sim::V3> {
 }
 
 /// A shield in hand rides on the character; a thrown one sits in the world.
+///
+/// **Its weight is drawn on it**: it thickens and darkens as it fills, so the
+/// person on the other side can read how loaded the wall is from across the
+/// arena -- see `bulwark-v2.md`. Read straight off the snapshot's number, per
+/// the overlay rule, so what you see is what a slam would spend.
 fn place_shields(
     sim: Res<Sim>,
     hands: Res<ShieldHands>,
-    mut shields: Query<(&ShieldMesh, &mut Transform, &mut Visibility)>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut shields: Query<(
+        &ShieldMesh,
+        &mut Transform,
+        &mut Visibility,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
-    for (tag, mut tf, mut vis) in shields.iter_mut() {
+    for (tag, mut tf, mut vis, look) in shields.iter_mut() {
+        let player = &sim.cur.players[tag.0];
         let held = matches!(
-            sim.cur.players[tag.0].mechanic,
-            sim::Mechanic::Shield(sim::state::Shield::Held)
+            player.mechanic,
+            sim::Mechanic::Shield(sim::state::Shield::Held { .. })
         );
+        let full = sim::bulwark::fullness(player).to_f32_for_render();
+        tf.scale = Vec3::new(1.0 + 0.2 * full, 1.0 + 0.2 * full, 1.0 + 1.5 * full);
+        if let Some(m) = materials.get_mut(&look.0) {
+            let empty = Vec3::new(0.92, 0.76, 0.38);
+            let heavy = Vec3::new(0.30, 0.20, 0.10);
+            let c = empty.lerp(heavy, full);
+            m.base_color = Color::srgb(c.x, c.y, c.z);
+        }
         match mechanic_world_pos(&sim.cur.players[tag.0].mechanic) {
             // Thrown or planted: it is somewhere in the arena on its own.
             Some(pos) => {
                 *vis = Visibility::Inherited;
                 tf.rotation = Quat::IDENTITY;
+                // Planted, it crowns the wall it has become -- the wall itself
+                // is drawn by `place_structures`, from the same field that
+                // stops people -- so it still reads as *his* shield.
+                let lift = match player.mechanic {
+                    sim::Mechanic::Shield(sim::state::Shield::Planted { pos, weight }) => {
+                        sim::bulwark::wall(pos, weight).height().to_f32_for_render()
+                    }
+                    _ => 0.0,
+                };
                 tf.translation = Vec3::new(
                     pos.x.to_f32_for_render(),
-                    pos.y.to_f32_for_render(),
+                    pos.y.to_f32_for_render() + lift,
                     pos.z.to_f32_for_render(),
                 );
             }
