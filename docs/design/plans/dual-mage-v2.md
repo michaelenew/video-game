@@ -1,8 +1,17 @@
 ---
-status: action plan — for one implementation thread
+status: M1–M3 built 2026-09-23; C1–C4 open — waiting on a person
 opened: 2026-09-23
 implements: ../dual-mage-v2.md
 ---
+
+> **Progress, 2026-09-23.** The instrument (`goad`) and milestones M1, M2 and M3 are built,
+> with every measured criterion a test in `crates/sim/tests/dual_mage.rs` or
+> `crates/view/tests/wings.rs`, except two that the numbers could not both satisfy — the
+> time-to-tier criteria in M1 and M2 are met at two and a quarter exchanges for the idle fall
+> and four for the climb rather than one and one, and the feel log for that date says why.
+> Human checkpoints C1, C2 and C3 are open with their play scripts written; M4 and M5 wait on
+> them. Two deviations from the brief, both argued in [`../dual-mage.md`](../dual-mage.md):
+> "both full" is the lower bar at 95, and the blink has no invulnerability knob of its own.
 
 # Dual mage v2 — action plan
 

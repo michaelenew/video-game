@@ -662,6 +662,86 @@ pub fn clear_between(from: V3, to: V3, scene: &Scene) -> bool {
         })
 }
 
+/// Where a **blink** ends: `reach` along the flat of `dir` from `from`, or
+/// short of that, against the first thing solid in the way.
+///
+/// The Dual mage's dodge at the first tier is the ordinary dodge with the
+/// travelling taken out: she is put where it would have ended, on its first
+/// frame. Where that is has to be decided here for the same reason the dash
+/// to the shadow is -- it is a body being sent somewhere, and the answer to
+/// "is anything in the way" is ray-against-shape work that belongs in one
+/// place. Bodies are not on the line, as ever: a blink passes through a
+/// fighter to the spot behind them, and it is the arena and the stones that
+/// stop it.
+///
+/// **Stricter than [`clear_between`], on purpose.** The dash goes wherever the
+/// shadow is, up included, so a way through for any part of the body is a way
+/// through; that is why one clear line out of four is enough there. A blink
+/// goes along the floor, to a spot at her own height, and a low platform her
+/// head would clear is still a wall to her feet -- so she stops where the
+/// **first** of the four corner lines meets something, less her own radius, and
+/// arrives against the obstacle rather than inside it or on top of it.
+pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+    if reach.raw() <= 0 {
+        return from;
+    }
+    let to = from.add(flat.scale(reach));
+    let sole = arena::SKIN;
+    let crown = t::body_height().sub(arena::SKIN);
+    // The share of the way each line gets before it is stopped, as a fraction
+    // of its own length -- which is the same fraction of the flat distance,
+    // because all four share one horizontal projection.
+    let mut share = Fx::ONE;
+    for (lift_a, lift_b) in [(sole, sole), (sole, crown), (crown, sole), (crown, crown)] {
+        let a = V3::new(from.x, from.y.add(lift_a), from.z);
+        let b = V3::new(to.x, to.y.add(lift_b), to.z);
+        if let Some(along) = first_solid_between(a, b, scene) {
+            share = share.min(along);
+        }
+    }
+    if share.raw() >= Fx::ONE.raw() {
+        return to;
+    }
+    let short = reach
+        .mul(share)
+        .sub(t::body_radius().add(arena::SKIN))
+        .max(Fx::ZERO);
+    from.add(flat.scale(short))
+}
+
+/// Where along one line, as a share of its length, the first solid is -- or
+/// `None` if nothing solid crosses it before the far end.
+fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
+    let span = b.sub(a);
+    let reach = span.len();
+    if reach.raw() <= 0 {
+        return None;
+    }
+    let dir = span.normalized();
+    let mut nearest: Option<Fx> = None;
+    let mut consider = |hit: Option<Fx>| {
+        if let Some(d) = hit {
+            if d.raw() < reach.raw() && nearest.is_none_or(|n| d.raw() < n.raw()) {
+                nearest = Some(d);
+            }
+        }
+    };
+    for solid in arena::SOLIDS.iter() {
+        consider(crate::math::ray_hits_box(a, dir, solid.min, solid.max));
+    }
+    for stone in scene.stones.iter().flatten() {
+        consider(crate::math::ray_hits_cylinder(
+            a,
+            dir,
+            stone.at,
+            t::structure_radius(),
+            stone.standing_height(),
+        ));
+    }
+    nearest.map(|d| d.div(reach))
+}
+
 /// One line of [`clear_between`], against the terrain and the structures on it.
 ///
 /// The ground plane is not consulted: every surface a body can stand on is at

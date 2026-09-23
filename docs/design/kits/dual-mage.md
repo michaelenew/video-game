@@ -1,7 +1,7 @@
 ---
-status: proposed; the initial kit is built
+status: built; the six moves are unchanged under the two bars of 2026-09-23
 decided: 2026-09-10
-revised: 2026-09-16
+revised: 2026-09-23
 formerly: Statera
 sources: docs/archive/combat-design/statera-skills.md, docs/archive/combat-design/class-builds.md
 depends: ../dual-mage.md
@@ -9,32 +9,47 @@ depends: ../dual-mage.md
 
 # Dual mage — kit
 
-> ⚠️ **The mechanic under this kit has a proposed v2, 2026-09-23** — see
-> [../dual-mage-v2.md](../dual-mage-v2.md). The six moves below do not change; what changes is
-> the bar they steer, and what the class's body can do as the bars rise. Nothing of it is built.
+**Identity.** Melee mage containing two forces, one in each arm, and a bar for each. Power is
+the bar she is carrying; what her body can do is the lower of the two; how fast she is losing
+it is the gap between them.
 
-**Identity.** Melee mage containing two forces. Power comes from riding as close to an edge
-as you can while still able to pull back.
-
-Read [../dual-mage.md](../dual-mage.md) first — this kit implements that meter and is
+Read [../dual-mage.md](../dual-mage.md) first — this kit implements that mechanic and is
 meaningless without it.
 
-## Mechanic — the two-pole meter
+## Mechanic — two bars, and the hill between them — rebuilt 2026-09-23
 
-- **Left click moves you darker, right click moves you lighter — but only the autos have a
-  side.** Every other input pushes further along whichever force she is already carrying.
-  Middle click and both-click have no side either, which is why Lance lives on middle click.
-- **Three tiers of push:** an auto moves the bar 5, a cast 12, and the finisher 26. The last is
-  what makes casting Judgement from depth a question about whether you survive the cast.
-- **Power scales continuously with depth.** The same cast is weak at centre and large at
-  the edge. Centre is where both forms are available and both are weak.
-- **Coming back:** throw a far-side auto. That is the only way — casts follow the force she is
-  *carrying*, and an auto is the only thing that changes which force that is. Casting against
-  the grain is not an input any more.
-- Past a depth threshold you take a burn that stops the moment you come back inside.
+**The six moves below did not change.** What changed is what they steer.
 
-**Ascension has no input.** It triggers when you max the bar by casting. See
-[../dual-mage.md](../dual-mage.md).
+- **Left click goads Dark and right click goads Light — and only the autos have a side.** Every
+  other input feeds whichever force she is already carrying. Middle click and the keys have no
+  side, which is why Lance lives on middle click.
+- **Three tiers of push:** an auto goads a bar 8, a cast 18, and the finisher 38. The last is
+  what makes casting Judgement from high a question about what the other bar does next.
+- **The hill.** Inside a band of 30 nothing moves on its own. Outside it the higher bar rises,
+  the lower falls and she burns, faster the wider the gap. Both bars calm toward empty, always.
+- **Power is the bar she is carrying**, continuously: a cast reads the carried bar, an auto its
+  own. Empty is thin and full is the most she can hold.
+- **The tiers read the lower bar.** At half the dodge is a blink; at three quarters she has a
+  second jump and a slower fall; both full is wings. So the climb is alternating hands — dark
+  auto, dark Lance, light auto, light Sweep — which uses this kit in both forms.
+- **Coming back:** the far-side auto, and it is urgent now, because the low bar is falling
+  while she waits. An auto alone only holds a runaway; the far-side *cast* wins it.
+
+**Ascension has no input.** It triggers when both bars are goaded to the top together, and the
+drift never delivers it. See [../dual-mage.md](../dual-mage.md).
+
+### How the tiers read
+
+| The lower bar | Reads as | On her back |
+| --- | --- | --- |
+| Below half | The dodge is a dodge; space in the air does nothing | Two short wings, or none |
+| Half | The dodge blinks: she is where it would have ended, on its first frame, and stands through the tail | Wings to the elbow |
+| Three quarters | Space in the air jumps once more, and she falls slower | Wings past the shoulder |
+| Both full | Wings full span; every press of space is a wing beat; no dodge | Full span |
+
+The wings are the two bars, dark on the left and light on the right. Lopsided wings are a mage
+about to burn; two full wings are a mage about to fly. `cargo run -p sim --bin frametable`
+prints the tiers under the class, and `cargo run -p sim --bin goad` runs the climb.
 
 Full input map in [../controls.md](../controls.md).
 
@@ -56,14 +71,15 @@ side, so by the class's own rule it pushes her further along whichever way she i
 going, while the light-or-dark form of the cast comes from the force she is carrying. The two
 rules stopped fighting.
 
-## Depth is the whole class, and it is in the numbers now — 2026-09-16
+## Depth is the whole class, and it is in the numbers now — 2026-09-16, re-pointed 2026-09-23
 
-**Power scales continuously with distance from the centre of the bar, and it scales
-everything.** One curve, `state::depth`: a straight line from `tuning::depth_floor` at zero to
-`tuning::depth_ceiling` at either end, symmetric, with every point on it reachable. No
-thresholds, no snapping between versions.
+**Power scales continuously with the bar of the force a move is made of, and it scales
+everything.** One curve, `state::depth`: a straight line from `tuning::depth_floor` at empty to
+`tuning::depth_ceiling` at full, with every point on it reachable. No thresholds, no snapping
+between versions. A cast reads the bar she is carrying; an auto reads its own, so the far-side
+auto is thrown from strength when the far side is the high one.
 
-At the centre everything she throws is thin and slightly disappointing. At the edge it is the
+With a bar empty everything she throws is thin and slightly disappointing. Full, it is the
 most she can hold.
 
 **What it moves, and what it deliberately does not.**
@@ -84,9 +100,9 @@ hurts and how big the thing that arrives is; where you can put it and how fast i
 fixed. A deep Judgement is a far bigger Judgement thrown exactly as far as a feeble one.
 
 **A cast is worth where you were standing when you pressed the button**, not where its own push
-has since taken you (`state::Player::thrown_at`). Throwing anything moves the bar on the press
+has since taken you (`state::Player::thrown_at`). Throwing anything moves a bar on the press
 and the finisher moves it a long way, so a cast read live would be worth its own push — and the
-one move in the kit that is supposed to be embarrassing at the centre would be the least
+one move in the kit that is supposed to be embarrassing from empty would be the least
 embarrassing thing there. It would also mean the number on the HUD never matched what the
 player got.
 
@@ -96,9 +112,10 @@ edge starts where the fist stops — and they are the one move in the kit thrown
 a volume drifting away from the animation would make the steering wheel unreadable. What depth
 does to an auto is what it *does*.
 
-`cargo run -p sim --bin frametable` prints the live numbers, and the HUD draws the bar under
-her health: a two-poled track, filled out from the centre toward whichever end she is on, with
-the deep thresholds marked and its border in the colour of the force she is carrying.
+`cargo run -p sim --bin frametable` prints the live numbers, and the HUD draws the two bars
+under her health in one track: Dark filling leftwards from the middle and Light rightwards, the
+two tiers ticked on each side, and its border in the colour of the force she is carrying. The
+wings on her back are the same two numbers, readable from across the arena.
 
 ### Why `E` carries an ability
 
@@ -367,9 +384,11 @@ stacking slow. Heals a fraction of the damage dealt.
 
 ## Playing it
 
-Commit to one side with repeated casts of that form, land the finisher from the deepest
-position you can survive, then close to melee and auto back toward centre — or cast the far
-side to bleed back slowly if you cannot close.
+Climb with both hands — dark auto, dark Lance, light auto, light Sweep — and the bars rise
+together inside the band. At half the dodge is a blink; at three quarters you have a second
+jump. Spend the height you have goaded on a finisher from the bar you are carrying, and the
+other bar starts to collapse: catch it with the far-side hand before the tier goes, or let it
+go and take the burn for the burst. Both full is wings, three seconds of them, and then empty.
 
 **And which arm you punch with is now a spacing question at the same time.** The dark hand
 drags them in, which is how a body this fragile stays attached to somebody long enough to
@@ -378,9 +397,8 @@ are also the two that decide the range you are fighting at, and you cannot ask f
 answering the other. That is the mechanic doing its job: it is not a bar you manage on the
 side, it is the thing your hands are already doing.
 
-Switching sides means crossing the whole bar, so which edge you commit to is a real
-strategic choice rather than a moment-to-moment one. Oscillating at centre is always
-available and always weak.
+Being one-sided is easy, powerful and a runaway. Being two-sided is hard, mobile and the only
+road to the wings. Alternating is how she climbs; what is weak is not goading at all.
 
 In the hand it comes out as **which arm you are punching with**, which is the point: the
 mechanic is not a bar you manage on the side, it is the left and right buttons you are already
@@ -398,13 +416,18 @@ pressing, and you can read your own commitment off your own animation.
   clips are authored to be opposites so the *opponent* can read it; whether the player can read
   their own is a different question and is not answered by the same thing.
 - **Does the depth curve read as continuous in the hand, or only on paper?** `depth_floor` is
-  0.5 and `depth_ceiling` is 2.0, so the edge is four times the centre. That is a big spread
-  and it is deliberately a guess: the risk in one direction is that the middle of the bar feels
-  broken rather than weak, and in the other that nothing below the last quarter of the bar is
-  worth casting from.
-- **Is a Judgement at full depth too much of a health bar?** It is the biggest number in the
-  game by design, and it is thrown from a position that is already burning her and one cast
-  from ascension. Whether that is a fair price is a play question.
+  0.5 and `depth_ceiling` is 2.0, so a full bar is four times an empty one. That is a big
+  spread and it is deliberately a guess: the risk in one direction is that a low bar feels
+  broken rather than weak, and in the other that nothing below the last quarter is worth
+  casting from.
+- **Is a Judgement from a full bar too much of a health bar?** It is the biggest number in the
+  game by design, and now it is thrown from a position where the *other* bar is about to
+  collapse rather than from one that is burning her. Whether that is a fair price is a play
+  question.
+- **The blink shares the dodge's window.** The plan listed a knob for the blink's own
+  invulnerable frames; it has none, because `Action::invulnerable` reads one number for every
+  dodge in the game and a second one would be a second dodge. If a blink wants a shorter or a
+  longer window than the roll, that is the day it gets one.
 - **Should the wing tilt at all?** Standing, its plane is the floor's and the camera's pitch
   does not touch it — which is the shape as specified, and which means an auto thrown at
   somebody on a ledge above or below misses them by geometry rather than by aim. Airborne it

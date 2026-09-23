@@ -16,6 +16,7 @@ pub mod math;
 pub mod play;
 pub mod pose;
 pub mod skeleton;
+pub mod wings;
 
 pub use camera::{CameraRig, Framing, Surroundings};
 pub use clips::Clip;

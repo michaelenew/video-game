@@ -22,7 +22,8 @@ const DIM: Color = Color::srgb(0.52, 0.58, 0.67);
 /// unmistakable at a glance and at speed.
 const DARK: Color = Color::srgb(0.58, 0.36, 0.95);
 const LIGHT: Color = Color::srgb(1.0, 0.89, 0.52);
-/// Past the deep threshold, where the forces start burning her.
+/// The tier marks on the Dual mage's track: where the blink and the second jump
+/// begin.
 const DEEP: Color = Color::srgb(0.95, 0.35, 0.35);
 /// Driven off the end. Nothing else in the HUD is this colour.
 const ASCENDED: Color = Color::srgb(1.0, 1.0, 1.0);
@@ -65,7 +66,10 @@ pub struct MeterTrack(pub usize);
 
 /// The fill, which runs from the centre out to wherever she is.
 #[derive(Component)]
-pub struct MeterFill(pub usize);
+pub struct MeterFill {
+    pub who: usize,
+    pub force: sim::class::Force,
+}
 
 #[derive(Component)]
 pub struct RoundText;
@@ -277,15 +281,17 @@ fn spawn_meter<T: Component>(
         });
 }
 
-/// One two-poled bar: a track with the centre marked, the two depths at which
-/// the forces start to burn, and a fill that runs out from the middle.
+/// The Dual mage's two bars in one track: Dark filling **leftwards** from the
+/// middle, Light filling rightwards, with the two tiers ticked on each side.
 ///
-/// Everything inside is absolutely positioned, because this bar fills from the
-/// *centre* in either direction rather than from one end -- which is the whole
-/// point of it. A bar that filled from the left would say "more" and "less"
-/// where the mechanic says "which way".
+/// Side by side rather than stacked because the thing the player is reading is
+/// the *gap*: two bars that grow away from each other from a shared middle are
+/// lopsided exactly when she is, which is the same picture the wings on her
+/// back make. Everything inside is absolutely positioned because of that.
 fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
-    let deep = 50.0 * sim::tuning::meter_deep() as f32 / sim::tuning::meter_max().max(1) as f32;
+    let max = sim::tuning::meter_max().max(1) as f32;
+    let blink = 50.0 * sim::tuning::tier_blink() as f32 / max;
+    let jump = 50.0 * sim::tuning::tier_jump() as f32 / max;
     parent
         .spawn((
             Node {
@@ -301,21 +307,28 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
             MeterTrack(who),
         ))
         .with_children(|track| {
-            // The fill first, so the ticks draw over it.
-            track.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(50.0),
-                    width: Val::Percent(0.0),
-                    height: Val::Percent(100.0),
-                    ..default()
-                },
-                BackgroundColor(DIM),
-                MeterFill(who),
-            ));
+            // The fills first, so the ticks draw over them.
+            for (force, colour) in [
+                (sim::class::Force::Dark, DARK),
+                (sim::class::Force::Light, LIGHT),
+            ] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(50.0),
+                        width: Val::Percent(0.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(colour),
+                    MeterFill { who, force },
+                ));
+            }
             for (at, colour) in [
-                (50.0 - deep, DEEP),
-                (50.0 + deep, DEEP),
+                (50.0 - blink, DEEP),
+                (50.0 + blink, DEEP),
+                (50.0 - jump, DEEP),
+                (50.0 + jump, DEEP),
                 (50.0, Color::srgb(0.82, 0.86, 0.93)),
             ] {
                 track.spawn((
@@ -413,9 +426,9 @@ pub fn update(
         node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
     }
 
-    // The Dual mage's bar. Three things at once, and each of them is a
-    // question the player is asking constantly: how far out am I, which force
-    // am I carrying, and am I past the line.
+    // The Dual mage's two bars. Three things at once, and each of them is a
+    // question the player is asking constantly: how high are the two, how far
+    // apart are they, and which force am I carrying.
     for (tag, mut visible) in meter_rows.iter_mut() {
         let carrying = meter_of(&sim.cur.players[tag.0]);
         *visible = if carrying.is_some() {
@@ -425,11 +438,11 @@ pub fn update(
         };
     }
     for (tag, mut border) in meter_tracks.iter_mut() {
-        let Some((_, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
+        let Some((_, _, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
             continue;
         };
         // The border is which force she is *carrying*, which is not the same as
-        // which side of the bar she is on: she can be deep in the dark and
+        // which bar is higher: she can be deep in the dark and
         // still light, having just landed one light auto, and every cast she
         // throws until she lands a dark one is light.
         border.0 = if ascending > 0 {
@@ -442,13 +455,24 @@ pub fn update(
         };
     }
     for (tag, mut node, mut fill) in meter_fills.iter_mut() {
-        let Some((value, _, _)) = meter_of(&sim.cur.players[tag.0]) else {
+        let Some((dark, light, _, ascending)) = meter_of(&sim.cur.players[tag.who]) else {
             continue;
         };
-        let (left, width) = fill_of(value, sim::tuning::meter_max());
+        let bar = match tag.force {
+            sim::class::Force::Dark => dark,
+            sim::class::Force::Light => light,
+        };
+        let (left, width) = fill_of(tag.force, bar, sim::tuning::meter_max() as f32);
         node.left = Val::Percent(left);
         node.width = Val::Percent(width);
-        fill.0 = if value < 0 { DARK } else { LIGHT };
+        fill.0 = if ascending > 0 {
+            ASCENDED
+        } else {
+            match tag.force {
+                sim::class::Force::Dark => DARK,
+                sim::class::Force::Light => LIGHT,
+            }
+        };
     }
 
     // The creature, if there is one.
@@ -503,40 +527,56 @@ pub fn update(
     }
 }
 
-/// Where the meter's fill sits in its track, as `(left, width)` in percent.
+/// Where one bar's fill sits in the shared track, as `(left, width)` in
+/// percent.
 ///
-/// Out from the **centre**, in whichever direction she has gone, which is the
-/// one thing this bar has to say that a health bar does not: the number is
-/// signed and the middle is the interesting place to be.
-fn fill_of(value: i32, max: i32) -> (f32, f32) {
-    let share = (value as f32 / max.max(1) as f32).clamp(-1.0, 1.0);
-    let half = 50.0 * share.abs();
-    (if share < 0.0 { 50.0 - half } else { 50.0 }, half)
+/// Dark fills **leftwards** from the middle and Light rightwards, which is the
+/// one thing this track has to say that two health bars would not: the two
+/// grow away from each other, so the gap between them is the lopsidedness of
+/// the whole thing, read at a glance.
+fn fill_of(force: sim::class::Force, bar: f32, max: f32) -> (f32, f32) {
+    let half = 50.0 * (bar / max.max(1.0)).clamp(0.0, 1.0);
+    match force {
+        sim::class::Force::Dark => (50.0 - half, half),
+        sim::class::Force::Light => (50.0, half),
+    }
 }
 
-/// The Dual mage's meter, if this fighter has one.
+/// The Dual mage's two bars, if this fighter has them: dark, light, the force
+/// she is carrying, and the frames of ascension left.
 ///
-/// `None` for the other five, which is what hides the bar rather than drawing
-/// an empty one -- a bar for a resource a class does not have is a thing to
-/// wonder about.
-fn meter_of(p: &sim::state::Player) -> Option<(i32, sim::class::Force, u16)> {
+/// `None` for the other five, which is what hides the track rather than
+/// drawing an empty one -- a bar for a resource a class does not have is a
+/// thing to wonder about.
+fn meter_of(p: &sim::state::Player) -> Option<(f32, f32, sim::class::Force, u16)> {
     match p.mechanic {
         sim::class::Mechanic::Meter {
-            value,
+            dark,
+            light,
             colour,
             ascending,
-        } => Some((value, colour, ascending)),
+            ..
+        } => Some((
+            dark.to_f32_for_render(),
+            light.to_f32_for_render(),
+            colour,
+            ascending,
+        )),
         _ => None,
     }
 }
 
 /// The class mechanic in one line -- where the shield is, which form is out,
-/// how deep the meter runs. Without it the mechanics are invisible.
+/// where the two bars stand. Without it the mechanics are invisible.
 fn mechanic(p: &sim::state::Player) -> String {
     use sim::class::alloc_free::Summary;
     match p.mechanic.summary() {
         Summary::Text(t) => t.to_string(),
         Summary::Value(label, v) => format!("{label}: {v}"),
+        Summary::Bars { dark, light, tier } if tier.is_empty() => {
+            format!("dark {dark} / light {light}")
+        }
+        Summary::Bars { dark, light, tier } => format!("dark {dark} / light {light}  {tier}"),
     }
 }
 
@@ -782,24 +822,34 @@ mod tests {
     }
 
     #[test]
-    fn the_meter_fills_out_from_the_middle() {
-        // The bar is read at a glance while she is being steered, so the thing
-        // that has to be true is positional: centre is centre, and an end is an
-        // end. Nobody can check that by looking at a screenshot of one frame.
-        let max = 100;
-        assert_eq!(fill_of(0, max), (50.0, 0.0));
-        assert_eq!(fill_of(-max, max), (0.0, 50.0));
-        assert_eq!(fill_of(max, max), (50.0, 50.0));
-        let (left, width) = fill_of(-max / 2, max);
+    fn the_two_bars_grow_away_from_the_middle() {
+        // The track is read at a glance while she is being steered, so the
+        // thing that has to be true is positional: the middle is the middle,
+        // Dark grows to the left of it and Light to the right, and a full bar
+        // reaches its own end of the track. Nobody can check that by looking at
+        // a screenshot of one frame.
+        use sim::class::Force;
+        let max = 100.0;
+        assert_eq!(fill_of(Force::Dark, 0.0, max), (50.0, 0.0));
+        assert_eq!(fill_of(Force::Light, 0.0, max), (50.0, 0.0));
+        assert_eq!(fill_of(Force::Dark, max, max), (0.0, 50.0));
+        assert_eq!(fill_of(Force::Light, max, max), (50.0, 50.0));
+        let (left, width) = fill_of(Force::Dark, max / 2.0, max);
         assert!((left - 25.0).abs() < 0.01 && (width - 25.0).abs() < 0.01);
+        let (left, width) = fill_of(Force::Light, max / 2.0, max);
+        assert!((left - 50.0).abs() < 0.01 && (width - 25.0).abs() < 0.01);
     }
 
     #[test]
-    fn a_meter_past_its_own_end_still_fits_the_track() {
-        // Ascension pins her at the end, and a bar that drew past its own track
-        // would spill across the screen.
-        let (left, width) = fill_of(500, 100);
-        assert!(left >= 0.0 && left + width <= 100.0);
+    fn a_bar_past_its_own_top_still_fits_the_track() {
+        // A bar can never exceed its top in the simulation, but a track that
+        // trusted that and drew past its own edge would spill across the
+        // screen the first time somebody retuned the top downward.
+        use sim::class::Force;
+        for force in [Force::Dark, Force::Light] {
+            let (left, width) = fill_of(force, 500.0, 100.0);
+            assert!(left >= 0.0 && left + width <= 100.0);
+        }
     }
 
     #[test]

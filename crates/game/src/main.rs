@@ -140,6 +140,7 @@ fn main() {
                     place_discs,
                     place_wings,
                     place_wing_tips,
+                    place_wingspans,
                     place_marks,
                 ),
                 beast::place,
@@ -497,6 +498,19 @@ struct WingMesh {
 /// The last frame of the Dual mage's wing: a ball at the end of the blade.
 #[derive(Component)]
 struct WingTipMesh(usize);
+
+/// One of the two wings on the Dual mage's **back**: her two bars, drawn.
+///
+/// Not the swept blade above, which is an attack. These are the meter: dark on
+/// her left and light on her right, each as long as its bar, so the gap
+/// between the two is readable across the arena by both players and full span
+/// is ascension. `view::wings` decides the root, the tip and the span, and
+/// `view/tests/wings.rs` holds the span to the bar.
+#[derive(Component)]
+struct WingSpanMesh {
+    owner: usize,
+    force: sim::class::Force,
+}
 
 /// How many bars the wing is drawn with.
 ///
@@ -864,6 +878,19 @@ fn setup(
             Visibility::Hidden,
             WingTipMesh(owner),
         ));
+        // And the two on her back, in the colour of the force each one is.
+        for (force, material) in [
+            (sim::class::Force::Dark, look.dark.clone()),
+            (sim::class::Force::Light, look.light.clone()),
+        ] {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(material),
+                Transform::default(),
+                Visibility::Hidden,
+                WingSpanMesh { owner, force },
+            ));
+        }
     }
     // The aim marker a channelled move is wound out along.
     for owner in 0..MAX_PLAYERS {
@@ -1207,6 +1234,57 @@ fn place_wing_tips(
         // asks is how far out it reaches, and a drawing that shrank it would be
         // teaching the wrong distance.
         tf.scale = Vec3::splat(hb.radius.to_f32_for_render() * 2.0);
+    }
+}
+
+/// The two wings on the Dual mage's back, each as long as its bar.
+///
+/// Drawn from the *interpolated* frame like the body rather than from the
+/// latest snapshot like the attack volumes, because they hang off her and a
+/// wing that lagged the back it grows from by half a frame would visibly
+/// detach every time she turned.
+fn place_wingspans(
+    sim: Res<Sim>,
+    mut meshes: Query<(&WingSpanMesh, &mut Transform, &mut Visibility)>,
+) {
+    let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        // The bars are read off the current snapshot -- they are the meter,
+        // and a meter is not a thing to blend -- and the body they hang off is
+        // read off the blended frame, which is where the body is drawn.
+        let mut p = sim.cur.players[tag.owner];
+        let drawn = frame.players[tag.owner];
+        p.pos = sim::V3::new(
+            sim::Fx::from_raw((drawn.pos[0] * 65536.0) as i32),
+            sim::Fx::from_raw((drawn.pos[1] * 65536.0) as i32),
+            sim::Fx::from_raw((drawn.pos[2] * 65536.0) as i32),
+        );
+        p.facing = sim::V3::new(
+            sim::Fx::from_raw((drawn.facing[0] * 65536.0) as i32),
+            sim::Fx::ZERO,
+            sim::Fx::from_raw((drawn.facing[2] * 65536.0) as i32),
+        );
+        let Some(wings) = view::wings::wings(&p) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let wing = wings
+            .iter()
+            .find(|w| w.force == tag.force)
+            .copied()
+            .expect("both wings are always answered for");
+        if wing.span < 0.02 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        let root = Vec3::from_array(wing.root);
+        let tip = Vec3::from_array(wing.tip);
+        let along = tip - root;
+        tf.translation = root + along * 0.5;
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / wing.span);
+        // A thin vane: the length is the bar and nothing else about it moves.
+        tf.scale = Vec3::new(0.06, wing.span, 0.22);
     }
 }
 

@@ -1048,27 +1048,134 @@ pub fn ascension_drain() -> i32 {
     oven::scalar(Scalar::AscensionDrain)
 }
 
-/// How long she is staggered when it ends.
-///
-/// The design wants this **graduated** -- shorter the closer you got to the
-/// damage threshold, so a near miss reads as a near miss. That needs a
-/// threshold to measure against and there is not one yet, so it is flat, and
-/// the flat version is still the thing that makes ascension a decision rather
-/// than a free three seconds.
+/// The longest she is staggered when it ends: the ceiling of a stagger that
+/// is **graduated** by how much of the drain her hits refunded, down to
+/// [`ascension_stun_floor`]. A near miss reads as a near miss.
 pub fn ascension_stun() -> u16 {
     oven::scalar(Scalar::AscensionStun) as u16
 }
 
+/// The top of either bar, in whole units. Both run from zero to this.
 pub fn meter_max() -> i32 {
     oven::scalar(Scalar::MeterMax)
 }
 
-pub fn meter_deep() -> i32 {
-    oven::scalar(Scalar::MeterDeep)
+// ---------------------------------------------------------------------------
+// The two bars and the hill between them -- see `crate::dual`
+// ---------------------------------------------------------------------------
+//
+// v2 of the mechanic, 2026-09-23. Every first value below came out of
+// `cargo run -p sim --bin goad` against the cadence `docs/design/dual-mage.md`
+// asks for, and the feel log entry for the same date says which criterion each
+// one was chosen against. None of them has been played.
+
+/// How far apart the two bars may sit and still count as level, in whole
+/// units of the bar. Inside it nothing moves on its own; outside it the hill
+/// starts.
+///
+/// **The cadence sets it.** One cast from level has to stay inside, two have
+/// to leave, the finisher always leaves, and the alternating rhythm -- an auto
+/// and a cast on one side, then the same on the other -- has to stay inside.
+/// So it is at least an auto plus a cast and less than two casts: with pushes
+/// of 8, 18 and 38 that is between 26 and 36, and 30 is the middle of it.
+pub fn meter_band() -> i32 {
+    oven::scalar(Scalar::MeterBand)
 }
 
-pub fn meter_burn() -> i32 {
-    oven::scalar(Scalar::MeterBurn)
+/// How fast the higher bar rises and the lower falls, per second, for every
+/// unit the gap is outside the band.
+///
+/// The slope of the hill. Two a second per unit means a Judgement thrown from
+/// level -- eight outside the band -- is already at the cap, so the finisher
+/// starts something the other hand has to answer within a cast or two.
+pub fn drift_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DriftGain))
+}
+
+/// The most the drift ever moves either bar, per second.
+///
+/// Chosen so the far-side **cast** wins the race and far-side **autos** only
+/// hold it: an auto every thirty frames is sixteen a second onto the low bar,
+/// and the cap plus the calm takes sixteen off it. The way back is the cast,
+/// which is a commitment, and the auto buys the time to make it.
+pub fn drift_cap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DriftCap))
+}
+
+/// Health per second the gap costs, per unit outside the band.
+pub fn burn_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BurnGain))
+}
+
+/// The most the burn ever costs, per second.
+///
+/// Fifteen, because a bar left fully one-sided for the whole of a versus round
+/// -- sixty seconds -- must not by itself be a health bar. It cannot kill
+/// either way; `dual::singe_health` stops at one.
+pub fn burn_cap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BurnCap))
+}
+
+/// How fast both bars fall on their own, per second, always.
+///
+/// What makes a tier something she holds by fighting. Six a second is a guess
+/// pulled two ways: the plan asks for the second tier to fall below the first
+/// inside two Judgements when she stops, which wants it above thirteen, and
+/// for the alternating climb to reach the first tier inside one exchange, which
+/// wants it under four. It cannot be both, so it is set where the climb to the
+/// top takes about a quarter of a round of clean alternating -- the design's
+/// own "roughly once per match" -- and the idle fall takes two and a half
+/// exchanges. The first thing to move after somebody has played it.
+pub fn meter_calm() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MeterCalm))
+}
+
+/// The lower bar at which the dodge becomes a blink. Half.
+pub fn tier_blink() -> i32 {
+    oven::scalar(Scalar::TierBlink)
+}
+
+/// The lower bar at which she gets a second jump and a slower fall. Three
+/// quarters.
+pub fn tier_jump() -> i32 {
+    oven::scalar(Scalar::TierJump)
+}
+
+/// The lower bar at which both are counted as full and she ascends.
+///
+/// A hair under the top rather than the top itself, and it has to be: the
+/// calm runs every frame and the two bars are pushed by two different presses,
+/// so the moment one is topped up the other has already lost a little, and
+/// both can never be at exactly the top on the same frame. Ninety-five is what
+/// the other bar keeps through one move's worth of calm with room to spare.
+pub fn tier_wings() -> i32 {
+    oven::scalar(Scalar::TierWings)
+}
+
+/// The second jump's impulse, as a share of the first.
+pub fn second_jump() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SecondJump))
+}
+
+/// What the fall cap is multiplied by while she holds the second tier.
+pub fn slow_fall() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlowFall))
+}
+
+/// Health returned for every hit landed while ascending.
+///
+/// The refund the original design wrote and never built. Forty against a drain
+/// of four a frame means the cost is paid back in full by eighteen hits in
+/// three seconds, which nobody will do -- it is meant to keep her alive one
+/// connection at a time, not to make the ride free.
+pub fn ascension_refund() -> i32 {
+    oven::scalar(Scalar::AscensionRefund)
+}
+
+/// The shortest the stagger on the way out gets, for a ride that paid itself
+/// back. [`ascension_stun`] is the longest, for one that landed nothing.
+pub fn ascension_stun_floor() -> u16 {
+    oven::scalar(Scalar::AscensionStunFloor) as u16
 }
 
 // ---------------------------------------------------------------------------
@@ -2005,27 +2112,26 @@ pub fn hammer_leap() -> Fx {
 // The Dual mage's depth curve
 // ---------------------------------------------------------------------------
 //
-// The class's founding idea, finally built: **power scales continuously with
-// distance from the centre of the bar.** Two numbers describe the whole of it,
-// and one function reads them -- `state::depth` -- so that "a cast at the edge
-// is a bigger cast" is one rule rather than a thing each ability remembers to
-// do. See `docs/design/dual-mage.md`.
+// The class's founding idea: **power scales continuously with the bar of the
+// force a move is made of.** Two numbers describe the whole of it, and one
+// function reads them -- `state::depth`, through `dual::depth_at` -- so that "a
+// cast from a full bar is a bigger cast" is one rule rather than a thing each
+// ability remembers to do. See `docs/design/dual-mage.md`.
 
-/// What a cast from dead centre is worth, as a multiplier.
+/// What a cast from an empty bar is worth, as a multiplier.
 ///
-/// **Below one, and it has to be.** Centre is where both forms are available
-/// and both are weak -- that is the sentence the whole mechanic hangs off, and
-/// the only way to say it in numbers is to make the middle of the bar cost you
-/// something. Everything she throws standing at zero comes out thin.
+/// **Below one, and it has to be.** A bar she has not goaded is a being she has
+/// not fed, and the only way to say that in numbers is to make an empty bar
+/// cost her something. Everything she throws from empty comes out thin.
 pub fn depth_floor() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DepthFloor))
 }
 
-/// And what the same cast is worth standing at either end.
+/// And what the same cast is worth from a full bar.
 ///
-/// Above one, by as much as the edge is meant to be frightening. The gap
-/// between this and [`depth_floor`] is the reason to leave the middle; how far
-/// out the burn starts is the reason not to go all the way.
+/// Above one, by as much as a full bar is meant to be frightening. The gap
+/// between this and [`depth_floor`] is the reason to goad; the hill between
+/// the two bars is the reason not to goad one of them alone.
 pub fn depth_ceiling() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DepthCeiling))
 }

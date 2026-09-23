@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 272] = [
+pub const SCALARS: [i32; 283] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -73,8 +73,6 @@ pub const SCALARS: [i32; 272] = [
            56360, // defence.hitstun_decay = 0.86
            57671, // match.settle_decay = 0.88
              100, // dual_mage.meter_range = 100
-              65, // dual_mage.meter_deep_threshold = 65
-               3, // dual_mage.burn_at_full_depth = 3
            58982, // stones.rise,_hold = 0.9
                0, // stones.rise,_hold_lift = 0
            62259, // stones.rise,_burst = 0.95
@@ -217,8 +215,8 @@ pub const SCALARS: [i32; 272] = [
            49152, // dual_mage.wing,_inner_edge_(x_reach) = 0.75
            16384, // dual_mage.wing,_the_tip_as_a_share_of_the_span = 0.25
           114688, // dual_mage.wing,_tip_damage_(x) = 1.75
-               5, // dual_mage.meter,_an_auto_moves = 5
-              12, // dual_mage.meter,_a_cast_moves = 12
+               8, // dual_mage.meter,_an_auto_moves = 8
+              18, // dual_mage.meter,_a_cast_moves = 18
              180, // dual_mage.ascension,_how_long = 180
                4, // dual_mage.ascension,_health_a_frame = 4
               40, // dual_mage.ascension,_stun_on_the_way_out = 40
@@ -266,7 +264,7 @@ pub const SCALARS: [i32; 272] = [
            32768, // dual_mage.depth,_power_at_the_centre_(x) = 0.5
           131072, // dual_mage.depth,_power_at_the_edge_(x) = 2
              100, // dual_mage.depth,_how_much_of_it_the_size_takes_(%) = 100
-              26, // dual_mage.meter,_the_finisher_moves = 26
+              38, // dual_mage.meter,_the_finisher_moves = 38
           131072, // dual_mage.wing,_tip_knockback_(x) = 2
            36045, // dual_mage.sweep,_dark:_speed_while_slowed_(x) = 0.55
               22, // dual_mage.sweep,_dark:_health_per_target_caught = 22
@@ -280,6 +278,19 @@ pub const SCALARS: [i32; 272] = [
               12, // dual_mage.judgement,_field_damage_per_tick = 12
              100, // dual_mage.judgement,_field_lasts = 100
            95027, // dual_mage.judgement,_her_speed_inside_it_(x) = 1.45
+              30, // dual_mage.band,_the_gap_that_still_counts_as_level = 30
+          131072, // dual_mage.drift_per_second,_per_unit_outside_the_band = 2
+          655360, // dual_mage.drift_per_second,_at_most = 10
+           98304, // dual_mage.burn_per_second,_per_unit_outside_the_band = 1.5
+          983040, // dual_mage.burn_per_second,_at_most = 15
+          393216, // dual_mage.calm,_both_bars_fall_per_second = 6
+              50, // dual_mage.tier,_the_dodge_is_a_blink_from = 50
+              75, // dual_mage.tier,_second_jump_and_slow_fall_from = 75
+              95, // dual_mage.tier,_wings_from_(both_bars) = 95
+           52428, // dual_mage.second_jump,_as_a_share_of_the_first_(x) = 0.8
+           39321, // dual_mage.slow_fall,_fall_cap_(x) = 0.6
+              40, // dual_mage.ascension,_health_back_per_hit_landed = 40
+              10, // dual_mage.ascension,_stun_on_the_way_out,_at_least = 10
 ];
 
 #[rustfmt::skip]

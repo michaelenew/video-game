@@ -1,370 +1,334 @@
 ---
-status: mostly decided; ascension is an open proposal
+status: built through the wings, 2026-09-23 — unverified in play; the single bar it replaced is recorded at the end
 decided: 2026-09-10
-revised: 2026-09-16
+revised: 2026-09-23
 formerly: Statera
-supersedes: docs/archive/combat-design/statera-skills.md (resource system), docs/archive/combat-design/class-builds.md (Statera section)
+supersedes: docs/archive/combat-design/statera-skills.md (resource system), docs/archive/combat-design/class-builds.md (Statera section); dual-mage-v2.md is folded in
 ---
 
 # Dual mage
 
-> ⚠️ **A v2 is proposed, 2026-09-23.** [dual-mage-v2.md](dual-mage-v2.md) replaces the single
-> signed bar below with **two bars**, Dark and Light, and a runaway between them: inside a band
-> nothing moves, outside it the higher bar rises, the lower falls and she burns. The lower bar
-> gates a blink, a second jump and, when both are full, wings. Nothing of it is built. This
-> document is still what is in the game, and most of its reasoning survives into v2.
-
 Formerly **Statera**. Renamed to pair with the Blood mage — two casters named for what they
 run on — and because "statera" (scales, balance) described the meter rather than the person.
 
-## Fantasy
+**Identity.** Two beings that would each kill her alone, and she is what keeps them apart.
+Feed one and it grows and the other starves; the further apart they get the faster they pull
+and the more of her they burn through. Feed *both* — goad them into a frenzy together while
+holding them level — and she gets what neither could give her alone: wings.
 
-The Dual mage contains **two immense forces**, each of which would individually kill the
-human trying to hold it. They sit in the balanced tension between them. Lose control and
-you lose your life.
+The verb is **goad**. This is a containment story, not a channelling story: the human is not a
+conduit, they are a vessel under load, and the load is two things that want to be apart.
 
-The play fantasy is to be **just on the line** — to wield as much power as you can by
-executing right at the edge of where you can still barely pull yourself back.
+> **Built 2026-09-23**, all of it below through the wings, in one thread against
+> [plans/dual-mage-v2.md](plans/dual-mage-v2.md). Every number is a first value chosen against
+> `cargo run -p sim --bin goad`, and **none of it has been played**. The feel log for that date
+> carries the play scripts. The single signed bar it replaced is under "Was" at the end, and the
+> proposal it was built from is [dual-mage-v2.md](dual-mage-v2.md).
 
-This is a containment story, not a channelling story. The human is not a conduit; they are
-a vessel under load.
+## The mechanic
 
-## The meter
+### Two bars
 
-A single bar with a centre and two ends.
+**Dark** and **Light**, each from empty to full (`tuning::meter_max`, 100), side by side.
+Nothing is signed; there is no centre.
 
-```
-  Dark  <——————————————[ centre ]——————————————>  Light
-   (extreme)                                        (extreme)
-```
+- **Goading.** The dark auto raises Dark by a little; the light auto raises Light by a little.
+  A cast raises the bar of the force she is *carrying* by more, and the finisher by a lot.
+  Which force she carries is still the arm she last punched with — the whole of the
+  carried-force rule below survives, and so does the two-form Lance.
+- **The struggle.** Every frame the two bars are compared. Inside a **band** around equal,
+  nothing moves on its own. Outside it, **the higher bar rises and the lower falls**, at a
+  rate that grows with how far outside the band they are, up to a cap. That is the hill: a
+  small lead is stable, a large one runs away. The higher bar gains exactly what the lower
+  loses, so the drift moves what she has from one being to the other and never makes more of
+  it — with no input the two together can only fall.
+- **The burn.** Health drains at a rate that grows with the same excess, capped, and never
+  past one health. There is no burn inside the band, however high both bars are.
+- **Calm.** Both bars fall slowly on their own, always. A mage who stops goading settles
+  toward empty. This is what makes a tier something she *holds* by fighting rather than a
+  level she reached.
 
-- **Power scales continuously with distance from centre**, symmetrically. Centre is the
-  weakest place to stand. The ends are the strongest and the most lethal.
-- There are no discrete zones and no threshold effects. It is a gradient, which is what
-  removes the dead-zone problem in the old three-state design.
+| Input | Which bar | How far |
+| --- | --- | --- |
+| Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 8 |
+| Light auto (`R`) | Light, and she is now light | 8 |
+| The finisher (`Q`) | Whichever force she is carrying | `tuning::meter_finisher_push` — 38 |
+| Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 18 |
 
-**Built 2026-09-16, and it is one function.** `state::depth` is a straight line from
-`tuning::depth_floor` at the centre to `tuning::depth_ceiling` at either end, and everything
-she throws is multiplied by a point on it — damage, knockback and pull, launch, leech, what a
-field drains and how long it lasts, and how big what arrives is.
+All of it **on the press**, whether or not it connects — see "Autos are the steering wheel"
+below. The three pushes were 5, 12 and 26 on the single bar and grew together, because the
+band is measured against them and the climb is measured against the calm; the ratios are what
+the old design chose and they are unchanged.
+
+| The hill | Knob | First value | Chosen against |
+| --- | --- | --- | --- |
+| Band | `meter_band` | 30 | One cast from level stays inside, two leave, the finisher always leaves, and the alternating rhythm — auto and cast on one side, then the other — never leaves. So at least an auto plus a cast and less than two casts: 26 to 36 |
+| Drift | `drift_gain` / `drift_cap` | 2 per second per unit outside the band, at most 10 per second | The cap is set so the far-side **cast** wins the race back and far-side **autos** only hold it: an auto every thirty frames puts sixteen a second on the low bar, and the cap plus the calm takes sixteen off |
+| Burn | `burn_gain` / `burn_cap` | 1.5 health per second per unit, at most 15 per second | A bar left fully one-sided for a whole sixty-second round must not by itself be a health bar |
+| Calm | `meter_calm` | 6 per second | See "Calm against the climb" under open questions — it is the knob pulled two ways |
+
+Three quantities fall out, and each is read by something different:
+
+| Quantity | What reads it |
+| --- | --- |
+| **The carried bar** | How hard a cast hits and how big it arrives — `state::depth`, pointed at the bar of the force the move is made of: an auto reads its own, everything else the carried one |
+| **The lower bar** — *frenzy* | The tiers below: what her body can do |
+| **The gap** | The drift and the burn: how fast she is losing it |
+
+So she can be **powerful and stable** — both high, held inside the band, which is hard — or
+**powerful and unstable** — one bar high, easy to reach, and burning while the other collapses.
+A deep Judgement still nearly throws her over an edge. It throws her *sideways* now, and what
+she loses when the low bar collapses is the wings.
+
+**What the instrument says.** `cargo run -p sim --bin goad` runs the scripts the plan asked
+for. With the first values: alternating hands climbs to the blink in 8 seconds, the second jump
+in 12 and the wings in 15, never leaving the band; one dark auto and then dark casts only
+leaves the band inside 70 frames with the light bar already empty, and burns about 430 health
+over the following half minute; a Judgement thrown from the band's edge empties the lower bar
+in 188 frames and takes 209 health before the calm brings her back inside; both bars left at
+three quarters with no input fall below the blink in 251 frames, two and a quarter exchanges.
+
+### The depth curve
+
+**Power scales continuously with the bar, and it is one function.** `state::depth` is a
+straight line from `tuning::depth_floor` at empty to `tuning::depth_ceiling` at full — half to
+double — and everything she throws is multiplied by a point on it: damage, knockback and pull,
+launch, leech, what a field drains and how long it lasts, and how big what arrives is.
 
 **Two things it deliberately never touches: how far a move is thrown, and how fast it comes
 out.** Spacing and frame data are what two players read each other with, and a class whose
 range or startup changed continuously with a bar only one of them can see would be unlearnable
-from either side. So the bar changes how much it hurts and how big the thing that arrives is;
-where you can put it and how long it takes are fixed at every point on the bar. A deep
-Judgement is a far bigger Judgement thrown exactly as far as a feeble one.
+from either side. That rule is *stronger* here than it was on one bar, because the thing that
+does scale with the bars is drawn on her back.
 
 **A cast is worth where you were standing when you pressed the button.** Throwing anything
-moves the bar on the press, and the finisher moves it a long way — so a cast whose power were
-read after its own push would be worth more than the bar said, and the one move that is
-supposed to be embarrassing at the centre would be the least embarrassing thing there.
+moves a bar on the press, and the finisher moves it a long way — so a cast whose power were
+read after its own push would be worth more than the bar said.
 
-The original design put human, balanced, and divine on a single axis of *how much damage
-and CDR you get*, which made the middle a strictly worse version of the ends. That could
-not be fixed by tuning, because all three states were the same quantity.
+**The two autos are exempt from the size half of it**, and only that half. Their reach is
+pinned to the punch that throws them — see [kits/dual-mage.md](kits/dual-mage.md).
+
+### The tiers — what frenzy does to her body
+
+The lower bar gates them, so both beings have to be fed. Each is movement, which is the leg
+this class never had, and each falls out of the mechanic rather than from a new button. A tier
+is held while the lower bar is at or above its threshold and lost the frame it drops below —
+including mid-air.
+
+| Lower bar at | She gains | Knobs |
+| --- | --- | --- |
+| **half** (`tier_blink`, 50) | **The dodge is a blink.** Shift plus a direction puts her where the dodge would have ended, on its first frame, and she is invulnerable for the dodge's own window and then stands through its tail. In the air it is the airdodge, and it is spent the same way. A blink stops against the first terrain or stone in its way — `aim::blink_to` decides, and it is stricter than the Reaver's dash: a low platform her head would clear is still a wall to her feet | — |
+| **three quarters** (`tier_jump`, 75) | **A second jump**, once per airtime, and a **slower fall**. The first class to answer the README's open double-jump row. Space in the air has one other exception, the Champion's uppercut; this is the second, and it is per class | `second_jump` 0.8 of the first · `slow_fall` 0.6 of the fall cap |
+| **both full** (`tier_wings`, 95) | **Ascension.** Wings erupt, and she may jump as often as she likes | below |
+
+The tiers are on the *lower* bar and not on the sum for one reason: a sum can be reached
+one-sided. Requiring both to be high is what makes the climb a rhythm of alternating hands —
+dark hand, dark Lance, light hand, light Sweep — and that rhythm uses the two-form kit in both
+forms, which nothing in the old design ever forced.
+
+**Why "full" is 95 and not 100.** The calm runs every frame and the two bars are pushed by two
+different presses, so the moment one is topped up the other has already lost a little; both can
+never be at exactly the top on the same frame. The third tier is the lower bar at 95, which is
+what the other bar keeps through one move's worth of calm with room to spare. It is a threshold
+on the lower bar like the other two, which is also why it is written beside them.
+
+### Ascension
+
+Both bars full. Nothing else triggers it, and the drift never delivers it — the drift pulls
+the bars apart, so the only way to the top is to goad both while holding them level, which is
+the hardest thing the class can do and is meant to be.
+
+- **Wings erupt** and she may jump without limit: every press of space in the air is a wing
+  beat.
+- **No dodge.** She flies instead. Loss of control is loss of the option to decline.
+- **Casts fire at the top of the power curve**, because both bars are at the top.
+- **Health is the clock** — `ascension_frames` (180) of `ascension_drain` (4) a frame, about
+  seventy per cent of a health bar, inside the "half to all of it" the original design asked
+  for — and **landing hits pulls some back**: `ascension_refund` (40) per hit, the refund the
+  old design wrote and never built.
+- **It ends with both bars empty** and a stagger graduated by how much she landed: the share of
+  the drain her hits refunded, read against a ceiling (`ascension_stun`, 40 frames, for landing
+  nothing) and a floor (`ascension_stun_floor`, 10, for paying it all back). The vent. Then she
+  climbs again.
+
+So a match has a shape: climb, hold a tier, ride it, ascend, vent, climb. In versus at sixty
+seconds fifteen seconds of clean alternating reaches the wings, which against a person is
+roughly once per match if she is good, which is what a nova should be.
+
+**Loss of control does not mean loss of input. It means losing the ability to decline.** In a
+fighting game, control *is* the option to not commit — to wait, block, dodge, reposition, do
+nothing. Remove that, and you have genuine loss of control with every input still mattering
+completely. The analogy is a car with the accelerator stuck: you still steer, you cannot stop.
+
+**Counterplay** is what keeps it from degenerating into a race to nova every match. Opponents
+beat it by playing evasively — deny the hits and the refund never comes — by CC, because she
+cannot dodge out, and by blocking, which eats the damage and denies the refund. The Bulwark is
+ascension's hard counter. You win with it by timing it for when your opponent is already
+vulnerable, not by reaching it as fast as possible.
+
+### On her back
+
+**The two bars are two wings**, dark on the left and light on the right — the same sides as
+the arms that goad them — each as long as its bar. Lopsided wings are the gap, readable across
+the arena by both players; full span is ascension. The HUD carries the two bars too, growing
+away from each other from a shared middle, but the wings are the display, and the thing the
+tiers unlock is the thing everyone is already looking at. That answers the old open question
+about colour on the body by making the body the meter.
+
+`view::wings` decides the root, the tip and the span, and `view/tests/wings.rs` holds the drawn
+span to the bar the way `kinematics.rs` holds the blade to the fist. The wings are drawn and
+not tested against.
 
 ## The last auto is the force you are carrying — revised 2026-09-13
 
 **The autos have sides. Nothing else does.** Left click is dark and right click is light,
-and landing one sets which of the two forces the mage is *carrying*. Every other input —
-the committed cast, the key abilities — is made of that force and pushes the bar that way.
+and throwing one sets which of the two forces the mage is *carrying*. Every other input —
+the committed cast, the key abilities — is made of that force and goads that bar.
 
-This replaces "every input picks a side by which button threw it", which could not survive
-the kit growing keys: `Q` and `E` have no side, and a rule that says "left click is dark"
-has nothing to say about a key. The revision is smaller than it looks, because the thing it
-protects is the same: **you cannot cast without moving the bar, and you cannot move the bar
-without committing to a side.** What changed is that the commitment is made with the button
-you press constantly rather than restated by every other button.
-
-It also gives the colour something to *be*. Which force she is carrying is what decides which
+It gives the colour something to *be*. Which force she is carrying is what decides which
 form her abilities take — the light/dark split every ability is written with — so it has to be
 a thing the player sets deliberately and can read off her own animation.
 
-| Input | Which way it pushes | How far |
-| --- | --- | --- |
-| Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
-| Light auto (`R`) | Light, and she is now light | 5 |
-| The finisher (`Q`) | Whichever force she is carrying | `tuning::meter_finisher_push` — 26 |
-| Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 12 |
+She is **always carrying one of the two**, dark to begin with: a vessel holding two forces is
+holding one of them at any moment, and the version where she carried neither until her first
+auto landed meant the first key pressed in a match did nothing. So a cast thrown before any
+auto is a *dark* cast, and it moves a bar; there is no neutral start to be stuck at.
 
-All of it **on the press**, whether or not it connects — see the note under "Autos are the
-steering wheel". And she is **always carrying one of the two**, dark to begin with: a vessel
-holding two forces is holding one of them at any moment, and the version where she carried
-neither until her first auto landed meant the first key pressed in a match did nothing. So a
-cast thrown before any auto is a *dark* cast, and it moves the bar; there is no neutral start
-to be stuck at.
-
-Three tiers rather than a number per ability. "Stronger abilities push harder" was a formula
-over damage, which meant a knob nobody could find and a finisher that pushed about as hard as
-a poke; three numbers, all in the Oven, are legible and are what a tuning pass can actually
-move.
-
-**The finisher's own tier was built 2026-09-16.** At 26 against a bar of 100, a Judgement
-thrown from the deep threshold lands her well past it and one more cast from the edge, which
-is "a deep finisher nearly throws you over the edge" made literal. It is also what replaces the
-depth gate the finisher used to have: its status is power and price now, rather than
-availability.
+Three tiers of push rather than a number per ability. "Stronger abilities push harder" was a
+formula over damage, which meant a knob nobody could find and a finisher that pushed about as
+hard as a poke; three numbers, all in the Oven, are legible and are what a tuning pass can
+actually move.
 
 ## Every ability has two forms, and the force she carries picks
 
-## Every ability has two forms, and the force she is carrying picks
-
 **Which form an ability takes is the force she is carrying**, which is set by the last auto
-she threw — see the section above. It is *not* which button threw it: a cast on a sided button
-would not be a dark cast for being on the left button, it would be a cast of whatever she is
-holding. Only the two autos have a side at all.
-
-> ⚠️ This section used to read *"left click always moves you darker, right click always moves
-> you lighter — every input, not just some of them"*, which is the rule the revision above
-> replaced and could not survive the kit growing keys. Kept as a heading correction rather
-> than a silent edit because the old sentence is quoted elsewhere.
+she threw. It is *not* which button threw it. Only the two autos have a side at all.
 
 **Built for the first time on 2026-09-16, on Lance.** Middle click throws one of two moves and
 the arm she last punched with decides which: light bursts at the far end of the line, dark
 tethers what it hits. They are two entries in the move table rather than one with a flag,
-because the thing that has to differ is the **wind-up** — a person standing opposite gets that
-and nothing else to choose between getting out from under a burst and closing to break a
-tether. Sweep has a form split too and did not need a second animation, because its shape is the
-same either way and only what happens to whoever it caught changes.
-
-Power scales with meter depth rather than snapping between states:
-
-| | At centre | Deep on that side |
-| --- | --- | --- |
-| Step (Light) | Short blink, minor damage | Long blink, damage and blind |
-| Step (Dark) | Short dash, minor drain | Long drain-dash, large steal |
-
-**Centre is not a third form.** It is the position where both forms are available and both
-are weak — most options, least power. That property falls out of the mechanic instead of
-being asserted.
+because the thing that has to differ is the **wind-up**. Sweep has a form split too and did not
+need a second animation, because its shape is the same either way and only what happens to
+whoever it caught changes. The kit is in [kits/dual-mage.md](kits/dual-mage.md).
 
 ### One pulls and one pushes — 2026-09-16
-
-The autos got a second job, and it is the same job the mechanic already had, said in space
-instead of on a bar.
 
 **The dark auto drags whoever it catches a short way toward her and returns a trickle of
 health. The light auto shoves, and the real shove is out at the tip of the wing.** Same frames,
 same shape, mirrored arms, opposite answers to the question of where the two of you end up
-standing.
-
-That is what makes which arm she punches with a **spacing decision as well as a meter
-decision** — which is the whole argument for putting the mechanic on the buttons a player
-presses constantly. A fragile melee mage stays attached to somebody with the dark hand and buys
-herself room with the light one, and she cannot ask for either without also committing to a
-side of the bar. Before this, "left or right" was a question about a number going up; now it is
-a question about the fight.
+standing. That is what makes which arm she punches with a **spacing decision as well as a
+bar decision** — a fragile melee mage stays attached to somebody with the dark hand and buys
+herself room with the light one, and she cannot ask for either without also feeding a being.
 
 ### Autos are the steering wheel
 
-The autos are dark (left) and light (right), and they are the *only* thing that picks a side
-at all — see the section above.
-
 > **"A whiff steers nothing" is suspended, 2026-09-13.** It read well and it was unplayable.
-> With the autos steering only on contact and every cast taking its direction from the last
-> auto that *landed*, a mage with nothing in reach could press every button on the class and
-> watch the bar sit at zero — no target, no mechanic. Steering happens on the **press** now.
->
-> **And it stays suspended — decided from play, 2026-09-13.** The obvious way to get the idea
-> back was a bonus for landing: the press moves you, connecting moves you again. Played
-> against, it turned out not to be needed. **Managing a frail character at short-to-mid range
-> while balancing the bar is already the challenge** — the pull toward melee comes from her
-> reach and her health, not from a second rule about where the resource moves. Steering is one
-> rule: throw something, the bar moves.
+> With the autos steering only on contact, a mage with nothing in reach could press every
+> button on the class and watch the bar sit at zero. Steering happens on the **press** now,
+> and it stayed that way after play: managing a frail character at short-to-mid range while
+> holding the bars is already the challenge.
 
-**Autos have a slight range boost**, powered by the beings inside. That is mechanical rather
-than decorative in a different way now that steering no longer depends on connecting: the
-reach is what lets a fragile body trade at all.
+Scroll click and the keys are neither left nor right, so they cannot pick a being — they feed
+whichever one she is already carrying. **That is what makes middle click the right home for a
+two-form cast**: on a button with no side the push is settled by the force she carries, and the
+*form* comes from the same place.
 
-**Steering is not optional.** You cannot cast without moving the bar, and you cannot move the
-bar without committing to a side. An earlier draft put the direction choice on a tap-versus-
-hold modifier, which made it something the player could ignore; direction belongs in the
-input the player uses constantly.
+### Why not a neutral form
 
-Scroll click and both-click are neither left nor right, so they cannot pick a direction —
-they push you **further along whichever path you are already on**. Direction comes from
-side-ness, and only left and right have it.
-
-**That is what makes middle click the right home for a two-form cast**, and it is why Lance
-moved there on 2026-09-16 when shift stopped being an attack modifier. On shift plus left click
-the two rules were fighting: the input had a side, so the committed cast pushed her dark
-whatever she was holding, and the light form of it had nowhere to live at all. On a button with
-no side the push is settled by the path she is on and the *form* is free to come from the force
-in her arms, which is the thing the two autos exist to set.
-
-### Why not a neutral form at centre
-
-An earlier draft gave each ability three states — a neutral behaviour at centre, plus Light
-and Dark at depth. That breaks at zero: a neutral form has no side, so at centre nothing
-votes and the meter cannot leave the middle. Two incompatible ideas had been merged —
-*abilities have sides* and *abilities transform with position*. They work at depth and fail
-at the origin.
-
-### Oscillating is possible, and correctly weak
-
-Alternate left and right autos and sit at centre indefinitely — and never threaten anything.
-Power requires repeated commitment to one side.
-
-See [controls.md](controls.md) for the full input map.
+An earlier draft gave each ability three states — a neutral behaviour at the old centre, plus
+Light and Dark at depth. It broke at zero: a neutral form has no side, so nothing voted and the
+meter could not leave the middle. There is no centre now, but the argument still holds for the
+start of a match: she is dark until she throws a light auto.
 
 ## Coming back
 
-One return path, where there used to be two:
+The far-side auto is still the way back, and it is **urgent** now rather than optional,
+because the low bar is falling while she waits. An auto alone only holds a runaway at the cap;
+a far-side **cast** wins it — one Sweep from the light hand pulls a two-cast excursion back
+inside the band — so the way back is a commitment, and the auto buys the time to make it.
+Turning round *requires* getting into auto range, which forces the class into melee exactly
+when it is most powerful and most fragile.
 
-| Path | Cost | Speed |
-| --- | --- | --- |
-| **Auto attack the far side** | It is the only way — an auto is the one input that changes which force she carries | The bar moves 5 a throw |
-| ~~Cast toward the far side~~ | **Not an input any more.** A cast follows the force she is carrying, so there is no casting against the grain | — |
+## What goes, and what stays
 
-Only one path survives, and that is the 2026-09-13 revision rather than an omission: casting
-against the grain stopped being expressible when casts lost their sides. It preserves the
-melee-mage identity harder than two paths did — turning round *requires* getting into auto
-range, which forces the class into melee exactly when it is most powerful and most fragile.
-**Whether that leaves her too easily pinned at depth is open**, and it is the one thing the
-old slow path was protecting against.
+Gone: the single signed bar, its centre, and the deep threshold on one side. The one-sided
+burn — burn is a function of the gap now, and only the gap. "Oscillating at centre is correctly
+weak" — alternating is how she climbs; what is weak is not goading at all.
 
-## The burn
+Kept: the carried force, the three tiers of push, the depth curve's shape, the exemption of the
+autos' size from scaling, the rule that range and frame data never scale with a bar, the moves.
 
-Past a depth threshold on either side, the Dual mage **takes damage over time**, scaling
-with distance from centre. This is the force burning them from the inside.
+## Why this shape
 
-Deliberately **not** a heal-on-exit. Relief comes from *stopping*, not from a reward — get
-back inside the line and the burn ends. Same mechanical function as a heal (it bounds how
-long the edge can be ridden) with the correct emotional beat for a containment story, and
-it puts a real-time clock on the edge.
+**It gives the mechanic something to contain.** A single bar sat still. Two bars with a
+runaway between them are a hill she is standing on top of, and the constant small correction
+— punch with the weaker hand — is the fantasy in the fingers.
 
-## The execution test — vote weight scales with power
+**Both edges have a reason.** One-sided is burst and danger. Both-sided is mobility and
+difficulty. The old design had one edge and a dead middle.
 
-**Stronger abilities push the meter harder.** Neutral pokes barely move it. A deep finisher
-nearly throws you over the edge.
-
-This is what turns the fantasy into a skill. There is a precise meter position from which
-each finisher can be cast survivably, and it differs per ability. Knowing where that line
-sits, under pressure, while also managing physical position, is the mastery curve.
-
-The player is solving a two-dimensional positioning problem: where they stand, and where
-they sit on the meter.
-
-## Ascension
-
-**Accepted in shape.** A timed nova: fast, short, the ride is the reward, and you fall off a
-cliff if you do not execute. Numbers below need the prototype.
-
-### Entry — there is no ascend button
-
-Ascension happens **when you max the bar by casting**. It is not a separate input, and it is
-not free. You drove there, one cast at a time, which is what keeps it a decision without
-making it a button you mash on cooldown.
-
-**Built 2026-09-13, as a clock and nothing else.** Reaching either end starts
-`tuning::ascension_frames` — three seconds — during which `tuning::ascension_drain` a frame
-comes off her health, nothing steers the bar, and when it runs out she is put back at the
-centre and staggered for `tuning::ascension_stun`. The drain over the whole window is about
-seventy per cent of a health bar, which is inside the "half to all of it" this document asks
-for below.
-
-Everything else here is still unbuilt: no refund on casting or hitting, no larger form of each
-ability, no graduated stun. What was wrong before it was built is worth writing down, because
-it is the failure mode any resource with an edge has: **there was no exit.** Riding to the end
-of the bar burned her down to one health and then went on burning, with no clock, no stun, no
-reset, and no signal that anything had happened. A cost with no end is not a cost, it is a
-broken state you play around.
-
-### While ascended — roughly three seconds
-
-- **Your health drains rapidly.** Somewhere between half and all of your bar over the
-  duration, depending on how it feels. **This drain is the clock** — no separate timer.
-- **Casting pulls some health back. Landing a hit pulls back more.**
-- **No dodge, no block, no cancel.** Every defensive option is gone.
-- **Movement is ability-driven only.** You move by casting, using the dashes and blinks in the
-  kit. Offence and mobility become the same resource.
-- **Abilities fire in their largest form.** You do not choose power level.
-
-Tying the refund to casting *and especially to hitting* is what makes this work moment to
-moment. You are not filling a quota to be checked at the end — you are staying alive one
-connection at a time, and every whiff is felt immediately.
-
-### Loss of control, without loss of input
-
-**Loss of control does not mean loss of input. It means losing the ability to decline.**
-
-In a fighting game, control *is* the option to not commit — to wait, block, dodge, reposition,
-do nothing. Remove that, and you have genuine loss of control with every input still
-mattering completely. The analogy is a car with the accelerator stuck: you still steer, you
-cannot stop.
-
-### Exit — graduated, not binary
-
-At the end, **you are stunned if you did not reach the damage threshold, and the closer you
-got, the shorter the stun.**
-
-A continuous landing is much better than a pass/fail one. A near-miss reads as a near-miss
-rather than a disaster, which is what lets players learn the timing instead of fearing it. It
-also softens the mode-scaling problem — the difference between a coop boss and a mobile duel
-opponent becomes a matter of degree rather than success versus catastrophe.
-
-### Counterplay
-
-This is what keeps it from degenerating into a race to nova every match. Opponents beat it by:
-
-- **Playing defensively and evasively** — deny the hits, and the health refund never comes.
-- **CC** — a stagger or root during the window is devastating, because you cannot dodge out.
-- **Strategic blocking** — eat the damage on a shield to deny the threshold.
-
-Every class and every monster has at least one of these, so it is always answerable. Note the
-class-level consequence: **the Bulwark is ascension's hard counter**, since blocking is
-exactly the tool that denies the threshold.
-
-You win with it by **timing it for when your opponent is already vulnerable** and comboing
-them into oblivion — not by reaching it as fast as possible.
-
-### Why this does not require doing more of what caused it
-
-Normal deep play **accumulates** — you are gathering power. Ascension **vents** — you are
-getting it out of you, and the refund on hit is that expulsion paying you back. Different
-verbs, so casting your way out is coherent rather than circular.
-
-### Separation from the normal loop
-
-| | Push out | Come back |
-| --- | --- | --- |
-| **Normal play** | Cast toward a side | Far-side casts (slow), far-side autos (fast) |
-| **Ascension** | (n/a — no meter) | Survive the drain; graduated stun on exit |
-
-You never auto your way down from ascension — that is the anticlimax, and it is structurally
-excluded, since during ascension the meter is not the operative resource.
-
-### Asymmetry between the sides
-
-- **Light ascension** — burst and zone flavour. Refunds come from large clean hits. A gamble
-  on landing reads.
-- **Dark ascension** — drain and lifesteal flavour. Refunds come from sustained contact. A
-  gamble on staying attached.
-
-Different failure modes, same shape, which makes which edge you ride strategic rather than
-cosmetic.
-
-### Open on ascension
-
-- The drain percentage, the refund rates, the threshold, and the stun curve. All prototype
-  questions.
-- Whether the threshold should scale with target count, so coop and versus feel comparable.
+**The third leg comes from the object.** Blink, double jump and wings are what frenzy does to
+her body. The Champion vaults on the spear, the Elementalist rides the stone, the Reaver
+crosses to the shadow, and now the Dual mage flies on what she has goaded. No new button, no
+new move, and the two-form kit gets used in both forms because the tiers demand it.
 
 ## Open questions
 
-- **Does the colour want to be visible on the character rather than only in the bar?** It
-  decides what her abilities are made of, and it is currently readable from the HUD, from which
-  arm she last punched with, and — since 2026-09-16 — from the colour of everything she leaves
-  in the world: a light burst is white, a tether is violet. A caster whose *hands* said it
-  would not need any of them.
-- **Does the spread between the two ends of the depth curve feel right?** Half at the centre
-  and double at the edge is a four-to-one range, chosen so the difference is unmistakable
-  rather than because anything says it should be four. Too wide and the middle of the bar reads
-  as broken rather than weak; too narrow and there is no reason to leave it.
-- Naming for the two forces. The existing skill lists carry a light/judgement vocabulary
-  (Judgement, Eclipse, Dark pulse, Culling, Mark of the Merciful) worth mining.
-- Whether low-tier abilities need a spam check beyond frame data, given they barely move the
-  meter.
-- Whether the far-side cast at depth should be merely weak, or gated entirely past some
-  distance. Weak is friendlier and keeps the escape hatch always open.
+- **Calm against the climb.** The plan asked for two things of the calm that one number cannot
+  give: that stopping at three quarters loses the blink inside one exchange (which wants the
+  calm above 13 a second), and that alternating hands reaches the blink inside one exchange
+  (which wants it under 4). At 6 the climb to the wings takes a quarter of a round of clean
+  alternating — the design's own "roughly once per match" — and the idle fall takes two and a
+  quarter exchanges. It is the first knob to move after somebody has played it, and if the
+  climb wants to be fast *and* the plateau fragile, the answer is a calm that scales with the
+  bar rather than a flat one, which is a shape change and not a number.
+- **The band's width against a cast's push.** One cast from level stays inside, two do not, a
+  finisher never does. Whether that cadence is right is the first thing to play.
+- **Is the burn a consequence or a footnote?** Fifteen a second at the cap is a tenth of what
+  the one-sided burn used to be at full depth, chosen so a whole round one-sided is not a
+  health bar. The low bar collapsing is meant to be the real cost now. Play decides.
+- **Goading on a whiff.** Autos steer on the press, so a mage can climb to the blink in an
+  empty arena — eight seconds of it, the instrument says. Calm may be enough to make that slow
+  and fragile; if not, the knob is how much of the goad a whiff pays.
+- **The refund counts every connection**, including a tether's ticks and a field's. That is
+  the "sustained contact" flavour the old design wanted for the dark side, and it may pay the
+  dark form back too well. Whether the refund should count hits or damage is a play question.
+- **Should the two hands have two rhythms?** Dark slow and heavy, light fast and sharp, so
+  which arm she is carrying is felt in the tempo rather than read off a wing. Frames differ by
+  form and never by bar, so the readability rule holds. Recorded as the first thing to try
+  after this.
+- **Both forms at once during ascension.** A Lance that bursts *and* tethers. Second pass.
+- **What the wings do to her hurtbox and her silhouette.** They are drawn, not tested against;
+  the question is whether a wingspan reads as a bigger target and lies.
+- **The names of the two beings.** "Goad" is the verb this thread produced and the autos may
+  simply be the goads.
+
+## Was — the single signed bar, 2026-09-10 to 2026-09-23
+
+Recorded because most of its reasoning survives into the two bars, and because the argument
+for replacing it is only legible against it.
+
+**One bar with a centre and two ends**, Dark at one and Light at the other. Power scaled
+continuously and symmetrically with distance from the centre — `state::depth` was a line from
+the floor at zero to the ceiling at either end — so the centre was the weakest place to stand
+and the ends the strongest and most lethal. There were no zones and no thresholds, which was
+what removed the dead-zone problem of the three-state design before it. Past a **deep
+threshold** on either side (65 of 100) she took a burn that grew with distance from centre and
+stopped the moment she came back inside: relief from stopping rather than from a reward, which
+was the containment beat. Driven all the way to an end the bar started **ascension** as a
+clock and nothing else — three seconds of drain, nothing steering, and a flat stagger on the
+way out at the centre.
+
+**What was wrong with it.** The single bar conflated two different things: *how powerful she
+is* and *how unstable she is*. Deep meant both. So the only way to be strong was to be
+one-sided, "riding the edge" was a position rather than an act, and a player who goaded both
+beings hard ended up at the centre, which the design called weak. Nothing moved on its own, so
+balance was free and the centre was only the weak spot; the fantasy paragraph said
+*containment* and the hands had nothing to contain. Two bars separate the two quantities, give
+the mechanic a runaway to hold, and give the class two edges to ride instead of one.
+
+**What it got exactly right**, and what the two bars keep: the carried force set by the last
+auto, the three tiers of push, steering on the press, a depth curve that scales force and size
+and never range or frame data, the autos' size exempt, and an ascension that is a clock with an
+exit — the version before that had no exit at all, and "a cost with no end is not a cost, it is
+a broken state you play around".
