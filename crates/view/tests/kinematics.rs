@@ -897,23 +897,37 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
     for grey in [0, 300, 600] {
         let mut p = mage_with_grey(grey);
         let resting = view::scythe::scythe(&p, left, right).expect("she carries a scythe");
-        // Carried low, and out of the crosshair: the tip below the hand and
-        // above the floor, and well off the line she is facing along.
+        // Standing: the butt on the floor, the haft upright, and the blade's
+        // tip a little over her head.
+        let height = sim::tuning::body_height().to_f32_for_render();
         assert!(
-            resting.tip[1] < resting.grip[1] && resting.tip[1] > 0.1,
-            "at rest the blade is carried at {:.2} m, not low",
+            resting.butt[1].abs() < 0.001,
+            "at rest the butt is {:.2} m off the floor",
+            resting.butt[1]
+        );
+        let lean = math::length([
+            resting.neck[0] - resting.butt[0],
+            0.0,
+            resting.neck[2] - resting.butt[2],
+        ]);
+        assert!(
+            lean < 0.001,
+            "at rest the haft leans {lean:.2} m off upright"
+        );
+        assert!(
+            resting.tip[1] > height && resting.tip[1] < height * 1.6,
+            "at rest the blade's tip is at {:.2} m against a {height:.2} m body",
             resting.tip[1]
         );
-        let ahead = math::sub(resting.tip, resting.grip);
+        let ahead = math::sub(resting.tip, resting.neck);
         let facing = [
             p.facing.x.to_f32_for_render(),
             0.0,
             p.facing.z.to_f32_for_render(),
         ];
-        let off = math::length(math::cross(facing, [ahead[0], 0.0, ahead[2]]));
         assert!(
-            off > 0.8,
-            "at rest the blade points only {off:.2} m off her line of sight"
+            math::dot(ahead, facing) > 0.1,
+            "at rest the blade does not curve forward off the head of the haft"
         );
 
         // The volume, on the first active frame of each of the two swings.
@@ -961,25 +975,17 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
                 wound.reach(),
                 hits
             );
-            assert!(
-                (resting.reach() - hits).abs() < 0.001,
-                "{} at {grey} grey: the scythe she carries is {:.2} m and the one she \
-                 swings is {:.2} m",
-                m.name,
-                resting.reach(),
-                hits
-            );
         }
-        reaches.push(resting.reach());
+        reaches.push(resting.tip[1] - resting.butt[1]);
         breadths.push(resting.breadth);
     }
     assert!(
         breadths[1] > breadths[0] && breadths[2] > breadths[1],
         "the blade does not broaden with grey"
     );
-    // And it visibly grows: half again as long at full grey is the design's
-    // first number, so six hundred of a thousand-point bar is well over a
-    // quarter longer.
+    // And the standing weapon visibly grows with grey, by the same factor as
+    // the reach: half again at full grey is the design's first number, so six
+    // hundred of a thousand-point bar is well over a quarter taller.
     assert!(reaches[1] > reaches[0] && reaches[2] > reaches[1]);
     assert!(
         reaches[2] > reaches[0] * 1.25,

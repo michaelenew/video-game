@@ -75,15 +75,18 @@ way the clips grip it — and the pole runs from behind the trailing hand throug
 one to the tip; while the hit volume is out the tip sits exactly at the volume's far end, and
 through the wind-up and the recovery it lies along the line of the two hands at the live
 reach. So the weapon moves with the arms rather than jumping to a line the arms are not on.
-At rest it is **carried low** in the left hand: the blade forward and to that side, dropped
-to knee height, out of the crosshair so it never sits over what she is aiming at. The blade's
-breadth grows with grey. `view::scythe` is the geometry and `view/tests/kinematics.rs` checks
-the tip against the hit volume and the leading hand against the haft.
+At rest it **stands**: the haft upright with its butt on the floor under her left hand, its
+head level with hers, and the blade leaving the head curving forward so its tip ends a little
+over her head — the way a scythe is stood when it is not being swung. The standing weapon
+grows with grey by the same factor as the reach, and the blade's breadth grows with it.
+`view::scythe` is the geometry and `view/tests/kinematics.rs` checks the tip against the hit
+volume, the leading hand against the haft, and the standing pose's butt on the floor and tip
+over the head.
 
 > **Was**: one bar from the hand straight out along the facing at the full reach, which read
-> as a five-metre pole pointed at whoever she was looking at; then, for a day, a haft and
-> flat blade standing upright beside her with the blade over the crosshair, pinned to the
-> world's axes rather than to her, which read as a picket sign and got in the way of aiming.
+> as a five-metre pole pointed at whoever she was looking at; then a haft and flat blade
+> pinned to the world's axes, which read as a picket sign; then, for a day, carried low and
+> horizontal, out of the crosshair but no longer reading as a scythe at all.
 
 So grey is risk and power in one segment. A cast at full health opens a wound and lengthens
 the blade; being hit does the same; drinking gives the power back and shortens it. The edge

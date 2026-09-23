@@ -18,14 +18,13 @@
 //! and on past her trailing one, so the weapon rides the arms the clips put on
 //! it. Through the wind-up and the recovery, when nothing is out, the haft
 //! simply lies along the line of her two hands, the tip the live reach from
-//! the leading one. At rest the weapon is **carried low**: the blade held forward and out
-//! to the side of the hand that holds it, a knee's height off the floor, with
-//! the pole trailing up behind her shoulder -- the tip still the live reach
-//! from the grip, which is the same function the hit test lengthens the sweep
-//! with, so the weapon a player watches grow while she is standing still is
-//! exactly as long as the one that is about to be swung. Low and to the side
-//! because the crosshair is the whole of how she aims, and a blade carried at
-//! head height sat over it.
+//! the leading one. At rest the weapon **stands**: the haft upright with its
+//! butt on the floor under the hand that holds it, its head level with hers,
+//! and the blade leaving the head curving forward and a little over it -- the
+//! way a scythe is stood when it is not being swung. It grows with grey by the
+//! same factor the hit test lengthens the sweep with, so the weapon a player
+//! watches grow while she is standing still is the one that is about to be
+//! swung.
 //!
 //! The blade's *flat* lies in the plane that contains the haft and the bow --
 //! the plane of the cut while she swings, the plane of her facing at rest --
@@ -80,19 +79,23 @@ const BLADE: f32 = 0.34;
 /// what makes it a scythe rather than a spear.
 const SET: f32 = 0.10;
 /// How far the blade's middle bows past the straight line from neck to tip,
-/// as a share of the reach: the curve of the blade.
-const CURVE: f32 = 0.05;
+/// as a share of the blade: the curve of it.
+const CURVE: f32 = 0.15;
 /// How far the pole runs on behind the trailing hand while she swings it, and
 /// behind the grip while she carries it.
 const BUTT: f32 = 0.35;
 /// How broad the blade is across its flat with no grey open. Doubles at a full
 /// bar.
 const BREADTH: f32 = 0.14;
-/// How high off the floor the resting blade's tip is carried.
-const CARRIED: f32 = 0.3;
-/// How far round from her facing toward the holding hand's side the resting
-/// blade points, as the sine of the angle: about fifty degrees.
-const ASIDE: f32 = 0.77;
+/// How tall the standing haft is, as a share of her height: its head is level
+/// with hers, and the blade rises past it.
+const STANDS: f32 = 1.0;
+/// How long the standing blade is, as a share of the haft.
+const HEAD: f32 = 0.5;
+/// Which way the standing blade leaves the head of the haft, as forward, up
+/// and to her side: mostly forward, a little up, so its tip ends a little over
+/// her head.
+const LEANS: V3 = [0.94, 0.35, 0.0];
 
 /// Where the scythe is, if this fighter carries one.
 ///
@@ -133,37 +136,40 @@ pub fn scythe(p: &Player, left: V3, right: V3) -> Option<Scythe> {
         // forward where the cut is already vertical.
         let bow = square(axis, [0.0, 1.0, 0.0])
             .unwrap_or_else(|| square(axis, facing).unwrap_or([0.0, 1.0, 0.0]));
-        return Some(set(butt, right, tip, bow, width, breadth));
+        // The blade is set at an angle: the neck sits a little off the line
+        // and the tip is back on it, which is what makes it a scythe rather
+        // than a spear.
+        let length = math::length(math::sub(tip, right));
+        let neck = math::add(
+            math::sub(tip, math::scale(axis, length * BLADE)),
+            math::scale(bow, length * SET),
+        );
+        return Some(set(butt, right, neck, tip, bow, width, breadth));
     }
-    let grip = left;
-    // Carried low: the tip a knee's height off the floor, forward and out to
-    // the side the holding hand is on, the whole reach from the grip.
+    // Standing: the haft upright on the floor under the holding hand, and
+    // the blade off its head, forward and a little up. It grows with grey by
+    // the same factor as the reach.
+    let base = crate::fx(sim::moves::get(p.class, sim::moves::blood::SWEEP).reach);
+    let grows = if base > 0.0 { reach / base } else { 1.0 };
     let floor = crate::fx(p.pos.y);
-    let feet = [crate::fx(p.pos.x), floor, crate::fx(p.pos.z)];
-    // Which side of her the holding hand is on: the part of the hand's
-    // offset from her feet that is square to her facing.
-    let hand_side = [grip[0] - feet[0], 0.0, grip[2] - feet[2]];
-    let side = square(facing, hand_side).unwrap_or_else(|| math::cross([0.0, 1.0, 0.0], facing));
-    let out = math::normalize_or(
+    let haft = crate::fx(sim::tuning::body_height()) * STANDS * grows;
+    let butt = [left[0], floor, left[2]];
+    let neck = [left[0], floor + haft, left[2]];
+    let grip = [left[0], left[1].clamp(floor, floor + haft), left[2]];
+    let side = math::normalize_or(math::cross([0.0, 1.0, 0.0], facing), [0.0, 0.0, 1.0]);
+    let leans = math::normalize_or(
         math::add(
-            math::scale(facing, (1.0 - ASIDE * ASIDE).sqrt()),
-            math::scale(side, ASIDE),
+            math::add(
+                math::scale(facing, LEANS[0]),
+                math::scale([0.0, 1.0, 0.0], LEANS[1]),
+            ),
+            math::scale(side, LEANS[2]),
         ),
         facing,
     );
-    let drop = (grip[1] - (floor + CARRIED)).clamp(0.0, reach * 0.9);
-    let flat = (reach * reach - drop * drop).sqrt();
-    let tip = [
-        grip[0] + out[0] * flat,
-        grip[1] - drop,
-        grip[2] + out[2] * flat,
-    ];
-    let axis = math::normalize_or(math::sub(tip, grip), facing);
-    let butt = math::sub(grip, math::scale(axis, BUTT));
-    // The blade bows up out of the carry, the way a scythe's edge faces the
-    // ground it is about to be swung through.
-    let bow = square(axis, [0.0, 1.0, 0.0]).unwrap_or(facing);
-    Some(set(butt, grip, tip, bow, width, breadth))
+    let tip = math::add(neck, math::scale(leans, haft * HEAD));
+    // The blade's flat lies in the plane of her facing, bowing forward.
+    Some(set(butt, grip, neck, tip, facing, width, breadth))
 }
 
 /// The part of `v` square to `axis`, unit, or `None` if there is none.
@@ -172,19 +178,13 @@ fn square(axis: V3, v: V3) -> Option<V3> {
     (math::length(flat) > 0.05).then(|| math::normalize_or(flat, axis))
 }
 
-/// Set the blade on a haft that runs from `butt` through `grip` to `tip`,
-/// bowing toward `bow`.
-fn set(butt: V3, grip: V3, tip: V3, bow: V3, width: f32, breadth: f32) -> Scythe {
-    let along = math::sub(tip, grip);
-    let reach = math::length(along);
-    let axis = math::normalize_or(along, [0.0, 1.0, 0.0]);
-    let neck = math::add(
-        math::add(grip, math::scale(axis, reach * (1.0 - BLADE))),
-        math::scale(bow, reach * SET),
-    );
+/// Set the blade: the haft runs from `butt` through `grip` to `neck`, and the
+/// blade curves from the neck to `tip`, bowing toward `bow`.
+fn set(butt: V3, grip: V3, neck: V3, tip: V3, bow: V3, width: f32, breadth: f32) -> Scythe {
+    let blade = math::length(math::sub(tip, neck));
     let mid = math::add(
         math::scale(math::add(neck, tip), 0.5),
-        math::scale(bow, reach * CURVE),
+        math::scale(bow, blade * CURVE),
     );
     Scythe {
         butt,

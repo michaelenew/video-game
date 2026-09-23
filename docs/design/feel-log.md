@@ -4492,8 +4492,11 @@ in the way, except a pool younger than the swing itself. A bare spike is just a 
 without a skirt; an eruption keeps the disc, and now sets off every other pool inside its
 radius, each of those setting off what it covers. And the weapon rides the hands the clips
 put on it — the pole through the leading hand and past the trailing one, the tip at the hit
-volume's end while it is out and at the live reach along the hands otherwise — carried low
-in the left hand at rest, and drawn broader across the blade the more grey she carries. The
+volume's end while it is out and at the live reach along the hands otherwise — and stands
+at rest, butt on the floor under her left hand and the blade curving forward a little over
+her head, drawn broader across the blade the more grey she carries. (It was carried low and
+horizontal for an hour, to keep the blade out of the crosshair; that stopped it reading as a
+scythe, which matters more.) The
 sweep's drink went from 35% to 50% so a full-health sweep, whose cost is the largest it can
 be, still returns more than it cost through its own pool.
 
