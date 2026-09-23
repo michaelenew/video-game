@@ -54,7 +54,7 @@ fn blocking_costs_no_health_but_does_cost_a_vulnerable_window() {
     run(&mut w, 30, L, R);
     assert_eq!(
         w.players[1].health,
-        w.players[1].max_health(),
+        w.players[1].full_health(),
         "blocking took chip damage"
     );
     assert!(
@@ -102,7 +102,7 @@ fn dodging_evades_an_attack_that_would_otherwise_land() {
     let mut baseline = engaged();
     run(&mut baseline, 20, L, 0);
     assert!(
-        baseline.players[1].health < baseline.players[1].max_health(),
+        baseline.players[1].health < baseline.players[1].full_health(),
         "setup did not connect"
     );
 
@@ -110,7 +110,7 @@ fn dodging_evades_an_attack_that_would_otherwise_land() {
     run(&mut dodged, 20, L, Input::SHIFT | Input::S);
     assert_eq!(
         dodged.players[1].health,
-        dodged.players[1].max_health(),
+        dodged.players[1].full_health(),
         "dodge failed to evade"
     );
 }
@@ -171,7 +171,7 @@ fn the_next_round_starts_fresh() {
     assert!(matches!(w.phase, Phase::Fighting), "round never restarted");
     assert_eq!(
         w.players[1].health,
-        w.players[1].max_health(),
+        w.players[1].full_health(),
         "health did not reset"
     );
     assert_eq!(w.players[0].rounds_won, 1, "round wins were lost on reset");
@@ -215,14 +215,14 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     let mut standing = reavers();
     run(&mut standing, 50, E, 0);
     assert!(
-        standing.players[1].health < standing.players[1].max_health(),
+        standing.players[1].health < standing.players[1].full_health(),
         "setup did not connect while standing"
     );
 
     let mut mid = reavers();
     run(&mut mid, 20, L, Input::CROUCH);
     assert!(
-        mid.players[1].health < mid.players[1].max_health(),
+        mid.players[1].health < mid.players[1].full_health(),
         "a mid was ducked; crouch beats everything"
     );
 
@@ -230,7 +230,7 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     run(&mut ducked, 50, E, Input::CROUCH);
     assert_eq!(
         ducked.players[1].health,
-        ducked.players[1].max_health(),
+        ducked.players[1].full_health(),
         "crouch failed to duck the overhead"
     );
 }
@@ -310,7 +310,7 @@ fn you_attack_where_you_look() {
     let mut facing = engaged();
     run(&mut facing, 20, L, 0);
     assert!(
-        facing.players[1].health < facing.players[1].max_health(),
+        facing.players[1].health < facing.players[1].full_health(),
         "a poke at point blank did not connect"
     );
 
@@ -321,7 +321,7 @@ fn you_attack_where_you_look() {
     }
     assert_eq!(
         away.players[1].health,
-        away.players[1].max_health(),
+        away.players[1].full_health(),
         "an attack aimed away from the opponent still hit them"
     );
 }
@@ -643,13 +643,13 @@ fn the_drawn_hitbox_is_the_one_that_hits() {
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(
-            inside.players[1].health < inside.players[1].max_health(),
+            inside.players[1].health < inside.players[1].full_health(),
             "{class:?}: a defender well inside the drawn box was not hit"
         );
         let outside = swinging_at(class, 1.3);
         assert_eq!(
             outside.players[1].health,
-            outside.players[1].max_health(),
+            outside.players[1].full_health(),
             "{class:?}: a defender well outside the drawn box was hit anyway"
         );
     }

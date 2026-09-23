@@ -1049,7 +1049,7 @@ fn a_hazard_never_touches_a_hunting_partner() {
     assert!(stood_in_it > 60, "fixture: nobody stood in anything");
     assert_eq!(
         w.players[1].health,
-        w.players[1].max_health(),
+        w.players[1].full_health(),
         "a hunter's own hazard hurt their partner"
     );
 }

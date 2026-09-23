@@ -817,7 +817,7 @@ fn the_bloodletter_pays_out_when_it_is_caught() {
     let mid = w.players[0].health;
     run(&mut w, flight as u32 / 2, 0, 0);
     assert!(
-        w.players[1].health < w.players[1].max_health(),
+        w.players[1].health < w.players[1].full_health(),
         "fixture: the blade never cut anybody"
     );
     assert_eq!(

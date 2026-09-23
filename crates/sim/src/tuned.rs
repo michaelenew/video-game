@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 311] = [
+pub const SCALARS: [i32; 319] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -298,16 +298,24 @@ pub const SCALARS: [i32; 311] = [
            39321, // dual_mage.slow_fall,_fall_cap_(x) = 0.6
               40, // dual_mage.ascension,_health_back_per_hit_landed = 40
               10, // dual_mage.ascension,_stun_on_the_way_out,_at_least = 10
+           32768, // reaver.shadow_turns_to_a_body_this_far_past_reach = 0.5
+              12, // reaver.shadow_damage,_attending_(%) = 12
+               5, // reaver.marks,_most_a_body_can_carry = 5
+              90, // reaver.marks,_one_fades_every = 90
+           26214, // reaver.cash-in,_damage_per_mark_(x) = 0.4
+              30, // reaver.cash-in,_stagger_at_a_full_tally = 30
+           81920, // health.bulwark_(x) = 1.25
+           65536, // health.champion_(x) = 1
+           49152, // health.shadow_reaver_(x) = 0.75
+           65536, // health.elementalist_(x) = 1
+           65536, // health.blood_mage_(x) = 1
+           65536, // health.dual_mage_(x) = 1
+               1, // reaver.shadow_turns_its_copy_to_a_body = on
+              20, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 20
              400, // bulwark.weight,_the_most_the_shield_holds = 400
              600, // bulwark.weight,_a_full_shield_empties_in = 600
           131072, // bulwark.weight,_a_parry_loads_(x_its_damage) = 2
            26214, // bulwark.weight,_pushback_at_the_cap_(x) = 0.4
-           81920, // health.bulwark_(x) = 1.25
-           65536, // health.champion_(x) = 1
-           65536, // health.shadow_reaver_(x) = 1
-           65536, // health.elementalist_(x) = 1
-           65536, // health.blood_mage_(x) = 1
-           65536, // health.dual_mage_(x) = 1
            32768, // bulwark.slam,_damage_per_weight_(x) = 0.5
           104858, // bulwark.slam,_shake_radius_added_when_full = 1.6
                6, // bulwark.slam,_damage_per_m/s_fallen = 6

@@ -178,7 +178,7 @@ fn a_heavy_shield_is_pushed_back_less() {
         run(&mut w, 30, 0, R);
         assert_eq!(
             w.players[1].health,
-            w.players[1].max_health(),
+            w.players[1].full_health(),
             "the fixture's guard did not hold"
         );
         w.players[1].pos.sub(from).flat_len()
@@ -197,13 +197,13 @@ fn a_heavy_shield_is_pushed_back_less() {
 
 #[test]
 fn the_bulwark_has_the_most_health_on_the_roster() {
-    let bulwark = t::class_health(Class::Bulwark);
+    let bulwark = t::health_of(Class::Bulwark);
     for class in sim::class::ALL_CLASSES {
         if class != Class::Bulwark {
             assert!(
-                t::class_health(class) < bulwark,
+                t::health_of(class) < bulwark,
                 "{class:?} has {} health to the Bulwark's {bulwark}",
-                t::class_health(class)
+                t::health_of(class)
             );
         }
     }

@@ -539,8 +539,11 @@ pub fn update(
         *text = Text::new(step_readout(&sim));
     }
     for (bar, mut node) in bars.iter_mut() {
-        let hp = sim.cur.players[bar.0].health.max(0) as f32;
-        node.width = Val::Percent(100.0 * hp / sim.cur.players[bar.0].max_health() as f32);
+        // Against this fighter's own full bar, which is per class now -- see
+        // `sim::tuning::health_of`.
+        let p = &sim.cur.players[bar.0];
+        let hp = p.health.max(0) as f32;
+        node.width = Val::Percent(100.0 * hp / p.full_health().max(1) as f32);
     }
 
     // The Dual mage's two bars. Three things at once, and each of them is a
@@ -905,6 +908,21 @@ pub fn toggle_class_buttons(keys: Res<ButtonInput<KeyCode>>, mut show: ResMut<Sh
 mod tests {
     use super::*;
     use sim::class::{ALL_CLASSES, Class};
+
+    #[test]
+    fn the_hud_systems_touch_nothing_twice() {
+        // Every text query in `update` writes `Text`, and Bevy refuses a system
+        // whose queries it cannot prove disjoint -- at run time, on the first
+        // frame, which is the first anybody hears of it. It shipped that way
+        // once: the step readout's query forgot the round counter, and the
+        // game panicked on launch with every test green. Initialising the
+        // system is where Bevy checks, so this does exactly that.
+        let mut world = bevy::ecs::world::World::new();
+        let mut system = IntoSystem::into_system(update);
+        system.initialize(&mut world);
+        let mut buttons = IntoSystem::into_system(update_class_buttons);
+        buttons.initialize(&mut world);
+    }
 
     #[test]
     fn a_picker_moves_only_its_own_player() {

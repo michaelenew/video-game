@@ -1,5 +1,5 @@
 ---
-status: proposed — v2 of the damage pattern, nothing built
+status: built 2026-09-23, unplayed; the cash-in window is cut — see the note below
 decided: 2026-09-23
 supersedes: nothing outright; adds to kits/shadow-reaver.md, whose moves and shadow survive
 sources: kits/shadow-reaver.md, docs/archive/combat-design/shadow-reaver-skills.md, this design thread
@@ -19,6 +19,14 @@ where setup becomes explosion — and a reason to leave melee once she is there.
 adds both, and both come off the shadow.
 
 **The action plan for building this is [plans/shadow-reaver-v2.md](plans/shadow-reaver-v2.md).**
+
+> **Built, 2026-09-23, and nobody has played it. One rule below is superseded:** the
+> cash-in is **not** gated behind the dash. *Any hit of hers on a marked target spends the
+> marks* — there is no window, and "only the dash opens the window" is gone. Decided on
+> review the same day; see the feel log. Also added in the building: **a swing pressed
+> inside the dash's carry cuts it short and plants her**, because the slide under the dash
+> took her nearly five metres past the shadow. The Bulwark's health multiplier is left at
+> one for the Bulwark thread to set.
 
 ## What is wrong today
 

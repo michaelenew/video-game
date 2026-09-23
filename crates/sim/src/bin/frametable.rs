@@ -49,7 +49,7 @@ fn main() {
             tenths(full_apex),
             full_time,
             tenths(full_apex.div(t::body_height())),
-            t::class_health(class),
+            t::health_of(class),
         );
         // The shield's weight: what it holds, how fast it leaks, what a parry
         // is worth and what a full one does to a shove. `--bin weight` runs it.
@@ -69,6 +69,39 @@ fn main() {
             tenths(mob.fall_cap),
             tenths(mob.air_speed),
         );
+        // Health beside the jump line, because the two are the most legible
+        // differences a body can have. See `tuning::health_of`.
+        println!(
+            "  health {} (x{} of {})",
+            t::health_of(class),
+            hundredths(Fx::ratio(t::health_of(class), t::max_health())),
+            t::max_health(),
+        );
+        // The Reaver's tally, and what cashing a full one is worth with each of
+        // her swings -- beside the rest of her numbers because the cash-in is
+        // a multiplier on moves listed below. See `sim::shadow`.
+        if class == sim::class::Class::ShadowReaver {
+            let full = sim::shadow::cash_multiple(t::mark_cap());
+            let swings: Vec<String> = sim::moves::table(class)
+                .iter()
+                .filter(|m| m.aim() == sim::aim::Kind::Swing && m.damage > 0)
+                .map(|m| format!("{} {}", m.name, Fx::from_int(m.damage).mul(full).to_int()))
+                .collect();
+            println!(
+                "  tally: cap {}, one fades every {}f  |  any hit of hers cashes; full x{}: {}, and staggers {}f",
+                t::mark_cap(),
+                t::mark_fade(),
+                hundredths(full),
+                swings.join(", "),
+                t::cash_stagger(),
+            );
+            println!(
+                "  copy: {}% from the field, {}% at her heel  |  turns to a body within reach + {}m",
+                percent(t::shadow_echo()),
+                percent(t::shadow_echo_attending()),
+                tenths(t::shadow_aim_slack()),
+            );
+        }
         // The Dual mage's tiers: what her body gains as the lower of her two
         // bars rises, beside the jump line because two of the three are jumps.
         // See `sim::dual`.
@@ -323,6 +356,15 @@ fn tenths(v: Fx) -> String {
     // Rounded, not truncated: 4.199 should read as 4.2, not 4.1.
     let t = (v.raw() as i64 * 10 + (1 << 15)) >> 16;
     format!("{}.{}", t / 10, (t % 10).abs())
+}
+
+fn percent(v: Fx) -> i64 {
+    (v.raw() as i64 * 100 + (1 << 15)) >> 16
+}
+
+fn hundredths(v: Fx) -> String {
+    let t = (v.raw() as i64 * 100 + (1 << 15)) >> 16;
+    format!("{}.{:02}", t / 100, (t % 100).abs())
 }
 
 /// Apex and airtime for a jump held `hold` frames.

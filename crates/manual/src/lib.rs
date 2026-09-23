@@ -490,6 +490,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Bulwark's shield weight, driven by named scripts -- openers, load, decay, pushback, stomp, slam, wall. What each class's opener deposits blocked and parried, a sword string loading it, a full shield draining on its clock, the shove at five weights, and each creature move into a raised guard. Name scripts to run only those.",
             ),
             e(
+                "cargo run -p sim --bin tally",
+                "The Shadow Reaver's v2, driven by named scripts -- range, stall, pattern, greedy, stick. Prints how many of the shadow's copies land at range with and without its self-aim, how a full tally fades, what the whole send-mark-cross-cash pattern deals and how long it takes, and what melee with the shadow at her heel is worth. Name one script for it frame by frame.",
+            ),
+            e(
                 "cargo run -p anim --bin bake",
                 "Re-bake the animation clips from their recipes.",
             ),

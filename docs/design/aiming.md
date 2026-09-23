@@ -300,6 +300,19 @@ there it would be a facing, a distance and a floor query sitting next to an
 ability — which is the exact shape of the mistake this document exists to
 prevent, three metres of it at a time.
 
+**Which way does a copy thrown from somewhere else face?** `aim::shadow_faces`
+answers that one — added 2026-09-23, for the Reaver's v2. Her shadow out on the
+field copies her swings, and the copy is still a **swing**: it keeps her pitch,
+her shape and her frames. The one thing it cannot take from her is *which way is
+forward over there*. On her yaw it landed only on somebody standing at exactly
+her offset from it, so it turns to the nearest body within the move's reach plus
+a slack, measured to the edge of a fighter's column or to the nearest point of
+the creature from the height the swing leaves at. `aim::copied_swing` then
+carries her line over to the shadow and turns it onto that yaw — along and
+across her facing, the same two amounts along and across the new one, and no
+angles. A yaw to the nearest body worked out beside the shadow would be the
+mistake again, so it lives here.
+
 It is what lets her dash *up*. At the foot of a platform with the shadow on the
 deck, the line from her soles goes into the wall of it and the line from her
 crown goes over the lip: there is a way, so she takes it. It is also why the

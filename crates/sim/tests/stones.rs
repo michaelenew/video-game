@@ -432,7 +432,7 @@ fn a_bolt_aimed_through_a_structure_kicks_it_instead_of_reaching_past_it() {
     );
     assert_eq!(
         w.players[1].health,
-        w.players[1].max_health(),
+        w.players[1].full_health(),
         "the beam kicked the stone and poked the fighter beyond it as well"
     );
 }

@@ -14,7 +14,6 @@
 //! values. Move a number freely; if a relationship test fails, either it is a
 //! bug or a design decision changed and the documents need updating with it.
 
-use crate::class::Class;
 use crate::fixed::Fx;
 use crate::oven::{self, Scalar};
 
@@ -247,23 +246,6 @@ pub fn knockback_decay() -> Fx {
 /// untested against a real match.
 pub fn max_health() -> i32 {
     oven::scalar(Scalar::MaxHealth)
-}
-
-/// A class's whole bar: `max_health` scaled by its row in the Health table.
-///
-/// Per class the way jump and gravity are, because after weight in the air,
-/// health is the most legible difference a character can have. The Bulwark
-/// is highest: committed, not slow, and now with a reason to stand in a hit.
-pub fn class_health(class: Class) -> i32 {
-    let scale = oven::scalar(match class {
-        Class::Bulwark => Scalar::HealthBulwark,
-        Class::Champion => Scalar::HealthChampion,
-        Class::ShadowReaver => Scalar::HealthReaver,
-        Class::Elementalist => Scalar::HealthElementalist,
-        Class::BloodMage => Scalar::HealthBloodMage,
-        Class::DualMage => Scalar::HealthDualMage,
-    });
-    Fx::from_int(max_health()).mul(Fx::from_raw(scale)).to_int()
 }
 
 /// Pause after a knockout before the next round starts.
@@ -846,6 +828,101 @@ pub fn shadow_buffer() -> u16 {
 /// has always had, and only the first frames of that tail are the window.
 pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
+}
+
+// ---------------------------------------------------------------------------
+// The Reaver's v2: the shadow aims and keeps a tally, and her hits cash it
+// ---------------------------------------------------------------------------
+//
+// First values, 2026-09-23, all guesses from `docs/design/shadow-reaver-v2.md`
+// and none of them played. The feel log is where they get argued about.
+
+/// How far past the copied move's reach the shadow, out on the field, will
+/// still turn to a body. Half a metre: enough that a target stepping out of
+/// reach during the wind-up is still followed, not so much that a copy turns to
+/// somebody it plainly cannot touch.
+pub fn shadow_aim_slack() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowAimSlack))
+}
+
+/// Does the shadow, out on the field, turn its copy to a body at all? On. The
+/// switch is there so the before and after can be played side by side.
+pub fn shadow_aims() -> bool {
+    oven::scalar(Scalar::ShadowAims) != 0
+}
+
+/// What the **attending** shadow's copy deals, as a share of her swing. Half of
+/// the field copy's, from the proposal: with the tally in place, the copy at
+/// her heel is the one thing in the kit that argues for standing in melee, and
+/// it has to argue less. Twelve rather than twelve and a half because it is a
+/// percentage.
+pub fn shadow_echo_attending() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::ShadowEchoAttending), 100)
+}
+
+/// The most marks one body can carry. Five is the proposal's first guess: too
+/// low and the burst is a bonus, too high and the shadow never fills it before
+/// the victim walks away.
+pub fn mark_cap() -> u8 {
+    oven::scalar(Scalar::MarkCap).clamp(1, 255) as u8
+}
+
+/// Frames between one mark fading and the next. A second and a half, the
+/// middle of the proposal's "a second or two": stalling should clean you, and
+/// a tally left alone for the length of a full cap should be gone.
+pub fn mark_fade() -> u16 {
+    oven::scalar(Scalar::MarkFade).max(1) as u16
+}
+
+/// What each mark adds to the swing that spends it, as a multiple of the
+/// swing. Four tenths, so a full tally of five triples it.
+pub fn mark_worth() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MarkWorth))
+}
+
+/// The stagger a cash-in at a full tally applies. Half a second: a hard stop,
+/// behind the hardest condition in her kit -- the rule `ability-spec.md` sets
+/// for staggers.
+pub fn cash_stagger() -> u16 {
+    oven::scalar(Scalar::CashStagger).max(0) as u16
+}
+
+// ---------------------------------------------------------------------------
+// Health, per class
+// ---------------------------------------------------------------------------
+
+/// A class's health, as `max_health` times its own multiplier.
+///
+/// Per class the way jump, gravity and fall already are. The Reaver starts at
+/// three quarters, because a class whose whole pattern is *not being there*
+/// should be the one that cannot afford to be. The Bulwark's number is the
+/// Bulwark thread's to set -- its v2 wants it highest -- and everybody else is
+/// one until a design says otherwise.
+pub fn health_of(class: crate::class::Class) -> i32 {
+    use crate::class::Class;
+    let knob = match class {
+        Class::Bulwark => Scalar::HealthBulwark,
+        Class::Champion => Scalar::HealthChampion,
+        Class::ShadowReaver => Scalar::HealthReaver,
+        Class::Elementalist => Scalar::HealthElementalist,
+        Class::BloodMage => Scalar::HealthBloodMage,
+        Class::DualMage => Scalar::HealthDualMage,
+    };
+    Fx::from_int(max_health())
+        .mul(Fx::from_raw(oven::scalar(knob)))
+        .to_int()
+        .max(1)
+}
+
+/// What a jump out of the dash's carry keeps of the dash's speed, flat.
+///
+/// A fifth, 2026-09-23. It used to be everything: the dash arrived at fifty
+/// metres a second, slid on past the shadow, and a jump in the carry took the
+/// whole slide up with it and cleared the arena. The dash stops on the shadow
+/// now, and the jump out of it is a lunge -- ten metres a second, about one
+/// and a half walks -- rather than a launch.
+pub fn dash_jump_keep() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
 }
 
 /// How fast she crosses to her shadow on a dash.

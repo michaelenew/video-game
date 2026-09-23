@@ -142,6 +142,7 @@ fn main() {
                     place_wing_tips,
                     place_wingspans,
                     place_marks,
+                    place_pips,
                 ),
                 beast::place,
                 drive_camera,
@@ -695,6 +696,24 @@ const WING_SLICES: usize = 12;
 #[derive(Component)]
 struct MarkMesh(usize);
 
+/// One of the Reaver's marks on a body, drawn as a pip over its head.
+///
+/// `body` is a fighter's index, or [`PIP_QUARRY`] for the creature. **Pips are
+/// drawn on the victim** because the victim is who has to read them: a fighter
+/// watching his own marks climb knows what is coming and where from. Read
+/// straight off `marks`, which is what the cash-in spends -- the drawing and
+/// the rule cannot disagree about how many there are.
+#[derive(Component)]
+struct PipMesh {
+    body: usize,
+    index: u8,
+}
+
+/// [`PipMesh::body`] for the creature.
+const PIP_QUARRY: usize = MAX_PLAYERS;
+/// Enough pips for the largest cap the Oven allows.
+const MAX_PIPS: u8 = 12;
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -1087,6 +1106,18 @@ fn setup(
                     },
                 ));
             }
+        }
+    }
+    // The Reaver's marks, over every body that can carry them.
+    for body in 0..=PIP_QUARRY {
+        for index in 0..MAX_PIPS {
+            commands.spawn((
+                Mesh3d(pellet.clone()),
+                MeshMaterial3d(look.shade.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                PipMesh { body, index },
+            ));
         }
     }
     // The aim marker a channelled move is wound out along.
@@ -1511,6 +1542,42 @@ fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut
         tf.translation = piece.at;
         tf.scale = piece.scale;
     }
+}
+
+/// Put the Reaver's pips over whoever is carrying marks.
+fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut Visibility)>) {
+    for (pip, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(at) = pip_spot(&sim.cur, pip.body, pip.index) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = at;
+        tf.scale = Vec3::splat(0.16);
+    }
+}
+
+/// Where pip `index` over `body` goes, or `None` if that body carries fewer
+/// marks than that.
+///
+/// A ring over the head rather than a row, so it reads the same from every
+/// side -- the one watching his own marks climb is usually looking at the back
+/// of his own head.
+fn pip_spot(w: &World, body: usize, index: u8) -> Option<Vec3> {
+    let (marks, top) = if body == PIP_QUARRY {
+        let beast = w.monster.as_ref()?;
+        let head = beast.world_of(sim::monster::HEAD, sim::V3::ZERO);
+        (beast.marks, fx3(head) + Vec3::Y * 1.5)
+    } else {
+        let p = &w.players[body];
+        let height = sim::tuning::body_height().to_f32_for_render();
+        (p.marks, fx3(p.pos) + Vec3::Y * (height + 0.35))
+    };
+    if index >= marks {
+        return None;
+    }
+    let turn = index as f32 / marks.max(1) as f32 * std::f32::consts::TAU;
+    Some(top + Vec3::new(turn.cos(), 0.0, turn.sin()) * 0.3)
 }
 
 /// Where a fighter's aim marker is, if they are channelling at all.

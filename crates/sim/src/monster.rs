@@ -584,6 +584,13 @@ pub struct Monster {
     /// Frames it is pinned in place. What a grab does to something too big to
     /// drag.
     pub rooted: u16,
+    /// The Reaver's marks, and the clock that fades them -- the same pair a
+    /// fighter carries (`state::Player::marks`). The shadow works a
+    /// Ridgeback's flank from range and she crosses to cash on a leg. The same
+    /// cap as a fighter's for now; whether a body this big wants its own is an
+    /// open question in `docs/design/shadow-reaver-v2.md`.
+    pub marks: u8,
+    pub mark_clock: u16,
 }
 
 impl Default for Monster {
@@ -611,7 +618,24 @@ impl Monster {
             slowed: 0,
             slow_mul: Fx::ONE,
             rooted: 0,
+            marks: 0,
+            mark_clock: 0,
         }
+    }
+
+    /// One mark from the Reaver's shadow. See `shadow::mark`, which is the
+    /// same rule for a fighter.
+    pub fn mark(&mut self) {
+        self.marks = self.marks.saturating_add(1).min(t::mark_cap());
+        self.mark_clock = t::mark_fade();
+    }
+
+    /// Spend every mark, and say how many there were.
+    pub fn spend_marks(&mut self) -> u8 {
+        let marks = self.marks;
+        self.marks = 0;
+        self.mark_clock = 0;
+        marks
     }
 
     /// On its side, with its options gone.
@@ -1193,6 +1217,36 @@ impl Monster {
             return false;
         }
         world.y.add(hurt_height).raw() >= low.raw() && world.y.raw() <= high.raw()
+    }
+
+    /// The point of the creature's body nearest `world`.
+    ///
+    /// Each part's box, clamped to in the part's own frame and carried back
+    /// out, and the one whose point is nearest **in three dimensions** wins.
+    /// What asks is the Reaver's shadow deciding which way to face -- see
+    /// `aim::shadow_faces` -- and it wants the flank it could reach, not the
+    /// middle of an animal twelve metres long. Measured flat, the nearest
+    /// thing to a shadow standing under the creature's neck was the head five
+    /// metres overhead, and the copy turned to swing at the air beneath it.
+    pub fn nearest_to(&self, world: V3) -> V3 {
+        let rig = self.rig();
+        let mut best: Option<(V3, Fx)> = None;
+        for index in 0..PARTS {
+            let sh = shape(index);
+            let frame = rig.of(index);
+            let local = frame.world_to_local(world);
+            let clamped = V3::new(
+                local.x.clamp(sh.min.x, sh.max.x),
+                local.y.clamp(sh.min.y, sh.max.y),
+                local.z.clamp(sh.min.z, sh.max.z),
+            );
+            let at = frame.local_to_world(clamped);
+            let gap = crate::math::big_len(at.sub(world));
+            if best.is_none_or(|(_, seen)| gap.raw() < seen.raw()) {
+                best = Some((at, gap));
+            }
+        }
+        best.map_or(self.pos, |(at, _)| at)
     }
 
     /// Which part an attack touches, or `None`.
@@ -1842,6 +1896,16 @@ impl Monster {
             self.strain = (self.strain - drop).max(0);
         }
         self.slowed = self.slowed.saturating_sub(1);
+        // The Reaver's marks fade on the same clock a fighter's do.
+        if self.marks > 0 {
+            self.mark_clock = self.mark_clock.saturating_sub(1);
+            if self.mark_clock == 0 {
+                self.marks -= 1;
+                if self.marks > 0 {
+                    self.mark_clock = t::mark_fade();
+                }
+            }
+        }
         if self.slowed == 0 {
             self.slow_mul = Fx::ONE;
         }

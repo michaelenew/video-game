@@ -43,7 +43,7 @@ fn main() {
         ),
         tenths(t::parry_load()),
         tenths(t::heavy_pushback()),
-        t::class_health(Class::Bulwark),
+        t::health_of(Class::Bulwark),
         t::max_health(),
     );
 

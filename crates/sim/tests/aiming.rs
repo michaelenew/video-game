@@ -1075,14 +1075,14 @@ fn standing_where_the_shadow_is_is_what_gets_you_cut() {
     run(&mut clear, 40, Q, down(20));
     assert_eq!(
         health(&clear),
-        clear.players[1].max_health(),
+        clear.players[1].full_health(),
         "Guillotine cut somebody standing nowhere near the shadow"
     );
 
     w.players[1].pos = V3::new(shadow.x, Fx::ZERO, shadow.z);
     run(&mut w, 40, Q, down(20));
     assert!(
-        health(&w) < w.players[1].max_health(),
+        health(&w) < w.players[1].full_health(),
         "standing on the shadow cost nothing when the blades came up"
     );
 }

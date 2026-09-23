@@ -7,9 +7,11 @@
 //! vocabulary greyed out.
 //!
 //! What is pinned here is what a player would notice if it broke: that holding
-//! the shadow is worth a quarter again on every swing, that the copy lands a
+//! the shadow is worth a little again on every swing, that the copy lands a
 //! beat late and from somewhere else, that the recall cuts on its way home, and
-//! that the forward dodge is the dash.
+//! that the forward dodge is the dash. And v2's tally: that the shadow out on
+//! the field turns to whoever is in reach, marks what it hits, and that only
+//! crossing to it by dash cashes the marks.
 
 use sim::class::{Ghost, Mechanic, Shadow};
 use sim::state::{Action, SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
@@ -65,7 +67,7 @@ fn duel() -> World {
 }
 
 fn hurt(w: &World) -> i32 {
-    w.players[1].max_health() - w.players[1].health
+    w.players[1].full_health() - w.players[1].health
 }
 
 /// Ask `aim` something about a world as it stands. The scene is everything a
@@ -189,7 +191,7 @@ fn the_shadow_is_never_nowhere() {
 fn the_shadow_stands_behind_her_rather_than_inside_her() {
     // Presentation with teeth: the copy swings from wherever the shadow is, so
     // two bodies in the same place would be two threats a player cannot tell
-    // apart -- and one of them hits for a quarter of the other.
+    // apart -- and one of them hits for a fraction of the other.
     let w = duel();
     let gap = shadow(&w).pos.sub(w.players[0].pos);
     assert!(
@@ -232,10 +234,16 @@ fn the_shadow_copies_her_swing_a_beat_late() {
 }
 
 #[test]
-fn the_copy_is_worth_a_quarter_of_the_swing_it_copies() {
-    // The number the class is balanced around: holding the shadow is a
-    // twenty-five per cent damage buff on everything her body does, paid for by
-    // not having the second body anywhere useful.
+fn the_attending_copy_is_worth_its_own_share_of_the_swing() {
+    // Holding the shadow at her heel is a small damage buff on everything her
+    // body does, paid for by not having the second body anywhere useful. It
+    // was a quarter; v2 halved it, because with the tally in place it is the
+    // one thing in the kit that argues for standing in melee, and it has to
+    // argue less. See `docs/design/shadow-reaver-v2.md`.
+    assert!(
+        t::shadow_echo_attending().raw() < t::shadow_echo().raw(),
+        "the copy at her heel is worth as much as the copy out on the field"
+    );
     let mut w = duel();
     let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
     tap(
@@ -247,10 +255,12 @@ fn the_copy_is_worth_a_quarter_of_the_swing_it_copies() {
 
     let total = hurt(&w);
     let echoed = total - poke.damage;
-    let want = Fx::from_int(poke.damage).mul(t::shadow_echo()).to_int();
+    let want = Fx::from_int(poke.damage)
+        .mul(t::shadow_echo_attending())
+        .to_int();
     assert_eq!(
         echoed, want,
-        "the copy dealt {echoed} where the swing dealt {} -- the quarter is the class",
+        "the attending copy dealt {echoed} where the swing dealt {}",
         poke.damage
     );
 }
@@ -644,10 +654,10 @@ fn a_planted_shield_across_the_line_leaves_her_with_an_ordinary_dodge() {
 }
 
 #[test]
-fn a_jump_inside_the_carry_leaves_with_the_dash_under_her() {
-    // Arriving leaves her sliding at the speed she crossed at, and the slide
-    // decays. A jump pressed inside that window takes what is left of it up
-    // with her; the earlier she finds it, the further she goes.
+fn a_jump_inside_the_carry_leaves_with_a_share_of_the_dash() {
+    // The dash stops on the shadow; a jump pressed in the short window after
+    // it takes `dash_jump_keep` of the crossing's speed up with her. More than
+    // a standing jump, far less than the dash -- which used to clear the arena.
     let mut w = in_the_open();
     let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
     put_the_shadow_at(&mut w, out);
@@ -670,15 +680,84 @@ fn a_jump_inside_the_carry_leaves_with_the_dash_under_her() {
     }
     let leaving = took_off.expect("the jump inside the carry never left the ground");
     let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
+    let want = t::shadow_dash_speed().mul(t::dash_jump_keep());
     assert!(
         leaving.y.raw() > 0,
         "she was airborne without going up, so that was the dash and not a jump"
     );
     assert!(
-        along.raw() > t::move_speed().mul(Fx::from_int(2)).raw(),
-        "she left the ground at {:.1} m/s, which is a standing jump rather than \
-         a jump with the dash under it",
+        along.raw() > t::move_speed().raw(),
+        "she left the ground at {:.1} m/s, no faster than a standing jump",
         along.to_f32_for_render()
+    );
+    assert!(
+        (along.raw() - want.raw()).abs() < Fx::ratio(1, 2).raw(),
+        "she left the ground at {:.1} m/s, not the {:.1} the dash jump keeps",
+        along.to_f32_for_render(),
+        want.to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_dash_stops_on_the_shadow() {
+    // The follow-through made precise combat impossible: she used to slide
+    // four or five metres past where the shadow was.
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    run(&mut w, 1, SHIFT | W, pitch);
+    for _ in 0..(t::dodge_frames() as u32 + 30) {
+        run(&mut w, 1, 0, pitch);
+    }
+    let past = w.players[0].pos.sub(out).flat_len();
+    assert!(
+        past.raw() < Fx::ratio(1, 10).raw(),
+        "the dash left her {:.2} m from where the shadow was",
+        past.to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_dash_jump_does_not_clear_the_arena() {
+    // Across the whole leash and straight into a held jump: where she lands
+    // should be well inside the arena's width from where she took off.
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
+    run(&mut w, 20, 0, 0);
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    let mut took_off_at = None;
+    for _ in 0..200 {
+        let carrying = shadow(&w).carry > 0;
+        let bits = if carrying || took_off_at.is_some() {
+            W | Input::SPACE
+        } else {
+            SHIFT | W
+        };
+        run(&mut w, 1, bits, pitch);
+        if carrying && took_off_at.is_none() && !w.players[0].grounded {
+            took_off_at = Some(w.players[0].pos);
+        }
+        if took_off_at.is_some() && w.players[0].grounded {
+            break;
+        }
+    }
+    let from = took_off_at.expect("the dash jump never left the ground");
+    let flew = w.players[0].pos.sub(from).flat_len();
+    let arena = sim::arena::ARENA_HALF.add(sim::arena::ARENA_HALF);
+    assert!(
+        flew.raw() < arena.mul(Fx::ratio(1, 2)).raw(),
+        "a dash jump carried her {:.1} m, over half the arena's {:.1}",
+        flew.to_f32_for_render(),
+        arena.to_f32_for_render()
     );
 }
 
@@ -1435,4 +1514,467 @@ fn the_repeat_lockout_never_holds_up_the_recall() {
         !shadow(&w).is_out(),
         "the recall came out but the shadow never came home"
     );
+}
+
+// ---------------------------------------------------------------------------
+// v2: the shadow aims itself
+// ---------------------------------------------------------------------------
+//
+// See `docs/design/shadow-reaver-v2.md`. Out on the field the copy turns to
+// whoever is in reach before it comes out; at her heel it keeps her yaw.
+
+/// A Reaver in the open with the shadow waiting six metres ahead of her, and
+/// the dummy standing `side` metres to the shadow's left -- off her line
+/// entirely, so a copy on her yaw goes past him.
+fn shadow_out_with_him_beside_it(side: Fx) -> World {
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    w.players[1].pos = V3::new(out.x, Fx::ZERO, out.z.add(side));
+    w.players[1].facing = V3::new(Fx::ZERO, Fx::ZERO, Fx::ONE.neg());
+    w
+}
+
+#[test]
+fn a_copy_from_the_field_turns_to_whoever_is_in_reach() {
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    // Inside the copy's reach from the shadow, and square to the side of it:
+    // with her yaw the arc sweeps the ground in front of the shadow and he is
+    // standing beside it.
+    let side = poke.reach.mul(Fx::ratio(3, 4));
+    let mut w = shadow_out_with_him_beside_it(side);
+    assert!(
+        w.players[0].pos.sub(w.players[1].pos).flat_len().raw() > poke.reach.raw() * 2,
+        "the fixture left her close enough to reach him herself"
+    );
+    let before = w.players[1].health;
+    // And it turned to do it: pointed at him while the copy was out, not along
+    // her line. Read on the frame the volume appears, before the hit shoves him.
+    let mut turned = false;
+    run(&mut w, 2, L, 0);
+    for _ in 0..(poke.whiff_cost() as u32 + t::shadow_lag() as u32 + 8) {
+        let to_him = w.players[1].pos.sub(shadow(&w).pos).normalized();
+        if let Some(copy) = sim::shadow::echo_body(&w.players[0]) {
+            if matches!(copy.action, Action::Active { .. })
+                && copy.facing.dot(to_him).raw() > Fx::ratio(9, 10).raw()
+            {
+                turned = true;
+            }
+        }
+        run(&mut w, 1, 0, 0);
+    }
+    assert!(turned, "the copy came out without facing him");
+    assert!(
+        w.players[1].health < before,
+        "the shadow was standing beside him with a swing in reach and threw it at nobody"
+    );
+}
+
+#[test]
+fn a_copy_from_the_field_does_not_turn_to_somebody_out_of_reach() {
+    // Reach plus the slack, and then some. Turning to a body it cannot touch
+    // is twitching, not fighting.
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let far = poke
+        .reach
+        .add(t::shadow_aim_slack())
+        .add(t::body_radius())
+        .add(Fx::from_int(2));
+    let mut w = shadow_out_with_him_beside_it(far);
+    let before = w.players[1].health;
+    run(&mut w, 2, L, 0);
+    for _ in 0..(poke.whiff_cost() as u32 + t::shadow_lag() as u32 + 8) {
+        run(&mut w, 1, 0, 0);
+        let s = shadow(&w);
+        assert!(
+            s.facing.dot(w.players[0].facing).raw() > Fx::ratio(99, 100).raw(),
+            "the shadow turned away from her yaw with nobody in reach"
+        );
+    }
+    assert_eq!(
+        w.players[1].health, before,
+        "he was out of reach and was hit"
+    );
+}
+
+#[test]
+fn the_attending_copy_keeps_her_yaw() {
+    // At her heel it is copying her, not fighting on its own. A dummy standing
+    // beside the attending shadow does not pull the copy round.
+    let mut w = in_the_open();
+    let heel = shadow(&w).pos;
+    w.players[1].pos = V3::new(heel.x, Fx::ZERO, heel.z.add(Fx::ONE));
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    run(&mut w, 2, L, 0);
+    let mut seen = false;
+    for _ in 0..(poke.whiff_cost() as u32 + t::shadow_lag() as u32 + 8) {
+        run(&mut w, 1, 0, 0);
+        if let Some(copy) = sim::shadow::echo_body(&w.players[0]) {
+            seen = true;
+            let hers = w.players[0].aim_dir();
+            assert!(
+                copy.aim_dir().dot(hers).raw() > Fx::ratio(99, 100).raw(),
+                "the attending copy swung somewhere other than along her line"
+            );
+        }
+    }
+    assert!(seen, "the attending shadow never copied the swing");
+}
+
+// ---------------------------------------------------------------------------
+// v2: the tally
+// ---------------------------------------------------------------------------
+
+/// Swing once and let the copy play out.
+fn swing_and_let_it_copy(w: &mut World) {
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    tap(
+        w,
+        L,
+        0,
+        poke.whiff_cost() as u32 + t::shadow_lag() as u32 + 8,
+    );
+}
+
+#[test]
+fn every_hit_the_shadow_lands_from_the_field_marks_once() {
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let mut w = shadow_out_with_him_beside_it(poke.reach.mul(Fx::ratio(3, 4)));
+    assert_eq!(w.players[1].marks, 0);
+    let before = w.players[1].health;
+    swing_and_let_it_copy(&mut w);
+    assert!(
+        w.players[1].health < before,
+        "fixture: the copy never landed"
+    );
+    assert_eq!(w.players[1].marks, 1, "one copy, one mark");
+    // Back where he was, for the second one.
+    let out = shadow(&w).pos;
+    w.players[1].pos = V3::new(out.x, Fx::ZERO, out.z.add(poke.reach.mul(Fx::ratio(3, 4))));
+    swing_and_let_it_copy(&mut w);
+    assert_eq!(w.players[1].marks, 2, "a second copy, a second mark");
+}
+
+#[test]
+fn the_attending_copy_marks_nothing() {
+    // It is at her shoulder; there is nothing being set up.
+    let mut w = duel();
+    let before = w.players[1].health;
+    swing_and_let_it_copy(&mut w);
+    assert!(w.players[1].health < before, "fixture: nothing landed");
+    assert_eq!(
+        w.players[1].marks, 0,
+        "the copy at her heel marked him -- standing in melee is the tally for free"
+    );
+}
+
+#[test]
+fn marks_stop_at_the_cap_and_fade_one_at_a_time() {
+    let mut w = in_the_open();
+    for _ in 0..(t::mark_cap() as u32 + 3) {
+        sim::shadow::mark(&mut w.players[1]);
+    }
+    assert_eq!(
+        w.players[1].marks,
+        t::mark_cap(),
+        "the tally ran past its cap"
+    );
+    // Nothing touching him: one fades every `mark_fade`, not all at once.
+    run(&mut w, t::mark_fade() as u32, 0, 0);
+    assert_eq!(
+        w.players[1].marks,
+        t::mark_cap() - 1,
+        "a full fade period took something other than one mark"
+    );
+    run(&mut w, t::mark_fade() as u32 * t::mark_cap() as u32, 0, 0);
+    assert_eq!(
+        w.players[1].marks, 0,
+        "left alone, the tally never cleaned itself"
+    );
+}
+
+#[test]
+fn a_lotus_out_and_home_marks_at_most_twice() {
+    // Once per pass, not once per blade: twelve blades each marking would fill
+    // the tally in one flower and make the lotus the whole setup.
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    // In the flower, off to one side of the shadow.
+    w.players[1].pos = V3::new(out.x, Fx::ZERO, out.z.add(Fx::from_int(2)));
+    let before = w.players[1].health;
+    let mut most = 0;
+    run(&mut w, 2, Q, 0);
+    for _ in 0..(t::lotus_erupt() + t::lotus_hold() + t::lotus_return() + 30) as u32 {
+        // Pinned where he stands, so he is there for both passes.
+        w.players[1].pos = V3::new(out.x, Fx::ZERO, out.z.add(Fx::from_int(2)));
+        run(&mut w, 1, 0, 0);
+        most = most.max(w.players[1].marks);
+    }
+    assert!(
+        w.players[1].health < before,
+        "fixture: the lotus never cut him"
+    );
+    assert!(most >= 1, "the lotus cut him and marked nothing");
+    assert!(
+        most <= 2,
+        "the lotus marked him {most} times -- once per pass is two"
+    );
+}
+
+#[test]
+fn the_recall_marks_once() {
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(8), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let midway = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO));
+    w.players[1].pos = midway;
+    let before = w.players[1].health;
+    run(&mut w, 2, R, down(25));
+    run(&mut w, 60, 0, down(25));
+    assert!(
+        w.players[1].health < before,
+        "fixture: the recall never cut him"
+    );
+    assert_eq!(
+        w.players[1].marks, 1,
+        "the way home cuts once and marks once"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// v2: the cash-in
+// ---------------------------------------------------------------------------
+//
+// The shadow puts the marks on; **any hit of hers takes them off**, multiplied.
+// No window, no dash required.
+
+/// Dash to a shadow waiting six metres ahead, and stop on the frame she
+/// arrives. Then stand him a step in front of her, carrying `marks`. Used by
+/// the strike out of the carry.
+fn dashed_in(marks: u8) -> World {
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let look = crosshair_onto(&w, out);
+    run(&mut w, 1, SHIFT | W, look);
+    assert!(
+        shadow(&w).dash > 0 || !shadow(&w).is_out(),
+        "fixture: the forward dodge was not the dash"
+    );
+    for _ in 0..(t::dodge_frames() as u32 + 20) {
+        if !shadow(&w).is_out() {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
+    assert!(!shadow(&w).is_out(), "fixture: she never arrived");
+    stand_him_in_front(&mut w, marks);
+    w
+}
+
+/// A Reaver in the open with him a step in front of her, carrying `marks`.
+fn face_to_face(marks: u8) -> World {
+    let mut w = in_the_open();
+    stand_him_in_front(&mut w, marks);
+    w
+}
+
+fn stand_him_in_front(w: &mut World, marks: u8) {
+    let me = w.players[0].pos;
+    w.players[1].pos = V3::new(me.x.add(Fx::ratio(6, 5)), me.y, me.z);
+    w.players[1].facing = V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO);
+    w.players[1].vel = V3::ZERO;
+    w.players[1].marks = marks;
+    w.players[1].mark_clock = t::mark_fade();
+}
+
+/// Swing, and return what her own blow dealt -- the first damage he takes,
+/// before the copy's follows it.
+fn first_blow(w: &mut World, bits: u16) -> i32 {
+    let before = w.players[1].health;
+    run(w, 2, bits, 0);
+    for _ in 0..60 {
+        if w.players[1].health < before {
+            return before - w.players[1].health;
+        }
+        run(w, 1, 0, 0);
+    }
+    0
+}
+
+#[test]
+fn any_hit_of_hers_on_a_marked_target_spends_the_marks() {
+    // No dash, no window: she walks up and hits him.
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let marks = t::mark_cap() - 1;
+    let mut w = face_to_face(marks);
+    let dealt = first_blow(&mut w, L);
+    let want = Fx::from_int(poke.damage)
+        .mul(sim::shadow::cash_multiple(marks))
+        .to_int();
+    assert_eq!(dealt, want, "the cash-in dealt {dealt}, not {want}");
+    assert!(dealt > poke.damage, "spending the marks was worth nothing");
+    assert_eq!(w.players[1].marks, 0, "the marks were not spent");
+    assert!(
+        !matches!(w.players[1].action, Action::Stagger { .. }),
+        "a tally short of the cap staggered"
+    );
+}
+
+#[test]
+fn a_hit_on_an_unmarked_target_is_a_plain_hit() {
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let mut w = face_to_face(0);
+    assert_eq!(first_blow(&mut w, L), poke.damage);
+}
+
+#[test]
+fn a_cash_in_at_the_cap_staggers_and_clears() {
+    let mut w = face_to_face(t::mark_cap());
+    let dealt = first_blow(&mut w, L);
+    assert!(dealt > 0, "fixture: nothing landed");
+    assert_eq!(w.players[1].marks, 0);
+    assert!(
+        matches!(w.players[1].action, Action::Stagger { .. }),
+        "a full tally cashed without the stagger"
+    );
+}
+
+#[test]
+fn every_hit_cashes_not_only_the_first() {
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let mut w = face_to_face(2);
+    let first = first_blow(&mut w, L);
+    assert!(first > poke.damage, "the first hit did not cash");
+    run(&mut w, poke.whiff_cost() as u32 + 30, 0, 0);
+    stand_him_in_front(&mut w, 2);
+    let second = first_blow(&mut w, L);
+    assert_eq!(
+        second, first,
+        "a second hit on fresh marks did not cash them too"
+    );
+    assert_eq!(w.players[1].marks, 0);
+}
+
+#[test]
+fn a_blocked_hit_spends_nothing() {
+    // A block is not a hit. The tally stays on his body, which is the
+    // counterplay the pips exist to make possible.
+    let mut w = face_to_face(t::mark_cap());
+    w.players[1].action = Action::Guard { held: 30 };
+    let before = w.players[1].health;
+    // Her swing, and only hers: read on the frame it is blocked, before the
+    // copy's lands a beat later.
+    w.advance([Input::looking_at(L, 0, 0), Input::looking_at(R, 32768, 0)]);
+    for _ in 0..30 {
+        if matches!(w.players[1].action, Action::BlockStun { .. }) {
+            break;
+        }
+        // Hold the guard up, facing her.
+        w.advance([Input::looking_at(0, 0, 0), Input::looking_at(R, 32768, 0)]);
+    }
+    assert_eq!(
+        w.players[1].health, before,
+        "fixture: the swing was not blocked"
+    );
+    assert_eq!(
+        w.players[1].marks,
+        t::mark_cap(),
+        "a blocked hit spent the marks"
+    );
+}
+
+#[test]
+fn a_swing_inside_the_carry_strikes_on_arrival_and_plants_her() {
+    // The jump out of the carry keeps the slide; the swing spends it. Without
+    // this the dash left her several metres past the shadow before she could
+    // act, and every cash-in on somebody standing beside it missed.
+    let mut w = dashed_in(0);
+    assert!(
+        sim::shadow::carrying_a_dash(&w.players[0]),
+        "fixture: no carry"
+    );
+    run(&mut w, 1, L, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Startup { .. }),
+        "a swing pressed inside the carry waited for the dodge to finish"
+    );
+    assert!(
+        w.players[0].vel.flat_len().raw() < Fx::ONE.raw(),
+        "the swing came out with the slide still under her"
+    );
+}
+
+#[test]
+fn an_ordinary_dodge_cannot_be_swung_out_of() {
+    // The carry is the dash's; every other dodge keeps its punishable tail.
+    let mut w = in_the_open();
+    run(&mut w, 1, SHIFT | W, 0);
+    run(&mut w, 2, 0, 0);
+    assert!(matches!(w.players[0].action, Action::Dodge { .. }));
+    run(&mut w, 1, L, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Dodge { .. }),
+        "an ordinary dodge was cut short by a swing"
+    );
+}
+
+#[test]
+fn the_shadow_marks_the_creature_from_the_field() {
+    let mut w = hunting();
+    // Out on the field where it already stands, a step behind her and within
+    // reach of the head.
+    let at = shadow(&w).pos;
+    put_the_shadow_at(&mut w, at);
+    let full = beast_health(&w);
+    swing_and_let_it_copy(&mut w);
+    assert!(
+        beast_health(&w) < full,
+        "fixture: nothing reached the creature"
+    );
+    assert_eq!(
+        w.monster.unwrap().marks,
+        1,
+        "the copy from the field cut the creature and did not mark it"
+    );
+}
+
+#[test]
+fn a_cash_in_lands_on_the_creature_too() {
+    // The shadow works a Ridgeback's flank from range and she cashes on a leg.
+    let first_blow_on_it = |marks: u8| {
+        let mut w = hunting();
+        let mut beast = w.monster.unwrap();
+        beast.marks = marks;
+        beast.mark_clock = t::mark_fade();
+        w.monster = Some(beast);
+        let full = beast_health(&w);
+        run(&mut w, 2, L, 0);
+        for _ in 0..30 {
+            if beast_health(&w) < full {
+                return (full - beast_health(&w), w.monster.unwrap().marks);
+            }
+            run(&mut w, 1, 0, 0);
+        }
+        (0, marks)
+    };
+    let (plain, _) = first_blow_on_it(0);
+    let (cashed, left) = first_blow_on_it(t::mark_cap());
+    assert!(plain > 0, "fixture: she never reached the creature");
+    assert!(
+        cashed > plain * 2,
+        "a full tally cashed on the creature for {cashed} against a plain {plain}"
+    );
+    assert_eq!(left, 0, "the cash-in did not spend the creature's marks");
 }
