@@ -152,7 +152,9 @@ table) of the essence *remaining* in the pool, converted out of grey and never p
 anything the share or the grey did not take is lost with the pool. A pool counts if the
 victim is standing against it or the hit volume passes over it; the fullest one is drunk.
 **The drink comes before the spill**, so a hit on bare floor returns nothing, and a hit that
-drinks leaves only its own fresh, smaller figure behind.
+drinks leaves only its own fresh, smaller figure behind. A hit an effect delivers -- an arm,
+the bolt -- drinks only pools older than the effect, so the Grasp's four arms closing on one
+spot take one share of the pool that was there and nothing of what they spill themselves.
 
 **The scythe collects without a hit.** On every active frame of a sweep, every pool
 of hers the blade's volume passes over is drunk, whether or not anybody was in the way — the
@@ -164,9 +166,9 @@ through an empty pool.
 | Move | Share of what is left | From a full pool (110), with grey to fill |
 | --- | --- | --- |
 | Reaping sweep | 50% | 54 |
-| Haemorrhage | — | — |
+| Haemorrhage | 40%, on the bolt's cut | 44 |
 | Bloodletter | 30%, on the way home | 42 |
-| Grasp | — | — |
+| Grasp | 60%, once for all four arms | 66 |
 | Black spike | 100%, and the pool erupts | 105 |
 
 The shares are what make the sweep a bad thing to put through a big pool: it takes half and
@@ -231,7 +233,7 @@ what tells it from the Dual mage's level Sweep at a glance; the hit volume itsel
 
 ### Haemorrhage — spell, `R`
 **Startup** 12 · **Active** 3 · **Recovery** 18 · **Damage** 30 on the bolt · **Reach** 9 m,
-skillshot · **Cost** 4% of red · **Drinks** nothing · **Bleed** 180 frames, 8 every 12
+skillshot · **Cost** 4% of red · **Drinks** 40%, on the bolt's cut · **Bleed** 180 frames, 8 every 12
 
 A bolt straight out along the crosshair, spent on the first body it reaches: it cuts, it
 spills like any hit, and it opens a **bleed**. For three seconds the victim takes a tick every
@@ -272,7 +274,7 @@ pool in one throw and out-healed the rest of the kit, and was reverted (feel log
 
 ### Grasp — special, `Q`
 **Startup** 16 · **Active** 4 · **Recovery** 20 · **Damage** 48 an arm · **Reach** chosen by
-the hold, 1.5–10 m · **Cost** 7% of red · **Hold** 26 frames, 10 of them bound
+the hold, 1.5–10 m · **Cost** 7% of red · **Drinks** 60%, once · **Hold** 26 frames, 10 of them bound
 
 Kept as built, because the built version is the best-argued ability in the class: hold to
 choose a depth on the crosshair's line, four arms converge there, each arm damages and spills,

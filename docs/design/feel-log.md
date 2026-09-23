@@ -4547,3 +4547,18 @@ make the marker free.
 
 **Verdict** open. Unplayed since the change.
 
+### 2026-09-23 — Blood mage: the Grasp and the Haemorrhage drink too
+**Changed** Every ability that lands now collects: the Grasp drinks 60% of a pool its arms
+land on, once for all four, and the Haemorrhage's bolt drinks 40% on its cut. One rule
+underneath it: a hit an effect delivers drinks only pools *older than the effect*, so four
+arms closing on one spot in one frame take a share of the pool that was there and nothing
+of what they spill themselves. Without that the second arm drank the first arm's spill,
+and a Grasp on bare floor refunded itself.
+
+**Why** Two of the five abilities put nothing through the blood, which made "put an ability
+through the pool" a rule with exceptions nobody could see.
+
+**Measured** on a full pool with grey open: sweep 54, bolt 43, blade 42, Grasp 61, spike 105.
+
+**Verdict** open. Unplayed since the change.
+

@@ -421,10 +421,11 @@ fn bleed_table() {
         );
     }
     println!(
-        "  (the bolt's radius is {} m against the blade's {} m; it costs {}% and drinks nothing)",
+        "  (the bolt's radius is {} m against the blade's {} m; it costs {}% and drinks {}% of a pool it lands on)",
         hundredths(t::haemorrhage_radius()),
         hundredths(t::bloodletter_radius()),
-        m.cost
+        m.cost,
+        m.drink
     );
     println!();
 }

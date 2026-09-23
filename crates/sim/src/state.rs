@@ -1314,7 +1314,7 @@ impl World {
                     }
                     if dealt > 0 {
                         if let Some(hb) = hitbox(&snapshot[attacker]) {
-                            self.drink_over(attacker, &m, hb.from, hb.to, Some(defender));
+                            self.drink_over(attacker, &m, hb.from, hb.to, Some(defender), 0);
                         }
                         self.spill_under(
                             attacker as u8,
@@ -5797,7 +5797,14 @@ impl World {
         // that also drank would take three shares of one pool in one throw.
         if dealt > 0 {
             if !effect.kind.comes_home() {
-                self.drink_over(effect.owner as usize, &m, from, from, Some(victim));
+                self.drink_over(
+                    effect.owner as usize,
+                    &m,
+                    from,
+                    from,
+                    Some(victim),
+                    effect.age,
+                );
             }
             self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
         }
@@ -5854,7 +5861,7 @@ impl World {
         // door onto its back.
         if dealt > 0 {
             let m = effect.source();
-            self.drink_over(effect.owner as usize, &m, at, at, None);
+            self.drink_over(effect.owner as usize, &m, at, at, None, effect.age);
             self.spill(
                 effect.owner,
                 effect.class,
@@ -6040,6 +6047,12 @@ impl World {
     /// it or the hit volume passes over its disc; the fullest one is drunk.
     /// What comes back is the move's own share of the pool, converted out of
     /// grey and never past it, and the pool loses exactly what she got.
+    ///
+    /// `older_than` is the age of the thing delivering the hit, and only pools
+    /// older than it count. Nought for a swing, whose one hit has nothing of
+    /// its own to find; for an effect it is the effect's own age, so four arms
+    /// closing on one spot cannot each drink what the arm before it spilled --
+    /// which was, for a frame, a Grasp that refunded itself.
     fn drink_over(
         &mut self,
         owner: usize,
@@ -6047,6 +6060,7 @@ impl World {
         from: V3,
         to: V3,
         victim: Option<usize>,
+        older_than: u16,
     ) -> i32 {
         if m.drink == 0 {
             return 0;
@@ -6055,7 +6069,7 @@ impl World {
         let mut best: Option<(usize, i32)> = None;
         for (slot, e) in self.effects.iter().enumerate() {
             let Some(e) = e else { continue };
-            if !e.is_a_pool() || e.owner != owner as u8 {
+            if !e.is_a_pool() || e.owner != owner as u8 || e.age <= older_than {
                 continue;
             }
             let standing_in = feet.is_some_and(|f| e.covers(f));
@@ -6973,7 +6987,7 @@ impl World {
             // Her double duty, against the creature: drink over the pool the
             // blade passes through, then spill under the part it struck.
             if dealt > 0 {
-                self.drink_over(i, &m, box_out.from, box_out.to, None);
+                self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
                 self.spill(
                     i as u8,
                     attacker.class,

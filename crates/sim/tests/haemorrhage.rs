@@ -310,10 +310,7 @@ fn the_bolt_is_the_easier_thing_to_land() {
         "the bolt is no wider than the blade"
     );
     let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
-    assert_eq!(
-        m.drink, 0,
-        "the Haemorrhage drinks: it is the setup, not the payoff"
-    );
+    assert!(m.drink > 0, "the bolt collects nothing");
     assert!(m.cost > 0);
 }
 
@@ -347,4 +344,28 @@ fn the_bleed_does_not_kill() {
     w.players[1].health = 3;
     run(&mut w, t::bleed_lasts() as u32, 0, 0);
     assert!(w.players[1].health >= 0);
+}
+
+#[test]
+fn a_bolt_landed_on_somebody_standing_in_a_pool_drinks_its_share() {
+    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    let mut w = mage();
+    w.players[0].health = t::max_health() - 300;
+    w.players[0].grey = 300;
+    let at = V3::new(Fx::from_int(4), Fx::ZERO, Fx::ZERO);
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
+    let before = w.players[0].health;
+    let paid = w.players[0].cost_of(m.cost);
+    bolt_the_dummy(&mut w, 4);
+    let got = w.players[0].health - (before - paid);
+    let expect = m.drinks(200);
+    assert!(
+        got >= expect - 4 && got <= expect,
+        "the bolt drank {got} of a pool of 200 at {}%",
+        m.drink
+    );
+    // One and done: only the cut's own fresh pool is left.
+    let left = pools(&w);
+    assert_eq!(left.len(), 1, "the pool it drank is still there");
+    assert!(left[0].pool_volume() <= m.damage);
 }

@@ -156,10 +156,12 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
 #[test]
 fn hits_that_land_on_one_spot_make_one_pool() {
     // Four arms of a Grasp converge on one point and each spills there. One
-    // figure, not four -- and the Grasp is the move to ask, because it drinks
-    // nothing: any move that drinks spends the pool it lands over before it
-    // spills, so a sweep repeated on one spot leaves one fresh pool each
-    // time rather than a growing one, by design.
+    // figure, not four -- and the Grasp is the move to ask, because its four
+    // hits land on one spot in one frame: a hit an effect delivers drinks
+    // only pools older than the effect, so the arms cannot each drink what
+    // the arm before spilled, and their four spills gather into one figure.
+    // (A sweep repeated on one spot leaves one fresh pool each time rather
+    // than a growing one, because each drinks the last one's first.)
     let mut w = mage();
     let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
     // At the reach a tap converges on, so no hold is needed.
@@ -456,4 +458,47 @@ fn a_pool_is_an_effect_and_the_world_still_fits_its_budget() {
     // being asked about.
     assert!(std::mem::size_of::<World>() <= 4096);
     assert_eq!(EffectKind::Pool.name(), "essence pool");
+}
+
+#[test]
+fn a_grasp_landed_on_somebody_standing_in_a_pool_drinks_its_share_once() {
+    // Four arms, one drink: the share of the pool that was there before the
+    // Grasp was thrown, and nothing of what its own arms spill.
+    let mut w = mage();
+    wounded(&mut w, 400);
+    let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
+    w.players[1].pos = w.players[0]
+        .pos
+        .add(V3::new(grasp.channel_from, Fx::ZERO, Fx::ZERO));
+    let at = w.players[1].pos;
+    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
+    let pitch = pitch_at(&w, w.players[1].pos);
+    let before = w.players[0].health;
+    let paid = w.players[0].cost_of(grasp.cost);
+    let full = w.players[1].health;
+    looking(&mut w, 2, Input::SPECIAL, pitch, 0);
+    looking(
+        &mut w,
+        grasp.whiff_cost() as u32 + t::grasp_flight() as u32,
+        0,
+        pitch,
+        0,
+    );
+    let dealt = full - w.players[1].health;
+    assert!(dealt > grasp.damage * 2, "fixture: only {dealt} landed");
+    let got = w.players[0].health - (before - paid);
+    let expect = grasp.drinks(200);
+    assert!(
+        got >= expect - 8 && got <= expect,
+        "the Grasp drank {got} of a pool of 200 at {}%, against a share of {expect}",
+        grasp.drink
+    );
+    // And what its arms spilled is still on the floor, in one figure.
+    let left = pools(&w);
+    assert_eq!(left.len(), 1, "{} pools after a Grasp over one", left.len());
+    assert!(
+        left[0].pool_volume() > grasp.damage * 2,
+        "the arms' own spill was drunk back: {} on the floor after {dealt} dealt",
+        left[0].pool_volume()
+    );
 }
