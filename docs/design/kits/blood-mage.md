@@ -168,7 +168,7 @@ through an empty pool.
 | Reaping sweep | 50% | 54 |
 | Haemorrhage | 40%, on the bolt's cut | 44 |
 | Bloodletter | 30%, on the way home | 42 |
-| Grasp | 60%, once for all four arms | 66 |
+| Grasp | 60%, once at the catch, and again from the pool the victim is hauled onto | 66 |
 | Black spike | 100%, and the pool erupts | 105 |
 
 The shares are what make the sweep a bad thing to put through a big pool: it takes half and
@@ -274,13 +274,18 @@ pool in one throw and out-healed the rest of the kit, and was reverted (feel log
 
 ### Grasp — special, `Q`
 **Startup** 16 · **Active** 4 · **Recovery** 20 · **Damage** 48 an arm · **Reach** chosen by
-the hold, 1.5–10 m · **Cost** 7% of red · **Drinks** 60%, once · **Hold** 26 frames, 10 of them bound
+the hold, 1.5–10 m · **Cost** 7% of red · **Drinks** 60%, at the catch and where the haul
+ends · **Hold** 26 frames, 10 of them bound
 
 Kept as built, because the built version is the best-argued ability in the class: hold to
 choose a depth on the crosshair's line, four arms converge there, each arm damages and spills,
 and only all four catch. The catch binds and then hauls at forty metres a second to **her
 feet** — the victim arrives touching her, held, disabled, at ×1.4, on whatever she is standing
-in, in reach of the sweep that is already winding up. Everything about the channel and the catch
+in, in reach of the sweep that is already winding up — **and the Grasp drinks the pool they
+land on**. Two drinks, then: the pool under the victim where the arms closed, and the pool
+under her feet when the haul ends, each only from pools older than the hold, so the arms'
+own spill is never drunk back. "Grasp them onto the pool you are standing in" is the play,
+and it pays. Everything about the channel and the catch
 is as it was: see [Holding `Q` chooses the depth](#holding-q-chooses-the-depth) below, kept
 from the previous revision.
 

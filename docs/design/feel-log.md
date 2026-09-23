@@ -4555,8 +4555,13 @@ arms closing on one spot in one frame take a share of the pool that was there an
 of what they spill themselves. Without that the second arm drank the first arm's spill,
 and a Grasp on bare floor refunded itself.
 
+And the Grasp drinks a second time where the haul ends: the pool at her own feet that the
+victim is hauled onto, which is the pool the kit's play pattern -- "Grasp them onto the pool
+you are standing in" -- was always about. A drink only where the arms closed never paid it.
+
 **Why** Two of the five abilities put nothing through the blood, which made "put an ability
-through the pool" a rule with exceptions nobody could see.
+through the pool" a rule with exceptions nobody could see; and the Grasp's one drink was at
+the wrong end of the haul.
 
 **Measured** on a full pool with grey open: sweep 54, bolt 43, blade 42, Grasp 61, spike 105.
 

@@ -316,8 +316,12 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
 #[test]
 fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
     // The catch hauls to her feet -- touching -- so a mage standing in a
-    // pool when the arms close has the victim on the essence, held.
+    // pool when the arms close has the victim on the essence, held, and
+    // **the Grasp drinks that pool as they land on it**: the kit's own
+    // sentence is "Grasp them onto the pool you are standing in".
     let mut w = mage();
+    w.players[0].health = t::max_health() - 300;
+    w.players[0].grey = 300;
     let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
     w.players[1].pos = w.players[0].pos.add(V3::new(
         grasp.reach.sub(Fx::from_int(1)),
@@ -356,6 +360,8 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
             path.from.add(dir.scale(down)).sub(middle).len().raw()
         })
         .expect("the scan is not empty");
+    let before = w.players[0].health;
+    let paid = w.players[0].cost_of(grasp.cost);
     looking(&mut w, grasp.channel as u32 + 1, Input::SPECIAL, pitch, 0);
     looking(&mut w, 1, 0, pitch, 0);
     let mut held = false;
@@ -377,10 +383,17 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
         "let go {} m from her, not at her feet",
         gap.to_f32_for_render()
     );
-    let pool = w.effects[0].expect("her pool is still there");
+    // Onto the pool she stands in -- and the pool is drunk as they land on
+    // it: gone, and her share of it back.
     assert!(
-        pool.covers(at),
-        "hauled onto her feet and not onto the pool she stands in"
+        w.effects[0].is_none_or(|e| !e.is_a_pool()),
+        "hauled onto her feet and the pool she stands in was not drunk"
+    );
+    let got = w.players[0].health - (before - paid);
+    let expect = grasp.drinks(150);
+    assert!(
+        got >= expect - 10 && got <= expect,
+        "the haul onto her pool drank {got} against a share of {expect}"
     );
 }
 

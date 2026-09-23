@@ -354,6 +354,13 @@ pub struct Player {
     pub bleeding: u16,
     /// Whose bleed it is, so the pools are hers. `u8::MAX` for nobody.
     pub bled_by: u8,
+    /// This fighter's haul ended this frame: the Grasp's arms have brought
+    /// them to their captor's feet. `drag_the_held` has only the bodies and
+    /// cannot see the floor, so it leaves the fact here for `advance` to
+    /// spend on the same frame -- the Blood mage drinks the pool the victim
+    /// has just been hauled onto. In the snapshot for the reason every edge
+    /// is: a frame re-simulated must drink the same pool.
+    pub hauled_in: bool,
     /// Frames left of being **hauled** somewhere by her own Grasp: all four
     /// arms landed on the creature, and the heavier body wins, so she is the
     /// one pulled across the gap to the contact point. Zero for everybody and
@@ -890,6 +897,7 @@ impl Default for Player {
             blinked: NO_POOL,
             bleeding: 0,
             bled_by: u8::MAX,
+            hauled_in: false,
             haul: 0,
             haul_to: V3::ZERO,
             slam: Fx::ZERO,
@@ -1441,6 +1449,7 @@ impl World {
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
+        self.drink_where_the_haul_ends();
 
         // Knockout check last, so the killing blow is fully applied first.
         if let (Phase::Fighting, Some(beast)) = (self.phase, self.monster) {
@@ -1576,6 +1585,7 @@ impl World {
             h.write_u32(p.blinked as u32);
             h.write_u32(p.bleeding as u32);
             h.write_u32(p.bled_by as u32);
+            h.write_u32(p.hauled_in as u32);
             h.write_u32(p.haul as u32);
             hash_v3(&mut h, &p.haul_to);
             h.write_i32(p.slam.raw());
@@ -6086,6 +6096,34 @@ impl World {
         }
     }
 
+    /// The Grasp's second drink: the pool the victim has just been hauled
+    /// onto, at her feet.
+    ///
+    /// The kit's own sentence is "Grasp them onto the pool you are standing
+    /// in", and a drink only where the arms closed never paid that: the arms
+    /// close out where the victim was, and the pool is here. Only pools older
+    /// than the hold count, so what the arms spilled at the catch -- which at
+    /// melee range is within a body of her feet -- is not drunk back.
+    fn drink_where_the_haul_ends(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            if !self.players[i].hauled_in {
+                continue;
+            }
+            self.players[i].hauled_in = false;
+            let by = self.players[i].held_by as usize;
+            if by >= MAX_PLAYERS || !self.players[by].class.wounds_go_grey() {
+                continue;
+            }
+            let m = moves::get(self.players[by].class, moves::blood::GRASP);
+            let held_for = match self.players[i].action {
+                Action::Held { left } => self.players[i].stun_total.saturating_sub(left),
+                _ => 0,
+            };
+            let feet = self.players[i].pos;
+            self.drink_over(by, &m, feet, feet, Some(i), held_for.saturating_add(1));
+        }
+    }
+
     /// A spike came up on the pool in `slot`: the pool erupts, and so does
     /// every pool of hers the eruption covers, each at its own size.
     ///
@@ -6223,6 +6261,8 @@ fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
         let far = gap.len();
         let step = t::reel_speed().mul(crate::DT);
         victim.pos = if far.raw() <= step.raw() {
+            // Arrived, this frame, if there was any ground left to cover.
+            victim.hauled_in = far.raw() > 0;
             want
         } else {
             victim.pos.add(gap.scale(step.div(far)))
