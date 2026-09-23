@@ -296,7 +296,7 @@ fn a_spike_on_bare_floor_returns_nothing_and_leaves_a_pool_where_it_hit() {
     looking(&mut w, 2, Input::MECHANIC, 0, 0);
     run(&mut w, spike.startup as u32 + 4, 0, 0);
     assert!(
-        w.players[1].health < t::max_health(),
+        w.players[1].health < w.players[1].full_health(),
         "fixture: the spike missed"
     );
     assert_eq!(

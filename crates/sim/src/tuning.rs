@@ -602,6 +602,96 @@ pub fn leap_rise() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LeapRise))
 }
 
+/// The most weight the shield holds, in health: what it can be holding at once.
+/// A guess at a little over two committed blows, so a Bulwark who has blocked a
+/// string is visibly full and one who blocked a poke is visibly not.
+pub fn weight_cap() -> Fx {
+    Fx::from_int(oven::scalar(Scalar::WeightCap))
+}
+
+/// How long a full shield takes to empty with nothing landing on it. A clock
+/// rather than a rate, so the knob reads the way the play script asks the
+/// question: ten seconds and the exchange is over.
+pub fn weight_drain_frames() -> i32 {
+    oven::scalar(Scalar::WeightDrain)
+}
+
+/// A parried blow's deposit, as a multiple of its damage. The four-frame read
+/// already pays a stagger; this is how much more it pays. Open -- see
+/// `bulwark-v2.md`.
+pub fn parry_load() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ParryLoad))
+}
+
+/// What each unit of weight adds to Slam's damage. Half, so a full shield's
+/// slam gives back half of what it took on top of the blow itself -- enough to
+/// be the class's big hit without being a round.
+pub fn slam_weight_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamWeightDamage))
+}
+
+/// How much wider Slam's shake is from a full shield, in metres; a part-full
+/// one adds its share.
+pub fn slam_weight_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlamWeightRadius))
+}
+
+/// What Slam adds per metre per second the Bulwark was falling when it came
+/// down -- the scaling the kit sketched, so a slam out of a leap is worth more
+/// than one thrown standing. The Champion's spike charges the same way.
+pub fn slam_fall_damage() -> i32 {
+    oven::scalar(Scalar::SlamFallDamage)
+}
+
+/// How full the shield must be for Slam's shake to stagger, as a share of the
+/// cap.
+pub fn slam_stagger_share() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::SlamStaggerShare), 100)
+}
+
+/// The stagger a full slam's shake leaves on whoever it catches unguarded.
+pub fn slam_full_stagger() -> u16 {
+    oven::scalar(Scalar::SlamStaggerFrames) as u16
+}
+
+/// A full shield's flight speed, as a share of an empty one's: a loaded throw
+/// is a boulder, and a boulder is slower to arrive and easier to read.
+pub fn throw_speed_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrowSpeedFull))
+}
+
+/// What each unit of weight adds to the thrown shield's damage.
+pub fn throw_weight_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ThrowWeightDamage))
+}
+
+/// How full a thrown shield must be to knock down what it hits, as a share of
+/// the cap.
+pub fn knockdown_share() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::KnockdownShare), 100)
+}
+
+/// How long a loaded throw leaves its victim on the floor.
+pub fn knockdown_frames() -> u16 {
+    oven::scalar(Scalar::KnockdownFrames) as u16
+}
+
+/// The planted shield's size as a wall, empty and full, as multiples of the
+/// Elementalist's stone. Between the two by how full it landed.
+pub fn wall_size_empty() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSizeEmpty))
+}
+
+pub fn wall_size_full() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::WallSizeFull))
+}
+
+/// Blocked knockback at a full shield, as a share of it empty. The more it has
+/// taken, the less it moves -- the pushback resistance `defense.md` promised.
+pub fn heavy_pushback() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HeavyPushback))
+}
+
 /// How far the Reaver may stray from a shadow standing out on the field before
 /// it comes and finds her.
 ///

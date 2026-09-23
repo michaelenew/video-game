@@ -813,13 +813,13 @@ fn the_bloodletter_brings_back_a_cut_and_not_health() {
     let paid = w.players[0].health;
     run(&mut w, flight as u32 * 2, 0, 0);
     assert!(
-        w.players[1].health < sim::tuning::max_health(),
+        w.players[1].health < w.players[1].full_health(),
         "fixture: the blade never cut anybody"
     );
     // What it can bring back is the pool the cut spilled, drunk once on the
     // way home like any pool the blade crosses -- never more than the pool's
     // share, and the pool is gone for it.
-    let dealt = sim::tuning::max_health() - w.players[1].health;
+    let dealt = w.players[1].full_health() - w.players[1].health;
     assert!(
         w.players[0].health <= paid + m.drinks(dealt),
         "the blade came home and brought health with it: {} up from {paid}, more than \

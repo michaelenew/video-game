@@ -5200,6 +5200,227 @@ question on the same list as the rest of the two-bar work.
 
 ---
 
+### 2026-09-23 — the Bulwark's shield stores what it blocks, and the health table (Bulwark v2, M1)
+
+**Changed** Every hit taken on the shield is now stored in it as **weight**
+([bulwark-v2.md](bulwark-v2.md), `crate::bulwark`). A blocked hit stores its damage; a parried
+one stores twice that. Weight is capped, drains on a clock, and a heavy guard is pushed back
+less. Health is per class now, through a `Health` family in the Oven, and the Bulwark's is
+highest. First values:
+
+| Knob | Value | Why |
+| --- | --- | --- |
+| Bulwark · Weight, the most the shield holds | 400 | A little over two committed blows, so a blocked string reads as full and a blocked poke does not |
+| Bulwark · Weight, a full shield empties in | 600 f | Ten seconds: about one exchange, so a first-minute block does not pay out at the end |
+| Bulwark · Weight, a parry loads | ×2 | The proposal's "more". Open: it may make the four-frame read worth too much |
+| Bulwark · Weight, pushback at the cap | ×0.4 | Enough that the number moves visibly; see below for how little it moves the body |
+| Health · Bulwark | ×1.25 (1250) | "Highest on the roster". Everyone else ×1, and the Reaver's row is the Reaver thread's to move |
+
+**Measured**, by `cargo run -p sim --bin weight`:
+
+- *Openers.* Every class's `L` blocked stores its damage exactly (Champion 64, Bulwark 60,
+  Elementalist 45, Dual mage 16) and parried stores double. Two show *guard took damage*: the
+  Reaver's shadow copy and the Blood mage's opener each have a part the guard does not cover.
+  That is existing behaviour, not this change, but it means those two load the shield with
+  only part of what they deal.
+- *Load.* A Champion's sword string, five blocked: deposits 64, 71, 99, 63, 71 → weight 306,
+  which is the deposits less 62 drained over 106 frames. A parry on top deposits 124. Never
+  past the cap.
+- *Decay.* A full shield loses 40 a second and is empty on frame 601 of a 600-frame clock.
+- *Stomp.* Bite (190) and Stomp (140) blocked from in front load the shield by their full
+  damage — a blocked bite is half the cap on its own. Rear-and-slam is unblockable and does
+  not load it, which is right. The tail sweep, charge, shake and back kick did not reach a
+  Bulwark standing at their ideal range in front, so this script says nothing about them yet.
+- *Pushback.* The curve takes a blocked sword swing's knockback from 1.4 m/s at empty to
+  0.6 m/s at the cap — but the body moves **18 cm at empty and 16 cm full**. Most of the shove
+  is the Champion's own step walking into the guard, which moves both bodies whatever the
+  shield weighs. **Finding:** against the sword, "a heavy shield resists pushback" is true of
+  the number and barely visible on the screen. Heavier knockback (the hammer, the creature)
+  should show it better; if it still reads as nothing, the trait wants to act on the
+  attacker's step as well, which is a change to the body-push rule and not a knob.
+
+**Why** Blocking produced not-being-hit, which a dodge produces for less. This is the first
+half of making it produce something: the deposit. The withdrawal — Slam and Throw spending
+it, the planted wall sized by it — is M2 and M3, so today weight is visible and changes
+pushback, and nothing spends it.
+
+**Verdict** open — **built, unverified**. Awaiting the first play (checkpoint C1 in
+[plans/bulwark-v2.md](plans/bulwark-v2.md)): *can you see the shield loading, does the parry
+feel like a bigger deposit, does the decay feel like a clock or a leak.*
+
+---
+
+### 2026-09-23 — Slam on middle click spends the weight; the leap brings the shield back (Bulwark v2, M2)
+
+**Changed** Slam is bound to middle click and spends the shield's weight. First values:
+`Slam, damage per weight` ×0.5; `Slam, shake radius added when full` 1.6 m; `Slam, damage per m/s
+fallen` 6; `Slam, staggers from` 90 % of the cap; `Slam, stagger at the cap` 45 frames. Three
+more changes the milestone could not be met without, each a decision rather than a knob:
+
+1. **The leap turns the shield around.** `E` on a shield in flight throws him toward it *and*
+   sends it homing back, so the two meet and he arrives with it in hand, in the air. Before,
+   the leap (15 m/s) was slower than the throw (19 m/s) and landed short every time, and
+   every Bulwark move needs the shield in hand — so "throw, leap, slam", the loop both the kit
+   and the proposal are built on, could not be done at all.
+2. **A Slam thrown in the air lands with the feet.** Once its wind-up is spent it waits for the
+   floor, the way Landfall does. Without it the flat shake connected while he was still half a
+   metre up, so the fall bonus was paid on about 2 m/s of a 6.6 m/s fall. A Slam pressed a
+   frame before landing still owes all fourteen frames of its wind-up — letting the landing
+   skip them made it an instant 170, and a test now pins that.
+3. **A crouch does not duck Slam.** It was flagged as a high move (`hits_crouching` off) while
+   the kit said a crouch does not duck it. A shake through the floor is not something you duck
+   under; the kit won. The Bulwark's answer to a turtle is still Grapple, so
+   `every_class_can_beat_a_turtle` is unchanged.
+
+**Measured**, `cargo run -p sim --bin weight slam`:
+
+| Weight | Damage | Shake radius | Weight after | Staggered |
+| --- | --- | --- | --- | --- |
+| 0 | 170 | 1.4 m | 0 | no |
+| 100 | 219 | 1.8 m | 0 | no |
+| 200 | 269 | 2.2 m | 0 | no |
+| 300 | 319 | 2.6 m | 0 | no |
+| 400 | 369 | 3.0 m | 0 | yes |
+
+Out of the leap: caught in the air, fell at 4.1 m/s — 194 empty, 389 full with the stagger. Out
+of a full jump, empty: 15.7 m/s, 260. Into a crouch: 170. A blocked Slam leaves the same
+blockstun at every weight, and all of `feel.rs` passes unchanged — the frames did not move.
+
+**Seen**, headless capture of the demo's Slam on its first active frame with the overlay on
+(`SHOT_FRAME=166 SHOT_WEIGHT=… DEBUG_OVERLAY=1 DEMO=1`): the red shake ring is visibly twice as
+wide at 299 weight as at 0, and it is the ring the hit test uses.
+
+**Why** This is the withdrawal. A full Slam is now the largest hit the Bulwark has, and it is
+largest because of what he took — a Slam at 400 deals 369, more than twice the empty one, and
+the full-shield stagger is the area stagger `bulwark.md` wanted a class to own.
+
+**Watch** A full Slam out of a leap is 389 of a Champion's 1000 — the biggest single blow on the
+roster now. It costs 400 of blocked damage, which has to be taken first, and a Slam's wind-up
+is fourteen frames anybody can see coming, with a shield that has visibly gone dark. If it
+reads as a round-ender, the lever is `Slam, damage per weight`, not the cap.
+
+**The hunt.** The scripted hunter (`cargo run -p hunt --bin fight -- --class bulwark`) now plays
+the class's plan: a Bulwark at a foot holds its guard between openings, and a blow felt on the
+shield is answered with Slam on the first free frame. Its report gained *blows guarded*, *weight
+stored* and *weight spent*. Default seed, before and after:
+
+| | Before (no guard) | After |
+| --- | --- | --- |
+| Outcome | unresolved at 1200 s | died at 520 s |
+| Damage dealt | 1471 | 1675 |
+| Blows guarded / stored / spent | — | 4 / 640 / 440 |
+
+A traced run shows the loop happening: a tail sweep taken on the guard (+160), then a Slam
+spending 148 into a hind foot for 244 — against 170 empty. The leg that broke was finished by
+pokes, not by the Slam. **Finding:** standing at the foot with the guard up deals damage more
+than twice as fast and dies in half the time, because the guard does nothing against the
+unblockable rear-and-slam and a Bulwark planted at the foot is under it. Across four seeds the
+guarding hunter dies at 520–590 s where the dodging one died at 660–1000 s or outlasted the
+budget. Whether that is the right trade for the class is a design question, not a bot one.
+
+**Verdict** open — built and measured, unplayed. The remaining felt question: whether an empty
+Slam is still worth pressing at 170 over 1.4 m for a 14-frame wind-up.
+
+---
+
+### 2026-09-23 — the loaded throw, and the planted shield as a wall (Bulwark v2, M3)
+
+**Changed** The throw reads weight and a planted shield is a solid. First values: `Throw,
+speed at the cap` ×0.6; `Throw, damage per weight` ×0.5; `Throw, knocks down from` 50 % of the
+cap; `Throw, knockdown` 40 frames; `Wall, size empty` 0.8 of a stone; `Wall, size full` 1.6.
+
+**How the wall is built.** Not a second collision path. `stones::gather` — which every body,
+aiming ray, bolt, gust and piece of debris already walks — puts a Bulwark's planted shield
+into its owner's first slot as a stone standing at full height and scaled by its weight. A
+Bulwark never has stones of his own, so the slot is always free, and because the field is
+rebuilt every frame and only written back into Elementalists' mechanics, nothing can kick,
+carry or erupt it. Stones gained a `scale` (one for all of hers) and every place that read the
+Oven's stone radius or height reads the stone's own now. The renderer draws the stones from
+the same field, so the wall is drawn at the size it is tested at.
+
+Four decisions the milestone forced, each pinned by a test:
+
+1. **Planted means on the floor.** A shield used to plant where its flight ended — at hand
+   height on a level throw, 2.3 m up. As a wall that was a solid everybody walked under.
+2. **A recall goes home through whoever is in the way**, once each. It used to plant where it
+   struck on the way back, which was invisible while planted shields floated; with them on the
+   floor, a recall through anybody never came home — `a_thrown_shield_plants_and_can_be_recalled`
+   found it. The contact also no longer hurts a partner in a hunt, the rule every other blow
+   already follows.
+3. **A wall holds its weight.** Weight drains in hand and in flight, not planted. A solid that
+   shrank over ten seconds would slide out from under whoever stood on it. It makes a wall a
+   bank — recall it and the weight comes home for a Slam — and the price of the bank is having
+   no shield in hand for anything, which on this class is everything.
+4. **Cataclysm does not break it.** It stops against it. The proposal wrote it bypass-only.
+
+**Measured**, `cargo run -p sim --bin weight wall`:
+
+| Weight | Throw arrives | Throw damage | Knocks down | Wall radius | Wall height | Walker | Bolt | Recalled: walker / bolt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 5 f | 85 | no | 0.6 m | 1.4 m | stopped | stopped | through / through |
+| 100 | 6 f | 132 | no | 0.7 m | 1.7 m | stopped | stopped | through / through |
+| 200 | 7 f | 182 | no | 0.8 m | 2.1 m | stopped | stopped | through / through |
+| 300 | 8 f | 232 | yes | 0.9 m | 2.4 m | stopped | stopped | through / through |
+| 400 | 9 f | 281 | yes | 1.1 m | 2.8 m | stopped | stopped | through / through |
+
+Every throw that strikes plants empty. The Bolt is fired at the pitch that reaches the Bulwark
+with the shield recalled, so "stopped" means stopped by the wall and not missed. The Reaver's
+dash is refused across a full planted shield, the sibling of the stone test.
+
+**Seen**, headless captures of the demo: the planted shield as a grey column with the shield
+standing on top of it; and, with the shield loaded to 400 just before the demo's throw (a
+throwaway local patch, not committed), the throw striking the far Bulwark — the HUD reading
+`STAGGER` and the planted shield `weight: 0`.
+
+**Watch** An empty wall is 1.4 m, shorter than a fighter, so it stops a walk and a level shot
+but is a line you can see and hop over; only a loaded one denies the Reaver's line. That is
+the intent — big cover is earned — but it means the "cover for the party" promise needs blows
+taken first.
+
+**Verdict** open — built and measured, unplayed.
+
+---
+
+### 2026-09-23 — the knob pass without a player, and the class done (Bulwark v2, M4–M5)
+
+**Changed** Nothing numeric. The M4 knob pass was meant to be driven by play; there was none,
+so it was driven by what can be measured, and nothing measured asked for a knob to move.
+
+**What was measured, and why each number stays.**
+
+- *A full Slam against the roster.* The biggest single hits elsewhere are 165–210 (Grapple 210,
+  Cataclysm 190, Executioner 185). A full Slam is 369, 389 out of the leap — about 1.8 times the
+  next. It costs 400 of blocked damage first, it is a 14-frame wind-up from a visibly dark
+  shield, and it returns exactly the proposal's "half of what it took". Its stagger leaves the
+  Bulwark about 19 frames ahead: enough for Bash (Slam + Bash = 429, under half a bar, the
+  line `feel.rs` draws for a combo), not enough for Grapple. Left alone.
+- *The hunt*, eight seeds, the default and the seven after it: the hunter guards 2–6 creature
+  blows a hunt and Slams 3–8 times; **in 6 of 8 runs a Slam lands the blow that breaks a leg**,
+  which is the plan's M4 criterion. Every run the hunter dies, at 518–625 s — the guard does
+  nothing about the unblockable rear-and-slam, and a Bulwark planted at a foot is under it.
+  That is a class-design finding (see *Open*), not a knob.
+- *Drain.* Ten seconds from full. Creature blows arrive minutes apart in a hunt, so the hunter
+  Slams straight after the block rather than banking; in versus, a string's worth of blocks
+  arrives inside it. Left alone.
+
+**The browser build runs the class.** `./crates/web/build-game.sh` built (the module
+validates), and headless Chromium loaded it with `?p1=bulwark&p2=bulwark&demo=1&shot_frame=166
+&shot_weight=400&debug_overlay=1`: Slam active, weight 299, the same shake ring and the same
+32 frames of hitstun on the dummy as the desktop capture of the same frame.
+
+**Also fixed along the way**: the desktop game panicked on launch on `main` — `hud::update`'s
+frame-step text query was not provably disjoint from the round counter's, which Bevy refuses.
+
+**Open — the felt questions no measurement answers.** Whether blocking feels like loading
+rather than waiting; whether a loaded throw is a decision or the obvious button; whether the
+wall's size reads as what was taken; whether an empty Slam is worth pressing; whether the
+opponent can read the shield's weight from across the arena (the capture says it can be
+*seen*; whether it *reads* is the question). And the one the proposal made a stop condition:
+whether this is enough of a reason to use a shield alone. If a player says it is not, the
+fallback is the grappler, and that is a new document.
+
+**Verdict** built and measured; felt verdict open.
+
 ### 2026-09-23 — the Reaver's shadow aims itself, and a health table (v2, M1)
 
 **Changed** Out on the field, the shadow turns its copy of her swing to the nearest body inside

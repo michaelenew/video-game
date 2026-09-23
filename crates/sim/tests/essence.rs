@@ -260,7 +260,7 @@ fn nobody_else_spills_anybody() {
             .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
         run(&mut w, 60, Input::LEFT, 0);
         assert!(
-            w.players[1].health < t::max_health(),
+            w.players[1].health < w.players[1].full_health(),
             "fixture: {} never hit her",
             class.name()
         );
@@ -293,7 +293,7 @@ fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_is_gone() {
     );
     // One and done: the pool she drank is gone. What is on the floor now is
     // only what the sweep spilled after it, which is a fresh, smaller figure.
-    let dealt = t::max_health() - w.players[1].health;
+    let dealt = w.players[1].full_health() - w.players[1].health;
     let left = pools(&w);
     assert_eq!(
         left.len(),
@@ -336,7 +336,7 @@ fn a_drink_is_capped_by_grey_and_the_pool_is_spent_regardless() {
     );
     // And the pool is spent all the same: what she could not fill is lost
     // with it. Only the Reap's own spill is left on the floor.
-    let dealt = t::max_health() - w.players[1].health;
+    let dealt = w.players[1].full_health() - w.players[1].health;
     let left = pools(&w);
     assert_eq!(left.len(), 1);
     assert!(
@@ -356,7 +356,7 @@ fn a_hit_on_bare_floor_returns_nothing_on_the_frame_it_lands() {
     let paid = w.players[0].health;
     run(&mut w, sweep.startup as u32 + 4, 0, 0);
     assert!(
-        w.players[1].health < t::max_health(),
+        w.players[1].health < w.players[1].full_health(),
         "fixture: the sweep missed"
     );
     assert_eq!(w.players[0].health, paid, "a hit on bare floor healed her");

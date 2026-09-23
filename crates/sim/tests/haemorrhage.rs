@@ -117,7 +117,7 @@ fn right_click_throws_a_bolt_that_cuts_and_opens_a_bleed() {
 fn the_bleed_ticks_for_its_whole_length_and_then_stops() {
     let mut w = mage();
     let bolt = bolt_the_dummy(&mut w, 4);
-    let full = t::max_health() - bolt;
+    let full = w.players[1].full_health() - bolt;
     // Opened when the bolt landed, part way through its flight.
     let opened = w.players[1].bleeding;
     assert!(
@@ -164,7 +164,7 @@ fn a_bleeding_fighter_standing_still_pools_where_they_stand() {
     let mut w = mage();
     let bolt = bolt_the_dummy(&mut w, 4);
     run(&mut w, t::bleed_lasts() as u32, 0, 0);
-    let bled = t::max_health() - bolt - w.players[1].health;
+    let bled = w.players[1].full_health() - bolt - w.players[1].health;
     let left = pools(&w);
     assert_eq!(
         left.len(),
@@ -330,7 +330,7 @@ fn a_guarded_bolt_is_spent_and_opens_nothing() {
     );
     assert_eq!(
         w.players[1].health,
-        t::max_health(),
+        w.players[1].full_health(),
         "a guard let the bolt through"
     );
     assert_eq!(w.players[1].bleeding, 0, "a guarded bolt opened a bleed");

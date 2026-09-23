@@ -1179,13 +1179,12 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             3 => "E",
             _ => "LMB",
         },
-        _ => match slot {
+        // Slam on the third click, since 2026-09-23: it spends the shield's
+        // weight, and the button was free. See `bulwark-v2.md`.
+        Class::Bulwark => match slot {
             0 => "LMB",
-            1 => "Shift+LMB",
-            2 => "Q",
-            // The Reaver puts an ability on the mechanic key, because
-            // throwing her second body across the arena is not an instant.
-            _ => "E",
+            1 => "MMB",
+            _ => "Q",
         },
     }
 }

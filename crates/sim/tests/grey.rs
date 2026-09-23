@@ -265,7 +265,7 @@ fn nobody_else_goes_grey() {
             .add(V3::new(Fx::ratio(3, 2), Fx::ZERO, Fx::ZERO));
         run(&mut w, 60, Input::LEFT, Input::LEFT);
         assert!(
-            w.players[0].health < t::max_health(),
+            w.players[0].health < w.players[0].full_health(),
             "fixture: {} was never hit",
             class.name()
         );

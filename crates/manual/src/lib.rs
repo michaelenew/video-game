@@ -486,6 +486,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Dual mage's two bars, driven by named input scripts -- alternate, one-sided, finisher, idle, ascend -- in an empty arena and against a dummy. Prints when each tier is reached, when the band is left, how long the lower bar lasts outside it, what the burn cost, and whether she ascended. Name one script for it frame by frame.",
             ),
             e(
+                "cargo run -p sim --bin weight",
+                "The Bulwark's shield weight, driven by named scripts -- openers, load, decay, pushback, stomp, slam, wall. What each class's opener deposits blocked and parried, a sword string loading it, a full shield draining on its clock, the shove at five weights, and each creature move into a raised guard. Name scripts to run only those.",
+            ),
+            e(
                 "cargo run -p sim --bin tally",
                 "The Shadow Reaver's v2, driven by named scripts -- range, stall, pattern, greedy, stick. Prints how many of the shadow's copies land at range with and without its self-aim, how a full tally fades, what the whole send-mark-cross-cash pattern deals and how long it takes, and what melee with the shadow at her heel is worth. Name one script for it frame by frame.",
             ),
@@ -577,6 +581,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "SHOT_BARS=<dark>,<light>",
                 "Start a Dual mage with her two bars there, so a capture can look at the wings without playing up to them. Ignored for any other class.",
+            ),
+            e(
+                "SHOT_WEIGHT=<n>",
+                "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

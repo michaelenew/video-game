@@ -115,6 +115,9 @@ pub enum Intent {
     Brace,
     /// Get out of the way.
     Evade,
+    /// Take it on the shield. The Bulwark's answer to a blockable blow, and
+    /// how its shield gets the weight a Slam spends.
+    Guard,
 }
 
 /// One scripted fighter.
@@ -129,6 +132,12 @@ pub struct Hunter {
     climb_left: u16,
     /// Frames since it last threw an attack, so it does not mash.
     cooldown: u16,
+    /// Frames left in which a blow just taken on the shield is answered with
+    /// Slam. Felt, not seen: the shield took the hit in the present, so there
+    /// is no reaction delay on knowing the creature's move is over.
+    answer_left: u16,
+    /// The shield's weight last frame, to feel a blow land on it.
+    weight_was: Fx,
     dodge_left: u16,
     /// Frames left of holding the jump button.
     ///
@@ -154,6 +163,8 @@ impl Hunter {
             intent: Intent::Circle,
             climb_left: 0,
             cooldown: 0,
+            answer_left: 0,
+            weight_was: Fx::ZERO,
             dodge_left: 0,
             leap_left: 0,
             hop: Fx::ZERO,
@@ -313,6 +324,9 @@ const SWING_GAP_OPEN: u16 = 8;
 /// and got swept about one time in two. Poking, then watching, then poking
 /// is what a person does at the feet of something with a tail.
 const SWING_GAP: u16 = 28;
+/// How long after a blow lands on the shield the Bulwark still answers it
+/// with Slam: the blockstun, and a beat.
+const ANSWER: u16 = 30;
 /// Far enough from the station to be worth a dash rather than a walk. The
 /// animal turns at a rate that moves the station about as fast as a walk, so
 /// a hunter who only walked never quite arrived behind it.
@@ -366,7 +380,13 @@ impl Hunter {
         self.cooldown = self.cooldown.saturating_sub(1);
         self.climb_left = self.climb_left.saturating_sub(1);
         self.dodge_left = self.dodge_left.saturating_sub(1);
+        self.answer_left = self.answer_left.saturating_sub(1);
         let me = w.players[self.who];
+        let weight = sim::bulwark::weight(&me);
+        if weight.raw() > self.weight_was.raw() {
+            self.answer_left = ANSWER;
+        }
+        self.weight_was = weight;
         // A jump it has decided on is held until it happens. The button does
         // nothing while a swing is finishing, and a bot that counted the hold
         // down from the decision rather than from the takeoff spent half of
@@ -428,6 +448,34 @@ impl Hunter {
         let threatened = coming.is_some_and(|m| {
             m.damage > 0 && range.raw() < m.ideal_range.add(m.range_span.mul(HALF)).raw()
         });
+
+        // 0. A Bulwark with the shield in hand takes a blockable blow on it
+        //    instead: that is what loads the shield, and the loaded Slam is
+        //    the punish. Facing the animal, which is where the guard's arc
+        //    points. Not the sweep, which comes round from the side the
+        //    guard is not covering, and not anything unblockable.
+        //
+        //    **Only while it can still land.** What it sees is `REACTION`
+        //    frames old, so a guard held until it *sees* the move end is a
+        //    guard held a quarter of a second into the creature's recovery --
+        //    which is the punish, thrown away. It knows the move's frames the
+        //    way a player who has seen it twice does, and drops the guard when
+        //    the active frames are over in the present rather than in memory.
+        let still_live = coming.is_some_and(|m| {
+            let to_go = if seen.doing == STARTUP {
+                seen.left as i32 + m.active as i32
+            } else {
+                seen.left as i32
+            };
+            to_go > REACTION as i32
+        });
+        let guards = me.shield().is_some_and(|s| s.in_hand())
+            && still_live
+            && coming.is_some_and(|m| !m.unblockable && seen.kind != monster::SWEEP);
+        if threatened && guards {
+            self.intent = Intent::Guard;
+            return Input::aimed(Input::RIGHT, wire);
+        }
 
         // 1. Get out of the way. The answers are not the same, which is the
         //    whole point of having six moves: a sweep goes under you, and
@@ -553,6 +601,33 @@ impl Hunter {
         } else {
             0
         };
+        // **A blow just taken on the shield is answered with Slam**, on the
+        // first free frame after the blockstun: what the blow put into the
+        // shield comes straight back out at the foot.
+        if self.answer_left > 0
+            && me.action.actionable()
+            && sim::bulwark::weight(me).raw() > 0
+            && range.raw() < strike.add(FOOT_HALF).raw()
+        {
+            self.answer_left = 0;
+            self.cooldown = SWING_GAP;
+            self.intent = Intent::Punish;
+            return Input::aimed(heavy(me.class), wire);
+        }
+        // **A Bulwark at the foot keeps the shield up between openings.** It
+        // is the class's plan, not a reaction: the stomp is faster than anybody
+        // reacts, so a guard raised on sight never meets it, and what loads
+        // the shield is standing where the blows land with the guard already
+        // there. Down for the swing, up again after -- the loaded Slam is then
+        // the swing the next opening gets.
+        let stance = me.shield().is_some_and(|s| s.in_hand())
+            && !seen.open
+            && swing == 0
+            && range.raw() < strike.add(FOOT_HALF).raw();
+        if stance {
+            self.intent = Intent::Guard;
+            return Input::aimed(walk | Input::RIGHT, wire);
+        }
         // A hop in progress keeps its button down -- height is what it is for --
         // without that costing the swing it was going to throw.
         let hop = if self.leap_left > 0 { Input::SPACE } else { 0 };
@@ -641,9 +716,14 @@ impl Hunter {
 /// opening with a hammer, and never with the class's *biggest* hits, which all
 /// live behind a Rush charge it deliberately does not spend. It is here to
 /// measure the creature, not to show off a kit.
+///
+/// The Bulwark's is on middle click too, since 2026-09-23: Slam, which spends
+/// the shield's weight, so a hunter that has blocked a stomp punishes with
+/// what the stomp put into it. The other classes' committed moves have had no
+/// input since shift stopped modifying clicks, and for them this is the poke.
 fn heavy(class: sim::Class) -> u16 {
     match class {
-        sim::Class::Champion => Input::MIDDLE,
+        sim::Class::Champion | sim::Class::Bulwark => Input::MIDDLE,
         // The Haemorrhage, on right click: a bolt that cuts and gores, and
         // the one right-click ability in the roster since shift stopped
         // modifying clicks. The creature does not bleed, so on a hunt it is

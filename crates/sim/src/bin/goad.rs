@@ -272,7 +272,7 @@ impl Report {
         println!(
             "  health lost {} of {}  |  ends dark {} / light {}",
             self.health_lost,
-            sim::state::max_health(),
+            t::health_of(Class::DualMage),
             tenths(self.end.0),
             tenths(self.end.1)
         );
@@ -353,10 +353,10 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
         // A training dummy that does not die: a round that ended would reset
         // the bars and the clock mid-script. What it lost this frame is what
         // she dealt.
-        let took = sim::state::max_health() - w.players[1].health;
+        let took = w.players[1].full_health() - w.players[1].health;
         r.dealt += took;
         r.biggest_hit = r.biggest_hit.max(took);
-        w.players[1].health = sim::state::max_health();
+        w.players[1].health = w.players[1].full_health();
         // And one that does not move: the benchmarks are stated against a
         // target that stands in everything, and the light hand's shove would
         // otherwise walk it out of range on the second press.

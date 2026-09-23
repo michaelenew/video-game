@@ -11,6 +11,7 @@ pub mod arena;
 pub mod beast;
 pub mod beast_baked;
 pub mod bolt;
+pub mod bulwark;
 pub mod camera;
 pub mod class;
 pub mod curve;

@@ -101,14 +101,17 @@ happened to be held — so what the key did depended on what the rest of your ha
 which is a modifier you cannot trust and cannot teach. Every other key in the game means one
 thing.
 
-What it costs is real and is being paid deliberately: **two classes have a committed move
-with no input at all** — the Bulwark's Slam and the Elementalist's Fissure. They are still in
-the move table, still tuned, still printed by the frame table, and a player cannot throw them.
-Finding each of them a home is a separate job, one kit at a time, because the right answer is
-different per class and guessing them at once is how a grammar gets worse. The Shadow Reaver
-loses nothing, because her Executioner was already on `E`; the Blood mage's committed move
-found its home on **right click** in the 2026-09-23 rebuild, where the Haemorrhage (by way of
-the Reap, the same day) took the row Rend had been stranded on.
+What it costs is real and is being paid deliberately: **three classes had a committed move
+with no input at all** — the Bulwark's Slam, the Elementalist's Fissure and the Blood mage's
+Rend. They stayed in the move table, still tuned, still printed by the frame table, and a
+player could not throw them. Finding each of them a home is a separate job, one kit at a time,
+because the right answer is different per class and guessing three of them at once is how a
+grammar gets worse. The Shadow Reaver loses nothing, because her Executioner was already on
+`E`. **Two of the three are home**, both since 2026-09-23. The Bulwark's Slam is on middle
+click, because it is where the shield's weight is spent and the third click was free — see
+[bulwark-v2.md](bulwark-v2.md). The Blood mage's row is on **right click**, where the
+Haemorrhage (by way of the Reap, the same day) took the row Rend had been stranded on. The
+Elementalist's Fissure is the one still waiting.
 
 What it bought, immediately, is the Dual mage. Her committed cast moved to **middle click**,
 which has no side — so by that class's own rule it pushes her further along whichever way she
@@ -861,17 +864,17 @@ three rows of three is as much as one class should ask a player to hold.
 
 ## Bulwark
 
-Current as of 2026-09-15, and the four rows marked **bound** are what the game does. This
+Current as of 2026-09-23, and the five rows marked **bound** are what the game does. This
 table read `M` for the mechanic and `shift` + click for the whole kit until then, which was
 the pre-2026-09-11 scheme rather than anything in the game.
 
 | Input | Result |
 | --- | --- |
 | `L` | **Bash** — the shield strike, and the safe poke. **Bound** |
-| `shift` + `L` | **Slam** — the overhead, driven into the ground. **Bound** |
+| `M` | **Slam** — the shield driven into the ground, spending its weight. A crouch does not duck the shake. Thrown in the air it lands with the feet. **Bound** since 2026-09-23; it had no input from 2026-09-16 |
 | `Q` | **Grapple** — the command grab, and the answer to a turtle. **Bound** |
 | `R` (hold) | **Guard.** Opening frames are the parry, and it is the mechanic that gates it rather than the button: `R` guards while the shield is in hand and does nothing while it is not. **Bound** |
-| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight. One key, three states, no frames — the mechanic fires on the press. **Bound** |
+| `E` | **Throw** when held, **Recall** when planted, **leap to it** when it is in flight — and the shield turns to meet the leap, so he arrives with it in hand. One key, three states, no frames — the mechanic fires on the press. **Bound** |
 | direction + `L` | Basic moves |
 | `LR` | Reserved — the candidate slot for a dedicated ally-cover stance |
 
@@ -881,9 +884,9 @@ and changing it is free. Guard on the right button matches every game where alt-
 defensive option. There is no separate off-hand auto: `L` is the shield itself.
 
 > **The auto and the committed slot are one rung lower than this table used to show.** Bash is
-> left click rather than `shift` + left, and Slam is `shift` + left rather than `shift` + right,
-> because the shared grammar gives every class a poke on the bare click and its committed
-> version on the modifier. What the class does *not* have yet is the sixth ability the kit
+> left click rather than `shift` + left, because the shared grammar gives every class a poke on
+> the bare click. Slam was `shift` + left until shift stopped modifying clicks, and is the third
+> click now. What the class does *not* have yet is the sixth ability the kit
 > document specifies — see [kits/bulwark.md](kits/bulwark.md).
 
 ## Shadow Reaver

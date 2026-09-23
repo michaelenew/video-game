@@ -48,6 +48,17 @@ fn main() {
             full_time,
             tenths(full_apex.div(t::body_height())),
         );
+        // The shield's weight: what it holds, how fast it leaks, what a parry
+        // is worth and what a full one does to a shove. `--bin weight` runs it.
+        if class == sim::class::Class::Bulwark {
+            println!(
+                "  weight: holds {}  |  full empties in {}f  |  parry loads x{}  |  pushback at the cap x{}",
+                t::weight_cap().to_int(),
+                t::weight_drain_frames(),
+                tenths(t::parry_load()),
+                tenths(t::heavy_pushback()),
+            );
+        }
         println!(
             "  air: jump x{}  gravity x{}  fall cap x{}  steering {}",
             tenths(mob.jump),

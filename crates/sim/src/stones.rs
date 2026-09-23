@@ -28,7 +28,7 @@
 
 use crate::DT;
 use crate::arena;
-use crate::class::{MAX_STRUCTURES, Mechanic, Structure};
+use crate::class::{MAX_STRUCTURES, Mechanic, Shield, Structure};
 use crate::fixed::Fx;
 use crate::math::V3;
 use crate::state::{Action, MAX_PLAYERS, Player};
@@ -71,6 +71,7 @@ impl Structure {
             // Straight up, and nobody is thrown by it. Every stone on the
             // field but one.
             erupt: V3::ZERO,
+            scale: Fx::ONE,
         }
     }
 
@@ -120,15 +121,25 @@ impl Structure {
         t::structure_rise_curve().at(Fx::ratio(age as i32, frames as i32))
     }
 
+    /// How wide it is: the Oven's stone, at this one's scale.
+    pub fn radius(&self) -> Fx {
+        t::structure_radius().mul(self.scale)
+    }
+
+    /// How tall it is once fully out of the floor.
+    pub fn height(&self) -> Fx {
+        t::structure_height().mul(self.scale)
+    }
+
     /// The surface you can stand on.
     pub fn top(&self) -> Fx {
-        self.at.y.add(t::structure_height().mul(self.risen()))
+        self.at.y.add(self.height().mul(self.risen()))
     }
 
     /// How tall the part above its own base is. Zero while fully buried, which
     /// is what keeps a stone that has not arrived yet from blocking anything.
     pub fn standing_height(&self) -> Fx {
-        t::structure_height().mul(self.risen())
+        self.height().mul(self.risen())
     }
 
     pub fn phase(&self) -> Phase {
@@ -151,7 +162,7 @@ impl Structure {
         let grew = self
             .risen_at(self.age)
             .sub(self.risen_at(self.age.saturating_sub(1)));
-        self.vel.y.add(t::structure_height().mul(grew).div(DT))
+        self.vel.y.add(self.height().mul(grew).div(DT))
     }
 
     /// Has the eruption already caught this fighter?
@@ -171,9 +182,18 @@ impl Structure {
 /// they act on *each other* and on *both* fighters, and neither of those can be
 /// written from inside one player's borrow. Gathering, resolving and writing
 /// back is the whole trick.
+///
+/// **And the Bulwark's planted shield.** It is a solid for exactly the reasons
+/// a stone is one, so it is gathered into the same field -- into its owner's
+/// first slot, which a Bulwark never fills -- and every query that walks the
+/// stones walks it too. See [`crate::bulwark::wall`].
 pub fn gather(players: &[Player; MAX_PLAYERS]) -> Field {
     let mut field = [None; MAX_STONES];
     for (owner, p) in players.iter().enumerate() {
+        if let Mechanic::Shield(Shield::Planted { pos, weight }) = p.mechanic {
+            field[owner * MAX_STRUCTURES] = Some(crate::bulwark::wall(pos, weight));
+            continue;
+        }
         let Mechanic::Structures(slots) = p.mechanic else {
             continue;
         };
@@ -240,7 +260,7 @@ pub fn step(players: &mut [Player; MAX_PLAYERS]) {
             stone.at,
             stone.vel,
             true,
-            t::structure_radius(),
+            stone.radius(),
             stone.standing_height(),
         );
         stone.at = r.pos;
@@ -291,9 +311,9 @@ pub fn step(players: &mut [Player; MAX_PLAYERS]) {
 /// on why this runs here rather than alongside the churn/eruption checks in
 /// `touch`.
 fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
-    let reach = t::body_radius().add(t::structure_radius());
     for (index, slot) in field.iter_mut().enumerate() {
         let Some(stone) = slot else { continue };
+        let reach = t::body_radius().add(stone.radius());
         if !stone.launched {
             continue;
         }
@@ -337,7 +357,7 @@ fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
 
 /// Two stones sharing space. The shorter way out wins.
 fn meet(mut a: Structure, mut b: Structure) -> (Structure, Structure) {
-    let span = t::structure_radius().add(t::structure_radius());
+    let span = a.radius().add(b.radius());
     let apart = V3::new(b.at.x.sub(a.at.x), Fx::ZERO, b.at.z.sub(a.at.z));
     let flat = apart.flat_len();
     if flat.raw() >= span.raw() {
@@ -391,7 +411,7 @@ fn ride(rider: &mut Structure, under: &Structure, offset: V3) {
     }
     rider.vel.y = climb.max(rider.vel.y);
 
-    let span = t::structure_radius().add(t::structure_radius());
+    let span = rider.radius().add(under.radius());
     let out = climb.mul(offset.flat_len().div(span));
     let away = offset.normalized();
     // Set rather than added: the rider is standing on a moving surface for as
@@ -515,7 +535,17 @@ pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
 /// aimed level or down would leave that point already inside the ground.
 /// Cataclysm's own blast is the one caller that wants a point rather than a
 /// volume, so it gets the point that is actually inside the thing that broke.
+///
+/// **Not a planted shield.** It stops Cataclysm like any solid and is not
+/// broken by it: the wall is bypass-only, per `bulwark-v2.md`, and a wall the
+/// opponent could break would spend the Bulwark's weight for him.
 pub fn destroy(players: &mut [Player; MAX_PLAYERS], index: usize) -> Option<V3> {
+    if !matches!(
+        players[owner_of(index) as usize].mechanic,
+        Mechanic::Structures(_)
+    ) {
+        return None;
+    }
     let mut field = gather(players);
     let at = field[index].take().map(|s| {
         let half = s.standing_height().mul(Fx::ratio(1, 2));
@@ -566,10 +596,10 @@ pub fn resolve_body(
     mut grounded: bool,
     was_grounded: bool,
 ) -> arena::Resolved {
-    let reach = t::body_radius().add(t::structure_radius());
     let height = t::body_height();
 
     for stone in field.iter().flatten() {
+        let reach = t::body_radius().add(stone.radius());
         let top = stone.top();
         let feet = pos.y;
         let head = pos.y.add(height);
@@ -668,8 +698,8 @@ pub fn resolve_body(
 
 /// Is there a stone directly beneath the feet?
 fn standing_on(field: &Field, pos: V3) -> bool {
-    let reach = t::body_radius().add(t::structure_radius());
     field.iter().flatten().any(|stone| {
+        let reach = t::body_radius().add(stone.radius());
         let apart = V3::new(pos.x.sub(stone.at.x), Fx::ZERO, pos.z.sub(stone.at.z));
         apart.flat_len().raw() < reach.raw()
             && pos.y.sub(stone.top()).abs().raw() <= arena::SKIN.raw()
@@ -682,10 +712,10 @@ fn standing_on(field: &Field, pos: V3) -> bool {
 /// being knocked on to a stone costs you the same as walking on to it.
 pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
     let mut field = gather(players);
-    let reach = t::body_radius().add(t::structure_radius());
 
     for (index, slot) in field.iter_mut().enumerate() {
         let Some(stone) = slot else { continue };
+        let reach = t::body_radius().add(stone.radius());
         let owner = owner_of(index);
         for (i, p) in players.iter_mut().enumerate() {
             // A stone never touches the fighter who raised it. She raises them

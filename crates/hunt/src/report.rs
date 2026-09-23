@@ -106,6 +106,13 @@ pub struct Report {
     pub dealt: i32,
     pub taken: i32,
     pub hits_taken: u32,
+    /// The Bulwark's shield: blows it took, the weight they stored, and the
+    /// weight its Slams spent. Zero for every other class. Whether the loop
+    /// the class is built on -- take a blow, give it back -- happens at all in
+    /// a hunt is a question only these three answer.
+    pub guarded: u32,
+    pub stored: i32,
+    pub spent: i32,
     pub unanswerable: u32,
     pub ridge_hits: u32,
     pub topples: u32,
@@ -181,6 +188,9 @@ impl Report {
             dealt: 0,
             taken: 0,
             hits_taken: 0,
+            guarded: 0,
+            stored: 0,
+            spent: 0,
             unanswerable: 0,
             ridge_hits: 0,
             topples: 0,
@@ -332,6 +342,20 @@ impl Report {
             }
         }
         self.was_aboard = aboard;
+
+        // The shield. A rise in weight is a blow taken on it; a fall bigger
+        // than a frame of drain is a Slam spending it.
+        for i in 0..MAX_PLAYERS {
+            let was = sim::bulwark::weight(&before.players[i]);
+            let now = sim::bulwark::weight(&after.players[i]);
+            let moved = now.sub(was).to_int();
+            if moved > 0 {
+                self.guarded += 1;
+                self.stored += moved;
+            } else if moved < -1 {
+                self.spent -= moved;
+            }
+        }
 
         // Damage to the hunters, and whether they had any way to answer it.
         // The blood on the floor, and what came back off it. A pool that
@@ -732,6 +756,19 @@ impl Report {
             "by the hunters",
         );
         line(&mut out, "hits taken", format!("{}", self.hits_taken), "");
+        line(
+            &mut out,
+            "blows guarded",
+            format!("{}", self.guarded),
+            "taken on a Bulwark's shield",
+        );
+        line(
+            &mut out,
+            "weight stored",
+            format!("{}", self.stored),
+            "and spent by Slam",
+        );
+        line(&mut out, "weight spent", format!("{}", self.spent), "");
         line(
             &mut out,
             "unanswerable hits",

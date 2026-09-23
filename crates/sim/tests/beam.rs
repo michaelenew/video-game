@@ -11,7 +11,7 @@
 //! would be asserting something about the rig instead of about the aim.
 
 use sim::class::{Class, Mechanic};
-use sim::state::{Action, max_health};
+use sim::state::Action;
 use sim::tuning as t;
 use sim::{Fx, Input, V3, World, aim};
 
@@ -140,7 +140,7 @@ fn the_shot_hits_whoever_the_crosshair_is_on() {
         .expect("no angle put the crosshair on the other fighter at all");
     shoot(&mut w, pitch);
     assert!(
-        w.players[1].health < max_health(),
+        w.players[1].health < w.players[1].full_health(),
         "the crosshair was on them and the shot went somewhere else"
     );
 }
@@ -157,7 +157,7 @@ fn aiming_over_someone_shoots_over_them() {
     shoot(&mut high, pitch + tenths(350));
     assert_eq!(
         high.players[1].health,
-        max_health(),
+        high.players[1].full_health(),
         "a shot aimed thirty-five degrees above a fighter still hit them, so the aim \
          is decoration and the shot is following the ground"
     );
@@ -176,7 +176,7 @@ fn aiming_up_reaches_someone_standing_above_her() {
         .expect("no angle put the crosshair on a fighter standing on the platform");
     shoot(&mut w, pitch);
     assert!(
-        w.players[1].health < max_health(),
+        w.players[1].health < w.players[1].full_health(),
         "aiming up at a fighter standing above her did not reach them"
     );
 }
@@ -289,10 +289,10 @@ fn the_shot_takes_the_charge_and_gives_the_frames_straight_back() {
         "the auto shoved its victim, which is knockback by another name"
     );
     assert!(
-        max_health() - now.health <= max_health() / 10,
+        now.full_health() - now.health <= now.full_health() / 10,
         "the auto took {} of {} health; it is meant to be small",
-        max_health() - now.health,
-        max_health()
+        now.full_health() - now.health,
+        now.full_health()
     );
 }
 
