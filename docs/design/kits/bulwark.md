@@ -6,6 +6,11 @@ depends: ../bulwark.md, ../defense.md
 
 # Bulwark — kit
 
+> ⚠️ **A v2 of the mechanic is proposed, 2026-09-23** — see [../bulwark-v2.md](../bulwark-v2.md).
+> Every hit taken on the shield is stored as **weight**; Slam (on middle click) and Throw spend
+> it, and a planted shield becomes a real structure sized by it. Health goes highest on the
+> roster. Nothing of it is built. This document is still what is in the game.
+
 **Identity.** The wall. Wins by denying space and funnelling the opponent into where you are
 already aimed. Committed, not slow.
 

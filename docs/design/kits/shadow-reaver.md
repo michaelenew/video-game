@@ -7,6 +7,13 @@ sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat
 
 # Shadow Reaver — kit
 
+> ⚠️ **A v2 of the damage pattern is proposed, 2026-09-23** — see
+> [../shadow-reaver-v2.md](../shadow-reaver-v2.md). The shadow, the dash, the lotus and the
+> recall do not change. What is added: the shadow out on the field turns to face whoever is in
+> reach; every hit it lands from the field **marks** the target; crossing to it by dash opens a
+> window in which her first landed swing spends the marks, and at a full tally staggers. Her
+> health drops below the Champion's. Nothing of it is built.
+
 **Identity.** Two bodies. Every option is a function of the line between you and your
 shadow. Tactical positioning in a second dimension, cashed out in burst.
 
