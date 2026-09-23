@@ -79,7 +79,15 @@ pub fn step(p: &mut Player) {
     // It turns the way she turns. It is her shadow: it does what she does, and
     // that includes which way it is pointed, which is what makes its copy of a
     // swing come out along the same line hers did.
-    shadow.facing = ease_to(shadow.facing, p.facing).normalized();
+    //
+    // **Except out on the field, in the middle of a copy.** There it has turned
+    // to whoever is in reach -- see `copy_needs_a_target` -- and it holds that
+    // until the copy is over. Eased back towards her mid-swing, the arc would
+    // bend round to point wherever her shoulders are, which is the miss the
+    // turn exists to fix.
+    if !fighting_out_there(shadow) {
+        shadow.facing = ease_to(shadow.facing, p.facing).normalized();
+    }
 
     match shadow.doing {
         Ghost::Attending => {
@@ -138,6 +146,12 @@ pub fn step(p: &mut Player) {
     age_the_echo(p, &mut shadow);
     put(p, shadow);
     step_her_dash(p);
+}
+
+/// Out on the field and copying a swing: the one time the shadow is pointed by
+/// something other than her.
+fn fighting_out_there(shadow: Shadow) -> bool {
+    matches!(shadow.doing, Ghost::Waiting) && shadow.echo != NO_ECHO
 }
 
 /// A step of the ease every following thing here uses.
@@ -235,17 +249,23 @@ fn age_the_echo(p: &Player, shadow: &mut Shadow) {
 /// second description of the same swing, and the two would disagree the first
 /// time either was touched.
 ///
-/// Her aim path is **translated** to the shadow rather than recomputed: the
-/// copy is her swing thrown from somewhere else, so it keeps her line — the
-/// pitch she committed to and the yaw her shoulders were on — and only the
-/// place it starts from changes.
+/// Her aim path is **carried over** to the shadow rather than recomputed: the
+/// copy is her swing thrown from somewhere else, so it keeps her line -- the
+/// pitch she committed to, the shape, the frames. At her heel it keeps her yaw
+/// too, and is a plain translation. **Out on the field it keeps the yaw the
+/// shadow turned to**, which is whoever was in reach when the copy wound up --
+/// see [`aim::shadow_faces`] and [`aim::copied_swing`].
 pub fn echo_body(p: &Player) -> Option<Player> {
     let shadow = of(p)?;
     let action = echo_action(p.class, shadow)?;
     if p.health <= 0 {
         return None;
     }
-    let shift = shadow.pos.sub(p.pos);
+    let yaw = if matches!(shadow.doing, Ghost::Waiting) {
+        shadow.facing
+    } else {
+        p.facing
+    };
     Some(Player {
         pos: shadow.pos,
         vel: V3::ZERO,
@@ -254,12 +274,36 @@ pub fn echo_body(p: &Player) -> Option<Player> {
         hit_used: shadow.echo_used,
         grounded: true,
         crouching: false,
-        aim_path: aim::Path {
-            from: p.aim_path.from.add(shift),
-            to: p.aim_path.to.add(shift),
-        },
+        aim_path: aim::copied_swing(p.aim_path, p.pos, p.facing, shadow.pos, yaw),
         ..*p
     })
+}
+
+/// If the shadow is out on the field and winding up a copy, where it is and how
+/// far the copy reaches -- the two things [`aim::shadow_faces`] needs to pick a
+/// target. `None` the rest of the time.
+///
+/// Through the wind-up rather than on one frame of it, so a target that steps
+/// across it during the startup is followed the way she would follow them
+/// herself. The moment the copy is out it holds, because a swing that turned
+/// to track somebody mid-arc would be homing.
+pub fn copy_needs_a_target(p: &Player) -> Option<(V3, Fx)> {
+    let shadow = of(p)?;
+    if !fighting_out_there(shadow) || p.health <= 0 {
+        return None;
+    }
+    match echo_action(p.class, shadow)? {
+        Action::Startup { kind, .. } => Some((shadow.pos, moves::get(p.class, kind).reach)),
+        _ => None,
+    }
+}
+
+/// Point the shadow. Called with whatever [`aim::shadow_faces`] answered, or her
+/// own facing when it answered nothing.
+pub fn turn_to(p: &mut Player, facing: V3) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.facing = facing;
+    put(p, shadow);
 }
 
 /// Mark the copy as having connected, so it lands once.
@@ -483,6 +527,35 @@ pub fn carrying_a_dash(p: &Player) -> bool {
     of(p).is_some_and(|shadow| shadow.carry > 0)
 }
 
+/// Is she asking to swing out of the carry?
+///
+/// **The cash-in is a strike on arrival**, and this is what makes it one. The
+/// dash leaves her sliding at the speed she crossed at, a few metres past the
+/// shadow, and a swing that had to wait for the dodge's tail to run out came
+/// out that far from anybody standing beside it: the whole pattern -- send,
+/// mark, cross, cash -- missed at the last step, every time, in `tally`. So a
+/// swing pressed inside the carry cuts the tail short the way a jump does,
+/// and comes out with her still on the shadow.
+///
+/// **The jump keeps the slide and the swing spends it.** The jump out of the
+/// carry is for going somewhere, so it takes the speed up with her; the swing
+/// is for striking *here*, so she plants -- and turns to the crosshair, the way
+/// any fighter free to act does, since the dodge she is cutting short had her
+/// facing fixed along the dash.
+///
+/// It buys no safety. The tail it cuts is traded for the swing's own frames,
+/// and a blocked Slash is still minus five.
+pub fn swing_out_of_the_carry(p: &mut Player, input: Input) -> bool {
+    if !(carrying_a_dash(p) && (input.has(Input::LEFT) || input.has(Input::MECHANIC))) {
+        return false;
+    }
+    p.action = Action::Free;
+    p.vel = V3::new(Fx::ZERO, p.vel.y, Fx::ZERO);
+    p.facing = V3::from_turns(input.aim_turns());
+    spend_carry(p);
+    true
+}
+
 /// Spend the carry on a jump, so it pays for one takeoff and not two.
 pub fn spend_carry(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
@@ -512,7 +585,10 @@ fn step_her_dash(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     // The carry runs down whether or not a dash is still going: it is what a
     // dash leaves behind, and the frame it was opened on is one of its own.
+    // The cash-in window is the same kind of thing and runs down beside it.
+    // See [`Shadow::cash`].
     shadow.carry = shadow.carry.saturating_sub(1);
+    shadow.cash = shadow.cash.saturating_sub(1);
     if shadow.dash == 0 {
         put(p, shadow);
         return;
@@ -543,6 +619,10 @@ fn step_her_dash(p: &mut Player) {
         // that carried her up would keep carrying her off the top of it.
         p.vel.y = Fx::ZERO;
         shadow.carry = t::shadow_carry();
+        // **And the cash-in window.** The same arrival, and only this one:
+        // the recall and the leash bring the shadow home too, and neither is
+        // her crossing to it. See [`cash_open`].
+        shadow.cash = t::cash_window();
         // The window is the same length however far she came. What is left of
         // the dodge usually *is* that window -- she arrived early and the rest
         // is the slide -- but a dash that spent the whole dodge crossing would
@@ -558,4 +638,86 @@ fn step_her_dash(p: &mut Player) {
         }
     }
     put(p, shadow);
+}
+
+// ---------------------------------------------------------------------------
+// The tally, and cashing it
+// ---------------------------------------------------------------------------
+//
+// v2 of the damage pattern, 2026-09-23 -- `docs/design/shadow-reaver-v2.md`.
+// The shadow already paid movement, damage and a thin slice of utility. This
+// makes it pay **burst**: every hit it lands from the field is counted on the
+// victim, and crossing to it by dash opens a window in which her first swing
+// to connect spends the count. Nothing new is put in the world to get it; the
+// marks are a count of what the shadow already does, and the cash-in is a
+// multiplier on a swing she already has.
+
+/// Put one mark on a fighter the shadow has just hit from the field.
+///
+/// Once per victim per *event* -- a copy, a lotus pass, a recall -- and the
+/// callers are what make it once: each already remembers whom it has cut.
+/// A new mark restarts the fade, so a victim the shadow is still working does
+/// not lose the count it is building.
+pub fn mark(victim: &mut Player) {
+    victim.marks = victim.marks.saturating_add(1).min(t::mark_cap());
+    victim.mark_clock = t::mark_fade();
+}
+
+/// Run a fighter's marks down: one every `mark_fade` frames since the last
+/// mark or the last fade.
+pub fn fade_mark(p: &mut Player) {
+    if p.marks == 0 {
+        p.mark_clock = 0;
+        return;
+    }
+    p.mark_clock = p.mark_clock.saturating_sub(1);
+    if p.mark_clock == 0 {
+        p.marks -= 1;
+        if p.marks > 0 {
+            p.mark_clock = t::mark_fade();
+        }
+    }
+}
+
+/// She has just thrown `kind`. If it is a swing and the window is open, this
+/// is the swing that cashes, and the window is spent on it; anything she throws
+/// afterwards is an ordinary swing.
+///
+/// The first swing *thrown*, not the first that pays: a Slash whiffed inside
+/// the window has had its chance, and so has one thrown at somebody with no
+/// marks on them.
+pub fn arm_the_cash(p: &mut Player, kind: u8) {
+    let Some(mut shadow) = of(p) else { return };
+    let swing = moves::get(p.class, kind).aim() == aim::Kind::Swing;
+    shadow.cashing = if swing && shadow.cash > 0 {
+        shadow.cash = 0;
+        kind
+    } else {
+        NO_ECHO
+    };
+    put(p, shadow);
+}
+
+/// Does the blow she is landing right now cash the tally?
+pub fn cashing(p: &Player) -> bool {
+    let Some(shadow) = of(p) else { return false };
+    shadow.cashing != NO_ECHO && p.action.attack_kind() == Some(shadow.cashing)
+}
+
+/// It connected: it has cashed, blocked or not, and cannot again.
+pub fn cashed(p: &mut Player) {
+    let Some(mut shadow) = of(p) else { return };
+    shadow.cashing = NO_ECHO;
+    put(p, shadow);
+}
+
+/// What a swing that spends `marks` is worth, as a multiple of itself: one,
+/// plus `mark_worth` a mark.
+pub fn cash_multiple(marks: u8) -> Fx {
+    Fx::ONE.add(t::mark_worth().mul(Fx::from_int(marks as i32)))
+}
+
+/// Is this a full tally -- the one that also staggers?
+pub fn full_tally(marks: u8) -> bool {
+    marks >= t::mark_cap()
 }

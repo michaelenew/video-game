@@ -507,8 +507,11 @@ pub fn update(
         *text = Text::new(step_readout(&sim));
     }
     for (bar, mut node) in bars.iter_mut() {
-        let hp = sim.cur.players[bar.0].health.max(0) as f32;
-        node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
+        // Against this fighter's own full bar, which is per class now -- see
+        // `sim::tuning::health_of`.
+        let p = &sim.cur.players[bar.0];
+        let hp = p.health.max(0) as f32;
+        node.width = Val::Percent(100.0 * hp / p.full_health().max(1) as f32);
     }
 
     // The Dual mage's two bars. Three things at once, and each of them is a

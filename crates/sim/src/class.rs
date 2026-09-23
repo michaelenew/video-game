@@ -289,6 +289,23 @@ pub struct Shadow {
     /// of throwing it on the floor. Pressing early keeps more, so the tech has
     /// a gradient rather than a pass mark -- see `tuning::shadow_carry`.
     pub carry: u16,
+    /// Frames left of **the cash-in window**: opened by the same arrival that
+    /// opens the carry, and spent by the first swing she throws inside it.
+    ///
+    /// A swing pressed inside the carry cuts the dodge's tail short -- see
+    /// `shadow::swing_out_of_the_carry` -- so at its first value, the carry's
+    /// own length, the window *is* the carry: the strike on arrival.
+    ///
+    /// That swing spends every mark on whoever it hits -- see
+    /// `state::Player::marks` and `docs/design/shadow-reaver-v2.md`. Only the
+    /// dash opens it. A recall brings the shadow home and so does the leash,
+    /// and neither is *her going there*: the assassin's verb is the crossing.
+    pub cash: u16,
+    /// The swing that was thrown inside that window and has not connected yet,
+    /// or [`NO_ECHO`]. It is the swing that cashes, when it lands -- so the
+    /// window measures when she *commits*, and Executioner's long wind-up is a
+    /// risk she chose rather than a timer she cannot beat.
+    pub cashing: u8,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -331,6 +348,8 @@ impl Shadow {
             echo_used: false,
             dash: 0,
             carry: 0,
+            cash: 0,
+            cashing: NO_ECHO,
         }
     }
 

@@ -740,6 +740,97 @@ pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
 }
 
+// ---------------------------------------------------------------------------
+// The Reaver's v2: the shadow aims, keeps a tally, and the dash cashes it
+// ---------------------------------------------------------------------------
+//
+// First values, 2026-09-23, all guesses from `docs/design/shadow-reaver-v2.md`
+// and none of them played. The feel log is where they get argued about.
+
+/// How far past the copied move's reach the shadow, out on the field, will
+/// still turn to a body. Half a metre: enough that a target stepping out of
+/// reach during the wind-up is still followed, not so much that a copy turns to
+/// somebody it plainly cannot touch.
+pub fn shadow_aim_slack() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowAimSlack))
+}
+
+/// Does the shadow, out on the field, turn its copy to a body at all? On. The
+/// switch is there so the before and after can be played side by side.
+pub fn shadow_aims() -> bool {
+    oven::scalar(Scalar::ShadowAims) != 0
+}
+
+/// What the **attending** shadow's copy deals, as a share of her swing. Half of
+/// the field copy's, from the proposal: with the tally in place, the copy at
+/// her heel is the one thing in the kit that argues for standing in melee, and
+/// it has to argue less. Twelve rather than twelve and a half because it is a
+/// percentage.
+pub fn shadow_echo_attending() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::ShadowEchoAttending), 100)
+}
+
+/// The most marks one body can carry. Five is the proposal's first guess: too
+/// low and the burst is a bonus, too high and the shadow never fills it before
+/// the victim walks away.
+pub fn mark_cap() -> u8 {
+    oven::scalar(Scalar::MarkCap).clamp(1, 255) as u8
+}
+
+/// Frames between one mark fading and the next. A second and a half, the
+/// middle of the proposal's "a second or two": stalling should clean you, and
+/// a tally left alone for the length of a full cap should be gone.
+pub fn mark_fade() -> u16 {
+    oven::scalar(Scalar::MarkFade).max(1) as u16
+}
+
+/// How long after the dash arrives her first landed swing spends the marks.
+/// The carry's length to start with, which the proposal calls the real
+/// execution test; twice it is the comfortable one, and both want playing.
+pub fn cash_window() -> u16 {
+    oven::scalar(Scalar::CashWindow).max(1) as u16
+}
+
+/// What each mark adds to the swing that spends it, as a multiple of the
+/// swing. Four tenths, so a full tally of five triples it.
+pub fn mark_worth() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MarkWorth))
+}
+
+/// The stagger a cash-in at a full tally applies. Half a second: a hard stop,
+/// behind the hardest condition in her kit -- the rule `ability-spec.md` sets
+/// for staggers.
+pub fn cash_stagger() -> u16 {
+    oven::scalar(Scalar::CashStagger).max(0) as u16
+}
+
+// ---------------------------------------------------------------------------
+// Health, per class
+// ---------------------------------------------------------------------------
+
+/// A class's health, as `max_health` times its own multiplier.
+///
+/// Per class the way jump, gravity and fall already are. The Reaver starts at
+/// three quarters, because a class whose whole pattern is *not being there*
+/// should be the one that cannot afford to be. The Bulwark's number is the
+/// Bulwark thread's to set -- its v2 wants it highest -- and everybody else is
+/// one until a design says otherwise.
+pub fn health_of(class: crate::class::Class) -> i32 {
+    use crate::class::Class;
+    let knob = match class {
+        Class::Bulwark => Scalar::HealthBulwark,
+        Class::Champion => Scalar::HealthChampion,
+        Class::ShadowReaver => Scalar::HealthReaver,
+        Class::Elementalist => Scalar::HealthElementalist,
+        Class::BloodMage => Scalar::HealthBloodMage,
+        Class::DualMage => Scalar::HealthDualMage,
+    };
+    Fx::from_int(max_health())
+        .mul(Fx::from_raw(oven::scalar(knob)))
+        .to_int()
+        .max(1)
+}
+
 /// How fast she crosses to her shadow on a dash.
 ///
 /// Constant while the dash runs rather than a decaying shove, so the distance

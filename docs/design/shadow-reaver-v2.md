@@ -1,5 +1,5 @@
 ---
-status: proposed — v2 of the damage pattern, nothing built
+status: built 2026-09-23, unplayed — see kits/shadow-reaver.md and the feel log
 decided: 2026-09-23
 supersedes: nothing outright; adds to kits/shadow-reaver.md, whose moves and shadow survive
 sources: kits/shadow-reaver.md, docs/archive/combat-design/shadow-reaver-skills.md, this design thread
@@ -19,6 +19,14 @@ where setup becomes explosion — and a reason to leave melee once she is there.
 adds both, and both come off the shadow.
 
 **The action plan for building this is [plans/shadow-reaver-v2.md](plans/shadow-reaver-v2.md).**
+
+> **Built, 2026-09-23, and nobody has played it.** Two things differ from what is written
+> below, both found with `cargo run -p sim --bin tally` and recorded in the feel log. **The
+> window is the swing thrown inside it, not the swing landed**, so Executioner's wind-up is a
+> risk rather than a timer. And **a swing pressed inside the dash's carry cuts it short and
+> plants her**: the slide under the dash took her nearly five metres past the shadow, and every
+> cash-in on somebody standing beside it missed. The Bulwark's health multiplier is left at one
+> for the Bulwark thread to set.
 
 ## What is wrong today
 

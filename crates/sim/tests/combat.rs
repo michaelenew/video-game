@@ -211,14 +211,14 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     let mut standing = reavers();
     run(&mut standing, 50, E, 0);
     assert!(
-        standing.players[1].health < max_health(),
+        standing.players[1].health < standing.players[1].full_health(),
         "setup did not connect while standing"
     );
 
     let mut mid = reavers();
     run(&mut mid, 20, L, Input::CROUCH);
     assert!(
-        mid.players[1].health < max_health(),
+        mid.players[1].health < mid.players[1].full_health(),
         "a mid was ducked; crouch beats everything"
     );
 
@@ -226,7 +226,7 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     run(&mut ducked, 50, E, Input::CROUCH);
     assert_eq!(
         ducked.players[1].health,
-        max_health(),
+        ducked.players[1].full_health(),
         "crouch failed to duck the overhead"
     );
 }
@@ -639,13 +639,13 @@ fn the_drawn_hitbox_is_the_one_that_hits() {
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(
-            inside.players[1].health < max_health(),
+            inside.players[1].health < inside.players[1].full_health(),
             "{class:?}: a defender well inside the drawn box was not hit"
         );
         let outside = swinging_at(class, 1.3);
         assert_eq!(
             outside.players[1].health,
-            max_health(),
+            outside.players[1].full_health(),
             "{class:?}: a defender well outside the drawn box was hit anyway"
         );
     }

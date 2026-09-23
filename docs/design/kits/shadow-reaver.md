@@ -1,21 +1,25 @@
 ---
 status: proposed
 decided: 2026-09-09
-revised: 2026-09-14
+revised: 2026-09-23 — v2's tally and cash-in built
 sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat-design/class-builds.md
 ---
 
 # Shadow Reaver — kit
 
-> ⚠️ **A v2 of the damage pattern is proposed, 2026-09-23** — see
-> [../shadow-reaver-v2.md](../shadow-reaver-v2.md). The shadow, the dash, the lotus and the
-> recall do not change. What is added: the shadow out on the field turns to face whoever is in
-> reach; every hit it lands from the field **marks** the target; crossing to it by dash opens a
-> window in which her first landed swing spends the marks, and at a full tally staggers. Her
-> health drops below the Champion's. Nothing of it is built.
+> **v2 of the damage pattern is built, 2026-09-23, and unplayed** — see
+> [../shadow-reaver-v2.md](../shadow-reaver-v2.md) and [the tally](#the-tally-and-the-cash-in--v2-2026-09-23)
+> below. The shadow, the dash, the lotus and the recall do not change. What is added: the shadow
+> out on the field turns its copy to whoever is in reach; every hit it lands from the field
+> **marks** the target; crossing to it by dash opens a window in which her first swing spends
+> the marks, and at a full tally staggers. Her health is three quarters of the Champion's.
 
 **Identity.** Two bodies. Every option is a function of the line between you and your
 shadow. Tactical positioning in a second dimension, cashed out in burst.
+
+**Glass.** 750 health against everybody else's 1000 — `Health` in the Oven, one multiplier per
+class. A class whose whole pattern is not being there should be the one that cannot afford to
+be.
 
 ## Mechanic — the shadow
 
@@ -51,16 +55,23 @@ is — see below.
 
 ### It copies you
 
-**Every swing you throw, the shadow throws too, a few frames later, for a quarter of the
-damage.** From wherever it is standing.
+**Every swing you throw, the shadow throws too, a few frames later.** From wherever it is
+standing.
 
 That is one sentence and it is most of the class:
 
-- **Holding the shadow is a flat 1.25× on everything your body does.** The cost is that
-  the second body is at your shoulder instead of somewhere useful.
-- **Sending it out is trading that quarter for reach.** The copy still comes out — it
-  comes out over *there*, so a Reaver with the shadow well placed threatens ground she is
-  not standing on, and a fight in two places at once is what the class is for.
+- **Holding the shadow is a small bonus on everything your body does** — twelve per cent
+  since v2, which halved it from a quarter. The cost is that the second body is at your
+  shoulder instead of somewhere useful, and at your shoulder it marks nothing.
+- **Sending it out is trading that for reach and for the tally.** The copy comes out over
+  *there*, for a quarter of the swing, so a Reaver with the shadow well placed threatens
+  ground she is not standing on — and every copy that lands out there marks the victim.
+- **Out there it faces whoever is in reach.** Through the copy's wind-up the shadow turns to
+  the nearest body inside the move's reach plus half a metre, and holds that once the swing is
+  out; with nobody in reach it keeps her yaw. The pitch she committed to comes with it. On her
+  yaw, a copy six metres away landed only on somebody standing at exactly her offset from it —
+  37% of copies against a dummy circling the shadow, against 100% now (`tally range`).
+  `aim::shadow_faces` decides; the Oven has a switch to play it off.
 
 The copy is blocked, ducked and spaced by exactly the rules your own swing is. It cannot
 be **parried**, because a parry is a stagger paid by the attacker and there is nobody at
@@ -72,14 +83,45 @@ same ability fired twice from the same place.
 
 Input map in [../controls.md](../controls.md).
 
+## The tally, and the cash-in — v2, 2026-09-23
+
+**Every hit the shadow lands from the field marks the target**, up to five. The copy out on the
+field, each pass of the lotus (once per pass, not per blade — a flower out and home is two), the
+recall's cut. Blocked hits do not mark. One mark fades every second and a half, and a new mark
+restarts that clock, so a target who gets away from the shadow slowly cleans himself: a full
+tally left alone is gone in seven and a half seconds.
+
+**Marks are drawn on the victim** — a ring of dark pips over the head, and rings in the F1
+overlay, both read off the same count the cash-in spends. That is the counterplay made visible.
+
+**Arriving at the shadow by dash opens a ten-frame window.** The first swing she *throws* in it
+cashes when it lands: ×(1 + 0.4 a mark), the marks spent, and at a full tally a half-second
+stagger. So a full tally triples Slash to 185 and Executioner to 554 — the largest single hit
+in the game, and still under the most fragile bar on the roster. Blocked, it spends the window
+and not the marks: the tally stays on him for the next crossing. Only the dash opens it; the
+recall and the leash bring the shadow home, and neither is her going there.
+
+**A swing pressed inside the carry strikes on arrival.** It cuts the dodge's tail short the way
+the jump out of it does — but where the jump keeps the slide to go somewhere, the swing spends
+it and plants her, turned to the crosshair. Without it the slide took her nearly five metres
+past the shadow before she could act, and every cash-in on somebody standing beside it missed.
+It buys no safety: a blocked Slash is still −5. See the feel log.
+
+The rhythm: **send, mark, cross, cash, send.** After the cash the target is clean and the
+shadow is at her shoulder marking nothing; staying is her own swings and a small copy against a
+body with more health than hers. Sending it away and dashing to it is the exit, and it starts
+the next tally.
+
+Numbers: `cargo run -p sim --bin tally`, and the Reaver's lines in `frametable`.
+
 ## Auto attack
 
 Melee, on left click. Decent damage, thrown constantly, and it is the move the shadow
 copies most.
 
 > The archive's *first auto after reclaiming your shadow deals bonus damage scaled by
-> dexterity* is unbuilt, and now sits oddly: reclaiming is no longer a moment, it is a
-> dash you chose. Parked rather than cut.
+> dexterity* is the cash-in now: the first swing after the dash, proportional to the marks
+> rather than to a stat, and her choice of which swing spends it.
 
 ## Abilities
 
@@ -356,7 +398,10 @@ makes with Rush.
   good four metres past the shadow, which on a dais is most of the way to the far edge.
   Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
-- The archive's bonus on the first auto after reclaiming the shadow. Reclaiming is a dash
-  now, so the trigger exists — nobody has decided whether the bonus should.
+- **The tally's numbers.** Five marks, a fade of a second and a half, a ten-frame window,
+  0.4 a mark. All first guesses; see the open questions in
+  [../shadow-reaver-v2.md](../shadow-reaver-v2.md).
+- **Does the strike out of the carry feel like arriving, or like being stopped?** It is the
+  one thing v2 added that the proposal did not describe.
 - **Twelve blades and a quarter-damage copy is a lot of numbers hitting at once.** Nobody has
   played against it. The per-blade damage is deliberately small for that reason.
