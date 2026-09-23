@@ -558,6 +558,10 @@ pub const SECTIONS: &[Section] = &[
                 "SHOT_FRAME=<n>",
                 "Run to exactly frame n and stop. Makes two captures comparable.",
             ),
+            e(
+                "SHOT_BARS=<dark>,<light>",
+                "Start a Dual mage with her two bars there, so a capture can look at the wings without playing up to them. Ignored for any other class.",
+            ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(
