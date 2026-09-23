@@ -11,8 +11,8 @@ sources: docs/archive/combat-design/shadow-reaver-skills.md, docs/archive/combat
 > [../shadow-reaver-v2.md](../shadow-reaver-v2.md) and [the tally](#the-tally-and-the-cash-in--v2-2026-09-23)
 > below. The shadow, the dash, the lotus and the recall do not change. What is added: the shadow
 > out on the field turns its copy to whoever is in reach; every hit it lands from the field
-> **marks** the target; crossing to it by dash opens a window in which her first swing spends
-> the marks, and at a full tally staggers. Her health is three quarters of the Champion's.
+> **marks** the target; any hit of her own on a marked target spends the marks for a burst,
+> and at a full tally staggers. Her health is three quarters of the Champion's.
 
 **Identity.** Two bodies. Every option is a function of the line between you and your
 shadow. Tactical positioning in a second dimension, cashed out in burst.
@@ -94,18 +94,18 @@ tally left alone is gone in seven and a half seconds.
 **Marks are drawn on the victim** — a ring of dark pips over the head, and rings in the F1
 overlay, both read off the same count the cash-in spends. That is the counterplay made visible.
 
-**Arriving at the shadow by dash opens a ten-frame window.** The first swing she *throws* in it
-cashes when it lands: ×(1 + 0.4 a mark), the marks spent, and at a full tally a half-second
-stagger. So a full tally triples Slash to 185 and Executioner to 554 — the largest single hit
-in the game, and still under the most fragile bar on the roster. Blocked, it spends the window
-and not the marks: the tally stays on him for the next crossing. Only the dash opens it; the
-recall and the leash bring the shadow home, and neither is her going there.
+**Any hit of hers on a marked target cashes.** ×(1 + 0.4 a mark), the marks spent, and at a
+full tally a half-second stagger. So a full tally triples Slash to 185 and Executioner to 554 —
+the largest single hit in the game, and still under the most fragile bar on the roster. There
+is no window and no dash required: the shadow puts marks on, her body takes them off. The
+shadow's own copies mark rather than spend, or the tally could never climb. A blocked or parried
+swing is not a hit and spends nothing: the tally stays on him.
 
 **A swing pressed inside the carry strikes on arrival.** It cuts the dodge's tail short the way
 the jump out of it does — but where the jump keeps the slide to go somewhere, the swing spends
 it and plants her, turned to the crosshair. Without it the slide took her nearly five metres
-past the shadow before she could act, and every cash-in on somebody standing beside it missed.
-It buys no safety: a blocked Slash is still −5. See the feel log.
+past the shadow before she could act, so the dash could not deliver her to anybody standing
+beside it. It buys no safety: a blocked Slash is still −5. See the feel log.
 
 The rhythm: **send, mark, cross, cash, send.** After the cash the target is clean and the
 shadow is at her shoulder marking nothing; staying is her own swings and a small copy against a
@@ -398,8 +398,7 @@ makes with Rush.
   good four metres past the shadow, which on a dais is most of the way to the far edge.
   Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
-- **The tally's numbers.** Five marks, a fade of a second and a half, a ten-frame window,
-  0.4 a mark. All first guesses; see the open questions in
+- **The tally's numbers.** Five marks, a fade of a second and a half, 0.4 a mark. All first guesses; see the open questions in
   [../shadow-reaver-v2.md](../shadow-reaver-v2.md).
 - **Does the strike out of the carry feel like arriving, or like being stopped?** It is the
   one thing v2 added that the proposal did not describe.

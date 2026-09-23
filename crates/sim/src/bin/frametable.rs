@@ -74,10 +74,9 @@ fn main() {
                 .map(|m| format!("{} {}", m.name, Fx::from_int(m.damage).mul(full).to_int()))
                 .collect();
             println!(
-                "  tally: cap {}, one fades every {}f  |  cash window {}f of her own  |  full cash-in x{}: {}, and staggers {}f",
+                "  tally: cap {}, one fades every {}f  |  any hit of hers cashes; full x{}: {}, and staggers {}f",
                 t::mark_cap(),
                 t::mark_fade(),
-                t::cash_window(),
                 hundredths(full),
                 swings.join(", "),
                 t::cash_stagger(),

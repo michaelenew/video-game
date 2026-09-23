@@ -5108,3 +5108,30 @@ teaching it the pattern is its own piece of work. The creature's half is pinned 
 `reaver::a_cash_in_lands_on_the_creature_too` instead.
 
 **Verdict** open. **Play script C4** is in `plans/shadow-reaver-v2.md`.
+
+### 2026-09-23 — any hit cashes; the dash window is cut
+
+**Changed** The cash-in window is gone, and with it the `Cash-in, window after the dash
+arrives` knob. **Any hit of the Reaver's own body on a marked target spends the marks**:
+×(1 + 0.4 a mark), and the stagger at a full tally, exactly as before. The shadow's copies
+still mark rather than spend. Blocked or parried swings are not hits and spend nothing.
+
+**Why** On review: the marks are the setup and her hit is the payoff, and gating the payoff
+behind "a swing thrown in the ten frames after a dash" was a rule the proposal wrote and play
+had not asked for. It made the burst a timing test layered on top of the pattern rather than
+the pattern itself. Reverted from the M3 entry above, which is kept as the record of what was
+tried: the window counted from arrival, the window counted in free frames, and the window as
+the swing thrown rather than landed. All three are moot now.
+
+**What stays** The strike out of the carry. It was built to make the window reachable, but
+the reason underneath is independent of it: the dash's slide leaves her nearly five metres
+past the shadow, so without it the dash cannot put her next to anybody standing there.
+
+**What the instrument says** `tally` is unchanged in its numbers — `pattern` cashes Slash for
+185 and `greedy` Executioner for 554, both staggering — because those scripts already swung on
+arrival. The tests that pinned the window are replaced by: any hit spends, an unmarked hit is
+plain, every hit cashes rather than only the first, a blocked hit spends nothing.
+
+**Open, and worth the person's eye at C3:** with no gate, stepping in and hitting a marked
+target is as good as crossing to it. Whether the dash still feels like the verb of the class
+or becomes one way among several to arrive is a play question.

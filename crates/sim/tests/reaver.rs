@@ -1646,13 +1646,13 @@ fn the_recall_marks_once() {
 // ---------------------------------------------------------------------------
 // v2: the cash-in
 // ---------------------------------------------------------------------------
+//
+// The shadow puts the marks on; **any hit of hers takes them off**, multiplied.
+// No window, no dash required.
 
 /// Dash to a shadow waiting six metres ahead, and stop on the frame she
-/// arrives. Then stand him a step in front of her, carrying `marks`.
-///
-/// He is put there rather than walked into the path, because what these tests
-/// are about is the window -- when a swing cashes and what it is worth. Where a
-/// real pattern leaves her relative to him is `tally`'s `pattern` script.
+/// arrives. Then stand him a step in front of her, carrying `marks`. Used by
+/// the strike out of the carry.
 fn dashed_in(marks: u8) -> World {
     let mut w = in_the_open();
     let out = w.players[0]
@@ -1672,10 +1672,13 @@ fn dashed_in(marks: u8) -> World {
         run(&mut w, 1, 0, 0);
     }
     assert!(!shadow(&w).is_out(), "fixture: she never arrived");
-    assert!(
-        shadow(&w).cash > 0,
-        "arriving by dash did not open the window"
-    );
+    stand_him_in_front(&mut w, marks);
+    w
+}
+
+/// A Reaver in the open with him a step in front of her, carrying `marks`.
+fn face_to_face(marks: u8) -> World {
+    let mut w = in_the_open();
     stand_him_in_front(&mut w, marks);
     w
 }
@@ -1704,10 +1707,11 @@ fn first_blow(w: &mut World, bits: u16) -> i32 {
 }
 
 #[test]
-fn a_swing_thrown_inside_the_window_spends_the_marks() {
+fn any_hit_of_hers_on_a_marked_target_spends_the_marks() {
+    // No dash, no window: she walks up and hits him.
     let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
     let marks = t::mark_cap() - 1;
-    let mut w = dashed_in(marks);
+    let mut w = face_to_face(marks);
     let dealt = first_blow(&mut w, L);
     let want = Fx::from_int(poke.damage)
         .mul(sim::shadow::cash_multiple(marks))
@@ -1722,103 +1726,45 @@ fn a_swing_thrown_inside_the_window_spends_the_marks() {
 }
 
 #[test]
+fn a_hit_on_an_unmarked_target_is_a_plain_hit() {
+    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
+    let mut w = face_to_face(0);
+    assert_eq!(first_blow(&mut w, L), poke.damage);
+}
+
+#[test]
 fn a_cash_in_at_the_cap_staggers_and_clears() {
-    let mut w = dashed_in(t::mark_cap());
+    let mut w = face_to_face(t::mark_cap());
     let dealt = first_blow(&mut w, L);
     assert!(dealt > 0, "fixture: nothing landed");
     assert_eq!(w.players[1].marks, 0);
     assert!(
         matches!(w.players[1].action, Action::Stagger { .. }),
-        "a full tally cashed without the stagger, which is the reward for the whole pattern"
+        "a full tally cashed without the stagger"
     );
 }
 
 #[test]
-fn only_the_first_swing_cashes() {
+fn every_hit_cashes_not_only_the_first() {
     let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
-    let mut w = dashed_in(0);
-    // The first swing lands on nothing marked, and has had its chance.
+    let mut w = face_to_face(2);
     let first = first_blow(&mut w, L);
-    assert_eq!(first, poke.damage);
+    assert!(first > poke.damage, "the first hit did not cash");
     run(&mut w, poke.whiff_cost() as u32 + 30, 0, 0);
-    stand_him_in_front(&mut w, t::mark_cap());
+    stand_him_in_front(&mut w, 2);
     let second = first_blow(&mut w, L);
     assert_eq!(
-        second, poke.damage,
-        "a second swing after the dash cashed the tally too"
+        second, first,
+        "a second hit on fresh marks did not cash them too"
     );
-    assert_eq!(
-        w.players[1].marks,
-        t::mark_cap(),
-        "the marks were spent anyway"
-    );
+    assert_eq!(w.players[1].marks, 0);
 }
 
 #[test]
-fn a_swing_after_the_window_closes_multiplies_nothing() {
-    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
-    let mut w = dashed_in(t::mark_cap());
-    // `dashed_in` hands her back at the end of the frame she arrived, which
-    // was the window's first. So the press on the frame after these is the
-    // first one past its length.
-    run(&mut w, t::cash_window() as u32 - 1, 0, 0);
-    // And out of the dodge, so the press is not eaten by its last frame.
-    while matches!(w.players[0].action, Action::Dodge { .. }) {
-        run(&mut w, 1, 0, 0);
-    }
-    stand_him_in_front(&mut w, t::mark_cap());
-    let dealt = first_blow(&mut w, L);
-    assert_eq!(dealt, poke.damage, "a swing after the window cashed anyway");
-    assert_eq!(w.players[1].marks, t::mark_cap());
-}
-
-#[test]
-fn a_swing_on_the_last_frame_of_the_window_still_cashes() {
-    let mut w = dashed_in(t::mark_cap());
-    // One frame of the window went on `dashed_in`'s last frame; this leaves
-    // exactly one, and the press lands on it.
-    run(&mut w, t::cash_window() as u32 - 2, 0, 0);
-    stand_him_in_front(&mut w, t::mark_cap());
-    first_blow(&mut w, L);
-    assert_eq!(
-        w.players[1].marks, 0,
-        "the last frame of the window did not cash"
-    );
-}
-
-#[test]
-fn only_the_dash_opens_the_window() {
-    // Recalling the shadow brings it home, and so does the leash; neither is
-    // her going there.
-    let poke = sim::moves::get(Class::ShadowReaver, SLOT_POKE);
-    let mut w = in_the_open();
-    let out = w.players[0]
-        .pos
-        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
-    put_the_shadow_at(&mut w, out);
-    run(&mut w, 2, R, down(25));
-    for _ in 0..120 {
-        if !shadow(&w).is_out() {
-            break;
-        }
-        run(&mut w, 1, 0, down(25));
-    }
-    assert!(!shadow(&w).is_out(), "fixture: the recall never arrived");
-    assert_eq!(shadow(&w).cash, 0, "the recall opened the window");
-    run(&mut w, 20, 0, 0);
-    stand_him_in_front(&mut w, t::mark_cap());
-    let dealt = first_blow(&mut w, L);
-    assert_eq!(
-        dealt, poke.damage,
-        "a swing after a recall cashed the tally"
-    );
-}
-
-#[test]
-fn a_blocked_cash_in_spends_the_window_and_not_the_marks() {
-    // The defender read it. The tally stays on his body for the next crossing,
-    // which is the counterplay the pips exist to make possible.
-    let mut w = dashed_in(t::mark_cap());
+fn a_blocked_hit_spends_nothing() {
+    // A block is not a hit. The tally stays on his body, which is the
+    // counterplay the pips exist to make possible.
+    let mut w = face_to_face(t::mark_cap());
     w.players[1].action = Action::Guard { held: 30 };
     let before = w.players[1].health;
     // Her swing, and only hers: read on the frame it is blocked, before the
@@ -1838,12 +1784,7 @@ fn a_blocked_cash_in_spends_the_window_and_not_the_marks() {
     assert_eq!(
         w.players[1].marks,
         t::mark_cap(),
-        "a blocked cash-in spent the marks"
-    );
-    assert_eq!(
-        shadow(&w).cashing,
-        sim::class::NO_ECHO,
-        "a blocked cash-in left the window armed"
+        "a blocked hit spent the marks"
     );
 }
 
@@ -1904,18 +1845,13 @@ fn the_shadow_marks_the_creature_from_the_field() {
 
 #[test]
 fn a_cash_in_lands_on_the_creature_too() {
-    // The shadow works a Ridgeback's flank from range and she crosses to cash
-    // on a leg. The window is opened by hand here: the dash is tested above,
-    // and this is about what the swing is worth once it is open.
+    // The shadow works a Ridgeback's flank from range and she cashes on a leg.
     let first_blow_on_it = |marks: u8| {
         let mut w = hunting();
         let mut beast = w.monster.unwrap();
         beast.marks = marks;
         beast.mark_clock = t::mark_fade();
         w.monster = Some(beast);
-        let mut s = shadow(&w);
-        s.cash = t::cash_window();
-        w.players[0].mechanic = Mechanic::Shadow(s);
         let full = beast_health(&w);
         run(&mut w, 2, L, 0);
         for _ in 0..30 {

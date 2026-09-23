@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 304] = [
+pub const SCALARS: [i32; 303] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -302,7 +302,6 @@ pub const SCALARS: [i32; 304] = [
               12, // reaver.shadow_damage,_attending_(%) = 12
                5, // reaver.marks,_most_a_body_can_carry = 5
               90, // reaver.marks,_one_fades_every = 90
-              10, // reaver.cash-in,_window_after_the_dash_arrives = 10
            26214, // reaver.cash-in,_damage_per_mark_(x) = 0.4
               30, // reaver.cash-in,_stagger_at_a_full_tally = 30
            65536, // health.bulwark_(x) = 1

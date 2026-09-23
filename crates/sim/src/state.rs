@@ -1210,9 +1210,9 @@ impl World {
             if let Some(mut hit) =
                 resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
-                // The Reaver's cash-in: the first swing after a dash to the
-                // shadow spends the marks on whoever it lands on. A no-op for
-                // every other blow in the game.
+                // The Reaver's cash-in: any blow of hers spends the marks on
+                // whoever it lands on. A no-op for every other blow in the
+                // game, and for anybody carrying no marks.
                 let staggers = cash_the_tally(&mut self.players, attacker, defender, &mut hit);
                 // What the blow is actually worth, before it lands: a killing
                 // hit on someone with forty health left is worth forty, not its
@@ -3903,10 +3903,6 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     // And the press that asked for the shadow is spent here, on the frame the
     // move it asked for actually starts. A no-op for everything else.
     shadow::spend_order(p, kind);
-    // And the first swing after a dash to the shadow is the one that spends
-    // the marks, when it lands. Decided on the throw -- see
-    // `shadow::arm_the_cash`. A no-op for everybody else.
-    shadow::arm_the_cash(p, kind);
     // Throwing anything at all is committing to a side, for the one class
     // where that is the mechanic. **On the press, including the autos** -- see
     // `steer_meter` for why that stopped being on contact.
@@ -4502,8 +4498,6 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.echo_used as u32);
             h.write_u32(shadow.dash as u32);
             h.write_u32(shadow.carry as u32);
-            h.write_u32(shadow.cash as u32);
-            h.write_u32(shadow.cashing as u32);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -4966,27 +4960,24 @@ impl World {
     }
 }
 
-/// Spend the marks on `defender` if this is the Reaver's cashing swing, and say
+/// Spend the marks on `defender` if this blow is the Reaver's own, and say
 /// whether it was a full tally -- the one that also staggers.
 ///
-/// The swing thrown inside the window a dash to the shadow opened is the one
-/// that cashes, and it cashes once, on the frame it connects. **Blocked or
-/// parried, it spends the window and not the marks**: the defender read it, and
-/// the tally is still on his body for the next crossing. That is the
-/// counterplay the pips exist to make possible. See
-/// `docs/design/shadow-reaver-v2.md`.
+/// **Any hit of hers cashes.** Every blow her body lands on a marked target
+/// multiplies by the marks and clears them; the shadow puts them on, she takes
+/// them off. The copies are not her body -- they go through
+/// `echo_cuts_the_other_fighter` and mark rather than spend, or the tally
+/// could never climb past one. **Blocked or parried, nothing is spent**: it
+/// was not a hit, and the tally stays on him. That is the counterplay the pips
+/// exist to make possible. See `docs/design/shadow-reaver-v2.md`.
 fn cash_the_tally(
     players: &mut [Player; MAX_PLAYERS],
     attacker: usize,
     defender: usize,
     hit: &mut Hit,
 ) -> bool {
-    if !shadow::cashing(&players[attacker]) {
-        return false;
-    }
-    shadow::cashed(&mut players[attacker]);
     let marks = players[defender].marks;
-    if hit.blocked || hit.parried || marks == 0 {
+    if players[attacker].class != Class::ShadowReaver || hit.blocked || hit.parried || marks == 0 {
         return false;
     }
     hit.damage = Fx::from_int(hit.damage)
@@ -6722,13 +6713,12 @@ impl World {
                 continue;
             };
             let m = moves::get(attacker.class, kind);
-            // The Reaver's cash-in, on a leg rather than a person. The
-            // creature cannot block, so the swing that cashes always spends.
+            // The Reaver's cash-in, on a leg rather than a person: any blow of
+            // hers spends the creature's marks, and it cannot block.
             // What a full tally does to something this size is its own flinch
             // and poise rules' business -- a hit three times the size is
             // already the thing those read.
-            let cash = if shadow::cashing(&self.players[i]) {
-                shadow::cashed(&mut self.players[i]);
+            let cash = if attacker.class == Class::ShadowReaver {
                 shadow::cash_multiple(beast.spend_marks())
             } else {
                 Fx::ONE

@@ -48,10 +48,9 @@ fn main() {
         ("stick", stick),
     ];
     println!(
-        "Shadow Reaver v2  --  cap {}, one fades every {}f, window {}f of her own, x{} a mark, full tally staggers {}f",
+        "Shadow Reaver v2  --  cap {}, one fades every {}f, any hit of hers cashes at x{} a mark, full tally staggers {}f",
         t::mark_cap(),
         t::mark_fade(),
-        t::cash_window(),
         hundredths(t::mark_worth()),
         t::cash_stagger(),
     );

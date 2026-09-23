@@ -741,7 +741,7 @@ pub fn shadow_carry() -> u16 {
 }
 
 // ---------------------------------------------------------------------------
-// The Reaver's v2: the shadow aims, keeps a tally, and the dash cashes it
+// The Reaver's v2: the shadow aims and keeps a tally, and her hits cash it
 // ---------------------------------------------------------------------------
 //
 // First values, 2026-09-23, all guesses from `docs/design/shadow-reaver-v2.md`
@@ -782,13 +782,6 @@ pub fn mark_cap() -> u8 {
 /// a tally left alone for the length of a full cap should be gone.
 pub fn mark_fade() -> u16 {
     oven::scalar(Scalar::MarkFade).max(1) as u16
-}
-
-/// How long after the dash arrives her first landed swing spends the marks.
-/// The carry's length to start with, which the proposal calls the real
-/// execution test; twice it is the comfortable one, and both want playing.
-pub fn cash_window() -> u16 {
-    oven::scalar(Scalar::CashWindow).max(1) as u16
 }
 
 /// What each mark adds to the swing that spends it, as a multiple of the

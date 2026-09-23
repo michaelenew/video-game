@@ -529,13 +529,12 @@ pub fn carrying_a_dash(p: &Player) -> bool {
 
 /// Is she asking to swing out of the carry?
 ///
-/// **The cash-in is a strike on arrival**, and this is what makes it one. The
-/// dash leaves her sliding at the speed she crossed at, a few metres past the
-/// shadow, and a swing that had to wait for the dodge's tail to run out came
-/// out that far from anybody standing beside it: the whole pattern -- send,
-/// mark, cross, cash -- missed at the last step, every time, in `tally`. So a
-/// swing pressed inside the carry cuts the tail short the way a jump does,
-/// and comes out with her still on the shadow.
+/// **A strike on arrival.** The dash leaves her sliding at the speed she
+/// crossed at, a few metres past the shadow, and a swing that had to wait for
+/// the dodge's tail to run out came out that far from anybody standing beside
+/// it: the pattern -- send, mark, cross, cash -- missed at the last step, every
+/// time, in `tally`. So a swing pressed inside the carry cuts the tail short
+/// the way a jump does, and comes out with her still on the shadow.
 ///
 /// **The jump keeps the slide and the swing spends it.** The jump out of the
 /// carry is for going somewhere, so it takes the speed up with her; the swing
@@ -585,10 +584,7 @@ fn step_her_dash(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     // The carry runs down whether or not a dash is still going: it is what a
     // dash leaves behind, and the frame it was opened on is one of its own.
-    // The cash-in window is the same kind of thing and runs down beside it.
-    // See [`Shadow::cash`].
     shadow.carry = shadow.carry.saturating_sub(1);
-    shadow.cash = shadow.cash.saturating_sub(1);
     if shadow.dash == 0 {
         put(p, shadow);
         return;
@@ -619,10 +615,6 @@ fn step_her_dash(p: &mut Player) {
         // that carried her up would keep carrying her off the top of it.
         p.vel.y = Fx::ZERO;
         shadow.carry = t::shadow_carry();
-        // **And the cash-in window.** The same arrival, and only this one:
-        // the recall and the leash bring the shadow home too, and neither is
-        // her crossing to it. See [`cash_open`].
-        shadow.cash = t::cash_window();
         // The window is the same length however far she came. What is left of
         // the dodge usually *is* that window -- she arrived early and the rest
         // is the slide -- but a dash that spent the whole dodge crossing would
@@ -647,8 +639,7 @@ fn step_her_dash(p: &mut Player) {
 // v2 of the damage pattern, 2026-09-23 -- `docs/design/shadow-reaver-v2.md`.
 // The shadow already paid movement, damage and a thin slice of utility. This
 // makes it pay **burst**: every hit it lands from the field is counted on the
-// victim, and crossing to it by dash opens a window in which her first swing
-// to connect spends the count. Nothing new is put in the world to get it; the
+// victim, and any hit of her own that lands on him spends the count. Nothing new is put in the world to get it; the
 // marks are a count of what the shadow already does, and the cash-in is a
 // multiplier on a swing she already has.
 
@@ -677,38 +668,6 @@ pub fn fade_mark(p: &mut Player) {
             p.mark_clock = t::mark_fade();
         }
     }
-}
-
-/// She has just thrown `kind`. If it is a swing and the window is open, this
-/// is the swing that cashes, and the window is spent on it; anything she throws
-/// afterwards is an ordinary swing.
-///
-/// The first swing *thrown*, not the first that pays: a Slash whiffed inside
-/// the window has had its chance, and so has one thrown at somebody with no
-/// marks on them.
-pub fn arm_the_cash(p: &mut Player, kind: u8) {
-    let Some(mut shadow) = of(p) else { return };
-    let swing = moves::get(p.class, kind).aim() == aim::Kind::Swing;
-    shadow.cashing = if swing && shadow.cash > 0 {
-        shadow.cash = 0;
-        kind
-    } else {
-        NO_ECHO
-    };
-    put(p, shadow);
-}
-
-/// Does the blow she is landing right now cash the tally?
-pub fn cashing(p: &Player) -> bool {
-    let Some(shadow) = of(p) else { return false };
-    shadow.cashing != NO_ECHO && p.action.attack_kind() == Some(shadow.cashing)
-}
-
-/// It connected: it has cashed, blocked or not, and cannot again.
-pub fn cashed(p: &mut Player) {
-    let Some(mut shadow) = of(p) else { return };
-    shadow.cashing = NO_ECHO;
-    put(p, shadow);
 }
 
 /// What a swing that spends `marks` is worth, as a multiple of itself: one,

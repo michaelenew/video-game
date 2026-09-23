@@ -504,13 +504,12 @@ scalars! {
     AscensionRefund,  "Dual mage", "Ascension, health back per hit landed", Int,   0,        400;
     AscensionStunFloor, "Dual mage", "Ascension, stun on the way out, at least", Frames, 0,  120;
     // **The Reaver's v2**, 2026-09-23: the shadow aims itself, keeps a tally,
-    // and arriving by dash cashes it. Appended for the reason everything above
+    // and her own hits cash it. Appended for the reason everything above
     // is. See `docs/design/shadow-reaver-v2.md`.
     ShadowAimSlack,   "Reaver",    "Shadow turns to a body this far past reach", Fixed, 0,    fx(4,1);
     ShadowEchoAttending, "Reaver", "Shadow damage, attending (%)",           Percent, 0,       100;
     MarkCap,          "Reaver",    "Marks, most a body can carry",           Int,    1,        12;
     MarkFade,         "Reaver",    "Marks, one fades every",                 Frames, 1,        600;
-    CashWindow,       "Reaver",    "Cash-in, window after the dash arrives", Frames, 1,        60;
     MarkWorth,        "Reaver",    "Cash-in, damage per mark (x)",           Fixed,  0,        fx(2,1);
     CashStagger,      "Reaver",    "Cash-in, stagger at a full tally",       Frames, 0,        120;
     // **Health per class**, as a multiple of `MaxHealth`. Shared with the
