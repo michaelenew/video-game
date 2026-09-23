@@ -471,6 +471,10 @@ pub struct Player {
     /// plant your feet; without it the first frame aboard looks like an
     /// infinite acceleration and throws you straight back off.
     pub grip_settle: u8,
+    /// Which of the creature's clips the surface underfoot was last measured
+    /// on. The pose is a lookup, so a change of clip is a cut, not a motion,
+    /// and the grip test must not read it as one. See `step_rider`.
+    pub ride_clip: u8,
 
     /// How far the Elementalist's beam actually reached this frame, or zero
     /// when no beam is out.
@@ -834,6 +838,7 @@ impl Default for Player {
             carry_yaw: Fx::ZERO,
             grip_vel: V3::ZERO,
             grip_settle: 0,
+            ride_clip: u8::MAX,
             beam_reach: Fx::ZERO,
             aim_path: Path::default(),
             channelled: Fx::ZERO,
@@ -1465,6 +1470,7 @@ impl World {
             hash_v3(&mut h, &p.grip_vel);
             h.write_i32(p.carry_yaw.raw());
             h.write_u32(p.grip_settle as u32);
+            h.write_u32(p.ride_clip as u32);
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
             for f in &p.repeat_lock {
@@ -5912,6 +5918,21 @@ fn step_rider(
     // skeleton: a tail that whips throws whoever is on the tail and does
     // nothing to somebody standing on the shoulder, and reading both in one
     // shared frame is how that distinction gets lost.
+    // **A cut is not a buck.** The pose is a lookup, so the frame the
+    // creature changes clip -- a shake interrupted into a flinch, say -- its
+    // back jumps from one pose to another with no motion in between, and the
+    // grip test read that jump as an acceleration and threw whoever was
+    // standing there. The rider who had just landed the hit that caused the
+    // flinch was the one thrown, every time: every ride ended with the first
+    // good hit on the ridge. Plant the feet again, as on landing, and let the
+    // motion that follows be what is judged. Read here rather than at the top
+    // of the frame because a flinch is dealt after the fighters have moved,
+    // so the cut shows up under the feet a frame later than it happens.
+    let clip = beast.doing.clip_key();
+    if p.ride_clip != clip {
+        p.ride_clip = clip;
+        p.grip_settle = p.grip_settle.max(t::mount_settle() as u8);
+    }
     let rig = beast.rig();
     let felt = rig.dir_to_part(part, accel);
     // `big_len`, not `len`: these are accelerations in the hundreds, and a
@@ -6113,6 +6134,16 @@ fn meet_the_creature(p: &mut Player, beast: &Monster) {
     if p.vel.y.raw() > 0 {
         return;
     }
+    // **A body that was just thrown does not land back on.** Mounting is
+    // landing, and a rider in the stun of a buck is still being thrown; the
+    // back that threw them is whipping about underneath, and a rolled top
+    // face scooped a falling rider up a dozen frames after it had thrown
+    // them, for the fall's damage a second time. The same goes for somebody
+    // knocked off by a hit. They are solid to the animal still -- `resolve`
+    // above -- so they slide off it rather than through it.
+    if p.action.stunned() {
+        return;
+    }
     let Some((part, top)) = beast.surface_under(p.pos, radius) else {
         return;
     };
@@ -6122,6 +6153,7 @@ fn meet_the_creature(p: &mut Player, beast: &Monster) {
 /// Take up station on a part. Mounting is landing: there is no button, because
 /// a surface is a surface.
 fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
+    p.ride_clip = beast.doing.clip_key();
     let mut rest = beast.rest_frame(part, p.pos);
     rest.y = top;
     p.mount = part as u8;
@@ -6157,17 +6189,34 @@ fn carry_off(surface: V3) -> V3 {
 /// creature's own up axis. The cap is what keeps a shake from firing someone
 /// over the arena wall.
 fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
-    let flat = V3::new(surface.x, Fx::ZERO, surface.z);
-    let speed = flat.flat_len().min(t::throw_kick());
-    // Up off the patch of animal you were standing on, not up off the animal.
-    // On a skeleton those differ, and being thrown off a tail that is pointing
-    // at the floor should not fire you into the ceiling.
-    let up = rig.of(part).rot.apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    // **Off the side, always.** The buck is the surface *accelerating*, and
+    // the surface's velocity at that instant can be anything -- at the
+    // reversal of a whip it is nearly nothing. The first version threw the
+    // rider along the surface's velocity, capped, so a rider thrown at a
+    // reversal went straight up seven metres, came straight back down onto
+    // the same back, and was thrown again: five throws in a second, each
+    // with the fall's damage on it. A rider comes off the side they were
+    // standing on, at the full kick, whatever the back was doing.
+    //
+    // Sideways in the creature's **body** frame -- its heading, which does
+    // not roll -- and up in the world's. The part underfoot is the thing that
+    // is whipping: at the top of a shake the spine is fifty degrees over, and
+    // "sideways" and "up" read in that frame are a throw that goes up and a
+    // lift that goes across, which is a rider who lands back on the other
+    // side of the same back.
+    let side = if p.local.z.raw() < 0 {
+        Fx::ONE.neg()
+    } else {
+        Fx::ONE
+    };
+    let out = rig.dir_to_world(V3::new(Fx::ZERO, Fx::ZERO, side));
+    let flat = V3::new(out.x, Fx::ZERO, out.z);
+    let _ = (surface, part);
     p.mount = monster::NO_PART;
-    p.vel = flat
-        .normalized()
-        .scale(speed)
-        .add(up.scale(t::throw_lift()));
+    p.vel =
+        flat.normalized()
+            .scale(t::throw_kick())
+            .add(V3::new(Fx::ZERO, t::throw_lift(), Fx::ZERO));
     p.grounded = false;
     p.air_dodged = false;
     p.jump_hold = 0;

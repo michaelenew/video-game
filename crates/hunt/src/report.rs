@@ -40,6 +40,22 @@ pub struct Beat {
     pub aboard: bool,
     /// Flat distance from the nearest hunter when the creature committed.
     pub range: Fx,
+    /// A hit landing rather than a move starting: what the hunter was in the
+    /// middle of when it did, which is the difference between "the telegraph
+    /// is too short" and "the bot swung a hammer into the next move".
+    pub hit: Option<HunterState>,
+}
+
+/// What the first hunter was doing on the frame a hit landed on it.
+#[derive(Clone, Copy, Debug)]
+pub struct HunterState {
+    /// It was on the animal and came off: the fall's damage, not the move's.
+    pub bucked: bool,
+    pub airborne: bool,
+    /// Locked into an attack or a recovery of its own.
+    pub busy: bool,
+    pub dodging: bool,
+    pub health: i32,
 }
 
 pub struct Report {
@@ -49,6 +65,10 @@ pub struct Report {
     /// Every move it started, by index, and how many of those could be answered
     /// on sight.
     pub starts: [u32; MOVES],
+    /// How many times each move actually connected with a hunter. Beside
+    /// `starts` this is the move's hit rate, which is what says whether a
+    /// move's telegraph is doing its job or whether it is a free throw.
+    pub landed: [u32; MOVES],
     pub reactable: u32,
     pub committed: u32,
     pub longest_repeat: u32,
@@ -72,7 +92,16 @@ pub struct Report {
     run_ride: u32,
     was_aboard: bool,
     pub thrown: u32,
+    /// Rides that ended, not by a buck, while a bucking move was in progress:
+    /// the rider read it and left. The buck working, by the other route.
+    pub fled: u32,
 
+    /// Attacks the hunters started, and frames on which one connected with
+    /// the creature. The ratio is whether the hunter is hitting what it is
+    /// swinging at, which "damage dealt" on its own cannot say: a low number
+    /// is either a cautious hunter or one swinging at air.
+    pub swings: u32,
+    pub connected: u32,
     /// Damage, both ways.
     pub dealt: i32,
     pub taken: i32,
@@ -118,6 +147,7 @@ impl Report {
             frames: 0,
             outcome: Outcome::Unresolved,
             starts: [0; MOVES],
+            landed: [0; MOVES],
             reactable: 0,
             committed: 0,
             longest_repeat: 0,
@@ -135,6 +165,9 @@ impl Report {
             run_ride: 0,
             was_aboard: false,
             thrown: 0,
+            fled: 0,
+            swings: 0,
+            connected: 0,
             dealt: 0,
             taken: 0,
             hits_taken: 0,
@@ -206,6 +239,7 @@ impl Report {
                     intent: bots.first().map(|b| b.intent).unwrap_or(Intent::Circle),
                     aboard: after.players.iter().any(|p| p.aboard()),
                     range: nearest,
+                    hit: None,
                 });
             }
         }
@@ -246,6 +280,17 @@ impl Report {
             self.ridge_hits += 1;
         }
         self.dealt += (was.health - now.health).max(0);
+        if now.health < was.health {
+            self.connected += 1;
+        }
+        for i in 0..MAX_PLAYERS {
+            let (a, b) = (&before.players[i], &after.players[i]);
+            if matches!(b.action, sim::state::Action::Startup { .. })
+                && !matches!(a.action, sim::state::Action::Startup { .. })
+            {
+                self.swings += 1;
+            }
+        }
 
         // Riding, and being removed from the ride.
         let aboard = after.players.iter().any(|p| p.aboard());
@@ -264,6 +309,12 @@ impl Report {
                 .any(|p| matches!(p.action, sim::state::Action::HitStun { .. }))
             {
                 self.thrown += 1;
+            } else if now
+                .doing
+                .attacking()
+                .is_some_and(|k| matches!(k, monster::SWEEP | monster::SLAM | monster::SHAKE))
+            {
+                self.fled += 1;
             }
         }
         self.was_aboard = aboard;
@@ -279,7 +330,31 @@ impl Report {
             if self.commit_kind == monster::NO_PART {
                 continue;
             }
+            let p = &after.players[i];
+            // A rider bucked off during the move's active window lost health
+            // to the fall, not to the volume: that is `thrown`, above.
+            let bucked = before.players[i].aboard();
+            self.timeline.push(Beat {
+                frame: after.frame,
+                kind: self.commit_kind,
+                intent: bots.first().map(|b| b.intent).unwrap_or(Intent::Circle),
+                aboard: p.aboard(),
+                range: self.commit_range[i],
+                hit: Some(HunterState {
+                    bucked,
+                    airborne: !before.players[i].grounded,
+                    busy: !before.players[i].action.actionable(),
+                    dodging: matches!(before.players[i].action, sim::state::Action::Dodge { .. }),
+                    health: p.health,
+                }),
+            });
             let m = monster::attack(self.commit_kind);
+            // A buck's fall is not a hit; it is the ride's own cost, and it
+            // is counted under `thrown`. Only damage while a volume is out
+            // is the move's.
+            if matches!(now.doing, Doing::Active { .. }) && m.damage > 0 && !bucked {
+                self.landed[self.commit_kind as usize] += 1;
+            }
             // **Unanswerable**: too fast to answer on sight, *and* it reached
             // somewhere the hunter could not have known was inside it.
             //
@@ -435,13 +510,14 @@ impl Report {
             seconds
         ));
 
-        out.push_str("\nWHAT IT DID\n");
+        out.push_str("\nWHAT IT DID                thrown   landed   frames\n");
         for (kind, count) in self.starts.iter().enumerate() {
             let m = monster::attack(kind as u8);
             out.push_str(&format!(
-                "  {:<16} {:>3}   {:>2}/{:>2}/{:>2}   {}\n",
+                "  {:<16}        {:>3}      {:>3}   {:>2}/{:>2}/{:>2}   {}\n",
                 m.name,
                 count,
+                self.landed[kind],
                 m.startup,
                 m.active,
                 m.recovery,
@@ -563,6 +639,12 @@ impl Report {
         );
         line(
             &mut out,
+            "left under a buck",
+            format!("{}", self.fled),
+            "read it and jumped, or stepped off",
+        );
+        line(
+            &mut out,
             "ridge hits",
             format!("{}", self.ridge_hits),
             "damage on the weak point",
@@ -588,6 +670,18 @@ impl Report {
         );
 
         out.push_str("\nWAS IT FAIR\n");
+        line(
+            &mut out,
+            "swings",
+            format!("{}", self.swings),
+            "attacks the hunters started",
+        );
+        line(
+            &mut out,
+            "connected",
+            format!("{}", self.connected),
+            "frames one of them landed",
+        );
         line(
             &mut out,
             "damage dealt",
@@ -616,6 +710,24 @@ impl Report {
     pub fn trace(&self) -> String {
         let mut out = String::from("\nTHE PLAY SEQUENCE\n");
         for beat in &self.timeline {
+            if let Some(hit) = beat.hit {
+                out.push_str(&format!(
+                    "  {:>5}    -> {:<13} {}; hunter was {:?}{}{}{}, {} health left\n",
+                    beat.frame,
+                    monster::attack(beat.kind).name,
+                    if hit.bucked {
+                        "bucked it off"
+                    } else {
+                        "landed"
+                    },
+                    beat.intent,
+                    if hit.busy { ", mid-attack" } else { "" },
+                    if hit.airborne { ", in the air" } else { "" },
+                    if hit.dodging { ", dodging" } else { "" },
+                    hit.health
+                ));
+                continue;
+            }
             out.push_str(&format!(
                 "  {:>5}  {:<16} at {:>6?} m   hunter: {:?}{}\n",
                 beat.frame,
