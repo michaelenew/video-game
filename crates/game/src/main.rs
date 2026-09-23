@@ -320,6 +320,7 @@ impl Default for Sim {
             World::with_classes(chosen_classes())
         };
         shot_bars(&mut w);
+        shot_weight(&mut w);
         let seed = w.clone();
         Sim {
             prev: w.clone(),
@@ -358,6 +359,22 @@ fn shot_bars(w: &mut World) {
         {
             *d = sim::Fx::from_int(dark);
             *l = sim::Fx::from_int(light);
+        }
+    }
+}
+
+/// `SHOT_WEIGHT=n` starts every Bulwark's shield holding `n`, so a capture can
+/// look at a loaded shield without blocking up to it. The same kind of hook as
+/// `SHOT_BARS`, for the same reason. It drains like any weight, so pair it with
+/// an early `SHOT_FRAME`.
+fn shot_weight(w: &mut World) {
+    let Some(weight) = platform::env("SHOT_WEIGHT").and_then(|s| s.trim().parse::<i32>().ok())
+    else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Shield(s) = p.mechanic {
+            p.mechanic = sim::Mechanic::Shield(s.with_weight(sim::Fx::from_int(weight)));
         }
     }
 }

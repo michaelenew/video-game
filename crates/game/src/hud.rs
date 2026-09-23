@@ -419,12 +419,35 @@ type StateQuery<'w, 's> = Query<
     'w,
     's,
     (&'static StateText, &'static mut Text),
-    (Without<RoundText>, Without<Banner>, Without<ClassLabel>),
+    (
+        Without<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
 >;
-type RoundQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<ClassLabel>)>;
-type StepQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<StepText>, Without<Banner>, Without<StateText>)>;
+type RoundQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
+>;
+type StepQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<StepText>,
+        Without<Banner>,
+        Without<StateText>,
+        Without<RoundText>,
+    ),
+>;
 
 /// What a stepped frame is doing, in the terms the thing being stepped through
 /// is made of.
@@ -483,8 +506,17 @@ pub fn step_lines(w: &sim::World) -> String {
     out
 }
 
-type BannerQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<ClassLabel>)>;
+type BannerQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<Banner>,
+        Without<RoundText>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
+>;
 // A Bevy system's parameter list *is* its dependency declaration: every entry
 // is something the scheduler has to know this system touches. Splitting one to
 // get under a count would split the system, which is the opposite of the point.
