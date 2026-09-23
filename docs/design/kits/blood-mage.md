@@ -7,6 +7,13 @@ sources: docs/archive/combat-design/blood-mage-skills.md, docs/archive/combat-de
 
 # Blood mage — kit
 
+> ⚠️ **A v1 rebuild is proposed, 2026-09-23.** [../blood-mage.md](../blood-mage.md) replaces
+> the economy below — leech on the hit and a draining field — with **grey health** and
+> **essence pools** on the floor: her blood is the ability, theirs pools where she cut them,
+> and the only heal is putting an ability through a pool. The weapon becomes a war scythe, the
+> auto a sweep, Reap takes right click, and a dodge with the crosshair on a pool is a blink.
+> Nothing of it is built. This document is still what is in the game.
+
 **Identity.** Sustain through aggression. Everything costs health and the good outcomes give
 it back, so the class is always spending itself forward.
 

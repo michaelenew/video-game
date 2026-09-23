@@ -9,6 +9,10 @@ depends: ../dual-mage.md
 
 # Dual mage — kit
 
+> ⚠️ **The mechanic under this kit has a proposed v2, 2026-09-23** — see
+> [../dual-mage-v2.md](../dual-mage-v2.md). The six moves below do not change; what changes is
+> the bar they steer, and what the class's body can do as the bars rise. Nothing of it is built.
+
 **Identity.** Melee mage containing two forces. Power comes from riding as close to an edge
 as you can while still able to pull back.
 
@@ -265,6 +269,13 @@ the colour of the force she is carrying. Deep is **the same threshold the burn s
 the same one the HUD already marks, deliberately — the cost of riding the edge is that it eats
 you, and the reward is that you stop touching the ground. One threshold, two faces of one
 decision, rather than two rules that happen to fire near each other.
+
+> **A v2 of the mechanic would rehome this.** The float triggers off a *position on the
+> depth curve*, and [../dual-mage-v2.md](../dual-mage-v2.md) replaces that curve's axis with
+> two bars and a runaway between them. The step and the hang do not care — they are properties
+> of the autos — but "deep or ascended" would need a new spelling. That is an argument for the
+> trigger rather than against it: whatever v2 calls the far end of the mechanic, the reward for
+> being there should still be that her feet leave the floor.
 
 It is also the one thing depth moves that is not a *force*. Everything else on the curve is
 how hard she hits and how big it is; this is how fast she gets there, and it is a step rather

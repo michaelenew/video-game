@@ -8,6 +8,12 @@ supersedes: docs/archive/combat-design/statera-skills.md (resource system), docs
 
 # Dual mage
 
+> ⚠️ **A v2 is proposed, 2026-09-23.** [dual-mage-v2.md](dual-mage-v2.md) replaces the single
+> signed bar below with **two bars**, Dark and Light, and a runaway between them: inside a band
+> nothing moves, outside it the higher bar rises, the lower falls and she burns. The lower bar
+> gates a blink, a second jump and, when both are full, wings. Nothing of it is built. This
+> document is still what is in the game, and most of its reasoning survives into v2.
+
 Formerly **Statera**. Renamed to pair with the Blood mage — two casters named for what they
 run on — and because "statera" (scales, balance) described the meter rather than the person.
 
