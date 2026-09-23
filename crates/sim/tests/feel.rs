@@ -370,18 +370,17 @@ fn the_blood_mage_pays_for_everything_and_nobody_else_pays_for_anything() {
                 m.cost
             );
             if blood {
-                assert!(
-                    m.leech > 0,
-                    "{}: costs health and gives none of it back, so it is pure downside",
-                    m.name
-                );
-                let best = m.leeched(best_case(&m));
-                assert!(
-                    best > m.cost,
-                    "{}: thrown perfectly it returns {best} and cost {}, so playing well \
-                     still loses you the fight",
-                    m.name,
-                    m.cost
+                // The return is a place on the floor now, not a share of the
+                // hit: `a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost`
+                // is the other half of this test. What is pinned here is that
+                // nothing of hers pays out on the hit itself any more -- a
+                // leech that survived on one move would be a heal she never
+                // has to go anywhere for.
+                assert_eq!(
+                    m.leech, 0,
+                    "{}: returns {}% of its damage wherever it lands, which is a heal \
+                     with nowhere to go to",
+                    m.name, m.leech
                 );
             }
         }
@@ -509,7 +508,11 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let expected = match class {
             Class::Champion => 19,
             Class::Elementalist => 7,
-            Class::BloodMage | Class::ShadowReaver => 4,
+            Class::ShadowReaver => 4,
+            // Five: the auto was appended when the scythe arrived, so the
+            // four rows that came before it kept their knobs. See
+            // `moves::blood`.
+            Class::BloodMage => 5,
             // Six on five inputs: both forms of Lance answer to middle click,
             // and which one comes out is the force she is carrying. See
             // `moves::dual`.

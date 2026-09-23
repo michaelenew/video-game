@@ -457,6 +457,20 @@ scalars! {
     JudgementFieldDamage, "Dual mage", "Judgement, field damage per tick",  Int,    0,       120;
     JudgementFieldLife,   "Dual mage", "Judgement, field lasts",            Frames, 1,       300;
     JudgementFieldSpeed,  "Dual mage", "Judgement, her speed inside it (x)", Fixed, fx(1,1), fx(3,1);
+    // The Blood mage's rebuild, appended: grey health, the scythe that grows
+    // with it, and the essence pools the other fighter bleeds onto the floor.
+    // See `docs/design/blood-mage.md`.
+    GreyFade,         "Blood mage", "Grey fades (health per second)",         Int,   0,        600;
+    GreyReach,        "Blood mage", "Scythe reach at full grey (x)",          Fixed, fx(1,1),  fx(4,1);
+    GreyDamage,       "Blood mage", "Scythe damage at full grey (x)",         Fixed, fx(1,1),  fx(4,1);
+    SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
+    SweepTipDamage,   "Blood mage", "Sweep, tip damage (x)",                  Fixed, fx(1,1),  fx(4,1);
+    PoolRadius,       "Blood mage", "Pool radius per root of volume",         Fixed, fx(1,100), fx(2,1);
+    PoolDrain,        "Blood mage", "Pool drains (volume per second)",        Int,   0,        600;
+    PoolHeight,       "Blood mage", "Pool height",                            Fixed, fx(1,20), fx(2,1);
+    PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        8;
+    PoolLock,         "Blood mage", "Crosshair lock on a pool",               Fixed, 0,        fx(6,1);
+    SpikeErupt,       "Blood mage", "Black spike, eruption lasts",            Frames, 1,       120;
 }
 
 // ---------------------------------------------------------------------------
@@ -644,8 +658,11 @@ pub enum MoveField {
     SelfLift,
     Grabs,
     Effect,
-    // Appended again, for the Blood mage's economy. Health out on the press,
-    // health back on the hit -- see `moves::Move::cost` and `leech`.
+    // Appended again, for the Blood mage's economy: health out on the press,
+    // and health back on the hit -- see `moves::Move::cost` and `leech`. The
+    // second half stopped being hers when the heal became a place on the
+    // floor (see `Drink`, appended at the end); it stays a column because the
+    // Dual mage's dark arm reads it.
     Cost,
     Leech,
     // And again, for which line of effect a move uses: 0 swings out along the
@@ -672,6 +689,9 @@ pub enum MoveField {
     // Appended, like everything above it: how far the move itself carries the
     // body forward. See `moves::Move::step`.
     Step,
+    // Appended for the Blood mage's rebuild: what share of an essence pool a
+    // move drinks when it lands over one. See `moves::Move::drink`.
+    Drink,
 }
 
 impl MoveField {
@@ -704,6 +724,7 @@ impl MoveField {
         MoveField::RepeatMul,
         MoveField::Reactivate,
         MoveField::Step,
+        MoveField::Drink,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -736,6 +757,7 @@ impl MoveField {
             MoveField::RepeatMul => "Repeat lockout (%)",
             MoveField::Reactivate => "Reactivate no sooner than",
             MoveField::Step => "Steps forward (m)",
+            MoveField::Drink => "Drinks of a pool (%)",
         }
     }
 
@@ -756,7 +778,7 @@ impl MoveField {
                 Unit::Frames
             }
             MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
-            MoveField::Leech | MoveField::RepeatMul => Unit::Percent,
+            MoveField::Leech | MoveField::Drink | MoveField::RepeatMul => Unit::Percent,
             _ => Unit::Fixed,
         }
     }
@@ -982,7 +1004,7 @@ pub const AIR_COUNT: usize = CLASSES * 4;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 28;
+pub const MOVE_FIELDS: usize = 29;
 
 // ---------------------------------------------------------------------------
 // The live store

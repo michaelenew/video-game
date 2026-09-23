@@ -545,8 +545,9 @@ pub fn aims_along_the_crosshair(class: Class, kind: u8) -> bool {
 /// exist -- see `sim::moves::bound`.
 pub fn move_clip(class: Class, slot: u8) -> Clip {
     // Clamped per class, because they no longer all have three: the Blood mage
-    // has four and the Champion ten, one per square of its weapon-by-stance
-    // grid. A slot a class does not have falls back to its special.
+    // has five and the Champion nineteen, one per square of its
+    // weapon-by-stance grid. A slot a class does not have falls back to its
+    // special.
     let slot = slot.min(sim::moves::slots(class) as u8 - 1);
     match (class, slot) {
         (Class::Bulwark, 0) => Clip::BulwarkPoke,
@@ -596,7 +597,8 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,
-        (Class::BloodMage, _) => Clip::BloodMechanic,
+        (Class::BloodMage, 3) => Clip::BloodMechanic,
+        (Class::BloodMage, _) => Clip::BloodSweep,
         (Class::DualMage, 0) => Clip::DualDark,
         (Class::DualMage, 1) => Clip::DualLightLance,
         (Class::DualMage, 2) => Clip::DualSpecial,

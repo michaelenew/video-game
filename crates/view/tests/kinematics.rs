@@ -861,3 +861,92 @@ fn the_two_lances_do_not_look_alike_while_they_are_winding_up() {
          difference you would have to be told about"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The scythe you see and the reach that hits
+// ---------------------------------------------------------------------------
+//
+// The Blood mage's reach grows with her grey, which `docs/design/aiming.md`
+// refuses for every other reach in the game. The one condition under which it
+// is allowed is that the blade is drawn at the length it hits at, for both
+// players -- and this is where that condition is held.
+
+/// A Blood mage standing in the arena with a given amount of grey open.
+///
+/// With an aim solved, the way every move has one by the time it is active:
+/// the swings hang their volume off the line the crosshair picked, and a
+/// fighter who has never aimed has no line.
+fn mage_with_grey(grey: i32) -> sim::state::Player {
+    let mut p = sim::state::Player::new(sim::Class::BloodMage);
+    p.health = sim::tuning::max_health() - grey;
+    p.grey = grey;
+    p.aim_path = sim::aim::Path {
+        from: p.pos,
+        to: p.pos.add(p.facing.scale(sim::Fx::from_int(3))),
+    };
+    p
+}
+
+#[test]
+fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
+    use sim::moves::blood;
+    let grip = [0.3, 1.0, 0.2];
+    let mut lengths = Vec::new();
+    for grey in [0, 300, 600] {
+        let mut p = mage_with_grey(grey);
+        let resting = view::scythe::blade(&p, grip).expect("she carries a scythe");
+
+        // The volume, on the first active frame of each of the two swings.
+        for kind in [blood::SWEEP, blood::REAP] {
+            let m = sim::moves::get(sim::Class::BloodMage, kind);
+            p.action = sim::state::Action::Active {
+                kind,
+                left: m.active,
+            };
+            let hb = sim::state::hitbox(&p).expect("a swing has a volume");
+            let swung = view::scythe::blade(&p, grip).expect("the blade is out");
+            let hits = hb.to.sub(hb.from).len().to_f32_for_render();
+            assert!(
+                (swung.length() - hits).abs() < 0.001,
+                "{} at {grey} grey: the blade is drawn {:.2} m and hits at {:.2} m",
+                m.name,
+                swung.length(),
+                hits
+            );
+            assert!(
+                (resting.length() - hits).abs() < 0.001,
+                "{} at {grey} grey: the blade she carries is {:.2} m and the one she \
+                 swings is {:.2} m",
+                m.name,
+                resting.length(),
+                hits
+            );
+        }
+        lengths.push(resting.length());
+    }
+    // And it visibly grows: half again as long at full grey is the design's
+    // first number, so six hundred of a thousand-point bar is well over a
+    // quarter longer.
+    assert!(lengths[1] > lengths[0] && lengths[2] > lengths[1]);
+    assert!(
+        lengths[2] > lengths[0] * 1.25,
+        "the blade grew from {:.2} m to only {:.2} m over most of a bar of grey",
+        lengths[0],
+        lengths[2]
+    );
+}
+
+#[test]
+fn nobody_else_carries_a_scythe() {
+    for class in sim::class::ALL_CLASSES {
+        if class == sim::Class::BloodMage {
+            continue;
+        }
+        let p = sim::state::Player::new(class);
+        assert!(
+            view::scythe::blade(&p, [0.0; 3]).is_none(),
+            "{} is drawn holding the Blood mage's weapon",
+            class.name()
+        );
+    }
+}

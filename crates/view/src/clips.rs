@@ -293,18 +293,24 @@ clips! {
     ElementalistHeavy,    "elementalist_heavy",     Moves, "elementalist", Length::Move(Class::Elementalist, 3), false,
         "Cataclysm: both hands wound up wide and thrown forward together, then let fall.";
 
-    // -- The Blood mage: Bloodletter, Rend, Grasp, Black spike --------------
+    // -- The Blood mage: Bloodletter, Reap, Grasp, Black spike, Reaping sweep
     //
-    // Four rather than three: `E` is an ability on this class, because its
-    // mechanic is health and there is no state to toggle. See `moves::NAMES`.
+    // Five rather than three: `E` is an ability on this class, because its
+    // mechanic is health and there is no state to toggle, and the auto is the
+    // fifth row because it was appended when the scythe arrived. See
+    // `moves::blood`. The scythe itself is not in any clip -- the two-handed
+    // moves put the hands on a haft, and `crate::scythe` hangs the blade off
+    // the grip at the reach the hit test uses.
     BloodPoke,      "blood_poke",       Moves, "blood", Length::Move(Class::BloodMage, 0), false,
         "Bloodletter: a blade thrown out underarm and caught again on the way back.";
     BloodCommitted, "blood_committed",  Moves, "blood", Length::Move(Class::BloodMage, 1), false,
-        "Rend: a raking claw. Close, personal, and it costs the caster.";
+        "Reap: the scythe raised over the right shoulder and brought over and down. Slow up, fast down, and the weight arrives after the blade.";
     BloodSpecial,   "blood_special",    Moves, "blood", Length::Move(Class::BloodMage, 2), false,
         "Grasp: both arms thrown open and snapped shut. Four arms leave wide and arrive together.";
     BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,
         "Black spike: a downward stabbing gesture that plants something in the ground.";
+    BloodSweep,     "blood_sweep",      Moves, "blood", Length::Move(Class::BloodMage, 4), false,
+        "Reaping sweep: both hands on the haft, gathered off the left hip and swept across the front, low to high.";
 
     // -- The Dual mage: two autos, two Lances, Judgement, Sweep -------------
     //

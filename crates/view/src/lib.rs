@@ -15,6 +15,7 @@ pub mod interp;
 pub mod math;
 pub mod play;
 pub mod pose;
+pub mod scythe;
 pub mod skeleton;
 
 pub use camera::{CameraRig, Framing, Surroundings};

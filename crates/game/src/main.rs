@@ -141,6 +141,7 @@ fn main() {
                     place_wings,
                     place_wing_tips,
                     place_marks,
+                    place_scythes,
                 ),
                 beast::place,
                 drive_camera,
@@ -516,6 +517,16 @@ const WING_SLICES: usize = 12;
 #[derive(Component)]
 struct MarkMesh(usize);
 
+/// The Blood mage's scythe.
+///
+/// One per fighter, because the class is picked at runtime and can change
+/// mid-match with Tab. Drawn as the line `view::scythe` gives back, which is
+/// the hit volume while she is swinging and the same reach hung off her grip
+/// while she is not -- the one condition under which a reach is allowed to
+/// grow with a bar is that the blade is drawn at the length it hits at.
+#[derive(Component)]
+struct ScytheMesh(usize);
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -875,6 +886,18 @@ fn setup(
             MarkMesh(owner),
         ));
     }
+    // The Blood mage's scythe: a bar from her grip to the head of the blade.
+    // Shade-skinned rather than blood: it is iron, and the blood is what it
+    // leaves on the floor.
+    for owner in 0..MAX_PLAYERS {
+        commands.spawn((
+            Mesh3d(unit.clone()),
+            MeshMaterial3d(look.shade.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            ScytheMesh(owner),
+        ));
+    }
     commands.insert_resource(look);
 }
 
@@ -1225,6 +1248,49 @@ fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut
         *vis = Visibility::Inherited;
         tf.translation = piece.at;
         tf.scale = piece.scale;
+    }
+}
+
+/// Put each Blood mage's scythe where `view::scythe` says the blade is.
+///
+/// **The renderer decides nothing about the reach.** The line comes out of the
+/// same function the hit test lengthens the sweep with, and the only thing
+/// added here is where the grip is drawn -- the body's left hand, which
+/// `apply_poses` already works out in the arena for whatever a hand holds.
+fn place_scythes(
+    sim: Res<Sim>,
+    hands: Res<ShieldHands>,
+    mut meshes: Query<(&ScytheMesh, &mut Transform, &mut Visibility)>,
+) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let grip = hands.0[tag.0].0;
+        let Some(blade) = view::scythe::blade(&sim.cur.players[tag.0], grip.into()) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let (from, to) = (Vec3::from(blade.from), Vec3::from(blade.to));
+        let along = to - from;
+        let length = along.length();
+        if length < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        tf.translation = from + along * 0.5;
+        // The unit cylinder stands along Y; turn it on to the blade.
+        tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
+        // Drawn at the volume's own thickness when it is out, and thinner at
+        // rest: a haft is not as fat as the arc the blade sweeps.
+        let swinging = sim.cur.players[tag.0]
+            .action
+            .attack_kind()
+            .is_some_and(sim::moves::blood::scythe);
+        let width = if swinging {
+            blade.width
+        } else {
+            blade.width * 0.3
+        };
+        tf.scale = Vec3::new(width, length, width);
     }
 }
 

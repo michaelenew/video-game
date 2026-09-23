@@ -224,6 +224,16 @@ pub struct Player {
     /// turning needs no trigonometry -- one less determinism risk.
     pub facing: V3,
     pub health: i32,
+    /// Health that is no longer red and not yet gone.
+    ///
+    /// The Blood mage's, and zero on everybody else (`Class::wounds_go_grey`).
+    /// Every cost she pays and every hit she takes moves red into here; it
+    /// fades on its own clock (`tuning::grey_fade`), and the only thing that
+    /// turns it back is a drink from an essence pool. While it is open it is
+    /// reach: the scythe's length and damage ride on it, which is why a full
+    /// bar is not simply the best place to be. `health + grey` never exceeds
+    /// the bar. See `docs/design/blood-mage.md` §"Grey health".
+    pub grey: i32,
     pub action: Action,
     pub grounded: bool,
     /// Frames of jump sustain left. Set on takeoff, spent while the button is
@@ -715,15 +725,63 @@ impl Player {
     /// this way -- and healing stops at full, so a Blood mage cannot bank
     /// health above the bar by farming a field.
     pub fn spend_health(&mut self, cost: i32) {
-        if cost > 0 {
-            self.health = (self.health - cost).max(1);
+        // Clamped at one: dying to your own button is not a decision anybody
+        // made. What was actually paid is what turns grey, so a cast at two
+        // health opens a one-point wound rather than the whole cost.
+        let paid = cost.min(self.health - 1).max(0);
+        self.health -= paid;
+        if self.class.wounds_go_grey() {
+            self.grey += paid;
         }
     }
 
-    pub fn heal(&mut self, amount: i32) {
-        if amount > 0 && self.health > 0 {
-            self.health = (self.health + amount).min(t::max_health());
+    /// Take `damage` off the bar, and give back what actually came off.
+    ///
+    /// **The one place enemy damage lands**, whichever path delivered it -- a
+    /// swing, a field ticking, a bolt, a stone, the floor after a spike -- so
+    /// that the Blood mage's grey is bookkept once. A killing blow on somebody
+    /// with forty health left is worth forty, not its listed damage, which is
+    /// what the return is for: anything paid out of a hit has to be paid out
+    /// of what the hit was worth.
+    pub fn wound(&mut self, damage: i32) -> i32 {
+        let dealt = damage.min(self.health).max(0);
+        self.health -= dealt;
+        if self.class.wounds_go_grey() {
+            self.grey += dealt;
         }
+        dealt
+    }
+
+    pub fn heal(&mut self, amount: i32) {
+        // Never above the bar, and never into the grey: a heal from anywhere
+        // but a pool cannot close a wound this class has open. Nothing heals
+        // her that way any more, and this is what keeps that true if something
+        // shared tries.
+        if amount > 0 && self.health > 0 {
+            self.health = (self.health + amount).min(t::max_health() - self.grey);
+        }
+    }
+
+    /// Turn up to `amount` of grey back into red, and give back how much was.
+    ///
+    /// The Blood mage's only heal. Grey is the ceiling -- she cannot get back
+    /// past where she stood a moment ago, only to it -- so a drink with no
+    /// grey to convert is worth nothing, and the pool it came from is not
+    /// charged for it (see `World::drink`).
+    pub fn drink(&mut self, amount: i32) -> i32 {
+        if self.health <= 0 {
+            return 0;
+        }
+        let took = amount.min(self.grey).max(0);
+        self.health += took;
+        self.grey -= took;
+        took
+    }
+
+    /// How much of the bar is grey, nought to one. What the scythe reads.
+    pub fn grey_share(&self) -> Fx {
+        let max = t::max_health().max(1);
+        Fx::ratio(self.grey.clamp(0, max), max)
     }
 
     /// Standing on the creature.
@@ -759,6 +817,7 @@ impl Default for Player {
             vel: V3::ZERO,
             facing: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
             health: 1000,
+            grey: 0,
             action: Action::Free,
             grounded: true,
             jump_hold: 0,
@@ -1013,6 +1072,7 @@ impl World {
             seen.iter()
                 .any(|v| matches!(v.action, Action::Held { .. }) && v.held_by == i as u8)
         });
+        let frame = self.frame;
         for (i, (p, input)) in self.players.iter_mut().zip(inputs).enumerate() {
             let scene = Scene {
                 stones: &field,
@@ -1023,6 +1083,7 @@ impl World {
             step_player(p, i, input, &field, beast.as_ref(), &scene, carrying[i]);
             advance_clocks(p);
             step_aloft(p, &field);
+            fade_grey(p, frame);
         }
 
         // What a move does *as it comes out*, on its first active frame: the
@@ -1381,6 +1442,7 @@ impl World {
                 h.write_i32(v.z.raw());
             }
             h.write_i32(p.health);
+            h.write_i32(p.grey);
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
@@ -1604,6 +1666,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     // rather than a branch per ability. Every other class, and both of her
     // autos, get exactly one back and nothing changes. See [`depth`].
     m.radius = m.radius.mul(depth_of_size(p, kind));
+    // **And the Blood mage's grey changes how far this reaches.** The same
+    // shape of rule -- one multiply, here, one for everybody else -- and the
+    // one reach in the game that scales. See [`live_reach`].
+    m.reach = live_reach(p, &m);
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -1838,6 +1904,58 @@ pub fn beam_of(p: &Player) -> Path {
 /// this is the kind of rule that is only worth having if it is true everywhere
 /// -- a class trait that applies to three of a class's four abilities is not a
 /// trait, it is a bug somebody will find in a match.
+/// How far a move reaches on this fighter right now.
+///
+/// The move's own reach for everything but the Blood mage's scythe, which
+/// lengthens with the grey on her bar: base at none, `tuning::grey_reach`
+/// times it at a full bar, a straight line between. **This is the one reach
+/// in the game that scales with a bar**, and `docs/design/aiming.md` refuses
+/// that for good reason; it is allowed here on the condition that the blade is
+/// drawn at the length it hits at, which `view::scythe` reads from the same
+/// function.
+pub fn live_reach(p: &Player, m: &moves::Move) -> Fx {
+    if !m.rides_the_grey() {
+        return m.reach;
+    }
+    m.reach
+        .mul(crate::math::lerp(Fx::ONE, t::grey_reach(), p.grey_share()))
+}
+
+/// What a move's damage is multiplied by for the grey on the caster's bar.
+/// The same line as [`live_reach`], with its own number at the top.
+fn grey_power(p: &Player, m: &moves::Move) -> Fx {
+    if !m.rides_the_grey() {
+        return Fx::ONE;
+    }
+    crate::math::lerp(Fx::ONE, t::grey_damage(), p.grey_share())
+}
+
+/// The scythe's reach on this fighter, out of a move: what the blade is drawn
+/// at while she is not swinging it. The sweep's, because the sweep is the
+/// weapon at rest; a Reap is the same blade lifted.
+pub fn scythe_reach(p: &Player) -> Fx {
+    live_reach(p, &moves::get(p.class, moves::blood::SWEEP))
+}
+
+/// Grey fades: `tuning::grey_fade` points a second, spread over the frames.
+///
+/// Integer arithmetic on the frame counter rather than a fixed-point
+/// accumulator in the snapshot: the cumulative fade after `k` frames of the
+/// second is `rate * k / 60`, and this frame's share is the difference of two
+/// of those, so a second of fading is exactly the rate whatever the rounding
+/// did in between. **The only way grey ever goes.** Nothing else takes it off
+/// the bar -- not a hit, not a cost, not a heal from anywhere but a pool.
+fn fade_grey(p: &mut Player, frame: u32) {
+    if p.grey <= 0 {
+        return;
+    }
+    let rate = t::grey_fade().max(0);
+    let hz = crate::TICK_HZ as i32;
+    let k = (frame % crate::TICK_HZ) as i32;
+    let faded = rate * (k + 1) / hz - rate * k / hz;
+    p.grey = (p.grey - faded).max(0);
+}
+
 fn preying(class: Class, victim_disabled: bool) -> Fx {
     if victim_disabled && class.preys_on_the_disabled() {
         t::disabled_damage_mul()
@@ -1876,8 +1994,21 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // How far out on her own bar the Dual mage is standing, as a multiplier on
     // everything this blow is worth. One for everybody else. See [`depth`].
     let power = depth(attacker);
+    // The scythe's tip: the outer part of the blade, measured from her feet,
+    // hits harder. Decided per defender rather than per frame, because a
+    // sweep can catch one body on the haft and another on the point.
+    let on_the_point = m.rides_the_grey()
+        && kind == moves::blood::SWEEP
+        && defender.pos.sub(attacker.pos).flat_len().raw()
+            >= box_out.to.sub(box_out.from).len().mul(t::sweep_tip()).raw();
     let damage_mul = preying(attacker.class, defender.disabled())
         .mul(if tipped { t::wing_tipper() } else { Fx::ONE })
+        .mul(if on_the_point {
+            t::sweep_tip_damage()
+        } else {
+            Fx::ONE
+        })
+        .mul(grey_power(attacker, &m))
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
@@ -2071,7 +2202,7 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
     } else {
-        defender.health = (defender.health - hit.damage).max(0);
+        defender.wound(hit.damage);
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
@@ -2718,7 +2849,7 @@ fn step_player(
         // why knocking someone down is worth more than knocking them away.
         if p.slam.raw() > 0 && !was_grounded {
             let cost = Fx::from_int(t::slam_damage()).mul(impact.abs()).to_int();
-            p.health = (p.health - cost).max(0);
+            p.wound(cost);
             p.stun_total = t::slam_stagger();
             p.action = Action::Stagger {
                 left: t::slam_stagger(),
@@ -2775,6 +2906,7 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
     match p.class {
         Class::Champion => champion_move(p, input),
         Class::DualMage => dual_move(p, input),
+        Class::BloodMage => blood_move(input),
         // The Reaver breaks it a third way: right click sends the shadow. It is
         // the one thing in her kit the **crosshair aims**, and the mouse is
         // where aiming lives -- so the mechanic is on the mouse and the swing
@@ -2822,6 +2954,23 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 /// displaces something rather than adding to it — on the floor that key is the
 /// mechanic and has no frames at all — so it is answered by
 /// [`keyed_move`] beside the rest of the mechanic grammar.
+/// Which move the Blood mage's three clicks throw.
+///
+/// Left is the auto, right is the committed heavy and middle is the throw --
+/// the same reading as the Elementalist's clicks, with the third button taking
+/// the ranged move because the mouse means where. See `moves::blood` for why
+/// the auto is the fifth row of the table rather than the first.
+fn blood_move(input: Input) -> Option<u8> {
+    use moves::blood as b;
+    if input.has(Input::LEFT) {
+        Some(b::SWEEP)
+    } else if input.has(Input::RIGHT) {
+        Some(b::REAP)
+    } else {
+        input.has(Input::MIDDLE).then_some(b::BLOODLETTER)
+    }
+}
+
 fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
     use moves::elementalist as e;
     if !p.grounded {
@@ -5279,8 +5428,7 @@ impl World {
         let damage = Fx::from_int(effect.damage())
             .mul(preying(effect.class, self.players[victim].disabled()))
             .to_int();
-        let dealt = damage.min(self.players[victim].health);
-        self.players[victim].health = (self.players[victim].health - damage).max(0);
+        let dealt = self.players[victim].wound(damage);
         let owed = effect.leeched(dealt);
         self.players[effect.owner as usize].heal(owed);
     }
@@ -5836,7 +5984,7 @@ fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
     };
     // The fall. See `tuning::throw_damage`: the back is safe from everything
     // the creature swings, so the buck has to be what the ride costs.
-    p.health = (p.health - t::throw_damage()).max(0);
+    p.wound(t::throw_damage());
 }
 
 /// Come off because something else decided it, rather than because you lost

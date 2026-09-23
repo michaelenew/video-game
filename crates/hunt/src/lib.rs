@@ -500,10 +500,12 @@ impl Hunter {
 /// live behind a Rush charge it deliberately does not spend. It is here to
 /// measure the creature, not to show off a kit.
 fn heavy(class: sim::Class) -> u16 {
-    if class == sim::Class::Champion {
-        Input::MIDDLE
-    } else {
-        Input::LEFT | Input::SHIFT
+    match class {
+        sim::Class::Champion => Input::MIDDLE,
+        // The Reap, on right click: the one committed heavy in the roster
+        // that has a button since shift stopped modifying clicks.
+        sim::Class::BloodMage => Input::RIGHT,
+        _ => Input::LEFT | Input::SHIFT,
     }
 }
 

@@ -1318,12 +1318,105 @@ pub fn debris_knockback() -> Fx {
 // ---------------------------------------------------------------------------
 // The Blood mage
 //
-// Everything she throws costs blood and gives it back on the hit, and those two
-// numbers are per move -- they are in the move table beside the damage, where
-// the rest of an ability's economy lives. What is here is the *shape* of the
-// three things she puts into the world: how tall the spike stands, how far the
-// blade flies, and how wide the arms of a Grasp open before they close.
+// Everything she throws costs blood, and the cost is per move -- it is in the
+// move table beside the damage, as is what share of a pool each move drinks.
+// What is here is the *shape* of the things she puts into the world -- how tall
+// the spike stands, how far the blade flies, how wide the arms of a Grasp open
+// -- and the two halves of her mechanic: how grey behaves, and how a pool does.
+// See `docs/design/blood-mage.md`.
 // ---------------------------------------------------------------------------
+
+/// How fast grey health fades, in points per second.
+///
+/// A rate rather than a lifetime on purpose: a large wound stays open longer
+/// than a small one, and there is always a clock. The first number is the one
+/// the design asks for -- a full committed cast's worth of grey (a Reap's cost)
+/// survives one whole exchange, its startup to the end of its recovery plus a
+/// dodge, before the fade has taken half of it. Too fast and the blade never
+/// gets long enough to matter; too slow and it is "missing health makes you
+/// stronger", which every berserk mechanic has already been.
+pub fn grey_fade() -> i32 {
+    oven::scalar(Scalar::GreyFade)
+}
+
+/// What the scythe's reach is multiplied by at a full bar of grey.
+///
+/// The one reach in the game allowed to scale with a bar, on the one condition
+/// that the blade is drawn at the length it hits at -- `view/tests/kinematics.rs`
+/// holds it to that. Half again as long is the first guess from the design:
+/// enough to be read across the arena, which is the whole justification.
+pub fn grey_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GreyReach))
+}
+
+/// What the scythe's damage is multiplied by at a full bar of grey. The same
+/// curve as the reach, its own number.
+pub fn grey_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GreyDamage))
+}
+
+/// Where the sweep's **tip** begins, as a share of the blade's live reach.
+///
+/// The one piece of execution in the auto: the outer part of the blade hits
+/// harder, and it is the part that reaches. Measured from the caster's feet
+/// rather than from the hub, because the question a player asks is "how far
+/// away were they", and the answer is the same whichever way the sweep is
+/// tilted.
+pub fn sweep_tip() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepTip))
+}
+
+/// What the tip of the sweep multiplies the damage by.
+pub fn sweep_tip_damage() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SweepTipDamage))
+}
+
+/// How wide a pool is, per square root of its volume.
+///
+/// A puddle spreads by area, so its radius goes with the root of what was
+/// spilled: a Reap's pool is wider than a sweep's, but not four times wider.
+/// The first value puts a sweep's smear at about a metre and a Reap's floor at
+/// a little over two.
+pub fn pool_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PoolRadius))
+}
+
+/// How fast a pool drains, in volume per second.
+///
+/// Litres a second rather than seconds a pool, so a big pool outlives a small
+/// one. This is the counterplay knob: a mobile opponent leaves small pools far
+/// apart, and by the time she has forced anybody onto one it has gone.
+pub fn pool_drain() -> i32 {
+    oven::scalar(Scalar::PoolDrain)
+}
+
+/// How tall the slab a pool is tested as stands. Low: it is on the floor, and
+/// standing in it is the point. Drawn at exactly this height.
+pub fn pool_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PoolHeight))
+}
+
+/// How many pools one Blood mage can have on the floor. A further one merges
+/// into the newest. The Elementalist's cap, for the Elementalist's reason:
+/// readability in third person matters more than the combo ceiling.
+pub fn pool_cap() -> usize {
+    oven::scalar(Scalar::PoolCap).clamp(1, crate::effects::MAX_EFFECTS as i32) as usize
+}
+
+/// How far off a pool the crosshair may be and still count as on it, for the
+/// blink. The Reaver's `shadow_lock_cone`, pointed at a puddle instead of a
+/// body; separate because a disc on the floor and a standing figure are not
+/// the same size to aim at.
+pub fn pool_lock() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PoolLock))
+}
+
+/// How long the spike's eruption stands out of the floor. Cosmetic and
+/// gameplay at once: the launch and the slow land on its first frame, and the
+/// rest is the thing you can see from across the arena.
+pub fn spike_erupt() -> u16 {
+    oven::scalar(Scalar::SpikeErupt) as u16
+}
 
 /// How tall the black spike stands out of the ground.
 ///

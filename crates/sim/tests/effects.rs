@@ -573,52 +573,21 @@ fn the_black_spike_drains_and_slows_whoever_stands_in_it() {
 }
 
 #[test]
-fn the_spike_feeds_the_caster_while_it_drains() {
-    // The class's whole loop: blood out on the press, blood back while it
-    // works. Continuous rather than a lump sum when the field expires, so a
-    // Blood mage standing in a fight is being paid the whole time it is up.
-    let mut w = as_class(Class::BloodMage);
-    let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
-    assert!(spike.leech > 0, "the spike returns nothing at all");
-
-    spiked(&mut w);
-    // Hurt, so there is room on the bar for the return to show.
-    w.players[0].health = sim::tuning::max_health() / 2;
-    let paid = w.players[0].health;
-    let victim = w.players[1].health;
-    run(&mut w, 60, 0, 0);
-    assert!(
-        w.players[1].health < victim,
-        "fixture: the field never drained anybody"
-    );
-    assert!(
-        w.players[0].health > paid,
-        "the spike drained {} and gave the caster none of it",
-        victim - w.players[1].health
-    );
-}
-
-#[test]
 fn casting_costs_the_blood_mage_health() {
     // Every one of her abilities is paid for out of the bar, which is the class
-    // -- see `docs/design/kits/blood-mage.md`. Asserted on all four rather than
+    // -- see `docs/design/kits/blood-mage.md`. Asserted on all five rather than
     // on one, because "all of them" is the design and a free ability would be
     // the one everybody pressed.
-    use sim::state::{SLOT_COMMITTED, SLOT_MECHANIC, SLOT_POKE, SLOT_SPECIAL};
-    // Rend is in the list and has no button: shift stopped being an attack
-    // modifier, so the committed slot is stranded on the three classes that
-    // still keep a move there. The table is still the design -- every one of
-    // her abilities is paid for -- so the cost is asserted on all four and only
-    // the three with an input are thrown. See `docs/design/controls.md`.
+    use sim::moves::blood as b;
     for (slot, button) in [
-        (SLOT_POKE, Some(Input::LEFT)),
-        (SLOT_COMMITTED, None),
-        (SLOT_SPECIAL, Some(Q)),
-        (SLOT_MECHANIC, Some(E)),
+        (b::BLOODLETTER, Input::MIDDLE),
+        (b::REAP, Input::RIGHT),
+        (b::GRASP, Q),
+        (b::BLACK_SPIKE, E),
+        (b::SWEEP, Input::LEFT),
     ] {
         let m = sim::moves::get(Class::BloodMage, slot);
         assert!(m.cost > 0, "{} is free to cast", m.name);
-        let Some(button) = button else { continue };
 
         // Cast it at nothing, so the only thing that can move the bar is the
         // price of pressing the button.
@@ -629,6 +598,13 @@ fn casting_costs_the_blood_mage_health() {
             w.players[0].health,
             before - m.cost,
             "{} did not cost what the table says",
+            m.name
+        );
+        // And what was paid is not gone: it is grey, and a pool can bring it
+        // back. See `tests/grey.rs`.
+        assert_eq!(
+            w.players[0].grey, m.cost,
+            "{} took the health off the bar for good",
             m.name
         );
     }
@@ -674,7 +650,7 @@ fn the_bloodletter_cuts_on_the_way_out_and_on_the_way_back() {
 
     let full = w.players[1].health;
     let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, Input::LEFT, pitch, 0);
+    looking(&mut w, 2, Input::MIDDLE, pitch, 0);
     let mut cuts = 0;
     let mut last = full;
     for _ in 0..120 {
@@ -701,7 +677,7 @@ fn the_blade_comes_back_to_the_mage_and_not_to_the_spot_she_threw_it_from() {
     // up under the old rule: the throw point is still there to compare with.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, Input::LEFT, 0, 0);
+    looking(&mut w, 2, Input::MIDDLE, 0, 0);
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
     let thrown_from = effects_of(&w, EffectKind::Bloodletter)
         .first()
@@ -745,7 +721,7 @@ fn the_blade_tracks_the_mage_the_whole_way_home_rather_than_snapping_to_her() {
     // the test above and read, in the hand, as a bug.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
-    looking(&mut w, 2, Input::LEFT, 0, 0);
+    looking(&mut w, 2, Input::MIDDLE, 0, 0);
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
 
     let flight = sim::tuning::bloodletter_flight();
@@ -793,10 +769,12 @@ fn the_blade_tracks_the_mage_the_whole_way_home_rather_than_snapping_to_her() {
 }
 
 #[test]
-fn the_bloodletter_pays_out_when_it_is_caught() {
-    // Not on contact. The cut lands at once and the health has to survive the
-    // flight home, which is what makes an auto attack a small commitment
-    // instead of a free poke.
+fn the_bloodletter_brings_back_a_cut_and_not_health() {
+    // It used to pay out on the catch: the cut landed at once and the health
+    // had to survive the flight home. It brings back nothing now. The health
+    // is on the floor where the cut happened -- the pool the hit spilled --
+    // and only a move put through that pool returns it. See
+    // `docs/design/blood-mage.md` and `tests/essence.rs`.
     let mut w = as_class(Class::BloodMage);
     let m = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
     w.players[1].pos = sim::V3::new(
@@ -807,27 +785,20 @@ fn the_bloodletter_pays_out_when_it_is_caught() {
         w.players[1].pos.y,
         w.players[0].pos.z,
     );
-    // Hurt, so there is room on the bar for the return to be visible.
-    w.players[0].health = sim::tuning::max_health() / 2;
-
     let pitch = aiming_at(&w, sim::state::SLOT_POKE, w.players[1].pos);
-    looking(&mut w, 2, Input::LEFT, pitch, 0);
+    looking(&mut w, 2, Input::MIDDLE, pitch, 0);
     let flight = sim::tuning::bloodletter_flight();
     run(&mut w, (m.startup + m.active) as u32, 0, 0);
-    let mid = w.players[0].health;
-    run(&mut w, flight as u32 / 2, 0, 0);
+    let paid = w.players[0].health;
+    run(&mut w, flight as u32 * 2, 0, 0);
     assert!(
         w.players[1].health < sim::tuning::max_health(),
         "fixture: the blade never cut anybody"
     );
-    assert_eq!(
-        w.players[0].health, mid,
-        "the blade paid out before it came home"
-    );
-    run(&mut w, flight as u32, 0, 0);
     assert!(
-        w.players[0].health > mid,
-        "the blade came home and brought nothing with it"
+        w.players[0].health <= paid,
+        "the blade came home and brought health with it: {} up from {paid}",
+        w.players[0].health
     );
 }
 

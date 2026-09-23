@@ -616,8 +616,13 @@ fn a_move_with_no_volume_draws_nothing_and_touches_nobody() {
     let mut w = World::with_classes([sim::class::Class::BloodMage; 2]);
     w.players[1].pos = w.players[0].pos;
     let before = w.players[1].health;
+    // Middle click: the blade moved off the left button when the scythe took
+    // it. See `moves::blood`.
     for _ in 0..40 {
-        w.advance([Input::aimed(L, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
+        w.advance([
+            Input::aimed(Input::MIDDLE, LOOK_RIGHT),
+            Input::aimed(0, LOOK_LEFT),
+        ]);
         assert!(
             hitbox(&w.players[0]).is_none(),
             "the thrown blade drew a hitbox on the caster"
