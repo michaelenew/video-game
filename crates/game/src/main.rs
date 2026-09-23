@@ -253,11 +253,12 @@ enum Dummy {
 
 impl Default for Sim {
     fn default() -> Self {
-        let w = if hunting() {
+        let mut w = if hunting() {
             World::hunt(chosen_classes())
         } else {
             World::with_classes(chosen_classes())
         };
+        shot_bars(&mut w);
         Sim {
             prev: w.clone(),
             cur: w,
@@ -270,6 +271,29 @@ impl Default for Sim {
             // captured without a keypress.
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
+        }
+    }
+}
+
+/// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
+/// headless capture can look at the wings without playing up to them. A
+/// sibling of `SHOT_FRAME`: a way of landing a screenshot on a state rather
+/// than a moment. Ignored for any other class, and read once at start.
+fn shot_bars(w: &mut World) {
+    let Some(spec) = platform::env("SHOT_BARS") else {
+        return;
+    };
+    let mut parts = spec.split(',').map(|s| s.trim().parse::<i32>().ok());
+    let (Some(Some(dark)), Some(Some(light))) = (parts.next(), parts.next()) else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Meter {
+            dark: d, light: l, ..
+        } = &mut p.mechanic
+        {
+            *d = sim::Fx::from_int(dark);
+            *l = sim::Fx::from_int(light);
         }
     }
 }
@@ -510,7 +534,7 @@ struct WingTipMesh(usize);
 struct WingSpanMesh {
     owner: usize,
     force: sim::class::Force,
-    index: usize,
+    slot: view::wings::Slot,
     /// Seconds since it appeared, while it is unfolding -- a wing
     /// materialises over a few frames rather than popping. Presentation only.
     unfolding: f32,
@@ -520,26 +544,23 @@ struct WingSpanMesh {
 const WING_UNFOLD_SECONDS: f32 = 0.22;
 
 /// The wing silhouette `view::wings::OUTLINE` describes, as a two-sided mesh
-/// in the wing's own plane: `x` out along the wing, `y` across it, both in
-/// metres. Fanned from the outline's centre, which the view promises it is
-/// star-shaped about.
+/// in the wing's own plane at unit length: `x` out along the wing, `y` across
+/// it. Scaled to each wing's own length when it is placed. Fanned from the
+/// outline's centre, which the view promises it is star-shaped about.
 fn wing_mesh() -> Mesh {
     use bevy::asset::RenderAssetUsages;
     use bevy::render::mesh::{Indices, PrimitiveTopology};
     let n = view::wings::OUTLINE.len() as u32;
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n as usize + 1);
     positions.push([
-        view::wings::OUTLINE_CENTRE[0] * view::wings::LENGTH,
-        view::wings::OUTLINE_CENTRE[1] * view::wings::LENGTH,
+        view::wings::OUTLINE_CENTRE[0],
+        view::wings::OUTLINE_CENTRE[1],
         0.0,
     ]);
     for p in view::wings::OUTLINE {
-        positions.push([p[0] * view::wings::LENGTH, p[1] * view::wings::LENGTH, 0.0]);
+        positions.push([p[0], p[1], 0.0]);
     }
-    let uvs: Vec<[f32; 2]> = positions
-        .iter()
-        .map(|p| [p[0] / view::wings::LENGTH, 0.5 - p[1] / view::wings::LENGTH])
-        .collect();
+    let uvs: Vec<[f32; 2]> = positions.iter().map(|p| [p[0], 0.5 - p[1]]).collect();
     // Both faces, so it reads from the front and from behind: the two places
     // the two players are.
     let mut indices = Vec::with_capacity(n as usize * 6);
@@ -590,6 +611,12 @@ struct EffectLook {
     /// two you are holding.
     light: Handle<StandardMaterial>,
     dark: Handle<StandardMaterial>,
+    /// The wings on the Dual mage's back, one per force. Translucent and
+    /// two-sided where the tether and the burst are not: they hang off the
+    /// body the player is looking at, and a solid vane the size of her would
+    /// hide the fight behind it.
+    wing_light: Handle<StandardMaterial>,
+    wing_dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
@@ -802,6 +829,24 @@ fn setup(
         // has to be visible along its whole length against anything it crosses,
         // and the one thing it must not do is wash out the body on the end of
         // it, which is what the player is actually looking at.
+        wing_light: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.95, 0.78, 0.34),
+            emissive: LinearRgba::rgb(1.8, 1.5, 0.9),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        wing_dark: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.38, 0.14, 0.62, 0.34),
+            emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
         dark: materials.add(StandardMaterial {
             base_color: Color::srgba(0.16, 0.06, 0.26, 0.88),
             emissive: LinearRgba::rgb(0.55, 0.12, 0.95),
@@ -929,10 +974,10 @@ fn setup(
         ));
         // And the six on her back, in the colour of the force each one is.
         for (force, material) in [
-            (sim::class::Force::Dark, look.dark.clone()),
-            (sim::class::Force::Light, look.light.clone()),
+            (sim::class::Force::Dark, look.wing_dark.clone()),
+            (sim::class::Force::Light, look.wing_light.clone()),
         ] {
-            for index in 0..view::wings::PER_SIDE {
+            for slot in view::wings::ORDER {
                 commands.spawn((
                     Mesh3d(wing.clone()),
                     MeshMaterial3d(material.clone()),
@@ -941,7 +986,7 @@ fn setup(
                     WingSpanMesh {
                         owner,
                         force,
-                        index,
+                        slot,
                         unfolding: 0.0,
                     },
                 ));
@@ -1329,7 +1374,7 @@ fn place_wingspans(
         };
         let wing = wings
             .iter()
-            .find(|w| w.force == tag.force && w.index == tag.index)
+            .find(|w| w.force == tag.force && w.slot == tag.slot)
             .copied()
             .expect("all six wings are always answered for");
         if !wing.shown {
@@ -1348,7 +1393,8 @@ fn place_wingspans(
         let normal = along.cross(across);
         tf.translation = Vec3::from_array(wing.root);
         tf.rotation = Quat::from_mat3(&Mat3::from_cols(along, across, normal));
-        tf.scale = Vec3::new(unfold.max(0.01), 1.0, 1.0);
+        // The mesh is unit length; the slot says how long this wing is.
+        tf.scale = Vec3::new(unfold.max(0.01) * wing.length, wing.length, 1.0);
     }
 }
 

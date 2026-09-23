@@ -8,10 +8,17 @@
 //! wings are the gap, readable across the arena by both players; three and
 //! three is a mage about to ascend, and ascension is all six.
 //!
+//! **Three sizes, and the biggest comes first.** From the top of her back
+//! down: the smallest, the biggest, the middle one -- the seraph's proportions,
+//! with the great wing in the middle where the shoulder blades are. They
+//! arrive biggest first: the first third of a bar puts the great wing out, the
+//! second the lower one, the third the small one above. So a mage at a third
+//! already has a wing you can see across the arena, and the last one is a
+//! flourish rather than the thing you are waiting for.
+//!
 //! Counting rather than stretching because a wing half a metre long is not a
 //! wing, it is a line, and the thing the opponent has to read from across the
-//! arena is a count -- one, two or three -- not a length. Three per side is the
-//! seraph's six, and it is the number of thresholds a player can hold in mind.
+//! arena is a count -- one, two or three -- not a length.
 //!
 //! The rule the overlay lives by holds here in the other direction: what is
 //! drawn *is* the bar, by construction, and `view/tests/wings.rs` says so the
@@ -28,71 +35,119 @@ use sim::state::Player;
 /// How many wings a side has, with its bar full.
 pub const PER_SIDE: usize = 3;
 
-/// How long one wing is, root to tip, in metres. Fixed: a wing does not grow.
-pub const LENGTH: f32 = 1.15;
+/// Where on her back a wing sits.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Slot {
+    /// The smallest, reaching up. The last to appear.
+    Top,
+    /// The great wing, reaching out and a little up. The first to appear.
+    Middle,
+    /// The middle size, reaching down. The second to appear.
+    Bottom,
+}
 
-/// Where on her back the wings root, as a share of her height: the top pair,
-/// and how much lower each pair below it roots.
-const ROOT_HEIGHT: f32 = 0.84;
-const ROOT_DROP: f32 = 0.11;
+/// The three slots in the order they **appear** as the bar rises.
+pub const ORDER: [Slot; PER_SIDE] = [Slot::Middle, Slot::Bottom, Slot::Top];
+
+impl Slot {
+    /// Root to tip, in metres. Fixed: a wing does not grow.
+    pub const fn length(self) -> f32 {
+        match self {
+            Slot::Top => 1.1,
+            Slot::Middle => 2.3,
+            Slot::Bottom => 1.7,
+        }
+    }
+
+    /// Where it roots, as a share of her height.
+    const fn root_height(self) -> f32 {
+        match self {
+            Slot::Top => 0.90,
+            Slot::Middle => 0.79,
+            Slot::Bottom => 0.66,
+        }
+    }
+
+    /// Pitch above the horizontal, in radians: the small one reaches up past
+    /// the shoulders, the great one up and out, the lower one out and down.
+    const fn pitch(self) -> f32 {
+        match self {
+            Slot::Top => 1.20,
+            Slot::Middle => 0.45,
+            Slot::Bottom => -0.40,
+        }
+    }
+
+    /// How far back it sweeps, as a share of its length along the facing.
+    /// Little: a wing seen from behind, which is where the player is, has to
+    /// be seen face-on, and every share of sweep is a share of the wing
+    /// foreshortened away.
+    const fn sweep(self) -> f32 {
+        match self {
+            Slot::Top => 0.15,
+            Slot::Middle => 0.10,
+            Slot::Bottom => 0.08,
+        }
+    }
+
+    /// Which third of the bar puts it out: zero is the first.
+    pub fn order(self) -> usize {
+        ORDER.iter().position(|s| *s == self).unwrap_or(0)
+    }
+}
 
 /// How far behind her centre line the roots sit, in metres.
 const ROOT_BACK: f32 = 0.10;
 
-/// Each wing's pitch above the horizontal, top pair first, in radians. The
-/// top pair reaches up, the middle pair out, the bottom pair down: the fan of
-/// a seraph rather than three bars stacked.
-const PITCH: [f32; PER_SIDE] = [0.85, 0.15, -0.55];
-
-/// How far back each wing sweeps, as a share of its length along the facing.
-/// The top pair sweeps back the most, so the three read as a fan from behind
-/// as well as from the side.
-const SWEEP: [f32; PER_SIDE] = [0.55, 0.35, 0.25];
-
-/// The silhouette of one wing, in its own plane: `u` out along the wing from
-/// the root, `v` across it, as shares of [`LENGTH`]. A leading edge that
-/// rises and falls to the tip, and a trailing edge cut into five feathers.
+/// The silhouette of one wing, in its own plane at unit length: `u` out along
+/// the wing from the root, `v` across it. A bird's wing spread: a leading edge
+/// that runs nearly straight out to the tip, and the long primaries hanging
+/// from the outer half, shortening toward the root, each cut from the next by
+/// a notch.
 ///
 /// Star-shaped about [`OUTLINE_CENTRE`], so a triangle fan from there fills it
-/// without a triangulator: every edge is seen face-on from that point, because
-/// each notch of the trailing edge sits inward of the feather tip before it.
-pub const OUTLINE: [[f32; 2]; 16] = [
-    [0.00, 0.02],
-    [0.18, 0.13],
-    [0.42, 0.21],
-    [0.68, 0.22],
-    [0.88, 0.16],
-    [1.00, 0.07],
-    // The trailing edge, tip to root: feather tip, notch, feather tip ...
-    [0.97, -0.10],
-    [0.84, -0.09],
-    [0.86, -0.27],
-    [0.70, -0.19],
-    [0.64, -0.38],
-    [0.50, -0.24],
-    [0.40, -0.40],
-    [0.30, -0.22],
-    [0.16, -0.30],
-    [0.00, -0.10],
+/// without a triangulator: each notch sits at the angular midpoint of the two
+/// feather tips beside it, seen from that centre, and well inside them.
+pub const OUTLINE: [[f32; 2]; 18] = [
+    [0.00, 0.00],
+    [0.28, 0.11],
+    [0.58, 0.19],
+    [0.84, 0.20],
+    [1.00, 0.12],
+    [0.99, -0.30],
+    [0.84, -0.29],
+    [0.90, -0.58],
+    [0.77, -0.46],
+    [0.76, -0.66],
+    [0.64, -0.45],
+    [0.58, -0.60],
+    [0.52, -0.39],
+    [0.40, -0.48],
+    [0.38, -0.32],
+    [0.22, -0.34],
+    [0.28, -0.19],
+    [0.04, -0.16],
 ];
 
 /// The point the outline is filled from. See [`OUTLINE`].
-pub const OUTLINE_CENTRE: [f32; 2] = [0.45, -0.02];
+pub const OUTLINE_CENTRE: [f32; 2] = [0.60, -0.04];
 
 /// One wing's place in the arena.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Wing {
     pub force: Force,
-    /// Which of the side's three: zero is the top pair.
-    pub index: usize,
+    pub slot: Slot,
     /// Is it there? The bar has reached this wing's third.
     pub shown: bool,
+    /// Root to tip, in metres.
+    pub length: f32,
     /// Where it roots.
     pub root: V3,
     /// Unit, out along the wing: the outline's `u`.
     pub along: V3,
-    /// Unit, across the wing: the outline's `v`. Up-ish, so the leading edge
-    /// is the upper edge.
+    /// Unit, across the wing: the outline's `v`, pointed up so the leading
+    /// edge is the upper edge. The wing's face -- `along` crossed with this --
+    /// looks forward and back, where the two players are.
     pub across: V3,
 }
 
@@ -114,9 +169,9 @@ pub fn shown_for(bar: sim::Fx) -> usize {
     }
 }
 
-/// All six, dark side first, if this fighter has bars to draw. `None` for the
-/// other five classes, which is what hides them rather than drawing nothing
-/// six times.
+/// All six, the dark side first and each side in the order it appears, if
+/// this fighter has bars to draw. `None` for the other five classes, which is
+/// what hides them rather than drawing nothing six times.
 pub fn wings(p: &Player) -> Option<[Wing; 2 * PER_SIDE]> {
     let (dark, light) = sim::dual::bars(p)?;
     let ascending = sim::dual::ascending(p);
@@ -125,12 +180,12 @@ pub fn wings(p: &Player) -> Option<[Wing; 2 * PER_SIDE]> {
     };
     let (d, l) = (shown(dark), shown(light));
     Some([
-        wing(p, Force::Dark, 0, d > 0),
-        wing(p, Force::Dark, 1, d > 1),
-        wing(p, Force::Dark, 2, d > 2),
-        wing(p, Force::Light, 0, l > 0),
-        wing(p, Force::Light, 1, l > 1),
-        wing(p, Force::Light, 2, l > 2),
+        wing(p, Force::Dark, ORDER[0], d > 0),
+        wing(p, Force::Dark, ORDER[1], d > 1),
+        wing(p, Force::Dark, ORDER[2], d > 2),
+        wing(p, Force::Light, ORDER[0], l > 0),
+        wing(p, Force::Light, ORDER[1], l > 1),
+        wing(p, Force::Light, ORDER[2], l > 2),
     ])
 }
 
@@ -148,43 +203,38 @@ fn norm(v: V3) -> V3 {
     [v[0] / n, v[1] / n, v[2] / n]
 }
 
-fn cross(a: V3, b: V3) -> V3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn wing(p: &Player, force: Force, index: usize, shown: bool) -> Wing {
+fn wing(p: &Player, force: Force, slot: Slot, shown: bool) -> Wing {
     let pos = [fx(p.pos.x), fx(p.pos.y), fx(p.pos.z)];
     let facing = norm([fx(p.facing.x), 0.0, fx(p.facing.z)]);
     let side = aim::across(p.facing, hand_of(force));
     let side = norm([fx(side.x), 0.0, fx(side.z)]);
-    let height = fx(sim::tuning::body_height()) * (ROOT_HEIGHT - ROOT_DROP * index as f32);
+    let height = fx(sim::tuning::body_height()) * slot.root_height();
     let root = [
         pos[0] - facing[0] * ROOT_BACK,
         pos[1] + height,
         pos[2] - facing[2] * ROOT_BACK,
     ];
     // Out to the side, pitched up or down, swept back.
-    let (sin, cos) = PITCH[index].sin_cos();
+    let (sin, cos) = slot.pitch().sin_cos();
     let along = norm([
-        side[0] * cos - facing[0] * SWEEP[index],
+        side[0] * cos - facing[0] * slot.sweep(),
         sin,
-        side[2] * cos - facing[2] * SWEEP[index],
+        side[2] * cos - facing[2] * slot.sweep(),
     ]);
-    // The wing is a flat vane whose face looks forward and back -- where the
-    // two players are -- so its plane holds the sideways direction, and
-    // `across` is what is left: perpendicular to `along` inside that plane,
-    // pointed up so the leading edge is the upper edge.
-    let normal = norm(cross(along, side));
-    let a = norm(cross(normal, along));
-    let across = if a[1] < 0.0 { [-a[0], -a[1], -a[2]] } else { a };
+    // Across is world-up with its `along` component taken out: the chord runs
+    // up the wing, so the vane stands in the vertical plane through `along`
+    // and its face looks forward and back.
+    let up_along = along[1];
+    let across = norm([
+        -along[0] * up_along,
+        1.0 - along[1] * up_along,
+        -along[2] * up_along,
+    ]);
     Wing {
         force,
-        index,
+        slot,
         shown,
+        length: slot.length(),
         root,
         along,
         across,

@@ -205,11 +205,20 @@ other from a shared middle, but the wings are the display, and the thing the tie
 the thing everyone is already looking at. That answers the old open question about colour on
 the body by making the body the meter.
 
-The three fan like a seraph's: the top pair reaches up and sweeps back, the middle pair out,
-the bottom pair down. `view::wings` decides the count, each wing's root and axes and the
-silhouette — a feathered vane, longer than it is deep — and `view/tests/wings.rs` holds the
-count to the bar the way `kinematics.rs` holds the blade to the fist. The wings are drawn and
-not tested against.
+**Three sizes, and the biggest comes first.** From the top of her back down: the smallest,
+the biggest, the middle one — the seraph's proportions, with the great wing where the shoulder
+blades are. They arrive biggest first: the first third of a bar puts the great wing out, the
+second the lower one, the third the small one above. So a mage at a third already has a wing
+you can see across the arena, and the last one is a flourish rather than the thing you are
+waiting for. Each is a spread bird's wing — a leading edge running out to the tip, the long
+primaries hanging from the outer half — standing in the vertical plane through its own length
+so that from the front and from behind, where the two players are, it is seen face-on. The
+great wing is 2.3 m, the lower 1.7, the small one 1.1; they are translucent, so they never hide
+the fight behind them. `view::wings` decides the count, each wing's root, axes and length and
+the silhouette, and `view/tests/wings.rs` holds the count, the order and the sizes to the bar
+the way `kinematics.rs` holds the blade to the fist. Looked at in a headless capture
+(`SHOT_BARS=70,100 ./scripts/screenshot.sh`) from both seats on 2026-09-23. The wings are drawn
+and not tested against.
 
 ## The last auto is the force you are carrying — revised 2026-09-13
 
