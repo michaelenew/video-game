@@ -1,7 +1,7 @@
 ---
-status: proposed — v1 kit, nothing built
+status: built 2026-09-23 — v1 kit, unplayed
 decided: 2026-09-23
-supersedes: the mechanic and ability sections of kits/blood-mage.md, once built
+built: 2026-09-23, along plans/blood-mage-v1.md; what is in the game is kits/blood-mage.md
 sources: docs/archive/combat-design/blood-mage-skills.md, kits/blood-mage.md, this design thread
 ---
 
@@ -18,9 +18,13 @@ The percentage was the problem: a number that pays out wherever the hit lands gi
 nothing to *go to*, and a class whose sentence is "sustain through aggression" shipped with
 three tools that reward standing back. See [Why this shape](#why-this-shape) for the argument.
 
-Input map in [controls.md](controls.md). The built kit, and what it got right, is still
-[kits/blood-mage.md](kits/blood-mage.md). **The action plan for building this is
-[plans/blood-mage-v1.md](plans/blood-mage-v1.md).**
+Input map in [controls.md](controls.md). **This is built**, along
+[plans/blood-mage-v1.md](plans/blood-mage-v1.md), and [kits/blood-mage.md](kits/blood-mage.md)
+describes the game as it is — with the numbers, and with the places the build departed from
+what is written here: the Bloodletter drinks once per pool and only on its way home, the
+`leech` column stays in the move table for the Dual mage, a victim hit in the air spills no
+pool, and the blink asks `aim::pointing_at_disc` rather than `pointing_at`, because a disc on
+the floor and a standing body are not the same shape to aim at. Nothing in it has been played.
 
 ## The three things a mechanic has to pay
 

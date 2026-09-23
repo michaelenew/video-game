@@ -4358,3 +4358,96 @@ each clip finally matches the prose in its own recipe, but anyone who had learnt
 the old silhouettes will notice. And the Bulwark's shield now hangs off the body's
 left hand rather than the slot named `HandL`; it was on the right before and
 nobody had said so.
+
+### 2026-09-23 — Blood mage M1: grey health and the scythe
+**Changed** Lost health on the class turns grey instead of going — every cost and every hit
+moves red into a segment that fades at 12 a second and that only a pool will turn back. The
+auto became Reaping sweep on left click (8/5/14, 22 damage, 2.8 m, cost 3, a tip at 65% of
+the blade worth ×1.5), and Reap took Rend's row on right click (20/4/26, 110, unblockable,
+an overhead, cost 55). Both reaches multiply by a line to ×1.5 at a full bar of grey, damage
+to ×1.3, and the blade is drawn at that length whether or not she is swinging. The Bloodletter
+moved to middle click and leeches nothing. Two clips re-authored: the overhead, and the sweep
+low to high off the left hip.
+
+**Why** The proposal's inversion — the correct answer to being wounded is to go in — needs
+the wound to be a weapon, and a reach that scales is the only reading of that both players
+can see. The fade's first number is the plan's own: a Reap's cost survives one exchange
+(its whiff plus a dodge, 72 frames) with more than half left. Faster and the blade never
+gets long enough to matter.
+
+**Tried and kept off:** removing the `leech` column outright, which the plan asks for. The
+Dual mage's dark auto and her tether heal through it and `dual_mage.rs` pins that, so the
+column stays and is zero on every move of hers — `feel.rs` now asserts the zero.
+
+**Verdict** open. Built, unverified: C1's questions (does the blade visibly grow; do you feel
+more dangerous after being hit, or just lower; does the sweep's arc read as a scythe) are
+the person's. The Reap's fall needed a mid key to stay inside the continuity ceiling: a
+straight blend from an arched back to a folded one moved the chest a hand's width in one
+frame.
+
+### 2026-09-23 — Blood mage M2: essence pools and the drink
+**Changed** Every hit she lands spills a pool under the target with a volume equal to the
+damage; radius is 0.24 per root of the volume, pools drain at 10 a second, merge on overlap,
+and are capped at four per mage. The effect array grew from eight slots to twelve. A move
+landed over a pool drinks its column's share (sweep 35%, Reap 60%, Bloodletter 30% on the way
+home, spike the whole pool), converted out of grey and never past it, and the pool loses
+exactly what she got; the drink comes before the spill. `cargo run -p sim --bin essence`
+prints the pool and drink tables.
+
+**Why** The heal has to be somewhere. A pool is a place, and making the heal a place is what
+turns "aggression" from an adjective into a direction on the floor.
+
+**Reverted:** the Bloodletter drinking on its cuts as well as on its crossing. Landed on a
+Reap's pool it took three shares in one throw — the out-cut, the return crossing and the
+return cut — and came back with 85 against the Reap's 64. It drinks once per pool now, on
+the way home only.
+
+**Moved:** the drain from 12 to 10 a second and the sweep's cost from 6 to 3, so that the
+relationship *a cast landed over a pool of its own making returns more than it cost* holds
+for the sweep. At 12 a second a sweep's smear (22) was down to 14 by the time the next
+sweep could land on it, and 30% of 14 was the cost exactly. The relationship is pinned in
+`essence.rs`; both numbers are knobs.
+
+**Verdict** open. C2's questions — did you know where to stand, did the heal feel earned or
+automatic, does four pools clutter the arena — are the person's.
+
+### 2026-09-23 — Blood mage M3: the blink, the haul, the spike on a pool
+**Changed** A dodge with the crosshair on one of her pools puts her in it and spends it, on
+the ground and in the air; the airborne one costs the airdodge and lands her. All four Grasp
+arms on the creature haul her to the contact point at the reel speed. The Black spike is one
+event: on bare floor the move's own disc hits, launches (9 m/s), slows and spills; on a pool
+the whole pool erupts at its radius, launching and slowing everything in it and drinking all
+of it. The drain field and its three knobs are gone; the spike stands for 20 frames as the
+thing you can see. `feel.rs` gains *every class has a move that carries the body*, with the
+Dual mage's row pending.
+
+**Why** The three payoffs from one object: the blink is the movement, the haul is the
+utility, the eruption is the damage, and none of them is a move added to fill a slot.
+
+**Reverted:** asking `aim::pointing_at` about a pool. With the pool's radius folded into the
+slack, the column it tests was six metres tall, and a blink aimed at the sky went through.
+`aim::pointing_at_disc` is the same ray against a short cylinder on the pool's own disc, 1.5 m
+tall — a fourth function in `aim.rs` rather than an angle worked out beside the dodge.
+
+**Found:** the spill has to read the victim as they stood when the hit landed. Read after
+the launch, a spiked victim was airborne and spilled nowhere, which made the one move meant
+to seed a pool at range the one move that never did.
+
+**Verdict** open. C3's questions — does the loop occur to you unprompted, is blink-or-drink a
+real decision, does the eruption read as the floor coming up — are the person's.
+
+### 2026-09-23 — Blood mage M4: the creature, the hunt, the costs
+**Changed** The scripted hunter Reaps on right click; the hunt report gains THE BLOOD (pools
+made, health drunk, health drunk while the creature was toppled). Costs to the proposal's
+shape: sweep 3, Bloodletter 8, Reap 55, Grasp 60, spike 80.
+
+**Measured** One scripted hunt as the class runs to completion (the hunters went down at 143
+s, one topple, 75 rides): 5 pools made, 2417 health drunk, 32 of it while the creature was on
+its side. The instrument's creature table: a sweep on a standing Ridgeback leaves 22, on a
+toppled one 30, and a Reap on a toppled one 153 — the largest pool in the game.
+
+**Verdict** open. C4 is one hunt and two versus rounds against a Champion who moves and one
+who trades, and its questions — do the pools vanish before you can use them, and does that
+feel like counterplay or like the class not working; do you out-heal a trader, by how much;
+do you bank grey for the reach or heal as soon as you can — are the ones this entry cannot
+answer.

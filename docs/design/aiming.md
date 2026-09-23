@@ -241,6 +241,7 @@ swing.
 | --- | --- |
 | **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
 | **Skillshot** | Bolt, Cataclysm, Air bolt, Gale, Bloodletter, Grasp, Lance |
+| **Swing** (the ones worth naming) | Reaping sweep and Reap — the Blood mage's scythe, whose reach grows with her grey and is drawn at the length it hits at |
 | **Swing** | every melee attack: Bash, Slam, Grapple, Slash, Executioner, Rend, Landfall, the Dual mage's Sweep and both of her autos, and all nineteen of the Champion's |
 | **At the mechanic** | Guillotine lotus |
 
@@ -268,6 +269,13 @@ does. The obvious alternative is an angle between the look direction and the
 line to the shadow, worked out beside the dodge, and that is the parallel-ray
 mistake in its usual disguise: it agrees with the crosshair at long range and is
 out by a whole body at short.
+
+**Is the crosshair on a pool on the floor?** `aim::pointing_at_disc` answers that for the
+Blood mage's blink — the same ray, against a short cylinder standing on the pool's own disc
+rather than the column a body makes. A disc is as wide as it is drawn and has no height to
+speak of, so the slack it needs is above it, not around it, and asking `pointing_at` about a
+puddle with a body's column made a blink aimed at the sky go through. It is here for the reason
+`pointing_at` is: built from the eye and the look direction.
 
 **Is there a way through to it?** `aim::clear_between` answers that one, and the
 same dodge asks it second — added 2026-09-14, when the dash learned to go up.

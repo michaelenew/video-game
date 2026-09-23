@@ -70,7 +70,7 @@ poke is a design choice in a closed arena, not a gap.
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Guillotine lotus · `E` Executioner | Rebuilt |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
-| [Blood mage](kits/blood-mage.md) | Health — **grey health and essence pools, proposed** | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked; [v1 kit proposed](blood-mage.md) |
+| [Blood mage](kits/blood-mage.md) | Grey health, and essence pools where she cut somebody | `L` Reaping sweep · `R` Reap · `M` Bloodletter · `Q` Grasp · `E` Black spike · `shift` on a pool = Blink | **v1 built**, unplayed; [the kit](blood-mage.md) |
 | [Dual mage](kits/dual-mage.md) | Meter position — **two bars, proposed** | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep | **Core rebuilt**; [v2 proposed](dual-mage-v2.md) |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` Bash · `shift`+`L` Slam · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New |
@@ -90,7 +90,7 @@ few enough to balance and to read in third person.
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
-| [blood-mage.md](blood-mage.md) | v1 kit: grey health, essence pools, the scythe, the blink | **Proposed** |
+| [blood-mage.md](blood-mage.md) | v1 kit: grey health, essence pools, the scythe, the blink | **Built 2026-09-23**, unplayed |
 | [dual-mage.md](dual-mage.md) | The two-pole meter, the depth curve and ascension | Decided; v2 proposed |
 | [dual-mage-v2.md](dual-mage-v2.md) | v2: two bars, the hill between them, the tiers, wings | **Proposed** |
 | [plans/](plans/) | Action plans for implementation threads: [Blood mage v1](plans/blood-mage-v1.md), [Dual mage v2](plans/dual-mage-v2.md) | Briefs |
@@ -128,7 +128,7 @@ Nothing here blocks a prototype.
 | Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all. **Since 2026-09-15**, five more, all of them in [feel-log.md](feel-log.md): whether the sword's step is too much free pressure, whether the spear's sixteen-frame second hit reads as a two-part move from across the arena, whether "jump into the finisher" occurs to anybody without being taught, whether +14 on hit is too much, and whether the spinning finisher's knockback fights the chain it ends |
 | Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
 | Elementalist | Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
-| Blood mage | ⚠️ **A v1 rebuild is proposed** — [blood-mage.md](blood-mage.md). The open questions there replace these two: health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
+| Blood mage | ⚠️ **The v1 rebuild is built and nobody has played it.** [kits/blood-mage.md](kits/blood-mage.md) §"Open questions" carries the proposal's questions with what the build found beside each; [plans/blood-mage-v1.md](plans/blood-mage-v1.md) has the four play scripts (C1–C4) that answer them. The numbers to watch first: the grey fade (12 a second), the reach at full grey (×1.5), and the pool drain (10 a second), which is the counterplay knob. Two things the build settled on its own and the person should overrule if wrong: the `leech` column stays in the move table because the Dual mage's dark arm reads it, and a hit on somebody in the air spills no pool |
 
 ## 5 · Parked — not slated for initial implementation
 
@@ -149,8 +149,8 @@ character progression.
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
 least three exemplar moves -- nineteen on the Champion, seven on the
-Elementalist, six on the Dual mage, four
-on the Blood mage and the Shadow Reaver -- there is a monster to fight and
+Elementalist, six on the Dual mage, five on the Blood mage and four on the
+Shadow Reaver -- there is a monster to fight and
 climb, peer-to-peer rollback play works over real UDP, and the test suite covers
 determinism, combat relationships, aiming, the ride, the camera, kinematics,
 animation and the frame budget.
@@ -206,7 +206,9 @@ the query string does what the flags do, so `?p1=champion&dev` is
 **Pick classes:** `game --p1 champion --p2 elementalist`, or Tab to cycle in-game.
 
 **Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
-on-hit advantage, and the repeat lockout beside them. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
+on-hit advantage, and the repeat lockout beside them. `cargo run -p sim --bin essence` is the
+Blood mage's instrument: the pool each move leaves, what each drinks, the grey bar over a
+scripted exchange, and the scythe's reach at each level of grey. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
 
 **Tune it while it runs:** **F7** opens the Oven — every tuned number in the game, grouped by

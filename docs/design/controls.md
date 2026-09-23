@@ -101,13 +101,14 @@ happened to be held — so what the key did depended on what the rest of your ha
 which is a modifier you cannot trust and cannot teach. Every other key in the game means one
 thing.
 
-What it costs is real and is being paid deliberately: **three classes have a committed move
-with no input at all** — the Bulwark's Slam, the Elementalist's Fissure and the Blood mage's
-Rend. They are still in the move table, still tuned, still printed by the frame table, and a
-player cannot throw them. Finding each of them a home is a separate job, one kit at a time,
-because the right answer is different per class and guessing three of them at once is how a
-grammar gets worse. The Shadow Reaver loses nothing, because her Executioner was already on
-`E`.
+What it costs is real and is being paid deliberately: **two classes have a committed move
+with no input at all** — the Bulwark's Slam and the Elementalist's Fissure. They are still in
+the move table, still tuned, still printed by the frame table, and a player cannot throw them.
+Finding each of them a home is a separate job, one kit at a time, because the right answer is
+different per class and guessing them at once is how a grammar gets worse. The Shadow Reaver
+loses nothing, because her Executioner was already on `E`; the Blood mage's committed move
+found its home on **right click** in the 2026-09-23 rebuild, where the Reap took the row Rend
+had been stranded on.
 
 What it bought, immediately, is the Dual mage. Her committed cast moved to **middle click**,
 which has no side — so by that class's own rule it pushes her further along whichever way she
@@ -954,19 +955,23 @@ actually lives.
 
 ### Blood mage
 
-Current as of 2026-09-13, and the four rows marked **bound** are what the game does.
+Current as of 2026-09-23, the v1 rebuild. Every row is **bound**.
 
 | Input | Result |
 | --- | --- |
-| `L` | **Bloodletter** — the auto. A blade out to a fixed distance and back, cutting on both passes and paying out on the catch. **Bound** |
-| `shift` + `L` | **Rend** — the committed melee rake. **Bound** |
-| hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge at a depth you chose by how long you held the button, from melee to ten metres over half a second along the line the crosshair picked; all four catch. **Bound** |
-| `E` | **Black spike** — a spike in a draining, slowing field, placed at long range. **Bound**, and the one place in the game where the mechanic key is an ability rather than a state change |
+| `L` | **Reaping sweep** — the auto. A war scythe drawn across the front, low to high; its reach grows with the grey on her bar, and the blade is drawn at the length it hits at |
+| `R` | **Reap** — the committed heavy. The scythe over and down: unblockable, an overhead, the biggest hit in the kit and the biggest drink when it lands over a pool. Right click is free on a class with no shield, the same argument the Reaver and the Elementalist make |
+| `M` | **Bloodletter** — a blade out to a fixed distance and back, cutting on both passes and drinking any pool it crosses on the way home. The third click, because the mouse means where |
+| hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge at a depth you chose by how long you held the button, from melee to ten metres over half a second along the line the crosshair picked; all four catch and haul the victim to her feet, or her to the creature |
+| `E` | **Black spike** — a spike out of the floor at long range after a delay; cast on one of her pools, the pool erupts. The one place in the game where the mechanic key is an ability rather than a state change |
+| `shift` + direction, crosshair on a pool | **Blink** — she is at the pool, and the pool is spent. The Reaver's dash to her shadow, pointed at the class's object |
 | direction + click | Cripple, Affliction, and the reactivating projectile Rend was meant to be |
 | the seals | Unplaced. Seal of the unforgiven wants a button of its own and there is not an obvious one |
 
-Every bound ability costs health on the press and returns a share of its damage on the hit.
-That is the class mechanic, and it is the only class with a cost in the move table.
+Every ability costs health on the press, and the health it costs turns **grey** rather than
+going: reclaimable, and reach while it is open. Every hit she lands spills the target into a
+pool on the floor, and putting a move through a pool is the only heal she has. That is the
+class mechanic; see [kits/blood-mage.md](kits/blood-mage.md).
 
 **Holding a cast button is new, and it means one thing only: range.** The Grasp is the first
 move in the game wound up by how long its button is down, and what the hold buys is how far

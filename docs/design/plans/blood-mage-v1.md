@@ -6,6 +6,11 @@ implements: ../blood-mage.md
 
 # Blood mage v1 — action plan
 
+> **Status, 2026-09-23.** M1–M4 are built and their measured criteria pass; the instrument is
+> `cargo run -p sim --bin essence`. **C1–C4 are unanswered** — no person has played it — so
+> the class is *built, unverified*, and the feel-log entries for the four milestones are
+> open. Each checkpoint's play script below is what to hand the person next.
+
 This is a complete brief for one implementer. Read [`../blood-mage.md`](../blood-mage.md)
 first: it is the specification, and this document is how to get there and how to know when
 you have. Read [`../README.md`](../README.md) and [`../../../CLAUDE.md`](../../../CLAUDE.md)
