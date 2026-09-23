@@ -16,8 +16,8 @@ use sim::{Class, Input, World};
 /// what the first version of this test used and it leaves out crouch and the
 /// mechanic key.
 const COMMON_BUTTONS: u16 = 0x1ff;
-/// Everything, mechanic key included.
-const EVERY_BUTTON: u16 = 0x7ff;
+/// Everything, mechanic key and middle click included.
+const EVERY_BUTTON: u16 = 0xfff;
 
 /// Play 1200 frames of random input through SyncTest against a given world.
 fn synctest(mut world: World, buttons: u16, label: &str) {

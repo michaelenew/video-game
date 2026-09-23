@@ -210,7 +210,10 @@ fn hauling_costs_her_the_whole_price_of_a_whiff() {
     let mut w = mage();
     in_the_open(&mut w);
     let before = w.players[0].health;
-    let cost = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).cost;
+    // A share of her current health since the v1 rebuild -- see
+    // `Player::cost_of` -- so the price is worked out before the press.
+    let cost =
+        w.players[0].cost_of(sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL).cost);
     grasp(&mut w, TOWARD_PLUS_X, 0);
     let spent = before - w.players[0].health;
     assert_eq!(

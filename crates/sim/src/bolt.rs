@@ -100,7 +100,7 @@ pub fn poke(defender: &mut Player, from: V3, damage: i32) -> Poked {
         // No chip damage, and nothing to interrupt: a guard is not a charge.
         return Poked::Blocked;
     }
-    defender.health = (defender.health - damage).max(0);
+    defender.wound(damage);
     // The interrupt, and the whole of it. Startup is the only phase that is a
     // *charge* -- a move already out has been paid for, and taking it back
     // would make a no-stagger poke better than moves that do stagger.

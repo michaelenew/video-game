@@ -344,7 +344,7 @@ fn knock_touch(field: &mut Field, players: &mut [Player; MAX_PLAYERS]) {
                 .mul(Fx::from_int(t::bolt_knock_damage_per_speed()))
                 .to_int()
                 .max(0);
-            p.health = (p.health - dmg).max(0);
+            p.wound(dmg);
             p.action = Action::Stagger {
                 left: t::bolt_knock_stagger(),
             };
@@ -746,7 +746,7 @@ pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
                         continue;
                     }
                     stone.struck |= 1 << i;
-                    p.health = (p.health - t::stone_erupt_damage()).max(0);
+                    p.wound(t::stone_erupt_damage());
                     p.action = Action::Stagger {
                         left: t::stone_erupt_stagger(),
                     };

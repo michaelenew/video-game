@@ -4363,6 +4363,214 @@ the old silhouettes will notice. And the Bulwark's shield now hangs off the body
 left hand rather than the slot named `HandL`; it was on the right before and
 nobody had said so.
 
+### 2026-09-23 — Blood mage M1: grey health and the scythe
+**Changed** Lost health on the class turns grey instead of going — every cost and every hit
+moves red into a segment that fades at 12 a second and that only a pool will turn back. The
+auto became Reaping sweep on left click (8/5/14, 22 damage, 2.8 m, cost 3, a tip at 65% of
+the blade worth ×1.5), and Reap took Rend's row on right click (20/4/26, 110, unblockable,
+an overhead, cost 55). Both reaches multiply by a line to ×1.5 at a full bar of grey, damage
+to ×1.3, and the blade is drawn at that length whether or not she is swinging. The Bloodletter
+moved to middle click and leeches nothing. Two clips re-authored: the overhead, and the sweep
+low to high off the left hip.
+
+**Why** The proposal's inversion — the correct answer to being wounded is to go in — needs
+the wound to be a weapon, and a reach that scales is the only reading of that both players
+can see. The fade's first number is the plan's own: a Reap's cost survives one exchange
+(its whiff plus a dodge, 72 frames) with more than half left. Faster and the blade never
+gets long enough to matter.
+
+**Tried and kept off:** removing the `leech` column outright, which the plan asks for. The
+Dual mage's dark auto and her tether heal through it and `dual_mage.rs` pins that, so the
+column stays and is zero on every move of hers — `feel.rs` now asserts the zero.
+
+**Verdict** open. Built, unverified: C1's questions (does the blade visibly grow; do you feel
+more dangerous after being hit, or just lower; does the sweep's arc read as a scythe) are
+the person's. The Reap's fall needed a mid key to stay inside the continuity ceiling: a
+straight blend from an arched back to a folded one moved the chest a hand's width in one
+frame.
+
+### 2026-09-23 — Blood mage M2: essence pools and the drink
+**Changed** Every hit she lands spills a pool under the target with a volume equal to the
+damage; radius is 0.24 per root of the volume, pools drain at 10 a second, merge on overlap,
+and are capped at four per mage. The effect array grew from eight slots to twelve. A move
+landed over a pool drinks its column's share (sweep 35%, Reap 60%, Bloodletter 30% on the way
+home, spike the whole pool), converted out of grey and never past it, and the pool loses
+exactly what she got; the drink comes before the spill. `cargo run -p sim --bin essence`
+prints the pool and drink tables.
+
+**Why** The heal has to be somewhere. A pool is a place, and making the heal a place is what
+turns "aggression" from an adjective into a direction on the floor.
+
+**Reverted:** the Bloodletter drinking on its cuts as well as on its crossing. Landed on a
+Reap's pool it took three shares in one throw — the out-cut, the return crossing and the
+return cut — and came back with 85 against the Reap's 64. It drinks once per pool now, on
+the way home only.
+
+**Moved:** the drain from 12 to 10 a second and the sweep's cost from 6 to 3, so that the
+relationship *a cast landed over a pool of its own making returns more than it cost* holds
+for the sweep. At 12 a second a sweep's smear (22) was down to 14 by the time the next
+sweep could land on it, and 30% of 14 was the cost exactly. The relationship is pinned in
+`essence.rs`; both numbers are knobs.
+
+**Verdict** open. C2's questions — did you know where to stand, did the heal feel earned or
+automatic, does four pools clutter the arena — are the person's.
+
+### 2026-09-23 — Blood mage M3: the blink, the haul, the spike on a pool
+**Changed** A dodge with the crosshair on one of her pools puts her in it and spends it, on
+the ground and in the air; the airborne one costs the airdodge and lands her. All four Grasp
+arms on the creature haul her to the contact point at the reel speed. The Black spike is one
+event: on bare floor the move's own disc hits, launches (9 m/s), slows and spills; on a pool
+the whole pool erupts at its radius, launching and slowing everything in it and drinking all
+of it. The drain field and its three knobs are gone; the spike stands for 20 frames as the
+thing you can see. `feel.rs` gains *every class has a move that carries the body*, with the
+Dual mage's row pending.
+
+**Why** The three payoffs from one object: the blink is the movement, the haul is the
+utility, the eruption is the damage, and none of them is a move added to fill a slot.
+
+**Reverted:** asking `aim::pointing_at` about a pool. With the pool's radius folded into the
+slack, the column it tests was six metres tall, and a blink aimed at the sky went through.
+`aim::pointing_at_disc` is the same ray against a short cylinder on the pool's own disc, 1.5 m
+tall — a fourth function in `aim.rs` rather than an angle worked out beside the dodge.
+
+**Found:** the spill has to read the victim as they stood when the hit landed. Read after
+the launch, a spiked victim was airborne and spilled nowhere, which made the one move meant
+to seed a pool at range the one move that never did.
+
+**Verdict** open. C3's questions — does the loop occur to you unprompted, is blink-or-drink a
+real decision, does the eruption read as the floor coming up — are the person's.
+
+### 2026-09-23 — Blood mage M4: the creature, the hunt, the costs
+**Changed** The scripted hunter Reaps on right click; the hunt report gains THE BLOOD (pools
+made, health drunk, health drunk while the creature was toppled). Costs to the proposal's
+shape: sweep 3, Bloodletter 8, Reap 55, Grasp 60, spike 80.
+
+**Measured** One scripted hunt as the class runs to completion (the hunters went down at 143
+s, one topple, 75 rides): 5 pools made, 2417 health drunk, 32 of it while the creature was on
+its side. The instrument's creature table: a sweep on a standing Ridgeback leaves 22, on a
+toppled one 30, and a Reap on a toppled one 153 — the largest pool in the game.
+
+**Verdict** open. C4 is one hunt and two versus rounds against a Champion who moves and one
+who trades, and its questions — do the pools vanish before you can use them, and does that
+feel like counterplay or like the class not working; do you out-heal a trader, by how much;
+do you bank grey for the reach or heal as soon as you can — are the ones this entry cannot
+answer.
+
+### 2026-09-23 — Blood mage: the pool is a figure, a drink is one and done, the scythe stands up
+**Changed** Three things from the first look at it, all presentation-and-rule pairs, since
+the rule is that what is drawn is what is tested. A pool is a shadowy column the size of the
+body it came out of — full at 110 essence, never under a third of a body, shrinking as it
+drains and drawn more solid the more is left — instead of a disc 0.24 m per root of essence
+across the floor. A drink **spends the pool**: the move's share of what is left comes back,
+the rest is lost with it, and the pool is gone. The scythe is drawn as a haft and a flat
+blade, the tip exactly at the hit volume's end while she swings and standing upright beside
+her at rest; its base reach went from 2.8 m to 2.4 m. And a spike cast on a pool erupts at
+0.3 m per root of the pool's essence, 3.4 m tall, at ×1.5 damage, where before it was the
+pool's own radius at the spike's own damage — which on a small pool was *smaller* than the
+bare spike and looked the same.
+
+**Why** The blood spatters were far too big and spread over the ground; a pool could be hit
+over and over for health, which is a heal with no decision in it; the scythe read as a
+five-metre pole straight out along the facing; and there was no visible or numerical
+difference between a spike on bare floor and one on a pool, which was the coolest idea in
+the kit.
+
+**What one-and-done changes underneath:** a sweep repeated on one spot no longer builds a
+pool — each sweep drinks the last one's figure and leaves its own. Only the moves that do
+not drink (the Grasp's four arms) pile essence on one spot, and the test that said five
+hits make one pool now asks the Grasp. The shares stay meaningful the other way round: a
+sweep through a Reap's pool takes a third and wastes the rest, which is a reason to save a
+big pool for the Reap.
+
+**Not done:** the figure starting as a shadow of the target's own model and coalescing. It
+is a column; a fading copy of the target's skeleton is presentation and is the next step.
+
+**Verdict** open. Unplayed since the change.
+
+### 2026-09-23 — Blood mage: costs are a share of red, the scythe collects, the spike chains
+**Changed** Four things from the second look. Every `Cost` on the class is now a percentage
+of her *current* health rather than a flat number: 1 / 6 / 1 / 7 / 9, which at full health is
+10 / 60 / 10 / 70 / 90 and at a fifth of a bar a fifth of that. The scythe collects: on every
+active frame a sweep or a Reap drinks any pool of hers the blade passes over, nobody needed
+in the way, except a pool younger than the swing itself. A bare spike is just a spike, drawn
+without a skirt; an eruption keeps the disc, and now sets off every other pool inside its
+radius, each of those setting off what it covers. And the weapon rides the hands the clips
+put on it — the pole through the leading hand and past the trailing one, the tip at the hit
+volume's end while it is out and at the live reach along the hands otherwise — and stands
+at rest, butt on the floor under her left hand and the blade curving forward a little over
+her head, drawn broader across the blade the more grey she carries. (It was carried low and
+horizontal for an hour, to keep the blade out of the crosshair; that stopped it reading as a
+scythe, which matters more.) The
+sweep's drink went from 35% to 50% so a full-health sweep, whose cost is the largest it can
+be, still returns more than it cost through its own pool.
+
+**Why** At low health a flat cost was the class burning itself to death trying to get back
+into the fight, and at high health it was too slow a way to open reach; a percentage does
+the right thing at both ends. Swinging the scythe through a pool with nobody in it did
+nothing, which is the opposite of what the weapon says. The spike and the eruption looked
+the same, and an eruption that stopped at one pool made pool placement not matter. The
+drawn scythe sat on a line the arms were not on and was pinned to the world's axes, and
+with the blade at chest height it was over the crosshair.
+
+**Watch for** the chain: three pools in a row is 700 essence and a launch across the whole
+floor for one press. It is bounded by the pools there are and by one-and-done, but whether
+a good Grasp-then-spike is a reward or a round is C3's question now.
+
+**Verdict** open. Unplayed since the change.
+
+### 2026-09-23 — Blood mage: the swing is essence, and right click is a bleed
+**Changed** Two things. The sweep's hit volume now grows in **width** with grey as well as
+reach — `Scythe width at full grey`, ×2 — and its damage curve went from ×1.3 to ×1.6 at a
+full bar. The weapon itself no longer grows at all: it is iron, drawn at the row's reach in
+her hands, and the volume is drawn around it as essence — the pools' own material, in the
+hit test's exact capsule, more solid the more grey she carries, lingering and fading through
+the first eight frames of recovery. And the Reap is gone from right click, replaced by the
+**Haemorrhage**: a bolt (radius 0.7 m, 9 m in fourteen frames, 30 damage, 4% of red) spent
+on the first body it reaches, which opens a three-second bleed of 8 every twelve frames,
+each tick spilling a pool under the victim wherever they are. The pool cap went from four to
+eight so the trail can exist. The scythe stands under the right hand now, so the left is
+free to throw and cast without the weapon following it.
+
+**Why** A weapon that got physically longer with grey looked like the model changing size
+rather than the class's mechanic; the thing that grows is her blood, and it should look like
+it. A wider volume is what turns grey into collection — the pools the swing passes near are
+drunk — which pays the aggression the class is for. And the Reap was a second swing on a
+class whose one swing already scales, while the kit's two payoff tools, the spike and the
+Grasp, were both genuinely hard to land with nothing easier beside them. The bleed is the
+easier thing, and it is not a payoff itself: it marks. A bleeding fighter is a fighter whose
+every spike is an eruption and whose trail is a fuse.
+
+**Measured** (`cargo run -p sim --bin essence`): a sweep's volume at 500 grey is 3.0 m long
+and 0.67 m across against 2.4 by 0.45 at none, at ×1.30 damage; the bolt on a standing
+dummy bleeds 120 over 15 ticks into one pool, and on a walking one into a trail 1.4 m a
+stride, of which the last four strides are alive at any moment.
+
+**Watch for** the trail's short life (a tick's pool drains in under a second) and whether
+that reads as a fuse or as nothing; and the bolt landing too easily at 0.7 m, which would
+make the marker free.
+
+**Verdict** open. Unplayed since the change.
+
+### 2026-09-23 — Blood mage: the Grasp and the Haemorrhage drink too
+**Changed** Every ability that lands now collects: the Grasp drinks 60% of a pool its arms
+land on, once for all four, and the Haemorrhage's bolt drinks 40% on its cut. One rule
+underneath it: a hit an effect delivers drinks only pools *older than the effect*, so four
+arms closing on one spot in one frame take a share of the pool that was there and nothing
+of what they spill themselves. Without that the second arm drank the first arm's spill,
+and a Grasp on bare floor refunded itself.
+
+And the Grasp drinks a second time where the haul ends: the pool at her own feet that the
+victim is hauled onto, which is the pool the kit's play pattern -- "Grasp them onto the pool
+you are standing in" -- was always about. A drink only where the arms closed never paid it.
+
+**Why** Two of the five abilities put nothing through the blood, which made "put an ability
+through the pool" a rule with exceptions nobody could see; and the Grasp's one drink was at
+the wrong end of the haul.
+
+**Measured** on a full pool with grey open: sweep 54, bolt 43, blade 42, Grasp 61, spike 105.
+
+**Verdict** open. Unplayed since the change.
+
 ---
 
 ### 2026-09-17 — the jump was the movement system, not the floor of one

@@ -724,6 +724,11 @@ impl Hunter {
 fn heavy(class: sim::Class) -> u16 {
     match class {
         sim::Class::Champion | sim::Class::Bulwark => Input::MIDDLE,
+        // The Haemorrhage, on right click: a bolt that cuts and gores, and
+        // the one right-click ability in the roster since shift stopped
+        // modifying clicks. The creature does not bleed, so on a hunt it is
+        // the ranged punish and nothing more.
+        sim::Class::BloodMage => Input::RIGHT,
         _ => Input::LEFT | Input::SHIFT,
     }
 }

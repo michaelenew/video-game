@@ -227,6 +227,13 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     FIELD,
                 );
             }
+            EffectKind::Haemorrhage => {
+                gizmos.sphere(
+                    Isometry3d::from_translation(v3(effect.bolt_at())),
+                    effect.field_radius().to_f32_for_render(),
+                    FIELD,
+                );
+            }
             EffectKind::Grasp => {
                 for arm in 0..sim::effects::GRASP_ARMS {
                     gizmos.sphere(
@@ -274,6 +281,17 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                 gizmos.sphere(
                     Isometry3d::from_translation(at),
                     effect.field_radius().to_f32_for_render(),
+                    FIELD,
+                );
+            }
+            // A pool, drawn as the slab it is tested at.
+            EffectKind::Pool => {
+                let slab = effect.pool_slab();
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    slab.radius.to_f32_for_render(),
+                    slab.top.to_f32_for_render().max(0.01),
                     FIELD,
                 );
             }

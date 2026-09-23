@@ -104,6 +104,7 @@ fn main() {
         .init_resource::<Fades>()
         .init_resource::<ShadowFades>()
         .init_resource::<ShieldHands>()
+        .init_resource::<Hands>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -142,6 +143,8 @@ fn main() {
                     place_wing_tips,
                     place_wingspans,
                     place_marks,
+                    place_scythes,
+                    place_essence_swings,
                     place_pips,
                 ),
                 beast::place,
@@ -290,6 +293,12 @@ impl Rewind {
 /// the posing pass and read by the one that places shields, which runs after.
 #[derive(Resource, Default)]
 struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
+
+/// Where both of each fighter's hands are drawn, in the arena: left, right.
+/// Written by the posing pass and read by the one that places the Blood
+/// mage's scythe, which rides the hands the clips put on its haft.
+#[derive(Resource, Default)]
+struct Hands([[Vec3; 2]; MAX_PLAYERS]);
 
 /// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
 /// whatever it was, which is wrong by a few frames of blend weight and
@@ -696,6 +705,42 @@ const WING_SLICES: usize = 12;
 #[derive(Component)]
 struct MarkMesh(usize);
 
+/// The Blood mage's scythe.
+///
+/// One per fighter, because the class is picked at runtime and can change
+/// mid-match with Tab. Drawn as the line `view::scythe` gives back, which is
+/// the hit volume while she is swinging and the same reach hung off her grip
+/// while she is not -- the one condition under which a reach is allowed to
+/// grow with a bar is that the blade is drawn at the length it hits at.
+#[derive(Component)]
+struct ScytheMesh {
+    owner: usize,
+    /// Which piece: the haft, or one of the two lengths of the curved blade.
+    piece: usize,
+}
+
+/// A weapon is a haft and a blade in two lengths, so its curve can be seen.
+const SCYTHE_PIECES: usize = 3;
+
+/// The essence around the Blood mage's swing: the hit volume itself, drawn
+/// in the same stuff as her pools, because it is the life force doing the
+/// swinging. The weapon is iron and one size; this is what her grey buys,
+/// and it is drawn at exactly the capsule the hit test reads --
+/// `view::scythe::swing_volume`.
+#[derive(Component)]
+struct EssenceSwing {
+    owner: usize,
+    /// The capsule: a cylinder down its length and a ball at each end.
+    piece: usize,
+}
+
+const SWING_PIECES: usize = 3;
+
+/// How many steps of solidity a pool is drawn in: one material per step,
+/// because a material is shared by everything wearing it and the solidity is
+/// per pool. Six is enough to watch one fade and few enough to make once.
+const ESSENCE_STEPS: usize = 6;
+
 /// One of the Reaver's marks on a body, drawn as a pip over its head.
 ///
 /// `body` is a fighter's index, or [`PIP_QUARRY`] for the creature. **Pips are
@@ -721,6 +766,9 @@ struct EffectLook {
     fire: Handle<StandardMaterial>,
     blood: Handle<StandardMaterial>,
     shade: Handle<StandardMaterial>,
+    /// A pool of essence, from faint to nearly solid: the more essence is
+    /// left in it, the more solid the figure.
+    essence: [Handle<StandardMaterial>; ESSENCE_STEPS],
     /// The Dual mage's two forces. Opposites on purpose -- one burns white and
     /// the other drinks the light -- because the whole class is which of the
     /// two you are holding.
@@ -930,6 +978,16 @@ fn setup(
             alpha_mode: AlphaMode::Blend,
             ..default()
         }),
+        essence: std::array::from_fn(|step| {
+            let solid = 0.18 + 0.72 * step as f32 / (ESSENCE_STEPS - 1) as f32;
+            materials.add(StandardMaterial {
+                base_color: Color::srgba(0.30, 0.04, 0.06, solid),
+                emissive: LinearRgba::rgb(0.25 * solid, 0.02, 0.04),
+                perceptual_roughness: 0.9,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            })
+        }),
         // Hot white with a violet edge: a detonation and the ground it leaves.
         // Bright enough to read as *the* thing on screen, which is what a
         // finisher at full depth is supposed to be.
@@ -1129,6 +1187,34 @@ fn setup(
             Visibility::Hidden,
             MarkMesh(owner),
         ));
+    }
+    // The Blood mage's scythe: a bar from her grip to the head of the blade.
+    // Shade-skinned rather than blood: it is iron, and the blood is what it
+    // leaves on the floor.
+    for owner in 0..MAX_PLAYERS {
+        for piece in 0..SCYTHE_PIECES {
+            commands.spawn((
+                Mesh3d(unit.clone()),
+                MeshMaterial3d(look.shade.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                ScytheMesh { owner, piece },
+            ));
+        }
+        // And the essence her swing carries: the capsule the hit test reads.
+        for piece in 0..SWING_PIECES {
+            commands.spawn((
+                Mesh3d(if piece == 0 {
+                    unit.clone()
+                } else {
+                    look.ball.clone()
+                }),
+                MeshMaterial3d(look.essence[0].clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                EssenceSwing { owner, piece },
+            ));
+        }
     }
     commands.insert_resource(look);
 }
@@ -1544,6 +1630,117 @@ fn place_marks(sim: Res<Sim>, mut meshes: Query<(&MarkMesh, &mut Transform, &mut
     }
 }
 
+/// Put each Blood mage's scythe where `view::scythe` says the blade is.
+///
+/// **The renderer decides nothing about the reach.** The line comes out of the
+/// same function the hit test lengthens the sweep with, and the only thing
+/// added here is where the grip is drawn -- the body's left hand, which
+/// `apply_poses` already works out in the arena for whatever a hand holds.
+fn place_scythes(
+    sim: Res<Sim>,
+    hands: Res<Hands>,
+    mut meshes: Query<(&ScytheMesh, &mut Transform, &mut Visibility)>,
+) {
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let [left, right] = hands.0[tag.owner];
+        let Some(scythe) =
+            view::scythe::scythe(&sim.cur.players[tag.owner], left.into(), right.into())
+        else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        // Three pieces of one weapon: the haft from the butt to the neck, and
+        // the blade from the neck to the mid and the mid to the tip, so its
+        // curve is visible.
+        let (from, to) = match tag.piece {
+            0 => (Vec3::from(scythe.butt), Vec3::from(scythe.neck)),
+            1 => (Vec3::from(scythe.neck), Vec3::from(scythe.mid)),
+            _ => (Vec3::from(scythe.mid), Vec3::from(scythe.tip)),
+        };
+        let along = to - from;
+        let length = along.length();
+        if length < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        tf.translation = from + along * 0.5;
+        // A full basis rather than a single axis, so the blade's flat lies in
+        // the plane of the haft and the bow -- the plane of the cut -- and
+        // does not roll to a world direction of its own. Y runs along the
+        // piece; Z is the blade's breadth, in that plane; X is its edge-on
+        // thickness, square to it.
+        let y = along / length;
+        let bow = Vec3::from(scythe.bow);
+        let x = y.cross(bow).try_normalize().unwrap_or(Vec3::X);
+        let z = x.cross(y);
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
+        // The haft is a pole. The blade is a thin band: edge-on it is nearly
+        // nothing, across it is a hand's breadth, and its length is the
+        // reach's last third.
+        tf.scale = if tag.piece == 0 {
+            Vec3::new(0.06, length, 0.06)
+        } else {
+            Vec3::new(0.025, length, scythe.breadth)
+        };
+    }
+}
+
+/// Draw the essence of a scythe swing: the hit volume, as a capsule in the
+/// pools' own material, at the solidity her grey has earned and fading
+/// through the first frames of the recovery.
+fn place_essence_swings(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &EssenceSwing,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let Some(volume) = view::scythe::swing_volume(p) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let (from, to) = (Vec3::from(volume.from), Vec3::from(volume.to));
+        let along = to - from;
+        let length = along.length();
+        if length < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        // More solid the more grey she carries, and fading with the ghost.
+        let solid = p.grey_share().to_f32_for_render() * volume.fade;
+        let step = (solid * (ESSENCE_STEPS - 1) as f32).round() as u8;
+        let want = look.material(Skin::Essence(step));
+        if mat.0 != want {
+            mat.0 = want;
+        }
+        let width = volume.radius * 2.0;
+        match tag.piece {
+            0 => {
+                tf.translation = from + along * 0.5;
+                tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
+                tf.scale = Vec3::new(width, length, width);
+            }
+            1 => {
+                tf.translation = from;
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::splat(width);
+            }
+            _ => {
+                tf.translation = to;
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::splat(width);
+            }
+        }
+    }
+}
+
 /// Put the Reaver's pips over whoever is carrying marks.
 fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut Visibility)>) {
     for (pip, mut tf, mut vis) in meshes.iter_mut() {
@@ -1663,6 +1860,8 @@ enum Skin {
     /// The Reaver's shadow-work: near black, and lit from inside just enough to
     /// be visible against the floor it is usually crossing.
     Shade,
+    /// A pool of essence, at a step of solidity from faint to nearly solid.
+    Essence(u8),
     /// The Dual mage's two forces, and the only pair of skins in the game that
     /// exist to be told apart from each other rather than from the floor.
     ///
@@ -1688,6 +1887,7 @@ impl EffectLook {
             Skin::Fire => self.fire.clone(),
             Skin::Blood => self.blood.clone(),
             Skin::Shade => self.shade.clone(),
+            Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
         }
@@ -1760,6 +1960,10 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // the drain reaches, and the spike is the thing you can see from across
         // the arena and decide to walk around. It was drawn as the disc alone
         // for a while, which is a hazard you find out about by standing in it.
+        // A bare spike is just a spike. Only an eruption -- one that came up
+        // out of a pool -- has the skirt: the disc of floor it came up
+        // through, which is the disc it hit across.
+        EffectKind::BlackSpike if part == 0 && !effect.erupted() => None,
         EffectKind::BlackSpike if part < 2 => {
             let volume = effect.spike_volume();
             let radius = volume.radius.to_f32_for_render();
@@ -1779,6 +1983,11 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         }
         EffectKind::Bloodletter if part == 0 => Some(floating(
             fx3(effect.blade_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The bolt: a ball, which is exactly what its hit test is.
+        EffectKind::Haemorrhage if part == 0 => Some(floating(
+            fx3(effect.bolt_at()),
             effect.field_radius().to_f32_for_render(),
         )),
         EffectKind::Grasp if part < GRASP_ARMS => Some(floating(
@@ -1816,6 +2025,23 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // Judgement's field: a wide, shallow disc of light on the floor. Drawn
         // at exactly the radius that burns, because walking to the edge of it
         // is the decision it offers.
+        // A pool: a shadowy figure the size the hit test reads, standing where
+        // the blood was spilled, shrinking as it drains and drawn more solid
+        // the more essence is left in it -- so the figure on the floor is
+        // the heal it is worth.
+        EffectKind::Pool if part == 0 => {
+            let slab = effect.pool_slab();
+            let step = (effect.pool_share().to_f32_for_render() * (ESSENCE_STEPS - 1) as f32)
+                .round() as u8;
+            Some(standing(
+                Shape::Column,
+                Skin::Essence(step),
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
         EffectKind::JudgementField if part == 0 => Some(standing(
             Shape::Column,
             Skin::Light,
@@ -2367,6 +2593,7 @@ fn apply_poses(
     mut fades: ResMut<Fades>,
     mut shadow_fades: ResMut<ShadowFades>,
     mut hands: ResMut<ShieldHands>,
+    mut both: ResMut<Hands>,
     hub: Option<Res<crate::hub::Hub>>,
     mut roots: Posed<Fighter, BodyPart, ShadowRoot, ShadowPart>,
     mut parts: Posed<BodyPart, Fighter, ShadowRoot, ShadowPart>,
@@ -2418,6 +2645,12 @@ fn apply_poses(
             Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
             turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
         );
+        // And both hands, for whatever is held in two.
+        for (side, left) in [(0, true), (1, false)] {
+            let (at, _) = skins[owner].box_of(&skeletons[owner], view::hand_joint(left));
+            both.0[owner][side] =
+                Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]);
+        }
     }
 
     for (bp, mut tf) in parts.iter_mut() {
@@ -2751,7 +2984,15 @@ mod tests {
         // It was a twelve-centimetre stain on the floor for a while, which is a
         // hazard you find out about by standing in it. The field is the disc;
         // the spike is what you can see from across the arena.
-        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let mut effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        // The disc it came out of, as `World::advance` sets it on the spawn.
+        effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
+        assert!(
+            effect_piece(&effect, 0).is_none(),
+            "a bare spike is drawn with a skirt"
+        );
+        // Erupted from a pool, it has the skirt: the disc it hit across.
+        effect.banked = 1;
         let field = effect_piece(&effect, 0).expect("the field is drawn");
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert_eq!(field.shape, Shape::Column);
@@ -2767,11 +3008,13 @@ mod tests {
     }
 
     #[test]
-    fn the_drawn_spike_is_exactly_as_tall_as_the_volume_that_drains() {
+    fn the_drawn_spike_is_exactly_as_tall_as_the_volume_that_hits() {
         // The rule for every effect in the game: what you see is what catches
         // you. A field drawn shorter than it tests would be a hazard you think
         // you jumped over.
-        let effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        let mut effect = cast(EffectKind::BlackSpike, sim::state::SLOT_MECHANIC);
+        effect.reach = sim::moves::get(sim::Class::BloodMage, sim::state::SLOT_MECHANIC).radius;
+        effect.banked = 1;
         let volume = effect.spike_volume();
         let spike = effect_piece(&effect, 1).expect("the spike is drawn");
         assert!(
@@ -2829,6 +3072,49 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_pool_is_drawn_at_the_disc_it_is_tested_at() {
+        // A pool is a place she wants the fight to be, and both players have
+        // to be able to read it at a glance. Drawn as the slab the hit test
+        // and the blink read, and nothing else: one piece, on the floor.
+        let effect = Effect::pool(
+            0,
+            sim::Class::BloodMage,
+            sim::state::SLOT_POKE,
+            sim::V3::new(sim::Fx::from_int(2), sim::Fx::ZERO, sim::Fx::from_int(-1)),
+            100,
+        );
+        let slab = effect.pool_slab();
+        let drawn = effect_piece(&effect, 0).expect("the pool is drawn");
+        assert_eq!(drawn.shape, Shape::Column);
+        let Skin::Essence(step) = drawn.skin else {
+            panic!("a pool is not drawn as essence");
+        };
+        assert!(
+            (drawn.scale.x * 0.5 - slab.radius.to_f32_for_render()).abs() < 0.001,
+            "drawn {} wide, tested at {}",
+            drawn.scale.x * 0.5,
+            slab.radius.to_f32_for_render()
+        );
+        assert!((drawn.scale.y - slab.top.to_f32_for_render()).abs() < 0.001);
+        assert!(effect_piece(&effect, 1).is_none(), "a pool is one figure");
+        // A pool never stands taller or wider than a body, and a fuller one
+        // is bigger and more solid than an emptier one.
+        assert!(drawn.scale.y <= sim::tuning::body_height().to_f32_for_render() + 0.001);
+        assert!(drawn.scale.x * 0.5 <= sim::tuning::body_radius().to_f32_for_render() + 0.001);
+        let mut less = effect;
+        less.banked = 20;
+        let smaller = effect_piece(&less, 0).expect("drawn");
+        assert!(smaller.scale.x < drawn.scale.x && smaller.scale.y < drawn.scale.y);
+        let Skin::Essence(faint) = smaller.skin else {
+            panic!("a pool is not drawn as essence");
+        };
+        assert!(
+            faint < step,
+            "an emptier pool is drawn as solid as a fuller one"
+        );
     }
 
     /// The same, for a class other than the Blood mage.

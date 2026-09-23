@@ -133,6 +133,16 @@ pub struct Report {
     hi: V3,
     pub spread: Fx,
 
+    /// The Blood mage's essence, if a hunter is one: pools her hits spilled
+    /// under the creature, and the health she got back by putting a move
+    /// through them -- all of it, and the share of it taken while the
+    /// creature was on its side, which is the pool the climb exists to earn.
+    /// Zero on any other class, since nobody else spills or drinks.
+    pub pools_made: u32,
+    pub drank: i32,
+    pub drank_toppled: i32,
+    was_pools: usize,
+
     /// What the creature was committed to, and how far away the hunters were
     /// when it committed. The second is what makes "unanswerable" checkable
     /// rather than arguable.
@@ -190,6 +200,10 @@ impl Report {
             lo: V3::ZERO,
             hi: V3::ZERO,
             spread: Fx::ZERO,
+            pools_made: 0,
+            drank: 0,
+            drank_toppled: 0,
+            was_pools: 0,
             commit_kind: monster::NO_PART,
             commit_range: [Fx::ZERO; MAX_PLAYERS],
             timeline: Vec::new(),
@@ -344,6 +358,29 @@ impl Report {
         }
 
         // Damage to the hunters, and whether they had any way to answer it.
+        // The blood on the floor, and what came back off it. A pool that
+        // merged into another is not a new pool; one that drained away is
+        // not counted against the ones made.
+        let pools = after
+            .effects
+            .iter()
+            .flatten()
+            .filter(|e| e.is_a_pool())
+            .count();
+        if pools > self.was_pools {
+            self.pools_made += (pools - self.was_pools) as u32;
+        }
+        self.was_pools = pools;
+        for i in 0..MAX_PLAYERS {
+            let back = after.players[i].health - before.players[i].health;
+            if back > 0 {
+                self.drank += back;
+                if matches!(now.doing, Doing::Toppled { .. }) {
+                    self.drank_toppled += back;
+                }
+            }
+        }
+
         for i in 0..MAX_PLAYERS {
             let lost = before.players[i].health - after.players[i].health;
             if lost <= 0 {
@@ -738,6 +775,30 @@ impl Report {
             format!("{}", self.unanswerable),
             "too fast to read, from outside its range",
         );
+
+        // Only when there is blood to report: the section is the Blood mage's,
+        // and printing zeroes for every other class would say she was there.
+        if self.pools_made > 0 || self.drank > 0 {
+            out.push_str("\nTHE BLOOD\n");
+            line(
+                &mut out,
+                "pools made",
+                format!("{}", self.pools_made),
+                "spilled under the creature",
+            );
+            line(
+                &mut out,
+                "drank",
+                format!("{}", self.drank),
+                "health reclaimed through a pool",
+            );
+            line(
+                &mut out,
+                "drank while toppled",
+                format!("{}", self.drank_toppled),
+                "off the pool under a Ridgeback on its side",
+            );
+        }
         out
     }
 

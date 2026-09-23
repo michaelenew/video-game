@@ -117,6 +117,20 @@ impl Class {
         matches!(self, Class::BloodMage)
     }
 
+    /// Does this class's lost health turn **grey** -- reclaimable, and a
+    /// weapon while it is open -- rather than simply going?
+    ///
+    /// The Blood mage's mechanic, in one predicate: every cost and every hit
+    /// she takes moves red into grey, grey fades on its own clock, and only a
+    /// drink from an essence pool turns it back. Nobody else has a grey
+    /// segment, and this is what keeps it that way: the bookkeeping in
+    /// `state::Player` asks here rather than checking the class by name at
+    /// each of the four places health leaves a body. See
+    /// `docs/design/blood-mage.md`.
+    pub const fn wounds_go_grey(self) -> bool {
+        matches!(self, Class::BloodMage)
+    }
+
     pub fn starting_mechanic(self) -> Mechanic {
         match self {
             Class::Bulwark => Mechanic::Shield(Shield::Held { weight: Fx::ZERO }),

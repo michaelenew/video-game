@@ -43,6 +43,9 @@ const GROUND_Y: Fx = Fx::ZERO;
 /// `held_by` when nobody is holding you.
 pub const NOBODY: u8 = u8::MAX;
 
+/// `Player::blinked` when she did not blink this frame.
+pub const NO_POOL: u8 = u8::MAX;
+
 /// `Phase::RoundOver::winner` when the creature is the one still standing.
 /// Player indices and `u8::MAX` for a double knockout are already spoken for.
 pub const QUARRY: u8 = 200;
@@ -226,6 +229,16 @@ pub struct Player {
     /// turning needs no trigonometry -- one less determinism risk.
     pub facing: V3,
     pub health: i32,
+    /// Health that is no longer red and not yet gone.
+    ///
+    /// The Blood mage's, and zero on everybody else (`Class::wounds_go_grey`).
+    /// Every cost she pays and every hit she takes moves red into here; it
+    /// fades on its own clock (`tuning::grey_fade`), and the only thing that
+    /// turns it back is a drink from an essence pool. While it is open it is
+    /// reach: the scythe's length and damage ride on it, which is why a full
+    /// bar is not simply the best place to be. `health + grey` never exceeds
+    /// the bar. See `docs/design/blood-mage.md` §"Grey health".
+    pub grey: i32,
     pub action: Action,
     pub grounded: bool,
     /// Frames of jump sustain left. Set on takeoff, spent while the button is
@@ -379,6 +392,28 @@ pub struct Player {
     /// The uppercut's extra leap has been spent this carry. Cleared when an
     /// uppercut starts and whenever the feet are back on the floor.
     pub leap_used: bool,
+    /// Which effect slot the Blood mage blinked to this frame, or [`NO_POOL`].
+    ///
+    /// The dodge branch places her in the pool and cannot delete it -- it
+    /// only has her body -- so it leaves the slot here for `advance` to spend
+    /// on the same frame. In the snapshot for the same reason every edge is:
+    /// a frame re-simulated must consume the same pool.
+    pub blinked: u8,
+    /// Frames of **bleed** left, from a Blood mage's Haemorrhage. Every
+    /// `tuning::bleed_tick` frames it takes `tuning::bleed_damage` and spills
+    /// that under you wherever you are standing, so a bleeding fighter walks
+    /// a trail of her pools behind them -- which is the point: a spike on any
+    /// of them chains along the trail. See `World::step_bleeds`.
+    pub bleeding: u16,
+    /// Whose bleed it is, so the pools are hers. `u8::MAX` for nobody.
+    pub bled_by: u8,
+    /// This fighter's haul ended this frame: the Grasp's arms have brought
+    /// them to their captor's feet. `drag_the_held` has only the bodies and
+    /// cannot see the floor, so it leaves the fact here for `advance` to
+    /// spend on the same frame -- the Blood mage drinks the pool the victim
+    /// has just been hauled onto. In the snapshot for the reason every edge
+    /// is: a frame re-simulated must drink the same pool.
+    pub hauled_in: bool,
     /// Downward speed banked by a spike, cashed in when this fighter lands.
     ///
     /// The Champion's aerial hammer drives an airborne target into the ground,
@@ -720,6 +755,14 @@ impl Player {
         }
     }
 
+    /// Open a bleed, or refresh one. A second bolt on a bleeding fighter
+    /// restarts the clock rather than stacking: two bleeds ticking at once
+    /// would be a damage-over-time build, and this is a marker, not a build.
+    pub fn bleed(&mut self, by: u8, frames: u16) {
+        self.bleeding = self.bleeding.max(frames);
+        self.bled_by = by;
+    }
+
     /// Take a slow. The strongest one on you is the one that counts, and any
     /// of them refreshes the clock.
     pub fn slow(&mut self, frames: u16, mul: Fx) {
@@ -784,16 +827,77 @@ impl Player {
     /// a decision anybody made, and the Dual mage's meter burn already works
     /// this way -- and healing stops at full, so a Blood mage cannot bank
     /// health above the bar by farming a field.
-    pub fn spend_health(&mut self, cost: i32) {
-        if cost > 0 {
-            self.health = (self.health - cost).max(1);
+    /// What a cast that costs `percent` of her current health would take
+    /// right now, in points.
+    ///
+    /// **A percentage of current red, not of the bar.** Casting at full health
+    /// opens a big wound -- which is how she gets power quickly, since the
+    /// wound is reach -- and casting at low health opens a small one, so she
+    /// is never burning herself to death trying to get back into the fight.
+    /// Clamped at one: dying to your own button is not a decision anybody
+    /// made.
+    pub fn cost_of(&self, percent: i32) -> i32 {
+        (self.health * percent.max(0) / 100)
+            .min(self.health - 1)
+            .max(0)
+    }
+
+    pub fn spend_health(&mut self, percent: i32) {
+        // What was actually paid is what turns grey.
+        let paid = self.cost_of(percent);
+        self.health -= paid;
+        if self.class.wounds_go_grey() {
+            self.grey += paid;
         }
     }
 
-    pub fn heal(&mut self, amount: i32) {
-        if amount > 0 && self.health > 0 {
-            self.health = (self.health + amount).min(self.full_health());
+    /// Take `damage` off the bar, and give back what actually came off.
+    ///
+    /// **The one place enemy damage lands**, whichever path delivered it -- a
+    /// swing, a field ticking, a bolt, a stone, the floor after a spike -- so
+    /// that the Blood mage's grey is bookkept once. A killing blow on somebody
+    /// with forty health left is worth forty, not its listed damage, which is
+    /// what the return is for: anything paid out of a hit has to be paid out
+    /// of what the hit was worth.
+    pub fn wound(&mut self, damage: i32) -> i32 {
+        let dealt = damage.min(self.health).max(0);
+        self.health -= dealt;
+        if self.class.wounds_go_grey() {
+            self.grey += dealt;
         }
+        dealt
+    }
+
+    pub fn heal(&mut self, amount: i32) {
+        // Never above the bar, and never into the grey: a heal from anywhere
+        // but a pool cannot close a wound this class has open. Nothing heals
+        // her that way any more, and this is what keeps that true if something
+        // shared tries.
+        if amount > 0 && self.health > 0 {
+            self.health = (self.health + amount).min(self.full_health() - self.grey);
+        }
+    }
+
+    /// Turn up to `amount` of grey back into red, and give back how much was.
+    ///
+    /// The Blood mage's only heal. Grey is the ceiling -- she cannot get back
+    /// past where she stood a moment ago, only to it -- so a drink with no
+    /// grey to convert is worth nothing, and the pool it came from is not
+    /// charged for it (see `World::drink`).
+    pub fn drink(&mut self, amount: i32) -> i32 {
+        if self.health <= 0 {
+            return 0;
+        }
+        let took = amount.min(self.grey).max(0);
+        self.health += took;
+        self.grey -= took;
+        took
+    }
+
+    /// How much of the bar is grey, nought to one. What the scythe reads.
+    pub fn grey_share(&self) -> Fx {
+        let max = self.full_health().max(1);
+        Fx::ratio(self.grey.clamp(0, max), max)
     }
 
     /// Standing on the creature.
@@ -829,6 +933,7 @@ impl Default for Player {
             vel: V3::ZERO,
             facing: V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
             health: t::health_of(Class::Bulwark),
+            grey: 0,
             action: Action::Free,
             grounded: true,
             jump_hold: 0,
@@ -858,6 +963,10 @@ impl Default for Player {
             held_by: NOBODY,
             space_held: false,
             leap_used: false,
+            blinked: NO_POOL,
+            bleeding: 0,
+            bled_by: u8::MAX,
+            hauled_in: false,
             slam: Fx::ZERO,
             slam_fall: Fx::ZERO,
             stride: 0,
@@ -1091,6 +1200,7 @@ impl World {
             seen.iter()
                 .any(|v| matches!(v.action, Action::Held { .. }) && v.held_by == i as u8)
         });
+        let frame = self.frame;
         for (i, (p, input)) in self.players.iter_mut().zip(inputs).enumerate() {
             let scene = Scene {
                 stones: &field,
@@ -1101,6 +1211,16 @@ impl World {
             step_player(p, i, input, &field, beast.as_ref(), &scene, carrying[i]);
             advance_clocks(p);
             step_aloft(p, &field);
+            fade_grey(p, frame);
+        }
+        // A blink spends its pool. Done here rather than in the dodge branch
+        // because the branch only has her body, and the pool is an effect.
+        for i in 0..MAX_PLAYERS {
+            let slot = self.players[i].blinked as usize;
+            if slot < MAX_EFFECTS && self.effects[slot].is_some_and(|e| e.is_a_pool()) {
+                self.effects[slot] = None;
+            }
+            self.players[i].blinked = NO_POOL;
         }
 
         // What a move does *as it comes out*, on its first active frame: the
@@ -1190,7 +1310,30 @@ impl World {
                 // leaves a puddle that is gone before anyone walks through it.
                 // A no-op for every other class. See [`depth`].
                 born.life = lasting(&p, born.life);
-                spawn_effect(&mut self.effects, born);
+                // The Black spike reads the floor. On bare ground it is a
+                // spike: the move's own disc does the damage, the launch and
+                // the slow, and this is only the thing you can see. On one
+                // of her pools the whole pool erupts at the pool's radius,
+                // launching and slowing everything in it, and drinks the
+                // pool in one go -- the payoff placement, and the pool is
+                // spent whether or not she had grey to fill.
+                let mut place = true;
+                if leaves == EffectKind::BlackSpike {
+                    match self.pool_covering(i as u8, born.pos) {
+                        Some(slot) => {
+                            // The eruption delivers the hit; the disc must
+                            // not land a second one. And the eruption chains
+                            // -- see `erupt_from`.
+                            self.players[i].hit_used = true;
+                            self.erupt_from(i, kind, slot);
+                            place = false;
+                        }
+                        None => born.reach = m.radius,
+                    }
+                }
+                if place {
+                    spawn_effect(&mut self.effects, born);
+                }
             }
         }
 
@@ -1248,6 +1391,34 @@ impl World {
                     .map(|kind| moves::get(snapshot[attacker].class, kind).leeched(dealt))
                     .unwrap_or(0);
                 self.players[attacker].heal(owed);
+                // The Blood mage's double duty: a hit over one of her pools
+                // drinks from it, and then spills what it dealt onto the
+                // floor. In that order, so a hit on bare floor returns
+                // nothing -- the smear it leaves is for the next one.
+                if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                    let m = moves::get(snapshot[attacker].class, kind);
+                    // A spike on bare floor is a spike: damage, a launch, and
+                    // a short slow. The slow is what makes leaving cost time.
+                    if snapshot[attacker].class == Class::BloodMage
+                        && kind == moves::blood::BLACK_SPIKE
+                        && !hit.blocked
+                        && !hit.parried
+                    {
+                        self.players[defender].slow(t::slow_frames(), t::spike_slow());
+                    }
+                    if dealt > 0 {
+                        if let Some(hb) = hitbox(&snapshot[attacker]) {
+                            self.drink_over(attacker, &m, hb.from, hb.to, Some(defender), 0);
+                        }
+                        self.spill_under(
+                            attacker as u8,
+                            snapshot[attacker].class,
+                            kind,
+                            &snapshot[defender],
+                            dealt,
+                        );
+                    }
+                }
                 self.players[attacker].hit_used = true;
                 // Landing anything while ascended pulls some health back. A
                 // no-op for everybody else and for her between ascensions.
@@ -1292,6 +1463,13 @@ impl World {
                     self.players[defender].parried = PARRY_FLOURISH;
                 }
             }
+        }
+
+        // The scythe collects: any pool of hers its volume passes over on an
+        // active frame is drunk, hit or no hit. The blade is the thing she
+        // puts through the blood, and it does not need a body in the way.
+        for i in 0..MAX_PLAYERS {
+            self.collect_with_the_scythe(i);
         }
 
         // A thrown shield is its own threat while it travels.
@@ -1413,6 +1591,7 @@ impl World {
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
+        self.drink_where_the_haul_ends();
 
         // Knockout check last, so the killing blow is fully applied first.
         if let (Phase::Fighting, Some(beast)) = (self.phase, self.monster) {
@@ -1532,6 +1711,7 @@ impl World {
                 h.write_i32(v.z.raw());
             }
             h.write_i32(p.health);
+            h.write_i32(p.grey);
             h.write_u32(p.grounded as u32);
             h.write_u32(p.air_dodged as u32);
             h.write_u32(p.slowed as u32);
@@ -1546,6 +1726,10 @@ impl World {
             h.write_u32(p.shadow_queued as u32);
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
+            h.write_u32(p.blinked as u32);
+            h.write_u32(p.bleeding as u32);
+            h.write_u32(p.bled_by as u32);
+            h.write_u32(p.hauled_in as u32);
             h.write_i32(p.slam.raw());
             h.write_i32(p.slam_fall.raw());
             h.write_u32(p.held_by as u32);
@@ -1765,6 +1949,12 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     // rather than a branch per ability. Every other class, and both of her
     // autos, get exactly one back and nothing changes. See [`depth`].
     m.radius = m.radius.mul(depth_of_size(p, kind));
+    // **And the Blood mage's grey changes how far this reaches.** The same
+    // shape of rule -- one multiply, here, one for everybody else -- and the
+    // one reach in the game that scales. See [`live_reach`].
+    m.reach = live_reach(p, &m);
+    // And how wide it is: the essence around the blade. See [`live_radius`].
+    m.radius = live_radius(p, &m);
     // **And the Bulwark's weight changes how wide Slam's shake is.** Here, in
     // the one description of an attack's volume, so the overlay draws the
     // shake at the radius it is tested at. See `crate::bulwark`.
@@ -2003,6 +2193,70 @@ pub fn beam_of(p: &Player) -> Path {
 /// this is the kind of rule that is only worth having if it is true everywhere
 /// -- a class trait that applies to three of a class's four abilities is not a
 /// trait, it is a bug somebody will find in a match.
+/// How far a move reaches on this fighter right now.
+///
+/// The move's own reach for everything but the Blood mage's scythe, which
+/// lengthens with the grey on her bar: base at none, `tuning::grey_reach`
+/// times it at a full bar, a straight line between. **This is the one reach
+/// in the game that scales with a bar**, and `docs/design/aiming.md` refuses
+/// that for good reason; it is allowed here on the condition that the blade is
+/// drawn at the length it hits at, which `view::scythe` reads from the same
+/// function.
+pub fn live_reach(p: &Player, m: &moves::Move) -> Fx {
+    if !m.rides_the_grey() {
+        return m.reach;
+    }
+    m.reach
+        .mul(crate::math::lerp(Fx::ONE, t::grey_reach(), p.grey_share()))
+}
+
+/// A move's hit radius on this fighter, right now: the row's, widened by
+/// her grey for the scythe. The same line as [`live_reach`], with its own
+/// number at the top (`tuning::grey_width`). The weapon is drawn at one size
+/// and the volume is drawn as essence around it -- see `view::scythe`.
+pub fn live_radius(p: &Player, m: &moves::Move) -> Fx {
+    if !m.rides_the_grey() {
+        return m.radius;
+    }
+    m.radius
+        .mul(crate::math::lerp(Fx::ONE, t::grey_width(), p.grey_share()))
+}
+
+/// What a move's damage is multiplied by for the grey on the caster's bar.
+/// The same line as [`live_reach`], with its own number at the top.
+fn grey_power(p: &Player, m: &moves::Move) -> Fx {
+    if !m.rides_the_grey() {
+        return Fx::ONE;
+    }
+    crate::math::lerp(Fx::ONE, t::grey_damage(), p.grey_share())
+}
+
+/// The scythe's reach on this fighter, out of a move: how far the sweep
+/// reaches right now. The weapon is drawn at the row's reach; this is what
+/// the essence around it is drawn to.
+pub fn scythe_reach(p: &Player) -> Fx {
+    live_reach(p, &moves::get(p.class, moves::blood::SWEEP))
+}
+
+/// Grey fades: `tuning::grey_fade` points a second, spread over the frames.
+///
+/// Integer arithmetic on the frame counter rather than a fixed-point
+/// accumulator in the snapshot: the cumulative fade after `k` frames of the
+/// second is `rate * k / 60`, and this frame's share is the difference of two
+/// of those, so a second of fading is exactly the rate whatever the rounding
+/// did in between. **The only way grey ever goes.** Nothing else takes it off
+/// the bar -- not a hit, not a cost, not a heal from anywhere but a pool.
+fn fade_grey(p: &mut Player, frame: u32) {
+    if p.grey <= 0 {
+        return;
+    }
+    let rate = t::grey_fade().max(0);
+    let hz = crate::TICK_HZ as i32;
+    let k = (frame % crate::TICK_HZ) as i32;
+    let faded = rate * (k + 1) / hz - rate * k / hz;
+    p.grey = (p.grey - faded).max(0);
+}
+
 fn preying(class: Class, victim_disabled: bool) -> Fx {
     if victim_disabled && class.preys_on_the_disabled() {
         t::disabled_damage_mul()
@@ -2041,8 +2295,21 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // How far out on her own bar the Dual mage is standing, as a multiplier on
     // everything this blow is worth. One for everybody else. See [`depth`].
     let power = depth(attacker);
+    // The scythe's tip: the outer part of the blade, measured from her feet,
+    // hits harder. Decided per defender rather than per frame, because a
+    // sweep can catch one body on the haft and another on the point.
+    let on_the_point = m.rides_the_grey()
+        && kind == moves::blood::SWEEP
+        && defender.pos.sub(attacker.pos).flat_len().raw()
+            >= box_out.to.sub(box_out.from).len().mul(t::sweep_tip()).raw();
     let damage_mul = preying(attacker.class, defender.disabled())
         .mul(if tipped { t::wing_tipper() } else { Fx::ONE })
+        .mul(if on_the_point {
+            t::sweep_tip_damage()
+        } else {
+            Fx::ONE
+        })
+        .mul(grey_power(attacker, &m))
         .mul(power);
 
     let reach = box_out.radius.add(t::body_radius());
@@ -2247,7 +2514,7 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
         defender.vel.x = hit.dir.x.mul(knockback);
         defender.vel.z = hit.dir.z.mul(knockback);
     } else {
-        defender.health = (defender.health - hit.damage).max(0);
+        defender.wound(hit.damage);
         defender.vel.x = hit.dir.x.mul(hit.knockback);
         defender.vel.z = hit.dir.z.mul(hit.knockback);
         if hit.grabs > 0 {
@@ -2603,6 +2870,25 @@ fn step_player(
                         // instead, and loss of control is loss of the option
                         // to decline. See `docs/design/dual-mage.md`.
                         Action::Free
+                    } else if let Some(pool) = may_commit
+                        .then(|| pool_under_the_crosshair(p, who, input, scene))
+                        .flatten()
+                    {
+                        // The Blood mage's blink: a dodge thrown with the
+                        // reticle on one of her pools puts her in it, and the
+                        // pool is spent. The Reaver's dash pointed at the
+                        // class's object instead of at a body -- and with
+                        // nothing to cross, the crossing is instant. The
+                        // airborne one spends the airdodge, like hers.
+                        if !p.grounded {
+                            p.air_dodged = true;
+                        }
+                        p.pos = scene.effects[pool].map_or(p.pos, |e| e.pos);
+                        p.vel = V3::ZERO;
+                        p.blinked = pool as u8;
+                        Action::Dodge {
+                            left: t::dodge_frames(),
+                        }
                     } else if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene)
                     {
                         if !p.grounded {
@@ -2999,7 +3285,7 @@ fn step_player(
         // why knocking someone down is worth more than knocking them away.
         if p.slam.raw() > 0 && !was_grounded {
             let cost = Fx::from_int(t::slam_damage()).mul(impact.abs()).to_int();
-            p.health = (p.health - cost).max(0);
+            p.wound(cost);
             p.stun_total = t::slam_stagger();
             p.action = Action::Stagger {
                 left: t::slam_stagger(),
@@ -3070,6 +3356,7 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
     match p.class {
         Class::Champion => champion_move(p, input),
         Class::DualMage => dual_move(p, input),
+        Class::BloodMage => blood_move(input),
         // The Reaver breaks it a third way: right click sends the shadow. It is
         // the one thing in her kit the **crosshair aims**, and the mouse is
         // where aiming lives -- so the mechanic is on the mouse and the swing
@@ -3125,6 +3412,23 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
 /// displaces something rather than adding to it — on the floor that key is the
 /// mechanic and has no frames at all — so it is answered by
 /// [`keyed_move`] beside the rest of the mechanic grammar.
+/// Which move the Blood mage's three clicks throw.
+///
+/// Left is the auto, right is the committed heavy and middle is the throw --
+/// the same reading as the Elementalist's clicks, with the third button taking
+/// the ranged move because the mouse means where. See `moves::blood` for why
+/// the auto is the fifth row of the table rather than the first.
+fn blood_move(input: Input) -> Option<u8> {
+    use moves::blood as b;
+    if input.has(Input::LEFT) {
+        Some(b::SWEEP)
+    } else if input.has(Input::RIGHT) {
+        Some(b::HAEMORRHAGE)
+    } else {
+        input.has(Input::MIDDLE).then_some(b::BLOODLETTER)
+    }
+}
+
 fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
     use moves::elementalist as e;
     if !p.grounded {
@@ -5254,9 +5558,19 @@ impl World {
             // the one thing a planted effect never has to check: whether it
             // has wandered off the map, the one effect whose centre actually
             // can.
+            // A pool drains rather than ages out: a fixed volume a second,
+            // so a big one outlives a small one, and it is gone when it is
+            // dry. The drain is taken here, before the frame's drinks, so a
+            // pool that is about to vanish cannot be drunk from on the frame
+            // it does.
+            if effect.is_a_pool() {
+                effect.banked -= effect.pool_drained_this_frame();
+            }
             let expired = if effect.kind == EffectKind::FireTornado {
                 let flying = effect.age.saturating_sub(effect.banked as u16);
                 flying >= t::tornado_travel_life() || !arena::inside(effect.tornado_pos())
+            } else if effect.is_a_pool() {
+                effect.banked <= 0
             } else {
                 effect.age >= effect.life
             };
@@ -5266,8 +5580,14 @@ impl World {
                 continue;
             }
             self.apply_effect(&mut effect);
-            self.effects[i] = Some(effect);
+            // The bolt is spent by what it just did -- it reached a body --
+            // and goes now rather than being drawn one more frame at the far
+            // end of a flight it never made. Nothing else expires here: a
+            // tornado, for one, is older than its life by design.
+            let spent = effect.kind == EffectKind::Haemorrhage && effect.age >= effect.life;
+            self.effects[i] = (!spent).then_some(effect);
         }
+        self.step_bleeds();
         // The slow's tail, for every source of one -- a drain field here, a
         // stone churning under your feet in `stones`. It runs down before either
         // of them gets to refresh it, so standing in one holds the slow at full
@@ -5289,6 +5609,38 @@ impl World {
             // tail because it is the same kind of thing: a count on the victim
             // that whatever set it refreshes, and that runs down otherwise.
             shadow::fade_mark(p);
+        }
+    }
+
+    /// Every bleed runs down a frame, and on its tick takes its damage and
+    /// spills it under the victim -- wherever they have got to, which is the
+    /// whole idea: a bleeding fighter who keeps moving lays a trail of her
+    /// pools, and a spike on any pool of the trail chains along it toward
+    /// them. Standing still merges the ticks into one growing pool instead,
+    /// which is worse for them, since one pool is one eruption.
+    ///
+    /// Not a hit: no stun, no block, no knockback, and it goes through a
+    /// guard, because it was the bolt that had to land. It cannot kill --
+    /// `wound` stops at nought like any damage -- and it stops when the
+    /// victim is dead.
+    fn step_bleeds(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if p.bleeding == 0 {
+                continue;
+            }
+            let owner = p.bled_by as usize;
+            if p.health <= 0 || owner >= MAX_PLAYERS {
+                self.players[i].bleeding = 0;
+                continue;
+            }
+            self.players[i].bleeding -= 1;
+            if self.players[i].bleeding % t::bleed_tick() != 0 {
+                continue;
+            }
+            let dealt = self.players[i].wound(t::bleed_damage());
+            let class = self.players[owner].class;
+            self.spill_under(owner as u8, class, moves::blood::HAEMORRHAGE, &p, dealt);
         }
     }
 
@@ -5521,23 +5873,37 @@ impl World {
             // makes a puddle you step out of, and the slow is what makes leaving
             // cost time -- which is what turns it into something you put
             // *between* yourself and someone else.
+            // The spike standing out of the floor. On bare ground it has
+            // already done its work -- the move's own disc hit on the frame
+            // it appeared -- and this is the thing you can see from across
+            // the arena. Erupted from a pool it is the hit: everything
+            // standing in the pool's disc, on its first frame, launched and
+            // slowed at the move's damage. Nothing ticks and nothing drains;
+            // the spike either seeds a pool or cashes one in, and both are
+            // one event the other player can watch happen.
             EffectKind::BlackSpike => {
-                let volume = effect.spike_volume();
-                let ticking = effect.ticks_now();
-                for i in 0..MAX_PLAYERS {
-                    let p = self.players[i];
-                    if !self.effects_reach(i, effect.owner)
-                        || !volume.contains(effect.pos, p.pos, t::body_radius(), p.hurt_height())
-                    {
-                        continue;
+                if effect.erupted() && effect.age == 1 {
+                    let volume = effect.spike_volume();
+                    let m = effect.source();
+                    for i in 0..MAX_PLAYERS {
+                        let p = self.players[i];
+                        if !self.effects_reach(i, effect.owner)
+                            || effect.already_hit(0, i)
+                            || !volume.contains(
+                                effect.pos,
+                                p.pos,
+                                t::body_radius(),
+                                p.hurt_height(),
+                            )
+                        {
+                            continue;
+                        }
+                        effect.take_hit(0, i);
+                        let blow = Fx::from_int(m.damage).mul(t::erupt_damage()).to_int();
+                        self.cut(i, effect, effect.pos, blow);
+                        self.players[i].slow(t::slow_frames(), t::spike_slow());
                     }
-                    self.players[i].slow(t::slow_frames(), t::spike_slow());
-                    if ticking {
-                        self.drain(i, effect);
-                    }
-                }
-                if ticking {
-                    self.feed_the_caster(effect, 0, effect.pos, volume.radius);
+                    self.gore_the_creature(effect, 0, effect.pos, volume.radius);
                 }
             }
 
@@ -5559,6 +5925,27 @@ impl World {
                     effect.banked += self.cut(i, effect, at, effect.source().damage);
                 }
                 effect.banked += self.gore_the_creature(effect, pass, at, radius);
+                // The return leg crossing pools on the floor is a small drink
+                // on the way back -- each pool once per blade. Only on the way
+                // home: the throw is a cut, and the health is where the cut
+                // lands.
+                if effect.returning() {
+                    let m = effect.source();
+                    for slot in 0..MAX_EFFECTS {
+                        if effect.drank_from(slot) {
+                            continue;
+                        }
+                        let over = self.effects[slot].is_some_and(|pool| {
+                            pool.is_a_pool()
+                                && pool.owner == effect.owner
+                                && pool.covers(V3::new(at.x, pool.pos.y, at.z))
+                        });
+                        if over {
+                            effect.mark_drank(slot);
+                            self.drink_from(slot, effect.owner as usize, &m);
+                        }
+                    }
+                }
             }
 
             // Six blades out of the shadow and six back into it. Each is its
@@ -5746,6 +6133,40 @@ impl World {
             // of the root. Every arm is tested separately and remembers who it
             // has already caught, because "hit by all four" is a question about
             // *different* arms and one shared mask could not tell them apart.
+            // A pool does nothing to anybody on its own. It is read by the
+            // moves put through it -- see `drink_over` -- and by the dodge.
+            EffectKind::Pool => {}
+
+            // The bolt. Straight out along the line and spent on the first
+            // body it reaches: the cut lands and the bleed opens, and from
+            // then on the victim's own feet make the pools. A guarded bolt is
+            // still spent -- it hit something -- and opens nothing.
+            EffectKind::Haemorrhage => {
+                let at = effect.bolt_at();
+                let radius = effect.field_radius();
+                let mut spent = false;
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, at, effect.source().damage);
+                    if dealt > 0 {
+                        self.players[i].bleed(effect.owner, t::bleed_lasts());
+                    }
+                    spent = true;
+                }
+                if self.gore_the_creature(effect, 0, at, radius) > 0 {
+                    spent = true;
+                }
+                if spent {
+                    effect.age = effect.life;
+                }
+            }
+
             EffectKind::Grasp => {
                 let radius = effect.field_radius();
                 for arm in 0..GRASP_ARMS {
@@ -5891,8 +6312,7 @@ impl World {
         let damage = Fx::from_int(effect.damage())
             .mul(preying(effect.class, self.players[victim].disabled()))
             .to_int();
-        let dealt = damage.min(self.players[victim].health);
-        self.players[victim].health = (self.players[victim].health - damage).max(0);
+        let dealt = self.players[victim].wound(damage);
         let owed = effect.leeched(dealt);
         self.players[effect.owner as usize].heal(owed);
     }
@@ -5957,6 +6377,24 @@ impl World {
         if parried {
             self.players[victim].parried = PARRY_FLOURISH;
         }
+        // The Blood mage's double duty, for a hit her effects deliver: drink
+        // from a pool the victim stands in, then spill what was dealt. See the
+        // melee loop in `advance` for the order. **Not for the blade**: it
+        // drinks on its way home, from each pool it crosses, once -- a cut
+        // that also drank would take three shares of one pool in one throw.
+        if dealt > 0 {
+            if !effect.kind.comes_home() {
+                self.drink_over(
+                    effect.owner as usize,
+                    &m,
+                    from,
+                    from,
+                    Some(victim),
+                    effect.age,
+                );
+            }
+            self.spill_under(effect.owner, effect.class, effect.slot, &p, dealt);
+        }
         dealt
     }
 
@@ -6005,6 +6443,20 @@ impl World {
         if effect.kind.travels() {
             effect.take_hit(part, QUARRY_VICTIM);
         }
+        // The creature bleeds too: under the struck part, projected to the
+        // floor, which is what makes the pool under a toppled Ridgeback a
+        // door onto its back.
+        if dealt > 0 {
+            let m = effect.source();
+            self.drink_over(effect.owner as usize, &m, at, at, None, effect.age);
+            self.spill(
+                effect.owner,
+                effect.class,
+                effect.slot,
+                floor_under(at),
+                dealt,
+            );
+        }
         dealt
     }
 }
@@ -6027,6 +6479,315 @@ impl World {
 /// left of the hold, which is the Bulwark's Grapple unchanged: its catch is
 /// already at arm's length, so there is nothing to haul and the two phases
 /// collapse into the behaviour it always had.
+/// Which of this fighter's pools the crosshair is on, with a clear line to
+/// it -- the two questions the Reaver's dash asks about her shadow, pointed
+/// at the class's object instead. Both are `aim`'s to answer; this only
+/// decides which pool, and the nearest is the one a player means.
+fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene) -> Option<usize> {
+    if !p.class.wounds_go_grey() {
+        return None;
+    }
+    let mut best: Option<(usize, Fx)> = None;
+    for (slot, e) in scene.effects.iter().enumerate() {
+        let Some(e) = e else { continue };
+        if !e.is_a_pool() || e.owner != who as u8 {
+            continue;
+        }
+        let wide = e.pool_radius().add(t::body_radius());
+        let tall = e.pool_height().add(t::pool_lock());
+        if !aim::pointing_at_disc(who, input, e.pos, wide, tall, scene)
+            || !aim::clear_between(p.pos, e.pos, scene)
+        {
+            continue;
+        }
+        let far = e.pos.sub(p.pos).len();
+        if best.is_none_or(|(_, seen)| far.raw() < seen.raw()) {
+            best = Some((slot, far));
+        }
+    }
+    best.map(|(slot, _)| slot)
+}
+
+/// The patch of floor under a point in the air: the arena's ground, and the
+/// creature's contact points are always over it. Stones are not consulted --
+/// a pool spilled onto a raised structure is an open question in the design,
+/// and until it is answered blood falls to the floor.
+fn floor_under(at: V3) -> V3 {
+    V3::new(at.x, GROUND_Y, at.z)
+}
+
+impl World {
+    /// Spill `volume` of `victim`'s blood under their feet, for a hit `owner`
+    /// landed on them.
+    ///
+    /// Only the Blood mage spills anybody (`Class::wounds_go_grey` is the
+    /// same predicate read the other way: she is the one class with a use for
+    /// blood on the floor), and only a fighter on the ground leaves a pool.
+    /// One hit in the air spills nowhere: whether it should land where they
+    /// do is an open question in `docs/design/blood-mage.md`, and the simpler
+    /// answer is the one built until somebody plays it.
+    ///
+    /// `victim` is the body **as it stood when the hit landed**, not as it is
+    /// afterwards: a spike launches what it hits, and a victim read after the
+    /// launch is airborne and spills nowhere, which would make the one move
+    /// meant to seed a pool at range the one move that never does.
+    fn spill_under(&mut self, owner: u8, class: Class, slot: u8, victim: &Player, volume: i32) {
+        if !victim.grounded {
+            return;
+        }
+        self.spill(owner, class, slot, victim.pos, volume);
+    }
+
+    /// Put `volume` of blood on the floor at `at`, owned by `owner`.
+    ///
+    /// Three rules, and they are the whole of what keeps four pools readable:
+    /// a spill onto a pool of hers merges into it rather than stacking a
+    /// second disc on the same floor; a spill past `tuning::pool_cap` merges
+    /// into the newest; and her own costs never come through here at all --
+    /// a cost is paid into the ability, not onto the floor, or every cast
+    /// would leave a free heal at her own feet.
+    fn spill(&mut self, owner: u8, class: Class, slot: u8, at: V3, volume: i32) {
+        if volume <= 0 || !class.wounds_go_grey() {
+            return;
+        }
+        let born = Effect::pool(owner, class, slot, at, volume);
+        // Onto one of hers already there: merge.
+        let overlapping = self.effects.iter().position(|e| {
+            e.is_some_and(|e| {
+                e.is_a_pool()
+                    && e.owner == owner
+                    // Within a body of each other: a figure spilled where
+                    // one already stands joins it rather than crowding it.
+                    && V3::new(e.pos.x.sub(at.x), Fx::ZERO, e.pos.z.sub(at.z))
+                        .flat_len()
+                        .raw()
+                        <= e.pool_radius()
+                            .add(born.pool_radius())
+                            .add(t::body_radius())
+                            .raw()
+            })
+        });
+        if let Some(i) = overlapping {
+            if let Some(pool) = self.effects[i].as_mut() {
+                pool.banked += volume;
+            }
+            return;
+        }
+        // Past the cap: into the newest.
+        let mut count = 0;
+        let mut newest: Option<(usize, u16)> = None;
+        for (i, e) in self.effects.iter().enumerate() {
+            let Some(e) = e else { continue };
+            if !e.is_a_pool() || e.owner != owner {
+                continue;
+            }
+            count += 1;
+            if newest.is_none_or(|(_, age)| e.age < age) {
+                newest = Some((i, e.age));
+            }
+        }
+        if count >= t::pool_cap() {
+            if let Some((i, _)) = newest {
+                if let Some(pool) = self.effects[i].as_mut() {
+                    pool.banked += volume;
+                }
+            }
+            return;
+        }
+        spawn_effect(&mut self.effects, born);
+    }
+
+    /// The pool of `owner`'s that a point on the floor is inside, if any.
+    fn pool_covering(&self, owner: u8, at: V3) -> Option<usize> {
+        self.effects
+            .iter()
+            .position(|e| e.is_some_and(|e| e.is_a_pool() && e.owner == owner && e.covers(at)))
+    }
+
+    /// A move of `owner`'s landed with its volume between `from` and `to`,
+    /// on `victim` if it hit a fighter: drink from a pool of hers under the
+    /// hit, if there is one.
+    ///
+    /// **The one rule of the heal**: it is where the blood is, and she has to
+    /// put something through it. A pool counts if the victim is standing in
+    /// it or the hit volume passes over its disc; the fullest one is drunk.
+    /// What comes back is the move's own share of the pool, converted out of
+    /// grey and never past it, and the pool loses exactly what she got.
+    ///
+    /// `older_than` is the age of the thing delivering the hit, and only pools
+    /// older than it count. Nought for a swing, whose one hit has nothing of
+    /// its own to find; for an effect it is the effect's own age, so four arms
+    /// closing on one spot cannot each drink what the arm before it spilled --
+    /// which was, for a frame, a Grasp that refunded itself.
+    fn drink_over(
+        &mut self,
+        owner: usize,
+        m: &moves::Move,
+        from: V3,
+        to: V3,
+        victim: Option<usize>,
+        older_than: u16,
+    ) -> i32 {
+        if m.drink == 0 {
+            return 0;
+        }
+        let feet = victim.map(|v| self.players[v].pos);
+        let mut best: Option<(usize, i32)> = None;
+        for (slot, e) in self.effects.iter().enumerate() {
+            let Some(e) = e else { continue };
+            if !e.is_a_pool() || e.owner != owner as u8 || e.age <= older_than {
+                continue;
+            }
+            let standing_in = feet.is_some_and(|f| e.covers(f));
+            let flat = |v: V3| V3::new(v.x, e.pos.y, v.z);
+            let passes_over = crate::math::segment_gap(flat(from), flat(to), e.pos, e.pos).raw()
+                <= e.pool_radius().add(t::body_radius()).raw();
+            if (standing_in || passes_over) && best.is_none_or(|(_, v)| e.banked > v) {
+                best = Some((slot, e.banked));
+            }
+        }
+        match best {
+            Some((slot, _)) => self.drink_from(slot, owner, m),
+            None => 0,
+        }
+    }
+
+    /// The Grasp's second drink: the pool the victim has just been hauled
+    /// onto, at her feet.
+    ///
+    /// The kit's own sentence is "Grasp them onto the pool you are standing
+    /// in", and a drink only where the arms closed never paid that: the arms
+    /// close out where the victim was, and the pool is here. Only pools older
+    /// than the hold count, so what the arms spilled at the catch -- which at
+    /// melee range is within a body of her feet -- is not drunk back.
+    fn drink_where_the_haul_ends(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            if !self.players[i].hauled_in {
+                continue;
+            }
+            self.players[i].hauled_in = false;
+            let by = self.players[i].held_by as usize;
+            if by >= MAX_PLAYERS || !self.players[by].class.wounds_go_grey() {
+                continue;
+            }
+            let m = moves::get(self.players[by].class, moves::blood::GRASP);
+            let held_for = match self.players[i].action {
+                Action::Held { left } => self.players[i].stun_total.saturating_sub(left),
+                _ => 0,
+            };
+            let feet = self.players[i].pos;
+            self.drink_over(by, &m, feet, feet, Some(i), held_for.saturating_add(1));
+        }
+    }
+
+    /// A spike came up on the pool in `slot`: the pool erupts, and so does
+    /// every pool of hers the eruption covers, each at its own size.
+    ///
+    /// **The chain is the skill curve.** A spike on one pool is a bigger spike;
+    /// a spike on a pool standing among others is the floor coming up across
+    /// the whole fight, and arranging that is a thing a player learns. Each
+    /// eruption drinks its own pool first, so the chain cannot run twice over
+    /// the same blood, and it is bounded by the pools there are.
+    fn erupt_from(&mut self, owner: usize, kind: u8, slot: usize) {
+        let Some(pool) = self.effects[slot].filter(|e| e.is_a_pool()) else {
+            return;
+        };
+        let m = moves::get(self.players[owner].class, kind);
+        // Sized by the pool's essence, before it is drunk: the eruption is the
+        // whole pool coming up at once.
+        let radius = t::erupt_radius()
+            .mul(Fx::from_int(pool.pool_volume().max(0)).sqrt())
+            .max(m.radius);
+        self.drink_from(slot, owner, &m);
+        let mut born = Effect::cast(
+            EffectKind::BlackSpike,
+            owner as u8,
+            self.players[owner].class,
+            kind,
+            pool.pos,
+            V3::ZERO,
+            radius,
+        );
+        born.banked = 1;
+        spawn_effect(&mut self.effects, born);
+        for next in 0..MAX_EFFECTS {
+            let covered = self.effects[next].is_some_and(|e| {
+                e.is_a_pool()
+                    && e.owner == owner as u8
+                    && V3::new(e.pos.x.sub(pool.pos.x), Fx::ZERO, e.pos.z.sub(pool.pos.z))
+                        .flat_len()
+                        .raw()
+                        <= radius.add(e.pool_radius()).raw()
+            });
+            if covered {
+                self.erupt_from(owner, kind, next);
+            }
+        }
+    }
+
+    /// Drink every pool of this fighter's that her scythe's volume is passing
+    /// over this frame. Only the two scythe moves, and only while the volume
+    /// is out.
+    ///
+    /// **Only pools that were there before the swing.** A hit spills a pool
+    /// under whoever it cut, and the blade is over that spot on the same
+    /// frame; if the swing collected it, every hit would refund itself on the
+    /// way through and nothing would ever be left on the floor for the next
+    /// swing or the spike. So a pool younger than the swing is left alone --
+    /// the hit itself already drank whatever the blade passed *through*, in
+    /// `drink_over`, before it spilled.
+    fn collect_with_the_scythe(&mut self, who: usize) {
+        let p = self.players[who];
+        let Some(kind) = p.action.attack_kind() else {
+            return;
+        };
+        if !p.class.wounds_go_grey() || !moves::blood::scythe(kind) {
+            return;
+        }
+        let Some(hb) = hitbox(&p) else {
+            return;
+        };
+        let m = moves::get(p.class, kind);
+        let swing_so_far = m.startup + m.active;
+        for slot in 0..MAX_EFFECTS {
+            let over = self.effects[slot].is_some_and(|e| {
+                e.is_a_pool()
+                    && e.owner == who as u8
+                    && e.age > swing_so_far
+                    && crate::math::segment_gap(
+                        V3::new(hb.from.x, e.pos.y, hb.from.z),
+                        V3::new(hb.to.x, e.pos.y, hb.to.z),
+                        e.pos,
+                        e.pos,
+                    )
+                    .raw()
+                        <= hb.radius.add(e.pool_radius()).add(t::body_radius()).raw()
+            });
+            if over {
+                self.drink_from(slot, who, &m);
+            }
+        }
+    }
+
+    /// Drink the pool in `slot`: `m`'s share of what is left in it comes back
+    /// as red, grey is the ceiling, and **the pool is gone**. One and done: a
+    /// pool is a heal you take once, worth what it has left, and what she
+    /// could not fill is lost with it -- a pool she could stand in and hit
+    /// forever would be a heal with no decision in it.
+    fn drink_from(&mut self, slot: usize, owner: usize, m: &moves::Move) -> i32 {
+        let Some(pool) = self.effects[slot] else {
+            return 0;
+        };
+        if !pool.is_a_pool() {
+            return 0;
+        }
+        let take = m.drinks(pool.banked);
+        let got = self.players[owner].drink(take);
+        self.effects[slot] = None;
+        got
+    }
+}
+
 fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
     let snapshot = *players;
     for victim in players.iter_mut() {
@@ -6056,6 +6817,8 @@ fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
         let far = gap.len();
         let step = t::reel_speed().mul(crate::DT);
         victim.pos = if far.raw() <= step.raw() {
+            // Arrived, this frame, if there was any ground left to cover.
+            victim.hauled_in = far.raw() > 0;
             want
         } else {
             victim.pos.add(gap.scale(step.div(far)))
@@ -6504,7 +7267,7 @@ fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
     };
     // The fall. See `tuning::throw_damage`: the back is safe from everything
     // the creature swings, so the buck has to be what the ride costs.
-    p.health = (p.health - t::throw_damage()).max(0);
+    p.wound(t::throw_damage());
 }
 
 /// Come off because something else decided it, rather than because you lost
@@ -6892,6 +7655,18 @@ impl World {
                 .mul(cash)
                 .to_int();
             let dealt = beast.take_hit(part, raw);
+            // Her double duty, against the creature: drink over the pool the
+            // blade passes through, then spill under the part it struck.
+            if dealt > 0 {
+                self.drink_over(i, &m, box_out.from, box_out.to, None, 0);
+                self.spill(
+                    i as u8,
+                    attacker.class,
+                    kind,
+                    floor_under(box_out.centre()),
+                    dealt,
+                );
+            }
             // An uppercut does not put thirteen metres of animal in the air and
             // a grab does not drag it anywhere, but throwing one at a creature
             // that is already reeling should still be a decision -- so the move

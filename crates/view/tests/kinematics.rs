@@ -861,3 +861,210 @@ fn the_two_lances_do_not_look_alike_while_they_are_winding_up() {
          difference you would have to be told about"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The scythe you see and the reach that hits
+// ---------------------------------------------------------------------------
+//
+// The Blood mage's reach grows with her grey, which `docs/design/aiming.md`
+// refuses for every other reach in the game. The one condition under which it
+// is allowed is that the blade is drawn at the length it hits at, for both
+// players -- and this is where that condition is held.
+
+/// A Blood mage standing in the arena with a given amount of grey open.
+///
+/// With an aim solved, the way every move has one by the time it is active:
+/// the swings hang their volume off the line the crosshair picked, and a
+/// fighter who has never aimed has no line.
+fn mage_with_grey(grey: i32) -> sim::state::Player {
+    let mut p = sim::state::Player::new(sim::Class::BloodMage);
+    p.health = sim::tuning::max_health() - grey;
+    p.grey = grey;
+    p.aim_path = sim::aim::Path {
+        from: p.pos,
+        to: p.pos.add(p.facing.scale(sim::Fx::from_int(3))),
+    };
+    p
+}
+
+#[test]
+fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
+    use sim::moves::blood;
+    // Where the two hands are drawn: the right leading on the haft.
+    let (left, right) = ([0.3, 1.0, 0.2], [0.55, 1.05, 0.15]);
+    let mut reaches = Vec::new();
+    let mut volumes = Vec::new();
+    for grey in [0, 300, 600] {
+        let mut p = mage_with_grey(grey);
+        let resting = view::scythe::scythe(&p, left, right).expect("she carries a scythe");
+        // Standing: the butt on the floor, the haft upright, and the blade's
+        // tip a little over her head.
+        let height = sim::tuning::body_height().to_f32_for_render();
+        assert!(
+            resting.butt[1].abs() < 0.001,
+            "at rest the butt is {:.2} m off the floor",
+            resting.butt[1]
+        );
+        let lean = math::length([
+            resting.neck[0] - resting.butt[0],
+            0.0,
+            resting.neck[2] - resting.butt[2],
+        ]);
+        assert!(
+            lean < 0.001,
+            "at rest the haft leans {lean:.2} m off upright"
+        );
+        assert!(
+            resting.tip[1] > height && resting.tip[1] < height * 1.6,
+            "at rest the blade's tip is at {:.2} m against a {height:.2} m body",
+            resting.tip[1]
+        );
+        let ahead = math::sub(resting.tip, resting.neck);
+        let facing = [
+            p.facing.x.to_f32_for_render(),
+            0.0,
+            p.facing.z.to_f32_for_render(),
+        ];
+        assert!(
+            math::dot(ahead, facing) > 0.1,
+            "at rest the blade does not curve forward off the head of the haft"
+        );
+
+        // The volume, on the first active frame of the swing.
+        {
+            let kind = blood::SWEEP;
+            let m = sim::moves::get(sim::Class::BloodMage, kind);
+            p.action = sim::state::Action::Active {
+                kind,
+                left: m.active,
+            };
+            let hb = sim::state::hitbox(&p).expect("a swing has a volume");
+            let swung = view::scythe::scythe(&p, left, right).expect("the blade is out");
+            let tip = [
+                hb.to.x.to_f32_for_render(),
+                hb.to.y.to_f32_for_render(),
+                hb.to.z.to_f32_for_render(),
+            ];
+            // The weapon points at the volume's far end from the leading
+            // hand: exactly on it with no grey open, and short of it -- the
+            // volume running on past the iron -- with grey open.
+            let toward = math::sub(tip, right);
+            let drawn = math::sub(swung.tip, right);
+            let off_line = math::length(math::cross(toward, drawn)) / math::length(toward);
+            assert!(
+                off_line < 0.001,
+                "{} at {grey} grey: the drawn tip is {off_line:.3} m off the line to the \
+                 volume's end",
+                m.name
+            );
+            let short = math::length(toward) - math::length(drawn);
+            if grey == 0 {
+                assert!(
+                    short.abs() < 0.001,
+                    "{} with no grey: the drawn tip is {short:.3} m from where the volume ends",
+                    m.name
+                );
+            } else {
+                assert!(
+                    short > 0.1,
+                    "{} at {grey} grey: the iron grew with the volume",
+                    m.name
+                );
+            }
+            // And it is in her hands: the haft runs through the leading one.
+            let on_the_haft = view::math::length(view::math::cross(
+                view::math::sub(swung.tip, swung.butt),
+                view::math::sub(right, swung.butt),
+            )) / view::math::length(view::math::sub(swung.tip, swung.butt));
+            assert!(
+                on_the_haft < 0.001,
+                "{} at {grey} grey: the leading hand is {on_the_haft:.3} m off the haft",
+                m.name
+            );
+            // The volume drawn is the volume tested: the same capsule, and
+            // it widens with grey the way the hit test does.
+            let volume = view::scythe::swing_volume(&p).expect("a swing has a volume to draw");
+            assert!(
+                math::length(math::sub(volume.to, tip)) < 0.001
+                    && (volume.radius - hb.radius.to_f32_for_render()).abs() < 0.001
+                    && volume.fade == 1.0,
+                "{} at {grey} grey: the essence drawn is not the volume tested",
+                m.name
+            );
+            volumes.push(volume.radius);
+            // It lingers, fading, through the first frames of the recovery,
+            // where the last active frame put it.
+            p.action = sim::state::Action::Recovery {
+                kind,
+                left: m.recovery - 2,
+            };
+            let ghost = view::scythe::swing_volume(&p).expect("the volume lingers");
+            assert!(
+                ghost.fade > 0.0 && ghost.fade < 1.0,
+                "two frames into recovery the volume is at {}",
+                ghost.fade
+            );
+            p.action = sim::state::Action::Recovery { kind, left: 1 };
+            assert!(
+                view::scythe::swing_volume(&p).is_none(),
+                "the volume is still drawn at the end of the recovery"
+            );
+            // Through the wind-up nothing is out, and the haft lies along the
+            // hands at the weapon's own length.
+            p.action = sim::state::Action::Startup {
+                kind,
+                left: m.startup,
+            };
+            assert!(
+                view::scythe::swing_volume(&p).is_none(),
+                "a volume is drawn during the wind-up"
+            );
+            let wound = view::scythe::scythe(&p, left, right).expect("she holds it");
+            assert!(
+                (wound.reach() - m.reach.to_f32_for_render()).abs() < 0.001,
+                "{} at {grey} grey: winding up, the blade is {:.2} m and the row says {:.2} m",
+                m.name,
+                wound.reach(),
+                m.reach.to_f32_for_render()
+            );
+        }
+        p.action = sim::state::Action::Free;
+        assert!(
+            view::scythe::swing_volume(&p).is_none(),
+            "a volume is drawn at rest"
+        );
+        reaches.push(resting.tip[1] - resting.butt[1]);
+    }
+    // The weapon is iron and one size, whatever the grey; it is the volume
+    // around it that grows -- half again in reach and doubled in width at a
+    // full bar are the design's first numbers, so six hundred of a
+    // thousand-point bar is well over a quarter wider.
+    assert!(
+        (reaches[0] - reaches[2]).abs() < 0.001,
+        "the standing weapon grew from {:.2} m to {:.2} m with grey",
+        reaches[0],
+        reaches[2]
+    );
+    assert!(volumes[1] > volumes[0] && volumes[2] > volumes[1]);
+    assert!(
+        volumes[2] > volumes[0] * 1.25,
+        "the volume widened from {:.2} m to only {:.2} m over most of a bar of grey",
+        volumes[0],
+        volumes[2]
+    );
+}
+
+#[test]
+fn nobody_else_carries_a_scythe() {
+    for class in sim::class::ALL_CLASSES {
+        if class == sim::Class::BloodMage {
+            continue;
+        }
+        let p = sim::state::Player::new(class);
+        assert!(
+            view::scythe::scythe(&p, [0.0; 3], [0.0; 3]).is_none(),
+            "{} is drawn holding the Blood mage's weapon",
+            class.name()
+        );
+    }
+}

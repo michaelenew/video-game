@@ -124,12 +124,17 @@ pub struct Move {
     /// end of the slider `reach` is the far end of. Meaningless when
     /// [`channel`](Move::channel) is zero.
     pub channel_from: Fx,
-    /// Health the caster pays the moment the move starts.
+    /// Health the caster pays the moment the move starts, **as a percentage
+    /// of her current health**.
     ///
     /// Zero on almost everything. It is the Blood mage's whole economy -- see
     /// `docs/design/kits/blood-mage.md` -- and it is a move field rather than a
     /// class rule because the *spread* is the design: an auto you can throw all
-    /// day costs a trickle, and the committed casts cost real blood.
+    /// day costs a trickle, and the committed casts cost real blood. A share of
+    /// what she has rather than a flat number, so casting at full health opens
+    /// a big wound (which is reach) and casting at low health opens a small
+    /// one: she is never burning herself to death trying to get back in. See
+    /// `state::Player::cost_of`.
     ///
     /// **It can never kill you.** Self-damage clamps at one, the same rule the
     /// Dual mage's meter burn already follows: dying to your own button is not
@@ -137,11 +142,24 @@ pub struct Move {
     pub cost: i32,
     /// Percent of the damage this move deals that comes back as health.
     ///
-    /// The other half of the same economy: the cost is paid on the press and
-    /// the return is earned on the hit, so missing is the punishment. Applies
-    /// to what the move itself deals and to what anything it leaves behind
-    /// drains -- one number per ability, wherever the damage happens to land.
+    /// **Not the Blood mage's any more.** It was the other half of her
+    /// economy -- cost on the press, a share of the damage back wherever the
+    /// hit landed -- and it is zero on every move of hers now, because a heal
+    /// that pays out wherever the hit happens gives the player nothing to *go
+    /// to*; her heal is [`drink`](Move::drink), a place on the floor. The
+    /// column stays because the Dual mage's dark arm reads it: her dark auto
+    /// and her tether drain, and this is what they return.
     pub leech: u8,
+    /// Percent of an essence pool this move **drinks** when it lands over one.
+    ///
+    /// The Blood mage's heal, and it is a place rather than a percentage of
+    /// the damage: the cost is paid on the press, the hit spills the target
+    /// onto the floor, and the health comes back only when a move is put
+    /// *through* the blood that is already there -- see
+    /// `docs/design/blood-mage.md` §"Double duty" and `state::World::drink`.
+    /// Zero on everything that is not hers, and zero on the abilities of hers
+    /// that read a pool for something other than healing.
+    pub drink: u8,
     /// This move's share of the shared repeat lockout, as a percentage.
     ///
     /// 100 on everything until somebody plays it and finds otherwise, which is
@@ -194,6 +212,12 @@ pub struct Move {
     pub shape: Shape,
     /// Which arm it comes out of. See [`crate::aim::Hand`].
     pub hand: crate::aim::Hand,
+    /// Whether the grey on the caster's bar lengthens this move's reach and
+    /// scales its damage. Code, like [`shape`] and [`hand`]: it is what the
+    /// scythe *is*, and a knob that could switch it on for a thrown blade
+    /// would be a way to make the blade you see and the volume that hits
+    /// disagree. See [`blood::scythe`].
+    pub grey_scaled: bool,
 }
 
 /// What an attack's hit volume looks like.
@@ -445,6 +469,20 @@ impl Move {
         }
         (dealt * self.leech as i32) / 100
     }
+
+    /// How much of a pool of `volume` this move takes, rounded down.
+    pub const fn drinks(&self, volume: i32) -> i32 {
+        if self.drink == 0 || volume <= 0 {
+            return 0;
+        }
+        (volume * self.drink as i32) / 100
+    }
+
+    /// Does this move's reach and damage grow with the grey on the caster's
+    /// bar? The Blood mage's scythe, and nothing else -- see [`blood`].
+    pub fn rides_the_grey(&self) -> bool {
+        self.grey_scaled
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -465,7 +503,8 @@ impl Move {
 /// Three is the shared vocabulary. The Blood mage has a fourth on `E`, because
 /// her mechanic is *health* -- not a thing you press a button to change -- so
 /// the key is free for an ability, and an ability needs a startup, a reach and
-/// a cost like any other. The Champion has nineteen, because its three mouse
+/// a cost like any other; and a fifth, her auto, appended when the scythe
+/// arrived (see [`blood`]). The Champion has nineteen, because its three mouse
 /// buttons are three weapons, each of them chains three hits deep, and each of
 /// them behaves differently on foot, in the air, mid-Rush and on the way off
 /// the floor: see [`champion`].
@@ -555,15 +594,28 @@ const NAMES: [&[&str]; 6] = [
         "Gale",
         "Landfall",
     ],
-    // Blood mage -- sustain through aggression. Everything costs health, and
-    // every one of these has a cost in the table to prove it.
-    //   Bloodletter: the auto. Out to a fixed distance and back, cutting on
-    //     both passes, and the blood it takes comes home with it.
-    //   Rend: the committed poke it was before the auto took its slot.
+    // Blood mage -- her blood goes out, and theirs comes back. Everything
+    // costs health, every hit she lands spills the target onto the floor, and
+    // the only heal she has is putting an ability through that blood. Five, in
+    // storage order rather than button order: see [`blood`] for why the auto
+    // is the last row.
+    //   Bloodletter: a blade out to a fixed distance and back, cutting on both
+    //     passes. Middle click, the ranged way to make a pool.
+    //   Haemorrhage: a bolt that opens a bleed, and every tick of the bleed
+    //     spills a pool under the victim. Right click, the easier thing to
+    //     land, and the thing that marks somebody as the target.
     //   Grasp: four arms out in a cone that arc back inward to meet. Caught by
-    //     all four and you are rooted.
+    //     all four and you are hauled to her feet.
     //   Black spike: on `E`, because the class has no other use for the key.
-    &["Bloodletter", "Rend", "Grasp", "Black spike"],
+    //   Reaping sweep: the auto. The scythe drawn across the front, low to
+    //     high, and its reach grows with her grey.
+    &[
+        "Bloodletter",
+        "Haemorrhage",
+        "Grasp",
+        "Black spike",
+        "Reaping sweep",
+    ],
     // Dual mage -- melee mage riding between two forces, one in each arm. Six
     // moves on five inputs, and the two on the bare clicks are the class: see
     // [`dual`].
@@ -839,6 +891,56 @@ pub mod dual {
 }
 
 // ---------------------------------------------------------------------------
+// The Blood mage's five
+// ---------------------------------------------------------------------------
+
+/// The Blood mage's move list, and **which button throws each**.
+///
+/// ```text
+///   left click     Reaping sweep   the auto; a war scythe across the front
+///   right click    Haemorrhage     a bolt that opens a bleed; a trail of pools
+///   middle click   Bloodletter     a blade out and back
+///   Q              Grasp           hold to choose a depth; four arms
+///   E              Black spike     a spike out of the floor, after a delay
+/// ```
+///
+/// **Storage order is not button order.** The Oven's move store is packed in
+/// class order, so a slot appended to this class shifts every Dual mage index
+/// in `tuned.rs` and a slot *renumbered* silently rewrites every number on the
+/// class. The auto is therefore the fifth row rather than the first: the four
+/// rows that existed before the scythe keep the meaning they were baked with,
+/// and the sweep was appended. `SLOT_POKE` on this class is the Bloodletter,
+/// which is still the fast, cheap thing she throws -- it simply moved off
+/// the left button.
+pub mod blood {
+    /// Middle click. The blade thrown out and back.
+    pub const BLOODLETTER: u8 = 0;
+    /// Right click. Was Rend, the claw with no button, then the Reap, the
+    /// heavier swing; the row was retuned each time rather than replaced, so
+    /// its knobs kept their index.
+    pub const HAEMORRHAGE: u8 = 1;
+    /// `Q`, held.
+    pub const GRASP: u8 = 2;
+    /// `E`.
+    pub const BLACK_SPIKE: u8 = 3;
+    /// Left click. Appended last: see the module note.
+    pub const SWEEP: u8 = 4;
+
+    pub const COUNT: usize = 5;
+
+    /// Is this the scythe -- the move whose reach, width and damage grow with
+    /// the grey on her bar?
+    ///
+    /// Declared rather than inferred from the shape, because a second swing on
+    /// this class would have to say which it was. The weapon is drawn at one
+    /// size and the growth is drawn as essence around it; `view::scythe`
+    /// reads this to know which move to draw the volume for.
+    pub const fn scythe(kind: u8) -> bool {
+        matches!(kind, SWEEP)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // The Elementalist's seven
 // ---------------------------------------------------------------------------
 
@@ -909,8 +1011,9 @@ pub const fn slots(class: Class) -> usize {
         // shield -- and a row of three more for the same buttons with her feet
         // off the floor. See [`elementalist`] and `state::clicked_move`.
         Class::Elementalist => elementalist::COUNT,
-        // The fourth is Black spike, on `E`. See `on_e`.
-        Class::BloodMage => SLOTS + 1,
+        // Five: the three shared slots, Black spike on `E`, and the auto
+        // appended last. See [`blood`].
+        Class::BloodMage => blood::COUNT,
         // And Send shadow, on `E`. The Reaver's mechanic *is* a state change,
         // unlike the Blood mage's -- but throwing a second body out across the
         // arena and dashing it back through somebody is not an instant, and a
@@ -1067,22 +1170,21 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             5 => "RMB air",
             _ => "E air",
         },
+        // Three clicks, three moves, and the auto on the last row: see
+        // [`blood`] for why the button order and the storage order differ.
+        Class::BloodMage => match slot {
+            0 => "MMB",
+            1 => "RMB",
+            2 => "Q",
+            3 => "E",
+            _ => "LMB",
+        },
         // Slam on the third click, since 2026-09-23: it spends the shield's
         // weight, and the button was free. See `bulwark-v2.md`.
         Class::Bulwark => match slot {
             0 => "LMB",
             1 => "MMB",
             _ => "Q",
-        },
-        _ => match slot {
-            0 => "LMB",
-            1 => "Shift+LMB",
-            2 => "Q",
-            // The two classes with a fourth put an ability on the mechanic key:
-            // the Blood mage because her mechanic is health and has nothing to
-            // toggle, the Reaver because throwing her second body across the
-            // arena is not an instant.
-            _ => "E",
         },
     }
 }
@@ -1186,6 +1288,13 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             // the effect, and the effect is what catches somebody and holds
             // on. See `effects::EffectKind::Tether`.
             dual::DARK_LANCE => Shape::None,
+            _ => Shape::Cylinder,
+        },
+        // The scythe. The sweep is a cut across the front, and the one swing
+        // in the kit. Everything else she has puts something in the world and
+        // lets it do the hitting, or lands on the floor where it was aimed.
+        Class::BloodMage => match kind {
+            blood::SWEEP => Shape::Swing(Plane::Flat),
             _ => Shape::Cylinder,
         },
         // Every other class is still the original disc at arm's length.
@@ -1331,6 +1440,7 @@ pub fn get(class: Class, kind: u8) -> Move {
         effect: raw(F::Effect) as u8,
         cost: raw(F::Cost),
         leech: raw(F::Leech) as u8,
+        drink: raw(F::Drink).clamp(0, 100) as u8,
         aim_code: raw(F::Aim) as u8,
         arc: Fx::from_raw(raw(F::Arc)),
         rehit: raw(F::Rehit) as u16,
@@ -1341,13 +1451,14 @@ pub fn get(class: Class, kind: u8) -> Move {
         step: Fx::from_raw(raw(F::Step)),
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
+        grey_scaled: class == Class::BloodMage && blood::scythe(slot as u8),
     }
 }
 
 /// Every move a class actually has, live.
 ///
 /// A `Vec` rather than an array because the count is not the same for
-/// everybody: three for most of the roster, four for the Blood mage, nineteen
+/// everybody: three for most of the roster, five for the Blood mage, nineteen
 /// for the Champion. The callers are the frame table and the feel tests, neither of
 /// which runs inside a frame, so the allocation buys readability for nothing.
 pub fn table(class: Class) -> Vec<Move> {

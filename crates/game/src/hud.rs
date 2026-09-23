@@ -33,7 +33,13 @@ const DEEP: Color = Color::srgb(0.95, 0.35, 0.35);
 const ASCENDED: Color = Color::srgb(1.0, 1.0, 1.0);
 
 #[derive(Component)]
-pub struct HealthBar(pub usize);
+pub struct HealthBar {
+    pub who: usize,
+    /// The grey segment beside the red: health the Blood mage has lost and can
+    /// still get back. Zero width on everybody else, so the bar reads the same
+    /// on every class until it does not.
+    pub grey: bool,
+}
 
 #[derive(Component)]
 pub struct StateText(pub usize);
@@ -384,7 +390,18 @@ fn spawn_health(parent: &mut ChildSpawnerCommands, who: usize, colour: Color) {
                     ..default()
                 },
                 BackgroundColor(colour),
-                HealthBar(who),
+                HealthBar { who, grey: false },
+            ));
+            // Grey health, drawn after the red so the two read as one bar with
+            // a faded tail: what she has lost and can still reclaim.
+            bar.spawn((
+                Node {
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
+                    ..default()
+                },
+                BackgroundColor(Color::srgb(0.42, 0.40, 0.42)),
+                HealthBar { who, grey: true },
             ));
         });
 }
@@ -541,9 +558,9 @@ pub fn update(
     for (bar, mut node) in bars.iter_mut() {
         // Against this fighter's own full bar, which is per class now -- see
         // `sim::tuning::health_of`.
-        let p = &sim.cur.players[bar.0];
-        let hp = p.health.max(0) as f32;
-        node.width = Val::Percent(100.0 * hp / p.full_health().max(1) as f32);
+        let p = &sim.cur.players[bar.who];
+        let share = if bar.grey { p.grey } else { p.health };
+        node.width = Val::Percent(100.0 * share.max(0) as f32 / p.full_health().max(1) as f32);
     }
 
     // The Dual mage's two bars. Three things at once, and each of them is a

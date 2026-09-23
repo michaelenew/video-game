@@ -155,10 +155,10 @@ scalars! {
     PillarHeightStart,"Effects",  "Pillar height, new",     Fixed,   fx(1,10),  fx(20,1);
     PillarHeight,     "Effects",  "Pillar height, grown",   Fixed,   fx(1,10),  fx(20,1);
     PillarLife,       "Effects",  "Pillar lifetime",        Frames,  10,        600;
-    SpikeRadius,      "Effects",  "Black spike radius",     Fixed,   fx(1,10),  fx(8,1);
-    SpikeLife,        "Effects",  "Black spike lifetime",   Frames,  10,        600;
+    // The spike's radius, lifetime and drain went with the drain field: it
+    // is a one-event spike now, sized by the move's own disc or the pool it
+    // erupts from, standing for `SpikeErupt` frames under *Blood mage*.
     SpikeSlow,        "Effects",  "Black spike slow (x)",   Fixed,   0,         fx(1,1);
-    SpikeDrain,       "Effects",  "Black spike drain",      Int,     0,         200;
     StructureRadius,  "Stones",   "Stone radius",           Fixed,   fx(1,10),  fx(4,1);
     SlowFrames,       "Effects",  "Slow duration",          Frames,  1,         120;
     PillarDamage,     "Effects",  "Fire pillar tick",       Int,     0,         300;
@@ -558,6 +558,41 @@ scalars! {
     KnockdownFrames,  "Bulwark",  "Throw, knockdown",                     Frames,  0,       120;
     WallSizeEmpty,    "Bulwark",  "Wall, size empty (x a stone)",         Fixed,   fx(1,10), fx(3,1);
     WallSizeFull,     "Bulwark",  "Wall, size full (x a stone)",          Fixed,   fx(1,10), fx(3,1);
+    // The Blood mage's rebuild, appended: grey health, the scythe that grows
+    // with it, and the essence pools the other fighter bleeds onto the floor.
+    // See `docs/design/blood-mage.md`.
+    GreyFade,         "Blood mage", "Grey fades (health per second)",         Int,   0,        600;
+    GreyReach,        "Blood mage", "Scythe reach at full grey (x)",          Fixed, fx(1,1),  fx(4,1);
+    GreyDamage,       "Blood mage", "Scythe damage at full grey (x)",         Fixed, fx(1,1),  fx(4,1);
+    SweepTip,         "Blood mage", "Sweep, tip as a share of the reach",     Fixed, 0,        fx(1,1);
+    SweepTipDamage,   "Blood mage", "Sweep, tip damage (x)",                  Fixed, fx(1,1),  fx(4,1);
+    PoolDrain,        "Blood mage", "Pool drains (volume per second)",        Int,   0,        600;
+    PoolCap,          "Blood mage", "Pools at once",                          Int,   1,        8;
+    PoolLock,         "Blood mage", "Crosshair lock on a pool",               Fixed, 0,        fx(6,1);
+    SpikeErupt,       "Blood mage", "Black spike, eruption lasts",            Frames, 1,       120;
+    // A pool is a shadowy figure the size of the body it came out of, and it
+    // shrinks as it drains: full-sized at this much volume, never smaller
+    // than this share of a body. Replaced a radius-per-root-of-volume and a
+    // fixed slab height, which spread a Reap's pool across two and a half
+    // metres of floor.
+    PoolFull,         "Blood mage", "Pool, full-sized at volume",             Int,   1,        1000;
+    PoolLeast,        "Blood mage", "Pool, smallest share of a body (x)",     Fixed, fx(1,20), fx(1,1);
+    // What a spike cast on a pool becomes: an eruption with its own size and
+    // its own weight, so that the placement the whole kit exists to arrange
+    // is a different event from a spike on bare floor.
+    EruptRadius,      "Blood mage", "Black spike, eruption radius per root of volume", Fixed, fx(1,100), fx(2,1);
+    EruptHeight,      "Blood mage", "Black spike, eruption height",           Fixed, fx(1,2),  fx(10,1);
+    EruptDamage,      "Blood mage", "Black spike, eruption damage (x)",       Fixed, fx(1,1),  fx(4,1);
+    // The scythe's hit volume widens with grey as well as lengthening. The
+    // weapon itself is drawn at one size; the growth is drawn as essence.
+    GreyWidth,        "Blood mage", "Scythe width at full grey (x)",          Fixed, fx(1,1),  fx(4,1);
+    // Haemorrhage, on right click: a bolt that opens a bleed, and every tick
+    // of the bleed spills a pool under the victim wherever they have got to.
+    HaemorrhageFlight, "Blood mage", "Haemorrhage, bolt flight",              Frames, 2,       120;
+    HaemorrhageRadius, "Blood mage", "Haemorrhage, bolt radius",              Fixed, fx(1,10), fx(3,1);
+    BleedLasts,       "Blood mage", "Bleed lasts",                            Frames, 1,       900;
+    BleedTick,        "Blood mage", "Bleed ticks every",                      Frames, 1,       120;
+    BleedDamage,      "Blood mage", "Bleed damage per tick",                  Int,   0,        200;
 }
 
 // ---------------------------------------------------------------------------
@@ -745,8 +780,11 @@ pub enum MoveField {
     SelfLift,
     Grabs,
     Effect,
-    // Appended again, for the Blood mage's economy. Health out on the press,
-    // health back on the hit -- see `moves::Move::cost` and `leech`.
+    // Appended again, for the Blood mage's economy: health out on the press,
+    // and health back on the hit -- see `moves::Move::cost` and `leech`. The
+    // second half stopped being hers when the heal became a place on the
+    // floor (see `Drink`, appended at the end); it stays a column because the
+    // Dual mage's dark arm reads it.
     Cost,
     Leech,
     // And again, for which line of effect a move uses: 0 swings out along the
@@ -773,6 +811,9 @@ pub enum MoveField {
     // Appended, like everything above it: how far the move itself carries the
     // body forward. See `moves::Move::step`.
     Step,
+    // Appended for the Blood mage's rebuild: what share of an essence pool a
+    // move drinks when it lands over one. See `moves::Move::drink`.
+    Drink,
 }
 
 impl MoveField {
@@ -805,6 +846,7 @@ impl MoveField {
         MoveField::RepeatMul,
         MoveField::Reactivate,
         MoveField::Step,
+        MoveField::Drink,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -837,6 +879,7 @@ impl MoveField {
             MoveField::RepeatMul => "Repeat lockout (%)",
             MoveField::Reactivate => "Reactivate no sooner than",
             MoveField::Step => "Steps forward (m)",
+            MoveField::Drink => "Drinks of a pool (%)",
         }
     }
 
@@ -856,8 +899,10 @@ impl MoveField {
             MoveField::Grabs | MoveField::Rehit | MoveField::Channel | MoveField::Reactivate => {
                 Unit::Frames
             }
-            MoveField::Effect | MoveField::Cost | MoveField::Aim => Unit::Int,
-            MoveField::Leech | MoveField::RepeatMul => Unit::Percent,
+            MoveField::Effect | MoveField::Aim => Unit::Int,
+            MoveField::Cost | MoveField::Leech | MoveField::Drink | MoveField::RepeatMul => {
+                Unit::Percent
+            }
             _ => Unit::Fixed,
         }
     }
@@ -1083,7 +1128,7 @@ pub const AIR_COUNT: usize = CLASSES * 4;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 28;
+pub const MOVE_FIELDS: usize = 29;
 
 // ---------------------------------------------------------------------------
 // The live store

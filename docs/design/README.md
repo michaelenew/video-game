@@ -81,7 +81,7 @@ poke is a design choice in a closed arena, not a gap.
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) — **a tally on the target, built** | `L` auto · `R` Send shadow · `Q` Guillotine lotus · `E` Executioner | v2 built, unplayed ([v2](shadow-reaver-v2.md)) |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
-| [Blood mage](kits/blood-mage.md) | Health — **grey health and essence pools, proposed** | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked; [v1 kit proposed](blood-mage.md) |
+| [Blood mage](kits/blood-mage.md) | Grey health, and essence pools where she cut somebody | `L` Reaping sweep · `R` Haemorrhage · `M` Bloodletter · `Q` Grasp · `E` Black spike · `shift` on a pool = Blink | **v1 built**, unplayed; [the kit](blood-mage.md) |
 | [Dual mage](kits/dual-mage.md) | Two bars, Dark and Light, and the hill between them | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep · **the lower bar unlocks a blink, a second jump, wings** | **Rebuilt on two bars**, unplayed |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
 | [Bulwark](kits/bulwark.md) | Shield position — **and its weight**: stored when blocked, spent by Slam | `L` Bash · `M` Slam · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New; [v2 built](bulwark-v2.md), unplayed |
@@ -101,10 +101,10 @@ few enough to balance and to read in third person.
 | [ability-spec.md](ability-spec.md) | The format kits are written in | Proposed |
 | [aiming.md](aiming.md) | The one raycast, and the two kinds of skillshot | Decided |
 | [defense.md](defense.md) | Dodge, block, parry, guard breaks | Proposed |
-| [blood-mage.md](blood-mage.md) | v1 kit: grey health, essence pools, the scythe, the blink | **Proposed** |
+| [blood-mage.md](blood-mage.md) | v1 kit: grey health, essence pools, the scythe, the blink | **Built 2026-09-23**, unplayed |
 | [dual-mage.md](dual-mage.md) | Two bars, the hill between them, the depth curve, the tiers, ascension and the wings; the single bar under "Was" | **Built 2026-09-23**, unplayed |
 | [dual-mage-v2.md](dual-mage-v2.md) | The proposal the two bars were built from | Built; folded into dual-mage.md |
-| [plans/](plans/) | Action plans for implementation threads: [Blood mage v1](plans/blood-mage-v1.md), [Dual mage v2](plans/dual-mage-v2.md) (built), [Shadow Reaver v2](plans/shadow-reaver-v2.md) (built, M4's knob pass waiting on play), [Bulwark v2](plans/bulwark-v2.md) | Briefs |
+| [plans/](plans/) | Action plans for implementation threads: [Blood mage v1](plans/blood-mage-v1.md) (built), [Dual mage v2](plans/dual-mage-v2.md) (built), [Shadow Reaver v2](plans/shadow-reaver-v2.md) (built, M4's knob pass waiting on play), [Bulwark v2](plans/bulwark-v2.md) | Briefs |
 | [champion.md](champion.md) | Forms, the three-hit chain, and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed; v2 proposed |
 | [bulwark-v2.md](bulwark-v2.md) | v2: the shield is a battery — weight, Slam on `M`, the planted wall | **Built 2026-09-23**, unplayed — weight, Slam on `M`, the loaded throw, the planted wall, the health table |
@@ -141,7 +141,7 @@ Nothing here blocks a prototype.
 | Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all. **Since 2026-09-15**, five more, all of them in [feel-log.md](feel-log.md): whether the sword's step is too much free pressure, whether the spear's sixteen-frame second hit reads as a two-part move from across the arena, whether "jump into the finisher" occurs to anybody without being taught, whether +14 on hit is too much, and whether the spinning finisher's knockback fights the chain it ends |
 | Shadow Reaver | ⚠️ **v2 is built and unplayed** — [shadow-reaver-v2.md](shadow-reaver-v2.md): the shadow marks from range and any hit of hers cashes the marks. Every number in the tally is a first guess, and the strike out of the carry was added in the building and wants a person's word. Still open: whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed. Since 2026-09-17 the leash is twice the throw rather than a third longer, so a placed shadow keeps its place long enough to be a decision; whether eighteen metres of slack is too much room is the new question. Since 2026-09-23 the dash stops dead on the shadow and the dash jump keeps a fifth of its speed |
 | Elementalist | The **double structure jump** — two stones two or three frames apart, jumped while both are still erupting — is the most interesting thing the class does, and since 2026-09-18 it is specified and tested rather than merely allowed. **⚠️ Its height is open and the stone knobs are not the way to move it.** They were tuned down on 2026-09-17 and put straight back: the chain is a *resonance* between how fast she rises and how fast the stone grows, so three frames on the rise halved the double while barely touching the single, and raising her jump makes the single **fall**. Everything there is discontinuous and some of it is non-monotonic — [feel-log.md](feel-log.md) has the map. What the cast-wide jump nerf leaves, with the stones untouched, is a double at 44.8 m against its old 58.8 and a single at 25.9 against 17.5. Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
-| Blood mage | ⚠️ **A v1 rebuild is proposed** — [blood-mage.md](blood-mage.md). The open questions there replace these two: health cost flat or percentage; is 1.4x against a disabled enemy the right bonus. **What it does not replace is which movement is hers**, which is the biggest question on the class as it stands: she had none, which was survivable while a full hop reached seven and a half metres and is not now the jump has been cut back to make room for class techniques. Two answers are built behind live Oven flags — the Grasp hauling her to a wall it caught instead of a person (on), and her dodge as a flat blink (off) — so the four combinations are two sliders away. Six more ideas, and the rule all of them were judged against, are in [kits/blood-mage.md](kits/blood-mage.md) §Movement. A rebuild around grey health and essence pools would give that rule new material to work with rather than settle it |
+| Blood mage | ⚠️ **The v1 rebuild is built and nobody has played it.** [kits/blood-mage.md](kits/blood-mage.md) §"Open questions" carries the proposal's questions with what the build found beside each; [plans/blood-mage-v1.md](plans/blood-mage-v1.md) has the four play scripts (C1–C4) that answer them. The numbers to watch first: the grey fade (12 a second), the reach at full grey (×1.5), and the pool drain (10 a second), which is the counterplay knob. Two things the build settled on its own and the person should overrule if wrong: the `leech` column stays in the move table because the Dual mage's dark arm reads it, and a hit on somebody in the air spills no pool. Her movement: the pool blink is built and always on; beside it are two live Oven flags from 2026-09-17 — the Grasp hauling her to a wall, structure or the creature it caught instead of a person (on), and her dodge as a flat blink (off) — see [kits/blood-mage.md](kits/blood-mage.md) §Movement |
 
 ## 5 · Parked — not slated for initial implementation
 
@@ -162,8 +162,8 @@ character progression.
 Rust, eight crates, simulation as a pure function. See
 [architecture.md](architecture.md). All six classes have their mechanic and at
 least three exemplar moves -- nineteen on the Champion, seven on the
-Elementalist, six on the Dual mage, four
-on the Blood mage and the Shadow Reaver -- there is a monster to fight and
+Elementalist, six on the Dual mage, five on the Blood mage and four on the
+Shadow Reaver -- there is a monster to fight and
 climb, peer-to-peer rollback play works over real UDP, and the test suite covers
 determinism, combat relationships, aiming, the ride, the camera, kinematics,
 animation and the frame budget.
@@ -219,7 +219,9 @@ the query string does what the flags do, so `?p1=champion&dev` is
 **Pick classes:** `game --p1 champion --p2 elementalist`, or Tab to cycle in-game.
 
 **Tune frame data:** `cargo run -p sim --bin frametable` prints every move's on-block and
-on-hit advantage, and the repeat lockout beside them. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
+on-hit advantage, and the repeat lockout beside them. `cargo run -p sim --bin essence` is the
+Blood mage's instrument: the pool each move leaves, what each drinks, the grey bar over a
+scripted exchange, and the scythe's reach at each level of grey. `./crates/web/build-sandbox.sh` writes a self-contained HTML file with
 hitbox overlays and frame stepping.
 
 **Tune it while it runs:** **F7** opens the Oven — every tuned number in the game, grouped by

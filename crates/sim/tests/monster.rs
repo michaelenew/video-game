@@ -866,64 +866,35 @@ fn beast_health(w: &World) -> i32 {
 }
 
 #[test]
-fn a_drain_field_hurts_the_creature() {
-    // It did not, for a long time, and the bug was invisible because it only
-    // showed up in a hunt: effects were applied to fighters and nobody else, so
-    // a Blood mage hunting alone put a spike in the ground, drained an empty
-    // patch of arena and got nothing back. Half a kit doing nothing in one of
-    // the game's two modes.
+fn a_spike_on_bare_floor_hits_the_creature_and_spills_under_it() {
+    // Effects used to be applied to fighters and nobody else, so a Blood mage
+    // hunting alone put a spike in the ground and it did nothing. The spike
+    // is one event now rather than a field, and the event has to reach the
+    // creature the same way it reaches a fighter: damage, and a pool of its
+    // blood on the floor under the part it struck.
     let mut w = parked();
     let full = beast_health(&w);
     for _ in 0..2 {
         w.advance([Input::new(Input::MECHANIC), Input::default()]);
     }
-    for _ in 0..200 {
+    for _ in 0..60 {
         w.advance([Input::default(), Input::default()]);
     }
     assert!(
         beast_health(&w) < full,
-        "the field never touched the creature"
+        "the spike never touched the creature"
     );
-}
-
-#[test]
-fn a_drain_field_feeds_the_hunter_who_laid_it() {
-    // The other half. The Blood mage pays health to cast, so if the return only
-    // worked in versus the class would be unplayable in coop by its own
-    // numbers.
-    //
-    // **It has to start measuring after the eruption**, and the first version
-    // of this test did not. The spike hits once on the frame it arrives and
-    // that hit pays out correctly; the *field* that stands there afterwards was
-    // taking health off the creature and returning none of it, for weeks,
-    // behind an assertion that only asked whether the caster's bar went up at
-    // all. It went up -- a few frames earlier, from the other thing. What is
-    // measured here is a window containing nothing but field ticks.
-    let mut w = parked();
-    let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
-    for _ in 0..2 {
-        w.advance([Input::new(Input::MECHANIC), Input::default()]);
-    }
-    for _ in 0..spike.startup + spike.active + 4 {
-        w.advance([Input::default(), Input::default()]);
-    }
+    let pools: Vec<_> = w
+        .effects
+        .iter()
+        .flatten()
+        .filter(|e| e.is_a_pool())
+        .collect();
+    assert_eq!(pools.len(), 1, "the hit left {} pools", pools.len());
+    assert_eq!(pools[0].owner, 0);
     assert!(
-        w.effects.iter().flatten().next().is_some(),
-        "fixture: the eruption is not over, or it left no field"
-    );
-
-    // Hurt, so there is room on the bar for the return to show.
-    w.players[0].health = sim::tuning::max_health() / 2;
-    let paid = w.players[0].health;
-    let beast = beast_health(&w);
-    for _ in 0..120 {
-        w.advance([Input::default(), Input::default()]);
-    }
-    let drained = beast - beast_health(&w);
-    assert!(drained > 0, "fixture: the field drained nothing");
-    assert!(
-        w.players[0].health > paid,
-        "the field drained {drained} off the creature and gave the caster none of it"
+        pools[0].pos.y.raw() == 0,
+        "the creature's pool is not on the floor"
     );
 }
 
@@ -966,9 +937,9 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
     // poses happened to agree -- which the animal's geometry stopped offering
     // the day its legs grew.
     //
-    // The Bloodletter, because it is her auto and the one attack in her kit
-    // with a button: shift stopped modifying clicks on 2026-09-16, and this
-    // fixture used to name the claw and press the poke's input.
+    // The Bloodletter, because it is her thrown blade and reaches a hind foot
+    // from behind without walking into the animal: on middle click since the
+    // Blood mage's v1 put the scythe on left.
     let blade = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
     let up = Doing::Prowl;
     let knee = Doing::Stumble {
@@ -997,7 +968,7 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
             // thrown down the centreline passes between the legs and grazes
             // whichever one the animal's breathing happens to sway into it.
             w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ratio(9, 10));
-            let held = if f < 2 { Input::LEFT } else { 0 };
+            let held = if f < 2 { Input::MIDDLE } else { 0 };
             // Facing the creature's tail, which is toward -x: it stands at the
             // origin pointed the other way.
             w.advance([Input::aimed(held, 1 << 15), Input::default()]);

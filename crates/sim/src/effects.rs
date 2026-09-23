@@ -37,7 +37,14 @@ use crate::moves::Move;
 use crate::state::MAX_PLAYERS;
 use crate::tuning as t;
 
-pub const MAX_EFFECTS: usize = 8;
+/// How many effects can stand in the world at once.
+///
+/// Twelve, since the Blood mage's essence pools: she may keep `pool_cap` of
+/// them on the floor, a mirror match keeps two of her, and each still wants a
+/// blade in flight, a Grasp and a spike beside them. Eight was enough before
+/// anything lived on the floor for as long as a pool does. Every slot costs
+/// snapshot bytes and a hash line, which is why it is not simply large.
+pub const MAX_EFFECTS: usize = 12;
 
 /// Every effect standing in the world. Named so that the one bundle
 /// `crate::aim` traces against can be written down without repeating the
@@ -81,6 +88,13 @@ pub enum EffectKind {
     /// Blood mage. Four arms thrown out in a cone that arc back inward to meet
     /// at the far end. Caught by all four and you are rooted.
     Grasp,
+    /// Blood mage. A bolt straight out along the crosshair, spent on the first
+    /// body it reaches: a cut, and a **bleed** -- see `state::Player::bleeding`
+    /// -- whose every tick spills a pool under the victim wherever they have
+    /// got to. The easier thing to land in a kit where everything can miss,
+    /// and what marks somebody as the target: a trail of pools behind them is
+    /// a spike's chain pointed at them.
+    Haemorrhage,
     /// Shadow Reaver. Six blades that erupt from the shadow along curving
     /// paths, hang at full extension, and then chase the shadow home -- cutting
     /// on the way out and again on the way back.
@@ -116,6 +130,19 @@ pub enum EffectKind {
     /// Judgement thrown at her own next few seconds, and how long either half
     /// lasts is how far out on the bar she was when she threw it.
     JudgementField,
+    /// The other fighter's blood, pooled on the floor where the Blood mage cut
+    /// them.
+    ///
+    /// **The class's object**, and the one effect in the game nothing casts:
+    /// every hit she lands spills one under the point of contact, with a
+    /// volume equal to the damage dealt (`banked`), and the only heal she has
+    /// is putting a move through it -- see `state::World::drink`. It drains at
+    /// a fixed volume a second so a big pool outlives a small one, merges
+    /// with a pool it lands on, and is capped per owner at `pool_cap`. A slab
+    /// on the floor, drawn at exactly the disc it is tested at; nothing
+    /// collides with it, and standing in one is the point.
+    /// See `docs/design/blood-mage.md` §"Essence pools".
+    Pool,
 }
 
 /// How many arms a Grasp has, and which corner each one leaves by.
@@ -163,6 +190,15 @@ const _: () = assert!(
     "the hit mask cannot address every part against every victim"
 );
 
+/// Where in the hit mask the **pool** bits start: one per effect slot, so a
+/// blade can remember which pools it has already drunk from on its way home.
+/// The top of the word, above every (part, victim) bit a lotus can need.
+const POOL_BITS: usize = u64::BITS as usize - MAX_EFFECTS;
+const _: () = assert!(
+    LOTUS_BLADES * VICTIMS <= POOL_BITS,
+    "the pool bits overlap the hit bits"
+);
+
 impl EffectKind {
     pub const fn name(self) -> &'static str {
         match self {
@@ -171,10 +207,12 @@ impl EffectKind {
             EffectKind::BlackSpike => "black spike",
             EffectKind::Bloodletter => "bloodletter",
             EffectKind::Grasp => "grasp",
+            EffectKind::Haemorrhage => "haemorrhage",
             EffectKind::GuillotineLotus => "guillotine lotus",
             EffectKind::LanceBurst => "lance burst",
             EffectKind::Tether => "tether",
             EffectKind::JudgementField => "judgement field",
+            EffectKind::Pool => "essence pool",
         }
     }
 
@@ -194,7 +232,7 @@ impl EffectKind {
             // Both of these are thrown *through* the air along the line the
             // player is looking, so the crosshair means a direction rather than
             // a place on the floor.
-            EffectKind::Bloodletter | EffectKind::Grasp => false,
+            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::Haemorrhage => false,
             // Neither. It erupts at the shadow, wherever the shadow happens to
             // be standing -- which is the fourth line of effect, and the only
             // move in the game that uses it. See `aim::mechanic_path`.
@@ -205,6 +243,7 @@ impl EffectKind {
             // the strike left, so it is the one of the three that is.
             EffectKind::LanceBurst | EffectKind::Tether => false,
             EffectKind::JudgementField => true,
+            EffectKind::Pool => true,
         }
     }
 
@@ -222,7 +261,10 @@ impl EffectKind {
     pub const fn travels(self) -> bool {
         matches!(
             self,
-            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::Tether
+            EffectKind::Bloodletter
+                | EffectKind::Grasp
+                | EffectKind::Tether
+                | EffectKind::Haemorrhage
         )
     }
 
@@ -272,6 +314,10 @@ impl EffectKind {
             6 => Some(EffectKind::LanceBurst),
             7 => Some(EffectKind::Tether),
             8 => Some(EffectKind::JudgementField),
+            // Listed so the numbering is complete; no move's row says it. A
+            // pool is what a hit leaves, not what a cast places.
+            9 => Some(EffectKind::Pool),
+            10 => Some(EffectKind::Haemorrhage),
             _ => None,
         }
     }
@@ -288,9 +334,10 @@ impl EffectKind {
     pub fn life(self) -> u16 {
         match self {
             EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_life(),
-            EffectKind::BlackSpike => t::spike_life(),
+            EffectKind::BlackSpike => t::spike_erupt(),
             EffectKind::Bloodletter => t::bloodletter_flight(),
             EffectKind::Grasp => t::grasp_flight(),
+            EffectKind::Haemorrhage => t::haemorrhage_flight(),
             // Out, held open, and home again. Three knobs rather than one
             // because they are three different decisions: how fast it opens is
             // spectacle, how long it hangs is how much time the victim has to
@@ -302,6 +349,9 @@ impl EffectKind {
             EffectKind::LanceBurst => t::lance_burst_life(),
             EffectKind::Tether => t::tether_life(),
             EffectKind::JudgementField => t::judgement_field_life(),
+            // A pool has no clock. It is gone when it has drained, which is
+            // volume, not frames -- see `state::World::step_effects`.
+            EffectKind::Pool => u16::MAX,
         }
     }
 
@@ -319,8 +369,11 @@ impl EffectKind {
     pub fn damage(self, m: &Move) -> i32 {
         match self {
             EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_damage(),
-            EffectKind::BlackSpike => t::spike_drain(),
-            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::GuillotineLotus => m.damage,
+            EffectKind::BlackSpike => m.damage,
+            EffectKind::Bloodletter
+            | EffectKind::Grasp
+            | EffectKind::GuillotineLotus
+            | EffectKind::Haemorrhage => m.damage,
             // All three of the Dual mage's carry a number of their own, for the
             // same reason a pillar does: the move that threw them hit on its
             // own and the two are not the same event. The light Lance's line is
@@ -330,6 +383,7 @@ impl EffectKind {
             EffectKind::LanceBurst => t::lance_burst_damage(),
             EffectKind::Tether => t::tether_drain(),
             EffectKind::JudgementField => t::judgement_field_damage(),
+            EffectKind::Pool => 0,
         }
     }
 }
@@ -575,10 +629,24 @@ impl Effect {
     /// certain size, and the hit test should agree with your eyes.
     pub fn spike_volume(&self) -> Pillar {
         Pillar {
-            radius: t::spike_radius(),
+            // The disc it came out of: the move's own radius on bare floor,
+            // the eruption's when it came up out of a pool. See
+            // `state::World::advance`.
+            radius: self.reach,
             bottom: Fx::ZERO,
-            top: t::spike_height(),
+            top: if self.erupted() {
+                t::erupt_height()
+            } else {
+                t::spike_height()
+            },
         }
+    }
+
+    /// Did this spike come up out of a pool, at the pool's size? A bare-floor
+    /// spike did its hitting through the move's own disc and is only a thing
+    /// to look at; an erupted one delivers the hit itself, once.
+    pub const fn erupted(&self) -> bool {
+        matches!(self.kind, EffectKind::BlackSpike) && self.banked > 0
     }
 
     /// Radius of a field effect. Drain fields do not grow; they are a place.
@@ -590,10 +658,11 @@ impl Effect {
     /// because the two are one multiply and the match is long.
     fn own_radius(&self) -> Fx {
         match self.kind {
-            EffectKind::BlackSpike => t::spike_radius(),
+            EffectKind::BlackSpike => self.reach,
             EffectKind::FirePillar | EffectKind::FireTornado => self.pillar_volumes().0.radius,
             EffectKind::Bloodletter => t::bloodletter_radius(),
             EffectKind::Grasp => t::grasp_arm_radius(),
+            EffectKind::Haemorrhage => t::haemorrhage_radius(),
             EffectKind::GuillotineLotus => t::lotus_blade_radius(),
             EffectKind::LanceBurst => t::lance_burst_radius(),
             // How thick the thrown line is, read off the move's own row -- the
@@ -602,6 +671,7 @@ impl Effect {
             // line that is a size, and it is where a tuner would look for it.
             EffectKind::Tether => self.source().radius,
             EffectKind::JudgementField => t::judgement_field_radius(),
+            EffectKind::Pool => self.pool_radius(),
         }
     }
 
@@ -661,6 +731,13 @@ impl Effect {
         } else {
             crate::math::lerp3(apex, self.home, p.sub(half).mul(Fx::from_int(2)))
         }
+    }
+
+    /// Where the Haemorrhage's bolt is this frame: straight out along the line
+    /// it was thrown, its whole reach over its whole life.
+    pub fn bolt_at(&self) -> V3 {
+        self.pos
+            .add(self.dir.scale(self.reach.mul(self.progress())))
     }
 
     /// Where one arm of a Grasp is this frame.
@@ -881,6 +958,101 @@ impl Effect {
     /// Forget everyone hit so far, so the next pass starts clean.
     pub fn forget_hits(&mut self) {
         self.struck = 0;
+    }
+
+    // -- Essence pools -----------------------------------------------------
+
+    /// A pool of `volume`, spilled on the floor at `at` by `owner`.
+    ///
+    /// `slot` is the move that spilled it, kept for the same reason every
+    /// effect keeps one: a reader asking what made this is answered from the
+    /// table rather than from a copy.
+    pub fn pool(owner: u8, class: Class, slot: u8, at: V3, volume: i32) -> Effect {
+        Effect {
+            kind: EffectKind::Pool,
+            owner,
+            class,
+            slot,
+            pos: at,
+            dir: V3::ZERO,
+            age: 0,
+            life: u16::MAX,
+            struck: 0,
+            reach: Fx::ZERO,
+            home: at,
+            banked: volume,
+            power: Fx::ONE,
+        }
+    }
+
+    pub const fn is_a_pool(&self) -> bool {
+        matches!(self.kind, EffectKind::Pool)
+    }
+
+    /// How much blood is in it. What a drink takes from and what the drain
+    /// takes off.
+    pub const fn pool_volume(&self) -> i32 {
+        self.banked
+    }
+
+    /// How much of a body this pool is, nought to one: a full figure at
+    /// `tuning::pool_full` of essence, never less than `tuning::pool_least`.
+    /// It shrinks as it drains, and the renderer draws it more solid the more
+    /// is left -- which is the whole of how a pool is read.
+    pub fn pool_share(&self) -> Fx {
+        Fx::ratio(self.banked.clamp(0, t::pool_full()), t::pool_full()).max(t::pool_least())
+    }
+
+    /// How wide the figure is: a body's radius, by its share.
+    pub fn pool_radius(&self) -> Fx {
+        t::body_radius().mul(self.pool_share())
+    }
+
+    /// How tall it stands: a body's height, by its share.
+    pub fn pool_height(&self) -> Fx {
+        t::body_height().mul(self.pool_share())
+    }
+
+    /// The column a pool is tested as: a shadowy figure standing on the floor
+    /// where the blood was spilled, a body's size at most and shrinking as it
+    /// drains. Drawn at exactly this.
+    pub fn pool_slab(&self) -> Pillar {
+        Pillar {
+            radius: self.pool_radius(),
+            bottom: Fx::ZERO,
+            top: self.pool_height(),
+        }
+    }
+
+    /// Is a body standing at `at` -- a pair of feet, the centre of a hit --
+    /// touching this figure? A body's radius of slack, so *in* a pool means
+    /// against it, not inside a column narrower than a foot.
+    pub fn covers(&self, at: V3) -> bool {
+        let flat = V3::new(at.x.sub(self.pos.x), Fx::ZERO, at.z.sub(self.pos.z)).flat_len();
+        flat.raw() <= self.pool_radius().add(t::body_radius()).raw()
+            && at.y.raw() >= self.pos.y.sub(self.pool_height()).raw()
+            && at.y.raw() <= self.pos.y.add(self.pool_height()).raw()
+    }
+
+    /// How much this pool loses this frame: `tuning::pool_drain` a second,
+    /// spread over the frames by the same integer trick the grey fade uses, so
+    /// a second of draining is exactly the rate whatever the rounding did in
+    /// between.
+    pub fn pool_drained_this_frame(&self) -> i32 {
+        let rate = t::pool_drain().max(0);
+        let hz = crate::TICK_HZ as i32;
+        let k = (self.age as u32 % crate::TICK_HZ) as i32;
+        rate * (k + 1) / hz - rate * k / hz
+    }
+
+    /// Has this effect already drunk from the pool in `slot`? A blade crossing
+    /// pools on its way home drinks from each one once.
+    pub fn drank_from(&self, slot: usize) -> bool {
+        self.struck & (1u64 << (POOL_BITS + slot.min(MAX_EFFECTS - 1))) != 0
+    }
+
+    pub fn mark_drank(&mut self, slot: usize) {
+        self.struck |= 1u64 << (POOL_BITS + slot.min(MAX_EFFECTS - 1));
     }
 
     /// Who a tether has hold of, if anything.

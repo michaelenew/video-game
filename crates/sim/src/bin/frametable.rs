@@ -295,14 +295,45 @@ fn main() {
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }
-            // The Blood mage's whole economy, and the only class it applies to.
+            // The Blood mage's economy: blood out on the press, and back only
+            // from a pool on the floor. The leech beside it is the Dual mage's
+            // dark arm now, and is printed wherever it is set.
             let blood = if m.cost > 0 {
-                format!("costs {} health, returns {}%", m.cost, m.leech)
+                format!("costs {}% of her health", m.cost)
             } else {
                 String::new()
             };
             if !blood.is_empty() {
                 notes.push(&blood);
+            }
+            let returns = if m.leech > 0 {
+                format!("returns {}% of the damage", m.leech)
+            } else {
+                String::new()
+            };
+            if !returns.is_empty() {
+                notes.push(&returns);
+            }
+            let drinks = if m.drink > 0 {
+                format!("drinks {}% of a pool it lands over", m.drink)
+            } else {
+                String::new()
+            };
+            if !drinks.is_empty() {
+                notes.push(&drinks);
+            }
+            // The one reach in the game that scales: the scythe's, with her
+            // grey. Printed so the table says what the blade can become.
+            let grey = if m.rides_the_grey() {
+                format!(
+                    "reach {} at full grey",
+                    tenths(m.reach.mul(t::grey_reach()))
+                )
+            } else {
+                String::new()
+            };
+            if !grey.is_empty() {
+                notes.push(&grey);
             }
             // On-hit means nothing for a move that is still swinging when it
             // lands again, so it is left blank rather than printed wrong.
