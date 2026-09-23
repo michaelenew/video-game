@@ -235,7 +235,7 @@ scalars! {
     LegDrop,          "Ridgeback · legs","Corner drop per break", Fixed, 0,         fx(2,1);
     LegPitch,         "Ridgeback · legs","Pitch per break",     Fixed,   0,         fx(1,8);
     LegRoll,          "Ridgeback · legs","Roll per break",      Fixed,   0,         fx(1,8);
-    LegFold,          "Ridgeback · legs","Broken leg, knee fold", Fixed, 0,         fx(1,4);
+    LegFold,          "Ridgeback · legs","Broken leg, knee fold", Fixed, 0,         fx(1,2);
     LegBuckle,        "Ridgeback · legs","Broken leg, hip share (x)", Fixed, 0,    fx(2,1);
     LegSpeedHurt,     "Ridgeback · legs","Speed per break (x)", Fixed,   0,         fx(1,1);
     StrainDecay,      "Ridgeback · nerve","Strain bled per frame (%)", Percent, 1,  50;
@@ -334,7 +334,7 @@ scalars! {
     ShadowHomeSpeed,  "Reaver",   "Shadow speed, coming home",  Fixed,   fx(1,1),   fx(60,1);
     ShadowRecallSlow, "Reaver",   "Recall slow (x)",            Fixed,   0,         fx(1,1);
     ShadowLockCone,   "Reaver",   "Crosshair lock on the shadow", Fixed, fx(1,10),  fx(6,1);
-    ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(40,1);
+    ShadowDashSpeed,  "Reaver",   "Dash to the shadow, speed",  Fixed,   fx(1,1),   fx(80,1);
     LotusRadius,      "Reaver",   "Lotus, how far the blades go", Fixed, fx(1,1),   fx(12,1);
     // Was "how high they arc", when the blades left the shadow's feet and rose
     // over the eruption. The flower is flat now and this slot carries the plane
@@ -455,8 +455,36 @@ scalars! {
     JudgementFieldDamage, "Dual mage", "Judgement, field damage per tick",  Int,    0,       120;
     JudgementFieldLife,   "Dual mage", "Judgement, field lasts",            Frames, 1,       300;
     JudgementFieldSpeed,  "Dual mage", "Judgement, her speed inside it (x)", Fixed, fx(1,1), fx(3,1);
+    // **Appended, like the camera's airborne framing above and for the same
+    // reason:** `tuned::SCALARS` is indexed by this enum's own discriminant, so
+    // slotting a knob in beside its relatives hands every knob below it its
+    // neighbour's baked value. New scalars go here, whatever family they show
+    // up under in the palette.
+    //
+    // What each successive aerial hang in one airtime is worth. See
+    // `state::Player::air_stalls`.
+    AirStallFalloff,  "Air",      "Aerial hang, each one after", Fixed,  fx(1,10), fx(1,1);
+    // How much faster the Dual mage moves once she is off the floor of her own
+    // bar -- deep, or ascended. See `tuning::float_move_speed`.
+    FloatMoveSpeed,   "Dual mage", "Floating, walk speed (x)",   Fixed,  fx(1,1),  fx(3,1);
+    // **The Blood mage's two movement experiments, and they are meant to be
+    // played against each other.** Both are off unless the flag says
+    // otherwise, so the four combinations are four settings of two sliders
+    // rather than four builds -- see `docs/design/kits/blood-mage.md`.
+    //
+    // Live rather than a Cargo feature for the reason every other number in
+    // here is live: the question is which of them feels like the class, and
+    // that is answered by flipping one mid-match, not by a rebuild. Both are
+    // folded into the tuning hash like everything else, so two peers running
+    // different combinations desync loudly instead of quietly.
+    GraspHauls,       "Blood mage", "Grasp hauls her to an anchor", Flag, 0,        1;
+    GraspHaulSpeed,   "Blood mage", "Grasp haul, speed",          Fixed,  fx(5,1),  fx(60,1);
+    DodgeBlinks,      "Blood mage", "Dodge is a blink",           Flag,   0,        1;
+    BlinkRange,       "Blood mage", "Blink, how far",             Fixed,  fx(1,1),  fx(20,1);
+    BlinkFrames,      "Blood mage", "Blink, frames to cross",     Frames, 1,        20;
     // Two bars and the hill between them -- v2 of the mechanic, 2026-09-23.
-    // Appended, like everything else, so nothing above moves. The band is in
+    // Appended after the Blood mage's flags, like everything else, so nothing
+    // above moves. The band is in
     // whole units of the bar; the rates are per second, in units of the bar
     // or in health.
     MeterBand,        "Dual mage", "Band, the gap that still counts as level",  Int,   0,        400;
@@ -984,7 +1012,7 @@ impl MonsterField {
     }
 }
 
-pub const MONSTER_MOVES: usize = 6;
+pub const MONSTER_MOVES: usize = 7;
 pub const MONSTER_FIELDS: usize = 23;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 

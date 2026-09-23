@@ -357,6 +357,14 @@ pub const SECTIONS: &[Section] = &[
             e("R", "Reset the match."),
             e("P", "Pause."),
             e("]", "Step one frame. Pauses if it was running."),
+            e(
+                "[",
+                "Step one frame BACK, about two and a half seconds' worth. Pauses if it was running. Local play only -- a peer is not rewinding with you. While paused, the readout under the crosshair says what the frame is doing: where her feet are, how fast she is rising, and every structure's age and climb rate.",
+            ),
+            e(
+                "G",
+                "--dev only. Play the double structure jump: two structures three frames apart and a jump nine frames after the first, which is the only shape that gets a third takeoff. It is a 50 ms double tap that nobody lands by hand, so this is how you watch one -- at speed, or paused and stepped through with [ and ].",
+            ),
         ],
     },
     Section {

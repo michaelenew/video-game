@@ -91,7 +91,7 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 
 | | The player does | What happens | Measured |
 | --- | --- | --- | --- |
-| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two and a quarter health bars, the last quarter being the six seconds of ascension the climb reaches near the end. Against a person a third lands, which is one kill a round from the sustained game | 2.09 bars |
+| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two and a quarter health bars, the last quarter being the six seconds of ascension the climb reaches near the end. Against a person a third lands, which is one kill a round from the sustained game | 2.20 bars |
 | **B2** | One dark auto, then dark casts only, a Judgement every time it is up, on a target standing in all of it | The biggest number the class makes: two to three and a half bars, and it costs her at least half of her own | 2.24 bars dealt, 0.64 lost |
 | **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | 25%; 9% |
 | **B4** | Alternates cleanly from empty | The blink in ten to fourteen seconds, the second jump in sixteen to twenty-one, the wings in twenty to twenty-six — once a round, with commitment | 10.9 s, 16.8 s, 21.2 s |
@@ -104,7 +104,7 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 What moved to get there, from the first pass: the pushes 8/18/38 → 5/9/20 and the band 30 →
 16; the calm 6 → 2 a second; the drift 2 per unit and 10 at most → 1 and 3; the burn 1.5 per
 unit and 15 at most → 4 and 25; the depth curve 0.5–2.0 → 0.6–1.4; and the base numbers, the
-autos 52 → 30, Lance 58 → 32 with a burst of 150 → 60, Sweep 95 → 55, Judgement 215 → 140
+autos 52 → 27, the wing's tip 1.75× → 1.5×, Lance 58 → 32 with a burst of 150 → 60, Sweep 95 → 55, Judgement 215 → 140
 with a field of 12 → 5 a tick, the tether's drain 9 → 2 a tick, and the dark Sweep's heal 22 →
 5 a target. **The target never moves, in the test and in the instrument alike**: the goad's
 dummy is held where the autos land, because the light hand's shove otherwise walked it out of

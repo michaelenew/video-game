@@ -59,7 +59,18 @@ around a second, because verticality is part of the positioning game and a begin
 in the air to use it. Classes differ in the air before they differ anywhere else: jump height,
 gravity, fall speed and steering all vary. Air control is Quake's — holding forward buys
 nothing, strafing across your motion turns you, and turning the camera while strafing is where
-the skill ceiling is. Aerials suspend the fall for a per-move number of frames.
+the skill ceiling is. Aerials suspend the fall for a per-move number of frames, and **each one
+after the first in a single airtime is worth less** — a class with two interchangeable pokes
+could otherwise alternate them and never come down.
+
+**The jump is the floor of the movement system, not the whole of it — ⚠️ retuned 2026-09-17.**
+Every class has one thing it does with the ground, and a jump good enough to go most of the
+way to that technique without it makes the technique a flourish. So the takeoff came down by a
+twelfth, which is a third off every apex: full hops now run 2.7 m on the Bulwark to 6.0 m on
+the Dual mage, where they ran 4.1 to 8.7. The hold's sustain was stiffened at the same time,
+because at its old strength and length a held jump read as an elevator with gravity switching
+on at the top. See [feel-log.md](feel-log.md); it changes the Ridgeback's climb, which
+`cargo run -p sim --bin beastcheck` now prints as a spread rather than one number.
 
 **Roster.** Six classes. The Gatekeeper is retired and not backfilled — a missing long-range
 poke is a design choice in a closed arena, not a gap.
@@ -123,12 +134,12 @@ Nothing here blocks a prototype.
 | **A move that carries the body** | ⚠️ **Newly open, 2026-09-15.** `Move::step` is a distance an attack moves you down its own locked facing, added to whatever the stick asks for and finished by the frame its hitbox appears. Six of the Champion's nine chain links use it and nothing else in the roster does. It is the cleanest answer yet to "what makes two attacks at the same range feel different" — *where you are standing when it is over* — and it is available to every class for free. Whether the other five should reach for it, or whether it is the Champion's texture, is not decided |
 | **Neutral shift** | Shift with no direction and no click does nothing. A spot dodge in place is the obvious candidate |
 | **Double jump** | **Answered for one class, 2026-09-23.** The Dual mage jumps once more in the air while the lower of her two bars holds three quarters, and on every press while she is ascending — earned by the mechanic rather than given to the roster. For everyone else space while airborne still does nothing, and the airdodge is the only air commitment. Whether a second jump wants to spread is now a question with an example to play |
-| Dual mage | **Built on two bars, 2026-09-23, and nothing of it played.** The open questions are in [dual-mage.md](dual-mage.md): the calm is pulled two ways between a fast climb and a fragile plateau; whether the band's cadence (one cast stays level, two do not) is right; whether the burn is a consequence or a footnote at a tenth of what it was; whether the refund should count hits or damage; the names of the two beings. Still open from before: whether a four-to-one spread on the depth curve is right, and whether "the form is the arm you last punched with" is findable. The play scripts for the four human checkpoints are in the feel log for that date |
+| Dual mage | **Built on two bars, 2026-09-23, and nothing of it played.** The open questions are in [dual-mage.md](dual-mage.md): the calm is pulled two ways between a fast climb and a fragile plateau; whether the band's cadence (one cast stays level, two do not) is right; whether the burn is a consequence or a footnote at a tenth of what it was; whether the refund should count hits or damage; the names of the two beings; whether the float (her feet leave the floor and she walks faster, from 2026-09-17) belongs on the three-quarter tier where it was rehomed or at half with the blink. Still open from before: whether a four-to-one spread on the depth curve is right, and whether "the form is the arm you last punched with" is findable. The rest of her movement is independent of the bars — a 1.3 m step on every auto, forward on the dark one and backward on the light one, and the longest aerial hang in the game — and the numbers to watch there are the step and whether the light auto's backward version feels like being pushed around by your own attack. The play scripts for the four human checkpoints are in the feel log for that date |
 | Bulwark | Possibly a seventh slot for a dedicated ally-cover stance |
 | Champion | Whether the mid-animation swap costs Rush — and, since the chain, whether it is still worth building at all. Also: how long a string should survive without a hit (26 frames is a guess), and whether swapping weapons mid-string should flow faster than repeating one at all. **Since 2026-09-15**, five more, all of them in [feel-log.md](feel-log.md): whether the sword's step is too much free pressure, whether the spear's sixteen-frame second hit reads as a two-part move from across the arena, whether "jump into the finisher" occurs to anybody without being taught, whether +14 on hit is too much, and whether the spinning finisher's knockback fights the chain it ends |
-| Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed |
-| Elementalist | Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
-| Blood mage | ⚠️ **A v1 rebuild is proposed** — [blood-mage.md](blood-mage.md). The open questions there replace these two: health cost flat or percentage; is 1.4x against a disabled enemy the right bonus |
+| Shadow Reaver | Whether the shadow has collision. And **where Deadly mistake goes** — it is the only ability in the kit with no input, and both obvious modifiers are already swallowed. Since 2026-09-17 the leash is twice the throw rather than a third longer, so a placed shadow keeps its place long enough to be a decision; whether eighteen metres of slack is too much room is the new question, along with how far the faster dash overshoots a near shadow |
+| Elementalist | The **double structure jump** — two stones two or three frames apart, jumped while both are still erupting — is the most interesting thing the class does, and since 2026-09-18 it is specified and tested rather than merely allowed. **⚠️ Its height is open and the stone knobs are not the way to move it.** They were tuned down on 2026-09-17 and put straight back: the chain is a *resonance* between how fast she rises and how fast the stone grows, so three frames on the rise halved the double while barely touching the single, and raising her jump makes the single **fall**. Everything there is discontinuous and some of it is non-monotonic — [feel-log.md](feel-log.md) has the map. What the cast-wide jump nerf leaves, with the stones untouched, is a double at 44.8 m against its old 58.8 and a single at 25.9 against 17.5. Structure cap of three is a readability guess, not a balance one — and **Landfall is a second way to spend it**, so it is under more pressure than when the guess was made. Stones are solid and standable, and Raise now places one where the crosshair is; the mobility that implies waits on moves that launch them. Her air row is built and none of its numbers have been played: the three to watch are in [kits/elementalist.md](kits/elementalist.md) §"Open questions" |
+| Blood mage | ⚠️ **A v1 rebuild is proposed** — [blood-mage.md](blood-mage.md). The open questions there replace these two: health cost flat or percentage; is 1.4x against a disabled enemy the right bonus. **What it does not replace is which movement is hers**, which is the biggest question on the class as it stands: she had none, which was survivable while a full hop reached seven and a half metres and is not now the jump has been cut back to make room for class techniques. Two answers are built behind live Oven flags — the Grasp hauling her to a wall it caught instead of a person (on), and her dodge as a flat blink (off) — so the four combinations are two sliders away. Six more ideas, and the rule all of them were judged against, are in [kits/blood-mage.md](kits/blood-mage.md) §Movement. A rebuild around grey health and essence pools would give that rule new material to work with rather than settle it |
 
 ## 5 · Parked — not slated for initial implementation
 
@@ -245,10 +256,12 @@ decision, and belongs in a test.
 
 1. **Play it against a person.** Everything else is downstream of that — and the
    Ridgeback needs it twice over. The browser build exists to make the asking
-   cheap: a link instead of a clone, [web.md](web.md). The climb now costs something to reach, and
-   whether the reward is worth the trip, whether anyone finds the tail hop, and
-   whether the ground game reads as a phase or as a toll are not things the
-   harness can answer. See [monsters.md](monsters.md) §9.
+   cheap: a link instead of a clone, [web.md](web.md). The climb now has to be
+   earned by five classes of six, the animal gallops, and the place behind it
+   that used to be safe has a kick aimed at it; whether the reward is worth the
+   trip, whether anyone finds the flank beside the hind leg, and whether the
+   ground game reads as a phase or as a toll are not things the harness can
+   answer. See [monsters.md](monsters.md) §9.
 2. Answer the open questions in [feel-log.md](feel-log.md) — the flagged one is
    whether the 4-frame parry window is findable by a human.
 3. Fill out the kits beyond three moves per class.

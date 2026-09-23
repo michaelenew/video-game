@@ -335,11 +335,40 @@ fn the_shadow_flies_out_and_then_stops() {
 fn the_leash_fits_the_throw() {
     // A leash shorter than the throw would have the shadow turn round on the
     // frame it landed, which is the class's setup deleting itself.
+    //
+    // **Doubled on 2026-09-17**: a leash only a third longer than the throw
+    // meant a shadow placed at full range expired almost as soon as it arrived,
+    // so a placement was something to spend rather than something to keep. The
+    // shadow is this class's movement, and movement you have to use immediately
+    // is not a decision. Two throws of slack is the room to leave it out there.
     let send = sim::moves::get(Class::ShadowReaver, SLOT_MECHANIC);
+    let slack = t::shadow_leash().div(send.reach);
     assert!(
-        t::shadow_leash().raw() > send.reach.raw(),
-        "the shadow can be thrown {} m and is leashed at {} m",
+        slack.raw() >= Fx::from_int(2).raw(),
+        "the shadow can be thrown {} m and is leashed at {} m -- under twice the \
+         throw, so a shadow left at range comes home before she has used it",
         send.reach.to_f32_for_render(),
+        t::shadow_leash().to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_dash_crosses_the_whole_leash() {
+    // **What makes the dash an escape rather than a gamble.** It ends when the
+    // dodge does -- it does not outlive it -- so a dash that cannot cover the
+    // distance spends the dodge and arrives nowhere, in the open, out of
+    // invulnerability. Whether that can happen is a question about the leash
+    // and the dodge together, and neither of them knows about the other.
+    //
+    // Untested until 2026-09-17, when the leash doubled and the only thing
+    // holding the property up was a sentence in `tuning::shadow_dash_speed`.
+    let covered = t::shadow_dash_speed().mul(Fx::ratio(t::dodge_frames() as i32, 60));
+    assert!(
+        covered.raw() >= t::shadow_leash().raw(),
+        "a dash covers {} m in the {} frames a dodge lasts, against a leash of {} m -- \
+         she can be left stranded at the far end of her own mechanic",
+        covered.to_f32_for_render(),
+        t::dodge_frames(),
         t::shadow_leash().to_f32_for_render()
     );
 }
@@ -411,16 +440,26 @@ fn a_forward_dodge_at_the_shadow_crosses_to_it() {
 
     // Shift and forward, looking at it. The camera is behind her and she is
     // facing the shadow, so the crosshair is on it.
+    //
+    // **Closest approach rather than where she finishes.** Arriving does not
+    // stop her -- the speed she crossed at stays under her as the slide, which
+    // is the vulnerable tail of the dash and the thing a jump inside the carry
+    // window spends (`tuning::shadow_carry`). She therefore goes *through* the
+    // shadow and keeps going, and how far past depends on the dash's speed,
+    // which was raised on 2026-09-17 when the leash doubled. Where she ends up
+    // was never what this test meant.
     let mut sighted = false;
+    let mut closest = Fx::from_int(100);
     for _ in 0..(t::dodge_frames() as u32 + 10) {
         run(&mut w, 1, SHIFT | W, down(10));
         sighted |= w.players[0].action.invulnerable();
+        closest = closest.min(w.players[0].pos.sub(out).flat_len());
     }
     assert!(sighted, "she was never invulnerable, so it was not a dodge");
     assert!(
-        w.players[0].pos.sub(out).flat_len().raw() < Fx::from_int(1).raw(),
-        "she ended {:.1} m from the shadow she dashed at",
-        w.players[0].pos.sub(out).flat_len().to_f32_for_render()
+        closest.raw() < Fx::from_int(1).raw(),
+        "she came no closer than {:.1} m to the shadow she dashed at",
+        closest.to_f32_for_render()
     );
     // Arriving picks it up: the loop is throw, act, dash back on, throw again.
     assert!(
@@ -460,8 +499,15 @@ fn a_forward_air_dodge_at_the_shadow_is_the_dash_too() {
         spent_the_airdodge |= w.players[0].air_dodged;
         closest = closest.min(w.players[0].pos.sub(out).len());
     }
+    // A frame of the dash's own travel, which is the tolerance the arrival test
+    // in `shadow::step_her_dash` uses and the finest a per-frame sample can
+    // resolve: she is put exactly on the shadow and then slid off it again
+    // inside the same frame, so the closest *sampled* position is a step out.
+    // It was a body radius until 2026-09-17, which was a number that happened
+    // to be larger than a step while the dash was slower.
+    let step = t::body_radius().max(t::shadow_dash_speed().mul(sim::DT));
     assert!(
-        closest.raw() < t::body_radius().raw(),
+        closest.raw() < step.raw(),
         "she came no closer than {:.1} m to the shadow, so it was an airdodge",
         closest.to_f32_for_render()
     );

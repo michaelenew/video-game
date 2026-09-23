@@ -33,6 +33,15 @@ path a recall takes and doing the same damage. The leash is deliberately longer 
 throw, so a shadow arrives with room to spare rather than turning round on the frame it
 lands.
 
+**Twice the throw since 2026-09-17**, where it used to be a third longer. A third was not
+enough room: a shadow placed at full range came home almost as soon as it got there, so the
+answer to "when do I take this" was always "now, before it leaves". The shadow is this class's
+movement, and movement you have to spend immediately is not a decision. Eighteen metres of
+slack against a nine-metre throw is room to leave it somewhere and go and do something else.
+
+The dash's speed went up with it, because the dash has to be able to cross whatever the leash
+is — see below.
+
 ### It copies you
 
 **Every swing you throw, the shadow throws too, a few frames later, for a quarter of the
@@ -193,6 +202,16 @@ collects it
 **With the crosshair on the shadow, a forward dodge becomes the dash to it.** Invulnerable
 across the gap, at a constant speed that crosses the whole leash inside one dodge, and
 arriving picks the shadow up.
+
+**Crossing the whole leash is a property, not an observation**, and it is the reason the dash
+got faster when the leash doubled. The dash *is* the dodge — it does not outlive it — so a dash
+that cannot cover the distance spends the dodge and arrives nowhere, in the open and out of
+invulnerability. That was written down in one comment and nowhere else until 2026-09-17; it is
+`reaver::the_dash_crosses_the_whole_leash` now.
+
+The duration is unchanged, so it is no harder to react to than it was. What did change is that
+the slide the dash leaves behind — the carry, below — scales with the speed, so she now travels
+several metres past a shadow she dashed to from close range.
 
 Pointed anywhere else, or thrown in any other direction, it is the ordinary dodge. That is
 the design: the class's mobility and the universal defensive option are the same button,

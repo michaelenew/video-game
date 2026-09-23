@@ -5,11 +5,15 @@
 //! of startup feels right without seeing that it was fourteen.
 
 use bevy::prelude::*;
+use sim::class::Mechanic;
 use sim::state::{Action, Phase};
 
 const P1: Color = Color::srgb(0.29, 0.66, 1.0);
 const P2: Color = Color::srgb(1.0, 0.54, 0.30);
 const INK: Color = Color::srgb(0.86, 0.90, 0.96);
+/// The frame readout. Dimmer than the fighters' own lines, because it is a
+/// developer's instrument rather than part of the fight.
+const STEP: Color = Color::srgb(0.62, 0.70, 0.80);
 /// The creature. Its health bar reads in the same colour as the ridge, which is
 /// the part of it you are trying to reduce.
 const QUARRY: Color = Color::srgb(0.86, 0.32, 0.22);
@@ -76,6 +80,10 @@ pub struct RoundText;
 
 #[derive(Component)]
 pub struct Banner;
+
+/// The frame readout, under the crosshair while the simulation is paused.
+#[derive(Component)]
+pub struct StepText;
 
 /// A click-to-cycle class picker, one per player.
 ///
@@ -205,14 +213,27 @@ pub fn setup(mut commands: Commands) {
                     TextColor(P1),
                     StateText(0),
                 ));
-                // Nothing in the middle. There was a control legend here,
-                // assembled from every section of the manual at once -- so a
-                // Bulwark player read the Champion's three weapons, the Dual
-                // mage's two autos and the Reaver's shadow, none of which were
-                // theirs. Eleven lines under the crosshair, and most of them
-                // wrong for whoever was reading them. `--help` and the browser
-                // page both carry the real thing, and neither is in the way of
-                // the fight.
+                // The middle was empty, and it is where the frame readout
+                // goes. There was a control legend here once, assembled from
+                // every section of the manual at once -- so a Bulwark player
+                // read the Champion's three weapons, the Dual mage's two autos
+                // and the Reaver's shadow, none of which were theirs. Eleven
+                // lines under the crosshair, and most of them wrong for whoever
+                // was reading them.
+                //
+                // This is the opposite case and it is why the space is worth
+                // using: it is empty whenever the game is running, it is about
+                // the fighter you are actually driving, and it is only there
+                // when you asked for it by pausing.
+                bottom.spawn((
+                    Text::new(""),
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    TextColor(STEP),
+                    StepText,
+                ));
                 bottom.spawn((
                     Text::new("free"),
                     TextFont {
@@ -402,6 +423,66 @@ type StateQuery<'w, 's> = Query<
 >;
 type RoundQuery<'w, 's> =
     Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<ClassLabel>)>;
+type StepQuery<'w, 's> =
+    Query<'w, 's, &'static mut Text, (With<StepText>, Without<Banner>, Without<StateText>)>;
+
+/// What a stepped frame is doing, in the terms the thing being stepped through
+/// is made of.
+///
+/// **Empty unless paused.** It is an instrument, and an instrument left on
+/// screen during play is clutter.
+///
+/// What it shows is chosen for one job: watching the Elementalist's structure
+/// jump, which chains because a rising stone's top catches her feet on exactly
+/// one frame and hands the still-held jump button another takeoff. You cannot
+/// see that happen at speed and you cannot see it stepping either, unless
+/// something tells you the stone's age and *the frame she was caught on* --
+/// grounded, with the ground moving up faster than she is. So that frame says
+/// so in words.
+fn step_readout(sim: &crate::Sim) -> String {
+    if !sim.stepping() {
+        return String::new();
+    }
+    step_lines(&sim.cur)
+}
+
+/// The readout itself, off a world rather than off the app, so it can be tested
+/// against a real structure jump instead of eyeballed.
+pub fn step_lines(w: &sim::World) -> String {
+    let p = &w.players[0];
+    let vy = p.vel.y.to_f32_for_render();
+    let mut out = format!(
+        "frame {}   feet {:.2} m   rise {:+.1} m/s   {}",
+        w.frame,
+        p.pos.y.to_f32_for_render(),
+        vy,
+        if p.grounded {
+            "on a surface"
+        } else {
+            "airborne"
+        },
+    );
+    // **The catch, named.** Grounded while climbing is not a state an ordinary
+    // fighter is ever in: the floor does not move. It means a stone has just
+    // overtaken her feet, and the next frame the jump button can fire again.
+    if p.grounded && vy > 1.0 {
+        out.push_str("  <- CAUGHT, another takeoff is available");
+    }
+    if let Mechanic::Structures(slots) = p.mechanic {
+        for (i, stone) in slots.iter().flatten().enumerate() {
+            out.push_str(&format!(
+                "\nstone {i}: age {:>2}   {:.0}% out   top {:.2} m   climbing {:>5.1} m/s   {:?}",
+                stone.age,
+                stone.risen().to_f32_for_render() * 100.0,
+                stone.top().to_f32_for_render(),
+                stone.surface_speed().to_f32_for_render(),
+                stone.phase(),
+            ));
+        }
+    }
+    out
+}
+
 type BannerQuery<'w, 's> =
     Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<ClassLabel>)>;
 // A Bevy system's parameter list *is* its dependency declaration: every entry
@@ -420,7 +501,11 @@ pub fn update(
     mut states: StateQuery,
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
+    mut step: StepQuery,
 ) {
+    for mut text in step.iter_mut() {
+        *text = Text::new(step_readout(&sim));
+    }
     for (bar, mut node) in bars.iter_mut() {
         let hp = sim.cur.players[bar.0].health.max(0) as f32;
         node.width = Val::Percent(100.0 * hp / sim::state::max_health() as f32);
@@ -865,5 +950,60 @@ mod tests {
                 class.name()
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod stepping {
+    use super::*;
+    use sim::{Input, World};
+
+    /// Play the rehearsed double and collect the readout for every frame.
+    fn readouts() -> Vec<String> {
+        let mut w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
+        let mut out = Vec::new();
+        for i in 0..40u32 {
+            w.advance([crate::rehearsal(i, &w), Input::default()]);
+            out.push(step_lines(&w));
+        }
+        out
+    }
+
+    #[test]
+    fn the_readout_names_the_frame_she_is_caught_on() {
+        // **The one thing stepping has to tell you.** A structure jump chains
+        // because a rising stone overtakes her feet and re-grounds her while
+        // she is still going up, which is a state nothing else in the game
+        // produces -- the floor does not move. It lasts one frame and it is
+        // invisible; if the readout does not say so, stepping through a double
+        // shows you a number going up and teaches nothing.
+        let caught: Vec<usize> = readouts()
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains("CAUGHT"))
+            .map(|(i, _)| i)
+            .collect();
+        assert!(
+            !caught.is_empty(),
+            "stepping through a rehearsed double never showed a catch"
+        );
+        // Twice, because it is a double: one catch per eruption.
+        assert!(
+            caught.len() >= 2,
+            "a double caught her on {} frame(s); the second stone's eruption is \
+             the whole difference from a single",
+            caught.len()
+        );
+    }
+
+    #[test]
+    fn the_readout_carries_the_stones_and_their_ages() {
+        // The other half of stepping blind: the technique is timed off the
+        // stone's rise, so the stone's age and how far out it is have to be on
+        // screen or the frame numbers mean nothing.
+        let mid = &readouts()[12];
+        assert!(mid.contains("stone 0"), "no stone in the readout: {mid}");
+        assert!(mid.contains("age"), "no age in the readout: {mid}");
+        assert!(mid.contains("climbing"), "no climb rate: {mid}");
     }
 }

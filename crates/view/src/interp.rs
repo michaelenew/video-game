@@ -79,6 +79,18 @@ pub struct PlayerView {
     /// It does not reset when you step off -- resetting it would whip the view
     /// round the moment you landed -- so it is not only a thing riders have.
     pub carried: f32,
+    /// **Her feet are off the floor**: the Dual mage, deep on her own bar or
+    /// ascended. `false` for everybody else, always.
+    ///
+    /// The simulation's own answer, `sim::state::floating`, rather than a
+    /// second reading of the meter here. She moves faster while it is true, so
+    /// a renderer that decided this for itself could draw a walking fighter
+    /// travelling at a float's speed -- which is the same class of bug as an
+    /// overlay that rebuilds the volume it illustrates.
+    pub floating: bool,
+    /// Which force she is carrying, for whatever is drawn in its colour. Only
+    /// the Dual mage has one.
+    pub force: Option<sim::class::Force>,
 }
 
 /// The Reaver's second body, ready to draw.
@@ -218,6 +230,11 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
         aim_pitch,
         aloft,
         carried,
+        floating: sim::state::floating(c),
+        force: match c.mechanic {
+            sim::class::Mechanic::Meter { colour, .. } => Some(colour),
+            _ => None,
+        },
     }
 }
 

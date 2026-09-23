@@ -665,21 +665,106 @@ fn nothing_it_throws_can_reach_its_own_back() {
     }
 }
 
+/// A body standing at a point in the creature's body space -- `+x` toward the
+/// head -- and whether the move it has out reaches them.
+fn reaches_from(kind: u8, mirror: bool, x: Fx, z: Fx) -> bool {
+    let mut beast = Monster::new();
+    beast.doing = Doing::Active { kind, left: 1 };
+    beast.brain.mirror = mirror;
+    let at = beast.rig().to_world(V3::new(x, Fx::ZERO, z));
+    beast.reaches(at, sim::tuning::body_height(), sim::tuning::body_radius())
+}
+
+#[test]
+fn nowhere_behind_it_is_safe_to_stand() {
+    // The tail root was. Every forward move needs you in front of it, and the
+    // sweep is a whip about the hips, so the patch directly astern was outside
+    // every volume the creature had -- a player found it and named it. Two
+    // things cover it now: the kick, aimed there, and a sweep whose volume
+    // rides the tail's motion from rest rather than sitting four metres
+    // behind it. Both, because each has a different answer.
+    let root = monster::shape(monster::TAIL_BASE);
+    let astern = sim::beast::rest(sim::beast::ROOT)
+        .x
+        .add(root.min.x)
+        .sub(sim::tuning::body_radius());
+    for z in [Fx::ZERO, Fx::ONE, Fx::ONE.neg()] {
+        assert!(
+            reaches_from(monster::KICK, false, astern, z),
+            "the kick does not reach somebody standing {z:?} m off the tail root"
+        );
+        let mirror = z.raw() < 0;
+        assert!(
+            reaches_from(monster::SWEEP, mirror, astern, z),
+            "the sweep does not reach somebody standing {z:?} m off the tail root"
+        );
+    }
+}
+
+#[test]
+fn the_sweep_goes_to_the_side_you_are_on() {
+    // The clip is baked going one way. Unmirrored, the whip is on the
+    // creature's right and a fighter on its left flank is outside it; the
+    // creature picks the side when it commits, and plays the clip that way
+    // round. Without this the left flank was the side the tail never came to.
+    let flank = |z: Fx| -> V3 {
+        let hip = monster::shape(monster::HINDFOOT_L);
+        let x = sim::beast::rest(sim::beast::ROOT).x.add(hip.min.x);
+        V3::new(x, Fx::ZERO, z)
+    };
+    let left = flank(Fx::from_int(-3));
+    let right = flank(Fx::from_int(3));
+    assert!(reaches_from(monster::SWEEP, false, right.x, right.z));
+    assert!(!reaches_from(monster::SWEEP, false, left.x, left.z));
+    assert!(reaches_from(monster::SWEEP, true, left.x, left.z));
+    assert!(!reaches_from(monster::SWEEP, true, right.x, right.z));
+
+    // And it is the target's side that decides, at the moment of choosing.
+    for (z, expect) in [(Fx::from_int(-3), true), (Fx::from_int(3), false)] {
+        let mut beast = Monster::new();
+        beast.brain.think_left = 0;
+        beast.brain.seen = beast.rig().to_world(flank(z));
+        // Only the sweep can score from there: it wants a target behind.
+        for kind in 0..monster::MOVES as u8 {
+            if kind != monster::SWEEP {
+                beast.brain.cooldown[kind as usize] = u16::MAX;
+            }
+        }
+        let behind = Quarry {
+            pos: beast.brain.seen,
+            vel: V3::ZERO,
+            alive: true,
+            aboard: false,
+        };
+        beast.step(&[behind]);
+        assert_eq!(
+            beast.doing.attacking(),
+            Some(monster::SWEEP),
+            "it did not sweep at somebody on its flank"
+        );
+        assert_eq!(
+            beast.brain.mirror, expect,
+            "the sweep went to the wrong side for a target at z = {z:?}"
+        );
+    }
+}
+
 #[test]
 fn it_can_still_reach_somebody_standing_where_it_is_looking() {
     // The companion, so the rule above reads as a fact about height rather than
     // as riders being quietly immune to something.
     let mut w = hunt();
-    // Where the bite's volume actually lands, asked of the creature rather than
-    // reconstructed: the head is thrown forward during the active window, so
-    // the anchor is further out than the move table's `hit_x` on its own says.
-    let mut beast = w.monster.expect("a hunt has a creature");
-    beast.doing = Doing::Active {
-        kind: monster::BITE,
-        left: 1,
-    };
-    let (anchor, ..) = beast.hit_volume().expect("the bite has a volume");
-    w.players[0].pos = V3::new(anchor.x, Fx::ZERO, anchor.z);
+    // **At the bite's own ideal range**, in front of it -- the distance the
+    // control algorithm throws it at. This fixture used to stand the fighter
+    // at the volume's anchor instead, with a note explaining why the anchor
+    // was "further out than `hit_x` says": it was nine to thirteen metres out
+    // on a move thrown at six, because the head bone's whole rest offset was
+    // being added to an anchor already authored in body space, and the bite
+    // whiffed at its ideal range on every throw. A test that measures where
+    // the volume is cannot say whether it is where it should be.
+    let beast = w.monster.expect("a hunt has a creature");
+    let ideal = monster::attack(monster::BITE).ideal_range;
+    w.players[0].pos = beast.rig().to_world(V3::new(ideal, Fx::ZERO, Fx::ZERO));
     w.players[0].grounded = true;
     let before = w.players[0].health;
     w.monster.as_mut().expect("a hunt has a creature").doing = Doing::Startup {
@@ -871,65 +956,75 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
     // The trait has to mean something in a hunt, or it is a versus-only feature
     // on a class that has just had its versus-only bugs fixed.
     //
-    // The creature is **frozen** and the fighter **placed**, rather than either
-    // of them being allowed to move: a toppled Ridgeback lies lower and pitched,
-    // so a fixture that walked into it would be measuring where its shoulder
-    // ended up. The spot is searched for, not typed, and the condition is that
-    // the claw lands on the *same part* in both states -- the hide's
-    // vulnerability differs part to part, and comparing two different parts
-    // would say nothing about the rule.
-    let claw = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
-    let still = |doing: Doing| {
-        let mut w = parked();
-        let mut beast = w.monster.expect("a hunt has a creature");
-        beast.pos = V3::ZERO;
-        beast.doing = doing;
-        w.monster = Some(beast);
-        w
-    };
+    // Disabled means on its side *or on a knee* (`Monster::disabled`), and the
+    // knee is the state this fixture uses: held on the first frame of a
+    // stumble the creature is still standing in exactly the pose it stands in,
+    // so the same throw from the same spot lands on the same foot, and the only
+    // thing that differs between the two runs is the rule under test. A
+    // toppled creature lies lower and pitched, and every version of this
+    // fixture that used it was really a search for a spot where two different
+    // poses happened to agree -- which the animal's geometry stopped offering
+    // the day its legs grew.
+    //
+    // The Bloodletter, because it is her auto and the one attack in her kit
+    // with a button: shift stopped modifying clicks on 2026-09-16, and this
+    // fixture used to name the claw and press the poke's input.
+    let blade = sim::moves::get(Class::BloodMage, sim::state::SLOT_POKE);
     let up = Doing::Prowl;
-    let over = Doing::Toppled { left: 400 };
-
-    let part_at = |w: &World, x: Fx| {
-        w.monster.expect("a hunt has a creature").part_struck(
-            V3::new(x.add(claw.reach), Fx::ZERO, Fx::ZERO),
-            claw.radius,
-            sim::tuning::body_height(),
-        )
+    let knee = Doing::Stumble {
+        left: sim::tuning::stumble_frames(),
+        front: true,
     };
-    let stand_at = (-80..0)
-        .map(|tenth| Fx::ratio(tenth, 10))
-        .find(|x| {
-            let a = part_at(&still(up), *x);
-            a.is_some() && a == part_at(&still(over), *x)
-        })
-        .expect("nowhere reaches the same part whether it is up or down");
 
-    let hit = |doing: Doing| {
-        let mut w = still(doing);
-        w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
+    // Throw from behind it, at a hind foot; report the damage and which foot.
+    let throw = |doing: Doing, stand_at: Fx| -> (i32, Option<usize>) {
+        let mut w = parked();
+        let feet_before = w.monster.expect("a hunt has a creature").part_health;
         let before = beast_health(&w);
-        for f in 0..(claw.startup + claw.active + 4) {
+        let flight = sim::tuning::bloodletter_flight();
+        for f in 0..(blade.startup + blade.active + flight + 4) {
             // Held down, and held still: the creature would otherwise stand up,
-            // walk off, or decide to bite.
+            // walk off, or decide to bite. Held on the *first* frame of the
+            // stumble, so its pose is the standing one.
             let mut beast = w.monster.expect("a hunt has a creature");
             beast.doing = doing;
             beast.pos = V3::ZERO;
+            beast.yaw = Fx::from_raw(1 << 15);
             beast.speed = Fx::ZERO;
+            beast.brain.think_left = u16::MAX;
             w.monster = Some(beast);
-            w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
-            let held = if f < 2 { Input::SHIFT | Input::LEFT } else { 0 };
-            w.advance([Input::new(held), Input::default()]);
+            // In line with the left hind leg rather than the spine: a blade
+            // thrown down the centreline passes between the legs and grazes
+            // whichever one the animal's breathing happens to sway into it.
+            w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ratio(9, 10));
+            let held = if f < 2 { Input::LEFT } else { 0 };
+            // Facing the creature's tail, which is toward -x: it stands at the
+            // origin pointed the other way.
+            w.advance([Input::aimed(held, 1 << 15), Input::default()]);
         }
-        before - beast_health(&w)
+        let feet_after = w.monster.expect("a hunt has a creature").part_health;
+        let foot = monster::BREAKABLE
+            .iter()
+            .copied()
+            .find(|p| feet_after[*p] < feet_before[*p]);
+        (before - beast_health(&w), foot)
     };
 
-    let standing = hit(up);
-    let floored = hit(over);
-    assert!(standing > 0, "fixture: the claw never reached the creature");
+    let mut found = None;
+    for tenth in 30..100 {
+        let x = Fx::ratio(tenth, 10);
+        let (standing, a) = throw(up, x);
+        let (kneeling, b) = throw(knee, x);
+        if standing > 0 && a.is_some() && a == b {
+            found = Some((standing, kneeling));
+            break;
+        }
+    }
+    let (standing, kneeling) =
+        found.expect("nowhere the blade reaches the same hind foot whether it is up or down");
     assert!(
-        floored > standing,
-        "a toppled creature took {floored} where a standing one took {standing}"
+        kneeling > standing,
+        "a creature on a knee took {kneeling} where a standing one took {standing}"
     );
 }
 
@@ -1035,6 +1130,7 @@ fn the_moves_that_are_aimed_at_the_ground_do_not_throw_a_braced_rider() {
         monster::STOMP,
         monster::CHARGE,
         monster::SWEEP,
+        monster::KICK,
     ] {
         for part in [monster::BARREL, monster::SHOULDERS, monster::HAUNCH] {
             assert!(
@@ -1087,9 +1183,20 @@ fn you_can_jump_the_shake_if_you_commit_before_the_whip() {
         best
     };
 
-    // Anywhere in the startup: back on, and back on for long enough to throw
-    // something committed at the ridge.
-    for lead in [0, startup / 3, startup * 2 / 3, startup - 4] {
+    // In the last part of the startup: back on, and back on for long enough
+    // to throw something committed at the ridge. Not anywhere in it -- a hop
+    // taken at the first frame of a forty-frame windup is back on the animal
+    // fifteen frames into the whip, and that is a throw. The read is *late
+    // in the tell*, which is the version of "read the startup" that is
+    // actually a read; the earlier claim that any frame of it would do was
+    // true only because a thrown rider used to land straight back on the
+    // animal and stay, at the fall's cost. See `docs/design/monsters.md` §3.
+    for lead in [
+        startup * 5 / 8,
+        startup * 3 / 4,
+        startup * 7 / 8,
+        startup - 2,
+    ] {
         let got = window(lead);
         assert!(
             got > 50,
@@ -1106,10 +1213,28 @@ fn you_can_jump_the_shake_if_you_commit_before_the_whip() {
         let n = range.len() as u32;
         range.map(window).sum::<u32>() / n.max(1)
     };
-    let early = mean(0..startup);
+    let early = mean(startup * 5 / 8..startup);
     let late = mean(startup..startup + 12);
+    // **Two bars, and the absolute one is the real one.** A late jump must not
+    // earn the fifty frames the first half of this test calls long enough to be
+    // worth having; that is what "no longer a plan" means, and it is stated
+    // against this test's own definition rather than against the early jump.
+    //
+    // The ratio was four to one until the mobility pass of 2026-09-17, which
+    // cut the takeoff across the cast: a full hop is now a little *shorter*
+    // than the whip rather than a little longer, so an early commit clears
+    // slightly less of it and the gap narrowed to 3.7 without anything about
+    // the read changing. A margin that moves every time somebody tunes the jump
+    // is measuring the jump rather than the timing. See
+    // `docs/design/feel-log.md`.
     assert!(
-        late * 4 < early,
+        late < 50,
+        "jumping once the whip had started still earned {late} frames back on \
+         the animal -- long enough to throw something committed at the ridge, \
+         so reading the startup buys nothing"
+    );
+    assert!(
+        late * 3 < early,
         "jumping once the whip had started still earned {late} frames back on \
          the animal on average, against {early} for jumping before it -- so \
          there is no timing in it"

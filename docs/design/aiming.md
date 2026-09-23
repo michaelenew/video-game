@@ -349,6 +349,21 @@ Each ability states which kinds of thing its path can meet. The Elementalist's
 beam meets bodies, stones and **fire**; the fire bolt that a pillar lights meets
 bodies and stones but not fire, or it could not leave the pillar that lit it.
 
+**The arena is on the list too, and nothing asks for it — added 2026-09-17.** It
+was not there at all before, which was invisible rather than wrong: the
+crosshair's ray already stops on terrain, so a shot is aimed at a point the
+geometry allows and asking a second time along its own path would only ever
+agree with the first answer. What wanted it is a different kind of question —
+**is there anything to pull on** — and the Blood mage's Grasp is the ability
+asking it. Her blink asks the same question from the other side: is there a wall
+in the way of where I am about to be. Both are answered here rather than beside
+either of them, so the two cannot disagree about where a wall is.
+
+That is also why `Contact` grew `is_an_anchor`. Terrain, a structure and the
+creature are things a thrown rope could hold on to; a fighter and a fire are not
+— one of them moves and the other is not there. It is a fact about the world
+rather than about the Blood mage, so it lives beside the enum.
+
 An ability whose *effect* travels — the Blood mage's thrown blade — takes the
 path's direction and flies its own distance along it, rather than stopping where
 the crosshair's ray stopped. A blade thrown at something four metres away still

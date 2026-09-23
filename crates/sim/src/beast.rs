@@ -136,38 +136,46 @@ const fn v(x: (i32, i32), y: (i32, i32), z: (i32, i32)) -> V3 {
 /// `tuning::monster_scale`, which multiplies all of it.
 ///
 /// The numbers make an animal about **thirteen metres nose to tail, standing
-/// four and a half metres at the back on long legs**. The height is in the legs
+/// five and a half metres at the back on long legs**. The height is in the legs
 /// rather than in the bulk on purpose, and both halves of that are load-bearing:
-/// the back is above a full hop and the legs are the only part of it a fighter
-/// on the floor can reach, which is what makes the ground game a route up
-/// rather than a chore. See `docs/design/monsters.md` §1.
+/// the back is above every full hop but one and the legs are the only part of
+/// it a fighter on the floor can reach, which is what makes the ground game a
+/// route up rather than a chore. See `docs/design/monsters.md` §1.
+///
+/// **A metre taller since 2026-09-23.** At 3.95 m hips the tail's middle sat at
+/// 3.4 m and four of six classes walked up it from the floor, so the climb was
+/// free for most of the roster. The metre went into the legs -- half into each
+/// segment -- and the collapse clips went a metre deeper to match, so every
+/// *earned* route (a stumble, a topple, the slam's crash) lands where it did.
 pub const REST: [V3; BONES] = [
-    v((-16, 10), (395, 100), (0, 1)), // root: the hips, 3.95 m up
+    v((-16, 10), (495, 100), (0, 1)), // root: the hips, 4.95 m up
     v((135, 100), (12, 100), (0, 1)), // spine
     v((145, 100), (5, 100), (0, 1)),  // chest
     v((100, 100), (30, 100), (0, 1)), // neck
     v((115, 100), (18, 100), (0, 1)), // neck2
     v((95, 100), (-5, 100), (0, 1)),  // head
-    // The tail droops as it goes, so its tip sweeps at ankle height and its
-    // base lands just inside a full hop -- which makes it the way up for
-    // somebody with no platform to hand and nothing broken yet.
-    v((-125, 100), (-40, 100), (0, 1)),
-    v((-130, 100), (-46, 100), (0, 1)),
-    v((-125, 100), (-56, 100), (0, 1)),
-    v((-115, 100), (-58, 100), (0, 1)),
+    // The tail is **carried level** off the hips and only the last two
+    // segments droop. It used to droop from the root, which put its base a
+    // hand's width inside a full hop and its middle well inside one: the free
+    // route up, for most of the roster. Carried level, the tail is a tread you
+    // reach from the haunch or from a platform, not from the floor.
+    v((-125, 100), (5, 100), (0, 1)),
+    v((-130, 100), (-5, 100), (0, 1)),
+    v((-125, 100), (-45, 100), (0, 1)),
+    v((-115, 100), (-60, 100), (0, 1)),
     // Forelegs, off the chest. Long: the animal's height is in its legs rather
     // than in its bulk, which is what puts its back out of reach without
     // making it so long that the arena stops having room for a fight.
     v((-10, 100), (-60, 100), (-95, 100)),
-    v((0, 1), (-175, 100), (0, 1)),
+    v((0, 1), (-225, 100), (0, 1)),
     v((-10, 100), (-60, 100), (95, 100)),
-    v((0, 1), (-175, 100), (0, 1)),
+    v((0, 1), (-225, 100), (0, 1)),
     // Hindlegs, off the hips. Heavier and set wider: this is where the animal
     // pushes from.
     v((-25, 100), (-55, 100), (-92, 100)),
-    v((15, 100), (-170, 100), (0, 1)),
+    v((15, 100), (-220, 100), (0, 1)),
     v((-25, 100), (-55, 100), (92, 100)),
-    v((15, 100), (-170, 100), (0, 1)),
+    v((15, 100), (-220, 100), (0, 1)),
 ];
 
 /// Which side of the body a bone is on: `-1` left, `+1` right, `0` centre.
@@ -369,7 +377,7 @@ pub const SHAPES: [Shape; PARTS] = [
     ),
     // Upper legs. Armoured, and not what breaks.
     part(
-        v((-36, 100), (-182, 100), (-38, 100)),
+        v((-36, 100), (-232, 100), (-38, 100)),
         v((38, 100), (30, 100), (38, 100)),
         SHOULDER_L,
         false,
@@ -377,7 +385,7 @@ pub const SHAPES: [Shape; PARTS] = [
         false,
     ),
     part(
-        v((-36, 100), (-182, 100), (-38, 100)),
+        v((-36, 100), (-232, 100), (-38, 100)),
         v((38, 100), (30, 100), (38, 100)),
         SHOULDER_R,
         false,
@@ -385,7 +393,7 @@ pub const SHAPES: [Shape; PARTS] = [
         false,
     ),
     part(
-        v((-42, 100), (-176, 100), (-42, 100)),
+        v((-42, 100), (-226, 100), (-42, 100)),
         v((42, 100), (34, 100), (42, 100)),
         THIGH_L,
         false,
@@ -393,7 +401,7 @@ pub const SHAPES: [Shape; PARTS] = [
         false,
     ),
     part(
-        v((-42, 100), (-176, 100), (-42, 100)),
+        v((-42, 100), (-226, 100), (-42, 100)),
         v((42, 100), (34, 100), (42, 100)),
         THIGH_R,
         false,
@@ -405,7 +413,7 @@ pub const SHAPES: [Shape; PARTS] = [
     // corner and puts the creature on its knee, which is the ground game's
     // whole reward -- see `monster::Monster::break_a_leg`.
     part(
-        v((-32, 100), (-177, 100), (-36, 100)),
+        v((-32, 100), (-227, 100), (-36, 100)),
         v((52, 100), (20, 100), (36, 100)),
         FOREARM_L,
         false,
@@ -413,7 +421,7 @@ pub const SHAPES: [Shape; PARTS] = [
         true,
     ),
     part(
-        v((-32, 100), (-177, 100), (-36, 100)),
+        v((-32, 100), (-227, 100), (-36, 100)),
         v((52, 100), (20, 100), (36, 100)),
         FOREARM_R,
         false,
@@ -421,7 +429,7 @@ pub const SHAPES: [Shape; PARTS] = [
         true,
     ),
     part(
-        v((-34, 100), (-172, 100), (-38, 100)),
+        v((-34, 100), (-222, 100), (-38, 100)),
         v((50, 100), (20, 100), (38, 100)),
         SHIN_L,
         false,
@@ -429,7 +437,7 @@ pub const SHAPES: [Shape; PARTS] = [
         true,
     ),
     part(
-        v((-34, 100), (-172, 100), (-38, 100)),
+        v((-34, 100), (-222, 100), (-38, 100)),
         v((50, 100), (20, 100), (38, 100)),
         SHIN_R,
         false,
@@ -587,6 +595,32 @@ impl Pose {
     pub fn turn(&mut self, bone: usize, pitch: Fx, yaw: Fx, roll: Fx) {
         self.bone[bone] = V3::new(pitch, yaw, roll);
     }
+
+    /// The same pose on the other side of the animal.
+    ///
+    /// Yaw and roll flip, pitch does not, and the two legs of each pair swap
+    /// -- the mirror lives in the skeleton, so that is the whole of it. What
+    /// it is for: the tail sweep is baked going one way, and a whip that only
+    /// ever went to the creature's right left its left flank a place the
+    /// sweep's own cone said it covered and its volume never reached. The
+    /// creature picks the side its target is on when it commits, and plays
+    /// the clip that way round.
+    pub fn mirrored(&self) -> Pose {
+        let mut out = *self;
+        out.hips = V3::new(self.hips.x, self.hips.y, self.hips.z.neg());
+        for b in 0..BONES {
+            out.bone[b] = V3::new(self.bone[b].x, self.bone[b].y.neg(), self.bone[b].z.neg());
+        }
+        for (l, r) in [
+            (SHOULDER_L, SHOULDER_R),
+            (FOREARM_L, FOREARM_R),
+            (THIGH_L, THIGH_R),
+            (SHIN_L, SHIN_R),
+        ] {
+            out.bone.swap(l, r);
+        }
+        out
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -665,6 +699,30 @@ impl Rig {
             yaw,
             facing,
         }
+    }
+
+    /// Where a bone would be with no pose on it at all: the rest skeleton,
+    /// placed at this rig's origin and yaw.
+    ///
+    /// What a bone-carried hit volume measures its motion from. The volume is
+    /// authored in body space -- "five metres in front of the hips" -- and
+    /// riding a bone means moving with it, so it is the bone's displacement
+    /// *from rest* that carries the anchor, not the bone's whole offset from
+    /// the hips. Adding the latter put the bite four metres past the target it
+    /// was thrown at and the sweep four metres behind anybody standing at the
+    /// tail root, which is how the tail root came to be a safe place to stand.
+    pub fn rest_at(&self, bone: usize) -> V3 {
+        let scale = t::monster_scale();
+        let mut sum = V3::ZERO;
+        let mut b = bone.min(BONES - 1);
+        loop {
+            sum = sum.add(REST[b].scale(scale));
+            if PARENTS[b] == NO_PARENT {
+                break;
+            }
+            b = PARENTS[b];
+        }
+        self.to_world(sum)
     }
 
     /// The frame a part's box is authored in.
@@ -756,6 +814,9 @@ pub enum Clip {
     Charge,
     Slam,
     Shake,
+    /// Both hind legs, straight back. The one move aimed at whoever is standing
+    /// directly behind it.
+    Kick,
     Flinch,
     /// Down on a knee. What a broken leg and a landed crowd-control both
     /// produce, and the way onto its back from the floor.
@@ -764,7 +825,7 @@ pub enum Clip {
     Dead,
 }
 
-pub const CLIPS: usize = 13;
+pub const CLIPS: usize = 14;
 
 impl Clip {
     pub const ALL: [Clip; CLIPS] = [
@@ -777,6 +838,7 @@ impl Clip {
         Clip::Charge,
         Clip::Slam,
         Clip::Shake,
+        Clip::Kick,
         Clip::Flinch,
         Clip::Stumble,
         Clip::Topple,
@@ -798,6 +860,7 @@ impl Clip {
             Clip::Charge => "charge",
             Clip::Slam => "slam",
             Clip::Shake => "shake",
+            Clip::Kick => "kick",
             Clip::Flinch => "flinch",
             Clip::Stumble => "stumble",
             Clip::Topple => "topple",
@@ -822,7 +885,13 @@ impl Clip {
     pub const fn phased(self) -> bool {
         matches!(
             self,
-            Clip::Bite | Clip::Stomp | Clip::Sweep | Clip::Charge | Clip::Slam | Clip::Shake
+            Clip::Bite
+                | Clip::Stomp
+                | Clip::Sweep
+                | Clip::Charge
+                | Clip::Slam
+                | Clip::Shake
+                | Clip::Kick
         )
     }
 
@@ -834,7 +903,8 @@ impl Clip {
             2 => Clip::Sweep,
             3 => Clip::Charge,
             4 => Clip::Slam,
-            _ => Clip::Shake,
+            5 => Clip::Shake,
+            _ => Clip::Kick,
         }
     }
 }

@@ -317,6 +317,13 @@ pub fn states() -> Canvas {
             }),
         ),
         (
+            "kick, thrown",
+            with(Doing::Active {
+                kind: monster::KICK,
+                left: 2,
+            }),
+        ),
+        (
             "stumbling",
             with(Doing::Stumble {
                 left: sim::tuning::stumble_frames() / 2,

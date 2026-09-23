@@ -433,10 +433,20 @@ change into forty lines of noise.
 
 ## What is authored
 
-All fifty-six. `cargo run -p anim --bin bake` lists any clip without a recipe
-every time it runs, and a test fails if there is one, so this cannot go quietly
-stale: an unauthored clip bakes as a held rest pose, which is a character
-standing still in the middle of a match.
+**All of them, and the count is deliberately not written down here.** It was
+"all fifty-six" for a while and there are eighty-two; a number in prose beside a
+number in code is a promise that one of them will be wrong, and this one was.
+`cargo run -p anim --bin bake` prints the total and lists any clip without a
+recipe every time it runs, and a test fails if there is one, so the state cannot
+go quietly stale: an unauthored clip bakes as a held rest pose, which is a
+character standing still in the middle of a match.
+
+**A clip's family and its file are two different things**, and the Dual mage's
+two float clips are the case that makes it worth saying. They are *locomotion* —
+they replace the idle and the walk while she is deep on her own bar — and they
+live in `dual.rs`, because the walk cycles belong to the whole roster and these
+two belong to one class. The family decides how the hub groups them; the file
+decides who owns them.
 
 Two diagnostics are worth knowing about when a clip is not behaving:
 

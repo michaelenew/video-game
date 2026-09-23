@@ -6,6 +6,7 @@
 
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::oven::{self, AirField};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Class {
@@ -50,39 +51,31 @@ pub struct Mobility {
     pub air_speed: Fx,
 }
 
-const fn mobility(
-    jump: (i32, i32),
-    gravity: (i32, i32),
-    fall: (i32, i32),
-    air: (i32, i32),
-) -> Mobility {
-    Mobility {
-        jump: Fx::ratio(jump.0, jump.1),
-        gravity: Fx::ratio(gravity.0, gravity.1),
-        fall_cap: Fx::ratio(fall.0, fall.1),
-        air_speed: Fx::ratio(air.0, air.1),
-    }
-}
-
 impl Class {
-    /// Air stats. The numbers are guesses; the *spread* is the design.
-    pub const fn mobility(self) -> Mobility {
-        match self {
-            // Heavy. Low jump, falls hard, barely steers. Committing to the air
-            // should be a real decision for the class whose whole identity is
-            // holding ground.
-            Class::Bulwark => mobility((88, 100), (118, 100), (115, 100), (9, 10)),
-            // Middleweight baseline. Everything else is read against this.
-            Class::Champion => mobility((1, 1), (1, 1), (1, 1), (12, 10)),
-            // The most mobile thing in the air, which is what a class built on
-            // repositioning should be.
-            Class::ShadowReaver => mobility((110, 100), (92, 100), (95, 100), (17, 10)),
-            // Floats, but steers poorly: a caster in the air is committed to
-            // where the jump was going to take them.
-            Class::Elementalist => mobility((105, 100), (85, 100), (88, 100), (10, 10)),
-            Class::BloodMage => mobility((1, 1), (98, 100), (1, 1), (13, 10)),
-            // The floatiest. Long hang time is the trade for being fragile.
-            Class::DualMage => mobility((112, 100), (80, 100), (85, 100), (14, 10)),
+    /// Air stats, read straight off the Oven's per-class table.
+    ///
+    /// The numbers are guesses; the *spread* is the design. Bulwark is heavy:
+    /// low jump, falls hard, barely steers, because committing to the air
+    /// should be a real decision for the class whose whole identity is holding
+    /// ground. Champion is the middleweight baseline everything else is read
+    /// against. The Shadow Reaver is the most mobile thing in the air, which is
+    /// what a class built on repositioning should be. The Elementalist floats
+    /// but steers poorly: a caster in the air is committed to where the jump
+    /// was going to take her. The Dual mage is the floatiest, and long hang
+    /// time is the trade for being fragile.
+    ///
+    /// **This was a `const fn` full of literals until 2026-09-17, and the Oven
+    /// had a per-class air table nobody read.** Those knobs were editable,
+    /// bakeable and folded into the tuning hash, and dragging one did exactly
+    /// nothing — the silent disagreement `crates/sim/tests/knobs.rs` exists to
+    /// catch, wearing its other face. The table is the only copy now.
+    pub fn mobility(self) -> Mobility {
+        let raw = |f: AirField| Fx::from_raw(oven::air(self, f));
+        Mobility {
+            jump: raw(AirField::Jump),
+            gravity: raw(AirField::Gravity),
+            fall_cap: raw(AirField::FallCap),
+            air_speed: raw(AirField::AirSpeed),
         }
     }
 

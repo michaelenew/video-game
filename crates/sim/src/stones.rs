@@ -612,6 +612,32 @@ pub fn resolve_body(
             } else if vel.y.raw() < 0 {
                 vel.y = Fx::ZERO;
             }
+            // **Grounded even when she is outrunning it, and that is the
+            // structure jump.**
+            //
+            // The obvious-looking rule is that a surface you are rising faster
+            // than is not holding you up, so a fighter who has already jumped
+            // off an erupting stone should read as airborne. It was tried on
+            // 2026-09-17 and reverted the same day, because what it actually
+            // deletes is the technique the class is built around -- see
+            // `docs/design/feel-log.md`.
+            //
+            // The stone's top **is** under her feet: that is why this branch
+            // ran. A body standing on a surface can jump off it, and the jump
+            // is level-triggered so that holding space hops the moment you
+            // land. Put those together and an eruption that catches up with a
+            // fighter mid-rise hands her another takeoff -- and a second stone
+            // raised a few frames behind the first hands her a third. That is
+            // the double structure jump, and it is not the double jump
+            // `docs/design/README.md` §4 rules out: that question is about
+            // space doing something with **nothing under you**, and this is a
+            // surface, placed by an ability, that costs structure slots and a
+            // frame-tight read of two eruptions to put there.
+            //
+            // The height is bounded by how fast the eruption climbs -- the
+            // `stones` family in the Oven, and `structure_rise` in particular
+            // -- and that is where it is tuned. Nothing here is an exception
+            // case.
             grounded = true;
         } else {
             pos.y = stone.at.y.sub(height);

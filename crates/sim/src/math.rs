@@ -613,3 +613,31 @@ pub fn wrap_unit(v: Fx) -> Fx {
     let one = Fx::ONE.raw();
     Fx::from_raw(raw.rem_euclid(one))
 }
+
+/// A quarter of a turn: the angle between a body's forward and its right.
+pub const QUARTER_TURN: Fx = Fx::ratio(1, 4);
+
+/// One full turn in radians, as 16.16.
+const TAU: Fx = Fx::from_raw(411_775);
+
+/// The fold that shortens a two-segment leg of total length `len` by `drop`,
+/// as the angle in **turns** each segment leans off the vertical.
+///
+/// A leg folded at both joints by the same angle `c` stands `len * cos(c)`
+/// tall, so the drop is `len * (1 - cos(c))`. For the angles a standing leg
+/// can fold through that is `len * c^2 / 2` to within a few centimetres, which
+/// inverts without a table: `c = sqrt(2 * drop / len)`. Geometry, not a feel
+/// number -- the only thing a different constant would do is put the foot
+/// somewhere other than the floor.
+pub fn crouch_turns(drop: Fx, len: Fx) -> Fx {
+    if drop.raw() <= 0 || len.raw() <= 0 {
+        return Fx::ZERO;
+    }
+    drop.add(drop).div(len).sqrt().div(TAU)
+}
+
+/// An angle in turns as the same angle in radians: what multiplies a lever
+/// arm to give the rise at its end.
+pub fn turns_to_radians(turns: Fx) -> Fx {
+    turns.mul(TAU)
+}

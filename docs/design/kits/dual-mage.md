@@ -264,6 +264,44 @@ air.
 consumes the mark for bonus damage and a short burst of movement speed. This is what makes
 closing to centre attractive rather than a chore.
 
+## Movement — built 2026-09-17
+
+**She is a melee mage who has to get in to steer her own meter, and she had nothing to get in
+with.** Three pieces, and they are all one class rule read in a different place.
+
+**A dash on every auto, and it goes the way the force goes.** 1.3 m forward on the dark auto
+and 1.3 m *backward* on the light one. The two autos already disagree about everything — one
+drags whoever it catches toward her and one shoves them away — so the step that carries her
+body is that same disagreement carried down to her feet. Dark closes the gap from both ends;
+light opens it from both ends.
+
+A step forward on *both* was the first version, and it made the light auto's push worth
+nothing: she walked into the space she had just made and the net distance between the two
+bodies went the wrong way. Two mirrored halves of one motion is also simply what the class is.
+
+**The longest aerial hang in the game.** Her autos hold her up for eighteen frames where
+everybody else's poke manages six — the air is the place this class is meant to want to be,
+and she already has the floatiest gravity on the roster. It needed a new universal rule first:
+a hang costs nothing but the move that carries it and the repeat lockout only stops *one* move
+being thrown twice, so two interchangeable pokes alternated forever is a hover. Each hang in
+one airtime is now worth less than the last. See [../controls.md](../controls.md#aerials-hang).
+
+**At the three-quarter tier or ascended, her feet leave the floor.** She moves faster
+(`Floating, walk speed (x)`), and she is drawn floating: feet pointed, knees soft, hips carried
+high and back, no stride at all. The float was built on 2026-09-17 against the old signed bar,
+where it triggered at *depth*; the two bars have no such position, so on 2026-09-23 it moved to
+the same tier the second jump and the slow fall live on — the lower bar at three quarters,
+`Tier, second jump and slow fall from`. Deliberately one threshold: that tier is already "her
+feet stop obeying the floor", and the float, the second jump and the slow fall are three faces
+of one decision rather than three rules that happen to fire near each other. The burn is what
+riding both bars up costs; this is one of the things it buys. The wings are the bars
+themselves now, counted rather than coloured — see the table at the top.
+
+It is also the one thing depth moves that is not a *force*. Everything else on the curve is
+how hard she hits and how big it is; this is how fast she gets there, and it is a step rather
+than a curve because it answers a yes-or-no question — are her feet on the floor — rather than
+a how-much one.
+
 ## Core abilities
 
 The intended shape: four abilities, each with a light and a dark form. **Nothing here is
@@ -412,6 +450,16 @@ pressing, and you can read your own commitment off your own animation.
 
 ## Open questions
 
+- **Is 1.3 m the right step, and is the light auto's backward one right at all?** It is a lot
+  of ground on a punch thrown every second, and the backward version may simply feel like
+  being pushed around by your own attack rather than like giving ground on purpose. Both are
+  move-table knobs (`Steps forward (m)`, signed), so the answer stays a play question — and
+  zero on one of them is a legitimate answer.
+- **Is the float's speed bonus the right shape?** 1.35× at a step, from the three-quarter tier.
+  A curve would tie it to the depth curve like everything else on the class, and the argument
+  against is that it answers a yes-or-no question rather than a how-much one: her feet are
+  either on the floor or they are not. Whether three quarters is the right tier for it, rather
+  than half with the blink, is a play question.
 - **Is `M` reliable enough to carry Lance?** It is the slowest input on most mice and this is
   now the committed cast rather than a finisher, which makes the question sharper rather than
   softer: it is a button she presses in every exchange. `U` stands in for it, and the answer

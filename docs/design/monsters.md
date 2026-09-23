@@ -3,11 +3,12 @@ status: proposed
 proposed: 2026-09-11
 built: 2026-09-12
 rebuilt: 2026-09-13
+hardened: 2026-09-23
 ---
 
 # Monsters — the Ridgeback
 
-The first monster, end to end: a body you can stand on, six moves, a control
+The first monster, end to end: a body you can stand on, seven moves, a control
 algorithm that decides between them, and a way to measure whether the fight is
 any good.
 
@@ -23,7 +24,7 @@ supply only its own parts and moves.
 off the ground without earning it.**
 
 The Ridgeback is a quadruped about thirteen metres nose to tail that stands
-**four and a half metres at the back on long legs**. Its head, flanks, haunch
+**five and a half metres at the back on long legs**. Its head, flanks, haunch
 and tail are armoured. There are two soft places, both on top:
 
 - the **ridge**, the strip of unarmoured spine it is named for, standing proud
@@ -32,17 +33,32 @@ and tail are armoured. There are two soft places, both on top:
   another walk forward past the shoulders to reach.
 
 Its height is in its legs rather than in its bulk, and both halves of that are
-load-bearing. A standing full hop apexes at 4.14 m, so its back is out of reach;
-and its **feet are the only part of it a fighter on the floor can touch at all**,
-which is what makes the ground game a route up rather than a chore.
+load-bearing. A standing full hop apexes at 2.7 m on the heaviest class and
+6.0 m on the floatiest, and the lowest thing on the standing animal is 5.3 m
+up, so its back is out of reach from the floor for **five of the six classes**
+(the Dual mage floats onto it, and that is her thing); and its **feet are the
+only part of it a fighter on the floor can touch at all**, which is what makes
+the ground game a route up rather than a chore.
+
+⚠️ **A metre taller since 2026-09-23.** At four and a half metres the tail's
+middle sat at 3.4 m and four classes walked up it from the floor, so the climb
+was free for most of the roster and the ground game was a thing you could
+decline. The metre went into the legs, and every *earned* route — a stumble, a
+topple, the slam's crash — was deepened by the same metre so it lands where it
+did. The same pass made the animal gallop, gave it a seventh move for the one
+place behind it nothing reached, and fixed a bug that had two of its six moves
+landing metres from where they were thrown. See [feel-log.md](feel-log.md).
 
 So the loop is:
 
-1. **Ground phase.** Get behind it, out of the cone every forward move needs and
-   out of the tail's, and **break a foot**. That is most of what you do down
-   there, and the feet are the softest thing you can reach.
-2. **Mount.** The back is above a standing jump. Five ways up, one of them free
-   and four of them earned — see §2.
+1. **Ground phase.** Get behind it, out of the cone every forward move needs,
+   and **break a foot**. That is most of what you do down there, and the feet
+   are the softest thing you can reach. Behind it is not safe: the tail sweeps
+   the whole half-circle behind the hips, toward whichever side you are on, and
+   the back kick covers the patch directly astern. Beside a hind leg you have
+   one of those to read; directly behind it you have both.
+2. **Mount.** The back is above a standing jump. Five ways up, four of them
+   earned and one of them a class's — see §2.
 3. **Ride.** Walk up the back to the ridge, and forward again to the nape. Your
    controls are relative to the surface under your feet: the creature turning
    does not turn your movement.
@@ -60,14 +76,15 @@ monster's move set, and it is the one the fight report measures directly.
 | --- | --- | --- |
 | Bite | Neck coils, head is thrown | Sidestep, or dodge through it |
 | Stomp | Foreleg comes up past the shoulder and down | 13 frames — *positional*: do not stand in front |
-| Tail sweep | Wide, low arc behind and to the sides | **Jump it** — the hitbox is 1.6 m, and a tapped hop is not enough |
-| Charge | Commits to a straight line at 15 m/s | Step laterally late — it cannot turn |
+| Tail sweep | Wide, low arc behind and to the sides, **to the side you are on** | **Jump it** — the hitbox is 1.6 m, and a tapped hop is not enough |
+| Charge | Commits to a straight line at 20 m/s | Step laterally late — it cannot turn |
 | Rear and slam | Both forelegs up, a held pose at the top, then down | 52-frame telegraph; get out from under it, and *off* it |
 | Shake | No damage; pure buck | Brace, leave, or jump the whip |
+| Back kick | Both hind legs, straight back; the tail lifts and the rump drops | 22 frames — **sidestep**, and do not linger dead astern |
 
 ## 2 · Getting on it
 
-Five ways up, and only one of them is available whenever you like.
+Five ways up. Four are earned, and the fifth belongs to one class.
 
 ```
 cargo run -p sim --bin beastcheck
@@ -77,51 +94,62 @@ prints all of this against the jump the simulation actually produces, because
 geometry arguments conducted in prose go wrong:
 
 ```text
-a full hop reaches 4.142 m off the floor
-the arena's platforms are 1.5 m, so from one it reaches 5.642 m
+a full hop reaches 2.681 m off the floor (Bulwark) to 5.968 m (Dual mage)
+the arena's platforms are 1.5 m, so from one the best of them reaches 7.468 m
 
 standing, the tops of the surfaces you can stand on:
-  shoulders       4.581 m   only from a platform
-  barrel           4.57 m   only from a platform
-  haunch          4.482 m   only from a platform
-  tail            3.925 m   a standing jump
-  tail, middle    3.404 m   a standing jump
+  shoulders        5.58 m   a standing jump for Dual mage
+  barrel          5.569 m   a standing jump for Dual mage
+  haunch          5.482 m   a standing jump for Dual mage
+  tail            5.374 m   a standing jump for Dual mage
+  tail, middle    5.263 m   a standing jump for Dual mage
 
 the weak points, standing:
-  ridge           4.514 m at its foot,  5.194 m at its top, x1.75 damage
-  nape            4.477 m at its foot,  5.057 m at its top, x2.4 damage
+  ridge           5.514 m at its foot,  6.194 m at its top, x1.75 damage
+  nape            5.476 m at its foot,  6.056 m at its top, x2.4 damage
 
 and what opens a way up (lowest the surface gets):
-  the shoulders, stumbling            2.701 m   a standing jump
-  the haunch, stumbling               3.913 m   a standing jump
-  the shoulders, both forefeet broken  3.587 m   a standing jump
-  the barrel, toppled                 2.289 m   a standing jump
-  the shoulders, through a slam       2.995 m   a standing jump
-  the tail, through a sweep            3.82 m   a standing jump
+  the shoulders, stumbling            2.665 m   a standing jump, every class
+  the haunch, stumbling               3.874 m   a standing jump for Champion, Shadow Reaver, Elementalist, Blood mage, Dual mage
+  the shoulders, both forefeet broken  3.807 m   a standing jump for Champion, Shadow Reaver, Elementalist, Blood mage, Dual mage
+  the barrel, toppled                 2.217 m   a standing jump, every class
+  the shoulders, through a slam       3.222 m   a standing jump for Champion, Shadow Reaver, Elementalist, Blood mage, Dual mage
+  the tail, through a sweep           5.268 m   a standing jump for Dual mage
 
-nose to tail: 13.412 m.  clips baked: 13
+nose to tail: 13.406 m.  clips baked: 14
 ```
 
-⚠️ **That is the Bulwark's jump**, because `beastcheck` measures `World::new()` and the
-default class is the Bulwark — the heaviest thing on the roster and the worst jumper on it.
-Every "only from a platform" above is a statement about the Bulwark. The Dual mage's full hop
-is 8.7 m and the Reaver's is 7.6 m, both of which clear the barrel from the floor. Whether the
-climb is *meant* to be a Bulwark-shaped problem, or the geometry should be read against the
-whole roster, is open — see §9.
+**It names who can get there, since 2026-09-23.** It printed "the floatier
+classes" for anything between the shortest hop and the tallest, and once the
+animal grew a metre that band held every surface on it while the honest answer
+for most of them was one name. A route is a route for the classes that can jump
+it, and the climb turns on which those are.
 
-1. **The tail, any time.** 3.93 m against a 4.14 m apex — about twenty
-   centimetres of margin, from beside an animal that is turning. Doable, and
-   not casually. This is the baseline route and it is deliberately the tightest
-   one. (For the Bulwark. For four of the six classes the tail is not a tight
-   hop at all.)
-2. **A platform.** The arena's two 1.5 m platforms put the whole back inside a
-   hop. The cost is that you have to fight the creature over to one.
-3. **A broken foot.** It goes down on a knee for nearly two seconds and the
-   shoulders come to 2.70 m. This is what the ground game is *for*.
-4. **A topple.** The barrel at 2.3 m, and a long window to use it in.
-5. **The slam's recovery.** Its shoulders are at 3.00 m at the bottom of the
+**What the metre did to the climb.** Standing, nothing on the animal is inside a
+hop for anybody but the Dual mage, whose 5.97 m float clears the tail with
+seventy centimetres to spare — the one class that can decline the ground game,
+and she is the class whose whole identity is not touching the floor. For the
+other five the way up is one of the four below, every one of which is either
+earned on the ground or read off a move. The Bulwark's 2.68 m hop reaches the
+two lowest — a stumbling shoulder and a toppled barrel — and nothing else, which
+is unchanged from before the metre and is still the open Bulwark-shaped
+question.
+
+1. **A broken foot.** It goes down on a knee for nearly two seconds and the
+   shoulders come to 2.67 m, inside every class's hop. This is what the ground
+   game is *for*, and it is now the baseline route rather than a bonus.
+2. **A topple.** The barrel at 2.2 m, and a long window to use it in.
+3. **The slam's recovery.** Its shoulders are at 3.2 m at the bottom of the
    crash — which means the answer to the hardest-hitting move in the set is also
    an invitation, if you are quick.
+4. **Two broken forefeet.** The shoulders at 3.8 m for the rest of the fight:
+   a permanent route for everybody but the Bulwark, bought with the whole ground
+   game.
+5. **The tail, for the Dual mage.** Carried level at 5.3 m; a hop for her and a
+   wall for everyone else. It used to droop to 3.4 m at its middle and was the
+   free route for most of the roster. From one of the arena's 1.5 m platforms
+   the Reaver and the Elementalist reach it too, if they can fight the animal
+   over to one.
 
 Once aboard, the climb is a **staircase**: tail → haunch → barrel → shoulders,
 with the ridge over the barrel and the nape over the shoulders. Consecutive
@@ -246,18 +274,46 @@ noise:
 - The shake's **startup is 40 frames** and is emphatically not violent — it
   plants its feet, hunches, and leans. A rider has to be able to tell the
   telegraph from the move, because the whole strategy is to leave over the
-  second half and not the first.
-- Its **whip is 56 frames**, which is longer than a full hop. That is what makes
-  the timing a *read*: committing during the startup clears the whole thing, and
-  committing once it has begun is a jump that never leaves. The transition is
-  sharp — measured frame by frame, jumping anywhere in frames 0–37 earns 80–108
-  frames back on the animal, and frames 38 onward earn nothing.
+  last part of the tell and not the first.
+- Its **whip is 36 frames**, which is shorter than a full hop by enough that a
+  hop begun in the last quarter of the startup lands after it. That is what
+  makes the timing a *read*: committing late in the tell clears the whole
+  thing, committing early lands you in the middle of it, and committing once it
+  has begun is a jump that never leaves. Measured frame by frame, a jump taken
+  in frames 25–39 earns 80–130 frames back on the animal, and frames 40 onward
+  earn nothing. ⚠️ **It was 56 frames until 2026-09-23**, and the document said
+  any frame of the startup would do. It would not: a hop is about 55 frames and
+  the whip began at 40, so every jump landed inside it and was thrown — and
+  then, because a thrown rider was kicked along the surface's own velocity,
+  which at a whip's reversal is nothing, went straight up, came straight back
+  down onto the same back, and stayed. The read "worked" through a fall taken
+  every time, at the fall's cost.
 - Its **lockout is 230 frames**. Without one the answer to every buck is another
   buck, and a rider who read the shake and jumped it has earned nothing, because
   the next shake starts on the frame the last one ended.
 
+Two more rules under the buck, both from the same day:
+
+- **A thrown rider comes off the side**, at the full kick, whichever way the
+  back was moving. The kick is taken in the creature's *heading* rather than in
+  the frame of the part underfoot, because at the top of a shake that part is
+  fifty degrees over and "sideways" read there is a throw that goes up. And a
+  body in the stun of a throw does not land back on: the back that threw it is
+  still whipping underneath, and a rolled top face scooped falling riders up a
+  dozen frames after throwing them, for the fall's damage a second time.
+- **A cut is not a buck.** The pose is a lookup, so on the frame the creature
+  changes clip — a shake interrupted into a flinch, say — its back jumps from
+  one pose to another with no motion in between, and the grip test read that as
+  an acceleration. The rider who had just landed the hit that caused the flinch
+  was the one thrown, every time, so every ride ended with its first good hit on
+  the ridge. The rider's feet are planted again on a cut, exactly as on landing,
+  and the motion that follows is what is judged.
+
 Pinned by `you_can_jump_the_shake_if_you_commit_before_the_whip` and
-`a_move_it_has_just_thrown_cannot_come_straight_back`.
+`a_move_it_has_just_thrown_cannot_come_straight_back`. The whip is six
+reversals now rather than nine, for the same six frames a swing it had before:
+nine over thirty-six frames threw braced riders off the hips, which are meant
+to be the calm place.
 
 ## 4 · Crowd control, and what a threshold is for
 
@@ -435,9 +491,21 @@ cone, which is what makes standing at the creature's flank *mean* something.
 
 The cones matter more than they look. The tail sweep's was once wide enough to
 cover almost the whole circle, and it became 70% of everything the creature did;
-narrowed, there is now a station **directly behind it** that is outside every
-move's cone but the shake's — which is the spot the ground game is played from,
-and is a thing a player can find.
+narrowed, there was a station **directly behind it** outside every move's cone
+but the shake's — which the first version of this document called the spot the
+ground game is played from, and a player called a safe spot, because it was
+one: you stood at the tail root and hit a hind foot and nothing reached you.
+Two things fixed that. The **back kick** is aimed at exactly that patch, its
+tell is twenty-two frames and its answer is a sidestep, which is not the
+sweep's answer. And the sweep's cone now runs to dead astern and the whip goes
+to whichever side you are on — the clip is baked one way and mirrored on the
+side the target was on when it committed, so the left flank is no longer the
+side the tail never came to. There is still a place the ground game is played
+from: **beside a hind leg**, about a hundred and ten degrees round, where the
+kick does not reach and the sweep's thirty-six frame tell is long enough to
+see over a twenty-frame poke. Directly behind, both threats are live and the
+kick's tell is barely longer than a poke, which is the point. The scripted
+hunter stands where a person learns to.
 
 Selection is **not** the maximum. Everything scoring at least
 `decisiveness × best` goes into a weighted draw, seeded from the snapshot.
@@ -445,6 +513,18 @@ Selection is **not** the maximum. Everything scoring at least
 between, the *distribution* is learnable while the next move is not, which is the
 only definition of "hard but fair" that survives contact with a player who has
 fought the thing fifty times.
+
+### It gallops when you run, and turns before it runs
+
+Its walk is slower than a fighter's on purpose — inside striking distance it
+catches you by cornering, not by outrunning. But the same was true at any
+distance until 2026-09-23, and a fight you could walk away from at leisure is
+not a hunt. Wanting to close a long gap now runs it up to the **gallop**, twelve
+metres a second against a walk of seven, and the gait blends to match. Forward
+speed is scaled by how squarely it faces you, so a creature that has been got
+behind comes about on the spot rather than galloping off in the wrong direction
+and swinging round in an arc — which is what the first version did, and is the
+difference between an animal and a car.
 
 ### Turning is the fight
 
@@ -496,6 +576,8 @@ scripted hunter against the creature and reports them.
 | **Damage into feet**, **worst foot** | Whether the ground game is being played at all | a foot should go, in a fight it wins |
 | **Time to kill** | The design document asks for one to twenty minutes coop | inside the band |
 | **Unanswerable hits** | Hits from an attack below reaction *and* with no positional warning | as close to none as the design allows |
+| **Landed, per move** | Beside how often each was thrown: a move's hit rate on the hunter | a telegraph that never lands is decoration; one that always does is unreadable |
+| **Swings and connected** | Attacks the hunter started, and frames one of them touched the animal | whether "damage dealt" is a cautious hunter or one swinging at air |
 
 The last one is the important one and the easiest to get wrong. A monster can
 score well on every other line and still feel cheap, and it will be because of
@@ -511,73 +593,104 @@ creature is on stilts, and the bot was standing where nothing could be hit.
 
 ## 9 · Where it landed
 
-Numbers from `cargo run -p hunt --bin fight`, against a Champion. **The scripted
-hunter is a mediocre player** — a fixed fifteen-frame reaction delay, one plan,
-no adaptation — so these are the numbers for someone who has just learned the
-fight, not for someone who is good at it.
+Numbers from `cargo run -p hunt --bin fight`, against a Champion, after the
+2026-09-23 pass. **The scripted hunter is a mediocre player** — a fixed
+fifteen-frame reaction delay, one plan, no adaptation — so these are the numbers
+for someone who has just learned the fight, not for someone who is good at it.
 
 ```text
-  killed at frame 6082  --  101.4 s
+  the hunters went down  --  9474 frames, 157.9 s
 
-  reactable moves            4/5   answerable on sight, not from memory
-  moves per minute          30.2   the rhythm
-  openings per minute       33.1   how often you get a turn
-  mean opening               50f   long enough to punish?
-  shortest opening           19f   the worst case
-  idle share                 11%   doing nothing at all
-  move coverage              6/6   moves it ever used
-  favourite move share       33%   one-note?
-  move entropy              0.87   1.00 is an even mix
+WHAT IT DID                thrown   landed   frames
+  Bite                      9        0   34/ 5/34
+  Stomp                     1        0   13/ 3/26   unreactable
+  Tail sweep               33        3   36/ 8/46
+  Charge                   10        0   34/30/44
+  Rear and slam            18        0   52/ 5/54
+  Shake                     6        0   40/36/44
+  Back kick                18        3   22/ 4/34
 
-  rides                       38   times anyone got on
-  ride share                 29%   of the fight spent aboard
-  mean ride                  46f   long enough to reach the ridge?
-  thrown off                  18   ended by a buck, not a jump
-  ridge hits                  44   damage on a weak point
-  topples                      3   poise broken
-  legs broken                  1
-  damage into feet           500   the ground game
+  reactable moves            5/6   answerable on sight, not from memory
+  moves per minute          36.1   the rhythm
+  openings per minute       35.7   how often you get a turn
+  mean opening               46f   long enough to punish?
+  shortest opening           18f   the worst case
+  idle share                  8%   doing nothing at all
+  move coverage              7/7   moves it ever used
+  favourite move share       35%   one-note?
+  move entropy              0.86   1.00 is an even mix
 
+  rides                        9   times anyone got on
+  ride share                  5%   of the fight spent aboard
+  mean ride                  51f   long enough to reach the ridge?
+  thrown off                   1   ended by a buck, not a jump
+  left under a buck            7   read it and jumped, or stepped off
+  ridge hits                   9   damage on a weak point
+  topples                      0   poise broken
+  legs broken                  2
+  damage into feet          1256   the ground game
+
+  swings                      77   attacks the hunters started
+  connected                   54   frames one of them landed
+  damage dealt              3668   to the creature
+  damage taken              1000   by the hunters
+  hits taken                   7
   unanswerable hits            0   too fast to read, from outside its range
 ```
 
-Across six seeds the hunter wins three, at a mean of seventy seconds. That is
-where the first version sat and where a first monster wants to sit: a bot this
-crude losing every time would mean nobody could learn against it, and winning
-every time would mean it is not a monster.
+Across six seeds the hunter wins two, at a mean of five minutes, and the losses
+run from two and a half minutes to five and a half. Before the pass it won one
+of six and every fight was over inside a hundred seconds either way; before the
+tail was raised it won five of six. Two of six is where a first monster wants to
+sit: a bot this crude losing every time would mean nobody could learn against
+it, and winning most of the time would mean it is not a monster. Seven hits is a
+dead hunter, and every one of the seven is a move it could have seen.
 
-Ride share fell from around 70% to under a third, which is the change this
-rebuild was most meant to produce: the back used to be where the fight happened,
-and it is now the reward for a phase that happens on the floor. Thirty-eight
-rides in a hundred seconds is still a lot of climbing for a bot with one plan,
-and whether a person would climb that often is one of the things only a person
-can say.
+**What the pass changed, in the numbers.** The bite lands where it is thrown
+(it is chosen for a target at three to eight metres and its volume used to
+start at nine); the sweep covers the tail root and goes to the side you are on;
+the kick exists and lands on a hunter that lingers astern. The creature closes a
+gap at twelve metres a second and comes about before it runs. Nothing on the
+standing animal is inside a hop for five of six classes, and the earned routes
+are where they were. The hunter, meanwhile, stopped jumping at a tail it cannot
+reach and learned three things a person learns in the first ten minutes: poke,
+then watch, then poke — a poke is twenty frames of not being able to jump and a
+chained one is forty; unload into a recovery you can see is long enough, and
+nowhere else; and stand beside the hind leg rather than behind it.
+
+**What the harness caught, and what it did not.** Two of the day's four real
+bugs were invisible in the old report and obvious in the new one. `landed`
+beside `thrown` is what showed that the bite never touched anybody and the kick
+touched a hunter standing exactly where it was aimed; `swings` beside
+`connected` is what showed a hunter swinging at air from a metre past its own
+reach. And the per-hit trace, which names what the hunter was in the middle of
+when each hit landed, is what found the five-throws-in-a-second re-landing and
+the flinch that threw the rider who caused it — both of which a person would
+have reported as "the ride feels random".
 
 ### Still open
 
-- **The Elementalist cannot win.** Zero of three, with four hundred rides in a
-  twelve-minute hunt. The scripted hunter's plan is a melee plan and a ranged
-  class plays a different fight; whether that is the class, the creature, or the
-  bot is not a question the harness can answer as written.
-- **Is the buck's damage the right lever?** Forty-five a throw is what took the
-  bot from winning six of six to winning three, which is the right *shape* --
-  but it is a blunt number and the bot gets thrown far more often than a person
-  would. A player who rides well should barely feel it, and whether that is true
-  is the sort of thing only a player can say.
-- **Is the tail hop too tight, and for whom?** About twenty centimetres of margin
-  on a Bulwark's full hop, beside an animal that is turning. It is meant to be the
-  hardest of the five routes; it may be the *only* one anyone finds. And it is a
-  Bulwark-shaped question: `beastcheck` measures the heaviest class, and the Dual
-  mage clears the whole back from the floor with two and a half metres to spare. So
-  "you cannot reach the thing that kills it from the ground" — §1's first sentence,
-  and the premise of the climb — is **true for one class of six**. Either the
-  creature's geometry is read against the roster rather than against one member of
-  it, or the ground phase is something four classes can simply decline, and that is
-  a decision rather than a tuning pass.
+- **The Dual mage can decline the ground game.** Her float clears the tail from
+  the floor by seventy centimetres. Whether that is her identity or a hole in
+  the premise is a decision, not a tuning pass; making the animal tall enough
+  to stop her would put its back seven metres up.
+- **The Bulwark's routes are the two lowest and nothing else.** A stumbling
+  shoulder and a toppled barrel. Unchanged by the metre, and still the sharpest
+  form of the question §2 asks.
+- **Is the kick's tell long enough?** Twenty-two frames is readable from
+  neutral and not from inside a poke, which is the design — but the scripted
+  hunter answers it by standing where it does not reach, and whether a person
+  finds that spot or eats kicks until they stop playing is a person's question.
+- **Is the buck's damage the right lever?** Forty-five a throw is now paid
+  once per throw rather than five times, and the shake is jumpable as
+  documented. A player who rides well should barely feel it, and whether that
+  is true is the sort of thing only a player can say.
 - **The nape may be a step too far.** It is worth 2.4× damage and it is another
   walk forward past the shoulders, on the part of the back the shake is most
   violent on. Whether anyone chooses it over the ridge is a question for a
   person.
+- **The Elementalist cannot win**, as before: the scripted hunter's plan is a
+  melee plan.
 - **Coop.** Both players can fight it and both can be on it at once, but the
   numbers are set for one, and a monster tuned for two is a different monster.
 
@@ -587,7 +700,7 @@ can say.
   ride, control, clips — but a second one is what proves it, and it should be
   built when there is something to learn from it.
 - **Roll on the ground.** The creature topples onto its side, which is the only
-  roll in the set. A body roll it *chooses* would be a fine seventh move and
+  roll in the set. A body roll it *chooses* would be a fine eighth move and
   nothing in the rig would have to change.
 - **A gait that turns.** The walk and gallop cycles are straight-line. A
   quadruped leaning into a turn is a real piece of readability and the rig can
