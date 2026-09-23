@@ -224,6 +224,10 @@ struct Report {
     /// `idle` only: when the lower bar fell below the first tier.
     lost_blink: Option<u32>,
     health_lost: i32,
+    /// What she took off the dummy over the whole run, and the most any one
+    /// press took: the two numbers the damage benchmarks are stated in.
+    dealt: i32,
+    biggest_hit: i32,
     presses: u32,
     peak_gap: Fx,
     end: (Fx, Fx),
@@ -266,12 +270,23 @@ impl Report {
             println!("  fell below the first tier at {}", when(Some(f)));
         }
         println!(
-            "  health lost {} of {}  |  ends dark {} / light {}\n",
+            "  health lost {} of {}  |  ends dark {} / light {}",
             self.health_lost,
             sim::state::max_health(),
             tenths(self.end.0),
             tenths(self.end.1)
         );
+        if dummy {
+            println!(
+                "  dealt {} to the dummy ({}% of a health bar), {} a press, biggest single frame {}\n",
+                self.dealt,
+                self.dealt * 100 / sim::state::max_health().max(1),
+                self.dealt / self.presses.max(1) as i32,
+                self.biggest_hit
+            );
+        } else {
+            println!();
+        }
     }
 }
 
@@ -280,11 +295,13 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
     if let Some(opening) = script.opening() {
         w.players[0].mechanic = opening;
     }
+    // Where the autos land: just inside the wing's reach, dead ahead.
+    let reach = sim::moves::get(Class::DualMage, d::DARK_AUTO).reach;
+    let stand = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(reach.sub(t::body_radius())));
     if dummy {
-        // Where the autos land: just inside the wing's reach, dead ahead.
-        let reach = sim::moves::get(Class::DualMage, d::DARK_AUTO).reach;
-        let ahead = w.players[0].facing.scale(reach.sub(t::body_radius()));
-        w.players[1].pos = w.players[0].pos.add(ahead);
+        w.players[1].pos = stand;
     } else {
         // Out of everything's reach, in the corner behind her. Where the two
         // spawn is inside a Judgement's range, and a Judgement at the top of
@@ -305,6 +322,8 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
         back_in_band: None,
         lost_blink: None,
         health_lost: 0,
+        dealt: 0,
+        biggest_hit: 0,
         presses: 0,
         peak_gap: Fx::ZERO,
         end: (Fx::ZERO, Fx::ZERO),
@@ -332,8 +351,18 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
         }
         w.advance([Input::aimed(bits, 0), Input::new(0)]);
         // A training dummy that does not die: a round that ended would reset
-        // the bars and the clock mid-script.
+        // the bars and the clock mid-script. What it lost this frame is what
+        // she dealt.
+        let took = sim::state::max_health() - w.players[1].health;
+        r.dealt += took;
+        r.biggest_hit = r.biggest_hit.max(took);
         w.players[1].health = sim::state::max_health();
+        // And one that does not move: the benchmarks are stated against a
+        // target that stands in everything, and the light hand's shove would
+        // otherwise walk it out of range on the second press.
+        if dummy {
+            w.players[1].pos = stand;
+        }
 
         let p = &w.players[0];
         let (dark, light) = dual::bars(p).unwrap_or((Fx::ZERO, Fx::ZERO));

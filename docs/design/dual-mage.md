@@ -20,10 +20,13 @@ The verb is **goad**. This is a containment story, not a channelling story: the 
 conduit, they are a vessel under load, and the load is two things that want to be apart.
 
 > **Built 2026-09-23**, all of it below through the wings, in one thread against
-> [plans/dual-mage-v2.md](plans/dual-mage-v2.md). Every number is a first value chosen against
-> `cargo run -p sim --bin goad`, and **none of it has been played**. The feel log for that date
-> carries the play scripts. The single signed bar it replaced is under "Was" at the end, and the
-> proposal it was built from is [dual-mage-v2.md](dual-mage-v2.md).
+> [plans/dual-mage-v2.md](plans/dual-mage-v2.md), and **played once the same day**: the first
+> values came back overtuned — too much damage, too little burn, bars that drained too fast,
+> spells that fed them too much — and were re-tuned to the **benchmarks** below, which are the
+> class stated as player actions and their outcomes. `cargo run -p sim --bin goad` prints them
+> and `crates/sim/tests/dual_mage.rs` pins them. The feel log for that date carries both passes
+> and the play scripts still open. The single signed bar it replaced is under "Was" at the end,
+> and the proposal it was built from is [dual-mage-v2.md](dual-mage-v2.md).
 
 ## The mechanic
 
@@ -50,22 +53,22 @@ Nothing is signed; there is no centre.
 
 | Input | Which bar | How far |
 | --- | --- | --- |
-| Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 8 |
-| Light auto (`R`) | Light, and she is now light | 8 |
-| The finisher (`Q`) | Whichever force she is carrying | `tuning::meter_finisher_push` — 38 |
-| Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 18 |
+| Dark auto (`L`) | Dark, and she is now dark | `tuning::meter_auto_push` — 5 |
+| Light auto (`R`) | Light, and she is now light | 5 |
+| The finisher (`Q`) | Whichever force she is carrying | `tuning::meter_finisher_push` — 20 |
+| Anything else | Whichever force she is carrying | `tuning::meter_cast_push` — 9 |
 
 All of it **on the press**, whether or not it connects — see "Autos are the steering wheel"
-below. The three pushes were 5, 12 and 26 on the single bar and grew together, because the
-band is measured against them and the climb is measured against the calm; the ratios are what
-the old design chose and they are unchanged.
+below. The band is measured against the pushes and the climb against the calm, so the four move
+together: the first pass was 8, 18 and 38 against a band of 30, and it read as spells that fed
+the bars too much.
 
 | The hill | Knob | First value | Chosen against |
 | --- | --- | --- | --- |
-| Band | `meter_band` | 30 | One cast from level stays inside, two leave, the finisher always leaves, and the alternating rhythm — auto and cast on one side, then the other — never leaves. So at least an auto plus a cast and less than two casts: 26 to 36 |
-| Drift | `drift_gain` / `drift_cap` | 2 per second per unit outside the band, at most 10 per second | The cap is set so the far-side **cast** wins the race back and far-side **autos** only hold it: an auto every thirty frames puts sixteen a second on the low bar, and the cap plus the calm takes sixteen off |
-| Burn | `burn_gain` / `burn_cap` | 1.5 health per second per unit, at most 15 per second | A bar left fully one-sided for a whole sixty-second round must not by itself be a health bar |
-| Calm | `meter_calm` | 6 per second | See "Calm against the climb" under open questions — it is the knob pulled two ways |
+| Band | `meter_band` | 16 | Benchmark B8: one cast from level stays inside, two leave, the finisher always leaves, and the alternating rhythm — auto and cast on one side, then the other — never leaves. So at least an auto plus a cast and less than two casts: 14 to 18 |
+| Drift | `drift_gain` / `drift_cap` | 1 per second per unit outside the band, at most 3 per second | B6: uncorrected, a Judgement from level empties the lower bar in eight to twelve seconds; answered by the far-side hand, it is back inside within an exchange; far-side autos alone hold or claw back. Was 2 and 10, which read as bars draining too fast |
+| Burn | `burn_gain` / `burn_cap` | 4 health per second per unit, at most 25 per second | B7: ignoring a runaway for ten seconds costs about a Judgement's worth; fully one-sided for half a round costs half to four fifths of a bar. Was 1.5 and 15, which read as a footnote |
+| Calm | `meter_calm` | 2 per second | B4 and B5: the climb and the idle fall below. Was 6 |
 
 Three quantities fall out, and each is read by something different:
 
@@ -80,20 +83,43 @@ So she can be **powerful and stable** — both high, held inside the band, which
 A deep Judgement still nearly throws her over an edge. It throws her *sideways* now, and what
 she loses when the low bar collapses is the wings.
 
-**What the instrument says.** `cargo run -p sim --bin goad` runs the scripts the plan asked
-for. With the first values: alternating hands climbs to the blink in 8 seconds, the second jump
-in 12 and the wings in 15, never leaving the band; one dark auto and then dark casts only
-leaves the band inside 70 frames with the light bar already empty, and burns about 430 health
-over the following half minute; a Judgement thrown from the band's edge empties the lower bar
-in 188 frames and takes 209 health before the calm brings her back inside; both bars left at
-three quarters with no input fall below the blink in 251 frames, two and a quarter exchanges.
+### Benchmarks — the class as player actions and outcomes
+
+Set after the first play, which came back overtuned, and built to. Each is a test in
+`crates/sim/tests/dual_mage.rs` named for it, and `cargo run -p sim --bin goad` prints the
+numbers. An *exchange* is a Judgement's startup to the end of its recovery, twice: 110 frames.
+
+| | The player does | What happens | Measured |
+| --- | --- | --- | --- |
+| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two health bars. Against a person a third lands, which is one kill a round from the sustained game | 1.96 bars |
+| **B2** | One dark auto, then dark casts only, a Judgement every time it is up, on a target standing in all of it | The biggest number the class makes: two to three and a half bars, and it costs her at least half of her own | 2.24 bars dealt, 0.64 lost |
+| **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | 25%; 9% |
+| **B4** | Alternates cleanly from empty | The blink in ten to fourteen seconds, the second jump in sixteen to twenty-one, the wings in twenty to twenty-six — once a round, with commitment | 10.9 s, 16.8 s, 21.2 s |
+| **B5** | Stops at three quarters | The second jump is gone within an exchange; the blink is kept for at least two and gone inside seven | 6.8 exchanges |
+| **B6** | Throws a Judgement from level and does nothing | The lower bar is empty in eight to twelve seconds | 10 s |
+| | …and answers it with the other hand: the far-side auto, the far-side cast, an auto or two | Back inside the band within one exchange of the finisher recovering; far-side autos alone hold it or claw it back | passes |
+| **B7** | Ignores the runaway for ten seconds | Fifteen to twenty-five per cent of a health bar, about what the Judgement did to them. Fully one-sided for half a round: half to four fifths, and never all of it | 20%; 75% |
+| **B8** | One cast from level; two; the finisher; alternating | Inside the band; outside; outside; never outside | passes |
+
+What moved to get there, from the first pass: the pushes 8/18/38 → 5/9/20 and the band 30 →
+16; the calm 6 → 2 a second; the drift 2 per unit and 10 at most → 1 and 3; the burn 1.5 per
+unit and 15 at most → 4 and 25; the depth curve 0.5–2.0 → 0.6–1.4; and the base numbers, the
+autos 52 → 30, Lance 58 → 32 with a burst of 150 → 60, Sweep 95 → 55, Judgement 215 → 140
+with a field of 12 → 5 a tick, the tether's drain 9 → 2 a tick, and the dark Sweep's heal 22 →
+5 a target. **The target never moves, in the test and in the instrument alike**: the goad's
+dummy is held where the autos land, because the light hand's shove otherwise walked it out of
+range on the second press and the instrument read half of what the test did. And the heal had
+to come down with the damage, or one-sided spam paid its own burn back: the dark Sweep's heal
+and the tether's leech against a target standing in everything were most of the burn.
 
 ### The depth curve
 
 **Power scales continuously with the bar, and it is one function.** `state::depth` is a
-straight line from `tuning::depth_floor` at empty to `tuning::depth_ceiling` at full — half to
-double — and everything she throws is multiplied by a point on it: damage, knockback and pull,
-launch, leech, what a field drains and how long it lasts, and how big what arrives is.
+straight line from `tuning::depth_floor` at empty to `tuning::depth_ceiling` at full — six
+tenths to fourteen tenths — and everything she throws is multiplied by a point on it: damage,
+knockback and pull, launch, leech, what a field drains and how long it lasts, and how big what
+arrives is. The spread was half to double in the first pass, and with the old base numbers a
+Judgement from a full bar was forty per cent of a health bar.
 
 **Two things it deliberately never touches: how far a move is thrown, and how fast it comes
 out.** Spacing and frame data are what two players read each other with, and a class whose
@@ -152,7 +178,7 @@ the hardest thing the class can do and is meant to be.
   climbs again.
 
 So a match has a shape: climb, hold a tier, ride it, ascend, vent, climb. In versus at sixty
-seconds fifteen seconds of clean alternating reaches the wings, which against a person is
+seconds twenty-one seconds of clean alternating reaches the wings, which against a person is
 roughly once per match if she is good, which is what a nova should be.
 
 **Loss of control does not mean loss of input. It means losing the ability to decline.** In a
@@ -243,9 +269,10 @@ start of a match: she is dark until she throws a light auto.
 ## Coming back
 
 The far-side auto is still the way back, and it is **urgent** now rather than optional,
-because the low bar is falling while she waits. An auto alone only holds a runaway at the cap;
-a far-side **cast** wins it — one Sweep from the light hand pulls a two-cast excursion back
-inside the band — so the way back is a commitment, and the auto buys the time to make it.
+because the low bar is falling while she waits. Far-side autos alone hold a runaway and claw
+it back slowly; the far-side **cast** wins it — a light auto, a light Sweep and an auto or two
+bring a Judgement's runaway back inside the band within an exchange — so the way back is a
+commitment, and the auto buys the time to make it.
 Turning round *requires* getting into auto range, which forces the class into melee exactly
 when it is most powerful and most fragile.
 
@@ -274,19 +301,20 @@ new move, and the two-form kit gets used in both forms because the tiers demand 
 
 ## Open questions
 
-- **Calm against the climb.** The plan asked for two things of the calm that one number cannot
-  give: that stopping at three quarters loses the blink inside one exchange (which wants the
-  calm above 13 a second), and that alternating hands reaches the blink inside one exchange
-  (which wants it under 4). At 6 the climb to the wings takes a quarter of a round of clean
-  alternating — the design's own "roughly once per match" — and the idle fall takes two and a
-  quarter exchanges. It is the first knob to move after somebody has played it, and if the
-  climb wants to be fast *and* the plateau fragile, the answer is a calm that scales with the
+- **Are the benchmarks right?** They were set from one play and one complaint — too much
+  damage, too little burn, bars too fast, spells feeding too much — and they are the first
+  thing the next play should argue with. Each is one row above and one test.
+- **The plan's calm criteria were dropped.** It wanted stopping at three quarters to lose the
+  blink inside one exchange *and* the climb to reach it inside one; the person asked for slower
+  bars, so the calm went down to 2 and the blink now outlives seven exchanges of stillness. If
+  a fragile plateau is wanted back with a slow climb, the answer is a calm that scales with the
   bar rather than a flat one, which is a shape change and not a number.
 - **The band's width against a cast's push.** One cast from level stays inside, two do not, a
-  finisher never does. Whether that cadence is right is the first thing to play.
-- **Is the burn a consequence or a footnote?** Fifteen a second at the cap is a tenth of what
-  the one-sided burn used to be at full depth, chosen so a whole round one-sided is not a
-  health bar. The low bar collapsing is meant to be the real cost now. Play decides.
+  finisher never does. Whether that cadence is right is still the first thing to play.
+- **The finisher every fifty-five frames.** One-sided spam is three Judgements in seven
+  seconds on a target that stands still, and it is most of benchmark B2. Its lockout cannot
+  grow without breaking the rule that a lockout never outlasts the cheapest other thing in the
+  kit. If B2 still reads as too much, the answer is in the finisher's own frames, not the bars.
 - **Goading on a whiff.** Autos steer on the press, so a mage can climb to the blink in an
   empty arena — eight seconds of it, the instrument says. Calm may be enough to make that slow
   and fragile; if not, the knob is how much of the goad a whiff pays.

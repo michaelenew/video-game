@@ -708,19 +708,21 @@ fn inside_the_band_nothing_moves_but_the_calm_and_nothing_burns() {
 
 #[test]
 fn outside_the_band_the_higher_bar_rises_and_the_lower_falls_until_it_is_empty() {
-    // The hill itself. From two casts out of level the gap is outside the band
+    // The hill itself. From a finisher out of level the gap is outside the band
     // and it runs away: every frame the higher bar is higher and the lower is
     // lower, until the lower one is empty. The gap can never come back inside
     // on its own -- that is what the other hand is for.
-    let two_casts = 50 + 2 * t::meter_cast_push();
+    //
+    // A finisher rather than two casts, because the higher bar's rise is net
+    // of the calm: just outside the band the drift is smaller than the calm
+    // and the higher bar holds rather than rises, while the gap still widens.
+    // A Judgement's push puts her past that.
+    let finisher = 50 + t::meter_finisher_push();
     assert!(
-        two_casts - 50 > t::meter_band(),
-        "two casts do not leave the band"
+        finisher - 50 > t::meter_band(),
+        "a finisher does not leave the band"
     );
-    for (d, l, name) in [
-        (two_casts, 50, "dark ahead"),
-        (50, two_casts, "light ahead"),
-    ] {
+    for (d, l, name) in [(finisher, 50, "dark ahead"), (50, finisher, "light ahead")] {
         let mut w = mage();
         w.players[0].mechanic = meter_at(d, l, Force::Dark);
         let health = w.players[0].health;
@@ -730,7 +732,7 @@ fn outside_the_band_the_higher_bar_rises_and_the_lower_falls_until_it_is_empty()
             (light(&w), dark(&w))
         };
         let mut emptied_at = None;
-        for frame in 0..600 {
+        for frame in 0..1200 {
             step(&mut w, 1, 0);
             let (hi, lo) = if d > l {
                 (dark(&w), light(&w))
@@ -862,11 +864,10 @@ fn alternating_hands_climbs_without_ever_leaving_the_band() {
 
 #[test]
 fn stopping_loses_the_second_tier_and_keeps_the_first_for_a_while() {
-    // The calm. A tier is something she holds by fighting: stop goading at
-    // three quarters and the second tier is gone almost at once, and the first
-    // follows -- but not so fast that one exchange's worth of not pressing
-    // buttons takes the blink away. The plan asked for the first tier to go
-    // inside one exchange; the feel log for 2026-09-23 says why it does not.
+    // Benchmark B5. The calm: a tier is something she holds by fighting. Stop
+    // goading at three quarters and the second tier is gone almost at once,
+    // and the first follows -- but slowly enough that two exchanges of not
+    // pressing buttons do not take the blink away, and surely inside seven.
     let mut w = mage();
     w.players[0].mechanic = meter_at(t::tier_jump(), t::tier_jump(), Force::Dark);
     assert_eq!(tier(&w), Tier::Jump);
@@ -874,21 +875,29 @@ fn stopping_loses_the_second_tier_and_keeps_the_first_for_a_while() {
     assert_eq!(
         tier(&w),
         Tier::Blink,
-        "one exchange of stillness and the blink is gone too"
+        "one exchange of stillness and the second jump survived, or the blink went too"
     );
-    step(&mut w, 2 * exchange(), 0);
+    step(&mut w, exchange(), 0);
+    assert_eq!(
+        tier(&w),
+        Tier::Blink,
+        "two exchanges of stillness and the blink is gone"
+    );
+    step(&mut w, 5 * exchange(), 0);
     assert_eq!(
         tier(&w),
         Tier::None,
-        "three exchanges of stillness and she still holds the blink"
+        "seven exchanges of stillness and she still holds the blink"
     );
 }
 
 #[test]
-fn a_bar_left_fully_one_sided_burns_and_is_not_by_itself_a_health_bar_in_a_round() {
-    // The burn is a consequence, not a clock. Fully one-sided for a whole
-    // versus round -- sixty seconds -- costs real health and less than all of
-    // it, and it stops the moment the calm brings the gap back inside the band.
+fn a_bar_left_fully_one_sided_burns_most_of_a_health_bar_in_half_a_round_and_never_all_of_it() {
+    // Benchmark B7. The burn is the price of ignoring the hill, and it has to
+    // be one a player feels: fully one-sided and uncorrected for thirty
+    // seconds costs between half and four fifths of a health bar. Over a whole
+    // round it still cannot be all of it, and it stops the moment the calm
+    // brings the gap back inside the band.
     let mut w = mage();
     w.players[0].mechanic = meter_at(t::meter_max(), 0, Force::Dark);
     let before = w.players[0].health;
@@ -898,12 +907,16 @@ fn a_bar_left_fully_one_sided_burns_and_is_not_by_itself_a_health_bar_in_a_round
         after_a_second < before,
         "a full one-sided bar burns nothing"
     );
-    step(&mut w, 3600 - 60, 0);
-    let lost = before - w.players[0].health;
+    step(&mut w, 1800 - 60, 0);
+    let half_round = before - w.players[0].health;
+    let bar = sim::state::max_health();
     assert!(
-        lost < sim::state::max_health(),
-        "the burn alone took a health bar ({lost})"
+        half_round * 2 >= bar && half_round * 5 <= bar * 4,
+        "thirty seconds fully one-sided cost {half_round} of {bar}"
     );
+    step(&mut w, 1800, 0);
+    let lost = before - w.players[0].health;
+    assert!(lost < bar, "the burn alone took a health bar ({lost})");
     assert!(sim::dual::level(&w.players[0]));
     let settled = w.players[0].health;
     step(&mut w, 60, 0);
@@ -927,6 +940,242 @@ fn neither_the_burn_nor_ascension_can_be_what_kills_her() {
         step(&mut w, 600, 0);
         assert_eq!(w.players[0].health, 1);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Benchmarks -- player actions and their outcomes, 2026-09-23
+// ---------------------------------------------------------------------------
+//
+// The first tuning came back overtuned from play: too much damage, too little
+// burn, bars that drained too fast, spells that fed them too much. These pin
+// the numbers it was re-tuned to, stated the way the person stated the
+// complaint -- as what a player does and what happens -- and
+// `cargo run -p sim --bin goad` prints the same numbers. The full list is in
+// `docs/design/dual-mage.md` under "Benchmarks".
+
+/// Run a script of presses against a dummy standing where the autos land,
+/// healed every frame so the round never ends, and give back what she dealt
+/// and what it cost her. The instrument's dummy, in a test.
+fn against_a_dummy(frames: u32, mut next: impl FnMut(u32) -> u16) -> (i32, i32) {
+    let mut w = mage();
+    let reach = sim::moves::get(Class::DualMage, dual::DARK_AUTO).reach;
+    let stand = w.players[0]
+        .pos
+        .add(w.players[0].facing.scale(reach.sub(t::body_radius())));
+    w.players[1].pos = stand;
+    let before = w.players[0].health;
+    let mut dealt = 0;
+    let mut presses = 0;
+    for _ in 0..frames {
+        let bits = if w.players[0].action.actionable() && w.players[0].grounded {
+            let b = next(presses);
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        dealt += sim::state::max_health() - w.players[1].health;
+        w.players[1].health = sim::state::max_health();
+        w.players[1].pos = stand;
+    }
+    (dealt, before - w.players[0].health)
+}
+
+#[test]
+fn b1_alternating_on_a_dummy_for_half_a_round_deals_about_a_health_bar_and_a_half() {
+    // Everything landing on a target that never moves, for thirty seconds,
+    // climbing from empty: between one and two health bars. Against a person
+    // a third of it lands, which is one kill a round from the sustained game.
+    let (dealt, _) = against_a_dummy(1800, |n| [L, M, R, E][(n % 4) as usize]);
+    let bar = sim::state::max_health();
+    assert!(
+        dealt >= bar && dealt <= 2 * bar,
+        "alternating for half a round dealt {dealt} of a {bar} health bar"
+    );
+}
+
+#[test]
+fn b2_one_sided_spam_on_a_dummy_deals_at_most_three_and_a_half_bars_and_costs_her_half_of_one() {
+    // The burst play: one dark auto, then dark casts only, a Judgement every
+    // time it is up, on a target that stands in all of it. It is allowed to be
+    // the biggest number the class can produce, and it has to cost her.
+    let (dealt, cost) = against_a_dummy(1800, |n| {
+        if n == 0 {
+            L
+        } else {
+            [M, E, Q][((n - 1) % 3) as usize]
+        }
+    });
+    let bar = sim::state::max_health();
+    assert!(
+        dealt >= 2 * bar && dealt * 2 <= 7 * bar,
+        "one-sided spam for half a round dealt {dealt} of a {bar} health bar"
+    );
+    assert!(
+        cost * 2 >= bar,
+        "one-sided spam for half a round cost her only {cost} of {bar}"
+    );
+}
+
+#[test]
+fn b3_a_judgement_from_a_full_bar_is_at_most_a_quarter_of_a_health_bar() {
+    // The biggest single strike in the kit, and the one that was too big. A
+    // quarter from a full bar; still a real hit -- not under eight per cent --
+    // from an empty one. Measured over the strike and its field on somebody
+    // standing where it lands.
+    let bar = sim::state::max_health();
+    let full = dealt_from(Q, high());
+    let empty = dealt_from(Q, 0);
+    assert!(
+        full * 4 <= bar,
+        "a Judgement from a full bar took {full} of {bar}, more than a quarter"
+    );
+    assert!(
+        empty * 100 >= bar * 8,
+        "a Judgement from an empty bar took {empty} of {bar}, under eight per cent"
+    );
+}
+
+#[test]
+fn b4_the_climb_takes_a_third_of_a_round_to_the_wings() {
+    // Clean alternating from empty, in an empty arena: the blink in ten to
+    // fourteen seconds, the second jump in sixteen to twenty-one, the wings in
+    // twenty to twenty-six. So the wings are once a round, with commitment.
+    let mut w = mage();
+    w.players[1].pos = V3::new(fx(-12.0), Fx::ZERO, fx(-12.0));
+    let mut presses = 0;
+    let (mut blink, mut jump, mut wings) = (None, None, None);
+    for frame in 1..=1800u32 {
+        let bits = if w.players[0].action.actionable() {
+            let b = [L, M, R, E][presses % 4];
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        let now = tier(&w);
+        if now >= Tier::Blink {
+            blink.get_or_insert(frame);
+        }
+        if now >= Tier::Jump {
+            jump.get_or_insert(frame);
+        }
+        if now == Tier::Wings {
+            wings.get_or_insert(frame);
+            break;
+        }
+    }
+    let seconds = |f: Option<u32>| f.map(|f| f as f32 / 60.0);
+    let (blink, jump, wings) = (seconds(blink), seconds(jump), seconds(wings));
+    assert!(
+        blink.is_some_and(|s| (10.0..=14.0).contains(&s)),
+        "the blink came at {blink:?} s"
+    );
+    assert!(
+        jump.is_some_and(|s| (16.0..=21.0).contains(&s)),
+        "the second jump came at {jump:?} s"
+    );
+    assert!(
+        wings.is_some_and(|s| (20.0..=26.0).contains(&s)),
+        "the wings came at {wings:?} s"
+    );
+}
+
+#[test]
+fn b6_a_finisher_from_level_is_caught_by_the_other_hand_inside_an_exchange() {
+    // The hill, and the answer to it. A Judgement from level leaves the band.
+    // Uncorrected, the lower bar is empty in eight to twelve seconds. Answered
+    // -- a far-side auto, the far-side cast, and an auto or two more -- it is
+    // back inside the band within one exchange of the finisher recovering.
+    // Far-side autos alone hold it or claw it back, slowly.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    step(&mut w, 1, Q);
+    assert!(!sim::dual::level(&w.players[0]));
+    let mut idle = w.clone();
+    let mut emptied = None;
+    for frame in 1..=900u32 {
+        step(&mut idle, 1, 0);
+        if sim::dual::lower(&idle.players[0]).raw() == 0 {
+            emptied = Some(frame);
+            break;
+        }
+    }
+    assert!(
+        emptied.is_some_and(|f| (480..=720).contains(&f)),
+        "uncorrected, the lower bar emptied at {emptied:?} frames"
+    );
+
+    // Answered with the light hand, from the frame the finisher recovers.
+    let mut presses = 0;
+    let mut recovered_at = None;
+    let mut caught_at = None;
+    for frame in 1..=600u32 {
+        let free = w.players[0].action.actionable();
+        if free && recovered_at.is_none() {
+            recovered_at = Some(frame);
+        }
+        let bits = if free {
+            let b = [R, E, R, R, R, R][presses.min(5)];
+            presses += 1;
+            b
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+        if sim::dual::level(&w.players[0]) {
+            caught_at = Some(frame);
+            break;
+        }
+    }
+    let recovered = recovered_at.expect("the finisher never recovered");
+    let caught = caught_at.expect("the other hand never caught it");
+    assert!(
+        caught - recovered <= exchange(),
+        "caught {} frames after the finisher recovered; an exchange is {}",
+        caught - recovered,
+        exchange()
+    );
+
+    // Autos alone: the gap does not grow.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    step(&mut w, 1, Q);
+    step(&mut w, 60, 0);
+    let gap_before = sim::dual::gap(&w.players[0]);
+    for _ in 0..300 {
+        let bits = if w.players[0].action.actionable() {
+            R
+        } else {
+            0
+        };
+        step(&mut w, 1, bits);
+    }
+    assert!(
+        sim::dual::gap(&w.players[0]).raw() <= gap_before.raw(),
+        "far-side autos alone lost ground: the gap went {gap_before:?} to {:?}",
+        sim::dual::gap(&w.players[0])
+    );
+}
+
+#[test]
+fn b7_ignoring_a_runaway_for_ten_seconds_costs_about_a_judgement() {
+    // The burn as a consequence: a Judgement from level, and then nothing for
+    // ten seconds, costs her between fifteen and twenty-five per cent of a
+    // health bar -- roughly what the Judgement did to them.
+    let mut w = mage();
+    w.players[0].mechanic = meter_at(50, 50, Force::Dark);
+    let before = w.players[0].health;
+    step(&mut w, 1, Q);
+    step(&mut w, 600, 0);
+    let lost = before - w.players[0].health;
+    let bar = sim::state::max_health();
+    assert!(
+        lost * 100 >= bar * 15 && lost * 100 <= bar * 25,
+        "ten seconds of ignoring the runaway cost {lost} of {bar}"
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -23,9 +23,9 @@ meaningless without it.
 - **Left click goads Dark and right click goads Light — and only the autos have a side.** Every
   other input feeds whichever force she is already carrying. Middle click and the keys have no
   side, which is why Lance lives on middle click.
-- **Three tiers of push:** an auto goads a bar 8, a cast 18, and the finisher 38. The last is
+- **Three tiers of push:** an auto goads a bar 5, a cast 9, and the finisher 20. The last is
   what makes casting Judgement from high a question about what the other bar does next.
-- **The hill.** Inside a band of 30 nothing moves on its own. Outside it the higher bar rises,
+- **The hill.** Inside a band of 16 nothing moves on its own. Outside it the higher bar rises,
   the lower falls and she burns, faster the wider the gap. Both bars calm toward empty, always.
 - **Power is the bar she is carrying**, continuously: a cast reads the carried bar, an auto its
   own. Empty is thin and full is the most she can hold.

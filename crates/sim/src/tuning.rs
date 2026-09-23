@@ -1064,10 +1064,12 @@ pub fn meter_max() -> i32 {
 // The two bars and the hill between them -- see `crate::dual`
 // ---------------------------------------------------------------------------
 //
-// v2 of the mechanic, 2026-09-23. Every first value below came out of
-// `cargo run -p sim --bin goad` against the cadence `docs/design/dual-mage.md`
-// asks for, and the feel log entry for the same date says which criterion each
-// one was chosen against. None of them has been played.
+// v2 of the mechanic, 2026-09-23. The first values were chosen against the
+// cadence in `docs/design/dual-mage.md`; the same day's play came back
+// overtuned, and the values below are the second pass, tuned to the
+// **benchmarks** in that document -- player actions and their outcomes, which
+// `cargo run -p sim --bin goad` prints and `tests/dual_mage.rs` pins. The feel
+// log for the date carries both passes.
 
 /// How far apart the two bars may sit and still count as level, in whole
 /// units of the bar. Inside it nothing moves on its own; outside it the hill
@@ -1077,7 +1079,7 @@ pub fn meter_max() -> i32 {
 /// to leave, the finisher always leaves, and the alternating rhythm -- an auto
 /// and a cast on one side, then the same on the other -- has to stay inside.
 /// So it is at least an auto plus a cast and less than two casts: with pushes
-/// of 8, 18 and 38 that is between 26 and 36, and 30 is the middle of it.
+/// of 5, 9 and 20 that is between 14 and 18, and 16 is the middle of it.
 pub fn meter_band() -> i32 {
     oven::scalar(Scalar::MeterBand)
 }
@@ -1085,19 +1087,23 @@ pub fn meter_band() -> i32 {
 /// How fast the higher bar rises and the lower falls, per second, for every
 /// unit the gap is outside the band.
 ///
-/// The slope of the hill. Two a second per unit means a Judgement thrown from
-/// level -- eight outside the band -- is already at the cap, so the finisher
-/// starts something the other hand has to answer within a cast or two.
+/// The slope of the hill. One a second per unit means a Judgement thrown from
+/// level -- four outside the band -- is already at the cap, so the finisher
+/// starts something the other hand has to answer within a cast or two. The
+/// first pass had it at two; the runaway read as too fast.
 pub fn drift_gain() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DriftGain))
 }
 
 /// The most the drift ever moves either bar, per second.
 ///
-/// Chosen so the far-side **cast** wins the race and far-side **autos** only
-/// hold it: an auto every thirty frames is sixteen a second onto the low bar,
-/// and the cap plus the calm takes sixteen off it. The way back is the cast,
-/// which is a commitment, and the auto buys the time to make it.
+/// Chosen against benchmark B6: uncorrected, a Judgement from level empties the
+/// lower bar in eight to twelve seconds, and answered with the far-side hand
+/// -- an auto, the cast, an auto or two -- it is back inside the band within
+/// one exchange of the finisher recovering. Far-side autos alone claw it back
+/// slowly: ten a second onto the low bar against a gap that widens at twice
+/// this. The first pass was ten a second, and it read as bars that drained too
+/// fast; the burn is what bites now, not the drift.
 pub fn drift_cap() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DriftCap))
 }
@@ -1109,8 +1115,10 @@ pub fn burn_gain() -> Fx {
 
 /// The most the burn ever costs, per second.
 ///
-/// Fifteen, because a bar left fully one-sided for the whole of a versus round
-/// -- sixty seconds -- must not by itself be a health bar. It cannot kill
+/// Twenty-five, against benchmark B7: ignoring a runaway for ten seconds costs
+/// about what the Judgement that started it did to them -- a fifth of a health
+/// bar -- and fully one-sided for half a round costs between half and four
+/// fifths. The first pass was fifteen and read as a footnote. It cannot kill
 /// either way; `dual::singe_health` stops at one.
 pub fn burn_cap() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::BurnCap))
@@ -1118,14 +1126,14 @@ pub fn burn_cap() -> Fx {
 
 /// How fast both bars fall on their own, per second, always.
 ///
-/// What makes a tier something she holds by fighting. Six a second is a guess
-/// pulled two ways: the plan asks for the second tier to fall below the first
-/// inside two Judgements when she stops, which wants it above thirteen, and
-/// for the alternating climb to reach the first tier inside one exchange, which
-/// wants it under four. It cannot be both, so it is set where the climb to the
-/// top takes about a quarter of a round of clean alternating -- the design's
-/// own "roughly once per match" -- and the idle fall takes two and a half
-/// exchanges. The first thing to move after somebody has played it.
+/// What makes a tier something she holds by fighting. Two a second, against
+/// benchmarks B4 and B5: clean alternating reaches the blink in ten to
+/// fourteen seconds, the second jump in sixteen to twenty-one and the wings in
+/// twenty to twenty-six -- once a round, with commitment -- and stopping at
+/// three quarters keeps the blink for at least two exchanges and loses it
+/// inside seven. The first pass was six, and it read as bars that drained too
+/// fast; the plan's own wish for the blink to go inside one exchange was
+/// dropped with it, in favour of the slower drain the person asked for.
 pub fn meter_calm() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MeterCalm))
 }
@@ -2123,6 +2131,11 @@ pub fn hammer_leap() -> Fx {
 /// **Below one, and it has to be.** A bar she has not goaded is a being she has
 /// not fed, and the only way to say that in numbers is to make an empty bar
 /// cost her something. Everything she throws from empty comes out thin.
+///
+/// Six tenths, and the ceiling is fourteen tenths: the first pass was half to
+/// double, and a Judgement from a full bar was forty per cent of a health bar.
+/// The spread is narrower now, and the base damage came down with it -- see
+/// benchmarks B1 to B3 in `docs/design/dual-mage.md`.
 pub fn depth_floor() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DepthFloor))
 }

@@ -206,23 +206,23 @@ pub const SECTIONS: &[Section] = &[
         entries: &[
             e(
                 "Left click",
-                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. It **drags** whoever it catches a short way toward you and gives you a trickle of health back, which is how a fragile melee mage stays attached to somebody. Feeds the dark bar eight, and makes you dark.",
+                "Dark auto. A punch with the left arm, and a wing that opens behind you on that side and comes round to the front. It **drags** whoever it catches a short way toward you and gives you a trickle of health back, which is how a fragile melee mage stays attached to somebody. Feeds the dark bar five, and makes you dark.",
             ),
             e(
                 "Right click",
-                "Light auto. The same punch and wing mirrored onto the right arm, and it **shoves** instead of pulling. Feeds the light bar eight, and makes you light. There is no guard on this class.",
+                "Light auto. The same punch and wing mirrored onto the right arm, and it **shoves** instead of pulling. Feeds the light bar five, and makes you light. There is no guard on this class.",
             ),
             e(
                 "Middle click",
-                "Lance, and which of the two you get is whichever force you are carrying. Light: the line flies out and bursts at its far end, so you aim it past somebody rather than at them. Dark: it catches the first thing it hits and drains it until one of you walks out of the leash. Middle click has no side, so it feeds whichever bar you are carrying, eighteen -- which is what lets the form come from the arm you last punched with. The wind-ups look nothing alike on purpose.",
+                "Lance, and which of the two you get is whichever force you are carrying. Light: the line flies out and bursts at its far end, so you aim it past somebody rather than at them. Dark: it catches the first thing it hits and drains it until one of you walks out of the leash. Middle click has no side, so it feeds whichever bar you are carrying, nine -- which is what lets the form come from the arm you last punched with. The wind-ups look nothing alike on purpose.",
             ),
             e(
                 "E",
-                "Sweep. Both arms round past both shoulders -- the one thing you throw that reaches a little behind you, which is what makes it the panic button. Light throws them back and off their feet; dark slows them and heals you per target caught. No side of its own, so it feeds whichever bar you are carrying, eighteen.",
+                "Sweep. Both arms round past both shoulders -- the one thing you throw that reaches a little behind you, which is what makes it the panic button. Light throws them back and off their feet; dark slows them and heals you per target caught. No side of its own, so it feeds whichever bar you are carrying, nine.",
             ),
             e(
                 "Q",
-                "Judgement. The finisher: a delayed strike where the crosshair is, and the field it leaves burns them and makes you fast while you stand in it. It feeds the bar you are carrying far harder than anything else you have -- thirty-eight -- so casting it from level throws the two apart, and the other hand has to answer.",
+                "Judgement. The finisher: a delayed strike where the crosshair is, and the field it leaves burns them and makes you fast while you stand in it. It feeds the bar you are carrying far harder than anything else you have -- twenty -- so casting it from level throws the two apart, and the other hand has to answer.",
             ),
             e(
                 "The bar you carry is power",
@@ -230,7 +230,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "The hill",
-                "The two bars are compared every frame. Level -- within thirty of each other -- nothing moves. Further apart than that, the higher one rises and the lower one falls, faster the wider the gap, and you burn. Both bars fall slowly on their own, always, so a height you stop feeding is a height you lose.",
+                "The two bars are compared every frame. Level -- within sixteen of each other -- nothing moves. Further apart than that, the higher one rises and the lower one falls, faster the wider the gap, and you burn. Both bars fall slowly on their own, always, so a height you stop feeding is a height you lose.",
             ),
             e(
                 "Blink, second jump, wings",

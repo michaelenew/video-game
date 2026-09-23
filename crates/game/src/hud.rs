@@ -573,9 +573,11 @@ fn mechanic(p: &sim::state::Player) -> String {
     match p.mechanic.summary() {
         Summary::Text(t) => t.to_string(),
         Summary::Value(label, v) => format!("{label}: {v}"),
-        Summary::Bars { dark, light, tier } if tier.is_empty() => {
-            format!("dark {dark} / light {light}")
-        }
+        Summary::Bars {
+            dark,
+            light,
+            tier: "",
+        } => format!("dark {dark} / light {light}"),
         Summary::Bars { dark, light, tier } => format!("dark {dark} / light {light}  {tier}"),
     }
 }

@@ -4474,3 +4474,55 @@ As the mage: did you spend the round managing the hill or ignoring it? Did you e
 was it the right moment? As the Champion: could you read the wings — did a lopsided mage look
 like a mage about to burn, and did full wings look like something to avoid or something to
 punish?
+
+### 2026-09-23 — the two bars came back overtuned, and were rebuilt to benchmarks (M4, first pass)
+**Changed** After the first play of the two bars: "less damage, more health drain, slower drain
+on the bars, lower resource adds for the spells". The class was restated as **benchmarks** —
+player actions and their outcomes, eight of them, in `docs/design/dual-mage.md` under
+"Benchmarks" — and the knobs were moved until `cargo run -p sim --bin goad` printed numbers
+inside them. Each benchmark is now a test in `crates/sim/tests/dual_mage.rs`, named `b1_` to
+`b7_`, and the goad prints what she dealt to the dummy alongside what it cost her.
+
+| Knob | Was | Now | Benchmark |
+| --- | --- | --- | --- |
+| Pushes: auto / cast / finisher | 8 / 18 / 38 | 5 / 9 / 20 | B4, B8 |
+| Band | 30 | 16 | B8 |
+| Calm | 6 a second | 2 | B4, B5 |
+| Drift, per unit / at most | 2 / 10 a second | 1 / 3 | B6 |
+| Burn, per unit / at most | 1.5 / 15 a second | 4 / 25 | B7 |
+| Depth curve, empty → full | 0.5 → 2.0 | 0.6 → 1.4 | B1–B3 |
+| Autos / Lance / burst | 52 / 58 / 150 | 30 / 32 / 60 | B1, B2 |
+| Judgement / its field a tick | 215 / 12 | 140 / 5 | B2, B3 |
+| Sweep / dark Lance / tether a tick | 95 / 35 / 9 | 55 / 28 / 2 | B1, B2 |
+| Dark Sweep's heal, a target | 22 | 5 | B2 |
+
+**What the instrument says now** against what it said before, half a round on a dummy that
+never moves: alternating deals 1.96 health bars (was 2.6, measured against a dummy the light
+hand had shoved out of range; held in place the first pass was over 5) and reaches the blink
+at 10.9 s, the second jump at 16.8 s and the wings at 21.2 s (were 8.1, 12.5, 15.3); one-sided
+spam deals 2.24 bars (was 9.9) and costs her 0.64 of one; a Judgement from a full bar is 25%
+of a bar with its field (was 40% for the strike alone); stopping at three quarters keeps the
+blink for 6.8 exchanges (was 2.3); a Judgement from level ignored empties the lower bar in
+10 s (was 3.1) and costs 20% in ten seconds; fully one-sided for half a round costs 75%.
+
+**Two things found on the way.** The instrument's dummy was being shoved out of range by the
+light auto on the second press, so it read half of what the same script did in a test that
+held the target still; it is held still now, and the benchmarks say so. And the first cut of
+the damage pass left one-sided spam costing her 160 health in half a round instead of 600:
+the dark Sweep's heal, 22 a target, and the tether's leech against a target standing in
+everything were paying the burn back. The heal came down to 5 with the damage. Sustain on the
+dark side is the kit's identity and it stays; it cannot be the thing that makes the hill free.
+
+**What could not be had.** The plan's wish for the blink to go inside one exchange of
+stillness is gone with the slower calm; the person asked for slower bars, and the benchmark
+now says two to seven exchanges. And one-sided spam is still the biggest number the class can
+make because a Judgement is up every 55 frames and its lockout cannot grow without breaking
+the lockout rule in `feel.rs`; if B2 still reads as too much, the answer is the finisher's own
+frames.
+
+**Verdict** open — rebuilt to benchmarks, unverified. **Play script, same as C1 with one
+addition:** *Dummy on. Alternate hands for ten seconds and watch the two bars. Throw two
+Judgements from level; catch it with the other hand; then do not catch it. Then spam dark
+casts at the dummy for fifteen seconds and watch your own health.* Questions: Which of the
+eight benchmark rows is wrong, and in which direction? Does a Judgement from a full bar still
+read as too much? Is the burn a consequence now?

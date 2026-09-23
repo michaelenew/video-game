@@ -9,8 +9,10 @@ implements: ../dual-mage-v2.md
 > `crates/view/tests/wings.rs`, except two that the numbers could not both satisfy — the
 > time-to-tier criteria in M1 and M2 are met at two and a quarter exchanges for the idle fall
 > and four for the climb rather than one and one, and the feel log for that date says why.
-> Human checkpoints C1, C2 and C3 are open with their play scripts written; M4 and M5 wait on
-> them. Two deviations from the brief, both argued in [`../dual-mage.md`](../dual-mage.md):
+> C1 was played the same day and came back overtuned; the first pass of M4 restated the class
+> as eight benchmarks in `../dual-mage.md` and re-tuned to them, with each benchmark a test.
+> C1 to C3 are open again against the new numbers, with their play scripts written; the rest
+> of M4 and M5 wait on them. Two deviations from the brief, both argued in [`../dual-mage.md`](../dual-mage.md):
 > "both full" is the lower bar at 95, and the blink has no invulnerability knob of its own.
 
 # Dual mage v2 — action plan
