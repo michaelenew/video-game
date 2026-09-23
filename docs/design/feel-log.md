@@ -124,29 +124,33 @@ as they get tested.
   once is how a grammar gets worse. Watching which of them is *missed* is the
   cheapest way to find out whether all three should come back.
 
-### The Dual mage's depth curve
+### The Dual mage's two bars
 
-⚠️ **All newly open, 2026-09-16.** Depth scales everything she throws now; none
-of these numbers has been played.
+⚠️ **All newly open, 2026-09-23.** The single bar became two, with a hill between
+them and three tiers on the lower one; none of these numbers has been played.
+The play scripts are in the dated entries for that day.
 
-- **Is four-to-one the right spread?** Half at the centre, double at the edge.
-  Too wide and the middle of the bar reads as broken rather than weak; too
-  narrow and there is no reason to leave it. Both ends are one knob each
-  (`Depth, power at the centre` / `at the edge`).
+- **Calm against the climb.** `Calm, both bars fall per second` is 6, and it is
+  pulled two ways: the plan wanted stopping at three quarters to lose the blink
+  inside one exchange (calm above 13) *and* alternating to reach the blink
+  inside one exchange (calm under 4). If play wants both, the calm scales with
+  the bar rather than being flat.
+- **Is the band's cadence right?** One cast from level stays inside it, two do
+  not, a finisher never does. `Band, the gap that still counts as level` is 30.
+- **Is the burn a consequence or a footnote?** Fifteen a second at the cap, a
+  tenth of the old one-sided burn at full depth. The low bar collapsing is
+  meant to be the real cost.
+- **Is four-to-one the right spread on the depth curve?** Half at empty, double
+  at full. Unchanged from the single bar, and still unplayed.
 - **Should size ride the whole curve, or less of it?** `Depth, how much of it
-  the size takes` is 100%, so a deep cast is exactly as much bigger as it is
-  harder. More damage is worse to be hit by and more radius is harder to *not*
-  be hit by, and those may not deserve the same slider.
-- **Is a Judgement at full depth too much of a health bar?** The strike alone is
-  about 43% of one, and the field can take it past 80% against somebody who
-  stands in all of it.
-- **Is "the form is the arm you last punched with" findable?** Nothing teaches
-  it but the bar's colour. The two Lance clips are authored so the *opponent*
-  can read which is coming; whether the player can read their own is a
-  different question with a different answer.
+  the size takes` is 100%.
+- **Is a Judgement from a full bar too much of a health bar?** The strike alone
+  is about 43% of one.
+- **Is "the form is the arm you last punched with" findable?** The wings and
+  the track's border both say it now; whether either teaches it is a different
+  question.
 - **Does the pull want to be weaker than the shove?** They are within 10% of
-  each other. Being dragged is worth more than being shoved at the same speed,
-  because you are usually walking into the shove and away from the pull.
+  each other.
 
 ### Defence
 - **Is the 4-frame parry window findable?** This is the single most important
@@ -4567,3 +4571,796 @@ the wrong end of the haul.
 
 **Verdict** open. Unplayed since the change.
 
+---
+
+### 2026-09-17 — the jump was the movement system, not the floor of one
+
+**Changed** takeoff 17.7 → 16.2 m/s; the hold's gravity 0.56 → 0.72 and its window
+26 → 18 frames; the release cut 0.6 → 0.52. Gravity itself untouched.
+
+**Why** two complaints, and they turned out to be about different knobs.
+
+A full hop reached from 4.1 m on the Bulwark to 8.7 m on the Dual mage. The
+Champion's pole vault reaches 7.4 m and the Elementalist's structure jump was
+reaching 17. So the vault — a committed move on a Rush charge, aimed at the floor
+— was worth a quarter more height than pressing space, and the structure jump was
+the only class technique in the game that clearly beat the universal one. A jump
+this good makes every class's signature movement a flourish rather than a
+technique.
+
+Apex goes as the **square** of the takeoff speed and airtime goes as the takeoff
+speed, so cutting one knob by a twelfth took a third off the height and only a
+fifth off the hang. That is why the height came off here rather than out of
+gravity: leaning on gravity would have kept the airtime and *raised* the vault and
+the structure jump, which is the wrong direction for the thing this was for.
+
+The second complaint was that a held jump read as an elevator — visibly climbing
+at a constant rate with gravity switching on at the top. That was the sustain,
+and the numbers say so plainly: at 0.56 gravity for 26 frames the rise lost only
+half its speed over four tenths of a second and covered five of its six metres
+doing it. A sustain has to be a *discount* on gravity rather than a suspension of
+it. At 0.72 for 18 the rise visibly slows the whole way up, and the slope change
+when the window closes went from 0.39 → 0.70 m/s per frame to 0.50 → 0.70.
+
+Stiffening the sustain takes more off the full hop than off the tap, so the
+release cut came down to hold the short hop at a quarter of the full one, which is
+the band `combat.rs` pins.
+
+**Where it landed** full hops of 2.7 m (Bulwark), 4.0 (Champion), 4.0 (Blood
+mage), 5.0 (Elementalist), 5.1 (Reaver), 6.0 (Dual mage), over 0.7 s to 1.2 s.
+Everybody still clears a standing fighter and the arena's 1.5 m platforms, and
+the vault is now worth 1.9 full hops rather than 1.2.
+
+**Two knock-ons worth watching, neither of them asked for.**
+
+`beastcheck` printed a single apex, which was honest while the shortest hop in
+the game got you most of the way up and is not now. It prints the spread, and the
+spread changes the climb: the Ridgeback's tail at 3.9 m and every surface a
+stumble or a broken foot opens is still a standing jump **for the floaty
+classes**, and for the Bulwark it is now a topple or a platform. That was
+partly true before and the diagnostic was hiding it — the Dual mage could always
+reach the shoulders unaided — but the Bulwark genuinely lost the tail.
+
+And `monster.rs` had the shake-jump's margin at four to one. A full hop is now a
+little shorter than the whip rather than a little longer, so committing early
+clears slightly less of it and the gap narrowed to 3.7 without anything about
+the read changing. The assertion is stated against the fifty frames that test
+already calls a usable window, with the ratio kept behind it at three; a margin
+that moves every time somebody tunes the jump was measuring the jump.
+
+**Verdict** open. Nobody has played it. The number to watch is the Bulwark:
+2.7 m and 41 frames is the thinnest airtime in the game and the class that can
+least afford a mistake in the air.
+
+### 2026-09-17 — the structure jump, cut to three quarters. **Reverted 2026-09-18**
+
+**Changed** the eruption's rise 14 → 16 → 17 frames and the lift a rider keeps
+0.40 → 0.44. **All of it put back on 2026-09-18.**
+
+**Why it was tried** a single structure jump and a double were both reckoned too
+tall: several seconds of air time to throw long-range attacks from and to pick
+the ground she was going to land on, off a button she can press at any time.
+That is a run-and-hit class, and this one is supposed to be an area-control
+mage. The target was about three quarters.
+
+**Why it came back** it felt much worse to play — the double noticeably lower —
+and underneath that were two mistakes, one of measurement and one of method.
+
+**The measurement.** The baseline for the double was taken as 43.9 m. It was
+58.8 m. The sweep that produced it sampled gaps of 0, 6, 10, 14 and 18 frames
+between the two casts, and the optimum is at **two**, which was never tried. So
+"three quarters" was computed against a number a quarter too low, and every
+number derived from it was wrong in the same direction. A coarse sweep is fine
+for finding out whether something is big; it is not fine for setting a target
+off — and the tell was there to be noticed, because a technique whose payout
+falls off steeply with the gap has its peak at one end of the range rather than
+in the middle of the samples.
+
+**The method, which is the part worth keeping.** The chain a structure jump is
+made of is a **resonance**, not a sum. Each link happens because the eruption
+grows upward faster than she is rising, catches her feet, and hands the
+still-held jump button another takeoff. Whether that happens at all depends on
+the margin between two speeds, so how many links each technique gets is
+*discontinuous* in the tuning, and not even monotonic:
+
+| | single | double |
+| --- | --- | --- |
+| as it was | 17.5 m | 58.8 m |
+| rise 16 | 12.5 | 45.1 |
+| rise 17, lift 0.44 | 12.8 | 33.0 |
+| her jump ×1.15 instead | **15.0** | 52.6 |
+| her jump ×1.25 instead | 16.4 | 45.0 |
+
+Three frames on the rise roughly halved the double while the single barely
+moved. Raising *her* jump made the single **fall**, because she outruns the
+stone that was going to catch her and loses a link. Nothing here can be solved
+for a target: every one of those rows is a different technique rather than the
+same technique scaled.
+
+**Verdict** reverted, every knob, and left alone. If these need to come down
+again the way to do it is to play each setting, not to compute one. The knobs
+are `Rise` and `Lift kept (x)` in the Oven under **Stones**, and the table above
+is a map of where the cliffs are.
+
+**What did not come back** is the height the cast-wide jump nerf takes out of
+them, and that is a real effect worth stating on its own: every link of the
+chain is a takeoff, so a smaller takeoff is subtracted once per link. With the
+structures untouched and that nerf in place the double reaches **44.8 m against
+its old 58.8 — about 76%**, which is the three quarters that was being aimed at
+in the first place, arrived at without touching a stone. The single goes the
+other way, **25.9 m against 17.5**, because the slower takeoff lets the eruption
+catch her for an extra link. Measured against her own full hop, which is what
+"special" means, both are further ahead than they were: the double was 7.9 full
+hops and is 8.9.
+
+Whether those absolute heights are right is a play question, and nobody has
+played it.
+
+### 2026-09-17 — deleting the double structure jump. Reverted the same day
+
+**Changed** `stones::resolve_body` stopped reporting a fighter as grounded when
+she was rising faster than the stone under her. **Reverted within hours.**
+
+**Why I tried it** it looked like a bug from underneath. A stone's top catching
+up with a fighter's feet re-grounded her; the jump is level-triggered so that
+holding space hops the moment you land; so an eruption reaching a fighter who
+had already jumped off it handed the still-held button another takeoff, and a
+second stone raised a few frames behind the first handed a third. One press
+reached 26 m. Set against `README.md` §4 — *space while airborne does nothing* —
+that reads as a double jump arriving through the one surface in the world that
+can climb into somebody's feet.
+
+**Why it was wrong, and this is the part worth keeping.** Two things.
+
+**The rule was misread.** "No double jump" is a question about space doing
+something with *nothing under you*. There is something under her: the stone's
+top, which is why the branch that grounds her runs at all. A body standing on a
+surface can jump off it. That the surface is moving upward makes the jump
+better, not illegitimate — the same sentence is already written down approvingly
+in `state::advance`, where a jump off an erupting stone *stacks* on to the
+carry.
+
+**And the technique is not the implementation.** What a player does is cast two
+structures two or three frames apart and time a jump while both are still coming
+out of the floor. That costs two of three structure slots, telegraphs itself
+twice, and pays inside a one-frame window. Whatever it looks like from inside
+`resolve_body`, from the outside it is execution, and it is the most interesting
+thing the class does. Deleting it took the double to 38% of its height — which
+was not what was asked for and not a tuning decision at all, because no knob
+would have brought it back.
+
+**The general mistake** is worth naming, because it is easy to make again: an
+emergent technique found through implementation is not thereby an accident.
+Nothing about "this fell out of how the code happens to work" says anything
+about whether it is good, and a house style that treats every surprising
+behaviour as a defect will delete the interesting parts of a fighting game one
+at a time. The question to ask is whether a player can learn it, whether it
+costs something, and whether it can be answered — not where it came from.
+
+**Verdict** reverted, and pinned. The behaviour is now specified in
+`stones::resolve_body` rather than tolerated, and three tests in
+`sim/tests/stones.rs` fail if it goes again: that the double is worth six full
+hops and that the second cast pays for itself, that it needs the two casts close
+together, and that its window stays inside four frames.
+
+The guard is read against her **full hop** rather than against the single, and
+that choice is the entry above in miniature: the single chains too, so the ratio
+between them is a reading of the resonance and moves under tuning, while the gap
+between having the technique and not does not — nine full hops against under
+four.
+
+### 2026-09-17 — the Reaver's shadow kept expiring before she used it
+
+**Changed** the leash 12 m → 18 m, twice the 9 m throw. The dash 34 → 50 m/s
+with it.
+
+**Why** a leash only a third longer than the throw meant a shadow placed at full
+range came home almost as soon as it arrived, so the answer to "when do I take
+this" was always "now, before it leaves". The shadow is this class's movement,
+and movement you have to spend immediately is not a decision.
+
+The dash had to move with it. It ends when the dodge does — it does not outlive
+it — so a dash that cannot cover the distance spends the dodge and arrives
+nowhere, in the open, out of invulnerability. That property was written down in
+`tuning::shadow_dash_speed` and nowhere else; it is a test now.
+
+**Verdict** open. Two things to watch. Fifty metres a second over twenty-two
+frames is the same *duration* as before, so it is no harder to react to, but the
+slide the dash leaves behind scales with the speed and the overshoot past a
+near shadow is now several metres. And an 18 m leash lets her leave the shadow
+most of the way across the arena, which is the point and may also be too much
+room.
+
+### 2026-09-17 — the Dual mage stops walking
+
+**Changed** a 1.3 m step on both autos, forward on the dark one and backward on
+the light one. Their aerial hang 6 → 18 frames, the longest in the game, with a
+new falloff so each hang in one airtime is worth 0.55 of the last. Deep or
+ascended she moves 1.35× and is drawn floating.
+
+**Why** she is a melee mage who has to get in to steer her own meter, and she
+had nothing to get in with.
+
+**The step going the way the force goes is the entry.** Forward on both was the
+first version and it made the light auto's push worth nothing — she walked into
+the space she had just made and the net distance between the two bodies went the
+wrong way. The two autos already disagree about everything, so the step is that
+disagreement carried down to her feet: dark closes the gap from both ends, light
+opens it from both ends. One rule, mirrored, which is how the rest of the class
+is built.
+
+**The falloff is the other entry, and it is a rule the game did not have.** A
+hang costs nothing but the move that carries it, and the repeat lockout only
+stops one move being thrown twice — so a class with two interchangeable pokes can
+alternate them and simply not come down. She is that class by construction. The
+falloff compounds rather than capping, because a cap has an edge somebody finds
+and plays against: the sum of every hang an airtime can contain is
+`first / (1 - falloff)`, bounded however long you stay up, and reset on landing
+like the airdodge. It applies to everybody, so the Champion's multi-aerial
+strings are mildly nerfed by it too, which is correct for the same reason.
+
+18 rather than 20 because `feel.rs` requires a hang to be shorter than the move
+that rides it — a hang longer than its move is a float with an attack attached,
+and it would let a whiffed aerial stay safe by remaining out of reach. The auto
+is 20 frames long, so 18 is the ceiling and the margin is thin.
+
+**One threshold for the float, not two.** Deep is the same number the burn starts
+at and the same one the HUD already marks: it eats you, and you stop touching the
+ground. The cost and the reward are two faces of one decision rather than two
+rules that fire near each other. The renderer reads the same predicate rather
+than the meter, so the pose and the speed cannot disagree about whether she is
+walking.
+
+**Verdict** open. The float's speed bonus is a guess and the wings are a blockout
+— five slabs per shoulder on a slow beat, in the colour of the force she is
+carrying, with no wing model behind them. The number most likely to be wrong is
+the step: 1.3 m on a punch thrown every second is a lot of ground, and the light
+auto's backward version may simply feel like being pushed around by your own
+attack.
+
+### 2026-09-17 — the Blood mage had no movement
+
+**Changed** two answers, both behind live flags in the Oven. The Grasp hauls her
+to a wall, a structure or the creature when its four arms catch nobody (**on**);
+her dodge becomes a flat blink (**off**). The Grasp's throw 10 → 12 m and its
+damage 48 → 40; the reel speed up with the throw.
+
+**Why** every other class has one thing it does with the ground and she walks.
+That was survivable while a full hop reached seven and a half metres. The jump
+nerf above was specifically to make class techniques matter more, and it left her
+as the one character with nothing to be good at.
+
+**The generator is the entry, and it is worth reusing.** Movement should be a
+re-reading of an ability she already has, paid for in health. The Grasp already
+exists to close a gap; the haul is the same sentence with the subject swapped,
+and the price is already right — the health went on the press and none of it comes
+back, because nothing was cut, so using it as a grappling hook costs a whiffed
+cast every time. The blink fails the test on both halves and is built anyway,
+because "does she just need the distance?" is a real question and trying it is
+cheaper than arguing about it.
+
+Two flags rather than one setting because what is wanted is a judgement about
+each and about the pair. Live rather than Cargo features because the question is
+answered by flipping one mid-match.
+
+**What the implementation cost.** `aim::first_along` knew about fighters, stones,
+fire and the creature and not about walls, and both features ask the same question
+of the arena — is there anything to pull on, is there a wall in the way. It is
+answered once in the shared model. And `feel.rs` caught the Grasp's longer throw
+dropping a full-range *catch* halfway home, mid-drag and suddenly able to walk,
+because the hold is a fixed number of frames; the reel speed went up with the
+reach.
+
+**Verdict** open, and this is the entry most in need of somebody playing it.
+Six more ideas the generator produces are written down in
+[kits/blood-mage.md](kits/blood-mage.md) and none are built — the two best are
+riding the Bloodletter home (the cost is the leech itself, which is the purest
+statement of this class there is) and giving the leech a positional pull. Both
+built answers are **flat**: what she is short of is ground rather than height,
+and whether that is the right read is the first thing to find out.
+
+### 2026-09-23 — the hunt was easy, four ways at once
+
+**Changed** the Ridgeback stands five and a half metres at the back (was four
+and a half), the metre in its legs and the tail carried level; it gallops at
+12 m/s when you run and comes about before it runs; it has a seventh move, a
+**back kick** aimed at the patch directly astern; the tail sweep's cone runs to
+dead astern and the whip goes to whichever side you are on; every hit is bigger
+and harder (bite 150 → 190, stomp 105 → 140, sweep 125 → 160, charge 160 → 210
+at 20 m/s, slam 230 → 290; radii up by about a fifth); it glances every 8
+frames rather than 11, leads by 1.0 rather than 0.85, and pauses 8 frames
+between moves rather than 12. The shake's whip is 36 frames rather than 56.
+Every collapse pose is a metre deeper. The scripted hunter climbs what it can
+reach rather than the tail, stands beside the hind leg rather than behind it,
+pokes then watches, and unloads only into recoveries it can see are long enough.
+
+**Why** a report from play, in four parts: it is not fast enough to catch you;
+approaching it has very little risk because its hits are telegraphed and small;
+getting on its back is too easy because it is short; and there is a safe spot at
+the base of its tail where nothing can hit you and you wail on it. All four were
+true, and two of them were bugs rather than tuning.
+
+**The bug under "its hits are small".** A move carried by a bone had the bone's
+*whole rest offset* added to an anchor that was already authored in body space.
+The bite is chosen for a target at three to nine metres and its volume started
+at nine; the sweep is a tail that reaches seven metres back and its volume began
+at five. So the bite whiffed at its own ideal range on every throw, and the
+sweep could not touch anybody standing at the tail root — which is the whole of
+the safe spot, and the design document had called that patch the ground game's
+station. `it_can_still_reach_somebody_standing_where_it_is_looking` did not
+catch it because it placed the fighter *at the anchor* rather than at the ideal
+range, with a comment rationalising the discrepancy. The volume now rides the
+bone's motion from rest, and the test could be trusted to fail.
+
+**The metre.** At 3.95 m hips the tail's middle was 3.4 m and four of six
+classes walked up it from the floor; the premise of the climb was true for one
+class of six, which §9 had already said. The metre went half into each leg
+segment, and every earned route was deepened by a metre so it lands where it
+did (stumbling shoulder 2.67 m, toppled barrel 2.2 m, slam's crash 3.2 m, two
+forefeet gone 3.8 m). What that cost: the collapse clips put feet through the
+floor, twice over. Once because a kneeling leg keyed as angles is a leg two
+metres longer than when the angles were chosen — fixed by folding the shin to
+horizontal. Once because the legs of a collapse rang 40% past the planted pose
+on a drop of a metre and a half, so a `COLLAPSE` looseness keeps the legs stiff
+while the body stays limp. And the sound legs of a lamed animal stood through
+the ground: a broken corner drops the hips, and the legs that are left had no
+rule for getting shorter. They fold now by exactly the angle that takes the
+drop out of their height — `math::crouch_turns`, the small-angle inverse of
+`len(1 − cos c)`, which needs no table and is off by four centimetres at the
+deepest drop the animal makes.
+
+**The kick, rather than widening the sweep.** The tail root was safe because a
+whip about the hips is calm at the hips; making the sweep's volume reach the
+pivot would have been lying about the animation. A quadruped kicking backward
+is a move a person can name from behind, where they cannot see its head, so the
+tell is authored for that view — tail up, rump down — and its answer is a
+sidestep, which is not the sweep's answer. Behind it is now two reads; beside
+the hind leg it is one; in front it is the rest of the kit.
+
+**Reverted: nine reversals over a thirty-six frame whip.** The sweep and the
+shake are the ride's cost, and the shake was documented as jumpable from any
+frame of its startup. It was not: a hop is about 55 frames, the whip began at 40
+and ran 56, so every early jump landed inside it and was thrown — and a thrown
+rider, kicked along the surface's own velocity, which at a reversal is nothing,
+went straight up and straight back down onto the same back and stayed. The read
+worked through a fall taken every time, for 45 health. Shortening the whip to 36
+so that a hop begun late in the tell clears it was the fix; the first version
+kept the nine reversals, which at four frames a swing threw braced riders off
+the hips, the place the gradient says is calm. Six reversals is the same six
+frames a swing it had before.
+
+**Three more bugs the per-hit trace found, none of which a person would have
+called a bug.** They would have said the ride feels random.
+
+- *Five throws in a second.* See above: thrown up rather than off, re-landed,
+  thrown again. Now: thrown off the side in the creature's heading (not the
+  part's frame, which is fifty degrees over at the top of a shake), and a body
+  in the stun of a throw does not land back on the thing that threw it.
+- *Every ride ended with its first good hit.* A flinch is a change of clip, a
+  change of clip is a step in the pose, and the grip test read the step as an
+  acceleration. The rider who caused the flinch was the one thrown. A rider's
+  feet are planted again on a cut, as on landing.
+- *The rider walked off the front.* The scripted hunter's "to the ridge" was a
+  spot in the barrel's frame, forward from the tail and also forward from the
+  shoulders — so a rider who came up a stumbling shoulder, which is now the
+  route, walked off the nose. It steers at the ridge as a place.
+
+**Turning before running.** The first gallop overshot every test of the turn:
+told the target was behind it, it ran forward at seven metres a second while
+coming about and ended up beside the target rather than facing it. Forward speed
+is scaled by how squarely it faces the target; a creature that has been got
+behind turns on the spot.
+
+**The instrument.** `landed` beside `thrown` per move, `swings` beside
+`connected`, a `left under a buck` count, and a trace line per hit naming what
+the hunter was doing. Two of the day's bugs were invisible without them and
+obvious with them.
+
+**Verdict** kept. The scripted hunter wins two of six at a mean of five minutes,
+where it won one of six inside a hundred seconds before the pass and five of six
+before the tail was raised; a bot that could not lose was the state §9 had
+already flagged. Seven hits is a dead hunter and every one of the seven is a move
+it could have seen. What only a person can say: whether the kick's twenty-two
+frame tell is a read or a tax; whether "beside the hind leg" is findable
+without being told; and whether the Dual mage floating onto a back nobody else
+can reach is her identity or a hole in the premise.
+
+---
+
+### 2026-09-23 — the Dual mage's two bars, and the hill between them (M1)
+**Changed** `Mechanic::Meter` is two bars, Dark and Light, each from empty to the old
+`Meter range` (100), and the signed value, its centre and the deep threshold are gone. Every
+frame the two are compared: inside `Band, the gap that still counts as level` (30) nothing
+moves; outside it the higher bar rises and the lower falls by
+`min(Drift per unit × excess, Drift at most)` a second (2 per unit, cap 10), the higher gaining
+exactly what the lower lost, and health falls by `min(Burn per unit × excess, Burn at most)` a
+second (1.5 per unit, cap 15), never past one. Both bars fall by `Calm` (6) a second, always.
+The three pushes grew from 5/12/26 to 8/18/38 so the band could sit between an auto plus a cast
+and two casts. `state::depth` reads the bar of the force a move is made of — an auto its own,
+everything else the carried one. The HUD's one track holds two fills growing away from the
+middle. `cargo run -p sim --bin goad` runs the plan's five scripts and prints the numbers
+below; every measured criterion in the plan is a test in `crates/sim/tests/dual_mage.rs`.
+
+**Why** The single bar conflated how powerful she is with how unstable she is, and nothing on
+it moved on its own, so "containment" was a word in the fantasy paragraph and not a thing the
+hands did. See `docs/design/dual-mage.md`, and its "Was" section for what it replaced.
+
+**What the instrument says**, with the first values, in an empty arena:
+
+| Script | Blink | Second jump | Wings | Leaves the band | Lower bar empty | Health lost in 30 s |
+| --- | --- | --- | --- | --- | --- | --- |
+| `alternate` | 486f (4.4 exchanges) | 748f (6.8) | 918f (8.4) | never | — | 720, all of it the ascension it reached |
+| `one-sided` | never | never | never | 69f | 1f after (light was never fed) | 427 |
+| `finisher` from the band's edge | — | — | — | 1f | 188f after | 209, before the calm brought her back |
+| `idle` from three quarters | falls below it at 251f (2.3 exchanges) | — | — | never | — | 0 |
+| `ascend` (greedy, lower bar first) | 442f | 670f | 859f (7.8) | never | — | 720 |
+
+An exchange is a Judgement's startup to the end of its recovery, twice: 110 frames.
+
+**What could not be had.** The plan asked for `idle` to fall below the first tier inside one
+exchange and for `alternate` to reach it inside one; the first wants the calm above 13 a second
+and the second under 4, and the climb per bar per cycle is a fixed 26 against a cycle of 115
+frames. It was set at 6 — where fifteen seconds of clean alternating reaches the wings, which
+is the design's own "roughly once per match", and the idle fall takes two and a quarter
+exchanges. Recorded as the first knob to move, and if play wants both a fast climb and a
+fragile plateau the honest answer is a calm proportional to the bar, which is a shape and not a
+number.
+
+**Verdict** open — built, unverified. **Play script C1:** *Dummy on. Alternate hands for ten
+seconds and watch the two bars. Then throw two Judgements from level and watch what happens.
+Catch it with the other hand. Then do not catch it.* Questions: Do you feel the hill — that the
+one-sided cast started something you have to answer? Is the band wide enough to fight in and
+narrow enough to fall off? Does the burn arrive as a consequence or as a surprise?
+
+### 2026-09-23 — the tiers: a blink at half, a second jump at three quarters (M2)
+**Changed** The lower bar gates what her body can do. At `Tier, the dodge is a blink from`
+(50) shift plus a direction puts her where the dodge would have ended, on its first frame, and
+she spends the dodge's own invulnerable window and tail standing there; `aim::blink_to` ends
+it against the first stone or wall any part of her body would meet, less her own radius, and
+airborne it is the airdodge and spends it. At `Tier, second jump and slow fall from` (75) a
+press of space in the air jumps once more, at `Second jump` (0.8) of the first, and the fall
+cap is multiplied by `Slow fall` (0.6). A tier is held while the lower bar is at or above it
+and lost the frame it drops below, mid-air included. The frame table prints the tiers under
+the class.
+
+**Why** The third leg this class never had, and it comes from the object rather than from a
+button: the Champion vaults on the spear, the Reaver crosses to the shadow, the Dual mage moves
+on what she has goaded. On the lower bar so that both beings have to be fed.
+
+**Two things the brief said that the build did not do, and why.** The blink has no
+invulnerability knob of its own: `Action::invulnerable` reads one number for every dodge in the
+game, and a second one would be a second dodge; the blink is the roll with the travelling
+taken out, and it keeps the roll's window. And the blink does **not** share the dash's "any of
+the four lines clear" rule — a low platform her head would clear is still a wall to her feet,
+so it stops at the nearest hit on any of the four. The first cut used the dash's rule and put
+her inside a platform.
+
+**Verdict** open — built, unverified. `goad alternate` reaches the blink in 8 seconds and the
+second jump in 12. **Play script C2:** *Alternate to half. Dodge. Alternate to three quarters.
+Jump twice and fall. Then throw a Judgement while at three quarters and watch what you lose.*
+Questions: Did you notice the dodge became a blink before you were told? Is the second jump and
+the float worth holding the bars for? When the low bar collapsed after the Judgement, did losing
+the tier feel like a price you chose to pay?
+
+### 2026-09-23 — ascension on both full, and the wings (M3)
+**Changed** Ascension triggers when the lower bar reaches `Tier, wings from` (95) — both
+bars, level, at the top — and nothing else triggers it; the drift never can, because it only
+pulls the two apart. While it runs: the dodge is refused, every press of space in the air is a
+wing beat, casts read the top of the curve, `Ascension, health a frame` (4) comes off for
+`Ascension, how long` (180 frames), and every hit landed returns `Ascension, health back per
+hit landed` (40). It ends with both bars empty and a stagger between `Ascension, stun on the
+way out, at least` (10) and `Ascension, stun on the way out` (40), shorter the more of the drain
+her hits paid back. Two wings on her back, dark on the left and light on the right, each as
+long as its bar and full span while ascending — `view::wings`, with `view/tests/wings.rs`
+holding the drawn span to the bar at five values including empty, full and lopsided.
+
+**Why** The nova the original design accepted in shape, with the refund and the graduated exit
+it wrote and never built. And the body as the meter: the thing the tiers unlock is the thing
+everyone is already looking at.
+
+**Why 95 and not 100.** The calm runs every frame and the two bars are pushed by two different
+presses, so both can never be at exactly the top on the same frame; the first cut asked for
+100 and was unreachable by construction. Ninety-five is what the other bar keeps through one
+move's worth of calm with room to spare, and it makes the third tier a threshold on the lower
+bar like the other two.
+
+**Verdict** open — built, unverified. `goad alternate` reaches the wings at 918 frames and
+`ascend` at 859; against the dummy the same ride ends with 379 lost instead of 720, which is the
+refund working. **Play script C3:** *Climb to both full — it should be hard. Fly. Cast. Come
+down.* Questions: Was the ride worth the climb? Could you read your own bars off the wings
+without looking at the HUD? When it ended, did the empty bars and the stagger feel like the
+vent the design describes, or like a punishment for succeeding?
+
+**Waiting on C1–C3 before M4.** The knob pass is a person's to drive; the first candidates,
+in order, are the calm, the band, the drift cap and the burn cap. **Play script C4**, for
+after: *One versus round against a Champion, then one as the Champion against a Dual mage.*
+As the mage: did you spend the round managing the hill or ignoring it? Did you ever ascend, and
+was it the right moment? As the Champion: could you read the wings — did a lopsided mage look
+like a mage about to burn, and did full wings look like something to avoid or something to
+punish?
+
+### 2026-09-23 — the two bars came back overtuned, and were rebuilt to benchmarks (M4, first pass)
+**Changed** After the first play of the two bars: "less damage, more health drain, slower drain
+on the bars, lower resource adds for the spells". The class was restated as **benchmarks** —
+player actions and their outcomes, eight of them, in `docs/design/dual-mage.md` under
+"Benchmarks" — and the knobs were moved until `cargo run -p sim --bin goad` printed numbers
+inside them. Each benchmark is now a test in `crates/sim/tests/dual_mage.rs`, named `b1_` to
+`b7_`, and the goad prints what she dealt to the dummy alongside what it cost her.
+
+| Knob | Was | Now | Benchmark |
+| --- | --- | --- | --- |
+| Pushes: auto / cast / finisher | 8 / 18 / 38 | 5 / 9 / 20 | B4, B8 |
+| Band | 30 | 16 | B8 |
+| Calm | 6 a second | 2 | B4, B5 |
+| Drift, per unit / at most | 2 / 10 a second | 1 / 3 | B6 |
+| Burn, per unit / at most | 1.5 / 15 a second | 4 / 25 | B7 |
+| Depth curve, empty → full | 0.5 → 2.0 | 0.6 → 1.4 | B1–B3 |
+| Autos / Lance / burst | 52 / 58 / 150 | 30 / 32 / 60 | B1, B2 |
+| Judgement / its field a tick | 215 / 12 | 140 / 5 | B2, B3 |
+| Sweep / dark Lance / tether a tick | 95 / 35 / 9 | 55 / 28 / 2 | B1, B2 |
+| Dark Sweep's heal, a target | 22 | 5 | B2 |
+
+**What the instrument says now** against what it said before, half a round on a dummy that
+never moves: alternating deals 1.96 health bars (was 2.6, measured against a dummy the light
+hand had shoved out of range; held in place the first pass was over 5) and reaches the blink
+at 10.9 s, the second jump at 16.8 s and the wings at 21.2 s (were 8.1, 12.5, 15.3); one-sided
+spam deals 2.24 bars (was 9.9) and costs her 0.64 of one; a Judgement from a full bar is 25%
+of a bar with its field (was 40% for the strike alone); stopping at three quarters keeps the
+blink for 6.8 exchanges (was 2.3); a Judgement from level ignored empties the lower bar in
+10 s (was 3.1) and costs 20% in ten seconds; fully one-sided for half a round costs 75%.
+
+**Two things found on the way.** The instrument's dummy was being shoved out of range by the
+light auto on the second press, so it read half of what the same script did in a test that
+held the target still; it is held still now, and the benchmarks say so. And the first cut of
+the damage pass left one-sided spam costing her 160 health in half a round instead of 600:
+the dark Sweep's heal, 22 a target, and the tether's leech against a target standing in
+everything were paying the burn back. The heal came down to 5 with the damage. Sustain on the
+dark side is the kit's identity and it stays; it cannot be the thing that makes the hill free.
+
+**What could not be had.** The plan's wish for the blink to go inside one exchange of
+stillness is gone with the slower calm; the person asked for slower bars, and the benchmark
+now says two to seven exchanges. And one-sided spam is still the biggest number the class can
+make because a Judgement is up every 55 frames and its lockout cannot grow without breaking
+the lockout rule in `feel.rs`; if B2 still reads as too much, the answer is the finisher's own
+frames.
+
+**Verdict** open — rebuilt to benchmarks, unverified. **Play script, same as C1 with one
+addition:** *Dummy on. Alternate hands for ten seconds and watch the two bars. Throw two
+Judgements from level; catch it with the other hand; then do not catch it. Then spam dark
+casts at the dummy for fifteen seconds and watch your own health.* Questions: Which of the
+eight benchmark rows is wrong, and in which direction? Does a Judgement from a full bar still
+read as too much? Is the burn a consequence now?
+
+### 2026-09-23 — ascension lasts six seconds, not three
+**Changed** `Ascension, how long` 180 → 360 frames, and `Ascension, health a frame` 4 → 2,
+so the whole ride still costs the same 720 of a 1000 health bar.
+
+**Why** Played: at three seconds there was time for two or three abilities and it was over
+before it had registered as having begun, unless the player was watching the bar rather than
+the fight. Six seconds is time to notice the wings, cast, and choose the last cast. The drain
+halved with it because the cost of the ride was not the complaint; the length was.
+
+**Verdict** open — halved and doubled, unplayed at the new length. Nothing else moved: the
+refund per hit is unchanged, so a longer ride lands more hits and pays more back, and the
+stagger on the way out is graduated against the same total drain. Two numbers moved with it.
+Benchmark B1 rose from 1.96 to 2.09 health bars, the extra being three more seconds at the
+top of the curve, and its ceiling went from two bars to two and a quarter rather than the
+ride being weakened — the ride is the payoff. And against a target that stands in everything,
+the longer ride nearly pays for itself: the goad's alternating run now loses 236 health over
+half a round where it lost 501, because six seconds of hits refund most of the 720 drained.
+Against a person who moves that will not happen; against one who does not, the refund per hit
+is the knob to watch.
+
+---
+
+### 2026-09-23 — the light auto's step back lands its tip
+
+**Changed** both autos 30 → 27 and `Wing, tip damage (x)` 1.75 → 1.5. Benchmark B1 is 2.20
+health bars, from 2.41.
+
+**Why** the two-bar branch was tuned to its benchmarks before the 1.3 m auto step from
+2026-09-17 was merged under it, and the step changed one of them. Against the pinned dummy the
+light auto steps *back* during its startup, which puts a target that was standing at the wing's
+body onto its **tip** — and the tip is worth 1.75×. Same thirty-six frames of contact, seventy
+per cent more damage from that one move, and B1 went from 2.09 bars to 2.41 against a ceiling
+of two and a quarter. Nothing else in the script moved; the dark auto, both Lances and Sweep
+dealt exactly what they did before.
+
+The step stays: it is the class's own argument (dark closes, light opens) carried to her feet,
+and it is the light auto finding its tip on purpose rather than by accident that makes the
+mechanic legible. So the fix is that landing the tip is worth a bit less and both autos are
+worth a bit less, rather than the benchmark's ceiling moving a second time. **Not played**: the
+tip at 1.5× is still the best single frame she has, and whether it still *feels* like the
+frame worth waiting for is the question. Against a person who moves, the step back will leave
+them out of the tip's reach as often as in it.
+
+---
+
+### 2026-09-23 — the float moves to the three-quarter tier
+
+**Changed** `state::floating` — her feet leave the floor and she walks 1.35× — used to fire at
+*depth* on the signed bar (past the old `meter_deep`). It now fires when the lower of the two
+bars is at three quarters (`tier_jump`), or while ascending. Nothing else about the float
+changed; the "deep" knob it read is gone with the signed bar.
+
+**Why** the v2 mechanic replaced the axis the trigger sat on, and the kit document had already
+said the reward for being at the far end should survive whatever v2 called the far end. The
+candidates were half (with the blink) and three quarters (with the second jump and the slow
+fall). Three quarters, because that tier is already the one where her relationship with the
+floor changes — a second jump and a slower fall are the same sentence as "her feet leave the
+floor" — and putting the float there makes it one threshold with two more faces rather than a
+fourth rule firing somewhere between the others. Half would have made the blink tier carry
+two rewards and the jump tier one.
+
+The ethereal fan of slabs that opened with the old float is gone: the six counted wings are
+the bars now, and two sets of wings on one back said two different things. **Not played.**
+Whether the walk-speed step feels right at three quarters, or wants to be at half, is a play
+question on the same list as the rest of the two-bar work.
+
+
+---
+
+### 2026-09-23 — the Reaver's shadow aims itself, and a health table (v2, M1)
+
+**Changed** Out on the field, the shadow turns its copy of her swing to the nearest body inside
+the copied move's reach plus `Shadow turns to a body this far past reach` (0.5 m), tracking
+through the copy's wind-up and holding once it is out. At her heel it keeps her yaw, as
+before. The decision is `aim::shadow_faces`; the swing is carried over by
+`aim::copied_swing`, which turns her line onto the new yaw and keeps its pitch. A flag,
+`Shadow turns its copy to a body`, switches it off, so the before and after can be played in
+one match. And a **Health** family in the Oven: one multiplier per class on `Max health`, read
+by `tuning::health_of`. The Reaver at 0.75 (750); everyone else at 1.
+
+**Why** `docs/design/shadow-reaver-v2.md`: a copy thrown from six metres away on her yaw landed
+only on somebody standing at exactly her offset from it, so the shadow's utility at range was
+real and unusable, and the tally below is worthless without it. Glass, because a class whose
+whole pattern is not being there should be the one that cannot afford to be.
+
+**The Bulwark's number was left at one.** Both plans say it goes above one, and the Bulwark
+thread owns it. Setting it here would have moved every test that uses a Bulwark as the dummy
+and measures damage against the universal bar, which is that thread's change to make.
+
+**What the instrument says** — `cargo run -p sim --bin tally range`: the shadow six metres
+out, a dummy walking a circle round it inside reach, the Reaver swinging at the air every 36
+frames. Self-aim off: **9 copies of 24 landed (37%)**. On: **24 of 24 (100%)**.
+
+**A bug the creature found.** The creature's "nearest point" was first measured flat across the
+floor, so a shadow standing under a Ridgeback's neck turned to the head five metres overhead
+and swung at the air. It is measured in three dimensions from the height the swing leaves at
+now. `reaver::the_shadow_marks_the_creature_from_the_field` is what caught it.
+
+**Verdict** open — built, unverified. **Play script C1:** *Send the shadow to mid range beside
+the dummy. Stand off and swing at the air. Then move the dummy around the shadow.* Questions:
+Do the copies now land on something? Does the shadow turning read as it fighting, or as it
+twitching?
+
+### 2026-09-23 — the tally (v2, M2)
+
+**Changed** `Player::marks` and `mark_clock`, and the same pair on the creature. Every hit the
+shadow lands from the field adds one, up to `Marks, most a body can carry` (5): the copy out on
+the field (not blocked), the lotus once per pass (the first blade of a pass to reach somebody
+marks them; the other eleven do not), the recall's cut (not blocked). One fades every
+`Marks, one fades every` (90 frames); a new mark restarts the clock. The attending copy deals
+`Shadow damage, attending` (12%, was 25%) and marks nothing. Pips: a ring of dark pellets over
+the marked body's head, read straight off `marks`, and rings in the F1 overlay.
+
+**What the instrument says** — `stall`: a full tally left alone goes 5 → 0 in 450 frames,
+one every 90. `pattern`: five swings on a rhythm fill the tally. `stick`: eight swings in melee
+with the shadow at her heel dealt 552 (69 a swing) and marked nothing.
+
+**Verdict** open — built, unverified. **Play script C2:** *Send, then watch the dummy as the
+copies land. Walk away and watch the marks fade. Then fight from the shadow's shoulder for the
+same time.* Questions: Can you read the tally on the body without the HUD? Does the fade feel
+like a clock you are racing? Does fighting with the shadow at your heel feel like the wrong
+way to play now?
+
+### 2026-09-23 — the cash-in, and the strike out of the carry (v2, M3)
+
+**Changed** Arriving at the shadow by dash opens `Cash-in, window after the dash arrives`
+(10 frames, the carry's length). The first swing she *throws* inside it is the one that
+cashes, when it lands: damage × (1 + marks × `Cash-in, damage per mark` (0.4)), the marks are
+spent, and at a full tally the victim is staggered for `Cash-in, stagger at a full tally`
+(30 frames). A full tally triples the swing: Slash 185, Executioner 554. Blocked or parried,
+it spends the window and not the marks. The recall and the leash open nothing.
+
+**And a swing pressed inside the carry cuts the dash's tail short, plants her and turns her
+to the crosshair** — `shadow::swing_out_of_the_carry`. This was not in the proposal, and it is
+the decision in this entry most worth a person's confirmation. Two things were tried first and
+did not work, both measured with `tally pattern`:
+
+1. *A window counted from arrival, swing after the dodge.* The dash leaves her in the dodge's
+   tail for exactly the carry's ten frames, so the window closed before she could start a swing.
+   On paper, at the plan's own first value.
+2. *A window counted only in frames she was free to act.* That made the swing possible and
+   useless: the slide under the dash carried her **4.9 m** past the shadow, and a Slash thrown
+   the moment she was free missed a dummy standing beside it by 3.5 m. Every scripted cash-in
+   missed.
+
+The jump out of the carry already cuts the tail and keeps the slide, to go somewhere. The
+swing now cuts it and **spends** the slide, to strike here. With that, `pattern` arrives 10
+frames after the dash press, 0.5 m from the dummy, and Slash cashes for 185 (×2.98) with the
+stagger; `greedy` cashes Executioner for 554. Send to cash is 197 frames, 180 of them the five
+marking swings. It buys no safety: a blocked Slash is still −5.
+
+**The window is the swing thrown, not the swing landed.** Measured on the landing, Executioner's
+sixteen-frame wind-up would need a window nearly three times Slash's, and the choice between
+them would be about fitting a timer rather than about risk.
+
+**What did not hold, roster-wide.** The plan asked `feel.rs` for "a class's largest hit is
+gated behind something the opponent could see coming", for the whole roster. It is pinned for
+the Reaver (`a_classs_largest_hit_is_gated_behind_something_the_opponent_could_see_coming`),
+and it does not hold for the Champion today: his largest hit is Rush stab, 165 in nine frames
+behind a charge. What counts as a visible gate for him is his thread's call; recorded rather
+than decided. The full cash-in *is* the largest single hit in the game and still under the
+most fragile bar on the roster (554 against 750) —
+`a_full_cash_in_is_the_biggest_hit_in_the_game_and_still_not_a_round`.
+
+**Verdict** open — built, unverified. **Play script C3:** *Run the pattern: send, let it mark,
+dash, Slash inside the slide. Then again with Executioner. Then dash and wait a beat before
+swinging.* Questions: Is the window findable, and is missing it your fault? Does swinging out of
+the slide feel like arriving and striking, or like being stopped? Does the greedy cash feel
+worth its risk? Does the stagger at a full tally feel earned?
+
+### 2026-09-23 — marks on the creature (v2, M4, first part)
+
+**Changed** The creature carries marks with the same cap and fade as a fighter. The copy from
+the field, the recall and the lotus mark it; her cashing swing spends them on whichever part
+it lands on. It cannot block, so the cashing swing always spends. What a full tally does to a
+body that size is left to its own flinch and poise rules — a hit three times the size is what
+those already read — rather than a stagger of its own.
+
+**Not built from M4:** the knob pass, which wants a person's answers from C1–C3 first, and the
+hunt bot playing the pattern. `cargo run -p hunt --bin fight -- --class reaver` completes, but
+the scripted hunter never sends the shadow, so it cannot show her crossing to cash on a leg;
+teaching it the pattern is its own piece of work. The creature's half is pinned in
+`reaver::a_cash_in_lands_on_the_creature_too` instead.
+
+**Verdict** open. **Play script C4** is in `plans/shadow-reaver-v2.md`.
+
+### 2026-09-23 — any hit cashes; the dash window is cut
+
+**Changed** The cash-in window is gone, and with it the `Cash-in, window after the dash
+arrives` knob. **Any hit of the Reaver's own body on a marked target spends the marks**:
+×(1 + 0.4 a mark), and the stagger at a full tally, exactly as before. The shadow's copies
+still mark rather than spend. Blocked or parried swings are not hits and spend nothing.
+
+**Why** On review: the marks are the setup and her hit is the payoff, and gating the payoff
+behind "a swing thrown in the ten frames after a dash" was a rule the proposal wrote and play
+had not asked for. It made the burst a timing test layered on top of the pattern rather than
+the pattern itself. Reverted from the M3 entry above, which is kept as the record of what was
+tried: the window counted from arrival, the window counted in free frames, and the window as
+the swing thrown rather than landed. All three are moot now.
+
+**What stays** The strike out of the carry. It was built to make the window reachable, but
+the reason underneath is independent of it: the dash's slide leaves her nearly five metres
+past the shadow, so without it the dash cannot put her next to anybody standing there.
+
+**What the instrument says** `tally` is unchanged in its numbers — `pattern` cashes Slash for
+185 and `greedy` Executioner for 554, both staggering — because those scripts already swung on
+arrival. The tests that pinned the window are replaced by: any hit spends, an unmarked hit is
+plain, every hit cashes rather than only the first, a blocked hit spends nothing.
+
+**Open, and worth the person's eye at C3:** with no gate, stepping in and hitting a marked
+target is as good as crossing to it. Whether the dash still feels like the verb of the class
+or becomes one way among several to arrive is a play question.
+
+### 2026-09-23 — the dash stops on the shadow, and the dash jump is a lunge
+
+**Changed** Arriving by dash zeroes her velocity: she stops on the shadow's spot instead of
+sliding on past it. The carry — the ten-frame window after arrival — is unchanged, and a jump
+inside it now takes `Dash jump, keeps of the dash speed` (20%, new knob) of the crossing's flat
+velocity, banked on arrival, instead of the whole slide.
+
+**Why** From play: the follow-through made precision combat hard, and the dash jump cleared the
+arena. The dash is fifty metres a second; it used to leave her four to five metres past the
+shadow, and a jump in the carry took all fifty up with her. Measured now
+(`reaver::the_dash_jump_does_not_clear_the_arena`): a dash jump across the whole arena's width
+carries her **10.5 m**, against 28 m of arena. A fifth of the dash is ten metres a second, about
+one and a half walks — a lunge rather than a launch.
+
+**What else moved** The strike out of the carry no longer has a slide to spend, so it is only
+the tail cut and the turn to the crosshair. `tally pattern` is unchanged: she already swung on
+arrival.
+
+**Verdict** open. Questions for the next play: is ten frames enough to find the jump? Is a
+fifth the right lunge, or does the dash jump want to be vertical more than horizontal?

@@ -141,9 +141,11 @@ fn main() {
                     place_discs,
                     place_wings,
                     place_wing_tips,
+                    place_wingspans,
                     place_marks,
                     place_scythes,
                     place_essence_swings,
+                    place_pips,
                 ),
                 beast::place,
                 drive_camera,
@@ -220,6 +222,67 @@ pub struct Sim {
     /// Useful rather than decorative: it is how you tell "this clip is wrong"
     /// from "this rig is wrong" while looking at the thing, in one keypress.
     bind_pose: bool,
+    /// The last few seconds of simulation, so `[` can step **backwards**.
+    ///
+    /// Stepping forward on its own is not enough to study anything that
+    /// happens on one frame, and the game has at least one of those: the
+    /// Elementalist's structure jump chains because a stone's top catches her
+    /// feet by three and a half centimetres, on exactly one frame of the rise.
+    /// Watching that means going past it and coming back, repeatedly.
+    ///
+    /// A ring rather than a growing log, written in place, so a frame of
+    /// stepping never allocates -- a `World` is a small flat copy by
+    /// construction (`sim/tests/budget.rs`) and the renderer already clones one
+    /// per tick for the interpolator.
+    history: Rewind,
+    /// The scripted double structure jump, if one is playing. See
+    /// [`rehearsal`].
+    rehearsing: Option<u32>,
+}
+
+/// A ring of past snapshots, and how far back through it we have stepped.
+struct Rewind {
+    /// Oldest to newest, written at `next`, wrapping.
+    ring: Vec<World>,
+    next: usize,
+    /// How many of `ring` hold a real frame -- it is short at startup.
+    filled: usize,
+}
+
+/// Rather over two seconds at 60 Hz. A `World` is about 2 KB, so the whole
+/// thing is a third of a megabyte and is allocated once.
+const REWIND_FRAMES: usize = 150;
+
+impl Rewind {
+    fn new(seed: &World) -> Rewind {
+        Rewind {
+            ring: vec![seed.clone(); REWIND_FRAMES],
+            next: 0,
+            filled: 0,
+        }
+    }
+
+    /// Remember the state *before* a tick, so stepping back lands on it.
+    fn push(&mut self, w: &World) {
+        self.ring[self.next].clone_from(w);
+        self.next = (self.next + 1) % REWIND_FRAMES;
+        self.filled = (self.filled + 1).min(REWIND_FRAMES);
+    }
+
+    /// Take the newest frame back off, or `None` once the ring runs dry.
+    fn pop(&mut self) -> Option<World> {
+        if self.filled == 0 {
+            return None;
+        }
+        self.next = (self.next + REWIND_FRAMES - 1) % REWIND_FRAMES;
+        self.filled -= 1;
+        Some(self.ring[self.next].clone())
+    }
+
+    fn clear(&mut self) {
+        self.filled = 0;
+        self.next = 0;
+    }
 }
 
 /// Where each fighter's shield hand ended up this frame, in world space.
@@ -261,11 +324,13 @@ enum Dummy {
 
 impl Default for Sim {
     fn default() -> Self {
-        let w = if hunting() {
+        let mut w = if hunting() {
             World::hunt(chosen_classes())
         } else {
             World::with_classes(chosen_classes())
         };
+        shot_bars(&mut w);
+        let seed = w.clone();
         Sim {
             prev: w.clone(),
             cur: w,
@@ -278,6 +343,31 @@ impl Default for Sim {
             // captured without a keypress.
             bind_pose: platform::env("BIND_POSE").as_deref() == Some("1"),
             stop_at: env_num("SHOT_FRAME"),
+            history: Rewind::new(&seed),
+            rehearsing: None,
+        }
+    }
+}
+
+/// `SHOT_BARS=dark,light` starts a Dual mage with her two bars there, so a
+/// headless capture can look at the wings without playing up to them. A
+/// sibling of `SHOT_FRAME`: a way of landing a screenshot on a state rather
+/// than a moment. Ignored for any other class, and read once at start.
+fn shot_bars(w: &mut World) {
+    let Some(spec) = platform::env("SHOT_BARS") else {
+        return;
+    };
+    let mut parts = spec.split(',').map(|s| s.trim().parse::<i32>().ok());
+    let (Some(Some(dark)), Some(Some(light))) = (parts.next(), parts.next()) else {
+        return;
+    };
+    for p in w.players.iter_mut() {
+        if let sim::Mechanic::Meter {
+            dark: d, light: l, ..
+        } = &mut p.mechanic
+        {
+            *d = sim::Fx::from_int(dark);
+            *l = sim::Fx::from_int(light);
         }
     }
 }
@@ -285,6 +375,15 @@ impl Default for Sim {
 impl Sim {
     fn local_player(&self) -> usize {
         self.driver.local_player()
+    }
+
+    /// Is the simulation being stepped rather than run?
+    ///
+    /// The HUD reads it to put up the frame readout: stepping without one is
+    /// guessing, and the things worth stepping through are exactly the ones too
+    /// quick to read at speed.
+    pub fn stepping(&self) -> bool {
+        self.paused
     }
 }
 
@@ -507,6 +606,70 @@ struct WingMesh {
 #[derive(Component)]
 struct WingTipMesh(usize);
 
+/// One of the six wings on the Dual mage's **back**: her two bars, drawn.
+///
+/// Not the swept blade above, which is an attack. These are the meter: three
+/// a side, dark on her left and light on her right, one materialising at each
+/// third of its bar, so the gap between the two is readable across the arena
+/// by both players and six is ascension. `view::wings` decides the root, the
+/// axes and the count, and `view/tests/wings.rs` holds the count to the bar.
+#[derive(Component)]
+struct WingSpanMesh {
+    owner: usize,
+    force: sim::class::Force,
+    slot: view::wings::Slot,
+    /// Seconds since it appeared, while it is unfolding -- a wing
+    /// materialises over a few frames rather than popping. Presentation only.
+    unfolding: f32,
+}
+
+/// How long a wing takes to unfold once its third of the bar is reached.
+const WING_UNFOLD_SECONDS: f32 = 0.22;
+
+/// The wing `view::wings` describes, as one two-sided mesh in the wing's own
+/// plane at unit span: `x` out along the wing, `y` across it. The coverts and
+/// every feather are convex, so each is fanned from its own middle and the
+/// wing is their overlap -- translucent, so the overlaps read as depth.
+/// Scaled to each wing's own length when it is placed.
+fn wing_mesh() -> Mesh {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::render::mesh::{Indices, PrimitiveTopology};
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+    let mut fan = |outline: &[[f32; 2]]| {
+        let n = outline.len();
+        let centre = outline.iter().fold([0.0f32, 0.0f32], |c, p| {
+            [c[0] + p[0] / n as f32, c[1] + p[1] / n as f32]
+        });
+        let first = positions.len() as u32;
+        positions.push([centre[0], centre[1], 0.0]);
+        for p in outline {
+            positions.push([p[0], p[1], 0.0]);
+        }
+        for i in 0..n as u32 {
+            let a = first + 1 + i;
+            let b = first + 1 + (i + 1) % n as u32;
+            // Both faces, so it reads from the front and from behind: the two
+            // places the two players are.
+            indices.extend_from_slice(&[first, a, b, first, b, a]);
+        }
+    };
+    fan(&view::wings::COVERTS);
+    for f in view::wings::FEATHERS.iter() {
+        fan(&view::wings::feather_outline(f));
+    }
+    let uvs: Vec<[f32; 2]> = positions.iter().map(|p| [p[0], 0.5 - p[1]]).collect();
+    let normals: Vec<[f32; 3]> = positions.iter().map(|_| [0.0, 0.0, 1.0]).collect();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+    .with_inserted_indices(Indices::U32(indices))
+}
+
 /// How many bars the wing is drawn with.
 ///
 /// Enough that consecutive bars overlap at the arc the autos are tuned for, so
@@ -561,6 +724,24 @@ const SWING_PIECES: usize = 3;
 /// per pool. Six is enough to watch one fade and few enough to make once.
 const ESSENCE_STEPS: usize = 6;
 
+/// One of the Reaver's marks on a body, drawn as a pip over its head.
+///
+/// `body` is a fighter's index, or [`PIP_QUARRY`] for the creature. **Pips are
+/// drawn on the victim** because the victim is who has to read them: a fighter
+/// watching his own marks climb knows what is coming and where from. Read
+/// straight off `marks`, which is what the cash-in spends -- the drawing and
+/// the rule cannot disagree about how many there are.
+#[derive(Component)]
+struct PipMesh {
+    body: usize,
+    index: u8,
+}
+
+/// [`PipMesh::body`] for the creature.
+const PIP_QUARRY: usize = MAX_PLAYERS;
+/// Enough pips for the largest cap the Oven allows.
+const MAX_PIPS: u8 = 12;
+
 /// Materials for the persistent effects, made once. Which one an entity wears
 /// changes as slots are reused, so they are kept rather than rebuilt.
 #[derive(Resource)]
@@ -576,6 +757,12 @@ struct EffectLook {
     /// two you are holding.
     light: Handle<StandardMaterial>,
     dark: Handle<StandardMaterial>,
+    /// The wings on the Dual mage's back, one per force. Translucent and
+    /// two-sided where the tether and the burst are not: they hang off the
+    /// body the player is looking at, and a solid vane the size of her would
+    /// hide the fight behind it.
+    wing_light: Handle<StandardMaterial>,
+    wing_dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
@@ -798,6 +985,24 @@ fn setup(
         // has to be visible along its whole length against anything it crosses,
         // and the one thing it must not do is wash out the body on the end of
         // it, which is what the player is actually looking at.
+        wing_light: materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.95, 0.78, 0.34),
+            emissive: LinearRgba::rgb(1.8, 1.5, 0.9),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
+        wing_dark: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.38, 0.14, 0.62, 0.34),
+            emissive: LinearRgba::rgb(0.7, 0.2, 1.3),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            double_sided: true,
+            cull_mode: None,
+            ..default()
+        }),
         dark: materials.add(StandardMaterial {
             base_color: Color::srgba(0.16, 0.06, 0.26, 0.88),
             emissive: LinearRgba::rgb(0.55, 0.12, 0.95),
@@ -861,6 +1066,7 @@ fn setup(
         ));
     }
     let pellet = meshes.add(Sphere::new(0.5));
+    let wing = meshes.add(wing_mesh());
     for slot in 0..sim::bolt::MAX_BOLTS {
         commands.spawn((
             Mesh3d(pellet.clone()),
@@ -922,6 +1128,38 @@ fn setup(
             Visibility::Hidden,
             WingTipMesh(owner),
         ));
+        // And the six on her back, in the colour of the force each one is.
+        for (force, material) in [
+            (sim::class::Force::Dark, look.wing_dark.clone()),
+            (sim::class::Force::Light, look.wing_light.clone()),
+        ] {
+            for slot in view::wings::ORDER {
+                commands.spawn((
+                    Mesh3d(wing.clone()),
+                    MeshMaterial3d(material.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    WingSpanMesh {
+                        owner,
+                        force,
+                        slot,
+                        unfolding: 0.0,
+                    },
+                ));
+            }
+        }
+    }
+    // The Reaver's marks, over every body that can carry them.
+    for body in 0..=PIP_QUARRY {
+        for index in 0..MAX_PIPS {
+            commands.spawn((
+                Mesh3d(pellet.clone()),
+                MeshMaterial3d(look.shade.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                PipMesh { body, index },
+            ));
+        }
     }
     // The aim marker a channelled move is wound out along.
     for owner in 0..MAX_PLAYERS {
@@ -1296,6 +1534,66 @@ fn place_wing_tips(
     }
 }
 
+/// The six wings on the Dual mage's back: three a side, one per third of its
+/// bar, each a wing-shaped vane in a fixed place that is there or is not.
+///
+/// Drawn from the *interpolated* frame like the body rather than from the
+/// latest snapshot like the attack volumes, because they hang off her and a
+/// wing that lagged the back it grows from by half a frame would visibly
+/// detach every time she turned.
+fn place_wingspans(
+    sim: Res<Sim>,
+    time: Res<Time>,
+    mut meshes: Query<(&mut WingSpanMesh, &mut Transform, &mut Visibility)>,
+) {
+    let frame = interpolate(&sim.prev, &sim.cur, sim.clock.alpha());
+    for (mut tag, mut tf, mut vis) in meshes.iter_mut() {
+        // The bars are read off the current snapshot -- they are the meter,
+        // and a meter is not a thing to blend -- and the body they hang off is
+        // read off the blended frame, which is where the body is drawn.
+        let mut p = sim.cur.players[tag.owner];
+        let drawn = frame.players[tag.owner];
+        p.pos = sim::V3::new(
+            sim::Fx::from_raw((drawn.pos[0] * 65536.0) as i32),
+            sim::Fx::from_raw((drawn.pos[1] * 65536.0) as i32),
+            sim::Fx::from_raw((drawn.pos[2] * 65536.0) as i32),
+        );
+        p.facing = sim::V3::new(
+            sim::Fx::from_raw((drawn.facing[0] * 65536.0) as i32),
+            sim::Fx::ZERO,
+            sim::Fx::from_raw((drawn.facing[2] * 65536.0) as i32),
+        );
+        let Some(wings) = view::wings::wings(&p) else {
+            *vis = Visibility::Hidden;
+            tag.unfolding = 0.0;
+            continue;
+        };
+        let wing = wings
+            .iter()
+            .find(|w| w.force == tag.force && w.slot == tag.slot)
+            .copied()
+            .expect("all six wings are always answered for");
+        if !wing.shown {
+            *vis = Visibility::Hidden;
+            tag.unfolding = 0.0;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        // Materialise: unfold from the root over a few frames, then hold. The
+        // shape never changes with the bar; only whether it is there.
+        tag.unfolding = (tag.unfolding + time.delta_secs()).min(WING_UNFOLD_SECONDS);
+        let t = tag.unfolding / WING_UNFOLD_SECONDS;
+        let unfold = t * t * (3.0 - 2.0 * t);
+        let along = Vec3::from_array(wing.along);
+        let across = Vec3::from_array(wing.across);
+        let normal = along.cross(across);
+        tf.translation = Vec3::from_array(wing.root);
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(along, across, normal));
+        // The mesh is unit length; the slot says how long this wing is.
+        tf.scale = Vec3::new(unfold.max(0.01) * wing.length, wing.length, 1.0);
+    }
+}
+
 /// Put each channelling fighter's aim marker where their aim currently lands.
 ///
 /// **The renderer aims nothing.** `aim_path` is already solved, every frame of
@@ -1423,6 +1721,42 @@ fn place_essence_swings(
             }
         }
     }
+}
+
+/// Put the Reaver's pips over whoever is carrying marks.
+fn place_pips(sim: Res<Sim>, mut meshes: Query<(&PipMesh, &mut Transform, &mut Visibility)>) {
+    for (pip, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(at) = pip_spot(&sim.cur, pip.body, pip.index) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        *vis = Visibility::Inherited;
+        tf.translation = at;
+        tf.scale = Vec3::splat(0.16);
+    }
+}
+
+/// Where pip `index` over `body` goes, or `None` if that body carries fewer
+/// marks than that.
+///
+/// A ring over the head rather than a row, so it reads the same from every
+/// side -- the one watching his own marks climb is usually looking at the back
+/// of his own head.
+fn pip_spot(w: &World, body: usize, index: u8) -> Option<Vec3> {
+    let (marks, top) = if body == PIP_QUARRY {
+        let beast = w.monster.as_ref()?;
+        let head = beast.world_of(sim::monster::HEAD, sim::V3::ZERO);
+        (beast.marks, fx3(head) + Vec3::Y * 1.5)
+    } else {
+        let p = &w.players[body];
+        let height = sim::tuning::body_height().to_f32_for_render();
+        (p.marks, fx3(p.pos) + Vec3::Y * (height + 0.35))
+    };
+    if index >= marks {
+        return None;
+    }
+    let turn = index as f32 / marks.max(1) as f32 * std::f32::consts::TAU;
+    Some(top + Vec3::new(turn.cos(), 0.0, turn.sin()) * 0.3)
 }
 
 /// Where a fighter's aim marker is, if they are channelling at all.
@@ -1808,6 +2142,40 @@ fn tick_sim(
         sim.step_once = true;
         sim.paused = true;
     }
+    // **Back a frame.** The other half of stepping, and the half that makes it
+    // worth having: anything that happens on a single frame has to be gone past
+    // and returned to before you can see what it did. Local play only -- a peer
+    // is not rewinding with you.
+    if keys.just_pressed(KeyCode::BracketLeft) && matches!(sim.driver, Driver::Local) {
+        sim.paused = true;
+        if let Some(back) = sim.history.pop() {
+            // `prev` as well, or the interpolator spends a frame drawing the
+            // step we just undid.
+            sim.prev = back.clone();
+            sim.cur = back;
+            // A rewind past the start of a rehearsal is a rewind out of it.
+            if sim.rehearsing.is_some_and(|from| sim.cur.frame < from) {
+                sim.rehearsing = None;
+            }
+        }
+    }
+    // **Play the double structure jump.** Not a hint at the timing -- the
+    // timing, performed: two structures three frames apart and a jump nine
+    // frames after the first, which is the only shape that gets a third takeoff
+    // (see `docs/design/kits/elementalist.md`). It is a thirty-three
+    // millisecond double tap and nobody hits it by hand, which is the whole
+    // reason to be able to watch one.
+    //
+    // Dev only, because it takes the controls away from you.
+    if dev_mode() && keys.just_pressed(KeyCode::KeyG) {
+        let classes = [sim::Class::Elementalist, sim.cur.players[1].class];
+        let w = World::with_classes(classes);
+        sim.prev = w.clone();
+        sim.cur = w;
+        sim.history.clear();
+        sim.rehearsing = Some(0);
+        sim.paused = false;
+    }
     if keys.just_pressed(KeyCode::F1) {
         // Toggled here rather than in the debug module so all input reading
         // stays in one place.
@@ -1898,10 +2266,26 @@ fn tick_sim(
                 // whatever the frame rate happened to be -- which makes two
                 // runs of the same script diverge.
                 let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
+                // The rehearsal outranks the demo script and the keyboard, and
+                // ends by handing the controls back rather than looping.
+                let rehearsed = sim.rehearsing.and_then(|from| {
+                    let since = sim.cur.frame.saturating_sub(from);
+                    if since > REHEARSAL_FRAMES {
+                        sim.rehearsing = None;
+                        None
+                    } else {
+                        Some(rehearsal(since, &sim.cur))
+                    }
+                });
                 let pair = [
-                    scripted_or(scripted, held),
+                    rehearsed.unwrap_or_else(|| scripted_or(scripted, held)),
                     dummy_input(sim.dummy, sim.cur.frame, held_two),
                 ];
+                // Remembered before the tick, so one press of `[` lands on the
+                // frame you were just looking at. Split out of the field access
+                // because the ring and the world live on the same struct.
+                let Sim { history, cur, .. } = &mut *sim;
+                history.push(cur);
                 sim.prev = sim.cur.clone();
                 sim.cur.advance(pair);
             }
@@ -1932,6 +2316,64 @@ fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
         Dummy::Attack => SimInput::default(),
         Dummy::Human => live,
     }
+}
+
+/// How long the rehearsal drives for, after which the controls come back.
+const REHEARSAL_FRAMES: u32 = 40;
+
+/// One frame of the double structure jump, `since` frames into it.
+///
+/// **The input, not a description of it.** Two structures raised three frames
+/// apart -- the second press needs the button up in between, because the
+/// mechanic fires on a press edge, which is also why the gap cannot be shorter
+/// than two frames -- and then the jump nine frames after the first, held so
+/// the rise sustains.
+///
+/// Three frames rather than two is deliberate: two is a metre higher at its
+/// best, and three gives five different jump frames that reach a third takeoff
+/// instead of three, so it is the one to *watch* if you are trying to see the
+/// shape of it.
+///
+/// Aimed at her own feet, because Raise puts the stone where the crosshair is
+/// and the technique needs it underfoot.
+fn rehearsal(since: u32, w: &World) -> SimInput {
+    let mut v = 0u16;
+    // Frame 0 and frame 3, with frames 1 and 2 releasing the button.
+    if since == 0 || since == 3 {
+        v |= SimInput::MECHANIC;
+    }
+    if since >= 9 {
+        v |= SimInput::SPACE;
+    }
+    let (yaw, tilt) = looking_at_her_feet(w);
+    SimInput::new(v).looking(yaw, tilt)
+}
+
+/// The yaw and pitch that put the **crosshair** on the patch of floor the
+/// Elementalist is standing on.
+///
+/// **Not straight down**, which is the first thing anybody writes here and is
+/// wrong for the reason `docs/design/aiming.md` exists: the ray starts at the
+/// camera's eye, which sits behind and above the shoulder, so a straight-down
+/// look lands on the floor somewhere behind her. The first version of the
+/// rehearsal did exactly that, raised both stones behind her heels, and reached
+/// eighteen metres on two takeoffs -- a single, which is the very thing the
+/// rehearsal exists to tell apart from a double.
+///
+/// Solved by iteration because the eye's own position depends on the pitch: a
+/// few rounds settle it, the rig being smooth. Floating point is safe here for
+/// the reason [`aim_toward`] gives -- this produces an *input*, and inputs are
+/// transmitted rather than recomputed.
+fn looking_at_her_feet(w: &World) -> (u16, i16) {
+    let stood = w.players[0].pos;
+    let mut tilt = 0i16;
+    for _ in 0..6 {
+        let eye = sim::camera::eye(stood, SimInput::looking_at(0, 0, tilt), sim::Fx::ZERO);
+        let flat = stood.sub(eye).flat_len().to_f32_for_render();
+        let drop = stood.y.sub(eye.y).to_f32_for_render();
+        tilt = view::pitch_from_radians(drop.atan2(flat));
+    }
+    (0, tilt)
 }
 
 /// `DEMO=1` drives player one from a script instead of the keyboard. Used to
@@ -2748,5 +3190,78 @@ mod tests {
             !idle.pointer && !idle.keyboard,
             "a shut palette claims nothing"
         );
+    }
+}
+
+#[cfg(test)]
+mod rehearsing {
+    use super::*;
+
+    /// Run the rehearsal and report the highest she gets, and how many takeoffs
+    /// fired on the way up.
+    fn play() -> (f32, u32) {
+        let mut w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
+        let (mut apex, mut takeoffs, mut climbing) = (0.0f32, 0, true);
+        for i in 0..200u32 {
+            let me = if i <= REHEARSAL_FRAMES {
+                rehearsal(i, &w)
+            } else {
+                SimInput::default()
+            };
+            let before = w.players[0].vel.y;
+            w.advance([me, SimInput::default()]);
+            let p = &w.players[0];
+            if climbing && p.vel.y.sub(before).to_f32_for_render() > 8.0 {
+                takeoffs += 1;
+            }
+            if climbing && i > 9 && p.vel.y.raw() < 0 {
+                climbing = false;
+            }
+            apex = apex.max(p.pos.y.to_f32_for_render());
+        }
+        (apex, takeoffs)
+    }
+
+    #[test]
+    fn the_rehearsal_actually_performs_a_double() {
+        // **The point of it existing.** It is a fixed input sequence standing in
+        // for a thirty-three millisecond double tap nobody can do by hand, so if
+        // it quietly stops landing the technique it is worse than nothing --
+        // somebody would watch it and conclude the double looks like that.
+        //
+        // Three takeoffs is what makes a double a double rather than a single
+        // off whichever stone happened to be bursting: the first eruption
+        // catches her feet after she jumps, and the second catches her again.
+        let (apex, takeoffs) = play();
+        assert_eq!(
+            takeoffs, 3,
+            "the rehearsal reached {apex:.1} m on {takeoffs} takeoffs -- a double is three"
+        );
+        assert!(
+            apex > 35.0,
+            "the rehearsal only reached {apex:.1} m, which is single-structure height"
+        );
+    }
+
+    #[test]
+    fn it_hands_the_controls_back() {
+        // A rehearsal that never ended would be a mode rather than a
+        // demonstration. It drives for `REHEARSAL_FRAMES` and stops, which the
+        // tick loop reads to clear `Sim::rehearsing`.
+        const {
+            assert!(
+                REHEARSAL_FRAMES > 9,
+                "the rehearsal stops before it presses jump"
+            )
+        };
+        // And the shape of the input is the thing the kit document describes:
+        // two presses three frames apart with the button up between them.
+        let w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
+        assert!(rehearsal(0, &w).has(SimInput::MECHANIC));
+        assert!(!rehearsal(1, &w).has(SimInput::MECHANIC));
+        assert!(!rehearsal(2, &w).has(SimInput::MECHANIC));
+        assert!(rehearsal(3, &w).has(SimInput::MECHANIC));
+        assert!(!rehearsal(8, &w).has(SimInput::SPACE));
+        assert!(rehearsal(9, &w).has(SimInput::SPACE));
     }
 }

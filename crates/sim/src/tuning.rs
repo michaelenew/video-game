@@ -45,8 +45,17 @@ pub fn crouch_move_speed() -> Fx {
 /// and it is over before you have read the situation you jumped into. A beginner
 /// needs long enough in the air to notice where the other player went.
 ///
-/// Full hop apexes around 2.2 m over roughly a second; a short hop is about half
-/// that. Both are relationships the feel tests pin, not numbers to trust.
+/// **Cut from 17.7 to 16.2 on 2026-09-17**, taking about a third off every
+/// apex in the game. Apex goes as the *square* of this and airtime goes as this,
+/// so the height came down by a third while the hang only lost a fifth -- which
+/// is why the height is tuned here rather than by leaning on gravity. A full
+/// hop now runs from 2.7 m on the Bulwark to 6.0 m on the Dual mage, over 0.7 s
+/// to 1.2 s.
+///
+/// The reason is that a jump is the *floor* of this game's movement system
+/// rather than the whole of it. The Elementalist rides a structure up and the
+/// Champion vaults, and both were being reached to within a quarter by pressing
+/// space. See `docs/design/feel-log.md`.
 pub fn jump_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpSpeed))
 }
@@ -66,11 +75,24 @@ pub fn fall_cap() -> Fx {
 /// short one, and everything in between. It is a *sustain* rather than a cut on
 /// release, because a cut makes the short hop feel like the jump was taken away
 /// from you, whereas a sustain makes the tall one feel earned.
+///
+/// **Raised from 0.56 to 0.72 on 2026-09-17, with the window below cut from 26
+/// frames to 18.** Together those two were what made a held jump read as an
+/// elevator. At 0.56 for 26 frames the rise lost only half its speed over four
+/// tenths of a second and covered five of its six metres doing it, so the climb
+/// looked like a constant one and gravity looked like something that switched
+/// on at the top. A sustain has to be a *discount* on gravity rather than a
+/// suspension of it, and you have to be able to see the rise slowing the whole
+/// way up. See `docs/design/feel-log.md`.
 pub fn jump_hold_gravity() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpHoldGravity))
 }
 
 /// How long the sustain can last. Beyond this, gravity is gravity.
+///
+/// Long enough to be a real decision, short enough that most of the rise
+/// happens under ordinary gravity -- see [`jump_hold_gravity`] for why those
+/// are the two things it is balanced between.
 pub fn jump_hold_frames() -> u16 {
     oven::scalar(Scalar::JumpHoldFrames) as u16
 }
@@ -317,6 +339,109 @@ pub fn air_attack_boost() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::AirAttackBoost))
 }
 
+// ---------------------------------------------------------------------------
+// The Blood mage's movement, both of it behind a flag
+// ---------------------------------------------------------------------------
+//
+// **This class has no movement at all and cannot stay that way.** Everything
+// else in the roster has one thing it does with the ground: the Reaver crosses
+// to her shadow, the Elementalist rides a structure up, the Champion vaults,
+// the Dual mage floats, the Bulwark leaps to its shield. The Blood mage walks.
+// In a game where jumping was just cut back specifically so that the class
+// techniques matter more, walking is not a position to be in.
+//
+// Two answers are built, both off a flag, because which one is the class is a
+// question for somebody playing it rather than for this file:
+//
+//   * **The Grasp haul.** Four arms that converge on a wall or on the creature
+//     rather than on a person pull *her* instead, which is a grappling hook
+//     made out of an ability she already has. It is the one with a thematic
+//     tie -- the arms are already a thing that closes distance, and this is
+//     the same sentence with the subject swapped -- and it costs her a whiffed
+//     Grasp's worth of health to use as movement.
+//   * **The blink dodge.** Her dodge covers a long flat distance at once
+//     instead of a short one over twenty-two frames. Honest about what it is:
+//     there is no thematic tie, and it leans entirely on the animation to make
+//     it feel like it belongs.
+//
+// The combinations are the point. Both on is a very mobile Blood mage and
+// probably too much; neither is where she is today.
+
+/// Does a Grasp that catches nothing but scenery pull her to it?
+pub fn grasp_hauls() -> bool {
+    oven::scalar(Scalar::GraspHauls) != 0
+}
+
+/// How fast the haul reels her in.
+///
+/// Constant while it runs, like the Reaver's dash and for the same reason: the
+/// distance is whatever the Grasp's own reach and hold chose, so a decaying
+/// pull would cover a distance that depends on how the decay happens to be
+/// tuned rather than on the thing the player aimed.
+///
+/// Constant *speed* rather than constant time, which is the opposite of the
+/// blink below and right for the opposite reason: you are being reeled in on a
+/// rope, so a short pull is quick and a long one is a journey. That difference
+/// is the whole of why `Player::haul_speed` is a field and not a knob.
+pub fn grasp_haul_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GraspHaulSpeed))
+}
+
+/// Is her dodge a blink?
+pub fn dodge_blinks() -> bool {
+    oven::scalar(Scalar::DodgeBlinks) != 0
+}
+
+/// How far the blink goes.
+///
+/// Longer than a dodge covers, which is the whole of the idea -- an ordinary
+/// dodge is `dodge_speed` decaying over `dodge_frames` and lands a little over
+/// four metres away. **Flat**, and deliberately: what this class is missing is
+/// ground, not height, and a blink that also went up would be a second jump on
+/// the one class that has not earned one.
+pub fn blink_range() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BlinkRange))
+}
+
+/// How many frames the blink takes to cross that distance.
+///
+/// Not zero. A teleport that resolves inside one frame cannot be read by the
+/// person opposite -- she is simply somewhere else -- and it cannot be drawn
+/// either, which on the answer with no thematic tie is the only thing it has
+/// going for it. A handful of frames is a smear rather than a cut, and it
+/// still lands well inside the dodge's own invulnerability.
+pub fn blink_frames() -> u16 {
+    oven::scalar(Scalar::BlinkFrames).max(1) as u16
+}
+
+/// How much faster the Dual mage moves once she is deep or ascended.
+///
+/// The one thing on this class that depth moves which is **not** a force.
+/// Everything else on the curve is how hard she hits and how big it is; this is
+/// how fast she gets there, and it is a step rather than a curve because it is
+/// answering a yes-or-no question -- are her feet on the floor -- rather than a
+/// how-much one. See `state::floating`.
+pub fn float_move_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FloatMoveSpeed))
+}
+
+/// What each successive aerial hang in one airtime is worth.
+///
+/// **The air gives you less each time you ask.** A hang costs nothing but the
+/// move that carries it, and the repeat lockout only stops one move being
+/// thrown twice -- so a class with two interchangeable pokes can alternate them
+/// and simply not come down. The Dual mage is that class by construction: her
+/// two autos are the same punch mirrored, and they are how she steers her
+/// meter, so she throws them alternately as a matter of course.
+///
+/// Compounding rather than a hard cap, because a cap has an edge somebody finds
+/// and plays against, and this has none: the sum of every hang an airtime can
+/// contain is `first / (1 - this)`, which is bounded however long you stay up.
+/// Reset on landing, like the airdodge.
+pub fn air_stall_falloff() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirStallFalloff))
+}
+
 /// Fraction of your upward speed kept when you let go of jump while rising.
 ///
 /// The sustain alone cannot give a short hop worth having. Holding reduces
@@ -329,6 +454,11 @@ pub fn air_attack_boost() -> Fx {
 /// touching the ceiling: the full hop never releases while rising, so it is
 /// untouched, and the short hop scales with the *square* of this because apex
 /// goes as velocity squared.
+///
+/// Trimmed to 0.52 on 2026-09-17 to hold the short hop at a quarter of the full
+/// one after the sustain was shortened. A stiffer sustain takes more off the
+/// full hop than off the tap, so without this the two would have drifted back
+/// toward each other.
 pub fn jump_release_cut() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JumpReleaseCut))
 }
@@ -379,8 +509,30 @@ pub fn spike_slow() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::SpikeSlow))
 }
 
-/// Frames a structure takes to climb out of the ground. Cosmetic: it is earth,
-/// so it comes up through the floor rather than appearing in the air.
+/// Frames a structure takes to climb out of the ground.
+///
+/// It was described here as cosmetic -- it is earth, so it comes up through the
+/// floor rather than appearing in the air -- and that stopped being true when a
+/// stone became a solid you can stand on. **How long the rise takes is how fast
+/// the eruption is**, because the burst at the end of the curve is a real
+/// surface speed that a rider keeps ([`stone_lift`]), and it is therefore the
+/// knob that decides how high a structure jump goes.
+///
+/// **Left at 14, and that is a decision rather than an oversight.** It was
+/// moved to 16 and then 17 on 2026-09-17 to bring the structure jumps down, and
+/// put back the next day.
+///
+/// The chain a structure jump is made of turns out to be a **resonance**
+/// between how fast she rises and how fast the stone grows: the eruption has to
+/// outrun her by just enough to catch her feet again, and how many takeoffs
+/// each technique gets out of one stone therefore moves around under tuning --
+/// and moves *non-monotonically*. Raising her jump can cost the single a link,
+/// because she outruns the stone that was going to catch her. Three frames on
+/// this knob roughly halved the double while the single barely noticed.
+///
+/// A knob with that shape is not one to turn on a calculation. If the structure
+/// jumps need to come down again, somebody has to play each setting rather than
+/// solve for a target. See `docs/design/feel-log.md`.
 pub fn structure_rise() -> u16 {
     oven::scalar(Scalar::StructureRise) as u16
 }
@@ -457,6 +609,15 @@ pub fn leap_rise() -> Fx {
 /// send's own reach, and a leash shorter than that would have it turn round on
 /// the frame it landed. The gap between the two is how far she may walk off the
 /// line before the line comes after her.
+///
+/// **Twice the throw since 2026-09-17**, where it used to be a third longer.
+/// The shadow is the Reaver's whole movement game -- she sends it somewhere
+/// useful and then chooses when to cross to it -- and a leash that close to the
+/// throw meant the placement expired while she was still deciding, so the
+/// answer to "when do I take this" was usually "now, before it leaves". Twice
+/// the throw is room to leave it somewhere and go and do something else.
+/// [`shadow_dash_speed`] went up with it, because the dash has to be able to
+/// cross whatever this is.
 pub fn shadow_leash() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowLeash))
 }
@@ -569,6 +730,101 @@ pub fn shadow_carry() -> u16 {
     oven::scalar(Scalar::ShadowCarry).max(0) as u16
 }
 
+// ---------------------------------------------------------------------------
+// The Reaver's v2: the shadow aims and keeps a tally, and her hits cash it
+// ---------------------------------------------------------------------------
+//
+// First values, 2026-09-23, all guesses from `docs/design/shadow-reaver-v2.md`
+// and none of them played. The feel log is where they get argued about.
+
+/// How far past the copied move's reach the shadow, out on the field, will
+/// still turn to a body. Half a metre: enough that a target stepping out of
+/// reach during the wind-up is still followed, not so much that a copy turns to
+/// somebody it plainly cannot touch.
+pub fn shadow_aim_slack() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ShadowAimSlack))
+}
+
+/// Does the shadow, out on the field, turn its copy to a body at all? On. The
+/// switch is there so the before and after can be played side by side.
+pub fn shadow_aims() -> bool {
+    oven::scalar(Scalar::ShadowAims) != 0
+}
+
+/// What the **attending** shadow's copy deals, as a share of her swing. Half of
+/// the field copy's, from the proposal: with the tally in place, the copy at
+/// her heel is the one thing in the kit that argues for standing in melee, and
+/// it has to argue less. Twelve rather than twelve and a half because it is a
+/// percentage.
+pub fn shadow_echo_attending() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::ShadowEchoAttending), 100)
+}
+
+/// The most marks one body can carry. Five is the proposal's first guess: too
+/// low and the burst is a bonus, too high and the shadow never fills it before
+/// the victim walks away.
+pub fn mark_cap() -> u8 {
+    oven::scalar(Scalar::MarkCap).clamp(1, 255) as u8
+}
+
+/// Frames between one mark fading and the next. A second and a half, the
+/// middle of the proposal's "a second or two": stalling should clean you, and
+/// a tally left alone for the length of a full cap should be gone.
+pub fn mark_fade() -> u16 {
+    oven::scalar(Scalar::MarkFade).max(1) as u16
+}
+
+/// What each mark adds to the swing that spends it, as a multiple of the
+/// swing. Four tenths, so a full tally of five triples it.
+pub fn mark_worth() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MarkWorth))
+}
+
+/// The stagger a cash-in at a full tally applies. Half a second: a hard stop,
+/// behind the hardest condition in her kit -- the rule `ability-spec.md` sets
+/// for staggers.
+pub fn cash_stagger() -> u16 {
+    oven::scalar(Scalar::CashStagger).max(0) as u16
+}
+
+// ---------------------------------------------------------------------------
+// Health, per class
+// ---------------------------------------------------------------------------
+
+/// A class's health, as `max_health` times its own multiplier.
+///
+/// Per class the way jump, gravity and fall already are. The Reaver starts at
+/// three quarters, because a class whose whole pattern is *not being there*
+/// should be the one that cannot afford to be. The Bulwark's number is the
+/// Bulwark thread's to set -- its v2 wants it highest -- and everybody else is
+/// one until a design says otherwise.
+pub fn health_of(class: crate::class::Class) -> i32 {
+    use crate::class::Class;
+    let knob = match class {
+        Class::Bulwark => Scalar::HealthBulwark,
+        Class::Champion => Scalar::HealthChampion,
+        Class::ShadowReaver => Scalar::HealthReaver,
+        Class::Elementalist => Scalar::HealthElementalist,
+        Class::BloodMage => Scalar::HealthBloodMage,
+        Class::DualMage => Scalar::HealthDualMage,
+    };
+    Fx::from_int(max_health())
+        .mul(Fx::from_raw(oven::scalar(knob)))
+        .to_int()
+        .max(1)
+}
+
+/// What a jump out of the dash's carry keeps of the dash's speed, flat.
+///
+/// A fifth, 2026-09-23. It used to be everything: the dash arrived at fifty
+/// metres a second, slid on past the shadow, and a jump in the carry took the
+/// whole slide up with it and cleared the arena. The dash stops on the shadow
+/// now, and the jump out of it is a lunge -- ten metres a second, about one
+/// and a half walks -- rather than a launch.
+pub fn dash_jump_keep() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
+}
+
 /// How fast she crosses to her shadow on a dash.
 ///
 /// Constant while the dash runs rather than a decaying shove, so the distance
@@ -576,6 +832,12 @@ pub fn shadow_carry() -> u16 {
 /// happens to be tuned this week. Fast enough to cross the **whole leash**
 /// inside one dodge, which is the property that makes the dash a reliable
 /// escape rather than a gamble on how far away she left the thing.
+///
+/// That property is `reaver::the_dash_crosses_the_whole_leash`, which did not
+/// exist until 2026-09-17 -- the leash went to twice the throw that day, and
+/// the one thing standing between that and a dash that runs out of dodge
+/// halfway across the arena was a sentence in this comment. The dash ends with
+/// the dodge, so falling short means spending the dodge and arriving nowhere.
 pub fn shadow_dash_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ShadowDashSpeed))
 }
@@ -1021,13 +1283,17 @@ pub fn meter_cast_push() -> i32 {
     oven::scalar(Scalar::MeterCastPush)
 }
 
-/// How long ascension lasts, once the bar is driven all the way to an end.
+/// How long ascension lasts, once both bars are goaded to the top together.
 ///
 /// **A clock rather than a state you have to escape.** The first version had no
 /// exit at all: reaching the end burned you until you were nearly dead and then
 /// went on burning, with nothing to do about it. The design's own answer is
-/// that the drain *is* the clock (see `docs/design/dual-mage.md`); this is that
-/// clock made literal while the rest of it is unbuilt.
+/// that the drain *is* the clock (see `docs/design/dual-mage.md`).
+///
+/// Six seconds, from three: at three a person had time for two or three
+/// abilities and it was over before they had noticed it had begun unless they
+/// were watching the bar. The drain a frame halved with it, so the whole ride
+/// still costs the same seventy per cent of a health bar.
 pub fn ascension_frames() -> u16 {
     oven::scalar(Scalar::AscensionFrames) as u16
 }
@@ -1038,27 +1304,142 @@ pub fn ascension_drain() -> i32 {
     oven::scalar(Scalar::AscensionDrain)
 }
 
-/// How long she is staggered when it ends.
-///
-/// The design wants this **graduated** -- shorter the closer you got to the
-/// damage threshold, so a near miss reads as a near miss. That needs a
-/// threshold to measure against and there is not one yet, so it is flat, and
-/// the flat version is still the thing that makes ascension a decision rather
-/// than a free three seconds.
+/// The longest she is staggered when it ends: the ceiling of a stagger that
+/// is **graduated** by how much of the drain her hits refunded, down to
+/// [`ascension_stun_floor`]. A near miss reads as a near miss.
 pub fn ascension_stun() -> u16 {
     oven::scalar(Scalar::AscensionStun) as u16
 }
 
+/// The top of either bar, in whole units. Both run from zero to this.
 pub fn meter_max() -> i32 {
     oven::scalar(Scalar::MeterMax)
 }
 
-pub fn meter_deep() -> i32 {
-    oven::scalar(Scalar::MeterDeep)
+// ---------------------------------------------------------------------------
+// The two bars and the hill between them -- see `crate::dual`
+// ---------------------------------------------------------------------------
+//
+// v2 of the mechanic, 2026-09-23. The first values were chosen against the
+// cadence in `docs/design/dual-mage.md`; the same day's play came back
+// overtuned, and the values below are the second pass, tuned to the
+// **benchmarks** in that document -- player actions and their outcomes, which
+// `cargo run -p sim --bin goad` prints and `tests/dual_mage.rs` pins. The feel
+// log for the date carries both passes.
+
+/// How far apart the two bars may sit and still count as level, in whole
+/// units of the bar. Inside it nothing moves on its own; outside it the hill
+/// starts.
+///
+/// **The cadence sets it.** One cast from level has to stay inside, two have
+/// to leave, the finisher always leaves, and the alternating rhythm -- an auto
+/// and a cast on one side, then the same on the other -- has to stay inside.
+/// So it is at least an auto plus a cast and less than two casts: with pushes
+/// of 5, 9 and 20 that is between 14 and 18, and 16 is the middle of it.
+pub fn meter_band() -> i32 {
+    oven::scalar(Scalar::MeterBand)
 }
 
-pub fn meter_burn() -> i32 {
-    oven::scalar(Scalar::MeterBurn)
+/// How fast the higher bar rises and the lower falls, per second, for every
+/// unit the gap is outside the band.
+///
+/// The slope of the hill. One a second per unit means a Judgement thrown from
+/// level -- four outside the band -- is already at the cap, so the finisher
+/// starts something the other hand has to answer within a cast or two. The
+/// first pass had it at two; the runaway read as too fast.
+pub fn drift_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DriftGain))
+}
+
+/// The most the drift ever moves either bar, per second.
+///
+/// Chosen against benchmark B6: uncorrected, a Judgement from level empties the
+/// lower bar in eight to twelve seconds, and answered with the far-side hand
+/// -- an auto, the cast, an auto or two -- it is back inside the band within
+/// one exchange of the finisher recovering. Far-side autos alone claw it back
+/// slowly: ten a second onto the low bar against a gap that widens at twice
+/// this. The first pass was ten a second, and it read as bars that drained too
+/// fast; the burn is what bites now, not the drift.
+pub fn drift_cap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DriftCap))
+}
+
+/// Health per second the gap costs, per unit outside the band.
+pub fn burn_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BurnGain))
+}
+
+/// The most the burn ever costs, per second.
+///
+/// Twenty-five, against benchmark B7: ignoring a runaway for ten seconds costs
+/// about what the Judgement that started it did to them -- a fifth of a health
+/// bar -- and fully one-sided for half a round costs between half and four
+/// fifths. The first pass was fifteen and read as a footnote. It cannot kill
+/// either way; `dual::singe_health` stops at one.
+pub fn burn_cap() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BurnCap))
+}
+
+/// How fast both bars fall on their own, per second, always.
+///
+/// What makes a tier something she holds by fighting. Two a second, against
+/// benchmarks B4 and B5: clean alternating reaches the blink in ten to
+/// fourteen seconds, the second jump in sixteen to twenty-one and the wings in
+/// twenty to twenty-six -- once a round, with commitment -- and stopping at
+/// three quarters keeps the blink for at least two exchanges and loses it
+/// inside seven. The first pass was six, and it read as bars that drained too
+/// fast; the plan's own wish for the blink to go inside one exchange was
+/// dropped with it, in favour of the slower drain the person asked for.
+pub fn meter_calm() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MeterCalm))
+}
+
+/// The lower bar at which the dodge becomes a blink. Half.
+pub fn tier_blink() -> i32 {
+    oven::scalar(Scalar::TierBlink)
+}
+
+/// The lower bar at which she gets a second jump and a slower fall. Three
+/// quarters.
+pub fn tier_jump() -> i32 {
+    oven::scalar(Scalar::TierJump)
+}
+
+/// The lower bar at which both are counted as full and she ascends.
+///
+/// A hair under the top rather than the top itself, and it has to be: the
+/// calm runs every frame and the two bars are pushed by two different presses,
+/// so the moment one is topped up the other has already lost a little, and
+/// both can never be at exactly the top on the same frame. Ninety-five is what
+/// the other bar keeps through one move's worth of calm with room to spare.
+pub fn tier_wings() -> i32 {
+    oven::scalar(Scalar::TierWings)
+}
+
+/// The second jump's impulse, as a share of the first.
+pub fn second_jump() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SecondJump))
+}
+
+/// What the fall cap is multiplied by while she holds the second tier.
+pub fn slow_fall() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::SlowFall))
+}
+
+/// Health returned for every hit landed while ascending.
+///
+/// The refund the original design wrote and never built. Forty against a drain
+/// of two a frame means the cost is paid back in full by eighteen hits in six
+/// seconds, which nobody will do -- it is meant to keep her alive one
+/// connection at a time, not to make the ride free.
+pub fn ascension_refund() -> i32 {
+    oven::scalar(Scalar::AscensionRefund)
+}
+
+/// The shortest the stagger on the way out gets, for a ride that paid itself
+/// back. [`ascension_stun`] is the longest, for one that landed nothing.
+pub fn ascension_stun_floor() -> u16 {
+    oven::scalar(Scalar::AscensionStunFloor) as u16
 }
 
 // ---------------------------------------------------------------------------
@@ -1105,6 +1486,10 @@ pub fn stone_erupt_stagger() -> u16 {
 /// top of another, so this is the knob that decides whether a stone raised
 /// underneath is a lift or a launch. One, and a rider leaves at exactly the
 /// speed the surface was climbing at.
+///
+/// Moved to 0.44 on 2026-09-17 and put back the next day, with the rise. See
+/// [`structure_rise`] for why neither of them is a knob to turn on a
+/// calculation.
 pub fn stone_lift() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StoneLift))
 }
@@ -1533,6 +1918,13 @@ pub fn grasp_mark() -> Fx {
 /// between the ability landing and the ability *looking* like it landed. One
 /// knob for every grab in the game, because it is a property of being dragged
 /// rather than of the thing doing the dragging.
+///
+/// **Raised with the Grasp's reach on 2026-09-17**, and `feel.rs` is what
+/// noticed: the hold is a fixed number of frames and the haul has to cover the
+/// whole reach inside it, so lengthening the throw without this drops a
+/// full-range catch halfway home -- standing in mid-air, mid-drag, suddenly
+/// able to walk. Invisible at short range and total at long range, which is the
+/// worst way for a number to be wrong.
 pub fn reel_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ReelSpeed))
 }
@@ -1573,10 +1965,12 @@ pub fn swing_level_to() -> i32 {
 /// in `beast::REST` and `beast::SHAPES` are constants and this is not.
 ///
 /// At one the creature is about thirteen metres nose to tail with its back
-/// three and a half metres up. That height is chosen against the jump: a
-/// standing full hop apexes around 2.2 m and cannot reach it, and a hop thrown
-/// from one of the arena's 1.5 m platforms can. **The climb is a positioning
-/// problem before it is a timing one**, and this is the number that decides it.
+/// five and a half metres up. That height is chosen against the jump: the
+/// lowest thing on the standing animal is out of every class's hop but the
+/// Dual mage's, and the ways up are the ones the ground game earns. **The
+/// climb is a positioning problem before it is a timing one**, and this is
+/// the number that decides it -- though the shape itself is `beast::REST`,
+/// and the height is in the legs. See `cargo run -p sim --bin beastcheck`.
 pub fn monster_scale() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterScale))
 }
@@ -1600,9 +1994,10 @@ pub fn monster_margin() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterMargin))
 }
 
-/// Walking, backing off, and how quickly it changes between them. Below the
-/// player's own walk on purpose: it catches you by cornering you, not by
-/// outrunning you.
+/// Walking, backing off, and how quickly it changes between them. The walk is
+/// below the player's own on purpose: inside striking distance it catches you
+/// by cornering you, not by outrunning you. The walk is also where the gait
+/// has fully changed over from standing; above it, it blends to the gallop.
 pub fn monster_walk() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterWalk))
 }
@@ -1613,16 +2008,20 @@ pub fn monster_accel() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterAccel))
 }
 
-/// The speed the gait has fully changed over to a gallop at. Between this and
-/// the walk the two cycles are blended, which is what stops a creature
-/// accelerating out of a walk from planting two feet at once.
+/// The speed the gait has fully changed over to a gallop at, **and the fastest
+/// it goes**: wanting to close a long gap runs it up to this. Above the
+/// player's walk on purpose, since 2026-09-23 -- a fight you could walk away
+/// from at leisure was not a hunt. Between this and the walk the two cycles
+/// are blended, which is what stops a creature accelerating out of a walk from
+/// planting two feet at once.
 pub fn gallop_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GallopSpeed))
 }
 
 /// The distance it tries to hold, and how hard it corrects toward it. Set near
 /// the middle of the move set's range band so that most of what it wants to do
-/// is available most of the time.
+/// is available most of the time. The correction is scaled by how squarely it
+/// faces the target -- it turns before it runs -- see `Monster::walk`.
 pub fn prowl_range() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ProwlRange))
 }
@@ -2147,27 +2546,31 @@ pub fn hammer_leap() -> Fx {
 // The Dual mage's depth curve
 // ---------------------------------------------------------------------------
 //
-// The class's founding idea, finally built: **power scales continuously with
-// distance from the centre of the bar.** Two numbers describe the whole of it,
-// and one function reads them -- `state::depth` -- so that "a cast at the edge
-// is a bigger cast" is one rule rather than a thing each ability remembers to
-// do. See `docs/design/dual-mage.md`.
+// The class's founding idea: **power scales continuously with the bar of the
+// force a move is made of.** Two numbers describe the whole of it, and one
+// function reads them -- `state::depth`, through `dual::depth_at` -- so that "a
+// cast from a full bar is a bigger cast" is one rule rather than a thing each
+// ability remembers to do. See `docs/design/dual-mage.md`.
 
-/// What a cast from dead centre is worth, as a multiplier.
+/// What a cast from an empty bar is worth, as a multiplier.
 ///
-/// **Below one, and it has to be.** Centre is where both forms are available
-/// and both are weak -- that is the sentence the whole mechanic hangs off, and
-/// the only way to say it in numbers is to make the middle of the bar cost you
-/// something. Everything she throws standing at zero comes out thin.
+/// **Below one, and it has to be.** A bar she has not goaded is a being she has
+/// not fed, and the only way to say that in numbers is to make an empty bar
+/// cost her something. Everything she throws from empty comes out thin.
+///
+/// Six tenths, and the ceiling is fourteen tenths: the first pass was half to
+/// double, and a Judgement from a full bar was forty per cent of a health bar.
+/// The spread is narrower now, and the base damage came down with it -- see
+/// benchmarks B1 to B3 in `docs/design/dual-mage.md`.
 pub fn depth_floor() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DepthFloor))
 }
 
-/// And what the same cast is worth standing at either end.
+/// And what the same cast is worth from a full bar.
 ///
-/// Above one, by as much as the edge is meant to be frightening. The gap
-/// between this and [`depth_floor`] is the reason to leave the middle; how far
-/// out the burn starts is the reason not to go all the way.
+/// Above one, by as much as a full bar is meant to be frightening. The gap
+/// between this and [`depth_floor`] is the reason to goad; the hill between
+/// the two bars is the reason not to goad one of them alone.
 pub fn depth_ceiling() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::DepthCeiling))
 }

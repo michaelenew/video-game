@@ -129,9 +129,12 @@ longer *changes* which attack it is.
 - **Airdodge**: shift plus a direction, **once per airtime**. It wipes vertical speed rather
   than adding to it, so it is a sideways commitment and never a second jump. A second one
   would turn a jump into flight.
-- Space while airborne does nothing, **with one exception**: while a Champion's uppercut has
-  hold of somebody, it takes the pair of you higher, once. See
-  [kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor).
+- Space while airborne does nothing, **with two exceptions**, both per class. While a
+  Champion's uppercut has hold of somebody, it takes the pair of you higher, once — see
+  [kits/champion.md](kits/champion.md#the-takeoffs--a-weapon-on-the-way-off-the-floor). And
+  the Dual mage jumps once more while the lower of her two bars holds three quarters, and on
+  every press while she is ascending — earned by the mechanic rather than given by the grammar,
+  see [dual-mage.md](dual-mage.md#the-tiers--what-frenzy-does-to-her-body). Added 2026-09-23.
 - **Space plus a weapon, on the ground, is a takeoff** — again on the Champion only, added
   2026-09-14. Three moves, one per weapon, thrown as the feet leave the floor. It is the
   first time `space` has modified anything, and the section below on that class is where
@@ -162,7 +165,12 @@ of them is settled:
   obvious candidate, and the case for it got stronger on 2026-09-16: shift means one verb now,
   so the neutral case is a gap in that verb rather than a third meaning.
 - **Double jump.** Space while airborne does nothing. The airdodge is the only air commitment
-  at present, which may be too few or exactly right.
+  at present, which may be too few or exactly right. **What "airborne" means got stated on
+  2026-09-17**, because the obvious reading deleted a technique: it means *nothing under you*.
+  A surface under you is a different thing, even a surface that is moving — the Elementalist's
+  erupting stone catches her feet mid-rise and she can jump off it again, and off a second one
+  raised behind it. That is a jump off a surface, not a jump off the air, and it costs
+  structure slots and a one-frame window to set up.
 
 ## Everything is relative to the camera
 
@@ -578,9 +586,18 @@ goes as velocity squared. Short hops now land at about a quarter of a full hop.
 A short hop is deliberately too low to cross over another fighter; the full hop is for that.
 What makes it worth having is that an aerial fits inside it.
 
-Floaty on purpose, and **high** on purpose. Verticality is part of the positioning game, and
-Smash characters routinely jump four or more times their own height. A full hop here reaches
-**2.3 to 4.8 body heights** depending on class.
+Floaty on purpose, and **no longer high on purpose — ⚠️ retuned 2026-09-17.** It reached 2.3
+to 4.8 body heights, which is Smash's range, and Smash is a game where the jump *is* the
+movement system. Here it is the floor of one: every class has a technique of its own, and a
+jump that goes most of the way to the technique without it makes the technique a flourish. The
+Champion's pole vault was worth only a quarter more height than pressing space.
+
+So the takeoff came down a twelfth, which is a third off every apex — height goes as the
+square of takeoff speed and airtime only as the speed, which is why the height was taken here
+rather than out of gravity. A full hop now reaches **1.5 to 3.3 body heights**, still clears a
+standing fighter and the arena's platforms on every class, and still lasts most of a second in
+the middle of the roster. The sustain was stiffened with it: see the two mechanisms above, and
+[feel-log.md](feel-log.md) for why the old pair read as an elevator.
 
 There is deliberately **no ceiling on airtime**. What a jump has to be is four separate things,
 and each is worth stating on its own rather than collapsing into one frame count:
@@ -668,7 +685,23 @@ a poke.
 
 Every aerial hangs a little by default — an attack that drops you straight through gives the
 air nothing to offer. Moves that want more say so; the Bulwark's Slam hangs twice as long as a
-poke.
+poke and the Dual mage's autos hang three times as long, which is the longest in the game and
+her air identity.
+
+**And each hang in one airtime is worth less than the last — added 2026-09-17.** A hang costs
+nothing but the move that carries it, and the repeat lockout only stops *one* move being thrown
+twice — so a class with two interchangeable pokes can alternate them and simply never come
+down. The Dual mage is that class by construction: her two autos are the same punch mirrored
+and throwing them alternately is how she steers her meter.
+
+Compounding rather than a cap, because a cap has an edge somebody finds and plays against and
+this has none: the sum of every hang an airtime can contain is `first / (1 - falloff)`, bounded
+however long you stay up. Reset on landing, like the airdodge. It applies to every class, so a
+multi-aerial string is mildly worse than it was, which is correct for the same reason.
+
+A hang is also always **shorter than the move that carries it** (`sim/tests/feel.rs`). A hang
+longer than its move is a float with an attack attached rather than the other way round, and it
+would let a whiffed aerial stay safe by simply remaining out of reach.
 
 ### Airborne attacks — ⚠️ open
 
@@ -682,11 +715,13 @@ What exists today: **space is a vertical takeoff**, and **shift plus a direction
 airdodge, once per airtime**, which wipes vertical speed so it can never be a second jump.
 Airborne attacks are still the grounded ones.
 
-One class spends that airdodge on something else. The Reaver's forward airdodge, thrown with
+Two classes spend that airdodge on something else. The Reaver's forward airdodge, thrown with
 the crosshair on her shadow, is the **dash to it** — added 2026-09-14, because mobility that
 switched off the moment she jumped was mobility in the wrong place. It costs the airdodge
 like any other air commitment; what it buys is the whole distance to the second body rather
-than a sideways shove.
+than a sideways shove. The Dual mage's, while the lower of her bars holds half, is the
+**blink** — added 2026-09-23: the same commitment with the travelling taken out, on the ground
+and in the air alike, and airborne it costs the airdodge the same way.
 
 ---
 

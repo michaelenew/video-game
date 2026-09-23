@@ -308,6 +308,19 @@ there it would be a facing, a distance and a floor query sitting next to an
 ability — which is the exact shape of the mistake this document exists to
 prevent, three metres of it at a time.
 
+**Which way does a copy thrown from somewhere else face?** `aim::shadow_faces`
+answers that one — added 2026-09-23, for the Reaver's v2. Her shadow out on the
+field copies her swings, and the copy is still a **swing**: it keeps her pitch,
+her shape and her frames. The one thing it cannot take from her is *which way is
+forward over there*. On her yaw it landed only on somebody standing at exactly
+her offset from it, so it turns to the nearest body within the move's reach plus
+a slack, measured to the edge of a fighter's column or to the nearest point of
+the creature from the height the swing leaves at. `aim::copied_swing` then
+carries her line over to the shadow and turns it onto that yaw — along and
+across her facing, the same two amounts along and across the new one, and no
+angles. A yaw to the nearest body worked out beside the shadow would be the
+mistake again, so it lives here.
+
 It is what lets her dash *up*. At the foot of a platform with the shadow on the
 deck, the line from her soles goes into the wall of it and the line from her
 crown goes over the lip: there is a way, so she takes it. It is also why the
@@ -356,6 +369,21 @@ so a body the camera could not see is still a body the shot passes through.
 Each ability states which kinds of thing its path can meet. The Elementalist's
 beam meets bodies, stones and **fire**; the fire bolt that a pillar lights meets
 bodies and stones but not fire, or it could not leave the pillar that lit it.
+
+**The arena is on the list too, and nothing asks for it — added 2026-09-17.** It
+was not there at all before, which was invisible rather than wrong: the
+crosshair's ray already stops on terrain, so a shot is aimed at a point the
+geometry allows and asking a second time along its own path would only ever
+agree with the first answer. What wanted it is a different kind of question —
+**is there anything to pull on** — and the Blood mage's Grasp is the ability
+asking it. Her blink asks the same question from the other side: is there a wall
+in the way of where I am about to be. Both are answered here rather than beside
+either of them, so the two cannot disagree about where a wall is.
+
+That is also why `Contact` grew `is_an_anchor`. Terrain, a structure and the
+creature are things a thrown rope could hold on to; a fighter and a fire are not
+— one of them moves and the other is not there. It is a fact about the world
+rather than about the Blood mage, so it lives beside the enum.
 
 An ability whose *effect* travels — the Blood mage's thrown blade — takes the
 path's direction and flies its own distance along it, rather than stopping where

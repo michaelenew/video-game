@@ -745,6 +745,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         action,
         grounded: true,
         crouching: false,
+        floating: false,
         crouched_for: 0,
         speed: 0.0,
         travel: [0.0, 0.0],
@@ -1426,4 +1427,65 @@ fn a_match_opens_showing_the_fighter_rather_than_the_floor() {
         "the fighter is {:.0}% faded away at the angle the match opens at",
         f.hidden * 100.0
     );
+}
+
+// ---------------------------------------------------------------------------
+// The Dual mage, off the floor
+// ---------------------------------------------------------------------------
+
+/// Her, standing still, floating or not.
+fn dual(floating: bool) -> PoseInput {
+    let mut input = input_at(Action::Free, 0.0, 61);
+    input.class = sim::Class::DualMage;
+    input.floating = floating;
+    input
+}
+
+#[test]
+fn floating_is_a_different_body_from_standing() {
+    // The visible half of the reward for riding the edge of her bar. The
+    // simulation half is that she moves faster (`sim::state::floating`), and the
+    // two come off the same predicate on purpose -- a renderer that decided
+    // this for itself could draw a walk at a float's speed.
+    let standing = pose_for(dual(false));
+    let hanging = pose_for(dual(true));
+    assert_ne!(
+        standing, hanging,
+        "deep on her own bar she is drawn exactly as she is standing"
+    );
+
+    // **Pointed feet are the whole tell.** Positive ankle swing drops the toe;
+    // a fighter on the floor has it near flat, because a heel that leaves the
+    // ground reads as being about to step.
+    let toes = |p: &view::pose::Pose, j| p.angles(j)[0];
+    for foot in [Joint::FootL, Joint::FootR] {
+        assert!(
+            toes(&hanging, foot) > toes(&standing, foot) + 0.3,
+            "her feet are no more pointed floating ({:.2}) than standing ({:.2})",
+            toes(&hanging, foot),
+            toes(&standing, foot)
+        );
+    }
+    // And the knees stay soft rather than locking straight: an angel hangs,
+    // she does not stand to attention in mid-air.
+    for knee in [Joint::ShinL, Joint::ShinR] {
+        assert!(
+            hanging.angles(knee)[0] > 0.1,
+            "her knees are straight while floating"
+        );
+    }
+}
+
+#[test]
+fn a_floating_body_still_poses_from_state_alone() {
+    // The rollback rule, asked of the two new clips. They loop off the
+    // simulation frame like the idle does, so the answer has to be the same
+    // every time for the same frame.
+    for moving in [0.0, 4.0] {
+        let mut input = dual(true);
+        input.speed = moving;
+        input.eased_speed = moving;
+        input.stride = 0.37;
+        assert_eq!(pose_for(input), pose_for(input));
+    }
 }

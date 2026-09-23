@@ -211,14 +211,14 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     let mut standing = reavers();
     run(&mut standing, 50, E, 0);
     assert!(
-        standing.players[1].health < max_health(),
+        standing.players[1].health < standing.players[1].full_health(),
         "setup did not connect while standing"
     );
 
     let mut mid = reavers();
     run(&mut mid, 20, L, Input::CROUCH);
     assert!(
-        mid.players[1].health < max_health(),
+        mid.players[1].health < mid.players[1].full_health(),
         "a mid was ducked; crouch beats everything"
     );
 
@@ -226,7 +226,7 @@ fn crouching_ducks_an_overhead_but_not_a_mid() {
     run(&mut ducked, 50, E, Input::CROUCH);
     assert_eq!(
         ducked.players[1].health,
-        max_health(),
+        ducked.players[1].full_health(),
         "crouch failed to duck the overhead"
     );
 }
@@ -644,13 +644,13 @@ fn the_drawn_hitbox_is_the_one_that_hits() {
     for class in ALL_CLASSES {
         let inside = swinging_at(class, 0.8);
         assert!(
-            inside.players[1].health < max_health(),
+            inside.players[1].health < inside.players[1].full_health(),
             "{class:?}: a defender well inside the drawn box was not hit"
         );
         let outside = swinging_at(class, 1.3);
         assert_eq!(
             outside.players[1].health,
-            max_health(),
+            outside.players[1].full_health(),
             "{class:?}: a defender well outside the drawn box was hit anyway"
         );
     }
@@ -975,25 +975,64 @@ fn a_short_hop_is_long_enough_to_throw_an_aerial() {
 }
 
 #[test]
-fn a_full_hop_reaches_platform_fighter_heights() {
-    // Smash characters jump four or more times their own height. Every class
-    // should manage twice, and the floaty end should reach the four that makes
-    // the genre's verticality read as generous rather than as a hop.
+fn a_full_hop_gets_you_onto_the_terrain_and_over_a_body() {
+    // **Replaced the "four body heights" assertion on 2026-09-17.** That number
+    // came from Smash, where the jump *is* the movement system. Here it is the
+    // floor of one: the Elementalist rides a structure up, the Champion vaults,
+    // the Reaver crosses to her shadow. A jump tall enough to go most of the way
+    // to those without them makes each of them a flourish rather than a
+    // technique, which is what the height nerf was for. See
+    // `docs/design/feel-log.md`.
+    //
+    // What is left is what a jump is actually *for*, and neither half of it is
+    // a body-height count. You have to be able to get on to the arena's
+    // terrain, and you have to be able to come down on somebody's head.
     let head = sim::tuning::body_height().to_f32_for_render();
-    let mut tallest: f32 = 0.0;
+    let platform = sim::arena::WALL_HEIGHT.to_f32_for_render();
     for class in ALL_CLASSES {
         let (apex, _) = jump_profile(class, 60);
         assert!(
-            apex > head * 2.0,
-            "{}: a full hop reaches {:.1} body heights",
-            class.name(),
-            apex / head
+            apex > platform,
+            "{}: a full hop reaches {apex:.2} m, short of the {platform:.2} m platforms",
+            class.name()
         );
-        tallest = tallest.max(apex / head);
+        assert!(
+            apex > head,
+            "{}: a full hop reaches {apex:.2} m, not over a standing fighter's {head:.2} m",
+            class.name()
+        );
     }
+}
+
+#[test]
+fn nobody_jumps_as_high_as_their_movement_ability_takes_them() {
+    // **The point of the height nerf, stated as a relationship.** Every class's
+    // signature movement is meant to read as a different kind of thing from
+    // pressing jump, and the cheapest way to lose that is for the jump to creep
+    // up until the ability is a slightly better version of it. Half again is
+    // the margin: enough that the two do not look alike from across the arena.
+    //
+    // Two of them are measured here because two of them are built. The
+    // Champion's vault sets a rise outright, and the Elementalist rides an
+    // eruption and jumps off the top of it; the Reaver's dash and the Bulwark's
+    // leap go sideways rather than up and are not this test's business.
+    let margin = 1.5;
+
+    let vault = sim::moves::get(sim::Class::Champion, sim::moves::champion::POLE_VAULT).self_lift;
+    let vault_apex = {
+        let v = vault.to_f32_for_render();
+        let g = (sim::tuning::gravity().to_f32_for_render()
+            * sim::class::Class::Champion
+                .mobility()
+                .gravity
+                .to_f32_for_render())
+        .abs();
+        v * v / (2.0 * g)
+    };
+    let (champion_hop, _) = jump_profile(sim::Class::Champion, 60);
     assert!(
-        tallest >= 4.0,
-        "nobody jumps four body heights; the tallest manages {tallest:.1}"
+        vault_apex > champion_hop * margin,
+        "the pole vault reaches {vault_apex:.2} m against a {champion_hop:.2} m full hop --          the Champion can nearly vault by pressing jump"
     );
 }
 
@@ -1090,12 +1129,20 @@ fn releasing_the_jump_button_is_final() {
 }
 
 /// Horizontal speed and heading after jumping forward and then holding `bits`.
+///
+/// The jump is **held** through the drift, and that is a fixture detail rather
+/// than part of what is being measured: holding space sustains the rise and
+/// does nothing horizontal. It is here because these measurements are only
+/// meaningful in the air, and the takeoff was retuned downward on 2026-09-17 —
+/// a tapped hop on the heaviest class is over in nineteen frames, so a
+/// twenty-frame drift was reading a fighter standing on the floor with the
+/// stick released. A full hop keeps everybody airborne for the window.
 fn air_drift(bits: u16, frames: u32) -> (f32, f32) {
     let mut w = World::new();
     // Walk up to speed, then take off carrying it.
     press(&mut w, Input::W, 12);
     press(&mut w, Input::SPACE | Input::W, 1);
-    press(&mut w, bits, frames);
+    press(&mut w, bits | Input::SPACE, frames);
     let v = w.players[0].vel;
     let (x, z) = (v.x.to_f32_for_render(), v.z.to_f32_for_render());
     ((x * x + z * z).sqrt(), z.atan2(x).to_degrees())
@@ -1302,12 +1349,12 @@ fn an_aerial_hangs_you_where_you_are() {
     // Per-move, and the reason the air is worth attacking from at all.
     let mut plain = World::new();
     let mut striking = World::new();
-    press(&mut plain, Input::SPACE, 1);
-    press(&mut striking, Input::SPACE, 1);
-    // Let both rise, then one of them attacks.
-    press(&mut plain, 0, 20);
-    press(&mut striking, 0, 19);
-    press(&mut striking, L, 1);
+    // The jump is held for the rise, so that the aerial is thrown by somebody
+    // who is still in the air. A tapped hop on the heaviest class no longer
+    // lasts the twenty frames this waits -- see `air_drift`.
+    press(&mut plain, Input::SPACE, 20);
+    press(&mut striking, Input::SPACE, 19);
+    press(&mut striking, L | Input::SPACE, 1);
     assert!(
         striking.players[0].air_stall > 0,
         "an aerial armed no hang at all"

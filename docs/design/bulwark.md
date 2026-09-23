@@ -6,6 +6,11 @@ replaces: docs/archive/combat-design/gatekeeper-skills.md
 
 # Bulwark
 
+> ⚠️ **A v2 is proposed, 2026-09-23** — [bulwark-v2.md](bulwark-v2.md). It answers the question
+> this document never asked: *why use a shield alone.* Blocking loads the shield; the shield's
+> attacks spend it; the planted shield joins the structure system and becomes the wall this
+> document promises. Nothing of it is built.
+
 The defensive class. Replaces the retired Gatekeeper in the roster.
 
 ## Why the roster needs it

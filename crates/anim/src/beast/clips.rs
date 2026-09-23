@@ -34,6 +34,7 @@ pub fn all() -> Vec<Recipe> {
         charge(),
         slam(),
         shake(),
+        kick(),
         flinch(),
         stumble(),
         topple(),
@@ -433,8 +434,11 @@ fn slam() -> Recipe {
         .forelegs(-58.0, -78.0);
     // Down. Everything reverses at once, which is why this is the move you
     // leave the back for rather than the one you brace against.
+    // The crash goes a metre further than the legs' own length asks, so the
+    // shoulders at the bottom of it stay inside a standing jump: the answer
+    // to the hardest-hitting move in the set is still an invitation.
     let slammed = Pose::standing()
-        .hips(0.40, -0.30, 0.0)
+        .hips(0.40, -1.05, 0.0)
         .root(-13.0, 0.0, 0.0)
         .spine(-10.0, 0.0, 0.0)
         .chest(-14.0, 0.0, 0.0)
@@ -527,7 +531,14 @@ fn shake() -> Recipe {
     // it has to stay violent per reversal however long the shake is tuned to
     // run, and spreading a fixed number of swings over a longer window makes
     // each of them slower and the whole move gentler.
-    const REVERSALS: usize = 9;
+    // Six for a thirty-six frame whip: six frames a swing, which is about
+    // what nine were over the fifty-six frame whip it had until 2026-09-23.
+    // The whip was shortened so that a hop begun late in the tell lands
+    // after it -- the jump-the-shake read the ride is built around, which a
+    // whip longer than a hop had quietly made impossible -- and nine swings
+    // in thirty-six frames threw braced riders off the hips, which are
+    // supposed to be the calm place.
+    const REVERSALS: usize = 6;
     for i in 0..=REVERSALS {
         let u = i as f32 / REVERSALS as f32;
         let side = if i % 2 == 0 { 1.0 } else { -1.0 };
@@ -545,7 +556,7 @@ fn shake() -> Recipe {
     keys.push(Key::at(1.0, Pose::standing()));
     Recipe::new(Clip::Shake, keys, Looseness::BUCK).noting(
         "The one move whose animation is a *contract*. Forty frames of planting \
-         and leaning, which are deliberately not violent, and then five \
+         and leaning, which are deliberately not violent, and then six \
          reversals that throw anybody still standing on it. A rider is meant to \
          be able to read the first and jump the second, and the only reason \
          that is possible is that the startup does not shake. An early version \
@@ -554,6 +565,69 @@ fn shake() -> Recipe {
          is for. \
          Roll rather than yaw carries it, because rolling is what throws \
          somebody standing on top of you and yawing mostly slides them."
+            .to_string(),
+    )
+}
+
+fn kick() -> Recipe {
+    let ready = Pose::standing();
+    // Weight onto the forelegs, head down, hind feet gathered under the belly.
+    // The tail comes up out of the way -- which is the tell that reads from
+    // behind, where the person this move is for is standing: a tail lifting
+    // and a rump dropping are the two things in the silhouette they can see.
+    let gather = Pose::standing()
+        .hips(0.30, -0.40, 0.0)
+        .root(-9.0, 0.0, 0.0)
+        .spine(-4.0, 0.0, 0.0)
+        .chest(-3.0, 0.0, 0.0)
+        .neck(-12.0, 0.0)
+        .head(6.0, 0.0, 0.0)
+        .tail_lift(34.0)
+        .plant_fore(0.04, 0.0)
+        .plant_hind(0.30, 0.0);
+    // Both hind legs straight back and up. The feet leave the floor for the
+    // only time in the move set, which is why it is fast: there is no stance
+    // to change, the animal simply throws the back half of itself.
+    let thrown = Pose::standing()
+        .hips(0.20, -0.30, 0.0)
+        .root(-14.0, 0.0, 0.0)
+        .spine(-3.0, 0.0, 0.0)
+        .chest(-2.0, 0.0, 0.0)
+        .neck(-14.0, 0.0)
+        .head(8.0, 0.0, 0.0)
+        .tail_lift(46.0)
+        .plant_fore(0.0, 0.0)
+        .hindlegs(-68.0, 8.0);
+    // Down again, heavily. The hind end drops onto legs that were not under
+    // it, and the recovery is the animal getting its feet back.
+    let landed = Pose::standing()
+        .hips(0.06, -0.28, 0.0)
+        .root(-5.0, 0.0, 0.0)
+        .neck(-6.0, 0.0)
+        .tail_lift(14.0)
+        .plant_fore(0.10, 0.0)
+        .plant_hind(-0.36, 0.0);
+    Recipe::new(
+        Clip::Kick,
+        vec![
+            Key::eased(0.0, ready, Ease::ANTICIPATE),
+            Key::eased(mark(Clip::Kick, 0, 0.7), gather, Ease::SNAP),
+            Key::eased(mark(Clip::Kick, 1, 0.0), thrown, Ease::STRIKE),
+            Key::eased(mark(Clip::Kick, 1, 1.0), thrown, Ease::OUT),
+            Key::eased(mark(Clip::Kick, 2, 0.4), landed, Ease::SMOOTH),
+            Key::at(1.0, ready),
+        ],
+        Looseness::SNAP,
+    )
+    .noting(
+        "The mule kick, and it exists for one patch of floor: directly behind \
+         the hips, where every forward move needs you elsewhere and the sweep \
+         is a whip about the very point you are standing on. Twenty-two frames \
+         of startup is readable but only just, and the tell is authored for \
+         the person it is aimed at -- who is behind it and cannot see the head \
+         -- so it is the tail going up and the rump going down. Its answer is \
+         a sidestep, which is not the sweep's answer, so being behind the \
+         animal is now two reads rather than none."
             .to_string(),
     )
 }
@@ -595,27 +669,37 @@ fn stumble() -> Recipe {
     // usually goes, and the simulation adds the pitch that says which end -- so
     // that a broken hindfoot and a broken forefoot share one clip and still
     // read differently.
+    // **A metre deeper than the legs used to need**, since 2026-09-23: the
+    // legs grew a metre and the shoulder still has to come down to about two
+    // and a half, because that number is what a broken foot buys and it is
+    // measured against the roster's jumps, not against the animal's height.
     let buckling = Pose::standing()
-        .hips(0.10, -0.35, 0.0)
+        .hips(0.10, -0.95, 0.0)
         .root(-6.0, 0.0, 5.0)
         .spine(-7.0, 0.0, 0.0)
         .chest(-10.0, 0.0, 0.0)
         .neck(-12.0, 8.0)
         .tail(14.0, -18.0)
-        .plant_hind(-0.42, 0.0)
-        .plant(1, 0.42, 0.0)
-        .leg(0, 26.0, -80.0);
+        // Planted a little *above* the floor, because a metre and a half of
+        // drop through LIMP springs overshoots and a foot solved onto the
+        // floor at the key goes through it between keys.
+        .plant_hind(-0.42, 0.45)
+        .plant(1, 0.42, 0.45)
+        // The kneeling leg is keyed as angles because it is the one leg that
+        // is *not* on the floor; the shin folds back to nearly horizontal so
+        // that a lower leg over two metres long does not go through it.
+        .leg(0, 30.0, -112.0);
     let down = Pose::standing()
-        .hips(0.05, -0.62, 0.0)
+        .hips(0.05, -1.62, 0.0)
         .root(-13.0, 0.0, 9.0)
         .spine(-10.0, 0.0, 0.0)
         .chest(-16.0, 0.0, 0.0)
         .neck(-12.0, 12.0)
         .head(8.0, 0.0, 0.0)
         .tail(6.0, -10.0)
-        .plant_hind(-0.50, 0.0)
-        .plant(1, 0.55, 0.0)
-        .leg(0, 40.0, -104.0);
+        .plant_hind(-0.50, 0.55)
+        .plant(1, 0.55, 0.55)
+        .leg(0, 42.0, -134.0);
     Recipe::new(
         Clip::Stumble,
         vec![
@@ -626,7 +710,7 @@ fn stumble() -> Recipe {
             Key::eased(0.88, buckling, Ease::OUT),
             Key::at(1.0, Pose::standing()),
         ],
-        Looseness::LIMP,
+        Looseness::COLLAPSE,
     )
     .noting(
         "The mount window, and it is shaped to be one: it goes down over a \
@@ -634,8 +718,8 @@ fn stumble() -> Recipe {
          getting back up. A collapse that bounced straight back would be a \
          window you cannot cross the arena to reach, which is the same as no \
          window at all. \
-         The shoulder comes down to about a metre and a half, which is a \
-         standing jump."
+         The shoulder comes down to about two and a half metres, which is a \
+         standing jump for most of the roster -- `beastcheck` prints it."
             .to_string(),
     )
 }
@@ -645,7 +729,7 @@ fn topple() -> Recipe {
     // why it reads as a different *kind* of event from everything else: nothing
     // the creature chooses to do rolls it.
     let over = Pose::standing()
-        .hips(0.0, -1.55, 0.35)
+        .hips(0.0, -2.55, 0.35)
         .root(-6.0, 0.0, 62.0)
         .spine(-4.0, 0.0, 10.0)
         .chest(-6.0, 0.0, 8.0)
@@ -658,7 +742,7 @@ fn topple() -> Recipe {
         .leg_spread(2, 22.0)
         .leg_spread(3, 22.0)
         .tail(4.0, 34.0);
-    let heaving = over.blend(&Pose::standing(), 0.45).hips(0.0, -0.7, 0.15);
+    let heaving = over.blend(&Pose::standing(), 0.45).hips(0.0, -1.4, 0.15);
     Recipe::new(
         Clip::Topple,
         vec![
@@ -668,7 +752,7 @@ fn topple() -> Recipe {
             Key::eased(0.82, heaving, Ease::OUT),
             Key::at(1.0, Pose::standing()),
         ],
-        Looseness::LIMP,
+        Looseness::COLLAPSE,
     )
     .noting(
         "A fall is fast and standing up is not, and the key positions say so: \
@@ -682,7 +766,7 @@ fn topple() -> Recipe {
 
 fn dead() -> Recipe {
     let gone = Pose::standing()
-        .hips(0.0, -1.70, 0.45)
+        .hips(0.0, -2.70, 0.45)
         .root(-8.0, 0.0, 74.0)
         .spine(-6.0, 0.0, 12.0)
         .chest(-8.0, 0.0, 10.0)

@@ -43,6 +43,8 @@ const TIPPER: Color = Color::srgb(1.0, 0.94, 0.42);
 /// outlive their move, so they are drawn in the hitbox family of colours.
 const PILLAR: Color = Color::srgb(1.0, 0.55, 0.15);
 const FIELD: Color = Color::srgb(0.85, 0.20, 0.35);
+/// The Reaver's marks on a body.
+const MARK: Color = Color::srgb(0.62, 0.40, 0.95);
 
 pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
     if !show.0 {
@@ -68,6 +70,18 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             if ducked { DUCKED } else { HURTBOX },
         );
         gizmos.line(centre, centre + facing * 1.2, FACING);
+
+        // The Reaver's marks on this body, one ring each over the head: the
+        // count the cash-in will spend, read from the same field it reads.
+        let marks = sim.cur.players[i].marks;
+        for k in 0..marks {
+            let top = pos + Vec3::Y * (body_height() + 0.35 + 0.12 * k as f32);
+            gizmos.circle(
+                Isometry3d::new(top, Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+                0.2,
+                MARK,
+            );
+        }
 
         // The live attack volume, straight from the simulation rather than
         // rebuilt here. Only during active frames: if you can see it, it is out.

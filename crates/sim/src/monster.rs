@@ -102,7 +102,7 @@ pub const fn is_weak_point(part: usize) -> bool {
 // Moves
 // ---------------------------------------------------------------------------
 
-pub const MOVES: usize = 6;
+pub const MOVES: usize = 7;
 
 pub const BITE: u8 = 0;
 pub const STOMP: u8 = 1;
@@ -110,6 +110,15 @@ pub const SWEEP: u8 = 2;
 pub const CHARGE: u8 = 3;
 pub const SLAM: u8 = 4;
 pub const SHAKE: u8 = 5;
+/// Both hind legs, straight back. **The answer to standing at the tail root.**
+/// Every forward move needs you in front of it and the sweep is a whip about
+/// the hips, so the patch of floor directly behind them was outside every
+/// hit volume it had -- a place to stand and wail on a hind foot, which the
+/// design document had called the ground game's station and a player called a
+/// safe spot. The kick is aimed at exactly that patch, and its answer is a
+/// sidestep rather than the sweep's jump, so being behind it is now two
+/// questions rather than none.
+pub const KICK: u8 = 6;
 
 pub const MOVE_NAMES: [&str; MOVES] = [
     "Bite",
@@ -118,6 +127,7 @@ pub const MOVE_NAMES: [&str; MOVES] = [
     "Charge",
     "Rear and slam",
     "Shake",
+    "Back kick",
 ];
 
 /// One of the creature's moves, read live from the Oven.
@@ -240,6 +250,7 @@ pub fn attacks() -> [Attack; MOVES] {
         attack(3),
         attack(4),
         attack(5),
+        attack(6),
     ]
 }
 
@@ -342,6 +353,22 @@ impl Doing {
             Doing::Toppled { .. } => 5,
             Doing::Dead => 6,
             Doing::Stumble { .. } => 7,
+        }
+    }
+
+    /// Which clip this state is drawn from. Two states with the same key are
+    /// two points on one continuous motion; two with different keys are a
+    /// cut, and a cut is not a movement of the surface under a rider's feet.
+    pub const fn clip_key(self) -> u8 {
+        match self {
+            Doing::Startup { kind, .. }
+            | Doing::Active { kind, .. }
+            | Doing::Recovery { kind, .. } => kind,
+            Doing::Prowl => MOVES as u8,
+            Doing::Flinch { .. } => MOVES as u8 + 1,
+            Doing::Stumble { .. } => MOVES as u8 + 2,
+            Doing::Toppled { .. } => MOVES as u8 + 3,
+            Doing::Dead => MOVES as u8 + 4,
         }
     }
 
@@ -483,6 +510,10 @@ pub struct Brain {
     pub repeat_left: u16,
     /// Per-move lockout. Zero means available.
     pub cooldown: [u16; MOVES],
+    /// The move in progress plays its clip the other way round. Set when a
+    /// sweep is chosen, from which side the target was on, so the tail goes
+    /// where the person is rather than always to the right.
+    pub mirror: bool,
     /// Deterministic, advanced only from inside the tick, and part of the
     /// snapshot -- so a rollback replays the same choices.
     pub rng: u32,
@@ -499,6 +530,7 @@ impl Default for Brain {
             last_move: NO_PART,
             repeat_left: 0,
             cooldown: [0; MOVES],
+            mirror: false,
             // Any odd seed. Xorshift is stuck at zero, and one is as good a
             // starting point as any other.
             rng: 0x2545_F491,
@@ -552,6 +584,13 @@ pub struct Monster {
     /// Frames it is pinned in place. What a grab does to something too big to
     /// drag.
     pub rooted: u16,
+    /// The Reaver's marks, and the clock that fades them -- the same pair a
+    /// fighter carries (`state::Player::marks`). The shadow works a
+    /// Ridgeback's flank from range and she crosses to cash on a leg. The same
+    /// cap as a fighter's for now; whether a body this big wants its own is an
+    /// open question in `docs/design/shadow-reaver-v2.md`.
+    pub marks: u8,
+    pub mark_clock: u16,
 }
 
 impl Default for Monster {
@@ -579,7 +618,24 @@ impl Monster {
             slowed: 0,
             slow_mul: Fx::ONE,
             rooted: 0,
+            marks: 0,
+            mark_clock: 0,
         }
+    }
+
+    /// One mark from the Reaver's shadow. See `shadow::mark`, which is the
+    /// same rule for a fighter.
+    pub fn mark(&mut self) {
+        self.marks = self.marks.saturating_add(1).min(t::mark_cap());
+        self.mark_clock = t::mark_fade();
+    }
+
+    /// Spend every mark, and say how many there were.
+    pub fn spend_marks(&mut self) -> u8 {
+        let marks = self.marks;
+        self.marks = 0;
+        self.mark_clock = 0;
+        marks
     }
 
     /// On its side, with its options gone.
@@ -672,7 +728,10 @@ impl Monster {
                 let kind = self.doing.attacking().unwrap_or(0);
                 let (which, at) = phase(self.doing);
                 let clip = Clip::of_move(kind);
-                let posed = beast::sample_phase(clip, which, at);
+                let mut posed = beast::sample_phase(clip, which, at);
+                if self.brain.mirror {
+                    posed = posed.mirrored();
+                }
                 if kind == SHAKE {
                     // The one clip whose *violence* is a gameplay number rather
                     // than a look: it is what decides whether a braced rider
@@ -735,14 +794,45 @@ impl Monster {
         // point, and how much lower the front is than the back is the pitch
         // below saying so -- adding both ends into the height as well drops the
         // whole animal through the floor once three feet are gone.
-        p.hips.y = drop.mul(f.add(r)).mul(Fx::ratio(1, 2)).neg();
+        let sunk = drop.mul(f.add(r)).mul(Fx::ratio(1, 2));
+        p.hips.y = sunk.neg();
         // Nose down when the front is gone, tail down when the back is. The
         // rig's pitch is positive nose-*up*, so the subtraction runs the other
         // way round to the one that reads naturally here.
-        p.bone[beast::ROOT].x = t::leg_pitch().mul(r.sub(f));
+        let pitch = t::leg_pitch().mul(r.sub(f));
+        p.bone[beast::ROOT].x = pitch;
         p.bone[beast::ROOT].z = t::leg_roll().mul(Fx::from_int(self.list()));
         for leg in beast::LEGS {
             if !self.broken(leg.foot) {
+                // **A sound leg on a lowered animal bends to meet the floor.**
+                // The hips came down and this leg did not get shorter, so it
+                // folds at both joints by the angle that takes exactly the
+                // drop out of its height -- what a real leg does under a body
+                // that has sagged onto it. Without this the legs that are
+                // left stand through the ground, and with the legs a metre
+                // longer than they were that is a metre of animal buried.
+                // The drop this end felt is the hips' drop corrected by the
+                // pitch: nose-up raises the front and lowers the rear.
+                let lever = if leg.front {
+                    beast::rest(beast::SPINE)
+                        .x
+                        .add(beast::rest(beast::CHEST).x)
+                        .add(beast::rest(leg.hip).x)
+                } else {
+                    beast::rest(leg.hip).x
+                };
+                let felt = sunk.sub(crate::math::turns_to_radians(pitch).mul(lever));
+                let len = beast::rest(leg.knee).len().add(shape(leg.foot).min.y.neg());
+                let c = crate::math::crouch_turns(felt, len);
+                // Folded the way this leg's joint goes -- the same rule the
+                // break below uses, and the same sign convention.
+                let (hip, knee) = if leg.front {
+                    (c.neg(), c.add(c))
+                } else {
+                    (c, c.add(c).neg())
+                };
+                p.bone[leg.hip].x = p.bone[leg.hip].x.add(hip);
+                p.bone[leg.knee].x = p.bone[leg.knee].x.add(knee);
                 continue;
             }
             // The joint above a broken foot folds. Which way depends on which
@@ -1091,8 +1181,15 @@ impl Monster {
         // The anchor is authored in body space and carried by whichever bone
         // the move rides, so a bite whose head has been thrown forward puts its
         // hitbox where the head now is rather than where the head starts.
-        let bone = rig.bone[follow_bone(m.follows)];
-        let carried = bone.at.sub(rig.bone[beast::ROOT].at);
+        //
+        // Carried by the bone's motion **from rest**, not by its offset from
+        // the hips. The first version added the whole offset, which put the
+        // bite's volume nine to thirteen metres out on a move thrown at six,
+        // and the sweep's five to eleven metres back on a tail that reaches
+        // seven -- so the bite whiffed at its own ideal range and the tail root
+        // was the one place behind the animal nothing could touch.
+        let which = follow_bone(m.follows);
+        let carried = rig.bone[which].at.sub(rig.rest_at(which));
         let anchor = rig
             .to_world(V3::new(m.hit_x, Fx::ZERO, m.hit_z))
             .add(V3::new(carried.x, Fx::ZERO, carried.z));
@@ -1120,6 +1217,36 @@ impl Monster {
             return false;
         }
         world.y.add(hurt_height).raw() >= low.raw() && world.y.raw() <= high.raw()
+    }
+
+    /// The point of the creature's body nearest `world`.
+    ///
+    /// Each part's box, clamped to in the part's own frame and carried back
+    /// out, and the one whose point is nearest **in three dimensions** wins.
+    /// What asks is the Reaver's shadow deciding which way to face -- see
+    /// `aim::shadow_faces` -- and it wants the flank it could reach, not the
+    /// middle of an animal twelve metres long. Measured flat, the nearest
+    /// thing to a shadow standing under the creature's neck was the head five
+    /// metres overhead, and the copy turned to swing at the air beneath it.
+    pub fn nearest_to(&self, world: V3) -> V3 {
+        let rig = self.rig();
+        let mut best: Option<(V3, Fx)> = None;
+        for index in 0..PARTS {
+            let sh = shape(index);
+            let frame = rig.of(index);
+            let local = frame.world_to_local(world);
+            let clamped = V3::new(
+                local.x.clamp(sh.min.x, sh.max.x),
+                local.y.clamp(sh.min.y, sh.max.y),
+                local.z.clamp(sh.min.z, sh.max.z),
+            );
+            let at = frame.local_to_world(clamped);
+            let gap = crate::math::big_len(at.sub(world));
+            if best.is_none_or(|(_, seen)| gap.raw() < seen.raw()) {
+                best = Some((at, gap));
+            }
+        }
+        best.map_or(self.pos, |(at, _)| at)
     }
 
     /// Which part an attack touches, or `None`.
@@ -1536,6 +1663,15 @@ impl Monster {
         let kind = chosen.unwrap_or(0);
 
         let m = attack(kind);
+        // The sweep goes to whichever side the target is on. Decided once,
+        // here, and held for the move: the yaw is locked for the same reason,
+        // and a tail that changed its mind mid-whip would be a telegraph that
+        // lied.
+        self.brain.mirror = kind == SWEEP && {
+            let right = V3::from_turns(self.yaw.add(crate::math::QUARTER_TURN));
+            let to = self.brain.seen.sub(self.pos);
+            right.dot(to).raw() < 0
+        };
         self.doing = Doing::Startup {
             kind,
             left: m.startup,
@@ -1614,16 +1750,34 @@ impl Monster {
             _ if self.rooted > 0 => Fx::ZERO,
             Doing::Active { kind, .. } => attack(kind).advance,
             Doing::Prowl => {
-                let range = V3::new(
+                let to = V3::new(
                     self.brain.seen.x.sub(self.pos.x),
                     Fx::ZERO,
                     self.brain.seen.z.sub(self.pos.z),
-                )
-                .flat_len();
-                range
+                );
+                let range = to.flat_len();
+                // **It gallops when you run.** The clamp used to be the walk,
+                // which is slower than a fighter's, so the whole fight was
+                // walking away from it at leisure. Wanting to close a long gap
+                // now runs it up to the gallop, and the gait blends to match;
+                // the walk is what it does inside striking distance.
+                let want = range
                     .sub(t::prowl_range())
                     .mul(t::approach_gain())
-                    .clamp(t::monster_back().neg(), t::monster_walk())
+                    .clamp(t::monster_back().neg(), t::gallop_speed());
+                // **It turns before it runs.** Forward speed is scaled by how
+                // squarely it is facing the target, so a creature that has
+                // been got behind comes about on the spot rather than
+                // galloping off in the wrong direction and swinging round in
+                // an arc that ends beside you. Backing off is not scaled: that
+                // is what it does when you are too close, whichever way it is
+                // pointed.
+                if want.raw() > 0 {
+                    let ahead = V3::from_turns(self.yaw).dot(to.normalized()).max(Fx::ZERO);
+                    want.mul(ahead)
+                } else {
+                    want
+                }
             }
             _ => Fx::ZERO,
         }
@@ -1742,6 +1896,16 @@ impl Monster {
             self.strain = (self.strain - drop).max(0);
         }
         self.slowed = self.slowed.saturating_sub(1);
+        // The Reaver's marks fade on the same clock a fighter's do.
+        if self.marks > 0 {
+            self.mark_clock = self.mark_clock.saturating_sub(1);
+            if self.mark_clock == 0 {
+                self.marks -= 1;
+                if self.marks > 0 {
+                    self.mark_clock = t::mark_fade();
+                }
+            }
+        }
         if self.slowed == 0 {
             self.slow_mul = Fx::ONE;
         }

@@ -83,6 +83,13 @@ pub struct PoseInput {
     pub action: Action,
     pub grounded: bool,
     pub crouching: bool,
+    /// **Her feet are off the floor** -- the Dual mage, deep on her own bar or
+    /// ascended. `false` for the other five classes, always.
+    ///
+    /// The simulation's answer, `sim::state::floating`, carried through
+    /// `PlayerView`. It is the same predicate that makes her walk faster, so
+    /// the pose and the speed cannot disagree about whether she is walking.
+    pub floating: bool,
     pub speed: f32,
     /// Strafe and forward velocity in the character's own frame.
     pub travel: [f32; 2],
@@ -129,6 +136,7 @@ impl PoseInput {
             action: view.action,
             grounded: view.grounded,
             crouching: view.crouching,
+            floating: view.floating,
             speed: view.speed,
             travel: view.travel,
             eased_speed: view.speed,
@@ -195,6 +203,12 @@ fn shape_of(input: PoseInput) -> Shape {
                 206
             } else if input.crouching {
                 207
+            } else if input.floating {
+                // Floating and standing are different animations and the bar
+                // can cross its threshold in one frame, so this needs a shape
+                // of its own or coming out of depth is a cut from a hover to a
+                // walk. Still and moving are separate for the reason below.
+                if input.speed < 0.5 { 210 } else { 211 }
             } else if input.speed < 0.5 {
                 // Standing and moving are different animations, and the
                 // simulation goes from one to the other in a single frame -- it
@@ -728,10 +742,45 @@ fn flight(input: PoseInput, since: u32) -> Pose {
 fn grounded(input: PoseInput) -> Pose {
     let base = if input.crouching {
         crouched(input)
+    } else if input.floating {
+        // **The one class whose locomotion has two states.** Deep on her own
+        // bar or ascended, the Dual mage stops walking -- see
+        // `sim::state::floating`, which is also what makes her faster, so the
+        // pose and the speed are one decision rather than two.
+        //
+        // Crouching still wins, above. Ducking is a thing the player is
+        // actively asking for on this frame and the float is a thing that is
+        // simply true, and when the two disagree the input is the one to
+        // believe.
+        hovering(input)
     } else {
         locomotion(input)
     };
     turn_layer(input, base)
+}
+
+/// Floating: hanging still, or travelling without stepping.
+///
+/// The same two-clip shape `locomotion` has, and blended the same way and by
+/// the same number, so the hand-off as she starts and stops moving behaves like
+/// the walk's. What it does *not* have is four directions: there is no stride
+/// to be facing along, so travelling sideways is the same trailing body seen
+/// from the side rather than a separate clip.
+///
+/// **The flag is the rule, and the class is not checked here.** Who is able to
+/// float is `sim::state::floating`, which answers for one class and `false` for
+/// the other five -- `dual_mage::nobody_else_floats` pins that. Asking again
+/// here would put the same rule in two files, which is the arrangement where
+/// one of them is eventually wrong.
+fn hovering(input: PoseInput) -> Pose {
+    let still = Clip::DualFloat.at(idle_phase(input));
+    if input.eased_speed < 0.15 {
+        return still;
+    }
+    let cycle = Clip::DualDrift;
+    let moving = cycle.at_fractional(input.stride * cycle.length() as f32);
+    let weight = (input.eased_speed / WALK_AT).clamp(0.0, 1.0);
+    still.blend(&moving, weight)
 }
 
 fn crouched(input: PoseInput) -> Pose {

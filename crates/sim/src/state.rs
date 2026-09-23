@@ -20,6 +20,7 @@ use crate::camera;
 pub use crate::class::Shield;
 use crate::class::{self, Class, Force, Form, Ghost, Mechanic};
 use crate::debris::{self, MAX_DEBRIS, Shrapnel};
+use crate::dual;
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, QUARRY_VICTIM};
 use crate::fixed::Fx;
 use crate::gust::{self, Gale, MAX_GUSTS};
@@ -245,6 +246,41 @@ pub struct Player {
     pub jump_hold: u16,
     /// Frames of suspended fall from an aerial attack. See `Move::air_stall`.
     pub air_stall: u16,
+    /// Frames left of a Grasp haul, and where it is pulling her.
+    ///
+    /// **The Blood mage's movement, behind `tuning::grasp_hauls`.** A Grasp
+    /// whose four arms converge on a wall, a structure or the creature rather
+    /// than on a person has nothing to drag, so it drags *her* -- a grappling
+    /// hook made out of an ability she already owns. Driven rather than
+    /// thrown: gravity and the arena are off for the duration, the way they are
+    /// for the Reaver's dash, so the line she travels is the line the arms
+    /// went out along.
+    ///
+    /// Zero for everybody else, always, and zero for her whenever the flag is
+    /// off.
+    pub haul: u16,
+    pub haul_to: V3,
+    /// How fast that haul reels, in metres a second.
+    ///
+    /// Per haul rather than one knob, because the two things that arm one want
+    /// opposite guarantees. The Grasp wants a constant **speed**: you are being
+    /// reeled in, and how long it takes is however far away the wall was. The
+    /// blink wants a constant **time**: it is a fixed distance crossed in a
+    /// fixed handful of frames, and a blink whose duration depended on how much
+    /// of its range the geometry allowed would be a different move at every
+    /// wall. One field answers both -- see `begin_blink` and
+    /// `World::haul_to_the_grasp`.
+    pub haul_speed: Fx,
+    /// How many aerials have hung this airtime. Reset on landing.
+    ///
+    /// **The air gives you less each time you ask.** A hang is per-move and
+    /// costs nothing but the move, so a class with two interchangeable pokes
+    /// can alternate them and never come down -- the repeat lockout stops one
+    /// move being mashed and has nothing to say about two. The Dual mage's
+    /// autos are exactly that pair, and hers hang longer than anybody's on
+    /// purpose, so the falloff is what keeps the floatiest poke in the game
+    /// from being a hover. See `tuning::air_stall_falloff`.
+    pub air_stalls: u8,
     /// An airdodge has been spent this airtime. Reset on landing.
     ///
     /// Without it, airdodging repeatedly is free flight: each one is a fresh
@@ -267,6 +303,21 @@ pub struct Player {
     /// strongest wins** rather than compounding -- two slows that multiplied
     /// would freeze you, and every new source would make the last one worse.
     pub slow_mul: Fx,
+    /// How many marks the Reaver's shadow has put on this fighter.
+    ///
+    /// **On the victim, not on her**, because the victim is who has to read
+    /// it: pips over a body are the counterplay made visible, and a fighter
+    /// watching his own marks climb knows what is coming and where from. Every
+    /// hit the shadow lands from the field adds one, up to `tuning::mark_cap`;
+    /// the first swing of hers to connect inside the window a dash to the
+    /// shadow opens spends them all. See `docs/design/shadow-reaver-v2.md`.
+    ///
+    /// Zero for everybody nobody is marking, which is everybody in a match
+    /// without a Reaver in it.
+    pub marks: u8,
+    /// Frames until the next mark fades. Reset by every new mark, so a target
+    /// who gets away from the shadow cleans himself one mark at a time.
+    pub mark_clock: u16,
     /// Frames of **haste** left, and the mirror of `slowed`.
     ///
     /// One source in the game: standing in the field a Judgement left, which is
@@ -282,16 +333,17 @@ pub struct Player {
     /// this is only how much longer it has.
     pub hasted: u16,
     /// What the Dual mage's bar was worth on the frame she committed to the
-    /// move she is in the middle of. [`Fx::ONE`] for everybody else, and
-    /// meaningless while she is not throwing anything.
+    /// move she is in the middle of -- the bar of the force that move is made
+    /// of. [`Fx::ONE`] for everybody else, and meaningless while she is not
+    /// throwing anything.
     ///
     /// **A cast is worth where you were standing when you pressed the button**,
     /// not where the cast's own push has since taken you. The two are different
-    /// numbers because throwing anything at all moves the bar, on the press,
-    /// and a finisher moves it a long way -- so a Judgement read live would be
+    /// numbers because throwing anything at all goads a bar, on the press,
+    /// and a finisher goads it a long way -- so a Judgement read live would be
     /// worth its own push, and the one place in the kit that is supposed to be
-    /// embarrassing at the centre would be the least embarrassing thing there.
-    /// It would also mean the bar on the HUD never matched what the player got.
+    /// embarrassing from empty would be the least embarrassing thing there.
+    /// It would also mean the bars on the HUD never matched what the player got.
     ///
     /// See [`depth`], which reads this while she is busy and the live bar when
     /// she is not.
@@ -361,13 +413,6 @@ pub struct Player {
     /// has just been hauled onto. In the snapshot for the reason every edge
     /// is: a frame re-simulated must drink the same pool.
     pub hauled_in: bool,
-    /// Frames left of being **hauled** somewhere by her own Grasp: all four
-    /// arms landed on the creature, and the heavier body wins, so she is the
-    /// one pulled across the gap to the contact point. Zero for everybody and
-    /// almost always for her. See `haul_drive`.
-    pub haul: u16,
-    /// Where the haul is taking her.
-    pub haul_to: V3,
     /// Downward speed banked by a spike, cashed in when this fighter lands.
     ///
     /// The Champion's aerial hammer drives an airborne target into the ground,
@@ -478,6 +523,10 @@ pub struct Player {
     /// plant your feet; without it the first frame aboard looks like an
     /// infinite acceleration and throws you straight back off.
     pub grip_settle: u8,
+    /// Which of the creature's clips the surface underfoot was last measured
+    /// on. The pose is a lookup, so a change of clip is a cut, not a motion,
+    /// and the grip test must not read it as one. See `step_rider`.
+    pub ride_clip: u8,
 
     /// How far the Elementalist's beam actually reached this frame, or zero
     /// when no beam is out.
@@ -543,8 +592,15 @@ impl Player {
         Player {
             class,
             mechanic: class.starting_mechanic(),
+            health: t::health_of(class),
             ..Player::default()
         }
+    }
+
+    /// What this fighter's bar holds when it is full. Per class -- see
+    /// `tuning::health_of`.
+    pub fn full_health(&self) -> i32 {
+        t::health_of(self.class)
     }
 
     /// The Bulwark's shield, if this is one.
@@ -574,8 +630,9 @@ impl Player {
             // always satisfied for this class.
             Mechanic::Shadow(_) => true,
             Mechanic::Structures(slots) => slots.iter().any(|s| s.is_some()),
-            Mechanic::Meter { value, .. } => value.abs() >= t::meter_deep(),
-            Mechanic::Forms { .. } | Mechanic::Blood => true,
+            // Nothing on the class is gated by the bars: what they change is
+            // power and what her body can do, never availability.
+            Mechanic::Forms { .. } | Mechanic::Blood | Mechanic::Meter { .. } => true,
         }
     }
 
@@ -811,7 +868,7 @@ impl Player {
         // her that way any more, and this is what keeps that true if something
         // shared tries.
         if amount > 0 && self.health > 0 {
-            self.health = (self.health + amount).min(t::max_health() - self.grey);
+            self.health = (self.health + amount).min(self.full_health() - self.grey);
         }
     }
 
@@ -833,7 +890,7 @@ impl Player {
 
     /// How much of the bar is grey, nought to one. What the scythe reads.
     pub fn grey_share(&self) -> Fx {
-        let max = t::max_health().max(1);
+        let max = self.full_health().max(1);
         Fx::ratio(self.grey.clamp(0, max), max)
     }
 
@@ -875,6 +932,10 @@ impl Default for Player {
             grounded: true,
             jump_hold: 0,
             air_stall: 0,
+            haul: 0,
+            haul_to: V3::ZERO,
+            haul_speed: Fx::ZERO,
+            air_stalls: 0,
             air_dodged: false,
             hit_used: false,
             repeat_lock: [0; moves::MAX_SLOTS],
@@ -886,6 +947,8 @@ impl Default for Player {
             slowed: 0,
             slow_mul: Fx::ONE,
             hasted: 0,
+            marks: 0,
+            mark_clock: 0,
             thrown_at: Fx::ONE,
             bound: 0,
             mechanic_held: false,
@@ -898,8 +961,6 @@ impl Default for Player {
             bleeding: 0,
             bled_by: u8::MAX,
             hauled_in: false,
-            haul: 0,
-            haul_to: V3::ZERO,
             slam: Fx::ZERO,
             stride: 0,
             air_frames: 0,
@@ -913,6 +974,7 @@ impl Default for Player {
             carry_yaw: Fx::ZERO,
             grip_vel: V3::ZERO,
             grip_settle: 0,
+            ride_clip: u8::MAX,
             beam_reach: Fx::ZERO,
             aim_path: Path::default(),
             channelled: Fx::ZERO,
@@ -1288,8 +1350,13 @@ impl World {
                 break;
             }
             let defender = 1 - attacker;
-            if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
+            if let Some(mut hit) =
+                resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
+                // The Reaver's cash-in: any blow of hers spends the marks on
+                // whoever it lands on. A no-op for every other blow in the
+                // game, and for anybody carrying no marks.
+                let staggers = cash_the_tally(&mut self.players, attacker, defender, &mut hit);
                 // What the blow is actually worth, before it lands: a killing
                 // hit on someone with forty health left is worth forty, not its
                 // listed damage, so leeching cannot pay out of an empty bar.
@@ -1299,6 +1366,9 @@ impl World {
                     hit.damage.min(snapshot[defender].health)
                 };
                 apply_hit(&mut self.players[defender], hit);
+                if staggers {
+                    stagger_the_cashed(&mut self.players[defender]);
+                }
                 let owed = snapshot[attacker]
                     .action
                     .attack_kind()
@@ -1334,6 +1404,11 @@ impl World {
                     }
                 }
                 self.players[attacker].hit_used = true;
+                // Landing anything while ascended pulls some health back. A
+                // no-op for everybody else and for her between ascensions.
+                if dealt > 0 {
+                    dual::landed_a_hit(&mut self.players[attacker]);
+                }
                 // The aerial spear pays its shove out on contact rather than
                 // on the throw: catch somebody with the fan and it kicks you
                 // the way you are holding, so it is a repositioning tool you
@@ -1575,6 +1650,8 @@ impl World {
             h.write_u32(p.slowed as u32);
             h.write_i32(p.slow_mul.raw());
             h.write_u32(p.hasted as u32);
+            h.write_u32(p.marks as u32);
+            h.write_u32(p.mark_clock as u32);
             h.write_i32(p.thrown_at.raw());
             h.write_u32(p.bound as u32);
             h.write_u32(p.mechanic_held as u32);
@@ -1586,12 +1663,14 @@ impl World {
             h.write_u32(p.bleeding as u32);
             h.write_u32(p.bled_by as u32);
             h.write_u32(p.hauled_in as u32);
-            h.write_u32(p.haul as u32);
-            hash_v3(&mut h, &p.haul_to);
             h.write_i32(p.slam.raw());
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
+            h.write_u32(p.haul as u32);
+            hash_v3(&mut h, &p.haul_to);
+            h.write_i32(p.haul_speed.raw());
+            h.write_u32(p.air_stalls as u32);
             h.write_u32(p.hit_used as u32);
             h.write_u32(p.crouching as u32);
             h.write_u32(p.stride as u32);
@@ -1617,6 +1696,7 @@ impl World {
             hash_v3(&mut h, &p.grip_vel);
             h.write_i32(p.carry_yaw.raw());
             h.write_u32(p.grip_settle as u32);
+            h.write_u32(p.ride_clip as u32);
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
             for f in &p.repeat_lock {
@@ -1643,6 +1723,8 @@ impl World {
                 h.write_u32(m.slowed as u32);
                 h.write_i32(m.slow_mul.raw());
                 h.write_u32(m.rooted as u32);
+                h.write_u32(m.marks as u32);
+                h.write_u32(m.mark_clock as u32);
                 for limb in &m.part_health {
                     h.write_i32(*limb);
                 }
@@ -2398,6 +2480,9 @@ pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
             *rush = 0;
         }
         shadow::broken_by_a_hit(defender);
+        // And the Blood mage's haul, for the same reason: a pull you can be
+        // hit out of and keep is a commitment with nothing on the other side of
+        // it. The arms let go.
         defender.haul = 0;
     }
 }
@@ -2600,6 +2685,12 @@ fn step_player(
 
     queue_the_shadow(p, input);
 
+    // **A swing out of the Reaver's carry.** The strike on arrival: it cuts the
+    // dodge's tail the way the jump out of it does, before the countdown, so
+    // the swing comes out on this frame rather than a slide's length later.
+    // See `shadow::swing_out_of_the_carry`.
+    shadow::swing_out_of_the_carry(p, input);
+
     // A channel resolves **instead of** the countdown, because it is the one
     // action whose next state depends on a button and on the scene rather than
     // on a number running down: held, it winds on and re-aims; released, it
@@ -2684,7 +2775,12 @@ fn step_player(
                     // airdodge; what it does not do is take the airdodge's shorter
                     // frames, because the dash has somewhere to *be* and a tail cut
                     // short would strand her halfway there.
-                    if let Some(pool) = may_commit
+                    if !dual::may_dodge(p) {
+                        // Ascending, the Dual mage has no dodge: she flies
+                        // instead, and loss of control is loss of the option
+                        // to decline. See `docs/design/dual-mage.md`.
+                        Action::Free
+                    } else if let Some(pool) = may_commit
                         .then(|| pool_under_the_crosshair(p, who, input, scene))
                         .flatten()
                     {
@@ -2712,6 +2808,52 @@ fn step_player(
                         // Whatever she was doing vertically is over: from here the
                         // dash drives all three axes along its own straight line.
                         p.vel.y = Fx::ZERO;
+                        Action::Dodge {
+                            left: t::dodge_frames(),
+                        }
+                    } else if may_commit && dual::may_blink(p) {
+                        // The Dual mage's dodge at the first tier is a **blink**:
+                        // the same commitment, the same invulnerable window and
+                        // the same tail, with the travelling taken out. She is
+                        // put where the dodge would have ended, on its first
+                        // frame, or against the first stone or wall in the way
+                        // -- `aim::blink_to` decides which. In the air it is the
+                        // airdodge and it is spent the same way.
+                        //
+                        // The tail is spent standing still, which is what keeps
+                        // a blink a dodge: the frames after it are the frames a
+                        // whiffed one is punished in.
+                        let grounded = p.grounded;
+                        p.pos = aim::blink_to(p.pos, dir, dual::dodge_travel(grounded), scene);
+                        p.vel.x = Fx::ZERO;
+                        p.vel.z = Fx::ZERO;
+                        if grounded {
+                            Action::Dodge {
+                                left: t::dodge_frames(),
+                            }
+                        } else {
+                            p.air_dodged = true;
+                            p.vel.y = Fx::ZERO;
+                            Action::Dodge {
+                                left: t::air_dodge_frames(),
+                            }
+                        }
+                    } else if p.grounded && blinks(p) {
+                        // **The Blood mage's dodge as a blink**, behind
+                        // `tuning::dodge_blinks`. The frames, the
+                        // invulnerability and the commitment are the ordinary
+                        // dodge's; the only thing that changes is that she
+                        // covers `blink_range` instead of whatever
+                        // `dodge_speed` decaying happens to reach, and covers it
+                        // in `blink_frames`.
+                        //
+                        // **Flat, and it stops at the wall.** What this class is
+                        // short of is ground rather than height, and the range
+                        // is cut back to whatever the arena allows along the
+                        // line -- a dodge that went through geometry would be a
+                        // different and much worse ability, and the one honest
+                        // thing about this answer is that it is only a distance.
+                        begin_blink(p, who, dir, scene);
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
@@ -2774,9 +2916,22 @@ fn step_player(
         .map(|m| t::move_speed().mul(Fx::ratio(m as i32, 100)));
     let steering = ax != 0 || az != 0;
 
+    // **A Grasp reeling her in**, or a blink, which is the same machinery
+    // pointed along the stick. Stepped rather than read, because arriving is
+    // something it *does*: she lands on the point rather than near it.
+    let hauling = step_haul(p);
+
     let dashing = shadow::dash_drive(p);
-    let hauled = haul_drive(p);
-    if let Some(drive) = dashing {
+    if hauling {
+        // Ahead of the dash and of everything below it, and it ignores the
+        // stick outright: the arms have hold of a wall and she is on the end of
+        // them. Like the dash it drives all three axes, so a Grasp thrown up on
+        // to a platform's lip takes her up on to it rather than into the side
+        // of it -- and like the dash it turns gravity and the arena off for the
+        // duration, further down, so the line she travels is the line the arms
+        // went out along.
+        // The velocity is already under her; `step_haul` set it.
+    } else if let Some(drive) = dashing {
         // A dash has somewhere to be, so it holds its speed rather than
         // decaying like the dodge it rides on: a decaying shove covers whatever
         // distance the decay happens to be tuned for, and the shadow is at a
@@ -2789,12 +2944,6 @@ fn step_player(
         p.vel.x = drive.x;
         p.vel.y = drive.y;
         p.vel.z = drive.z;
-    } else if let Some(drive) = hauled {
-        // Her Grasp hauling *her*: a straight line to the creature's flank at
-        // the reel speed every grab hauls at, with the arena and the creature
-        // still solid under her -- unlike the Reaver's dash, this ends by
-        // arriving against a body.
-        p.vel = drive;
     } else if matches!(p.action, Action::Dodge { .. }) {
         p.vel.x = p.vel.x.mul(t::dodge_decay());
         p.vel.z = p.vel.z.mul(t::dodge_decay());
@@ -2901,24 +3050,41 @@ fn step_player(
     // nothing to stack with -- standing still on it is vertical speed zero --
     // so this changes nothing there.
     //
+    // The second exception to "space in the air does nothing", after the
+    // Champion's uppercut below, and it is per class: the Dual mage's **second
+    // jump**, once per airtime while her lower bar holds the second tier, and
+    // on every press while she is ascending -- the wing beat. A fresh takeoff
+    // rather than an addition, so it works on the way down, which is when a
+    // second jump is worth having; the sustain is not offered on it, because
+    // the height is the tier's to give and not the button's.
+    //
+    // **Before the ordinary takeoff**, which clears `grounded` on the frame
+    // it fires: read after it, the press that left the floor would look like a
+    // press in the air and spend the second jump on the first.
+    if pressed_space && !p.grounded && p.action.actionable() && dual::may_beat_wings(p) {
+        p.vel.y = t::jump_speed().mul(mob.jump).mul(t::second_jump());
+        p.jump_hold = 0;
+        dual::spend_wing_beat(p);
+    }
+
     if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
     }
 
-    // **The dash jump.** Arriving from a dash leaves the Reaver sliding for a
-    // few frames with the speed she crossed at still under her -- the carry --
-    // and a jump pressed inside that window takes the slide up with her instead
-    // of letting the floor have it. It cuts the dodge's tail short, which is the
-    // other half of the reward: the frames she would have spent standing there
-    // being punished are spent in the air going somewhere.
+    // **The dash jump.** The dash stops dead on the shadow, and for a few
+    // frames after -- the carry -- a jump takes a share of the crossing's speed
+    // up with her (`tuning::dash_jump_keep`). It cuts the dodge's tail short,
+    // which is the other half of the reward: the frames she would have spent
+    // standing there being punished are spent in the air going somewhere.
     //
-    // A press rather than a hold, and the slide decays while the window is open,
-    // so the tech has a gradient -- the earlier she finds it, the further she
-    // goes. The ordinary jump above cannot fire here: the carry runs inside the
-    // dodge, and a dodge is not actionable.
+    // A share rather than all of it, since 2026-09-23: the whole fifty metres a
+    // second cleared the arena. The ordinary jump above cannot fire here: the
+    // carry runs inside the dodge, and a dodge is not actionable.
     if pressed_space && shadow::carrying_a_dash(p) {
+        let lunge = shadow::lunge(p);
+        p.vel = V3::new(lunge.x, p.vel.y, lunge.z);
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
@@ -2935,7 +3101,7 @@ fn step_player(
         p.leap_used = true;
     }
 
-    if !p.grounded && dashing.is_none() {
+    if !p.grounded && dashing.is_none() && !hauling {
         if plunging(p) {
             // **The descent.** Driven rather than fallen: gravity would make
             // the plunge take longer the lower she started, which is backwards
@@ -2982,7 +3148,8 @@ fn step_player(
                 gravity = gravity.mul(t::jump_hold_gravity());
             }
             p.vel.y = p.vel.y.add(gravity.mul(DT));
-            let floor = t::fall_cap().mul(mob.fall_cap);
+            // Slower at the Dual mage's second tier; one for everybody else.
+            let floor = t::fall_cap().mul(mob.fall_cap).mul(dual::fall_scale(p));
             if p.vel.y.raw() < floor.raw() {
                 p.vel.y = floor;
             }
@@ -3002,7 +3169,11 @@ fn step_player(
     //
     // She arrives at the shadow's own spot, which is somewhere a body can stand,
     // and the frame after the dash ends resolves her there normally.
-    if dashing.is_some() {
+    // The Grasp haul is the same argument: the arms chose a point on a surface
+    // (`haul_to_the_grasp` stops her a body's width short of it), so resolving
+    // her against the geometry halfway along would catch her feet on the thing
+    // she is being pulled on to.
+    if dashing.is_some() || hauling {
         return;
     }
 
@@ -3046,7 +3217,9 @@ fn step_player(
         p.air_dodged = false;
         p.jump_hold = 0;
         p.air_stall = 0;
+        p.air_stalls = 0;
         p.leap_used = false;
+        dual::feet_down(p);
     }
 }
 
@@ -3645,6 +3818,120 @@ fn champion_fan_boost(p: &mut Player, input: Input) {
     clamp_air_speed(p);
 }
 
+/// Is this fighter's dodge a blink?
+///
+/// The Blood mage's, and only while the flag is on. Grounded only: the airdodge
+/// is already a commitment bought once per airtime, and a blink that also
+/// worked off the floor would be the second jump this class has not earned.
+fn blinks(p: &Player) -> bool {
+    p.class == Class::BloodMage && t::dodge_blinks()
+}
+
+/// Arm the blink: the same haul machinery, pointed along the stick.
+///
+/// Reusing the haul rather than teleporting is what makes it drawable and
+/// readable -- a body that is simply somewhere else cannot be reacted to and
+/// cannot be animated -- and it means the two experiments on this class share
+/// one piece of state instead of each growing their own. Four frames of smear
+/// against a twenty-two-frame dodge, well inside the invulnerability.
+///
+/// **Stopped at the geometry.** `aim::first_along` against the arena and the
+/// structures, the same question the Grasp's anchor asks, so a blink into a
+/// wall arrives at the wall.
+fn begin_blink(p: &mut Player, who: usize, dir: V3, scene: &aim::Scene) {
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+    let from = aim::origin(p.pos);
+    let path = aim::Path {
+        from,
+        to: from.add(flat.scale(t::blink_range())),
+    };
+    let blocked = aim::first_along(
+        path,
+        t::body_radius(),
+        who as u8,
+        scene,
+        aim::Targets::none().terrain().stones(),
+    );
+    let reach = match blocked {
+        Some(c) => c.dist().sub(t::body_radius()),
+        None => t::blink_range(),
+    };
+    if reach.raw() <= 0 {
+        return;
+    }
+    // Back down to her feet: the ray was cast from her chest so that it meets
+    // the same geometry an ability would, and where she *stands* is the floor
+    // under the far end of it.
+    let land = p.pos.add(flat.scale(reach));
+    let frames = t::blink_frames();
+    // **Constant time, not constant speed**, which is the opposite of the
+    // Grasp's haul and correct for the opposite reason. The blink's distance is
+    // whatever the wall allows, so a fixed speed would make a blink into a
+    // corner a shorter move than a blink across the arena -- and how long she
+    // is a smear for is the one thing the person opposite has to read it by.
+    let speed = t::blink_range().div(Fx::from_int(frames as i32).mul(DT));
+    begin_haul(p, aim::settle(land, scene.stones), speed, frames);
+}
+
+/// The velocity a Grasp haul is driving this frame, or `None` if she is not on
+/// one.
+///
+/// Constant speed, like the Reaver's dash and for the same reason: the distance
+/// was chosen by the ability -- the Grasp's reach and the length of the hold --
+/// so a decaying pull would cover whatever distance the decay happens to be
+/// tuned for rather than the distance the player aimed at. See
+/// `Player::haul`.
+///
+/// Ends on arrival, and gravity and the arena are off while it runs, so the
+/// line she travels is the line the arms went out along. Getting hit ends it,
+/// because a commitment you can be hit out of and keep is not one.
+fn step_haul(p: &mut Player) -> bool {
+    if p.haul == 0 {
+        return false;
+    }
+    p.haul -= 1;
+    let gap = p.haul_to.sub(p.pos);
+    let far = gap.len();
+    let step = p.haul_speed.mul(DT);
+    // **The frames ran out without arriving.** Nothing should get here -- the
+    // bound is worked out from the distance and the speed -- so the answer is
+    // to stop dead and let the world have her back rather than to snap her to a
+    // point the pull never reached.
+    if p.haul == 0 && far.raw() > step.raw() {
+        p.vel = V3::ZERO;
+        return false;
+    }
+    if far.raw() <= step.raw() {
+        // **She lands on it, not near it**, which is the Reaver's dash arrival
+        // word for word and for the same reason: the point was chosen as
+        // somewhere a body can stand, and stopping half a metre short of it
+        // leaves her inside whatever she was being pulled on to -- or, worse,
+        // still carrying the pull's whole speed with nothing left to spend it
+        // on. The first draft returned early here and let momentum finish the
+        // job, and she sailed past the wall and oscillated around it.
+        p.pos = p.haul_to;
+        p.vel = V3::ZERO;
+        p.haul = 0;
+        return false;
+    }
+    p.vel = gap.scale(p.haul_speed.div(far));
+    p.grounded = false;
+    true
+}
+
+/// Arm a haul: where it is pulling to, and how fast.
+///
+/// The `frames` are a bound rather than the duration -- the drive ends on
+/// arrival, and this only stops a haul running forever if something displaces
+/// her mid-pull. Generous on purpose: a bound that cut a pull short would be a
+/// second, invisible rule about how far a Grasp reaches.
+fn begin_haul(p: &mut Player, to: V3, speed: Fx, frames: u16) {
+    p.haul_to = to;
+    p.haul_speed = speed;
+    p.haul = frames;
+    p.vel = V3::ZERO;
+}
+
 /// The drive a **stepping** move is putting under the body this frame.
 ///
 /// `None` for almost everything. A move with no [`step`] does not carry you, and
@@ -3878,10 +4165,10 @@ fn begin_move(
     aerial: bool,
 ) -> Action {
     p.hit_used = false;
-    // **Before anything else**, and before `throw_move` steers the bar: what
-    // this cast is worth is where she is standing right now. See
-    // [`Player::thrown_at`].
-    p.thrown_at = live_depth(p);
+    // **Before anything else**, and before `throw_move` steers the bars: what
+    // this cast is worth is where she is standing right now, on the bar of the
+    // force this move is made of. See [`Player::thrown_at`].
+    p.thrown_at = dual::depth_at(p, Some(kind));
     // Health is spent on the press, never on the hit. Missing is the
     // punishment, which is the whole of the Blood mage's economy -- see
     // `docs/design/kits/blood-mage.md`. Paid here even for a channelled move,
@@ -4057,7 +4344,22 @@ fn arm_aerial(p: &mut Player, kind: u8, input: Input) {
     if p.grounded {
         return;
     }
-    p.air_stall = moves::get(p.class, kind).air_stall;
+    // **Each successive hang in one airtime is worth less** -- see
+    // `Player::air_stalls`. The first is the move's own number; after that the
+    // falloff compounds, so a pair of pokes alternated forever is a slow
+    // descent rather than a hover, and the sum of everything the air will give
+    // you is bounded before you touch the floor.
+    let full = moves::get(p.class, kind).air_stall;
+    if full > 0 {
+        let mut worth = Fx::from_int(full as i32);
+        for _ in 0..p.air_stalls {
+            worth = worth.mul(t::air_stall_falloff());
+        }
+        p.air_stall = worth.to_int().max(0) as u16;
+        p.air_stalls = p.air_stalls.saturating_add(1);
+    } else {
+        p.air_stall = 0;
+    }
 
     let (ax, az) = input.move_axis();
     // The class's fast button, which for the Champion in the air is the sword.
@@ -4324,53 +4626,9 @@ fn step_mechanic(p: &mut Player) {
         // See `crate::shadow`.
         Mechanic::Shadow(_) => shadow::step(p),
 
-        // Two different things happen at depth, and they are different on
-        // purpose. Inside the bar, past the deep threshold, the forces **burn**
-        // you and you stop it by coming back inside the line -- relief from
-        // stopping rather than from a reward, which is the containment story.
-        // Driven all the way to an end, that becomes **ascension**, which you
-        // cannot stop: it runs its clock, it costs far more, and it puts you
-        // back at the centre staggered. See `docs/design/dual-mage.md`.
-        Mechanic::Meter {
-            value,
-            colour,
-            ascending,
-        } => {
-            if ascending > 0 {
-                p.health = (p.health - t::ascension_drain().max(1)).max(1);
-                let left = ascending - 1;
-                p.mechanic = Mechanic::Meter {
-                    // Pinned while it runs: the meter is not the operative
-                    // resource during ascension, so nothing steers it.
-                    value,
-                    colour,
-                    ascending: left,
-                };
-                if left == 0 {
-                    // Spat back out at the centre. The stun is what makes
-                    // reaching the end a decision rather than a free ride --
-                    // flat for now, where the design wants it graduated by how
-                    // much damage was dealt.
-                    p.mechanic = Mechanic::Meter {
-                        value: 0,
-                        colour,
-                        ascending: 0,
-                    };
-                    p.stun_total = t::ascension_stun();
-                    p.action = Action::Stagger {
-                        left: t::ascension_stun(),
-                    };
-                }
-                return;
-            }
-            let depth = value.abs();
-            if depth > t::meter_deep() {
-                let over = depth - t::meter_deep();
-                let span = (t::meter_max() - t::meter_deep()).max(1);
-                let burn = (t::meter_burn() * over) / span;
-                p.health = (p.health - burn.max(1)).max(1);
-            }
-        }
+        // Two bars and the hill between them: calm, the drift, the burn, and
+        // the clock while she is ascending. See `crate::dual`.
+        Mechanic::Meter { .. } => dual::step(p),
 
         _ => {}
     }
@@ -4380,11 +4638,12 @@ fn step_mechanic(p: &mut Player) {
 // The depth curve
 // ---------------------------------------------------------------------------
 //
-// The Dual mage's founding idea, and until now the largest hole in her:
-// **power scales continuously with distance from the centre of the bar.** Not
-// thresholds, not two versions of a move with a snap between them -- a straight
-// line from `tuning::depth_floor` at zero to `tuning::depth_ceiling` at either
-// end, symmetric, with every point on it reachable.
+// The Dual mage's founding idea: **power scales continuously with the bar of
+// the force a move is made of.** Not thresholds, not two versions of a move
+// with a snap between them -- a straight line from `tuning::depth_floor` at
+// empty to `tuning::depth_ceiling` at full, with every point on it reachable.
+// Which of her two bars is `dual::depth_at`'s to answer: a cast reads the one
+// she is carrying, an auto its own.
 //
 // It is one function rather than a rule each ability remembers, which is the
 // whole reason it is worth building at all: "ride as close to the edge as you
@@ -4410,8 +4669,8 @@ fn step_mechanic(p: &mut Player) {
 /// tether drains harder if she keeps riding outward while it holds, which is
 /// the class's own argument made by an ability that outlives its cast.
 pub fn depth(p: &Player) -> Fx {
-    // Mid-move, it is what the bar said when she committed. Throwing anything
-    // moves the bar on the press and the finisher moves it a long way, so a
+    // Mid-move, it is what the bars said when she committed. Throwing anything
+    // moves a bar on the press and the finisher moves it a long way, so a
     // cast read live would be worth its own push -- see [`Player::thrown_at`].
     match p.action.attack_kind() {
         Some(_) => p.thrown_at,
@@ -4419,18 +4678,30 @@ pub fn depth(p: &Player) -> Fx {
     }
 }
 
-/// The curve read off the bar as it is this instant.
-///
-/// The shape of the whole thing: a straight line from `depth_floor` at the
-/// centre to `depth_ceiling` at either end, symmetric, with every point on it
-/// reachable and nothing anywhere that snaps.
+/// The curve read off the bars as they are this instant, for whatever she is
+/// carrying. See [`dual::depth_at`].
 fn live_depth(p: &Player) -> Fx {
-    let Mechanic::Meter { value, .. } = p.mechanic else {
-        return Fx::ONE;
-    };
-    let max = t::meter_max().max(1);
-    let out = Fx::ratio(value.abs().min(max), max);
-    crate::math::lerp(t::depth_floor(), t::depth_ceiling(), out)
+    dual::depth_at(p, None)
+}
+
+/// Is the Dual mage off the floor: at the three-quarter tier, or ascended?
+///
+/// **`false` for every other class**, so it is safe to ask of anybody.
+///
+/// The float used to trigger at *depth*, a position on the one signed bar. The
+/// two bars have no such position, so it lives on the same tier the second jump
+/// and the slow fall do -- the lower bar at three quarters, `tuning::tier_jump`
+/// -- deliberately: that tier is already "her feet stop obeying the floor", and
+/// one threshold is what makes the float, the second jump and the slow fall
+/// three faces of the same decision rather than three rules that happen to fire
+/// near each other. The burn is what riding both bars up costs; this is one of
+/// the things it buys. See `dual::Tier`.
+///
+/// Read live rather than from `thrown_at`, unlike [`depth`]. It is not what a
+/// cast is worth -- it is where she *is*, and where she is has to match what
+/// the renderer is drawing on the frame it draws it.
+pub fn floating(p: &Player) -> bool {
+    dual::ascending(p) || dual::tier(p) >= dual::Tier::Jump
 }
 
 /// The same curve as it applies to the **size** of what a move puts in the
@@ -4460,69 +4731,11 @@ pub fn depth_of_size(p: &Player, kind: u8) -> Fx {
     crate::math::lerp(Fx::ONE, depth(p), t::depth_size())
 }
 
-/// Attacking steers the Dual mage's meter: dark darker, light lighter, an auto
-/// a little and a cast more. Nothing else moves it, so every step is a
-/// consequence of a decision the player made.
-///
-/// **On the press, every time, including the autos.** They used to steer on
-/// *contact* -- the design's own rule, and the reason for it is good: landing a
-/// far-side auto is the fast way back toward centre, which is what forces this
-/// class into melee exactly when it is most fragile. It was still wrong, and
-/// obviously so the moment anybody played it: with nothing in reach, **no
-/// button on the class moved the bar at all.** The autos hit nothing, the casts
-/// took their direction from an auto that had never landed, and the whole
-/// mechanic sat at zero. A resource you cannot move without a target is a
-/// resource you cannot learn, cannot tune, and cannot see working.
-///
-/// If the melee pull is wanted back it should return as a **bonus for
-/// landing** rather than as the only way to move -- see the feel log entry for
-/// 2026-09-13.
-///
-/// **Which way comes from the force she is carrying, not from the buttons held
-/// down.** Only the autos have a side of their own, and throwing one is what
-/// sets which force she carries; everything else is made of that force. Reading
-/// the input bits instead meant asking which of `shift` and `left click` won,
-/// and a move already knows what it is made of.
+/// Attacking goads one of the Dual mage's bars. Nothing else moves them up, so
+/// every step is a consequence of a decision the player made. See
+/// [`dual::steer`].
 fn steer_meter(p: &mut Player, kind: u8) {
-    let Mechanic::Meter {
-        value,
-        colour,
-        ascending,
-    } = p.mechanic
-    else {
-        return;
-    };
-    // Nothing steers during ascension. The bar is not the resource then; the
-    // clock is.
-    if ascending > 0 {
-        return;
-    }
-    // Three tiers, and the order of the arms is the order of the commitment.
-    // An auto is the unit the bar is measured in, and it also *sets* which
-    // force she is carrying. A cast moves her further, in whichever direction
-    // the last auto left her facing. And the **finisher** very nearly throws
-    // her over the edge, which is the tier `docs/design/dual-mage.md` has been
-    // asking for since the bar was built: what makes Judgement the payoff is no
-    // longer that it is gated, it is that casting it deep is a real question
-    // about whether you survive the cast.
-    let (push, colour) = match moves::dual::force(kind) {
-        Some(thrown) => (t::meter_auto_push(), thrown),
-        None if moves::dual::is_the_finisher(kind) => (t::meter_finisher_push(), colour),
-        None => (t::meter_cast_push(), colour),
-    };
-    let value = (value + push * colour.along()).clamp(-t::meter_max(), t::meter_max());
-    // Driven all the way to an end, and it takes her. There is no input for it
-    // and there never was -- you got there one cast at a time.
-    let ascending = if value.abs() >= t::meter_max() {
-        t::ascension_frames()
-    } else {
-        0
-    };
-    p.mechanic = Mechanic::Meter {
-        value,
-        colour,
-        ascending,
-    };
+    dual::steer(p, kind);
 }
 
 fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
@@ -4589,6 +4802,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.echo_used as u32);
             h.write_u32(shadow.dash as u32);
             h.write_u32(shadow.carry as u32);
+            hash_v3(h, &shadow.lunge);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -4611,14 +4825,22 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
         }
         Mechanic::Blood => h.write_u32(6),
         Mechanic::Meter {
-            value,
+            dark,
+            light,
             colour,
             ascending,
+            jumped,
+            landed,
+            singe,
         } => {
             h.write_u32(7);
-            h.write_i32(*value);
-            h.write_i32(colour.along());
+            h.write_i32(dark.raw());
+            h.write_i32(light.raw());
+            h.write_u32(*colour as u32);
             h.write_u32(*ascending as u32);
+            h.write_u32(*jumped as u32);
+            h.write_u32(*landed as u32);
+            h.write_i32(singe.raw());
         }
     }
 }
@@ -4834,9 +5056,34 @@ impl World {
     /// What the second body does to the other one, this frame.
     fn step_shadows(&mut self) {
         for owner in 0..MAX_PLAYERS {
+            self.aim_the_copy(owner);
             self.echo_strikes(owner);
             self.recall_cuts(owner);
         }
+    }
+
+    /// Out on the field, the shadow turns to whoever is in reach while its copy
+    /// winds up -- and keeps her yaw if nobody is. The decision is
+    /// `aim::shadow_faces`'s; this only hands it the scene.
+    ///
+    /// The scene is built only on the frames a copy is winding up out there,
+    /// which is a handful of frames per swing for one class. Every other frame
+    /// for every other fighter this is a match on the mechanic and nothing
+    /// more.
+    fn aim_the_copy(&mut self, owner: usize) {
+        let Some((at, reach)) = shadow::copy_needs_a_target(&self.players[owner]) else {
+            return;
+        };
+        let stones = stones::gather(&self.players);
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &self.players,
+            effects: &self.effects,
+            quarry: self.monster.as_ref(),
+        };
+        let facing = aim::shadow_faces(at, owner, reach, self.monster.is_none(), &scene)
+            .unwrap_or(self.players[owner].facing);
+        shadow::turn_to(&mut self.players[owner], facing);
     }
 
     /// The shadow's copy of her swing, landing a beat after hers.
@@ -4860,16 +5107,32 @@ impl World {
         // creature to swing at instead -- the same condition direct hits use,
         // and for the same reason: a mechanic that only works in versus is half
         // a mechanic.
+        // **Where it is standing decides what the copy is worth and whether it
+        // counts.** Out on the field it deals the full share and marks what it
+        // hits -- that is the tally. At her heel it deals half that and marks
+        // nothing: it is at her shoulder, and there is nothing being set up.
+        let out = shadow::of(&self.players[owner]).is_some_and(|s| s.is_out());
+        let share = if out {
+            t::shadow_echo()
+        } else {
+            t::shadow_echo_attending()
+        };
         let landed = match self.monster {
-            Some(_) => self.echo_gores_the_creature(&ghost),
-            None => self.echo_cuts_the_other_fighter(owner, &ghost),
+            Some(_) => self.echo_gores_the_creature(&ghost, share, out),
+            None => self.echo_cuts_the_other_fighter(owner, &ghost, share, out),
         };
         if landed {
             shadow::echo_landed(&mut self.players[owner]);
         }
     }
 
-    fn echo_cuts_the_other_fighter(&mut self, owner: usize, ghost: &Player) -> bool {
+    fn echo_cuts_the_other_fighter(
+        &mut self,
+        owner: usize,
+        ghost: &Player,
+        share: Fx,
+        marks: bool,
+    ) -> bool {
         let target = 1 - owner;
         let defender = self.players[target];
         if defender.health <= 0 {
@@ -4878,13 +5141,18 @@ impl World {
         let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
             return false;
         };
-        hit.damage = Fx::from_int(hit.damage).mul(t::shadow_echo()).to_int();
+        hit.damage = Fx::from_int(hit.damage).mul(share).to_int();
         hit.parried = false;
         apply_hit(&mut self.players[target], hit);
+        // A mark for a hit that *landed*. Blocked, the copy did what a blocked
+        // swing does and nothing more; the tally counts what got through.
+        if marks && !hit.blocked {
+            shadow::mark(&mut self.players[target]);
+        }
         true
     }
 
-    fn echo_gores_the_creature(&mut self, ghost: &Player) -> bool {
+    fn echo_gores_the_creature(&mut self, ghost: &Player, share: Fx, marks: bool) -> bool {
         let (Some(mut beast), Some(box_out), Some(kind)) =
             (self.monster, hitbox(ghost), ghost.action.attack_kind())
         else {
@@ -4898,9 +5166,12 @@ impl World {
         };
         let raw = Fx::from_int(moves::get(ghost.class, kind).damage)
             .mul(preying(ghost.class, beast.disabled()))
-            .mul(t::shadow_echo())
+            .mul(share)
             .to_int();
         beast.take_hit(part, raw);
+        if marks {
+            beast.mark();
+        }
         self.monster = Some(beast);
         true
     }
@@ -4928,6 +5199,7 @@ impl World {
                         .mul(preying(Class::ShadowReaver, beast.disabled()))
                         .to_int();
                     beast.take_hit(part, raw);
+                    beast.mark();
                     // The recall's slow, offered the same way everything else
                     // is. It is half the reason to recall through something.
                     beast.take_control(monster::Control::slowing(
@@ -4984,8 +5256,52 @@ impl World {
             },
         );
         self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
+        // One mark for the way home, the way it cuts once. Not if he blocked
+        // it: the tally counts what got through.
+        if !guarding {
+            shadow::mark(&mut self.players[target]);
+        }
         shadow::mark_cut(&mut self.players[owner], target);
     }
+}
+
+/// Spend the marks on `defender` if this blow is the Reaver's own, and say
+/// whether it was a full tally -- the one that also staggers.
+///
+/// **Any hit of hers cashes.** Every blow her body lands on a marked target
+/// multiplies by the marks and clears them; the shadow puts them on, she takes
+/// them off. The copies are not her body -- they go through
+/// `echo_cuts_the_other_fighter` and mark rather than spend, or the tally
+/// could never climb past one. **Blocked or parried, nothing is spent**: it
+/// was not a hit, and the tally stays on him. That is the counterplay the pips
+/// exist to make possible. See `docs/design/shadow-reaver-v2.md`.
+fn cash_the_tally(
+    players: &mut [Player; MAX_PLAYERS],
+    attacker: usize,
+    defender: usize,
+    hit: &mut Hit,
+) -> bool {
+    let marks = players[defender].marks;
+    if players[attacker].class != Class::ShadowReaver || hit.blocked || hit.parried || marks == 0 {
+        return false;
+    }
+    hit.damage = Fx::from_int(hit.damage)
+        .mul(shadow::cash_multiple(marks))
+        .to_int();
+    players[defender].marks = 0;
+    players[defender].mark_clock = 0;
+    shadow::full_tally(marks)
+}
+
+/// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
+/// own hitstun, and only if it is longer.
+fn stagger_the_cashed(p: &mut Player) {
+    if p.health <= 0 {
+        return;
+    }
+    let left = t::cash_stagger().max(p.action.frames_left());
+    p.action = Action::Stagger { left };
+    p.stun_total = left;
 }
 
 /// Age every effect, apply what it does, and drop the expired.
@@ -5125,6 +5441,11 @@ impl World {
             // expires, so standing in the field holds it and leaving lets the
             // tail run.
             p.hasted = p.hasted.saturating_sub(1);
+            // The Reaver's marks fade one at a time, so a target who gets away
+            // from the shadow slowly cleans himself. Here beside the slow's
+            // tail because it is the same kind of thing: a count on the victim
+            // that whatever set it refreshes, and that runs down otherwise.
+            shadow::fade_mark(p);
         }
     }
 
@@ -5173,6 +5494,10 @@ impl World {
     /// life runs out. The one way not to be paid is not to be there -- a dead
     /// caster catches nothing, which `Player::heal` enforces on its own.
     fn pay_out(&mut self, effect: &Effect) {
+        if effect.kind == EffectKind::Grasp {
+            self.haul_to_the_grasp(effect);
+            return;
+        }
         if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
             return;
         }
@@ -5180,6 +5505,92 @@ impl World {
         if let Some(caster) = self.players.get_mut(effect.owner as usize) {
             caster.heal(owed);
         }
+    }
+
+    /// **A Grasp that closed on scenery pulls her to it** -- the Blood mage's
+    /// movement, behind `tuning::grasp_hauls`.
+    ///
+    /// The ability already exists to close a gap: four arms converge on a point
+    /// and whatever they catch is hauled back to her. This is the same sentence
+    /// with the subject swapped. Catch a person and it works as it always has;
+    /// catch a wall, a structure or the creature and the arms have something to
+    /// pull against and nothing to pull, so what moves is her.
+    ///
+    /// Asked on the frame the arms are done, which is the only frame it can be
+    /// asked on: "all four and nobody in them" is not knowable until the fourth
+    /// has landed or failed to, and the arms land a frame apart.
+    ///
+    /// **Whiffing it is still whiffing it.** The health went on the press and
+    /// none of it comes back -- nothing was cut -- so using the Grasp as a
+    /// grappling hook costs her the full price of a missed cast every time. That
+    /// is the whole reason it is allowed to be this strong: it is movement she
+    /// pays for out of the resource she is made of.
+    fn haul_to_the_grasp(&mut self, effect: &Effect) {
+        if !t::grasp_hauls() {
+            return;
+        }
+        let owner = effect.owner as usize;
+        // Somebody in the arms means there was something to pull. The arms do
+        // not do both jobs at once.
+        if (0..MAX_PLAYERS).any(|i| effect.parts_landed(i, GRASP_ARMS) == GRASP_ARMS) {
+            return;
+        }
+        let Some(caster) = self.players.get(owner) else {
+            return;
+        };
+        if caster.health <= 0 {
+            return;
+        }
+        // Where the arms met. `pos`, `dir` and `reach` were fixed on the frame
+        // she let go, so this is the point she was promised rather than a
+        // second guess at it.
+        let met = effect.pos.add(effect.dir.scale(effect.reach));
+        let stones = stones::gather(&self.players);
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &self.players,
+            effects: &self.effects,
+            quarry: self.monster.as_ref(),
+        };
+        // **Is there anything to pull on?** Asked along the arms' own path with
+        // the shared question `aim::first_along` already answers for every
+        // thrown thing in the game -- see `aim::Contact::is_an_anchor`. A
+        // fighter is not an anchor and neither is a fire: one of them moves and
+        // the other is not there.
+        let path = aim::Path {
+            from: effect.pos,
+            to: met,
+        };
+        let found = aim::first_along(
+            path,
+            t::grasp_arm_radius(),
+            effect.owner,
+            &scene,
+            aim::Targets::none()
+                .terrain()
+                .stones()
+                .quarry(self.monster.is_some()),
+        );
+        let Some(anchor) = found.filter(|c| c.is_an_anchor()) else {
+            return;
+        };
+        // To the anchor rather than to the point the arms converged on, which
+        // may be a long way behind it: the Grasp's reach is the hold and the
+        // hold does not shorten itself against the scenery (see the kit
+        // document), so a full wind-up at a near wall converges metres inside
+        // it. She arrives at the surface, not inside it.
+        // Dropped on to whatever is underneath it. The ray was cast from her
+        // chest so that it meets the same geometry an ability would, and where
+        // she *stands* is the floor -- or the platform top -- under the far end
+        // of it.
+        let stop = aim::settle(path.at(anchor.dist().sub(t::body_radius())), &stones);
+        let speed = t::grasp_haul_speed();
+        // Long enough to cover the whole of the Grasp's reach at that speed,
+        // with a frame in hand. Worked out rather than written down, so
+        // retuning either the reach or the speed cannot leave a pull that stops
+        // in mid-air.
+        let frames = effect.reach.div(speed.mul(DT)).to_int().clamp(1, 240) as u16 + 1;
+        begin_haul(&mut self.players[owner], stop, speed, frames);
     }
 
     /// What one effect does to everything standing in it this frame.
@@ -5397,6 +5808,12 @@ impl World {
                         {
                             continue;
                         }
+                        // The first blade of this pass to reach somebody
+                        // marks them, and the other eleven do not: once per
+                        // pass, so a flower out and home is two marks rather
+                        // than a full tally on its own. The mask is cleared at
+                        // the turn, which is what makes it once per *pass*.
+                        let first_this_pass = (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, i));
                         effect.take_hit(blade, i);
                         let share = if coming_back {
                             t::lotus_return_damage()
@@ -5404,10 +5821,19 @@ impl World {
                             Fx::ONE
                         };
                         let blow = Fx::from_int(effect.source().damage).mul(share).to_int();
-                        self.cut(i, effect, at, blow);
+                        let dealt = self.cut(i, effect, at, blow);
                         self.players[i].slow(t::slow_frames(), t::lotus_slow());
+                        if first_this_pass && dealt > 0 {
+                            shadow::mark(&mut self.players[i]);
+                        }
                     }
-                    self.gore_the_creature(effect, blade, at, radius);
+                    let first_this_pass =
+                        (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, QUARRY_VICTIM));
+                    if self.gore_the_creature(effect, blade, at, radius) > 0 && first_this_pass {
+                        if let Some(beast) = self.monster.as_mut() {
+                            beast.mark();
+                        }
+                    }
                 }
             }
 
@@ -5608,26 +6034,14 @@ impl World {
                             if caught > 0 {
                                 self.players[i].seized(effect.owner, caught, t::grasp_bind());
                             }
+                            // Somebody is in the arms, so they are not free to
+                            // pull on anything else.
+                            self.players[effect.owner as usize].haul = 0;
                         }
                     }
                     let dealt = self.gore_the_creature(effect, arm, at, radius);
                     let owed = effect.leeched(dealt);
                     self.players[effect.owner as usize].heal(owed);
-                    // Against something that cannot be hauled, the catch hauls
-                    // *her*: all four arms on a Ridgeback's flank pull her
-                    // across the gap to the contact point. The same ability
-                    // doing the same thing, with the heavier body winning.
-                    if effect.parts_landed(QUARRY_VICTIM, GRASP_ARMS) == GRASP_ARMS {
-                        let owner = effect.owner as usize;
-                        if self.players[owner].haul == 0 {
-                            let far = at.sub(self.players[owner].pos).len();
-                            // The reel speed's slider does not reach zero, so
-                            // a frame's step is never nothing to divide by.
-                            let frames = far.div(t::reel_speed().mul(DT)).to_int().max(0) + 2;
-                            self.players[owner].haul = frames.min(u16::MAX as i32) as u16;
-                            self.players[owner].haul_to = at;
-                        }
-                    }
                 }
             }
         }
@@ -5929,27 +6343,6 @@ fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene)
         }
     }
     best.map(|(slot, _)| slot)
-}
-
-/// Being hauled by her own Grasp: the velocity that takes her there this
-/// frame, or `None` if she is not.
-///
-/// Arrives exactly rather than overshooting -- the last step is the gap --
-/// and counts the frames down so a haul that meets something solid on the
-/// way still ends.
-fn haul_drive(p: &mut Player) -> Option<V3> {
-    if p.haul == 0 {
-        return None;
-    }
-    p.haul -= 1;
-    let gap = p.haul_to.sub(p.pos);
-    let far = gap.len();
-    let step = t::reel_speed().mul(DT);
-    if far.raw() <= step.raw() {
-        p.haul = 0;
-        return Some(gap.scale(Fx::ONE.div(DT)));
-    }
-    Some(gap.normalized().scale(t::reel_speed()))
 }
 
 /// The patch of floor under a point in the air: the arena's ground, and the
@@ -6316,6 +6709,15 @@ fn dragged(p: &Player, speed: Fx) -> Fx {
     } else {
         speed
     };
+    // **The Dual mage's feet leave the floor at the three-quarter tier**, and
+    // a thing that is not walking is not held to a walk. See [`floating`] and
+    // `tuning::float_move_speed`; the renderer reads the same predicate to stop
+    // driving her legs -- `view::pose`.
+    let speed = if floating(p) {
+        speed.mul(t::float_move_speed())
+    } else {
+        speed
+    };
     if p.slowed == 0 {
         return speed;
     }
@@ -6392,6 +6794,21 @@ fn step_rider(
     // skeleton: a tail that whips throws whoever is on the tail and does
     // nothing to somebody standing on the shoulder, and reading both in one
     // shared frame is how that distinction gets lost.
+    // **A cut is not a buck.** The pose is a lookup, so the frame the
+    // creature changes clip -- a shake interrupted into a flinch, say -- its
+    // back jumps from one pose to another with no motion in between, and the
+    // grip test read that jump as an acceleration and threw whoever was
+    // standing there. The rider who had just landed the hit that caused the
+    // flinch was the one thrown, every time: every ride ended with the first
+    // good hit on the ridge. Plant the feet again, as on landing, and let the
+    // motion that follows be what is judged. Read here rather than at the top
+    // of the frame because a flinch is dealt after the fighters have moved,
+    // so the cut shows up under the feet a frame later than it happens.
+    let clip = beast.doing.clip_key();
+    if p.ride_clip != clip {
+        p.ride_clip = clip;
+        p.grip_settle = p.grip_settle.max(t::mount_settle() as u8);
+    }
     let rig = beast.rig();
     let felt = rig.dir_to_part(part, accel);
     // `big_len`, not `len`: these are accelerations in the hundreds, and a
@@ -6418,6 +6835,9 @@ fn step_rider(
     // move that spent the jump on an attack would take that away.
     chain_cancel(p, input);
     queue_the_shadow(p, input);
+    // And the Reaver's strike on arrival, for a shadow left standing on the
+    // creature's back -- the same cut as on the floor.
+    shadow::swing_out_of_the_carry(p, input);
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
 
     // Resolved instead of the countdown, exactly as on the ground -- see
@@ -6593,6 +7013,16 @@ fn meet_the_creature(p: &mut Player, beast: &Monster) {
     if p.vel.y.raw() > 0 {
         return;
     }
+    // **A body that was just thrown does not land back on.** Mounting is
+    // landing, and a rider in the stun of a buck is still being thrown; the
+    // back that threw them is whipping about underneath, and a rolled top
+    // face scooped a falling rider up a dozen frames after it had thrown
+    // them, for the fall's damage a second time. The same goes for somebody
+    // knocked off by a hit. They are solid to the animal still -- `resolve`
+    // above -- so they slide off it rather than through it.
+    if p.action.stunned() {
+        return;
+    }
     let Some((part, top)) = beast.surface_under(p.pos, radius) else {
         return;
     };
@@ -6602,6 +7032,7 @@ fn meet_the_creature(p: &mut Player, beast: &Monster) {
 /// Take up station on a part. Mounting is landing: there is no button, because
 /// a surface is a surface.
 fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
+    p.ride_clip = beast.doing.clip_key();
     let mut rest = beast.rest_frame(part, p.pos);
     rest.y = top;
     p.mount = part as u8;
@@ -6612,6 +7043,7 @@ fn mount_on(p: &mut Player, beast: &Monster, part: usize, top: Fx) {
     p.air_dodged = false;
     p.jump_hold = 0;
     p.air_stall = 0;
+    p.air_stalls = 0;
     p.grip_vel = V3::ZERO;
     p.grip_settle = t::mount_settle() as u8;
 }
@@ -6636,17 +7068,34 @@ fn carry_off(surface: V3) -> V3 {
 /// creature's own up axis. The cap is what keeps a shake from firing someone
 /// over the arena wall.
 fn thrown_off(p: &mut Player, rig: &monster::Rig, part: usize, surface: V3) {
-    let flat = V3::new(surface.x, Fx::ZERO, surface.z);
-    let speed = flat.flat_len().min(t::throw_kick());
-    // Up off the patch of animal you were standing on, not up off the animal.
-    // On a skeleton those differ, and being thrown off a tail that is pointing
-    // at the floor should not fire you into the ceiling.
-    let up = rig.of(part).rot.apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    // **Off the side, always.** The buck is the surface *accelerating*, and
+    // the surface's velocity at that instant can be anything -- at the
+    // reversal of a whip it is nearly nothing. The first version threw the
+    // rider along the surface's velocity, capped, so a rider thrown at a
+    // reversal went straight up seven metres, came straight back down onto
+    // the same back, and was thrown again: five throws in a second, each
+    // with the fall's damage on it. A rider comes off the side they were
+    // standing on, at the full kick, whatever the back was doing.
+    //
+    // Sideways in the creature's **body** frame -- its heading, which does
+    // not roll -- and up in the world's. The part underfoot is the thing that
+    // is whipping: at the top of a shake the spine is fifty degrees over, and
+    // "sideways" and "up" read in that frame are a throw that goes up and a
+    // lift that goes across, which is a rider who lands back on the other
+    // side of the same back.
+    let side = if p.local.z.raw() < 0 {
+        Fx::ONE.neg()
+    } else {
+        Fx::ONE
+    };
+    let out = rig.dir_to_world(V3::new(Fx::ZERO, Fx::ZERO, side));
+    let flat = V3::new(out.x, Fx::ZERO, out.z);
+    let _ = (surface, part);
     p.mount = monster::NO_PART;
-    p.vel = flat
-        .normalized()
-        .scale(speed)
-        .add(up.scale(t::throw_lift()));
+    p.vel =
+        flat.normalized()
+            .scale(t::throw_kick())
+            .add(V3::new(Fx::ZERO, t::throw_lift(), Fx::ZERO));
     p.grounded = false;
     p.air_dodged = false;
     p.jump_hold = 0;
@@ -6754,7 +7203,11 @@ impl World {
                     self.players[i].hit_used = true;
                 }
             }
-            None => {}
+            // `Terrain` cannot arrive: the beam does not ask for it, and the
+            // arena is where the crosshair's own ray already stopped. The arm
+            // is spelled out rather than wildcarded so that whatever is added
+            // to `Contact` next is a compile error here instead of silence.
+            Some(Contact::Terrain { .. }) | None => {}
         }
     }
 
@@ -6880,7 +7333,11 @@ impl World {
                     self.players[i].hit_used = true;
                 }
             }
-            None => {}
+            // `Terrain` cannot arrive: the beam does not ask for it, and the
+            // arena is where the crosshair's own ray already stopped. The arm
+            // is spelled out rather than wildcarded so that whatever is added
+            // to `Contact` next is a compile error here instead of silence.
+            Some(Contact::Terrain { .. }) | None => {}
         }
     }
 }
@@ -7020,8 +7477,19 @@ impl World {
                 continue;
             };
             let m = moves::get(attacker.class, kind);
+            // The Reaver's cash-in, on a leg rather than a person: any blow of
+            // hers spends the creature's marks, and it cannot block.
+            // What a full tally does to something this size is its own flinch
+            // and poise rules' business -- a hit three times the size is
+            // already the thing those read.
+            let cash = if attacker.class == Class::ShadowReaver {
+                shadow::cash_multiple(beast.spend_marks())
+            } else {
+                Fx::ONE
+            };
             let raw = Fx::from_int(m.damage)
                 .mul(preying(attacker.class, beast.disabled()))
+                .mul(cash)
                 .to_int();
             let dealt = beast.take_hit(part, raw);
             // Her double duty, against the creature: drink over the pool the
@@ -7048,6 +7516,9 @@ impl World {
             });
             self.players[i].heal(m.leeched(dealt));
             self.players[i].hit_used = true;
+            if dealt > 0 {
+                dual::landed_a_hit(&mut self.players[i]);
+            }
         }
 
         // Nothing to stand on any more.

@@ -5,11 +5,15 @@
 //! of startup feels right without seeing that it was fourteen.
 
 use bevy::prelude::*;
+use sim::class::Mechanic;
 use sim::state::{Action, Phase};
 
 const P1: Color = Color::srgb(0.29, 0.66, 1.0);
 const P2: Color = Color::srgb(1.0, 0.54, 0.30);
 const INK: Color = Color::srgb(0.86, 0.90, 0.96);
+/// The frame readout. Dimmer than the fighters' own lines, because it is a
+/// developer's instrument rather than part of the fight.
+const STEP: Color = Color::srgb(0.62, 0.70, 0.80);
 /// The creature. Its health bar reads in the same colour as the ridge, which is
 /// the part of it you are trying to reduce.
 const QUARRY: Color = Color::srgb(0.86, 0.32, 0.22);
@@ -22,7 +26,8 @@ const DIM: Color = Color::srgb(0.52, 0.58, 0.67);
 /// unmistakable at a glance and at speed.
 const DARK: Color = Color::srgb(0.58, 0.36, 0.95);
 const LIGHT: Color = Color::srgb(1.0, 0.89, 0.52);
-/// Past the deep threshold, where the forces start burning her.
+/// The tier marks on the Dual mage's track: where the blink and the second jump
+/// begin.
 const DEEP: Color = Color::srgb(0.95, 0.35, 0.35);
 /// Driven off the end. Nothing else in the HUD is this colour.
 const ASCENDED: Color = Color::srgb(1.0, 1.0, 1.0);
@@ -71,13 +76,20 @@ pub struct MeterTrack(pub usize);
 
 /// The fill, which runs from the centre out to wherever she is.
 #[derive(Component)]
-pub struct MeterFill(pub usize);
+pub struct MeterFill {
+    pub who: usize,
+    pub force: sim::class::Force,
+}
 
 #[derive(Component)]
 pub struct RoundText;
 
 #[derive(Component)]
 pub struct Banner;
+
+/// The frame readout, under the crosshair while the simulation is paused.
+#[derive(Component)]
+pub struct StepText;
 
 /// A click-to-cycle class picker, one per player.
 ///
@@ -207,14 +219,27 @@ pub fn setup(mut commands: Commands) {
                     TextColor(P1),
                     StateText(0),
                 ));
-                // Nothing in the middle. There was a control legend here,
-                // assembled from every section of the manual at once -- so a
-                // Bulwark player read the Champion's three weapons, the Dual
-                // mage's two autos and the Reaver's shadow, none of which were
-                // theirs. Eleven lines under the crosshair, and most of them
-                // wrong for whoever was reading them. `--help` and the browser
-                // page both carry the real thing, and neither is in the way of
-                // the fight.
+                // The middle was empty, and it is where the frame readout
+                // goes. There was a control legend here once, assembled from
+                // every section of the manual at once -- so a Bulwark player
+                // read the Champion's three weapons, the Dual mage's two autos
+                // and the Reaver's shadow, none of which were theirs. Eleven
+                // lines under the crosshair, and most of them wrong for whoever
+                // was reading them.
+                //
+                // This is the opposite case and it is why the space is worth
+                // using: it is empty whenever the game is running, it is about
+                // the fighter you are actually driving, and it is only there
+                // when you asked for it by pausing.
+                bottom.spawn((
+                    Text::new(""),
+                    TextFont {
+                        font_size: 15.0,
+                        ..default()
+                    },
+                    TextColor(STEP),
+                    StepText,
+                ));
                 bottom.spawn((
                     Text::new("free"),
                     TextFont {
@@ -283,15 +308,17 @@ fn spawn_meter<T: Component>(
         });
 }
 
-/// One two-poled bar: a track with the centre marked, the two depths at which
-/// the forces start to burn, and a fill that runs out from the middle.
+/// The Dual mage's two bars in one track: Dark filling **leftwards** from the
+/// middle, Light filling rightwards, with the two tiers ticked on each side.
 ///
-/// Everything inside is absolutely positioned, because this bar fills from the
-/// *centre* in either direction rather than from one end -- which is the whole
-/// point of it. A bar that filled from the left would say "more" and "less"
-/// where the mechanic says "which way".
+/// Side by side rather than stacked because the thing the player is reading is
+/// the *gap*: two bars that grow away from each other from a shared middle are
+/// lopsided exactly when she is, which is the same picture the wings on her
+/// back make. Everything inside is absolutely positioned because of that.
 fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
-    let deep = 50.0 * sim::tuning::meter_deep() as f32 / sim::tuning::meter_max().max(1) as f32;
+    let max = sim::tuning::meter_max().max(1) as f32;
+    let blink = 50.0 * sim::tuning::tier_blink() as f32 / max;
+    let jump = 50.0 * sim::tuning::tier_jump() as f32 / max;
     parent
         .spawn((
             Node {
@@ -307,21 +334,28 @@ fn spawn_bar(parent: &mut ChildSpawnerCommands, who: usize) {
             MeterTrack(who),
         ))
         .with_children(|track| {
-            // The fill first, so the ticks draw over it.
-            track.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(50.0),
-                    width: Val::Percent(0.0),
-                    height: Val::Percent(100.0),
-                    ..default()
-                },
-                BackgroundColor(DIM),
-                MeterFill(who),
-            ));
+            // The fills first, so the ticks draw over them.
+            for (force, colour) in [
+                (sim::class::Force::Dark, DARK),
+                (sim::class::Force::Light, LIGHT),
+            ] {
+                track.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Percent(50.0),
+                        width: Val::Percent(0.0),
+                        height: Val::Percent(100.0),
+                        ..default()
+                    },
+                    BackgroundColor(colour),
+                    MeterFill { who, force },
+                ));
+            }
             for (at, colour) in [
-                (50.0 - deep, DEEP),
-                (50.0 + deep, DEEP),
+                (50.0 - blink, DEEP),
+                (50.0 + blink, DEEP),
+                (50.0 - jump, DEEP),
+                (50.0 + jump, DEEP),
                 (50.0, Color::srgb(0.82, 0.86, 0.93)),
             ] {
                 track.spawn((
@@ -402,12 +436,104 @@ type StateQuery<'w, 's> = Query<
     'w,
     's,
     (&'static StateText, &'static mut Text),
-    (Without<RoundText>, Without<Banner>, Without<ClassLabel>),
+    (
+        Without<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
 >;
-type RoundQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<RoundText>, Without<Banner>, Without<ClassLabel>)>;
-type BannerQuery<'w, 's> =
-    Query<'w, 's, &'static mut Text, (With<Banner>, Without<RoundText>, Without<ClassLabel>)>;
+type RoundQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<RoundText>,
+        Without<Banner>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
+>;
+type StepQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<StepText>,
+        Without<Banner>,
+        Without<StateText>,
+        Without<RoundText>,
+    ),
+>;
+
+/// What a stepped frame is doing, in the terms the thing being stepped through
+/// is made of.
+///
+/// **Empty unless paused.** It is an instrument, and an instrument left on
+/// screen during play is clutter.
+///
+/// What it shows is chosen for one job: watching the Elementalist's structure
+/// jump, which chains because a rising stone's top catches her feet on exactly
+/// one frame and hands the still-held jump button another takeoff. You cannot
+/// see that happen at speed and you cannot see it stepping either, unless
+/// something tells you the stone's age and *the frame she was caught on* --
+/// grounded, with the ground moving up faster than she is. So that frame says
+/// so in words.
+fn step_readout(sim: &crate::Sim) -> String {
+    if !sim.stepping() {
+        return String::new();
+    }
+    step_lines(&sim.cur)
+}
+
+/// The readout itself, off a world rather than off the app, so it can be tested
+/// against a real structure jump instead of eyeballed.
+pub fn step_lines(w: &sim::World) -> String {
+    let p = &w.players[0];
+    let vy = p.vel.y.to_f32_for_render();
+    let mut out = format!(
+        "frame {}   feet {:.2} m   rise {:+.1} m/s   {}",
+        w.frame,
+        p.pos.y.to_f32_for_render(),
+        vy,
+        if p.grounded {
+            "on a surface"
+        } else {
+            "airborne"
+        },
+    );
+    // **The catch, named.** Grounded while climbing is not a state an ordinary
+    // fighter is ever in: the floor does not move. It means a stone has just
+    // overtaken her feet, and the next frame the jump button can fire again.
+    if p.grounded && vy > 1.0 {
+        out.push_str("  <- CAUGHT, another takeoff is available");
+    }
+    if let Mechanic::Structures(slots) = p.mechanic {
+        for (i, stone) in slots.iter().flatten().enumerate() {
+            out.push_str(&format!(
+                "\nstone {i}: age {:>2}   {:.0}% out   top {:.2} m   climbing {:>5.1} m/s   {:?}",
+                stone.age,
+                stone.risen().to_f32_for_render() * 100.0,
+                stone.top().to_f32_for_render(),
+                stone.surface_speed().to_f32_for_render(),
+                stone.phase(),
+            ));
+        }
+    }
+    out
+}
+
+type BannerQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        With<Banner>,
+        Without<RoundText>,
+        Without<ClassLabel>,
+        Without<StepText>,
+    ),
+>;
 // A Bevy system's parameter list *is* its dependency declaration: every entry
 // is something the scheduler has to know this system touches. Splitting one to
 // get under a count would split the system, which is the opposite of the point.
@@ -424,16 +550,22 @@ pub fn update(
     mut states: StateQuery,
     mut rounds: RoundQuery,
     mut banner: BannerQuery,
+    mut step: StepQuery,
 ) {
+    for mut text in step.iter_mut() {
+        *text = Text::new(step_readout(&sim));
+    }
     for (bar, mut node) in bars.iter_mut() {
+        // Against this fighter's own full bar, which is per class now -- see
+        // `sim::tuning::health_of`.
         let p = &sim.cur.players[bar.who];
         let share = if bar.grey { p.grey } else { p.health };
-        node.width = Val::Percent(100.0 * share.max(0) as f32 / sim::state::max_health() as f32);
+        node.width = Val::Percent(100.0 * share.max(0) as f32 / p.full_health().max(1) as f32);
     }
 
-    // The Dual mage's bar. Three things at once, and each of them is a
-    // question the player is asking constantly: how far out am I, which force
-    // am I carrying, and am I past the line.
+    // The Dual mage's two bars. Three things at once, and each of them is a
+    // question the player is asking constantly: how high are the two, how far
+    // apart are they, and which force am I carrying.
     for (tag, mut visible) in meter_rows.iter_mut() {
         let carrying = meter_of(&sim.cur.players[tag.0]);
         *visible = if carrying.is_some() {
@@ -443,11 +575,11 @@ pub fn update(
         };
     }
     for (tag, mut border) in meter_tracks.iter_mut() {
-        let Some((_, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
+        let Some((_, _, colour, ascending)) = meter_of(&sim.cur.players[tag.0]) else {
             continue;
         };
         // The border is which force she is *carrying*, which is not the same as
-        // which side of the bar she is on: she can be deep in the dark and
+        // which bar is higher: she can be deep in the dark and
         // still light, having just landed one light auto, and every cast she
         // throws until she lands a dark one is light.
         border.0 = if ascending > 0 {
@@ -460,13 +592,24 @@ pub fn update(
         };
     }
     for (tag, mut node, mut fill) in meter_fills.iter_mut() {
-        let Some((value, _, _)) = meter_of(&sim.cur.players[tag.0]) else {
+        let Some((dark, light, _, ascending)) = meter_of(&sim.cur.players[tag.who]) else {
             continue;
         };
-        let (left, width) = fill_of(value, sim::tuning::meter_max());
+        let bar = match tag.force {
+            sim::class::Force::Dark => dark,
+            sim::class::Force::Light => light,
+        };
+        let (left, width) = fill_of(tag.force, bar, sim::tuning::meter_max() as f32);
         node.left = Val::Percent(left);
         node.width = Val::Percent(width);
-        fill.0 = if value < 0 { DARK } else { LIGHT };
+        fill.0 = if ascending > 0 {
+            ASCENDED
+        } else {
+            match tag.force {
+                sim::class::Force::Dark => DARK,
+                sim::class::Force::Light => LIGHT,
+            }
+        };
     }
 
     // The creature, if there is one.
@@ -521,40 +664,58 @@ pub fn update(
     }
 }
 
-/// Where the meter's fill sits in its track, as `(left, width)` in percent.
+/// Where one bar's fill sits in the shared track, as `(left, width)` in
+/// percent.
 ///
-/// Out from the **centre**, in whichever direction she has gone, which is the
-/// one thing this bar has to say that a health bar does not: the number is
-/// signed and the middle is the interesting place to be.
-fn fill_of(value: i32, max: i32) -> (f32, f32) {
-    let share = (value as f32 / max.max(1) as f32).clamp(-1.0, 1.0);
-    let half = 50.0 * share.abs();
-    (if share < 0.0 { 50.0 - half } else { 50.0 }, half)
+/// Dark fills **leftwards** from the middle and Light rightwards, which is the
+/// one thing this track has to say that two health bars would not: the two
+/// grow away from each other, so the gap between them is the lopsidedness of
+/// the whole thing, read at a glance.
+fn fill_of(force: sim::class::Force, bar: f32, max: f32) -> (f32, f32) {
+    let half = 50.0 * (bar / max.max(1.0)).clamp(0.0, 1.0);
+    match force {
+        sim::class::Force::Dark => (50.0 - half, half),
+        sim::class::Force::Light => (50.0, half),
+    }
 }
 
-/// The Dual mage's meter, if this fighter has one.
+/// The Dual mage's two bars, if this fighter has them: dark, light, the force
+/// she is carrying, and the frames of ascension left.
 ///
-/// `None` for the other five, which is what hides the bar rather than drawing
-/// an empty one -- a bar for a resource a class does not have is a thing to
-/// wonder about.
-fn meter_of(p: &sim::state::Player) -> Option<(i32, sim::class::Force, u16)> {
+/// `None` for the other five, which is what hides the track rather than
+/// drawing an empty one -- a bar for a resource a class does not have is a
+/// thing to wonder about.
+fn meter_of(p: &sim::state::Player) -> Option<(f32, f32, sim::class::Force, u16)> {
     match p.mechanic {
         sim::class::Mechanic::Meter {
-            value,
+            dark,
+            light,
             colour,
             ascending,
-        } => Some((value, colour, ascending)),
+            ..
+        } => Some((
+            dark.to_f32_for_render(),
+            light.to_f32_for_render(),
+            colour,
+            ascending,
+        )),
         _ => None,
     }
 }
 
 /// The class mechanic in one line -- where the shield is, which form is out,
-/// how deep the meter runs. Without it the mechanics are invisible.
+/// where the two bars stand. Without it the mechanics are invisible.
 fn mechanic(p: &sim::state::Player) -> String {
     use sim::class::alloc_free::Summary;
     match p.mechanic.summary() {
         Summary::Text(t) => t.to_string(),
         Summary::Value(label, v) => format!("{label}: {v}"),
+        Summary::Bars {
+            dark,
+            light,
+            tier: "",
+        } => format!("dark {dark} / light {light}"),
+        Summary::Bars { dark, light, tier } => format!("dark {dark} / light {light}  {tier}"),
     }
 }
 
@@ -766,6 +927,21 @@ mod tests {
     use sim::class::{ALL_CLASSES, Class};
 
     #[test]
+    fn the_hud_systems_touch_nothing_twice() {
+        // Every text query in `update` writes `Text`, and Bevy refuses a system
+        // whose queries it cannot prove disjoint -- at run time, on the first
+        // frame, which is the first anybody hears of it. It shipped that way
+        // once: the step readout's query forgot the round counter, and the
+        // game panicked on launch with every test green. Initialising the
+        // system is where Bevy checks, so this does exactly that.
+        let mut world = bevy::ecs::world::World::new();
+        let mut system = IntoSystem::into_system(update);
+        system.initialize(&mut world);
+        let mut buttons = IntoSystem::into_system(update_class_buttons);
+        buttons.initialize(&mut world);
+    }
+
+    #[test]
     fn a_picker_moves_only_its_own_player() {
         // Two pickers sharing one array is the obvious place to get an index
         // wrong, and the symptom would be changing the wrong fighter's class
@@ -800,24 +976,34 @@ mod tests {
     }
 
     #[test]
-    fn the_meter_fills_out_from_the_middle() {
-        // The bar is read at a glance while she is being steered, so the thing
-        // that has to be true is positional: centre is centre, and an end is an
-        // end. Nobody can check that by looking at a screenshot of one frame.
-        let max = 100;
-        assert_eq!(fill_of(0, max), (50.0, 0.0));
-        assert_eq!(fill_of(-max, max), (0.0, 50.0));
-        assert_eq!(fill_of(max, max), (50.0, 50.0));
-        let (left, width) = fill_of(-max / 2, max);
+    fn the_two_bars_grow_away_from_the_middle() {
+        // The track is read at a glance while she is being steered, so the
+        // thing that has to be true is positional: the middle is the middle,
+        // Dark grows to the left of it and Light to the right, and a full bar
+        // reaches its own end of the track. Nobody can check that by looking at
+        // a screenshot of one frame.
+        use sim::class::Force;
+        let max = 100.0;
+        assert_eq!(fill_of(Force::Dark, 0.0, max), (50.0, 0.0));
+        assert_eq!(fill_of(Force::Light, 0.0, max), (50.0, 0.0));
+        assert_eq!(fill_of(Force::Dark, max, max), (0.0, 50.0));
+        assert_eq!(fill_of(Force::Light, max, max), (50.0, 50.0));
+        let (left, width) = fill_of(Force::Dark, max / 2.0, max);
         assert!((left - 25.0).abs() < 0.01 && (width - 25.0).abs() < 0.01);
+        let (left, width) = fill_of(Force::Light, max / 2.0, max);
+        assert!((left - 50.0).abs() < 0.01 && (width - 25.0).abs() < 0.01);
     }
 
     #[test]
-    fn a_meter_past_its_own_end_still_fits_the_track() {
-        // Ascension pins her at the end, and a bar that drew past its own track
-        // would spill across the screen.
-        let (left, width) = fill_of(500, 100);
-        assert!(left >= 0.0 && left + width <= 100.0);
+    fn a_bar_past_its_own_top_still_fits_the_track() {
+        // A bar can never exceed its top in the simulation, but a track that
+        // trusted that and drew past its own edge would spill across the
+        // screen the first time somebody retuned the top downward.
+        use sim::class::Force;
+        for force in [Force::Dark, Force::Light] {
+            let (left, width) = fill_of(force, 500.0, 100.0);
+            assert!(left >= 0.0 && left + width <= 100.0);
+        }
     }
 
     #[test]
@@ -831,5 +1017,60 @@ mod tests {
                 class.name()
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod stepping {
+    use super::*;
+    use sim::{Input, World};
+
+    /// Play the rehearsed double and collect the readout for every frame.
+    fn readouts() -> Vec<String> {
+        let mut w = World::with_classes([sim::Class::Elementalist, sim::Class::Bulwark]);
+        let mut out = Vec::new();
+        for i in 0..40u32 {
+            w.advance([crate::rehearsal(i, &w), Input::default()]);
+            out.push(step_lines(&w));
+        }
+        out
+    }
+
+    #[test]
+    fn the_readout_names_the_frame_she_is_caught_on() {
+        // **The one thing stepping has to tell you.** A structure jump chains
+        // because a rising stone overtakes her feet and re-grounds her while
+        // she is still going up, which is a state nothing else in the game
+        // produces -- the floor does not move. It lasts one frame and it is
+        // invisible; if the readout does not say so, stepping through a double
+        // shows you a number going up and teaches nothing.
+        let caught: Vec<usize> = readouts()
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains("CAUGHT"))
+            .map(|(i, _)| i)
+            .collect();
+        assert!(
+            !caught.is_empty(),
+            "stepping through a rehearsed double never showed a catch"
+        );
+        // Twice, because it is a double: one catch per eruption.
+        assert!(
+            caught.len() >= 2,
+            "a double caught her on {} frame(s); the second stone's eruption is \
+             the whole difference from a single",
+            caught.len()
+        );
+    }
+
+    #[test]
+    fn the_readout_carries_the_stones_and_their_ages() {
+        // The other half of stepping blind: the technique is timed off the
+        // stone's rise, so the stone's age and how far out it is have to be on
+        // screen or the frame numbers mean nothing.
+        let mid = &readouts()[12];
+        assert!(mid.contains("stone 0"), "no stone in the readout: {mid}");
+        assert!(mid.contains("age"), "no age in the readout: {mid}");
+        assert!(mid.contains("climbing"), "no climb rate: {mid}");
     }
 }

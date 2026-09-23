@@ -273,8 +273,8 @@ blade, and only the crossing: the version where its cuts also drank took three s
 pool in one throw and out-healed the rest of the kit, and was reverted (feel log, 2026-09-23).
 
 ### Grasp — special, `Q`
-**Startup** 16 · **Active** 4 · **Recovery** 20 · **Damage** 48 an arm · **Reach** chosen by
-the hold, 1.5–10 m · **Cost** 7% of red · **Drinks** 60%, at the catch and where the haul
+**Startup** 16 · **Active** 4 · **Recovery** 20 · **Damage** 40 an arm · **Reach** chosen by
+the hold, 1.5–12 m · **Cost** 7% of red · **Drinks** 60%, at the catch and where the haul
 ends · **Hold** 26 frames, 10 of them bound
 
 Kept as built, because the built version is the best-argued ability in the class: hold to
@@ -289,10 +289,10 @@ and it pays. Everything about the channel and the catch
 is as it was: see [Holding `Q` chooses the depth](#holding-q-chooses-the-depth) below, kept
 from the previous revision.
 
-Against something that cannot be hauled — the creature — the catch **hauls her to it**: all
-four arms landed on a Ridgeback's flank pull her across the gap to the contact point at the
-same reel speed, with the arena and the creature solid under her, so she arrives against its
-side. A second route up.
+Against something that cannot be hauled — a wall, a structure, the creature — the catch
+**hauls her to it** instead: the arms find nobody to close on, so they pull her to the anchor
+they met, behind `Grasp hauls her to an anchor` (on). On a Ridgeback that is a second route
+up. See [Movement](#movement--two-answers-both-behind-a-flag-2026-09-17) below.
 
 ### Black spike — mechanic, `E`
 **Startup** 30 · **Active** 4 · **Recovery** 22 · **Damage** 100 · **Reach** 9 m, grounded ·
@@ -452,3 +452,112 @@ sentence was "sustain through aggression" shipped with three tools that rewarded
 back. The rebuild's argument is in [../blood-mage.md](../blood-mage.md) §"Why this shape".
 What survived: the Grasp entire, the spike's thirty-frame telegraph, the thrown blade, the
 ×1.4, and the rule that a cut can never kill her.
+
+## Movement — two answers, both behind a flag, 2026-09-17
+
+**This class had no movement at all, and it could not stay that way.** Every other class has
+one thing it does with the ground: the Reaver crosses to her shadow, the Elementalist rides a
+structure up, the Champion vaults, the Dual mage floats, the Bulwark leaps to its shield. The
+Blood mage walks. That was survivable while a full hop reached seven and a half metres and
+mobility was something everybody had for free; the jump was cut back across the cast on the
+same day precisely so that the class techniques matter more, and it left her as the one
+character with nothing to be good at.
+
+Two answers are built. **Neither is chosen**, and both are live flags in the Oven under
+**Blood mage** rather than compile-time features, so all four combinations are two sliders
+away in a running match:
+
+| Knob | Default | What it does |
+| --- | --- | --- |
+| `Grasp hauls her to an anchor` | **on** | A Grasp whose four arms converge on a wall, a structure or the creature — rather than on a person — pulls *her* to it |
+| `Dodge is a blink` | off | Her dodge covers `Blink, how far` in `Blink, frames to cross`, flat, instead of a shove that decays |
+
+### The generator, stated once
+
+The Grasp haul is the better of the two, and the reason is worth naming because it is the test
+every future candidate should be put to:
+
+> **Movement should be a re-reading of an ability she already has, and it should be paid for in
+> health.**
+
+The Grasp already exists to close a gap — four arms converge on a point and whatever they
+catch is hauled back to her. The haul is that same sentence with the subject swapped: catch a
+person and it works as it always has, catch a wall and the arms have something to pull against
+and nothing to pull. Nothing new was invented, and the price is already right — the health
+went on the press and none of it comes back, because nothing was cut, so using the Grasp as a
+grappling hook costs a whiffed cast every single time.
+
+The blink fails the test on both halves. There is nothing in the kit it is a re-reading of,
+and it leans entirely on the animation to make it feel like it belongs — which is a way of
+saying the design is hoping to be rescued later. It is built anyway, because "does she just
+need the distance?" is a real question and the cheapest way to answer it is to try it.
+
+> **The v1 blink passes the test where this fails it, and it is built.** `shift` plus a
+> direction with the crosshair on an **essence pool** puts her at the pool and consumes it —
+> see [Blink](#blink--the-mechanics-movement-shift--a-direction-with-the-crosshair-on-a-pool)
+> above. That is a re-reading of the mechanic, and it is paid for in the currency the class is
+> made of, because a blink eats a heal. It takes precedence over this flag: with the crosshair
+> on a pool the dodge is the pool blink, and only otherwise does the flag decide what a dodge
+> is. What the flag can still settle is the *distance*.
+
+### What changed with the haul
+
+The Grasp's throw went from 10 m to 12 m and its damage from 48 to 40, which is the balance
+payment for the second job. The v1 build had its own haul to the creature; it was folded into
+this one when the two branches met, since an anchor here already includes the creature. `feel.rs` then caught the consequence: the hold is a fixed number
+of frames and the haul has to cover the whole reach inside it, so a longer throw was dropping
+a full-range *catch* halfway home — mid-air, mid-drag, suddenly able to walk. `Grab haul
+speed` went up with it.
+
+The haul stops at the **anchor**, not at the convergence point. The Grasp deliberately does
+not shorten itself against the scenery — point at a near wall, wind to full, and the arms
+close metres behind it — so without that she would arrive inside the arena.
+
+### Other ideas, none of them built
+
+Kept here because the two above are a first pass and the generator above produces more. Rough
+order of how well each satisfies it.
+
+1. **Ride the Bloodletter home.** The blade goes out a fixed distance and comes back, and the
+   blood it took is paid **on the catch**. Let her take the ride instead: press again while it
+   is outbound and she goes to the blade rather than the blade coming to her, forfeiting the
+   payout. The cost is *the thing the ability is for*, which is the purest statement of this
+   class there is, and it is on the auto — so it is movement she has every couple of seconds
+   rather than movement she saves up for. Its own risk is that the auto is already the one
+   reliably profitable thing in the kit, and making it the movement as well puts most of the
+   class on one button.
+2. **The leech pulls.** Give the blood that comes back a positional component: every hit that
+   pays out drags her a fraction of the way toward what it came from. No input, no ability —
+   a property of her damage, always on, and it only ever helps when she is connecting, which
+   is exactly when the class is supposed to be winning. Its risk is the opposite of the
+   blink's: a movement with no button is one nobody notices, and it may simply read as jank.
+3. **The Grasp as a swing rather than a reel.** The ceiling version of what is built. The arms
+   hold and she travels an arc, preserving and redirecting the speed she came in with instead
+   of being placed at the far end. Same thematic tie, far more skill in it — and it is the one
+   idea here that is not a re-reading, because a rope constraint is a primitive the simulation
+   does not have.
+4. **Recall to the spike.** Black spike already plants something at long range; a reactivation
+   (`Move::reactivate`, zero everywhere and an open question in its own right) yanks her to
+   it, cutting whatever is on the line. Proven shape — it is the Reaver's shadow — which is
+   both the recommendation and the objection.
+5. **Follow her own blood back.** She leaves a trail; the input snaps her back along it to
+   where she stood a second or two ago. The most thematic idea on this list and the most
+   novel, and the reason it is fifth is that it makes positional commitment *free*, which is
+   the opposite of what a game built on whiff punishment wants.
+6. **Buy the height.** A takeoff that costs health, with the rise scaling in what she spends.
+   The only idea here that addresses **height at all** — every other one, including both of
+   the built ones, is purely horizontal. If she turns out to need the vertical game rather
+   than the ground one, this is the only candidate on the list.
+7. **Spent blood makes her light.** Extra speed and lower gravity in proportion to how much
+   health she has spent recently, decaying back. No input at all, and it turns her existing
+   loop into her movement — but it is a stat rather than a technique, and a technique is what
+   the jump nerf was making room for.
+8. **Standable spikes.** Black spike's spike becomes a solid you can get on top of, like a
+   structure. Reuses `stones::resolve_body` almost unchanged and gives her vertical reach for
+   a telegraph and some health. Last because the thematic tie is thin: nothing about a blood
+   spike says platform.
+
+**What the pair that is built does not do is height.** Both answers are flat, deliberately —
+what she is short of is ground, and a blink or a haul that also went up would be the second
+jump the one class with no movement has not earned. Whether that is the right read is the
+first thing to find out by playing it.

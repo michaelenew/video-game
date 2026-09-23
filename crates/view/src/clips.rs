@@ -337,6 +337,23 @@ clips! {
         "Light auto, right arm: the dark punch mirrored, and it has to read as the other side.";
     DualDarkLance, "dual_dark_lance", Moves, "dual", Length::Move(Class::DualMage, 5), false,
         "Dark lance: the left arm hauled low and back, a slow reach that ends holding on rather than letting go.";
+
+    // -- The Dual mage, off the floor ---------------------------------------
+    //
+    // **Two locomotion clips that only one class ever plays.** Deep on her own
+    // bar, or ascended, her feet leave the ground -- `sim::state::floating` --
+    // and these replace the idle and the walk for as long as that holds. They
+    // are in the `dual` file rather than in `locomotion` because they are hers:
+    // the walk cycles are the whole roster's and these two are one class's
+    // reward for riding the edge of its own mechanic.
+    //
+    // They **loop**, unlike every other clip in this file, because they are a
+    // stance rather than a move: there is no startup to line up against and no
+    // last frame to hand back to the idle. See `play::grounded`.
+    DualFloat,     "dual_float",      Locomotion, "dual", Length::Fixed(140), true,
+        "Deep or ascended, holding still: feet pointed, knees soft, hips carried a little high. A renaissance angel rather than a fighter at rest.";
+    DualDrift,     "dual_drift",      Locomotion, "dual", Length::Fixed(96), true,
+        "The same body travelling. She does not step -- the legs trail and the torso leads, and the only cycle in it is the wings.";
 }
 
 impl Clip {

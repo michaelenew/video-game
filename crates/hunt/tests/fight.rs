@@ -135,13 +135,18 @@ fn the_back_is_reachable_and_is_not_a_safe_room() {
     let reports = hunts();
     let rides: u32 = reports.iter().map(|r| r.rides).sum();
     let thrown: u32 = reports.iter().map(|r| r.thrown).sum();
+    let fled: u32 = reports.iter().map(|r| r.fled).sum();
     let ridge: u32 = reports.iter().map(|r| r.ridge_hits).sum();
     assert!(rides > 0, "nobody ever got on it");
     assert!(ridge > 0, "nobody ever reached the ridge");
+    // A buck that is read and jumped ended the ride as surely as one that
+    // threw the rider: both are the creature deciding when the ride is over.
+    // Counting only throws made a hunter who answered every shake look like
+    // one nothing could touch.
     assert!(
-        thrown * 4 > rides,
-        "only {thrown} of {rides} rides ended in a buck -- the back is a place \
-         to stand rather than a wager"
+        (thrown + fled) * 4 > rides,
+        "only {thrown} of {rides} rides ended in a buck and {fled} were left \
+         under one -- the back is a place to stand rather than a wager"
     );
     for report in &reports {
         assert!(

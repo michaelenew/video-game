@@ -1,11 +1,19 @@
 ---
-status: proposed — v2 of the mechanic, nothing built
+status: built 2026-09-23, through the wings; folded into dual-mage.md, which is now the specification
 decided: 2026-09-23
-supersedes: dual-mage.md (the meter, the depth curve, ascension) once built; the kit in kits/dual-mage.md keeps its moves
+supersedes: the single bar, recorded under "Was" in dual-mage.md; the kit in kits/dual-mage.md keeps its moves
 sources: dual-mage.md, kits/dual-mage.md, docs/archive/combat-design/statera-skills.md, this design thread
 ---
 
 # Dual mage — v2: two bars, and the hill between them
+
+> **Built, 2026-09-23.** Everything below is in the game through the wings, against
+> [plans/dual-mage-v2.md](plans/dual-mage-v2.md), and [dual-mage.md](dual-mage.md) is where it
+> is specified now — with the first values, what the instrument measures, and what the build
+> changed about this proposal (the third tier is the lower bar at 95 rather than both bars at
+> exactly the top, because the calm makes the top unreachable on one frame; the calm's first
+> value is a compromise the plan's criteria could not both have). This document is kept as the
+> argument the class was rebuilt on. Nothing of it has been played.
 
 **Identity.** Two beings that would each kill her alone, and she is what keeps them apart.
 Feed one and it grows and the other starves; the further apart they get the faster they pull

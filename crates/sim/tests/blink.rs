@@ -323,6 +323,10 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
     w.players[0].health = t::max_health() - 300;
     w.players[0].grey = 300;
     let grasp = sim::moves::get(Class::BloodMage, b::GRASP);
+    // A lane clear of the arena's two platforms, which stand across the
+    // middle of the floor: a full-range throw from the spawn lands the victim
+    // on top of one, above where the arms meet.
+    w.players[0].pos = V3::new(Fx::from_int(-6), Fx::ZERO, Fx::from_int(7));
     w.players[1].pos = w.players[0].pos.add(V3::new(
         grasp.reach.sub(Fx::from_int(1)),
         Fx::ZERO,

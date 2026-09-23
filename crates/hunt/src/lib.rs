@@ -44,12 +44,57 @@ struct Seen {
     beast_yaw: Fx,
     doing: u32,
     kind: u8,
+    /// How much longer what it is doing goes on for. Visible: it is the
+    /// animation's phase, and a player who has seen a recovery twice knows
+    /// roughly where the end of it is.
+    left: u16,
     toppled: bool,
     open: bool,
     alive: bool,
-    /// Whether any foot has gone. Visible: a broken one is drawn darker, and
-    /// the animal limps.
-    lamed: bool,
+    /// The lowest surface on the animal you could stand on, right now. What a
+    /// player sees when they look at it: a shoulder down on the floor during
+    /// a stumble, the barrel of a creature on its side, the tail of a standing
+    /// one.
+    mount: Mount,
+    /// Where the ridge is, in the world. A rider who came up the shoulders
+    /// walks *back* to it and one who came up the tail walks forward, so it is
+    /// a place rather than a direction.
+    ridge: V3,
+}
+
+/// A surface on the creature and where it is.
+#[derive(Clone, Copy, Default)]
+struct Mount {
+    /// The middle of its top face, in the world.
+    spot: V3,
+    /// How high that face is off the floor.
+    top: Fx,
+}
+
+/// The middle of a part's top face, in the world.
+fn top_of(rig: &sim::beast::Rig, part: usize) -> V3 {
+    let sh = monster::shape(part);
+    let mid = sh.min.add(sh.max).scale(HALF);
+    rig.part_to_world(part, V3::new(mid.x, sh.max.y, mid.z))
+}
+
+/// The lowest mountable face on the animal as it stands this frame.
+fn lowest_mount(beast: &Monster) -> Mount {
+    let rig = beast.rig();
+    let mut best = Mount {
+        spot: beast.pos,
+        top: Fx::MAX,
+    };
+    for part in 0..monster::PARTS {
+        if !sim::beast::SHAPES[part].mountable {
+            continue;
+        }
+        let spot = top_of(&rig, part);
+        if spot.y.raw() < best.top.raw() {
+            best = Mount { spot, top: spot.y };
+        }
+    }
+    best
 }
 
 /// What the hunter is trying to do. Committing to an intent for a while is what
@@ -92,6 +137,11 @@ pub struct Hunter {
     /// the side of a tail that sits at one and three quarters. Committing to a
     /// number of frames is what a person does without thinking about it.
     leap_left: u16,
+    /// How high its own full hop goes. A player knows this about themselves
+    /// -- it is the first thing anybody learns in a game with a jump -- and it
+    /// is what decides which of the creature's surfaces are a route and which
+    /// are a wall. Measured by jumping, in `play`, rather than typed.
+    hop: Fx,
 }
 
 impl Hunter {
@@ -106,7 +156,14 @@ impl Hunter {
             cooldown: 0,
             dodge_left: 0,
             leap_left: 0,
+            hop: Fx::ZERO,
         }
+    }
+
+    /// Tell it how high it can jump. See `hop`.
+    pub fn knowing_hop(mut self, hop: Fx) -> Hunter {
+        self.hop = hop;
+        self
     }
 
     /// Record this frame. Called before `act`, every tick, so the delay line
@@ -118,10 +175,12 @@ impl Hunter {
                 beast_yaw: b.yaw,
                 doing: b.doing.tag(),
                 kind: b.doing.attacking().unwrap_or(monster::NO_PART),
+                left: b.doing.frames_left(),
                 toppled: matches!(b.doing, Doing::Toppled { .. }),
                 open: b.doing.open(),
                 alive: b.alive(),
-                lamed: monster::BREAKABLE.iter().any(|p| b.broken(*p)),
+                mount: lowest_mount(b),
+                ridge: top_of(&b.rig(), monster::RIDGE),
             },
             None => Seen::default(),
         };
@@ -184,7 +243,16 @@ fn hind_foot(seen: Seen, right: bool) -> V3 {
 /// which a fighter on the floor can reach anything at all -- the creature's
 /// barrel is three metres over their head and its feet are the one part of it
 /// at ground level.
-const FLANK: Fx = Fx::ratio(44, 100);
+///
+/// **Since the back kick, beside the hind leg rather than behind it.** About
+/// a hundred and twelve degrees round: inside the sweep's cone and just
+/// outside the kick's. The kick's tell is twenty-two frames and a poke is
+/// twenty, so a hunter standing where the kick is aimed cannot both attack
+/// and be sure of answering it -- which is the kick doing its job, and the
+/// reason the station moved. From the flank the one threat is the tail, whose
+/// tell is long enough to see over a poke. Dead astern used to be outside
+/// every cone the creature had, which a player found and named a safe spot.
+const FLANK: Fx = Fx::ratio(31, 100);
 /// Far enough round that the tail is closer than the head. The climb only
 /// starts from here, and it is deliberately just inside the station above: a
 /// threshold the hunter's own resting position does not meet is a threshold
@@ -196,33 +264,59 @@ const BEHIND: Fx = Fx::ratio(22, 100);
 /// back on long legs, so its barrel is three metres over a fighter's head and
 /// the only thing a person on the floor can reach is a leg. Standing further
 /// out is standing where nothing can be hit, which is what this was doing.
-const HOLD: Fx = Fx::ratio(32, 10);
-/// Close enough for a poke to touch a leg.
-const STRIKE: Fx = Fx::ratio(38, 10);
+const HOLD: Fx = Fx::ratio(30, 10);
+/// How far past the poke's own reach a foot's centre may be and still be
+/// touched: about a foot's half-width. What "close enough to swing" means,
+/// and it is read off the move rather than typed because a poke thrown from
+/// a metre past its reach is a poke thrown at air, which is what most of the
+/// bot's swings were when this was a round number.
+const FOOT_HALF: Fx = Fx::ratio(5, 10);
 /// Do not bother correcting for less than this.
 const SETTLED: Fx = Fx::ratio(7, 10);
 /// Once it decides to climb, it keeps trying for this long.
 const CLIMB_COMMIT: u16 = 150;
-/// Jump for the tail from here.
-const TAIL_LEAP: Fx = Fx::ratio(24, 10);
-/// Frames to hold the jump for, climbing. **All of one.** The tail base sits
-/// twenty centimetres inside a full hop's apex, so anything less bounces off
-/// the side of it -- which is the climb being a real jump rather than a step,
-/// and is deliberate. See `cargo run -p sim --bin beastcheck`.
+/// Jump for the surface from here.
+const MOUNT_LEAP: Fx = Fx::ratio(24, 10);
+/// Frames to hold the jump for, climbing. **All of one.** A route is a
+/// surface inside a full hop's apex and often not by much, so anything less
+/// bounces off the side of it -- which is the climb being a real jump rather
+/// than a step, and is deliberate. See `cargo run -p sim --bin beastcheck`.
 const LEAP_HOLD: u16 = 32;
-/// Frames to hold the jump for, going over a tail sweep. Enough to clear a
-/// hitbox a metre and a half off the floor, and no more: every frame past that
-/// is a frame spent in the air over an animal that has moved on.
-const SWEEP_HOP: u16 = 11;
+/// How far inside its own apex a surface has to be before it is a route.
+/// Landing snaps to a face within `mount_snap` of the feet, so this is a
+/// margin against the animal moving, not against the geometry.
+const ROUTE_MARGIN: Fx = Fx::ratio(15, 100);
+/// Frames to hold the jump for, going over a tail sweep. Enough to put the
+/// *feet* well over a hitbox a metre and a half off the floor for the whole
+/// of the whip -- the sweep is eight frames wide and the feet are what it
+/// measures -- and no more: every frame past that is a frame spent in the
+/// air over an animal that has moved on.
+const SWEEP_HOP: u16 = 16;
 /// Frames to hold the jump for, going over a shake. Long enough to clear the
 /// whole whip, which is the only reason jumping one works.
 const BUCK_HOP: u16 = 22;
-/// Where on the ridge it stands to hit it, in the barrel's own frame.
-const WORK_SPOT: Fx = Fx::ratio(4, 10);
+/// How far behind the ridge's middle it stands to hit it: on the barrel,
+/// swinging forward at the strip.
+const WORK_BACK: Fx = Fx::ratio(6, 10);
 /// Stick deadzone when turning a direction into four keys.
 const DEAD: Fx = Fx::ratio(3, 10);
+/// Frames between attacks in a window it can see is safe -- a recovery with
+/// more frames left than a poke and its own reaction put together. Nothing
+/// can start inside one, so there is nothing to watch for, and a person
+/// unloads.
+const SWING_GAP_OPEN: u16 = 8;
 /// Frames between attacks, so it does not mash into its own recovery.
-const SWING_GAP: u16 = 6;
+///
+/// **Wider than the recovery.** A poke is twenty frames of not being able to
+/// jump, and the sweep's tell is thirty-six; a bot that pokes the moment it
+/// can is committed for most of every window it has to read the tail in,
+/// and got swept about one time in two. Poking, then watching, then poking
+/// is what a person does at the feet of something with a tail.
+const SWING_GAP: u16 = 28;
+/// Far enough from the station to be worth a dash rather than a walk. The
+/// animal turns at a rate that moves the station about as fast as a walk, so
+/// a hunter who only walked never quite arrived behind it.
+const DASH_FROM: Fx = Fx::ratio(45, 10);
 
 fn turns_to_aim(turns: Fx) -> u16 {
     (turns.raw() as u32 & 0xFFFF) as u16
@@ -264,6 +358,7 @@ fn bucks(kind: u8) -> bool {
 /// hunter's delay line keeps -- it remembers what it saw, not the enum.
 const STARTUP: u32 = 1;
 const ACTIVE: u32 = 2;
+const STUMBLE: u32 = 7;
 
 impl Hunter {
     /// One frame of decision. `watch` must have been called first.
@@ -271,9 +366,16 @@ impl Hunter {
         self.cooldown = self.cooldown.saturating_sub(1);
         self.climb_left = self.climb_left.saturating_sub(1);
         self.dodge_left = self.dodge_left.saturating_sub(1);
-        self.leap_left = self.leap_left.saturating_sub(1);
-
         let me = w.players[self.who];
+        // A jump it has decided on is held until it happens. The button does
+        // nothing while a swing is finishing, and a bot that counted the hold
+        // down from the decision rather than from the takeoff spent half of
+        // every sweep's hop still on the floor -- which is a person mashing
+        // jump inside a recovery and getting the short hop when it comes out.
+        if !me.grounded || me.aboard() || me.action.actionable() {
+            self.leap_left = self.leap_left.saturating_sub(1);
+        }
+
         let (Some(beast), true) = (w.monster, me.health > 0) else {
             return Input::default();
         };
@@ -285,6 +387,13 @@ impl Hunter {
         // the live mount. Everything about the *creature* comes from the delay
         // line.
         if me.aboard() {
+            // A hop decided on the ground is spent once the feet are on the
+            // animal: landing on it *was* the hop. Left running, the same
+            // held button is the ride's "leave", and the bot stepped straight
+            // back off every surface it had just reached.
+            if self.intent != Intent::Brace {
+                self.leap_left = 0;
+            }
             self.ride(&me, seen)
         } else {
             self.ground(&me, &beast, seen)
@@ -344,45 +453,42 @@ impl Hunter {
             return Input::aimed(steer(aim, out) | Input::SHIFT, wire);
         }
 
-        // 2. Take the free window if there is one worth taking. A toppled
-        //    animal is worth climbing; an ordinary recovery from behind is too.
-        // **Break a leg first.** The back is out of a standing jump, so the
-        // ordinary way up is the tail -- a hop with about twenty centimetres in
-        // it, taken beside an animal that is turning. Breaking a foot puts the
-        // creature on its knee for two seconds and drops that whole corner for
-        // the rest of the fight, which turns the climb from a gamble into a
-        // walk-up. So the plan is: work a leg until one goes, then ride.
+        // 2. Climb, if there is anything to climb. **A route is a surface
+        //    inside its own jump**, and which surfaces those are is the whole
+        //    ground game: standing, nothing on the animal is -- except for the
+        //    floatiest class, whose hop clears the tail -- so the way up is a
+        //    shoulder on the floor during a stumble, the barrel of a creature
+        //    on its side, or the slam's crash, and every one of those has to be
+        //    earned or read. The bot does what the design says a player does:
+        //    it works a hind foot until one goes, and goes up when the animal
+        //    comes down.
         //
-        // A creature already on the ground is worth climbing whatever else is
-        // true -- a topple is the window, and refusing it to go on hitting a
-        // foot would be a bot following a plan rather than playing.
-        // Losing the ground game is its own reason to go up: the back is out of
-        // reach of everything the animal throws, so a hunter who is running out
-        // of health climbs whether or not the plan said to.
-        let hurting = me.health * 2 < sim::tuning::max_health();
-        let worth_climbing = seen.toppled
-            || ((seen.lamed || hurting)
-                && seen.open
-                && bearing.abs().raw() > BEHIND.raw()
-                && range.raw() < Fx::from_int(9).raw());
+        // The old plan jumped for the tail and nothing else, which was the
+        // free route for most of the roster while the tail drooped to within
+        // a hop of the floor. With the tail carried level it is a wall, and a
+        // bot that kept jumping at it stood under a rearing animal for the
+        // rest of every fight.
+        let route = seen.mount.top.add(ROUTE_MARGIN).raw() < self.hop.raw();
+        let worth_climbing = route
+            && (seen.toppled
+                || seen.doing == STUMBLE
+                || (seen.open && bearing.abs().raw() > BEHIND.raw()))
+            && range.raw() < Fx::from_int(12).raw();
         if worth_climbing && self.climb_left == 0 {
             self.climb_left = CLIMB_COMMIT;
+        }
+        // A window that has closed is not worth running at. A toppled animal
+        // stays a route until it is up; a stumble's shoulder comes back up on
+        // its own, and the bot sees that happen.
+        if self.climb_left > 0 && !route {
+            self.climb_left = 0;
         }
 
         if self.climb_left > 0 {
             self.intent = Intent::Climb;
-            // The tail, reconstructed the way a player eyeballs it: from where
-            // the animal was and which way it was pointed.
-            let tail = monster::shape(monster::TAIL_BASE);
-            let mid = tail.min.add(tail.max).scale(HALF);
-            let along = V3::from_turns(seen.beast_yaw);
-            let side = V3::from_turns(seen.beast_yaw.add(QUARTER));
-            let spot = seen
-                .beast_pos
-                .add(along.scale(mid.x))
-                .add(side.scale(mid.z));
+            let spot = seen.mount.spot;
             let to_spot = V3::new(spot.x.sub(me.pos.x), Fx::ZERO, spot.z.sub(me.pos.z));
-            if to_spot.flat_len().raw() < TAIL_LEAP.raw() && me.grounded && self.leap_left == 0 {
+            if to_spot.flat_len().raw() < MOUNT_LEAP.raw() && me.grounded && self.leap_left == 0 {
                 self.leap_left = LEAP_HOLD;
             }
             let jump = if self.leap_left > 0 { Input::SPACE } else { 0 };
@@ -399,8 +505,19 @@ impl Hunter {
             .beast_pos
             .add(V3::from_turns(seen.beast_yaw.add(this_side)).scale(HOLD));
         let to_station = V3::new(station.x.sub(me.pos.x), Fx::ZERO, station.z.sub(me.pos.z));
-        let walk = if to_station.flat_len().raw() > SETTLED.raw() {
+        let far = to_station.flat_len();
+        let walk = if far.raw() > SETTLED.raw() {
             steer(aim, to_station)
+        } else {
+            0
+        };
+        // A dash to get round it. The dodge is the fastest thing a fighter
+        // has, and getting behind an animal that turns to keep you in front
+        // of it is what it is for on the ground. Not while something is
+        // coming, and not twice in a row -- the same gate the evade uses.
+        let dash = if far.raw() > DASH_FROM.raw() && self.dodge_left == 0 && !threatened {
+            self.dodge_left = sim::tuning::dodge_frames();
+            Input::SHIFT
         } else {
             0
         };
@@ -412,11 +529,23 @@ impl Hunter {
         let at_foot = atan2_turns(to_foot.z, to_foot.x);
         let wire = turns_to_aim(at_foot.sub(me.carry_yaw));
         let range = to_foot.flat_len();
-        let swing = if self.cooldown == 0 && range.raw() < STRIKE.raw() && !threatened {
-            self.cooldown = SWING_GAP;
+        let strike = sim::moves::get(me.class, sim::state::SLOT_POKE)
+            .reach
+            .add(FOOT_HALF);
+        let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
+        let poke_busy = (poke.startup + poke.active + poke.recovery) as usize + REACTION;
+        let safe = seen.open && seen.left as usize > poke_busy;
+        let swing = if self.cooldown == 0 && range.raw() < strike.raw() && !threatened {
+            self.cooldown = if safe { SWING_GAP_OPEN } else { SWING_GAP };
             // Nothing to punish means a poke; a real opening is worth the slow
-            // one, which is what makes an opening worth having.
-            if seen.open {
+            // one, which is what makes an opening worth having. **Only into a
+            // window that will still be open when the swing lands**, though:
+            // the bot sees the opening fifteen frames late, and a hammer
+            // started into the last third of a recovery is a hammer the next
+            // move lands on. That was most of how it died once the creature
+            // stopped pausing between moves.
+            let fits = seen.left as usize > heavy_commitment(me.class) + REACTION;
+            if seen.open && fits {
                 heavy(me.class)
             } else {
                 Input::LEFT
@@ -427,7 +556,7 @@ impl Hunter {
         // A hop in progress keeps its button down -- height is what it is for --
         // without that costing the swing it was going to throw.
         let hop = if self.leap_left > 0 { Input::SPACE } else { 0 };
-        Input::aimed(walk | swing | hop, wire)
+        Input::aimed(walk | dash | swing | hop, wire)
     }
 
     fn ride(&mut self, me: &sim::state::Player, seen: Seen) -> Input {
@@ -472,11 +601,24 @@ impl Hunter {
             }
         }
 
-        let dx = WORK_SPOT.sub(me.local.x);
-        let dz = me.local.z.neg();
-        if dx.abs().raw() > Fx::ratio(4, 10).raw() || dz.abs().raw() > Fx::ratio(5, 10).raw() {
+        // To the ridge, wherever it is from here. The old version walked to a
+        // spot in the barrel's own frame, which is forward from the tail and
+        // *also* forward from the shoulders -- so a rider who had come up a
+        // stumbling shoulder walked off the animal's front.
+        let to_ridge = V3::new(
+            seen.ridge.x.sub(me.pos.x),
+            Fx::ZERO,
+            seen.ridge.z.sub(me.pos.z),
+        );
+        let along_it = to_ridge.dot(along);
+        let across_it = to_ridge.dot(side);
+        if along_it.sub(WORK_BACK).abs().raw() > Fx::ratio(4, 10).raw()
+            || across_it.abs().raw() > Fx::ratio(5, 10).raw()
+        {
             self.intent = Intent::ToRidge;
-            let want = along.scale(dx).add(side.scale(dz));
+            let want = along
+                .scale(along_it.sub(WORK_BACK))
+                .add(side.scale(across_it));
             return Input::aimed(steer(aim, want), wire);
         }
 
@@ -511,6 +653,33 @@ fn heavy(class: sim::Class) -> u16 {
     }
 }
 
+/// How long the committed attack keeps the hunter busy: the frames until it is
+/// free to move again. What an opening has to be longer than to be worth it.
+fn heavy_commitment(class: sim::Class) -> usize {
+    let m = sim::moves::get(class, sim::state::SLOT_COMMITTED);
+    (m.startup + m.active + m.recovery) as usize
+}
+
+/// Apex of a full hop above the feet, for one class.
+///
+/// Measured by running the simulation, the way `beastcheck` does, because the
+/// sustain window makes the closed form wrong -- and the number is what
+/// decides which of the creature's surfaces the hunter treats as a route.
+fn jump_apex(class: sim::Class) -> Fx {
+    let mut w = World::with_classes([class; MAX_PLAYERS]);
+    for _ in 0..40 {
+        w.advance([Input::default(); MAX_PLAYERS]);
+    }
+    let floor = w.players[0].pos.y;
+    let mut best = floor;
+    let held = Input::default().with(Input::SPACE);
+    for _ in 0..240 {
+        w.advance([held, Input::default()]);
+        best = best.max(w.players[0].pos.y);
+    }
+    best.sub(floor)
+}
+
 /// Run a whole hunt and hand back the report.
 ///
 /// One hunter and one idle second fighter by default: the numbers are set for a
@@ -526,7 +695,9 @@ pub fn play(classes: [sim::Class; MAX_PLAYERS], partners: usize, limit: u32, see
         beast.brain.rng = seed | 1;
     }
     let count = partners.clamp(1, MAX_PLAYERS);
-    let mut bots: Vec<Hunter> = (0..count).map(Hunter::new).collect();
+    let mut bots: Vec<Hunter> = (0..count)
+        .map(|who| Hunter::new(who).knowing_hop(jump_apex(classes[who])))
+        .collect();
     // A fighter nobody is driving is not a fighter standing very still: it is a
     // target the creature will happily charge across the arena at for twenty
     // minutes, which is what the first long run of this harness actually

@@ -99,7 +99,173 @@ pub fn clips() -> Vec<Recipe> {
         sweep(),
         punch(Clip::DualLight, Arm::Light),
         dark_lance(),
+        float(),
+        drift(),
     ]
+}
+
+// ---------------------------------------------------------------------------
+// Off the floor
+// ---------------------------------------------------------------------------
+//
+// **The one class in the game whose locomotion has two states.** With the
+// lower of her two bars at three quarters, or ascended, her feet leave the
+// ground -- `sim::state::floating` -- and these two replace the idle and the
+// walk for as long as that holds. It is the same tier the second jump and the
+// slow fall arrive on, which is why the three share one threshold.
+//
+// The reference is a renaissance angel rather than a superhero: **the body
+// hangs**. Feet pointed and together-ish, knees softly bent rather than
+// straight, hips carried a little high and a little back so the legs trail, the
+// spine long, the arms low and open with the palms turned out. Nothing is
+// braced against anything, because there is nothing to brace against -- which
+// is also why these are the only two clips in this file on `FLOATY` rather than
+// on a martial looseness.
+//
+// The wings are not here. They are geometry rather than bones -- a pool of
+// pieces the renderer hangs off the chest and colours by the force she is
+// carrying, `game::main` -- for the same reason the Reaver's blades are: a
+// skeleton has sixteen joints and none of them are a wing.
+
+/// The hanging body both clips are built on.
+///
+/// Authored once so the idle and the travelling version cannot drift apart at
+/// the join: `play::grounded` cross-fades between them the moment she starts
+/// moving, and two separately-authored hangs would pop through each other.
+fn hanging() -> Pose {
+    Pose::rest()
+        // Up, and the toes are what is nearest the floor. A bent knee shortens
+        // the leg by more than a pointed foot lengthens it, so this lands the
+        // feet at about the height they would be standing -- she reads as
+        // hovering rather than as sunk into the ground or stilted above it.
+        .hips(0.0, 0.035, -0.02)
+        .root(-3.0, 0.0, 0.0)
+        .spine(-4.0, 0.0, 0.0)
+        .chest(-3.0, 0.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+        // Low and open, palms out. The idle's guard is up and bladed; this is
+        // the opposite reading, and it has to be, because the point of the
+        // silhouette is that she has stopped standing like a fighter.
+        .shoulder_l(-8.0, 26.0, -14.0)
+        .elbow_l(16.0)
+        .wrist_l(-14.0, 0.0, 0.0)
+        .shoulder_r(-8.0, 26.0, 14.0)
+        .elbow_r(16.0)
+        .wrist_r(-14.0, 0.0, 0.0)
+        // Trailing, not standing. Both legs behind the hips, knees soft, toes
+        // dropped hard -- the pointed foot is most of what says "not walking".
+        .hips_both(-14.0, 3.0, 0.0)
+        .knees(22.0)
+        .ankles(42.0, 0.0, 0.0)
+}
+
+/// Holding still, off the floor.
+///
+/// Two clocks against each other, the way the idle does it: a long rise and
+/// fall of the whole body, and a slower sway across it. A hover on one period
+/// reads as a machine, and this is the pose a player will look at for whole
+/// seconds at a time -- it is the reward, so it is the thing they are looking
+/// at when they get it.
+fn float() -> Recipe {
+    let up = hanging()
+        .hips(0.0, 0.075, -0.02)
+        .head(6.0, 0.0, 0.0)
+        .shoulder_l(-12.0, 29.0, -14.0)
+        .shoulder_r(-12.0, 29.0, 14.0)
+        .knees(17.0)
+        .ankles(46.0, 0.0, 0.0);
+
+    let sway_left = hanging()
+        .hips(-0.028, 0.05, -0.02)
+        .root(-3.0, -4.0, -6.0)
+        .spine(-4.0, 3.0, 0.0)
+        .head(4.0, 2.0, 5.0)
+        .hip_l(-11.0, 4.0, 0.0)
+        .hip_r(-18.0, 2.0, 0.0);
+
+    let sway_right = hanging()
+        .hips(0.028, 0.05, -0.02)
+        .root(-3.0, 4.0, 6.0)
+        .spine(-4.0, -3.0, 0.0)
+        .head(4.0, -2.0, -5.0)
+        .hip_l(-18.0, 2.0, 0.0)
+        .hip_r(-11.0, 4.0, 0.0);
+
+    Recipe {
+        clip: Clip::DualFloat,
+        looseness: Looseness::FLOATY,
+        notes: "Deep or ascended and holding still. A rise and fall every \
+                seventy frames against a sway every hundred and forty, so the \
+                loop never lands in the same place twice -- the idle's trick, \
+                for the same reason. Feet pointed throughout: the moment a \
+                heel drops she is standing again."
+            .into(),
+        keys: vec![
+            Key::eased(0, hanging(), Ease::SMOOTH),
+            Key::eased(35, up, Ease::SMOOTH),
+            Key::eased(70, sway_left, Ease::SMOOTH),
+            Key::eased(105, up.blend(&sway_right, 0.5), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// Travelling, off the floor.
+///
+/// **No cycle in the legs at all**, which is the whole difference from the walk
+/// it replaces. A stride is a sequence of contacts and there are no contacts
+/// here, so what carries the motion is the torso leading and the legs trailing
+/// behind it -- and the only thing that repeats is the body's own slow roll.
+///
+/// It is sampled by the stride phase like the walk cycles are, which means it
+/// speeds up as she does. That is wrong for feet and right for this: the faster
+/// she goes the harder the trail, and a phase that came from a clock instead
+/// would have the legs swinging at the same rate at every speed.
+fn drift() -> Recipe {
+    let lead = hanging()
+        .hips(0.0, 0.03, -0.06)
+        .root(-11.0, 0.0, 0.0)
+        .spine(-6.0, 0.0, 0.0)
+        .chest(-4.0, 0.0, 0.0)
+        .head(9.0, 0.0, 0.0)
+        // Arms swept back by the travel. Not thrown back -- trailing.
+        .shoulder_l(-22.0, 22.0, -10.0)
+        .shoulder_r(-22.0, 22.0, 10.0)
+        .hips_both(-24.0, 4.0, 0.0)
+        .knees(26.0)
+        .ankles(46.0, 0.0, 0.0);
+
+    let roll_left = lead
+        .root(-11.0, -5.0, -7.0)
+        .spine(-6.0, 3.0, 0.0)
+        .hip_l(-20.0, 6.0, 0.0)
+        .hip_r(-28.0, 2.0, 0.0)
+        .knee_l(21.0)
+        .knee_r(30.0);
+
+    let roll_right = lead
+        .root(-11.0, 5.0, 7.0)
+        .spine(-6.0, -3.0, 0.0)
+        .hip_l(-28.0, 2.0, 0.0)
+        .hip_r(-20.0, 6.0, 0.0)
+        .knee_l(30.0)
+        .knee_r(21.0);
+
+    Recipe {
+        clip: Clip::DualDrift,
+        looseness: Looseness::FLOATY,
+        notes: "Travelling, off the floor. The torso leads and everything else \
+                trails it; there is no stride, because a stride is a sequence \
+                of contacts and nothing here touches the ground. The only \
+                cycle is a slow roll, and it runs on the stride phase so it \
+                hardens as she picks up speed."
+            .into(),
+        keys: vec![
+            Key::eased(0, lead, Ease::SMOOTH),
+            Key::eased(24, roll_left, Ease::SMOOTH),
+            Key::eased(48, lead, Ease::SMOOTH),
+            Key::eased(72, roll_right, Ease::SMOOTH),
+        ],
+    }
 }
 
 /// Which arm a punch is thrown with.

@@ -683,6 +683,86 @@ pub fn clear_between(from: V3, to: V3, scene: &Scene) -> bool {
         })
 }
 
+/// Where a **blink** ends: `reach` along the flat of `dir` from `from`, or
+/// short of that, against the first thing solid in the way.
+///
+/// The Dual mage's dodge at the first tier is the ordinary dodge with the
+/// travelling taken out: she is put where it would have ended, on its first
+/// frame. Where that is has to be decided here for the same reason the dash
+/// to the shadow is -- it is a body being sent somewhere, and the answer to
+/// "is anything in the way" is ray-against-shape work that belongs in one
+/// place. Bodies are not on the line, as ever: a blink passes through a
+/// fighter to the spot behind them, and it is the arena and the stones that
+/// stop it.
+///
+/// **Stricter than [`clear_between`], on purpose.** The dash goes wherever the
+/// shadow is, up included, so a way through for any part of the body is a way
+/// through; that is why one clear line out of four is enough there. A blink
+/// goes along the floor, to a spot at her own height, and a low platform her
+/// head would clear is still a wall to her feet -- so she stops where the
+/// **first** of the four corner lines meets something, less her own radius, and
+/// arrives against the obstacle rather than inside it or on top of it.
+pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
+    let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
+    if reach.raw() <= 0 {
+        return from;
+    }
+    let to = from.add(flat.scale(reach));
+    let sole = arena::SKIN;
+    let crown = t::body_height().sub(arena::SKIN);
+    // The share of the way each line gets before it is stopped, as a fraction
+    // of its own length -- which is the same fraction of the flat distance,
+    // because all four share one horizontal projection.
+    let mut share = Fx::ONE;
+    for (lift_a, lift_b) in [(sole, sole), (sole, crown), (crown, sole), (crown, crown)] {
+        let a = V3::new(from.x, from.y.add(lift_a), from.z);
+        let b = V3::new(to.x, to.y.add(lift_b), to.z);
+        if let Some(along) = first_solid_between(a, b, scene) {
+            share = share.min(along);
+        }
+    }
+    if share.raw() >= Fx::ONE.raw() {
+        return to;
+    }
+    let short = reach
+        .mul(share)
+        .sub(t::body_radius().add(arena::SKIN))
+        .max(Fx::ZERO);
+    from.add(flat.scale(short))
+}
+
+/// Where along one line, as a share of its length, the first solid is -- or
+/// `None` if nothing solid crosses it before the far end.
+fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
+    let span = b.sub(a);
+    let reach = span.len();
+    if reach.raw() <= 0 {
+        return None;
+    }
+    let dir = span.normalized();
+    let mut nearest: Option<Fx> = None;
+    let mut consider = |hit: Option<Fx>| {
+        if let Some(d) = hit {
+            if d.raw() < reach.raw() && nearest.is_none_or(|n| d.raw() < n.raw()) {
+                nearest = Some(d);
+            }
+        }
+    };
+    for solid in arena::SOLIDS.iter() {
+        consider(crate::math::ray_hits_box(a, dir, solid.min, solid.max));
+    }
+    for stone in scene.stones.iter().flatten() {
+        consider(crate::math::ray_hits_cylinder(
+            a,
+            dir,
+            stone.at,
+            t::structure_radius(),
+            stone.standing_height(),
+        ));
+    }
+    nearest.map(|d| d.div(reach))
+}
+
 /// One line of [`clear_between`], against the terrain and the structures on it.
 ///
 /// The ground plane is not consulted: every surface a body can stand on is at
@@ -756,6 +836,99 @@ pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field) -> V3 {
     settle(pos.add(flat.scale(ahead)), stones)
 }
 
+/// Which way the Reaver's shadow, **out on the field**, throws its copy of
+/// her swing: flat, at the nearest body inside `reach` -- or `None`, and it
+/// keeps her yaw.
+///
+/// Not a fifth line of effect either. The copy is still a [`Kind::Swing`] and
+/// keeps everything about hers but the yaw: the pitch she committed to, the
+/// shape, the frames. What this answers is the one thing a copy thrown from
+/// somewhere else cannot take from her -- which way is *forward* over there.
+/// With her yaw, a copy six metres away was a quarter-damage arc pointed
+/// wherever her shoulders happened to be, and landed only on somebody standing
+/// at exactly her offset from it. See `docs/design/shadow-reaver-v2.md`.
+///
+/// "In reach" is the copied move's own reach from the shadow's feet to the
+/// nearest edge of a body, plus `tuning::shadow_aim_slack`. A fighter counts
+/// by the edge of their column; the creature by the nearest point of whichever
+/// part of it is closest to the height the swing leaves at, so a shadow standing at a Ridgeback's flank cuts the
+/// flank rather than turning to face the middle of the animal. The owner is
+/// never a candidate, nor anybody already down, and `fighters` is false in a
+/// hunt -- the copy cannot hurt a partner, so it does not turn to one.
+///
+/// Here rather than beside the shadow because it is a decision about where
+/// something goes, and the alternative -- a yaw to the nearest body worked out
+/// in `shadow.rs` -- is the thing this file exists to stop.
+pub fn shadow_faces(
+    from: V3,
+    owner: usize,
+    reach: Fx,
+    fighters: bool,
+    scene: &Scene,
+) -> Option<V3> {
+    if !t::shadow_aims() {
+        return None;
+    }
+    let limit = reach.add(t::shadow_aim_slack());
+    let mut best: Option<(V3, Fx)> = None;
+    let mut consider = |at: V3, gap: Fx| {
+        if gap.raw() <= limit.raw() && best.is_none_or(|(_, seen)| gap.raw() < seen.raw()) {
+            best = Some((at, gap));
+        }
+    };
+    for (i, body) in scene.players.iter().enumerate() {
+        if !fighters || i == owner || body.health <= 0 {
+            continue;
+        }
+        let gap = body.pos.sub(from).flat_len().sub(t::body_radius());
+        consider(body.pos, gap);
+    }
+    // From the height the swing leaves at, and in three dimensions: a part
+    // overhead is not in reach however close its footprint is.
+    if let Some(beast) = scene.quarry.filter(|b| b.alive()) {
+        let hub = origin(from);
+        let at = beast.nearest_to(hub);
+        consider(at, crate::math::big_len(at.sub(hub)));
+    }
+    let (at, _) = best?;
+    let flat = V3::new(at.x.sub(from.x), Fx::ZERO, at.z.sub(from.z));
+    if flat.flat_len().raw() <= 0 {
+        return None;
+    }
+    Some(flat.normalized())
+}
+
+/// Her swing's line, **thrown from the shadow** at `at` and turned onto
+/// `facing`.
+///
+/// The copy keeps her line: where along her body it leaves, how far it goes,
+/// the pitch it goes at. Only two things change, which place it starts from
+/// and which way is forward. Turned rather than recomputed, because the pitch
+/// on her path is what she committed to when she threw the move, and a copy
+/// that re-read the camera would be a second swing rather than a copy of hers.
+///
+/// With `facing` equal to her own this is a plain translation, which is what an
+/// attending shadow gets -- it is at her heel copying her, not fighting on its
+/// own.
+pub fn copied_swing(path: Path, her_pos: V3, her_facing: V3, at: V3, facing: V3) -> Path {
+    let turn = |p: V3| {
+        let v = p.sub(her_pos);
+        // Her frame: along her facing, and across it. Then the same two
+        // amounts along the new facing and across that. No angles, so no
+        // trigonometry and nothing to round differently on two machines.
+        let across_hers = V3::new(her_facing.z.neg(), Fx::ZERO, her_facing.x);
+        let across_new = V3::new(facing.z.neg(), Fx::ZERO, facing.x);
+        let along = V3::new(v.x, Fx::ZERO, v.z).dot(her_facing);
+        let side = V3::new(v.x, Fx::ZERO, v.z).dot(across_hers);
+        let flat = facing.scale(along).add(across_new.scale(side));
+        at.add(V3::new(flat.x, v.y, flat.z))
+    };
+    Path {
+        from: turn(path.from),
+        to: turn(path.to),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // What a path runs into
 // ---------------------------------------------------------------------------
@@ -771,6 +944,17 @@ pub struct Targets {
     pub stones: bool,
     pub fire: bool,
     pub quarry: bool,
+    /// The arena itself -- walls, the sides and tops of platforms.
+    ///
+    /// **Off for every ability that existed before 2026-09-17**, and that is
+    /// not an oversight being preserved: the crosshair's ray already stops on
+    /// terrain ([`sight`]), so a shot is aimed at a point the geometry allows
+    /// and asking a second time along its own path would only ever agree. What
+    /// wants this is an ability asking *whether there is something to pull on*,
+    /// which is a question about the anchor rather than about the flight -- the
+    /// Blood mage's Grasp, and her blink looking for the wall it must not go
+    /// through.
+    pub terrain: bool,
 }
 
 impl Targets {
@@ -780,7 +964,13 @@ impl Targets {
             stones: false,
             fire: false,
             quarry: false,
+            terrain: false,
         }
+    }
+
+    pub const fn terrain(mut self) -> Targets {
+        self.terrain = true;
+        self
     }
 
     pub const fn fighters(mut self, yes: bool) -> Targets {
@@ -807,10 +997,26 @@ impl Targets {
 /// What a travelling ability meets, and how far along its path it sits.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Contact {
-    Fighter { index: usize, dist: Fx },
-    Stone { index: usize, dist: Fx },
-    Fire { dist: Fx },
-    Quarry { part: usize, dist: Fx },
+    Fighter {
+        index: usize,
+        dist: Fx,
+    },
+    Stone {
+        index: usize,
+        dist: Fx,
+    },
+    Fire {
+        dist: Fx,
+    },
+    Quarry {
+        part: usize,
+        dist: Fx,
+    },
+    /// A wall, or the side or top of a platform. Only ever reported when
+    /// [`Targets::terrain`] asked for it.
+    Terrain {
+        dist: Fx,
+    },
 }
 
 impl Contact {
@@ -819,8 +1025,22 @@ impl Contact {
             Contact::Fighter { dist, .. }
             | Contact::Stone { dist, .. }
             | Contact::Fire { dist }
-            | Contact::Quarry { dist, .. } => dist,
+            | Contact::Quarry { dist, .. }
+            | Contact::Terrain { dist } => dist,
         }
+    }
+
+    /// Is this something a thrown rope could hold on to?
+    ///
+    /// Terrain, a structure and the creature are anchors; a fighter and a fire
+    /// are not -- one of them moves and the other is not there. It is a
+    /// question about the world rather than about the Blood mage, so it is
+    /// answered here beside the enum rather than beside her ability.
+    pub fn is_an_anchor(self) -> bool {
+        matches!(
+            self,
+            Contact::Terrain { .. } | Contact::Stone { .. } | Contact::Quarry { .. }
+        )
     }
 }
 
@@ -904,6 +1124,19 @@ pub fn first_along(
             .and_then(|b| b.part_struck_along(from, dir, limit, girth))
         {
             keep(Contact::Quarry { part, dist });
+        }
+    }
+    if targets.terrain {
+        // The blockout's own boxes, grown by the travelling thing's girth in
+        // all three axes -- the same trick the stones use, so "do these two
+        // volumes touch" stays one ray against one shape.
+        let fat = V3::new(girth, girth, girth);
+        for solid in arena::SOLIDS.iter() {
+            if let Some(dist) =
+                crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
+            {
+                keep(Contact::Terrain { dist });
+            }
         }
     }
     best

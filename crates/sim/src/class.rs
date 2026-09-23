@@ -6,6 +6,7 @@
 
 use crate::fixed::Fx;
 use crate::math::V3;
+use crate::oven::{self, AirField};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Class {
@@ -50,39 +51,31 @@ pub struct Mobility {
     pub air_speed: Fx,
 }
 
-const fn mobility(
-    jump: (i32, i32),
-    gravity: (i32, i32),
-    fall: (i32, i32),
-    air: (i32, i32),
-) -> Mobility {
-    Mobility {
-        jump: Fx::ratio(jump.0, jump.1),
-        gravity: Fx::ratio(gravity.0, gravity.1),
-        fall_cap: Fx::ratio(fall.0, fall.1),
-        air_speed: Fx::ratio(air.0, air.1),
-    }
-}
-
 impl Class {
-    /// Air stats. The numbers are guesses; the *spread* is the design.
-    pub const fn mobility(self) -> Mobility {
-        match self {
-            // Heavy. Low jump, falls hard, barely steers. Committing to the air
-            // should be a real decision for the class whose whole identity is
-            // holding ground.
-            Class::Bulwark => mobility((88, 100), (118, 100), (115, 100), (9, 10)),
-            // Middleweight baseline. Everything else is read against this.
-            Class::Champion => mobility((1, 1), (1, 1), (1, 1), (12, 10)),
-            // The most mobile thing in the air, which is what a class built on
-            // repositioning should be.
-            Class::ShadowReaver => mobility((110, 100), (92, 100), (95, 100), (17, 10)),
-            // Floats, but steers poorly: a caster in the air is committed to
-            // where the jump was going to take them.
-            Class::Elementalist => mobility((105, 100), (85, 100), (88, 100), (10, 10)),
-            Class::BloodMage => mobility((1, 1), (98, 100), (1, 1), (13, 10)),
-            // The floatiest. Long hang time is the trade for being fragile.
-            Class::DualMage => mobility((112, 100), (80, 100), (85, 100), (14, 10)),
+    /// Air stats, read straight off the Oven's per-class table.
+    ///
+    /// The numbers are guesses; the *spread* is the design. Bulwark is heavy:
+    /// low jump, falls hard, barely steers, because committing to the air
+    /// should be a real decision for the class whose whole identity is holding
+    /// ground. Champion is the middleweight baseline everything else is read
+    /// against. The Shadow Reaver is the most mobile thing in the air, which is
+    /// what a class built on repositioning should be. The Elementalist floats
+    /// but steers poorly: a caster in the air is committed to where the jump
+    /// was going to take her. The Dual mage is the floatiest, and long hang
+    /// time is the trade for being fragile.
+    ///
+    /// **This was a `const fn` full of literals until 2026-09-17, and the Oven
+    /// had a per-class air table nobody read.** Those knobs were editable,
+    /// bakeable and folded into the tuning hash, and dragging one did exactly
+    /// nothing — the silent disagreement `crates/sim/tests/knobs.rs` exists to
+    /// catch, wearing its other face. The table is the only copy now.
+    pub fn mobility(self) -> Mobility {
+        let raw = |f: AirField| Fx::from_raw(oven::air(self, f));
+        Mobility {
+            jump: raw(AirField::Jump),
+            gravity: raw(AirField::Gravity),
+            fall_cap: raw(AirField::FallCap),
+            air_speed: raw(AirField::AirSpeed),
         }
     }
 
@@ -159,9 +152,13 @@ impl Class {
             // and is not nothing: one click of the other button changes it, and
             // the bar says which one she is in from the first frame.
             Class::DualMage => Mechanic::Meter {
-                value: 0,
+                dark: Fx::ZERO,
+                light: Fx::ZERO,
                 colour: Force::Dark,
                 ascending: 0,
+                jumped: false,
+                landed: 0,
+                singe: Fx::ZERO,
             },
         }
     }
@@ -306,6 +303,11 @@ pub struct Shadow {
     /// of throwing it on the floor. Pressing early keeps more, so the tech has
     /// a gradient rather than a pass mark -- see `tuning::shadow_carry`.
     pub carry: u16,
+    /// What a jump out of the carry takes with it, flat: a share of the
+    /// dash's own velocity, banked on arrival. The dash itself stops dead on
+    /// the shadow -- see `shadow::step_her_dash` -- so this is the only place
+    /// the crossing's speed survives, and it survives only into the jump.
+    pub lunge: V3,
 }
 
 /// [`Shadow::echo`] when the shadow is not repeating anything.
@@ -348,6 +350,7 @@ impl Shadow {
             echo_used: false,
             dash: 0,
             carry: 0,
+            lunge: V3::ZERO,
         }
     }
 
@@ -447,10 +450,10 @@ pub struct Structure {
 // Dual mage
 // ---------------------------------------------------------------------------
 
-// The meter runs from deep Dark to deep Light, with zero at the centre: most
-// options, least power. Its range, the depth at which finishers unlock and the
-// burn starts, and how hard it burns are all in the Oven -- see
-// `tuning::meter_max`, `meter_deep` and `meter_burn`.
+// Two bars, Dark and Light, each from empty to `tuning::meter_max`, and a hill
+// between them: inside a band nothing moves, outside it the higher rises, the
+// lower falls and she burns. The lower bar gates what her body can do. All of
+// it is in `crate::dual`, and every number in it is in the Oven.
 
 // ---------------------------------------------------------------------------
 
@@ -520,17 +523,25 @@ pub enum Mechanic {
     Structures([Option<Structure>; MAX_STRUCTURES]),
     /// Health is the resource, so there is no extra state to carry.
     Blood,
-    /// The Dual mage: where she sits between the two forces, which of them she
-    /// is currently *in*, and whether she has been driven off the end of the
-    /// bar. See [`Force`] and `docs/design/dual-mage.md`.
+    /// The Dual mage: **two bars**, one per force, the force she is carrying,
+    /// and whether the two of them have taken her. See [`Force`],
+    /// `crate::dual` and `docs/design/dual-mage.md`.
+    ///
+    /// The bars are fixed point rather than a count because the hill between
+    /// them moves them a fraction of a unit a frame: the drift and the calm are
+    /// rates per second, and a bar that could only move a whole unit at a time
+    /// would either sit still or lurch.
     Meter {
-        value: i32,
+        /// The Dark bar, from zero to `tuning::meter_max`.
+        dark: Fx,
+        /// The Light bar, the same.
+        light: Fx,
         /// Which force she is carrying, set by the last auto she **threw**.
         ///
-        /// It is not the same question as which side of the bar she is on, and
-        /// that is the point: she can be deep in the dark and still light,
-        /// having just thrown one light auto, and her casts are light until she
-        /// throws a dark one.
+        /// It is not the same question as which bar is higher, and that is the
+        /// point: she can be deep in the dark and still light, having just
+        /// thrown one light auto, and her casts are light until she throws a
+        /// dark one.
         ///
         /// **Always one of the two, never neither.** A vessel holding two
         /// forces is holding one of them at any moment, and the alternative --
@@ -538,9 +549,22 @@ pub enum Mechanic {
         /// direction to push in and the first key a player pressed in a match
         /// did nothing at all.
         colour: Force,
-        /// Frames of ascension left. Non-zero means the bar was driven to an
-        /// end and she is burning through it on a clock.
+        /// Frames of ascension left. Non-zero means both bars were goaded to
+        /// the top together, the wings are out, and she is burning through it
+        /// on a clock.
         ascending: u16,
+        /// The second jump has been spent this airtime. Reset on landing, and
+        /// never consulted while ascending, when every press is a wing beat.
+        jumped: bool,
+        /// Hits landed during this ascension. What the stagger on the way out
+        /// is graduated by -- see `crate::dual::end_ascension`.
+        landed: u16,
+        /// The fraction of a health point the burn owes and has not yet taken.
+        ///
+        /// The burn is a rate per second small enough that a frame's worth is
+        /// less than one health, and health is a whole number; this carries the
+        /// remainder forward so a slow burn is slow rather than nothing.
+        singe: Fx,
     },
 }
 
@@ -563,12 +587,11 @@ impl Force {
         }
     }
 
-    /// Which way along the bar this force pulls: dark is negative, light
-    /// positive, and the bar's centre is zero.
-    pub const fn along(self) -> i32 {
+    /// The other one.
+    pub const fn other(self) -> Force {
         match self {
-            Force::Dark => -1,
-            Force::Light => 1,
+            Force::Dark => Force::Light,
+            Force::Light => Force::Dark,
         }
     }
 }
@@ -607,8 +630,15 @@ pub mod alloc_free {
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub enum Summary {
         Text(&'static str),
-        /// A label and a number, e.g. meter position.
+        /// A label and a number, e.g. how many structures stand.
         Value(&'static str, i32),
+        /// The Dual mage's two bars, in whole units, and the tier the lower
+        /// one holds -- an empty string for none.
+        Bars {
+            dark: i32,
+            light: i32,
+            tier: &'static str,
+        },
     }
 
     impl Summary {
@@ -663,12 +693,19 @@ pub mod alloc_free {
                 ),
                 Mechanic::Blood => Summary::Text("blood"),
                 Mechanic::Meter {
-                    value, ascending, ..
+                    dark,
+                    light,
+                    ascending,
+                    ..
                 } => {
                     if *ascending > 0 {
                         Summary::Text("ASCENDED")
                     } else {
-                        Summary::Value("meter", *value)
+                        Summary::Bars {
+                            dark: dark.to_int(),
+                            light: light.to_int(),
+                            tier: crate::dual::tier_of_bar((*dark).min(*light)).name(),
+                        }
                     }
                 }
             }
