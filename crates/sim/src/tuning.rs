@@ -1345,6 +1345,44 @@ pub fn grey_damage() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GreyDamage))
 }
 
+/// What the scythe's hit volume's radius is multiplied by at a full bar of
+/// grey. The weapon is drawn at one size; the extra is drawn as essence, the
+/// life force doing the swinging. A wider volume is an easier collection of
+/// the pools it passes over, which is what rewards staying grey and pressing.
+pub fn grey_width() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GreyWidth))
+}
+
+/// How many frames the Haemorrhage's bolt takes to cross its reach.
+pub fn haemorrhage_flight() -> u16 {
+    oven::scalar(Scalar::HaemorrhageFlight) as u16
+}
+
+/// The bolt's radius. Wider than the Bloodletter's blade on purpose: it is
+/// the *easier* thing in a kit where everything else can miss.
+pub fn haemorrhage_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::HaemorrhageRadius))
+}
+
+/// How long a bleed runs, in frames.
+pub fn bleed_lasts() -> u16 {
+    oven::scalar(Scalar::BleedLasts) as u16
+}
+
+/// How often a bleed ticks, in frames. Each tick spills a pool under the
+/// victim, so this is also how far apart the trail's pools are for a victim
+/// walking away: at twelve frames and a walk of seven a second the pools land
+/// under a metre and a half apart, inside a bare spike's eruption, so a spike
+/// on one end of the trail runs the length of it.
+pub fn bleed_tick() -> u16 {
+    oven::scalar(Scalar::BleedTick).max(1) as u16
+}
+
+/// What each tick of a bleed takes.
+pub fn bleed_damage() -> i32 {
+    oven::scalar(Scalar::BleedDamage)
+}
+
 /// Where the sweep's **tip** begins, as a share of the blade's live reach.
 ///
 /// The one piece of execution in the auto: the outer part of the blade hits

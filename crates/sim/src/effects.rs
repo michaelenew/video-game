@@ -88,6 +88,13 @@ pub enum EffectKind {
     /// Blood mage. Four arms thrown out in a cone that arc back inward to meet
     /// at the far end. Caught by all four and you are rooted.
     Grasp,
+    /// Blood mage. A bolt straight out along the crosshair, spent on the first
+    /// body it reaches: a cut, and a **bleed** -- see `state::Player::bleeding`
+    /// -- whose every tick spills a pool under the victim wherever they have
+    /// got to. The easier thing to land in a kit where everything can miss,
+    /// and what marks somebody as the target: a trail of pools behind them is
+    /// a spike's chain pointed at them.
+    Haemorrhage,
     /// Shadow Reaver. Six blades that erupt from the shadow along curving
     /// paths, hang at full extension, and then chase the shadow home -- cutting
     /// on the way out and again on the way back.
@@ -200,6 +207,7 @@ impl EffectKind {
             EffectKind::BlackSpike => "black spike",
             EffectKind::Bloodletter => "bloodletter",
             EffectKind::Grasp => "grasp",
+            EffectKind::Haemorrhage => "haemorrhage",
             EffectKind::GuillotineLotus => "guillotine lotus",
             EffectKind::LanceBurst => "lance burst",
             EffectKind::Tether => "tether",
@@ -224,7 +232,7 @@ impl EffectKind {
             // Both of these are thrown *through* the air along the line the
             // player is looking, so the crosshair means a direction rather than
             // a place on the floor.
-            EffectKind::Bloodletter | EffectKind::Grasp => false,
+            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::Haemorrhage => false,
             // Neither. It erupts at the shadow, wherever the shadow happens to
             // be standing -- which is the fourth line of effect, and the only
             // move in the game that uses it. See `aim::mechanic_path`.
@@ -253,7 +261,10 @@ impl EffectKind {
     pub const fn travels(self) -> bool {
         matches!(
             self,
-            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::Tether
+            EffectKind::Bloodletter
+                | EffectKind::Grasp
+                | EffectKind::Tether
+                | EffectKind::Haemorrhage
         )
     }
 
@@ -306,6 +317,7 @@ impl EffectKind {
             // Listed so the numbering is complete; no move's row says it. A
             // pool is what a hit leaves, not what a cast places.
             9 => Some(EffectKind::Pool),
+            10 => Some(EffectKind::Haemorrhage),
             _ => None,
         }
     }
@@ -325,6 +337,7 @@ impl EffectKind {
             EffectKind::BlackSpike => t::spike_erupt(),
             EffectKind::Bloodletter => t::bloodletter_flight(),
             EffectKind::Grasp => t::grasp_flight(),
+            EffectKind::Haemorrhage => t::haemorrhage_flight(),
             // Out, held open, and home again. Three knobs rather than one
             // because they are three different decisions: how fast it opens is
             // spectacle, how long it hangs is how much time the victim has to
@@ -357,7 +370,10 @@ impl EffectKind {
         match self {
             EffectKind::FirePillar | EffectKind::FireTornado => t::pillar_damage(),
             EffectKind::BlackSpike => m.damage,
-            EffectKind::Bloodletter | EffectKind::Grasp | EffectKind::GuillotineLotus => m.damage,
+            EffectKind::Bloodletter
+            | EffectKind::Grasp
+            | EffectKind::GuillotineLotus
+            | EffectKind::Haemorrhage => m.damage,
             // All three of the Dual mage's carry a number of their own, for the
             // same reason a pillar does: the move that threw them hit on its
             // own and the two are not the same event. The light Lance's line is
@@ -646,6 +662,7 @@ impl Effect {
             EffectKind::FirePillar | EffectKind::FireTornado => self.pillar_volumes().0.radius,
             EffectKind::Bloodletter => t::bloodletter_radius(),
             EffectKind::Grasp => t::grasp_arm_radius(),
+            EffectKind::Haemorrhage => t::haemorrhage_radius(),
             EffectKind::GuillotineLotus => t::lotus_blade_radius(),
             EffectKind::LanceBurst => t::lance_burst_radius(),
             // How thick the thrown line is, read off the move's own row -- the
@@ -714,6 +731,13 @@ impl Effect {
         } else {
             crate::math::lerp3(apex, self.home, p.sub(half).mul(Fx::from_int(2)))
         }
+    }
+
+    /// Where the Haemorrhage's bolt is this frame: straight out along the line
+    /// it was thrown, its whole reach over its whole life.
+    pub fn bolt_at(&self) -> V3 {
+        self.pos
+            .add(self.dir.scale(self.reach.mul(self.progress())))
     }
 
     /// Where one arm of a Grasp is this frame.

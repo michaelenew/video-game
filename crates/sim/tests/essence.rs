@@ -117,7 +117,7 @@ fn every_hit_she_lands_spills_a_pool_under_the_target() {
 #[test]
 fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
     let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     let life_of = |volume: i32| -> (Fx, u32) {
         let mut w = mage();
         w.effects[0] = Some(Effect::pool(
@@ -137,18 +137,18 @@ fn a_pools_size_and_life_are_monotone_in_the_damage_that_made_it() {
         panic!("a pool of {volume} never drained");
     };
     let (small_r, small_life) = life_of(sweep.damage);
-    let (big_r, big_life) = life_of(reap.damage);
+    let (big_r, big_life) = life_of(spike.damage);
     assert!(
         big_r.raw() > small_r.raw(),
-        "a Reap's pool is no wider than a sweep's"
+        "a spike's pool is no wider than a sweep's"
     );
-    // A Reap's pool outlives a sweep's by at least the ratio of their damage:
+    // A spike's pool outlives a sweep's by at least the ratio of their damage:
     // the drain is a rate, so life is volume over rate.
     assert!(
-        big_life * sweep.damage as u32 >= small_life * reap.damage as u32,
-        "a Reap's pool lives {big_life}f and a sweep's {small_life}f, against a \
+        big_life * sweep.damage as u32 >= small_life * spike.damage as u32,
+        "a spike's pool lives {big_life}f and a sweep's {small_life}f, against a \
          damage ratio of {}:{}",
-        reap.damage,
+        spike.damage,
         sweep.damage
     );
 }
@@ -277,20 +277,20 @@ fn a_move_landed_over_a_pool_drinks_its_share_and_the_pool_is_gone() {
     wounded(&mut w, 300);
     let at = w.players[1].pos;
     w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     let before = w.players[0].health;
-    let paid = w.players[0].cost_of(reap.cost);
-    run(&mut w, 2, Input::RIGHT, 0);
-    run(&mut w, reap.startup as u32 + 4, 0, 0);
+    let paid = w.players[0].cost_of(sweep.cost);
+    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, sweep.startup as u32 + 4, 0, 0);
     let got = w.players[0].health - (before - paid);
-    let expect = reap.drinks(200);
+    let expect = sweep.drinks(200);
     assert!(
         got >= expect - 4 && got <= expect,
-        "the Reap drank {got} of a pool of 200 at {}%",
-        reap.drink
+        "the sweep drank {got} of a pool of 200 at {}%",
+        sweep.drink
     );
     // One and done: the pool she drank is gone. What is on the floor now is
-    // only what the Reap spilled after it, which is a fresh, smaller figure.
+    // only what the sweep spilled after it, which is a fresh, smaller figure.
     let dealt = t::max_health() - w.players[1].health;
     let left = pools(&w);
     assert_eq!(
@@ -317,14 +317,14 @@ fn a_drink_is_capped_by_grey_and_the_pool_is_spent_regardless() {
     in_reach(&mut w);
     let at = w.players[1].pos;
     w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, 200));
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     // At full health the only grey she has is the cast's own cost, less what
     // faded during the wind-up.
-    run(&mut w, 2, Input::RIGHT, 0);
-    run(&mut w, reap.startup as u32 + 4, 0, 0);
+    run(&mut w, 2, Input::LEFT, 0);
+    run(&mut w, sweep.startup as u32 + 4, 0, 0);
     assert!(
         w.players[0].health <= t::max_health()
-            && w.players[0].health >= t::max_health() - t::max_health() * reap.cost / 100,
+            && w.players[0].health >= t::max_health() - t::max_health() * sweep.cost / 100,
         "she healed past the top of the bar, or not to it: {}",
         w.players[0].health
     );
@@ -349,13 +349,13 @@ fn a_hit_on_bare_floor_returns_nothing_on_the_frame_it_lands() {
     let mut w = mage();
     in_reach(&mut w);
     wounded(&mut w, 300);
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
-    run(&mut w, 2, Input::RIGHT, 0);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+    run(&mut w, 2, Input::LEFT, 0);
     let paid = w.players[0].health;
-    run(&mut w, reap.startup as u32 + 4, 0, 0);
+    run(&mut w, sweep.startup as u32 + 4, 0, 0);
     assert!(
         w.players[1].health < t::max_health(),
-        "fixture: the Reap missed"
+        "fixture: the sweep missed"
     );
     assert_eq!(w.players[0].health, paid, "a hit on bare floor healed her");
     assert_eq!(pools(&w).len(), 1, "and it left no pool for the next one");
@@ -401,11 +401,7 @@ fn a_blood_mage_ability_landed_over_a_pool_returns_more_than_it_cost() {
     // and landed over a pool of its own making it returns more than it cost.
     // The first cast makes the pool; the second, thrown as soon as she is
     // free, is the one measured.
-    let cases = [
-        (b::SWEEP, Input::LEFT),
-        (b::REAP, Input::RIGHT),
-        (b::BLOODLETTER, Input::MIDDLE),
-    ];
+    let cases = [(b::SWEEP, Input::LEFT), (b::BLOODLETTER, Input::MIDDLE)];
     for (slot, button) in cases {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut w = mage();

@@ -38,14 +38,16 @@ fn main() {
     pool_table();
     drink_table();
     grey_over_time();
+    bleed_table();
     against_the_creature();
 
     println!(
         "A pool's volume is the damage that made it and its life is that volume over the\n\
-         drain rate, so a Reap's pool outlives a sweep's by their damage ratio. A drink is\n\
+         drain rate, so a spike's pool outlives a sweep's by their damage ratio. A drink is\n\
          the move's share of the pool, converted out of grey and never past it; grey is the\n\
-         ceiling on every heal she has. Reach is the sweep's base times the grey curve, and\n\
-         the blade is drawn at exactly that. Record what you change in docs/design/feel-log.md."
+         ceiling on every heal she has. Reach and width are the sweep's row times the grey\n\
+         curves, drawn as essence around a weapon of one size. Record what you change in\n\
+         docs/design/feel-log.md."
     );
 }
 
@@ -142,7 +144,7 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
 fn kit() -> [(u8, u16); 5] {
     [
         (b::SWEEP, Input::LEFT),
-        (b::REAP, Input::RIGHT),
+        (b::HAEMORRHAGE, Input::RIGHT),
         (b::BLOODLETTER, Input::MIDDLE),
         (b::GRASP, Input::SPECIAL),
         (b::BLACK_SPIKE, Input::MECHANIC),
@@ -186,13 +188,12 @@ fn cast(w: &mut World, slot: u8, button: u16) -> Option<Effect> {
 // ---------------------------------------------------------------------------
 
 fn reach_table() {
-    println!("Reach: the scythe at each level of grey");
+    println!("Reach: the sweep's volume at each level of grey (the weapon is drawn at one size)");
     println!(
         "  {:>6}{:>10}{:>10}{:>10}",
-        "grey", "sweep", "reap", "damage x"
+        "grey", "reach m", "radius m", "damage x"
     );
     let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
     for grey in [0, 250, 500, 750, t::max_health() - 1] {
         let mut p = sim::state::Player::new(Class::BloodMage);
         p.health = t::max_health() - grey;
@@ -202,7 +203,7 @@ fn reach_table() {
             "  {:>6}{:>10}{:>10}{:>10}",
             grey,
             tenths(sim::state::live_reach(&p, &sweep)),
-            tenths(sim::state::live_reach(&p, &reap)),
+            hundredths(sim::state::live_radius(&p, &sweep)),
             hundredths(power),
         );
     }
@@ -254,10 +255,9 @@ fn pool_table() {
 }
 
 fn drink_table() {
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
-    let volume = reap.damage;
+    let volume = t::pool_full();
     println!(
-        "Drinks: each move landed on the dummy standing in a pool of {volume} (a Reap's), with 500 grey open. \
+        "Drinks: each move landed on the dummy standing in a pool of {volume} (a full-sized one), with 500 grey open. \
          A drink takes what is left and the pool is gone"
     );
     println!(
@@ -293,7 +293,8 @@ fn grey_over_time() {
         "frame", "red", "grey", "gone"
     );
     let mut w = mage();
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
     let bash = sim::moves::get(Class::Bulwark, sim::state::SLOT_POKE);
     let log = |w: &World, event: &str| {
         let p = w.players[0];
@@ -308,9 +309,9 @@ fn grey_over_time() {
     log(&w, "start");
     // Far from the dummy, so the cast opens a wound and nothing else.
     w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-    run(&mut w, 2, Input::RIGHT, 0);
-    log(&w, "Reap cast at nothing: opened by a cost");
-    run(&mut w, reap.whiff_cost() as u32, 0, 0);
+    run(&mut w, 2, Input::MECHANIC, 0);
+    log(&w, "Spike cast at nothing: opened by a cost");
+    run(&mut w, spike.whiff_cost() as u32, 0, 0);
     log(&w, "recovered");
     // The dummy walks up and bashes her twice.
     w.players[1].pos = w.players[0].pos.add(V3::new(
@@ -334,21 +335,102 @@ fn grey_over_time() {
         run(&mut w, 60, 0, 0);
         log(&w, "a second of fading");
     }
-    // A pool under the dummy, and a Reap over it.
+    // A pool under the dummy, and a sweep over it.
     in_reach(&mut w);
     let at = w.players[1].pos;
-    w.effects[0] = Some(Effect::pool(0, Class::BloodMage, b::SWEEP, at, reap.damage));
-    run(&mut w, 2, Input::RIGHT, 0);
-    log(&w, "Reap cast over a pool: opened by a cost");
-    run(&mut w, reap.startup as u32 + 4, 0, 0);
-    log(&w, "Reap landed over the pool: reclaimed");
+    w.effects[0] = Some(Effect::pool(
+        0,
+        Class::BloodMage,
+        b::SWEEP,
+        at,
+        t::pool_full(),
+    ));
+    run(&mut w, 2, Input::LEFT, 0);
+    log(&w, "Sweep cast over a pool: opened by a cost");
+    run(&mut w, sweep.startup as u32 + 4, 0, 0);
+    log(&w, "Sweep landed over the pool: reclaimed");
+    println!();
+}
+
+fn bleed_table() {
+    let m = sim::moves::get(Class::BloodMage, b::HAEMORRHAGE);
+    println!(
+        "Haemorrhage: the bolt on the dummy, and the bleed after it -- {} frames, a tick every {} of {} -- \
+         standing still and walking away. The trail is read half way through the bleed",
+        t::bleed_lasts(),
+        t::bleed_tick(),
+        t::bleed_damage()
+    );
+    println!(
+        "  {:<14}{:>8}{:>8}{:>8}{:>10}{:>10}{:>10}",
+        "dummy", "bolt", "bled", "ticks", "trail", "stride m", "at end"
+    );
+    for (name, walking) in [("standing", 0), ("walking", Input::A)] {
+        let mut w = mage();
+        // Half the bolt's reach away.
+        w.players[1].pos = V3::new(m.reach.mul(Fx::ratio(1, 2)), Fx::ZERO, Fx::ZERO);
+        let full = w.players[1].health;
+        // A tick is a drop of exactly the tick's damage; the bolt is the rest.
+        let mut ticks = 0;
+        let mut was = full;
+        let mut count_ticks = |health: i32, ticks: &mut i32| {
+            if health < was && was - health == t::bleed_damage() {
+                *ticks += 1;
+            }
+            was = health;
+        };
+        // Thrown by hand rather than through `cast`, which runs on past the
+        // landing and would fold the first ticks into the bolt.
+        let pitch = pitch_at(&w, b::HAEMORRHAGE, w.players[1].pos);
+        looking(&mut w, 2, Input::RIGHT, pitch, 0);
+        for _ in 0..m.startup as u32 + t::haemorrhage_flight() as u32 + 2 {
+            looking(&mut w, 1, 0, pitch, 0);
+            count_ticks(w.players[1].health, &mut ticks);
+        }
+        // The cut's own pool is cleared, so what is read is the bleed's trail.
+        for slot in w.effects.iter_mut() {
+            if slot.is_some_and(|e| e.is_a_pool()) {
+                *slot = None;
+            }
+        }
+        let mut trail = 0;
+        let mut stride = Fx::ZERO;
+        for frame in 0..t::bleed_lasts() as u32 + 2 {
+            run(&mut w, 1, 0, walking);
+            count_ticks(w.players[1].health, &mut ticks);
+            if frame == t::bleed_lasts() as u32 / 2 {
+                let mut along: Vec<Fx> = pools(&w).iter().map(|p| p.pos.z).collect();
+                along.sort_by_key(|z| z.raw());
+                trail = along.len();
+                for pair in along.windows(2) {
+                    stride = stride.max(pair[1].sub(pair[0]));
+                }
+            }
+        }
+        let total = full - w.players[1].health;
+        let bled = ticks * t::bleed_damage();
+        println!(
+            "  {:<14}{:>8}{:>8}{:>8}{:>10}{:>10}{:>10}",
+            name,
+            total - bled,
+            bled,
+            ticks,
+            trail,
+            tenths(stride),
+            pools(&w).len()
+        );
+    }
+    println!(
+        "  (the bolt's radius is {} m against the blade's {} m; it costs {}% and drinks nothing)",
+        hundredths(t::haemorrhage_radius()),
+        hundredths(t::bloodletter_radius()),
+        m.cost
+    );
     println!();
 }
 
 fn against_the_creature() {
-    println!(
-        "Against the creature: the pool under a Ridgeback swept standing and toppled, and Reaped toppled"
-    );
+    println!("Against the creature: the pool under a Ridgeback swept standing and toppled");
     println!(
         "  {:<18}{:>8}{:>8}{:>10}",
         "state", "dealt", "volume", "radius m"
@@ -356,7 +438,6 @@ fn against_the_creature() {
     for (name, toppled, slot, button) in [
         ("swept, standing", false, b::SWEEP, Input::LEFT),
         ("swept, toppled", true, b::SWEEP, Input::LEFT),
-        ("Reaped, toppled", true, b::REAP, Input::RIGHT),
     ] {
         let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
         let mut beast = w.monster.expect("a hunt has a creature");

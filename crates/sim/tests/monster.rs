@@ -849,7 +849,7 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
     // the claw lands on the *same part* in both states -- the hide's
     // vulnerability differs part to part, and comparing two different parts
     // would say nothing about the rule.
-    let claw = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    let claw = sim::moves::get(Class::BloodMage, sim::moves::blood::SWEEP);
     let still = |doing: Doing| {
         let mut w = parked();
         let mut beast = w.monster.expect("a hunt has a creature");
@@ -861,25 +861,13 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
     let up = Doing::Prowl;
     let over = Doing::Toppled { left: 400 };
 
-    let part_at = |w: &World, x: Fx| {
-        w.monster.expect("a hunt has a creature").part_struck(
-            V3::new(x.add(claw.reach), Fx::ZERO, Fx::ZERO),
-            claw.radius,
-            sim::tuning::body_height(),
-        )
-    };
-    let stand_at = (-80..0)
-        .map(|tenth| Fx::ratio(tenth, 10))
-        .find(|x| {
-            let a = part_at(&still(up), *x);
-            a.is_some() && a == part_at(&still(over), *x)
-        })
-        .expect("nowhere reaches the same part whether it is up or down");
-
-    let hit = |doing: Doing| {
+    // One sweep from `x` at a creature held still in `doing`: what it took
+    // off the whole, and which part it landed on. Found by swinging rather
+    // than by modelling the volume here -- the sweep is a level capsule at
+    // its own height, and the creature's own test is the only honest one.
+    let swing = |doing: Doing, x: Fx| -> (i32, Option<usize>) {
         let mut w = still(doing);
-        w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
-        let before = beast_health(&w);
+        let was = w.monster.expect("a hunt has a creature");
         for f in 0..(claw.startup + claw.active + 4) {
             // Held down, and held still: the creature would otherwise stand up,
             // walk off, or decide to bite.
@@ -888,15 +876,24 @@ fn a_blood_mage_hits_a_toppled_creature_harder() {
             beast.pos = V3::ZERO;
             beast.speed = Fx::ZERO;
             w.monster = Some(beast);
-            w.players[0].pos = V3::new(stand_at, Fx::ZERO, Fx::ZERO);
-            let held = if f < 2 { Input::SHIFT | Input::LEFT } else { 0 };
+            w.players[0].pos = V3::new(x, Fx::ZERO, Fx::ZERO);
+            let held = if f < 2 { Input::LEFT } else { 0 };
             w.advance([Input::new(held), Input::default()]);
         }
-        before - beast_health(&w)
+        let now = w.monster.expect("a hunt has a creature");
+        let part = (0..now.part_health.len()).find(|&i| now.part_health[i] < was.part_health[i]);
+        (was.health - now.health, part)
     };
+    let stand_at = (-80..0)
+        .map(|tenth| Fx::ratio(tenth, 10))
+        .find(|x| {
+            let (_, a) = swing(up, *x);
+            a.is_some() && a == swing(over, *x).1
+        })
+        .expect("nowhere reaches the same part whether it is up or down");
 
-    let standing = hit(up);
-    let floored = hit(over);
+    let (standing, _) = swing(up, stand_at);
+    let (floored, _) = swing(over, stand_at);
     assert!(standing > 0, "fixture: the claw never reached the creature");
     assert!(
         floored > standing,

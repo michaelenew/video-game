@@ -1,5 +1,5 @@
 ---
-status: built 2026-09-23 — v1 kit, unplayed
+status: built 2026-09-23 — v1 kit, unplayed; right click is the Haemorrhage since the same day, not the Reap this proposes (see kits/blood-mage.md)
 decided: 2026-09-23
 built: 2026-09-23, along plans/blood-mage-v1.md; what is in the game is kits/blood-mage.md
 sources: docs/archive/combat-design/blood-mage-skills.md, kits/blood-mage.md, this design thread

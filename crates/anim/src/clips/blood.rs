@@ -1,4 +1,4 @@
-//! The Blood mage: Reaping sweep, Reap, Bloodletter, Grasp, Black spike.
+//! The Blood mage: Reaping sweep, Haemorrhage, Bloodletter, Grasp, Black spike.
 //!
 //! ## What the class fights like
 //!
@@ -12,8 +12,8 @@
 //! Three things carry it, and they are in every clip here:
 //!
 //! - **The recovery is heavier than the wind-up.** The frame data already says
-//!   so -- the Reap is twenty frames of startup against twenty-six of recovery
-//!   -- and the poses agree with it rather than fighting it. The lowest,
+//!   so -- the Haemorrhage is twelve frames of startup against eighteen of
+//!   recovery -- and the poses agree with it rather than fighting it. The lowest,
 //!   slowest, most folded frame of each of these clips is *after* the hit, not
 //!   before.
 //! - **A hand comes back to the ribs.** Every recovery in this file ends with
@@ -32,7 +32,7 @@
 //!
 //! ```text
 //!   Reaping sweep  both hands gathered off the left hip   -- across you
-//!   Reap           both hands climbing over the shoulder  -- down on you
+//!   Haemorrhage    one hand drawn in to the chest, palm out -- at you
 //!   Bloodletter    one hand drawn back low, behind the hip  -- past you
 //!   Grasp          the feet square and both arms opening    -- around you
 //!   Black spike    one hand climbing, one pointing low      -- at the floor
@@ -72,7 +72,7 @@
 //! ## Why the fast parts are LINEAR
 //!
 //! A shaped ease spends about half its travel in the middle of its span, so
-//! across the six frames of the Reap's fall or the eight of the spike's descent it
+//! across the eight frames of the Haemorrhage's thrust or the spike's descent it
 //! is worth half again as much motion in the worst frame as a straight line
 //! through the same two poses. That is the whole difference between a hand
 //! moving at the speed of a hand and a hand over the ceiling in
@@ -90,7 +90,13 @@ use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
 use view::skeleton::Joint;
 
 pub fn clips() -> Vec<Recipe> {
-    vec![bloodletter(), reap(), grasp(), black_spike(), sweep()]
+    vec![
+        bloodletter(),
+        haemorrhage(),
+        grasp(),
+        black_spike(),
+        sweep(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -249,7 +255,7 @@ fn bloodletter() -> Recipe {
                 caster, and a hand that finished in a fist would be claiming a \
                 threat that is ten metres away by then. The draw is LINEAR \
                 because five frames is not enough room to shape anything, and \
-                the same reasoning as the Reap applies to the release. The recovery \
+                the same reasoning as the sweep applies to the release. The recovery \
                 pays the class's usual bill -- hand to the ribs, chest shut over \
                 it -- and then comes back to the open palm of `ready`, which is \
                 the hand the blade is going to land in."
@@ -347,7 +353,8 @@ fn emptied() -> Pose {
 ///
 /// `lead` is the hand nearer the blade and `rear` the one at the butt of the
 /// pole; the right hand leads, because the sweep is drawn from the body's
-/// left across to its right and the Reap comes down over the right shoulder.
+/// left across to its right -- and the right hand is the one the scythe stands
+/// under at rest, so the left is free to throw and to cast.
 /// Character space: `+Z` forward, `+Y` up, the left hand at `-X`.
 ///
 /// Placed with the solver rather than keyed as angles, for the reason the
@@ -363,167 +370,96 @@ fn gripping(pose: Pose, lead: V3, rear: V3, cock: f32) -> Pose {
 }
 
 // ---------------------------------------------------------------------------
-// Reap
+// Haemorrhage
 // ---------------------------------------------------------------------------
 
-/// The scythe raised over the right shoulder and brought over and down.
+/// The bolt: one hand drawn in to the chest and thrust out flat, palm forward.
 ///
-/// The committed heavy, on right click, and the guard breaker: it is
-/// unblockable, so the whole of what it owes the opponent is the *time* --
-/// twenty frames of a blade being lifted, which is over the reaction threshold
-/// and is meant to be answered by stepping out from under it. The lift is
-/// therefore slow and held at the top, and the fall is fast and straight.
+/// The one thing in the kit meant to connect, on right click. Twelve frames
+/// of startup is under the reaction threshold, so, like the throw, it owes
+/// the opponent a shape rather than a telegraph -- and the shape is the
+/// opposite of the throw's: the hand comes **in** before it goes out, to the
+/// chest with the palm turned forward, where the Bloodletter's goes back and
+/// down behind the hip. Same arm, two directions, and an opponent who has
+/// learned one has learned the other.
 ///
-/// It replaced Rend on this row. Rend was a one-handed rake at chest range;
-/// this is both hands on a pole and the head of it a body-length out, so the
-/// clip shares nothing with the old one but its bill -- both hands drawn in
-/// against the ribs at the end, which is the class's punctuation.
+/// The thrust is LINEAR across its eight frames for the reason the sweep's
+/// crossing is: a shaped ease would put half the reach of an arm into one
+/// frame. The arm finishes straight and open -- the bolt is in the air and
+/// the hand has nothing in it -- and the recovery is the class's usual bill.
 ///
-/// The top of the wind-up goes *past the ear*, which the rest of this file
-/// refuses. It is the one overhead in the kit, and an overhead that stopped at
-/// the ear would be drawn coming down from a place the hit volume does not
-/// start from: the Reap's volume begins above the aim and finishes below it.
-fn reap() -> Recipe {
+/// It took the Reap's row, which took Rend's. The scythe stays standing
+/// under the other hand throughout: this is a spell, not a swing.
+fn haemorrhage() -> Recipe {
     let clip = Clip::BloodCommitted;
     let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
     let end = clip.length() - 1;
-    let lift = (contact * 3 / 10).max(2);
-    let top = (contact * 6 / 10).max(lift + 2);
-    let falling = (contact * 8 / 10).max(top + 1);
-    let paid = recover + (end - recover) * 2 / 5;
+    let gather = (contact * 2 / 5).max(2);
+    let paid = recover + (end - recover) / 3;
     let home = end.saturating_sub(3);
 
     Recipe {
         clip,
         looseness: Looseness::MARTIAL,
-        notes: "Twenty frames up, four across, twenty-six down. The lift is \
-                SMOOTH and the top is a HOLD, because the telegraph is a body \
-                stopped with a pole over its head; the fall is LINEAR, since a \
-                shaped ease across the six frames before contact puts half a \
-                metre of hand into one of them. Both hands stay on the haft \
-                the whole way -- the blade is hung off the grip by the \
-                renderer, at the reach the hit test uses, so a hand that left \
-                the pole would be a blade drawn from nowhere. The lowest frame \
-                is the first recovery frame: the weight finishes arriving after \
-                the blade has already landed, and the hands come back to the \
-                ribs from there."
+        notes: "Twelve frames in, three out, eighteen back. The gather is \
+                SMOOTH because it is small and has room; the thrust is LINEAR \
+                because eight frames is not enough room to shape a straight \
+                arm's worth of travel. The hand finishes open and forward, \
+                claiming nothing at the body -- the bolt is the threat and it \
+                has left -- and the recovery draws it back to the ribs."
             .into(),
         keys: vec![
             Key::eased(0, ready(), Ease::OUT),
-            Key::eased(lift, lifting(), Ease::SMOOTH),
-            Key::eased(top, raised(), Ease::HOLD),
-            // The fall is keyed half way as well as at the bottom: a straight
-            // blend from an arched back to a folded one moves the chest a
-            // hand's width in one frame, and the mid key is what keeps the
-            // torso inside what a torso can do while the hands still cover
-            // their whole arc.
-            Key::eased(falling, falling_blade(), Ease::LINEAR),
-            Key::eased(contact, reaped(), Ease::LINEAR),
-            Key::eased(recover, buried(), Ease::OUT),
+            Key::eased(gather, drawn_in(), Ease::SMOOTH),
+            Key::eased(contact, loosed(), Ease::LINEAR),
+            Key::eased(recover, emptied(), Ease::OUT),
             Key::eased(paid, spent(), Ease::SMOOTH),
             Key::eased(home, ready(), Ease::SMOOTH),
         ],
     }
 }
 
-/// Six frames in: the haft has come up to chest height and across, and the
-/// weight has started back onto the rear foot.
-fn lifting() -> Pose {
+/// The gather, a few frames in: the casting hand drawn in against the chest,
+/// palm turned forward, the elbow folded and the chest turned a little away
+/// behind it. The head stays on the line.
+fn drawn_in() -> Pose {
     footing(
-        gripping(
-            ready()
-                .hips(0.010, -0.070, -0.030)
-                .root(-2.0, 0.0, -14.0)
-                .spine(2.0, 0.0, -8.0)
-                .chest(-2.0, 0.0, -10.0)
-                .head(-4.0, 0.0, 14.0),
-            [0.26, 1.24, 0.10],
-            [-0.04, 0.96, 0.26],
-            -10.0,
-        ),
+        ready()
+            .hips(0.010, -0.088, -0.016)
+            .root(6.0, 0.0, -16.0)
+            .spine(12.0, 0.0, -8.0)
+            .chest(8.0, 0.0, -12.0)
+            .head(-10.0, 0.0, 16.0)
+            .shoulder_l(20.0, 30.0, -34.0)
+            .forearm_l(118.0, 24.0)
+            .wrist_l(-30.0, 10.0, 0.0)
+            .shoulder_r(-8.0, 10.0, -24.0)
+            .forearm_r(112.0, -18.0)
+            .wrist_r(-20.0, -8.0, 0.0),
         0.0,
-        0.012,
+        0.006,
     )
 }
 
-/// The top, held: both hands over the right shoulder, the back arched and the
-/// head up under the blade. This is the shape the opponent gets to leave.
-fn raised() -> Pose {
+/// The thrust, on the frame the bolt leaves: the arm straight out in front at
+/// chest height, the hand open with the palm forward, the chest turned in
+/// behind it and the weight on the front foot.
+fn loosed() -> Pose {
     footing(
-        gripping(
-            ready()
-                .hips(0.020, -0.040, -0.060)
-                .root(-8.0, 0.0, -18.0)
-                .spine(-10.0, 0.0, -6.0)
-                .chest(-8.0, 0.0, -8.0)
-                .head(6.0, 0.0, 12.0),
-            [0.30, 1.62, -0.24],
-            [0.06, 1.34, -0.02],
-            -18.0,
-        ),
+        ready()
+            .hips(-0.010, -0.100, 0.044)
+            .root(8.0, 0.0, 2.0)
+            .spine(12.0, 0.0, 10.0)
+            .chest(8.0, 0.0, 18.0)
+            .head(-6.0, 0.0, -4.0)
+            .shoulder_l(66.0, 8.0, 2.0)
+            .forearm_l(10.0, -4.0)
+            .wrist_l(20.0, -10.0, 0.0)
+            .shoulder_r(-6.0, 12.0, -22.0)
+            .forearm_r(108.0, -16.0)
+            .wrist_r(-18.0, -8.0, 0.0),
         0.0,
-        0.030,
-    )
-}
-
-/// Half way down: the hands have come over the top and are out in front at
-/// head height, the back through straight and starting to fold.
-fn falling_blade() -> Pose {
-    footing(
-        gripping(
-            ready()
-                .hips(0.006, -0.110, 0.000)
-                .root(4.0, 0.0, -10.0)
-                .spine(8.0, 0.0, -2.0)
-                .chest(2.0, 0.0, -2.0)
-                .head(-8.0, 0.0, 6.0),
-            [0.26, 1.30, 0.34],
-            [0.00, 1.02, 0.40],
-            -24.0,
-        ),
-        0.0,
-        0.036,
-    )
-}
-
-/// Contact: the pole brought over and down, both hands out in front at waist
-/// height, the body folded after it and the hips dropped. The head watches the
-/// place the blade lands.
-fn reaped() -> Pose {
-    footing(
-        gripping(
-            ready()
-                .hips(-0.006, -0.200, 0.050)
-                .root(16.0, 0.0, -2.0)
-                .spine(26.0, 0.0, 4.0)
-                .chest(12.0, 0.0, 6.0)
-                .head(-22.0, 0.0, -2.0),
-            [0.16, 0.72, 0.56],
-            [-0.12, 0.54, 0.66],
-            -30.0,
-        ),
-        0.0,
-        0.044,
-    )
-}
-
-/// The first recovery frame, and the lowest in the clip: the blade is in the
-/// floor, the hands have followed it down and the shoulders are over them.
-fn buried() -> Pose {
-    footing(
-        gripping(
-            ready()
-                .hips(-0.004, -0.250, 0.040)
-                .root(18.0, 0.0, -2.0)
-                .spine(30.0, 0.0, 4.0)
-                .chest(14.0, 0.0, 6.0)
-                .head(-26.0, 0.0, -2.0),
-            [0.16, 0.50, 0.58],
-            [-0.12, 0.34, 0.68],
-            -34.0,
-        ),
-        0.0,
-        0.044,
+        0.016,
     )
 }
 

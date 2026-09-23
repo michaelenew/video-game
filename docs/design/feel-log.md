@@ -4513,3 +4513,37 @@ floor for one press. It is bounded by the pools there are and by one-and-done, b
 a good Grasp-then-spike is a reward or a round is C3's question now.
 
 **Verdict** open. Unplayed since the change.
+
+### 2026-09-23 — Blood mage: the swing is essence, and right click is a bleed
+**Changed** Two things. The sweep's hit volume now grows in **width** with grey as well as
+reach — `Scythe width at full grey`, ×2 — and its damage curve went from ×1.3 to ×1.6 at a
+full bar. The weapon itself no longer grows at all: it is iron, drawn at the row's reach in
+her hands, and the volume is drawn around it as essence — the pools' own material, in the
+hit test's exact capsule, more solid the more grey she carries, lingering and fading through
+the first eight frames of recovery. And the Reap is gone from right click, replaced by the
+**Haemorrhage**: a bolt (radius 0.7 m, 9 m in fourteen frames, 30 damage, 4% of red) spent
+on the first body it reaches, which opens a three-second bleed of 8 every twelve frames,
+each tick spilling a pool under the victim wherever they are. The pool cap went from four to
+eight so the trail can exist. The scythe stands under the right hand now, so the left is
+free to throw and cast without the weapon following it.
+
+**Why** A weapon that got physically longer with grey looked like the model changing size
+rather than the class's mechanic; the thing that grows is her blood, and it should look like
+it. A wider volume is what turns grey into collection — the pools the swing passes near are
+drunk — which pays the aggression the class is for. And the Reap was a second swing on a
+class whose one swing already scales, while the kit's two payoff tools, the spike and the
+Grasp, were both genuinely hard to land with nothing easier beside them. The bleed is the
+easier thing, and it is not a payoff itself: it marks. A bleeding fighter is a fighter whose
+every spike is an eruption and whose trail is a fuse.
+
+**Measured** (`cargo run -p sim --bin essence`): a sweep's volume at 500 grey is 3.0 m long
+and 0.67 m across against 2.4 by 0.45 at none, at ×1.30 damage; the bolt on a standing
+dummy bleeds 120 over 15 ticks into one pool, and on a walking one into a trail 1.4 m a
+stride, of which the last four strides are alive at any moment.
+
+**Watch for** the trail's short life (a tick's pool drains in under a second) and whether
+that reads as a fuse or as nothing; and the bolt landing too easily at 0.7 m, which would
+make the marker free.
+
+**Verdict** open. Unplayed since the change.
+

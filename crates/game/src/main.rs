@@ -143,6 +143,7 @@ fn main() {
                     place_wing_tips,
                     place_marks,
                     place_scythes,
+                    place_essence_swings,
                 ),
                 beast::place,
                 drive_camera,
@@ -541,6 +542,20 @@ struct ScytheMesh {
 /// A weapon is a haft and a blade in two lengths, so its curve can be seen.
 const SCYTHE_PIECES: usize = 3;
 
+/// The essence around the Blood mage's swing: the hit volume itself, drawn
+/// in the same stuff as her pools, because it is the life force doing the
+/// swinging. The weapon is iron and one size; this is what her grey buys,
+/// and it is drawn at exactly the capsule the hit test reads --
+/// `view::scythe::swing_volume`.
+#[derive(Component)]
+struct EssenceSwing {
+    owner: usize,
+    /// The capsule: a cylinder down its length and a ball at each end.
+    piece: usize,
+}
+
+const SWING_PIECES: usize = 3;
+
 /// How many steps of solidity a pool is drawn in: one material per step,
 /// because a material is shared by everything wearing it and the solidity is
 /// per pool. Six is enough to watch one fade and few enough to make once.
@@ -929,6 +944,20 @@ fn setup(
                 Transform::default(),
                 Visibility::Hidden,
                 ScytheMesh { owner, piece },
+            ));
+        }
+        // And the essence her swing carries: the capsule the hit test reads.
+        for piece in 0..SWING_PIECES {
+            commands.spawn((
+                Mesh3d(if piece == 0 {
+                    unit.clone()
+                } else {
+                    look.ball.clone()
+                }),
+                MeshMaterial3d(look.essence[0].clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                EssenceSwing { owner, piece },
             ));
         }
     }
@@ -1341,6 +1370,61 @@ fn place_scythes(
     }
 }
 
+/// Draw the essence of a scythe swing: the hit volume, as a capsule in the
+/// pools' own material, at the solidity her grey has earned and fading
+/// through the first frames of the recovery.
+fn place_essence_swings(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &EssenceSwing,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let p = &sim.cur.players[tag.owner];
+        let Some(volume) = view::scythe::swing_volume(p) else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let (from, to) = (Vec3::from(volume.from), Vec3::from(volume.to));
+        let along = to - from;
+        let length = along.length();
+        if length < 0.01 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        // More solid the more grey she carries, and fading with the ghost.
+        let solid = p.grey_share().to_f32_for_render() * volume.fade;
+        let step = (solid * (ESSENCE_STEPS - 1) as f32).round() as u8;
+        let want = look.material(Skin::Essence(step));
+        if mat.0 != want {
+            mat.0 = want;
+        }
+        let width = volume.radius * 2.0;
+        match tag.piece {
+            0 => {
+                tf.translation = from + along * 0.5;
+                tf.rotation = Quat::from_rotation_arc(Vec3::Y, along / length);
+                tf.scale = Vec3::new(width, length, width);
+            }
+            1 => {
+                tf.translation = from;
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::splat(width);
+            }
+            _ => {
+                tf.translation = to;
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::splat(width);
+            }
+        }
+    }
+}
+
 /// Where a fighter's aim marker is, if they are channelling at all.
 ///
 /// Split out so the geometry can be asserted without a renderer, the same way
@@ -1547,6 +1631,11 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         }
         EffectKind::Bloodletter if part == 0 => Some(floating(
             fx3(effect.blade_at()),
+            effect.field_radius().to_f32_for_render(),
+        )),
+        // The bolt: a ball, which is exactly what its hit test is.
+        EffectKind::Haemorrhage if part == 0 => Some(floating(
+            fx3(effect.bolt_at()),
             effect.field_radius().to_f32_for_render(),
         )),
         EffectKind::Grasp if part < GRASP_ARMS => Some(floating(

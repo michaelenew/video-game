@@ -556,10 +556,10 @@ fn the_spike_reaches_much_further_than_a_swing() {
     // you can put a wall. Pinned against the class's own melee rather than
     // against a number, so retuning either one keeps the relationship honest.
     let spike = sim::moves::get(Class::BloodMage, sim::state::SLOT_MECHANIC);
-    let rend = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::SWEEP);
     assert!(
         spike.reach.raw() > rend.reach.mul(sim::fixed::Fx::from_int(2)).raw(),
-        "the spike lands barely further than a claw does: {} against {}",
+        "the spike lands barely further than the scythe does: {} against {}",
         spike.reach.to_f32_for_render(),
         rend.reach.to_f32_for_render()
     );
@@ -601,7 +601,7 @@ fn casting_costs_the_blood_mage_health() {
     use sim::moves::blood as b;
     for (slot, button) in [
         (b::BLOODLETTER, Input::MIDDLE),
-        (b::REAP, Input::RIGHT),
+        (b::HAEMORRHAGE, Input::RIGHT),
         (b::GRASP, Q),
         (b::BLACK_SPIKE, E),
         (b::SWEEP, Input::LEFT),
@@ -1004,10 +1004,10 @@ fn the_marker_starts_inside_melee_range() {
     // already mid-range gives the player no sense that holding is doing
     // anything -- the marker appears out in the arena and creeps, rather than
     // leaving the body and travelling. Inside the reach of her own melee is the
-    // test of that, because Rend is what "right in front of me" means for this
-    // class.
+    // test of that, because the sweep is what "right in front of me" means for
+    // this class.
     let grasp = sim::moves::get(Class::BloodMage, sim::state::SLOT_SPECIAL);
-    let rend = sim::moves::get(Class::BloodMage, sim::state::SLOT_COMMITTED);
+    let rend = sim::moves::get(Class::BloodMage, sim::moves::blood::SWEEP);
     assert!(
         grasp.reach_after(0).raw() < rend.reach.raw(),
         "a tapped Grasp reaches {} m against {} m of Rend, so it does not start \

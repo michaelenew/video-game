@@ -89,7 +89,7 @@ fn red_plus_grey_plus_gone_is_the_bar_and_gone_only_grows_by_the_fade() {
 fn a_cast_at_full_health_opens_grey_by_its_cost() {
     for (slot, button) in [
         (b::SWEEP, Input::LEFT),
-        (b::REAP, Input::RIGHT),
+        (b::HAEMORRHAGE, Input::RIGHT),
         (b::BLOODLETTER, Input::MIDDLE),
         (b::GRASP, Input::SPECIAL),
         (b::BLACK_SPIKE, Input::MECHANIC),
@@ -158,16 +158,19 @@ fn grey_fades_and_nothing_but_the_fade_takes_it() {
 
 #[test]
 fn a_committed_casts_worth_of_grey_survives_one_exchange() {
-    // The starting fade rate, from the design: the grey a Reap opens should
-    // still be more than half there after one whole exchange -- the Reap's own
-    // startup, active and recovery, and a dodge on the end of it. Faster and
-    // the blade never gets long enough to matter.
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
-    let exchange = reap.whiff_cost() as u32 + t::dodge_frames() as u32;
+    // The starting fade rate, from the design: the grey a committed cast
+    // opens -- the spike, the dearest thing she throws -- should still be more
+    // than half there after one whole exchange: its own startup, active and
+    // recovery, and a dodge on the end of it. Faster and the blade never gets
+    // long enough to matter.
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
+    let exchange = spike.whiff_cost() as u32 + t::dodge_frames() as u32;
     let mut w = mage();
-    run(&mut w, 2, Input::RIGHT, 0);
+    let paid = w.players[0].cost_of(spike.cost);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
+    run(&mut w, 2, Input::MECHANIC, 0);
     let opened = w.players[0].grey;
-    assert_eq!(opened, w.players[0].cost_of(reap.cost).max(opened));
+    assert_eq!(opened, paid);
     run(&mut w, exchange, 0, 0);
     assert!(
         w.players[0].grey * 2 > opened,
@@ -186,8 +189,8 @@ fn the_scythe_is_at_least_half_again_as_long_at_full_grey() {
         "reach at full grey is only x{}",
         t::grey_reach().to_f32_for_render()
     );
-    for slot in [b::SWEEP, b::REAP] {
-        let m = sim::moves::get(Class::BloodMage, slot);
+    {
+        let m = sim::moves::get(Class::BloodMage, b::SWEEP);
         let mut p = sim::state::Player::new(Class::BloodMage);
         let base = sim::state::live_reach(&p, &m);
         assert_eq!(
@@ -210,7 +213,7 @@ fn the_scythe_is_at_least_half_again_as_long_at_full_grey() {
         );
     }
     // And nothing else she throws grows.
-    for slot in [b::BLOODLETTER, b::GRASP, b::BLACK_SPIKE] {
+    for slot in [b::BLOODLETTER, b::HAEMORRHAGE, b::GRASP, b::BLACK_SPIKE] {
         let m = sim::moves::get(Class::BloodMage, slot);
         let mut p = sim::state::Player::new(Class::BloodMage);
         p.health = 1;
@@ -271,11 +274,11 @@ fn nobody_else_goes_grey() {
 }
 
 #[test]
-fn a_reap_is_the_committed_heavy_and_a_sweep_is_the_auto() {
-    // The two clicks throw the two scythe moves, and what each one is.
+fn right_click_is_the_haemorrhage_and_left_is_the_sweep() {
+    // The three clicks, and what each one throws.
     let mut w = mage();
     run(&mut w, 1, Input::RIGHT, 0);
-    assert_eq!(w.players[0].action.attack_kind(), Some(b::REAP));
+    assert_eq!(w.players[0].action.attack_kind(), Some(b::HAEMORRHAGE));
     let mut w = mage();
     run(&mut w, 1, Input::LEFT, 0);
     assert_eq!(w.players[0].action.attack_kind(), Some(b::SWEEP));
@@ -283,9 +286,6 @@ fn a_reap_is_the_committed_heavy_and_a_sweep_is_the_auto() {
     run(&mut w, 1, Input::MIDDLE, 0);
     assert_eq!(w.players[0].action.attack_kind(), Some(b::BLOODLETTER));
     assert!(matches!(w.players[0].action, Action::Startup { .. }));
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
-    assert!(reap.unblockable, "the Reap is not the guard breaker");
-    assert!(!reap.hits_crouching, "the Reap is not an overhead");
 }
 
 #[test]
@@ -294,20 +294,65 @@ fn a_cast_costs_a_share_of_what_she_has_so_the_wounded_pay_less() {
     // cast opens a big wound, which is how she gets reach quickly, and at low
     // health it opens a small one, so getting back into the fight never costs
     // the fight. And never the last point.
-    let reap = sim::moves::get(Class::BloodMage, b::REAP);
+    let spike = sim::moves::get(Class::BloodMage, b::BLACK_SPIKE);
     let at = |health: i32| {
         let mut w = mage();
         w.players[0].health = health;
         w.players[0].grey = 0;
-        run(&mut w, 2, Input::RIGHT, 0);
+        run(&mut w, 2, Input::MECHANIC, 0);
         health - w.players[0].health
     };
     let full = at(t::max_health());
     let low = at(t::max_health() / 5);
     assert!(
         full > low * 3,
-        "a Reap at full health cost {full} and at a fifth {low}"
+        "a spike at full health cost {full} and at a fifth {low}"
     );
-    assert_eq!(full, t::max_health() * reap.cost / 100);
+    assert_eq!(full, t::max_health() * spike.cost / 100);
     assert_eq!(at(1), 0, "a cast at one health took the last point");
+}
+
+#[test]
+fn the_sweeps_volume_widens_with_grey_and_the_row_does_not() {
+    // The second thing grey buys, beside the reach: the hit volume's radius,
+    // which is what makes a grey mage's swing collect the pools it passes
+    // near. Doubled at a full bar is the first number.
+    assert!(
+        t::grey_width().raw() >= Fx::ratio(3, 2).raw(),
+        "width at full grey is only x{}",
+        t::grey_width().to_f32_for_render()
+    );
+    let m = sim::moves::get(Class::BloodMage, b::SWEEP);
+    let mut p = sim::state::Player::new(Class::BloodMage);
+    let base = sim::state::live_radius(&p, &m);
+    assert_eq!(base.raw(), m.radius.raw(), "no grey, and the radius moved");
+    p.health = 1;
+    p.grey = t::max_health() - 1;
+    let wide = sim::state::live_radius(&p, &m);
+    assert!(
+        wide.raw() >= base.mul(Fx::ratio(149, 100)).raw(),
+        "{} m wide at a full bar of grey against {} m at none",
+        wide.to_f32_for_render(),
+        base.to_f32_for_render()
+    );
+    // And it is the volume that widens, not just a number beside it.
+    p.action = Action::Active {
+        kind: b::SWEEP,
+        left: m.active,
+    };
+    let hb = sim::state::hitbox(&p).expect("a swing has a volume");
+    assert_eq!(
+        hb.radius.raw(),
+        wide.raw(),
+        "the hit test does not read the live radius"
+    );
+    for slot in [b::BLOODLETTER, b::HAEMORRHAGE, b::GRASP, b::BLACK_SPIKE] {
+        let m = sim::moves::get(Class::BloodMage, slot);
+        assert_eq!(
+            sim::state::live_radius(&p, &m).raw(),
+            m.radius.raw(),
+            "{} widened with grey",
+            m.name
+        );
+    }
 }

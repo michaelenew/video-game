@@ -893,7 +893,7 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
     // Where the two hands are drawn: the right leading on the haft.
     let (left, right) = ([0.3, 1.0, 0.2], [0.55, 1.05, 0.15]);
     let mut reaches = Vec::new();
-    let mut breadths = Vec::new();
+    let mut volumes = Vec::new();
     for grey in [0, 300, 600] {
         let mut p = mage_with_grey(grey);
         let resting = view::scythe::scythe(&p, left, right).expect("she carries a scythe");
@@ -930,8 +930,9 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
             "at rest the blade does not curve forward off the head of the haft"
         );
 
-        // The volume, on the first active frame of each of the two swings.
-        for kind in [blood::SWEEP, blood::REAP] {
+        // The volume, on the first active frame of the swing.
+        {
+            let kind = blood::SWEEP;
             let m = sim::moves::get(sim::Class::BloodMage, kind);
             p.action = sim::state::Action::Active {
                 kind,
@@ -939,18 +940,37 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
             };
             let hb = sim::state::hitbox(&p).expect("a swing has a volume");
             let swung = view::scythe::scythe(&p, left, right).expect("the blade is out");
-            let hits = hb.to.sub(hb.from).len().to_f32_for_render();
             let tip = [
                 hb.to.x.to_f32_for_render(),
                 hb.to.y.to_f32_for_render(),
                 hb.to.z.to_f32_for_render(),
             ];
-            let off = view::math::length(view::math::sub(swung.tip, tip));
+            // The weapon points at the volume's far end from the leading
+            // hand: exactly on it with no grey open, and short of it -- the
+            // volume running on past the iron -- with grey open.
+            let toward = math::sub(tip, right);
+            let drawn = math::sub(swung.tip, right);
+            let off_line = math::length(math::cross(toward, drawn)) / math::length(toward);
             assert!(
-                off < 0.001,
-                "{} at {grey} grey: the drawn tip is {off:.3} m from where the volume ends",
+                off_line < 0.001,
+                "{} at {grey} grey: the drawn tip is {off_line:.3} m off the line to the \
+                 volume's end",
                 m.name
             );
+            let short = math::length(toward) - math::length(drawn);
+            if grey == 0 {
+                assert!(
+                    short.abs() < 0.001,
+                    "{} with no grey: the drawn tip is {short:.3} m from where the volume ends",
+                    m.name
+                );
+            } else {
+                assert!(
+                    short > 0.1,
+                    "{} at {grey} grey: the iron grew with the volume",
+                    m.name
+                );
+            }
             // And it is in her hands: the haft runs through the leading one.
             let on_the_haft = view::math::length(view::math::cross(
                 view::math::sub(swung.tip, swung.butt),
@@ -961,37 +981,76 @@ fn the_scythe_is_drawn_at_the_reach_it_hits_at() {
                 "{} at {grey} grey: the leading hand is {on_the_haft:.3} m off the haft",
                 m.name
             );
+            // The volume drawn is the volume tested: the same capsule, and
+            // it widens with grey the way the hit test does.
+            let volume = view::scythe::swing_volume(&p).expect("a swing has a volume to draw");
+            assert!(
+                math::length(math::sub(volume.to, tip)) < 0.001
+                    && (volume.radius - hb.radius.to_f32_for_render()).abs() < 0.001
+                    && volume.fade == 1.0,
+                "{} at {grey} grey: the essence drawn is not the volume tested",
+                m.name
+            );
+            volumes.push(volume.radius);
+            // It lingers, fading, through the first frames of the recovery,
+            // where the last active frame put it.
+            p.action = sim::state::Action::Recovery {
+                kind,
+                left: m.recovery - 2,
+            };
+            let ghost = view::scythe::swing_volume(&p).expect("the volume lingers");
+            assert!(
+                ghost.fade > 0.0 && ghost.fade < 1.0,
+                "two frames into recovery the volume is at {}",
+                ghost.fade
+            );
+            p.action = sim::state::Action::Recovery { kind, left: 1 };
+            assert!(
+                view::scythe::swing_volume(&p).is_none(),
+                "the volume is still drawn at the end of the recovery"
+            );
             // Through the wind-up nothing is out, and the haft lies along the
-            // hands with the tip the live reach from the leading one.
+            // hands at the weapon's own length.
             p.action = sim::state::Action::Startup {
                 kind,
                 left: m.startup,
             };
+            assert!(
+                view::scythe::swing_volume(&p).is_none(),
+                "a volume is drawn during the wind-up"
+            );
             let wound = view::scythe::scythe(&p, left, right).expect("she holds it");
             assert!(
-                (wound.reach() - hits).abs() < 0.001,
-                "{} at {grey} grey: winding up, the blade is {:.2} m and hits at {:.2} m",
+                (wound.reach() - m.reach.to_f32_for_render()).abs() < 0.001,
+                "{} at {grey} grey: winding up, the blade is {:.2} m and the row says {:.2} m",
                 m.name,
                 wound.reach(),
-                hits
+                m.reach.to_f32_for_render()
             );
         }
+        p.action = sim::state::Action::Free;
+        assert!(
+            view::scythe::swing_volume(&p).is_none(),
+            "a volume is drawn at rest"
+        );
         reaches.push(resting.tip[1] - resting.butt[1]);
-        breadths.push(resting.breadth);
     }
+    // The weapon is iron and one size, whatever the grey; it is the volume
+    // around it that grows -- half again in reach and doubled in width at a
+    // full bar are the design's first numbers, so six hundred of a
+    // thousand-point bar is well over a quarter wider.
     assert!(
-        breadths[1] > breadths[0] && breadths[2] > breadths[1],
-        "the blade does not broaden with grey"
-    );
-    // And the standing weapon visibly grows with grey, by the same factor as
-    // the reach: half again at full grey is the design's first number, so six
-    // hundred of a thousand-point bar is well over a quarter taller.
-    assert!(reaches[1] > reaches[0] && reaches[2] > reaches[1]);
-    assert!(
-        reaches[2] > reaches[0] * 1.25,
-        "the blade grew from {:.2} m to only {:.2} m over most of a bar of grey",
+        (reaches[0] - reaches[2]).abs() < 0.001,
+        "the standing weapon grew from {:.2} m to {:.2} m with grey",
         reaches[0],
         reaches[2]
+    );
+    assert!(volumes[1] > volumes[0] && volumes[2] > volumes[1]);
+    assert!(
+        volumes[2] > volumes[0] * 1.25,
+        "the volume widened from {:.2} m to only {:.2} m over most of a bar of grey",
+        volumes[0],
+        volumes[2]
     );
 }
 

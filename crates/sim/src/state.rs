@@ -346,6 +346,14 @@ pub struct Player {
     /// on the same frame. In the snapshot for the same reason every edge is:
     /// a frame re-simulated must consume the same pool.
     pub blinked: u8,
+    /// Frames of **bleed** left, from a Blood mage's Haemorrhage. Every
+    /// `tuning::bleed_tick` frames it takes `tuning::bleed_damage` and spills
+    /// that under you wherever you are standing, so a bleeding fighter walks
+    /// a trail of her pools behind them -- which is the point: a spike on any
+    /// of them chains along the trail. See `World::step_bleeds`.
+    pub bleeding: u16,
+    /// Whose bleed it is, so the pools are hers. `u8::MAX` for nobody.
+    pub bled_by: u8,
     /// Frames left of being **hauled** somewhere by her own Grasp: all four
     /// arms landed on the creature, and the heavier body wins, so she is the
     /// one pulled across the gap to the contact point. Zero for everybody and
@@ -677,6 +685,14 @@ impl Player {
         }
     }
 
+    /// Open a bleed, or refresh one. A second bolt on a bleeding fighter
+    /// restarts the clock rather than stacking: two bleeds ticking at once
+    /// would be a damage-over-time build, and this is a marker, not a build.
+    pub fn bleed(&mut self, by: u8, frames: u16) {
+        self.bleeding = self.bleeding.max(frames);
+        self.bled_by = by;
+    }
+
     /// Take a slow. The strongest one on you is the one that counts, and any
     /// of them refreshes the clock.
     pub fn slow(&mut self, frames: u16, mul: Fx) {
@@ -872,6 +888,8 @@ impl Default for Player {
             space_held: false,
             leap_used: false,
             blinked: NO_POOL,
+            bleeding: 0,
+            bled_by: u8::MAX,
             haul: 0,
             haul_to: V3::ZERO,
             slam: Fx::ZERO,
@@ -1556,6 +1574,8 @@ impl World {
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
             h.write_u32(p.blinked as u32);
+            h.write_u32(p.bleeding as u32);
+            h.write_u32(p.bled_by as u32);
             h.write_u32(p.haul as u32);
             hash_v3(&mut h, &p.haul_to);
             h.write_i32(p.slam.raw());
@@ -1773,6 +1793,8 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     // shape of rule -- one multiply, here, one for everybody else -- and the
     // one reach in the game that scales. See [`live_reach`].
     m.reach = live_reach(p, &m);
+    // And how wide it is: the essence around the blade. See [`live_radius`].
+    m.radius = live_radius(p, &m);
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -2024,6 +2046,18 @@ pub fn live_reach(p: &Player, m: &moves::Move) -> Fx {
         .mul(crate::math::lerp(Fx::ONE, t::grey_reach(), p.grey_share()))
 }
 
+/// A move's hit radius on this fighter, right now: the row's, widened by
+/// her grey for the scythe. The same line as [`live_reach`], with its own
+/// number at the top (`tuning::grey_width`). The weapon is drawn at one size
+/// and the volume is drawn as essence around it -- see `view::scythe`.
+pub fn live_radius(p: &Player, m: &moves::Move) -> Fx {
+    if !m.rides_the_grey() {
+        return m.radius;
+    }
+    m.radius
+        .mul(crate::math::lerp(Fx::ONE, t::grey_width(), p.grey_share()))
+}
+
 /// What a move's damage is multiplied by for the grey on the caster's bar.
 /// The same line as [`live_reach`], with its own number at the top.
 fn grey_power(p: &Player, m: &moves::Move) -> Fx {
@@ -2033,9 +2067,9 @@ fn grey_power(p: &Player, m: &moves::Move) -> Fx {
     crate::math::lerp(Fx::ONE, t::grey_damage(), p.grey_share())
 }
 
-/// The scythe's reach on this fighter, out of a move: what the blade is drawn
-/// at while she is not swinging it. The sweep's, because the sweep is the
-/// weapon at rest; a Reap is the same blade lifted.
+/// The scythe's reach on this fighter, out of a move: how far the sweep
+/// reaches right now. The weapon is drawn at the row's reach; this is what
+/// the essence around it is drawn to.
 pub fn scythe_reach(p: &Player) -> Fx {
     live_reach(p, &moves::get(p.class, moves::blood::SWEEP))
 }
@@ -3096,7 +3130,7 @@ fn blood_move(input: Input) -> Option<u8> {
     if input.has(Input::LEFT) {
         Some(b::SWEEP)
     } else if input.has(Input::RIGHT) {
-        Some(b::REAP)
+        Some(b::HAEMORRHAGE)
     } else {
         input.has(Input::MIDDLE).then_some(b::BLOODLETTER)
     }
@@ -5057,8 +5091,14 @@ impl World {
                 continue;
             }
             self.apply_effect(&mut effect);
-            self.effects[i] = Some(effect);
+            // The bolt is spent by what it just did -- it reached a body --
+            // and goes now rather than being drawn one more frame at the far
+            // end of a flight it never made. Nothing else expires here: a
+            // tornado, for one, is older than its life by design.
+            let spent = effect.kind == EffectKind::Haemorrhage && effect.age >= effect.life;
+            self.effects[i] = (!spent).then_some(effect);
         }
+        self.step_bleeds();
         // The slow's tail, for every source of one -- a drain field here, a
         // stone churning under your feet in `stones`. It runs down before either
         // of them gets to refresh it, so standing in one holds the slow at full
@@ -5075,6 +5115,38 @@ impl World {
             // expires, so standing in the field holds it and leaving lets the
             // tail run.
             p.hasted = p.hasted.saturating_sub(1);
+        }
+    }
+
+    /// Every bleed runs down a frame, and on its tick takes its damage and
+    /// spills it under the victim -- wherever they have got to, which is the
+    /// whole idea: a bleeding fighter who keeps moving lays a trail of her
+    /// pools, and a spike on any pool of the trail chains along it toward
+    /// them. Standing still merges the ticks into one growing pool instead,
+    /// which is worse for them, since one pool is one eruption.
+    ///
+    /// Not a hit: no stun, no block, no knockback, and it goes through a
+    /// guard, because it was the bolt that had to land. It cannot kill --
+    /// `wound` stops at nought like any damage -- and it stops when the
+    /// victim is dead.
+    fn step_bleeds(&mut self) {
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            if p.bleeding == 0 {
+                continue;
+            }
+            let owner = p.bled_by as usize;
+            if p.health <= 0 || owner >= MAX_PLAYERS {
+                self.players[i].bleeding = 0;
+                continue;
+            }
+            self.players[i].bleeding -= 1;
+            if self.players[i].bleeding % t::bleed_tick() != 0 {
+                continue;
+            }
+            let dealt = self.players[i].wound(t::bleed_damage());
+            let class = self.players[owner].class;
+            self.spill_under(owner as u8, class, moves::blood::HAEMORRHAGE, &p, dealt);
         }
     }
 
@@ -5465,6 +5537,36 @@ impl World {
             // A pool does nothing to anybody on its own. It is read by the
             // moves put through it -- see `drink_over` -- and by the dodge.
             EffectKind::Pool => {}
+
+            // The bolt. Straight out along the line and spent on the first
+            // body it reaches: the cut lands and the bleed opens, and from
+            // then on the victim's own feet make the pools. A guarded bolt is
+            // still spent -- it hit something -- and opens nothing.
+            EffectKind::Haemorrhage => {
+                let at = effect.bolt_at();
+                let radius = effect.field_radius();
+                let mut spent = false;
+                for i in 0..MAX_PLAYERS {
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !self.inside(i, at, radius)
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let dealt = self.cut(i, effect, at, effect.source().damage);
+                    if dealt > 0 {
+                        self.players[i].bleed(effect.owner, t::bleed_lasts());
+                    }
+                    spent = true;
+                }
+                if self.gore_the_creature(effect, 0, at, radius) > 0 {
+                    spent = true;
+                }
+                if spent {
+                    effect.age = effect.life;
+                }
+            }
 
             EffectKind::Grasp => {
                 let radius = effect.field_radius();

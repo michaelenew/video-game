@@ -316,6 +316,11 @@ fn best_case(m: &Move) -> i32 {
     match EffectKind::from_code(m.effect) {
         Some(EffectKind::Bloodletter) => EffectKind::Bloodletter.damage(m) * 2,
         Some(EffectKind::Grasp) => EffectKind::Grasp.damage(m) * GRASP_ARMS as i32,
+        // The bolt cuts once, and then the bleed it opened runs its length.
+        Some(EffectKind::Haemorrhage) => {
+            EffectKind::Haemorrhage.damage(m)
+                + t::bleed_damage() * (t::bleed_lasts() / t::bleed_tick()) as i32
+        }
         // A field, for as long as it stands. The move's own hit lands too.
         //
         // `FireTornado` never actually reaches this match: nothing casts one

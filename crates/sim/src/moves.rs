@@ -601,8 +601,9 @@ const NAMES: [&[&str]; 6] = [
     // is the last row.
     //   Bloodletter: a blade out to a fixed distance and back, cutting on both
     //     passes. Middle click, the ranged way to make a pool.
-    //   Reap: the scythe brought over and down. Right click, unblockable, the
-    //     biggest hit in the kit and the biggest drink over a pool.
+    //   Haemorrhage: a bolt that opens a bleed, and every tick of the bleed
+    //     spills a pool under the victim. Right click, the easier thing to
+    //     land, and the thing that marks somebody as the target.
     //   Grasp: four arms out in a cone that arc back inward to meet. Caught by
     //     all four and you are hauled to her feet.
     //   Black spike: on `E`, because the class has no other use for the key.
@@ -610,7 +611,7 @@ const NAMES: [&[&str]; 6] = [
     //     high, and its reach grows with her grey.
     &[
         "Bloodletter",
-        "Reap",
+        "Haemorrhage",
         "Grasp",
         "Black spike",
         "Reaping sweep",
@@ -897,7 +898,7 @@ pub mod dual {
 ///
 /// ```text
 ///   left click     Reaping sweep   the auto; a war scythe across the front
-///   right click    Reap            the committed heavy; over and down
+///   right click    Haemorrhage     a bolt that opens a bleed; a trail of pools
 ///   middle click   Bloodletter     a blade out and back
 ///   Q              Grasp           hold to choose a depth; four arms
 ///   E              Black spike     a spike out of the floor, after a delay
@@ -914,9 +915,10 @@ pub mod dual {
 pub mod blood {
     /// Middle click. The blade thrown out and back.
     pub const BLOODLETTER: u8 = 0;
-    /// Right click. Was Rend, the claw with no button; the row was retuned
-    /// rather than replaced, so its knobs kept their index.
-    pub const REAP: u8 = 1;
+    /// Right click. Was Rend, the claw with no button, then the Reap, the
+    /// heavier swing; the row was retuned each time rather than replaced, so
+    /// its knobs kept their index.
+    pub const HAEMORRHAGE: u8 = 1;
     /// `Q`, held.
     pub const GRASP: u8 = 2;
     /// `E`.
@@ -926,17 +928,15 @@ pub mod blood {
 
     pub const COUNT: usize = 5;
 
-    /// Is this the scythe -- the two moves whose reach and damage grow with the
-    /// grey on her bar?
+    /// Is this the scythe -- the move whose reach, width and damage grow with
+    /// the grey on her bar?
     ///
-    /// Declared rather than inferred from the shape, because the sweep and the
-    /// Reap are the two swings in the kit *and* the two moves the blade is
-    /// drawn for; a third swing on this class would have to say which it was.
-    /// `view/tests/kinematics.rs` checks the blade is drawn at the reach these
-    /// two hit at, which is the one condition under which a reach is allowed
-    /// to scale at all -- see `docs/design/blood-mage.md`.
+    /// Declared rather than inferred from the shape, because a second swing on
+    /// this class would have to say which it was. The weapon is drawn at one
+    /// size and the growth is drawn as essence around it; `view::scythe`
+    /// reads this to know which move to draw the volume for.
     pub const fn scythe(kind: u8) -> bool {
-        matches!(kind, REAP | SWEEP)
+        matches!(kind, SWEEP)
     }
 }
 
@@ -1291,14 +1291,11 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             dual::DARK_LANCE => Shape::None,
             _ => Shape::Cylinder,
         },
-        // The scythe. The sweep is a cut across the front, and the Reap is the
-        // same blade brought over and down -- the two swings in the kit, and
-        // the two moves the blade is drawn for. Everything else she has puts
-        // something in the world and lets it do the hitting, or lands on the
-        // floor where it was aimed.
+        // The scythe. The sweep is a cut across the front, and the one swing
+        // in the kit. Everything else she has puts something in the world and
+        // lets it do the hitting, or lands on the floor where it was aimed.
         Class::BloodMage => match kind {
             blood::SWEEP => Shape::Swing(Plane::Flat),
-            blood::REAP => Shape::Swing(Plane::Upright),
             _ => Shape::Cylinder,
         },
         // Every other class is still the original disc at arm's length.

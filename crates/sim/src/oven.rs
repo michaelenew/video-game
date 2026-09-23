@@ -482,6 +482,16 @@ scalars! {
     EruptRadius,      "Blood mage", "Black spike, eruption radius per root of volume", Fixed, fx(1,100), fx(2,1);
     EruptHeight,      "Blood mage", "Black spike, eruption height",           Fixed, fx(1,2),  fx(10,1);
     EruptDamage,      "Blood mage", "Black spike, eruption damage (x)",       Fixed, fx(1,1),  fx(4,1);
+    // The scythe's hit volume widens with grey as well as lengthening. The
+    // weapon itself is drawn at one size; the growth is drawn as essence.
+    GreyWidth,        "Blood mage", "Scythe width at full grey (x)",          Fixed, fx(1,1),  fx(4,1);
+    // Haemorrhage, on right click: a bolt that opens a bleed, and every tick
+    // of the bleed spills a pool under the victim wherever they have got to.
+    HaemorrhageFlight, "Blood mage", "Haemorrhage, bolt flight",              Frames, 2,       120;
+    HaemorrhageRadius, "Blood mage", "Haemorrhage, bolt radius",              Fixed, fx(1,10), fx(3,1);
+    BleedLasts,       "Blood mage", "Bleed lasts",                            Frames, 1,       900;
+    BleedTick,        "Blood mage", "Bleed ticks every",                      Frames, 1,       120;
+    BleedDamage,      "Blood mage", "Bleed damage per tick",                  Int,   0,        200;
 }
 
 // ---------------------------------------------------------------------------

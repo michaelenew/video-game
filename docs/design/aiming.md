@@ -241,7 +241,7 @@ swing.
 | --- | --- |
 | **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
 | **Skillshot** | Bolt, Cataclysm, Air bolt, Gale, Bloodletter, Grasp, Lance |
-| **Swing** (the ones worth naming) | Reaping sweep and Reap — the Blood mage's scythe, whose reach grows with her grey and is drawn at the length it hits at |
+| **Swing** (the ones worth naming) | Reaping sweep — the Blood mage's scythe, whose reach and width grow with her grey and are drawn, as essence around the weapon, at the size they hit at |
 | **Swing** | every melee attack: Bash, Slam, Grapple, Slash, Executioner, Rend, Landfall, the Dual mage's Sweep and both of her autos, and all nineteen of the Champion's |
 | **At the mechanic** | Guillotine lotus |
 

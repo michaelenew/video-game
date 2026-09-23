@@ -70,7 +70,7 @@ poke is a design choice in a closed arena, not a gap.
 | --- | --- | --- | --- |
 | [Shadow Reaver](kits/shadow-reaver.md) | Shadow position (always placed) | `L` auto · `R` Send shadow · `Q` Guillotine lotus · `E` Executioner | Rebuilt |
 | [Elementalist](kits/elementalist.md) | Structure slots (cap 3) | `L` beam auto · `R` Cataclysm · `Q` Fire pillar · `E` Raise · **and the same three, airborne** | Strong |
-| [Blood mage](kits/blood-mage.md) | Grey health, and essence pools where she cut somebody | `L` Reaping sweep · `R` Reap · `M` Bloodletter · `Q` Grasp · `E` Black spike · `shift` on a pool = Blink | **v1 built**, unplayed; [the kit](blood-mage.md) |
+| [Blood mage](kits/blood-mage.md) | Grey health, and essence pools where she cut somebody | `L` Reaping sweep · `R` Haemorrhage · `M` Bloodletter · `Q` Grasp · `E` Black spike · `shift` on a pool = Blink | **v1 built**, unplayed; [the kit](blood-mage.md) |
 | [Dual mage](kits/dual-mage.md) | Meter position — **two bars, proposed** | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep | **Core rebuilt**; [v2 proposed](dual-mage-v2.md) |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
 | [Bulwark](kits/bulwark.md) | Shield position | `L` Bash · `shift`+`L` Slam · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New |

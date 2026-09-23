@@ -304,7 +304,7 @@ clips! {
     BloodPoke,      "blood_poke",       Moves, "blood", Length::Move(Class::BloodMage, 0), false,
         "Bloodletter: a blade thrown out underarm and caught again on the way back.";
     BloodCommitted, "blood_committed",  Moves, "blood", Length::Move(Class::BloodMage, 1), false,
-        "Reap: the scythe raised over the right shoulder and brought over and down. Slow up, fast down, and the weight arrives after the blade.";
+        "Haemorrhage: one hand drawn in to the chest and thrust out flat, palm forward. The bolt leaves on the thrust.";
     BloodSpecial,   "blood_special",    Moves, "blood", Length::Move(Class::BloodMage, 2), false,
         "Grasp: both arms thrown open and snapped shut. Four arms leave wide and arrive together.";
     BloodMechanic,  "blood_mechanic",   Moves, "blood", Length::Move(Class::BloodMage, 3), false,

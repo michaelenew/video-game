@@ -107,8 +107,8 @@ the move table, still tuned, still printed by the frame table, and a player cann
 Finding each of them a home is a separate job, one kit at a time, because the right answer is
 different per class and guessing them at once is how a grammar gets worse. The Shadow Reaver
 loses nothing, because her Executioner was already on `E`; the Blood mage's committed move
-found its home on **right click** in the 2026-09-23 rebuild, where the Reap took the row Rend
-had been stranded on.
+found its home on **right click** in the 2026-09-23 rebuild, where the Haemorrhage (by way of
+the Reap, the same day) took the row Rend had been stranded on.
 
 What it bought, immediately, is the Dual mage. Her committed cast moved to **middle click**,
 which has no side — so by that class's own rule it pushes her further along whichever way she
@@ -959,8 +959,8 @@ Current as of 2026-09-23, the v1 rebuild. Every row is **bound**.
 
 | Input | Result |
 | --- | --- |
-| `L` | **Reaping sweep** — the auto. A war scythe drawn across the front, low to high; its reach grows with the grey on her bar, and the blade is drawn at the length it hits at |
-| `R` | **Reap** — the committed heavy. The scythe over and down: unblockable, an overhead, the biggest hit in the kit and the biggest drink when it lands over a pool. Right click is free on a class with no shield, the same argument the Reaver and the Elementalist make |
+| `L` | **Reaping sweep** — the auto. A war scythe drawn across the front, low to high; its reach, width and damage grow with the grey on her bar, and the volume is drawn as essence at the size it hits at |
+| `R` | **Haemorrhage** — a bolt along the crosshair that opens a bleed; every tick of the bleed spills a pool under the victim wherever they have got to. The easier thing to land, and what marks somebody as the spike's target. Right click is free on a class with no shield, the same argument the Reaver and the Elementalist make |
 | `M` | **Bloodletter** — a blade out to a fixed distance and back, cutting on both passes and drinking any pool it crosses on the way home. The third click, because the mouse means where |
 | hold `Q` | **Grasp** — four arms out in a cone that arc inward to converge at a depth you chose by how long you held the button, from melee to ten metres over half a second along the line the crosshair picked; all four catch and haul the victim to her feet, or her to the creature |
 | `E` | **Black spike** — a spike out of the floor at long range after a delay; cast on one of her pools, the pool erupts. The one place in the game where the mechanic key is an ability rather than a state change |
