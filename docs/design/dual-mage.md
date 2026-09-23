@@ -91,7 +91,7 @@ numbers. An *exchange* is a Judgement's startup to the end of its recovery, twic
 
 | | The player does | What happens | Measured |
 | --- | --- | --- | --- |
-| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two health bars. Against a person a third lands, which is one kill a round from the sustained game | 1.96 bars |
+| **B1** | Alternates hands for half a round with everything landing on a target that never moves | One to two and a quarter health bars, the last quarter being the six seconds of ascension the climb reaches near the end. Against a person a third lands, which is one kill a round from the sustained game | 2.09 bars |
 | **B2** | One dark auto, then dark casts only, a Judgement every time it is up, on a target standing in all of it | The biggest number the class makes: two to three and a half bars, and it costs her at least half of her own | 2.24 bars dealt, 0.64 lost |
 | **B3** | Throws a Judgement from a full bar | At most a quarter of a health bar, strike and field together; from an empty bar still at least eight per cent | 25%; 9% |
 | **B4** | Alternates cleanly from empty | The blink in ten to fourteen seconds, the second jump in sixteen to twenty-one, the wings in twenty to twenty-six — once a round, with commitment | 10.9 s, 16.8 s, 21.2 s |
@@ -168,10 +168,11 @@ the hardest thing the class can do and is meant to be.
   beat.
 - **No dodge.** She flies instead. Loss of control is loss of the option to decline.
 - **Casts fire at the top of the power curve**, because both bars are at the top.
-- **Health is the clock** — `ascension_frames` (180) of `ascension_drain` (4) a frame, about
-  seventy per cent of a health bar, inside the "half to all of it" the original design asked
-  for — and **landing hits pulls some back**: `ascension_refund` (40) per hit, the refund the
-  old design wrote and never built.
+- **Health is the clock** — `ascension_frames` (360, six seconds) of `ascension_drain` (2) a
+  frame, about seventy per cent of a health bar, inside the "half to all of it" the original
+  design asked for — and **landing hits pulls some back**: `ascension_refund` (40) per hit, the
+  refund the old design wrote and never built. It was three seconds, and at three a player had
+  time for two or three abilities and it was over before they had noticed it had begun.
 - **It ends with both bars empty** and a stagger graduated by how much she landed: the share of
   the drain her hits refunded, read against a ceiling (`ascension_stun`, 40 frames, for landing
   nothing) and a floor (`ascension_stun_floor`, 10, for paying it all back). The vent. Then she
@@ -214,8 +215,10 @@ the biggest, the middle one — the seraph's proportions, with the great wing wh
 blades are. They arrive biggest first: the blink puts the great wing out, the second jump the
 lower one, the top the small one above. So a mage at half already has a wing you can see
 across the arena, and the last one is a flourish rather than the thing you are waiting for.
-The great wing reaches out and a little up, the small one up at about sixty-five degrees, the
-lower one out with its primaries hanging; none crosses her centre line. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
+The great wing reaches up and out from the shoulder blade, the lower one out with its
+primaries hanging, and the small one **floats** above the great wing, off her shoulder and
+above her head, bound to nothing — it is the highest presence of that being, not a limb, and a
+binding that is not physical is the point of it. None crosses her centre line. Each is a bird's wing, built the way a bird's is: an arm that rises from the shoulder to a
 wrist well short of the tip, seven primaries fanning from that wrist like fingers — the
 outermost reaching the full span, each next one shorter and hung lower, the last hanging down
 — and secondaries hanging from the arm behind them, every feather a rounded slat and the wing

@@ -985,12 +985,14 @@ fn against_a_dummy(frames: u32, mut next: impl FnMut(u32) -> u16) -> (i32, i32) 
 #[test]
 fn b1_alternating_on_a_dummy_for_half_a_round_deals_about_a_health_bar_and_a_half() {
     // Everything landing on a target that never moves, for thirty seconds,
-    // climbing from empty: between one and two health bars. Against a person
-    // a third of it lands, which is one kill a round from the sustained game.
+    // climbing from empty: between one and two and a quarter health bars,
+    // the last quarter being the six seconds of ascension the climb reaches
+    // near the end, cast at the top of the curve. Against a person a third of
+    // it lands, which is one kill a round from the sustained game.
     let (dealt, _) = against_a_dummy(1800, |n| [L, M, R, E][(n % 4) as usize]);
     let bar = sim::state::max_health();
     assert!(
-        dealt >= bar && dealt <= 2 * bar,
+        dealt >= bar && dealt * 4 <= 9 * bar,
         "alternating for half a round dealt {dealt} of a {bar} health bar"
     );
 }

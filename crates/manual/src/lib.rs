@@ -234,11 +234,11 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "Blink, second jump, wings",
-                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower. Both full and you ascend: wings, a wing beat on every press of space, no dodge, three seconds of heavy drain that landing hits pays back, and then both bars empty and a stagger -- shorter the more you landed. Climb it with both hands: dark auto, dark Lance, light auto, light Sweep.",
+                "The **lower** bar is what your body can do. At half the dodge is a blink. At three quarters you have a second jump and you fall slower. Both full and you ascend: wings, a wing beat on every press of space, no dodge, six seconds of heavy drain that landing hits pays back, and then both bars empty and a stagger -- shorter the more you landed. Climb it with both hands: dark auto, dark Lance, light auto, light Sweep.",
             ),
             e(
                 "On your back",
-                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar -- the great wing at half, the lower one at three quarters, the small one on top at full -- and never grows. Everybody in the arena can count them. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
+                "The two bars are six wings, three a side, dark on the left and light on the right. A wing appears whole at each tick on that side of the bar -- the great wing at half, the lower one at three quarters, the small one floating above the great wing at full -- and never grows. Everybody in the arena can count them. Lopsided wings are a mage about to burn; three and three is a mage about to fly.",
             ),
             e(
                 "The tip",

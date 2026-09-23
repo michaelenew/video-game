@@ -25,6 +25,10 @@ fn mage_with(dark: i32, light: i32, ascending: u16) -> World {
     w
 }
 
+fn low_facing() -> sim::V3 {
+    World::with_classes([Class::DualMage, Class::Bulwark]).players[0].facing
+}
+
 fn shown(w: &World, force: Force) -> Vec<Slot> {
     wings::wings(&w.players[0])
         .expect("the Dual mage has wings")
@@ -102,6 +106,26 @@ fn the_biggest_comes_first_then_the_lower_then_the_small_one_on_top() {
     };
     assert!(height(Slot::Top) > height(Slot::Middle));
     assert!(height(Slot::Middle) > height(Slot::Bottom));
+    // The small one floats: above her head, off to its own side, bound to
+    // nothing. The other two root on the back.
+    let head = sim::tuning::body_height().to_f32_for_render();
+    let top = all
+        .iter()
+        .find(|w| w.force == Force::Dark && w.slot == Slot::Top)
+        .unwrap();
+    assert!(
+        top.root[1] > head,
+        "the floating wing is not above her head"
+    );
+    let across = sim::aim::across(low_facing(), wings::hand_of(Force::Dark));
+    let out = top.root[0] * across.x.to_f32_for_render()
+        + top.root[2] * across.z.to_f32_for_render()
+        - (all[0].root[0] * across.x.to_f32_for_render()
+            + all[0].root[2] * across.z.to_f32_for_render());
+    assert!(
+        out > 0.2,
+        "the floating wing sits over her spine rather than over the great wing"
+    );
 }
 
 #[test]
@@ -173,9 +197,9 @@ fn dark_is_on_her_left_and_light_on_her_right_and_the_vanes_face_the_players() {
             n[1]
         );
         match wing.slot {
-            Slot::Top => assert!(wing.along[1] > 0.4, "the top wing does not reach up"),
+            Slot::Top => assert!(wing.along[1] > 0.3, "the top wing does not reach up"),
             Slot::Bottom => assert!(wing.along[1] < -0.2, "the bottom wing does not reach down"),
-            Slot::Middle => assert!(wing.along[1] > 0.05 && wing.along[1] < 0.5),
+            Slot::Middle => assert!(wing.along[1] > 0.3 && wing.along[1] < 0.6),
         }
     }
 }

@@ -1031,13 +1031,17 @@ pub fn meter_cast_push() -> i32 {
     oven::scalar(Scalar::MeterCastPush)
 }
 
-/// How long ascension lasts, once the bar is driven all the way to an end.
+/// How long ascension lasts, once both bars are goaded to the top together.
 ///
 /// **A clock rather than a state you have to escape.** The first version had no
 /// exit at all: reaching the end burned you until you were nearly dead and then
 /// went on burning, with nothing to do about it. The design's own answer is
-/// that the drain *is* the clock (see `docs/design/dual-mage.md`); this is that
-/// clock made literal while the rest of it is unbuilt.
+/// that the drain *is* the clock (see `docs/design/dual-mage.md`).
+///
+/// Six seconds, from three: at three a person had time for two or three
+/// abilities and it was over before they had noticed it had begun unless they
+/// were watching the bar. The drain a frame halved with it, so the whole ride
+/// still costs the same seventy per cent of a health bar.
 pub fn ascension_frames() -> u16 {
     oven::scalar(Scalar::AscensionFrames) as u16
 }
@@ -1173,8 +1177,8 @@ pub fn slow_fall() -> Fx {
 /// Health returned for every hit landed while ascending.
 ///
 /// The refund the original design wrote and never built. Forty against a drain
-/// of four a frame means the cost is paid back in full by eighteen hits in
-/// three seconds, which nobody will do -- it is meant to keep her alive one
+/// of two a frame means the cost is paid back in full by eighteen hits in six
+/// seconds, which nobody will do -- it is meant to keep her alive one
 /// connection at a time, not to make the ride free.
 pub fn ascension_refund() -> i32 {
     oven::scalar(Scalar::AscensionRefund)

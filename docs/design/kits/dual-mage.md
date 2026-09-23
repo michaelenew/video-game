@@ -45,7 +45,7 @@ drift never delivers it. See [../dual-mage.md](../dual-mage.md).
 | Below half | The dodge is a dodge; space in the air does nothing | Nothing on that side |
 | Half | The dodge blinks: she is where it would have ended, on its first frame, and stands through the tail | The great wing of that side is there |
 | Three quarters | Space in the air jumps once more, and she falls slower | The lower wing, under the great one |
-| Both full | Every press of space is a wing beat; no dodge | All six: the small one on top completes each side |
+| Both full | Every press of space is a wing beat; no dodge | All six: the small one floating above the great wing completes each side |
 
 The wings are the two bars, three a side, dark on the left and light on the right, and each
 one is there or is not — a bar is read as a count, not a length, and **a wing is a tier**: a
@@ -393,7 +393,7 @@ Climb with both hands — dark auto, dark Lance, light auto, light Sweep — and
 together inside the band. At half the dodge is a blink; at three quarters you have a second
 jump. Spend the height you have goaded on a finisher from the bar you are carrying, and the
 other bar starts to collapse: catch it with the far-side hand before the tier goes, or let it
-go and take the burn for the burst. Both full is wings, three seconds of them, and then empty.
+go and take the burn for the burst. Both full is wings, six seconds of them, and then empty.
 
 **And which arm you punch with is now a spacing question at the same time.** The dark hand
 drags them in, which is how a body this fragile stays attached to somebody long enough to

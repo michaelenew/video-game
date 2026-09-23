@@ -4526,3 +4526,23 @@ Judgements from level; catch it with the other hand; then do not catch it. Then 
 casts at the dummy for fifteen seconds and watch your own health.* Questions: Which of the
 eight benchmark rows is wrong, and in which direction? Does a Judgement from a full bar still
 read as too much? Is the burn a consequence now?
+
+### 2026-09-23 — ascension lasts six seconds, not three
+**Changed** `Ascension, how long` 180 → 360 frames, and `Ascension, health a frame` 4 → 2,
+so the whole ride still costs the same 720 of a 1000 health bar.
+
+**Why** Played: at three seconds there was time for two or three abilities and it was over
+before it had registered as having begun, unless the player was watching the bar rather than
+the fight. Six seconds is time to notice the wings, cast, and choose the last cast. The drain
+halved with it because the cost of the ride was not the complaint; the length was.
+
+**Verdict** open — halved and doubled, unplayed at the new length. Nothing else moved: the
+refund per hit is unchanged, so a longer ride lands more hits and pays more back, and the
+stagger on the way out is graduated against the same total drain. Two numbers moved with it.
+Benchmark B1 rose from 1.96 to 2.09 health bars, the extra being three more seconds at the
+top of the curve, and its ceiling went from two bars to two and a quarter rather than the
+ride being weakened — the ride is the payoff. And against a target that stands in everything,
+the longer ride nearly pays for itself: the goad's alternating run now loses 236 health over
+half a round where it lost 501, because six seconds of hits refund most of the 720 drained.
+Against a person who moves that will not happen; against one who does not, the refund per hit
+is the knob to watch.

@@ -64,25 +64,42 @@ impl Slot {
     }
 
     /// Where it roots, as a share of her height.
+    ///
+    /// The small one **floats**, above her head and clear of the great wing,
+    /// bound to nothing: it is the highest presence of that being, not a limb,
+    /// and a binding that is not physical is the point of it. The other two
+    /// root on the back where the shoulder blades are.
     const fn root_height(self) -> f32 {
         match self {
-            Slot::Top => 0.90,
+            Slot::Top => 1.30,
             Slot::Middle => 0.79,
             Slot::Bottom => 0.66,
         }
     }
 
+    /// How far out to its own side it roots, in metres. The floating one
+    /// starts off the shoulder rather than on the spine, so it hovers over
+    /// the great wing instead of over her head.
+    const fn root_out(self) -> f32 {
+        match self {
+            Slot::Top => 0.45,
+            Slot::Middle => 0.0,
+            Slot::Bottom => 0.0,
+        }
+    }
+
     /// Pitch of the wing's own line above the horizontal, in radians. The arm
     /// rises another thirty-five degrees inside the wing before the wrist, so
-    /// these are lower than the wings look: the small one's wrist ends up
-    /// about sixty-five degrees up, the great one's about forty-five, the
-    /// lower one's level with the shoulder with its primaries hanging. The
-    /// first cut had the small one at seventy, which put its wrist past
-    /// vertical and its feathers over her head onto the other side.
+    /// these are lower than the wings look: the great one's wrist ends up
+    /// about sixty degrees up, the floating one's about fifty, the lower one's
+    /// level with the shoulder with its primaries hanging. The first cut had
+    /// the small one rooted on the back at seventy, which put its wrist past
+    /// vertical and its feathers over her head onto the other side; floating
+    /// off the shoulder it can lie lower and still sit clear of the great one.
     const fn pitch(self) -> f32 {
         match self {
-            Slot::Top => 0.52,
-            Slot::Middle => 0.16,
+            Slot::Top => 0.35,
+            Slot::Middle => 0.45,
             Slot::Bottom => -0.40,
         }
     }
@@ -283,9 +300,9 @@ fn wing(p: &Player, force: Force, slot: Slot, shown: bool) -> Wing {
     let side = norm([fx(side.x), 0.0, fx(side.z)]);
     let height = fx(sim::tuning::body_height()) * slot.root_height();
     let root = [
-        pos[0] - facing[0] * ROOT_BACK,
+        pos[0] - facing[0] * ROOT_BACK + side[0] * slot.root_out(),
         pos[1] + height,
-        pos[2] - facing[2] * ROOT_BACK,
+        pos[2] - facing[2] * ROOT_BACK + side[2] * slot.root_out(),
     ];
     // Out to the side, pitched up or down, swept back.
     let (sin, cos) = slot.pitch().sin_cos();
