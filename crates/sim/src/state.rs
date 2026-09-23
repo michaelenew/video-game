@@ -2787,18 +2787,18 @@ fn step_player(
         p.jump_hold = t::jump_hold_frames();
     }
 
-    // **The dash jump.** Arriving from a dash leaves the Reaver sliding for a
-    // few frames with the speed she crossed at still under her -- the carry --
-    // and a jump pressed inside that window takes the slide up with her instead
-    // of letting the floor have it. It cuts the dodge's tail short, which is the
-    // other half of the reward: the frames she would have spent standing there
-    // being punished are spent in the air going somewhere.
+    // **The dash jump.** The dash stops dead on the shadow, and for a few
+    // frames after -- the carry -- a jump takes a share of the crossing's speed
+    // up with her (`tuning::dash_jump_keep`). It cuts the dodge's tail short,
+    // which is the other half of the reward: the frames she would have spent
+    // standing there being punished are spent in the air going somewhere.
     //
-    // A press rather than a hold, and the slide decays while the window is open,
-    // so the tech has a gradient -- the earlier she finds it, the further she
-    // goes. The ordinary jump above cannot fire here: the carry runs inside the
-    // dodge, and a dodge is not actionable.
+    // A share rather than all of it, since 2026-09-23: the whole fifty metres a
+    // second cleared the arena. The ordinary jump above cannot fire here: the
+    // carry runs inside the dodge, and a dodge is not actionable.
     if pressed_space && shadow::carrying_a_dash(p) {
+        let lunge = shadow::lunge(p);
+        p.vel = V3::new(lunge.x, p.vel.y, lunge.z);
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
@@ -4498,6 +4498,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.echo_used as u32);
             h.write_u32(shadow.dash as u32);
             h.write_u32(shadow.carry as u32);
+            hash_v3(h, &shadow.lunge);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);

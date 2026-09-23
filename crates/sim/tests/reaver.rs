@@ -616,10 +616,10 @@ fn a_stone_across_the_line_leaves_her_with_an_ordinary_dodge() {
 }
 
 #[test]
-fn a_jump_inside_the_carry_leaves_with_the_dash_under_her() {
-    // Arriving leaves her sliding at the speed she crossed at, and the slide
-    // decays. A jump pressed inside that window takes what is left of it up
-    // with her; the earlier she finds it, the further she goes.
+fn a_jump_inside_the_carry_leaves_with_a_share_of_the_dash() {
+    // The dash stops on the shadow; a jump pressed in the short window after
+    // it takes `dash_jump_keep` of the crossing's speed up with her. More than
+    // a standing jump, far less than the dash -- which used to clear the arena.
     let mut w = in_the_open();
     let out = V3::new(Fx::from_int(8), Fx::ZERO, Fx::from_int(8));
     put_the_shadow_at(&mut w, out);
@@ -642,15 +642,84 @@ fn a_jump_inside_the_carry_leaves_with_the_dash_under_her() {
     }
     let leaving = took_off.expect("the jump inside the carry never left the ground");
     let along = V3::new(leaving.x, Fx::ZERO, leaving.z).flat_len();
+    let want = t::shadow_dash_speed().mul(t::dash_jump_keep());
     assert!(
         leaving.y.raw() > 0,
         "she was airborne without going up, so that was the dash and not a jump"
     );
     assert!(
-        along.raw() > t::move_speed().mul(Fx::from_int(2)).raw(),
-        "she left the ground at {:.1} m/s, which is a standing jump rather than \
-         a jump with the dash under it",
+        along.raw() > t::move_speed().raw(),
+        "she left the ground at {:.1} m/s, no faster than a standing jump",
         along.to_f32_for_render()
+    );
+    assert!(
+        (along.raw() - want.raw()).abs() < Fx::ratio(1, 2).raw(),
+        "she left the ground at {:.1} m/s, not the {:.1} the dash jump keeps",
+        along.to_f32_for_render(),
+        want.to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_dash_stops_on_the_shadow() {
+    // The follow-through made precise combat impossible: she used to slide
+    // four or five metres past where the shadow was.
+    let mut w = in_the_open();
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    run(&mut w, 1, SHIFT | W, pitch);
+    for _ in 0..(t::dodge_frames() as u32 + 30) {
+        run(&mut w, 1, 0, pitch);
+    }
+    let past = w.players[0].pos.sub(out).flat_len();
+    assert!(
+        past.raw() < Fx::ratio(1, 10).raw(),
+        "the dash left her {:.2} m from where the shadow was",
+        past.to_f32_for_render()
+    );
+}
+
+#[test]
+fn the_dash_jump_does_not_clear_the_arena() {
+    // Across the whole leash and straight into a held jump: where she lands
+    // should be well inside the arena's width from where she took off.
+    let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
+    w.players[0].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
+    w.players[0].facing = V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
+    w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(-12));
+    run(&mut w, 20, 0, 0);
+    let out = w.players[0]
+        .pos
+        .add(V3::new(Fx::from_int(6), Fx::ZERO, Fx::ZERO));
+    put_the_shadow_at(&mut w, out);
+    let pitch = crosshair_onto(&w, out);
+    let mut took_off_at = None;
+    for _ in 0..200 {
+        let carrying = shadow(&w).carry > 0;
+        let bits = if carrying || took_off_at.is_some() {
+            W | Input::SPACE
+        } else {
+            SHIFT | W
+        };
+        run(&mut w, 1, bits, pitch);
+        if carrying && took_off_at.is_none() && !w.players[0].grounded {
+            took_off_at = Some(w.players[0].pos);
+        }
+        if took_off_at.is_some() && w.players[0].grounded {
+            break;
+        }
+    }
+    let from = took_off_at.expect("the dash jump never left the ground");
+    let flew = w.players[0].pos.sub(from).flat_len();
+    let arena = sim::arena::ARENA_HALF.add(sim::arena::ARENA_HALF);
+    assert!(
+        flew.raw() < arena.mul(Fx::ratio(1, 2)).raw(),
+        "a dash jump carried her {:.1} m, over half the arena's {:.1}",
+        flew.to_f32_for_render(),
+        arena.to_f32_for_render()
     );
 }
 

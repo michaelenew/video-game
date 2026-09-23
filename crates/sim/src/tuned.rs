@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 303] = [
+pub const SCALARS: [i32; 304] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -311,6 +311,7 @@ pub const SCALARS: [i32; 303] = [
            65536, // health.blood_mage_(x) = 1
            65536, // health.dual_mage_(x) = 1
                1, // reaver.shadow_turns_its_copy_to_a_body = on
+              20, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 20
 ];
 
 #[rustfmt::skip]

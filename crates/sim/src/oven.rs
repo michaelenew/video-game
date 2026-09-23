@@ -525,6 +525,9 @@ scalars! {
     // before v2 -- so the difference can be felt in one match rather than
     // remembered across two builds, and measured by `tally`'s `range`.
     ShadowAims,       "Reaver",    "Shadow turns its copy to a body",        Flag,   0,        1;
+    // What a jump out of the dash keeps of the dash's speed. The dash stops
+    // dead on the shadow now; this is the only way its speed carries on.
+    DashJumpKeep,     "Reaver",    "Dash jump, keeps of the dash speed (%)", Percent, 0,       100;
 }
 
 // ---------------------------------------------------------------------------

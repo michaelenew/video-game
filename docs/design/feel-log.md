@@ -5135,3 +5135,24 @@ plain, every hit cashes rather than only the first, a blocked hit spends nothing
 **Open, and worth the person's eye at C3:** with no gate, stepping in and hitting a marked
 target is as good as crossing to it. Whether the dash still feels like the verb of the class
 or becomes one way among several to arrive is a play question.
+
+### 2026-09-23 — the dash stops on the shadow, and the dash jump is a lunge
+
+**Changed** Arriving by dash zeroes her velocity: she stops on the shadow's spot instead of
+sliding on past it. The carry — the ten-frame window after arrival — is unchanged, and a jump
+inside it now takes `Dash jump, keeps of the dash speed` (20%, new knob) of the crossing's flat
+velocity, banked on arrival, instead of the whole slide.
+
+**Why** From play: the follow-through made precision combat hard, and the dash jump cleared the
+arena. The dash is fifty metres a second; it used to leave her four to five metres past the
+shadow, and a jump in the carry took all fifty up with her. Measured now
+(`reaver::the_dash_jump_does_not_clear_the_arena`): a dash jump across the whole arena's width
+carries her **10.5 m**, against 28 m of arena. A fifth of the dash is ten metres a second, about
+one and a half walks — a lunge rather than a launch.
+
+**What else moved** The strike out of the carry no longer has a slide to spend, so it is only
+the tail cut and the turn to the crosshair. `tally pattern` is unchanged: she already swung on
+arrival.
+
+**Verdict** open. Questions for the next play: is ten frames enough to find the jump? Is a
+fifth the right lunge, or does the dash jump want to be vertical more than horizontal?

@@ -824,6 +824,17 @@ pub fn health_of(class: crate::class::Class) -> i32 {
         .max(1)
 }
 
+/// What a jump out of the dash's carry keeps of the dash's speed, flat.
+///
+/// A fifth, 2026-09-23. It used to be everything: the dash arrived at fifty
+/// metres a second, slid on past the shadow, and a jump in the carry took the
+/// whole slide up with it and cleared the arena. The dash stops on the shadow
+/// now, and the jump out of it is a lunge -- ten metres a second, about one
+/// and a half walks -- rather than a launch.
+pub fn dash_jump_keep() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::DashJumpKeep), 100)
+}
+
 /// How fast she crosses to her shadow on a dash.
 ///
 /// Constant while the dash runs rather than a decaying shove, so the distance

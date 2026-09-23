@@ -559,7 +559,14 @@ pub fn swing_out_of_the_carry(p: &mut Player, input: Input) -> bool {
 pub fn spend_carry(p: &mut Player) {
     let Some(mut shadow) = of(p) else { return };
     shadow.carry = 0;
+    shadow.lunge = V3::ZERO;
     put(p, shadow);
+}
+
+/// What a jump out of the carry takes with it: the share of the dash banked
+/// on arrival. Zero if there is no carry to jump out of.
+pub fn lunge(p: &Player) -> V3 {
+    of(p).map_or(V3::ZERO, |shadow| shadow.lunge)
 }
 
 /// Being hit ends the dash and the carry both.
@@ -611,9 +618,16 @@ fn step_her_dash(p: &mut Player) {
         // on the deck rather than half a metre short of the lip, where the
         // arena would push her off again.
         p.pos = shadow.pos;
-        // The line is over, so the world takes her back. Left alone, the rise
-        // that carried her up would keep carrying her off the top of it.
-        p.vel.y = Fx::ZERO;
+        // **And she stops there.** The line is over, so the world takes her
+        // back -- the rise that carried her up would keep carrying her off the
+        // top of it -- and so does the floor: the dash used to leave her
+        // sliding at the speed she crossed at, four or five metres past the
+        // shadow, which made arriving anywhere precise impossible. What is
+        // kept of that speed is banked for a jump out of the carry, and only
+        // for that. See `tuning::dash_jump_keep`.
+        let flat = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
+        shadow.lunge = flat.scale(t::dash_jump_keep());
+        p.vel = V3::ZERO;
         shadow.carry = t::shadow_carry();
         // The window is the same length however far she came. What is left of
         // the dodge usually *is* that window -- she arrived early and the rest

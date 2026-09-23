@@ -102,10 +102,8 @@ shadow's own copies mark rather than spend, or the tally could never climb. A bl
 swing is not a hit and spends nothing: the tally stays on him.
 
 **A swing pressed inside the carry strikes on arrival.** It cuts the dodge's tail short the way
-the jump out of it does — but where the jump keeps the slide to go somewhere, the swing spends
-it and plants her, turned to the crosshair. Without it the slide took her nearly five metres
-past the shadow before she could act, so the dash could not deliver her to anybody standing
-beside it. It buys no safety: a blocked Slash is still −5. See the feel log.
+the jump out of it does, and turns her to the crosshair, so arriving and striking are one
+motion. It buys no safety: a blocked Slash is still −5. See the feel log.
 
 The rhythm: **send, mark, cross, cash, send.** After the cash the target is clean and the
 shadow is at her shoulder marking nothing; staying is her own swings and a small copy against a
@@ -258,9 +256,9 @@ that cannot cover the distance spends the dodge and arrives nowhere, in the open
 invulnerability. That was written down in one comment and nowhere else until 2026-09-17; it is
 `reaver::the_dash_crosses_the_whole_leash` now.
 
-The duration is unchanged, so it is no harder to react to than it was. What did change is that
-the slide the dash leaves behind — the carry, below — scales with the speed, so she now travels
-several metres past a shadow she dashed to from close range.
+The duration is unchanged, so it is no harder to react to than it was. **Since 2026-09-23 it
+stops dead on the shadow**: it used to leave her sliding at the crossing's speed, four or five
+metres past where the shadow was, which made precise fighting at the far end impossible.
 
 Pointed anywhere else, or thrown in any other direction, it is the ordinary dodge. That is
 the design: the class's mobility and the universal defensive option are the same button,
@@ -306,17 +304,16 @@ something another class can actually do, rather than a rule nothing exercises. S
 
 #### The carry, and the jump out of it — added 2026-09-14
 
-**Arriving does not stop her.** She was crossing at more than thirty metres a second and
-that speed is still under her; the frames after she lands are a slide that decays. That
-window is the **carry**, and it is the same length however far she came — a dash that spent
-its whole dodge getting there is given the window rather than having the distance swallow
-it.
+**Arriving stops her on the shadow's spot**, and opens a short window — ten frames — called
+the **carry**. It is the same length however far she came: a dash that spent its whole dodge
+getting there is given the window rather than having the distance swallow it.
 
-**A jump pressed inside the carry takes the slide up with her.** It is the one thing that
-can cut a dodge's tail short, and that is half the reward: the frames she would have spent
-standing there being punished are spent in the air going somewhere instead. The other half
-is the speed, which decays while the window is open — so pressing early keeps more, and the
-tech is a gradient rather than a pass mark.
+**A jump pressed inside the carry is a lunge.** It is one of the two things that can cut a
+dodge's tail short (a swing is the other, above), and that is half the reward: the frames she
+would have spent standing there being punished are spent in the air going somewhere instead.
+The other half is speed — a fifth of the dash's, about one and a half walks, in the direction
+she crossed (`Dash jump, keeps of the dash speed`). It used to be the whole slide, fifty metres
+a second, and a dash jump cleared the arena; it carries her about ten and a half metres now.
 
 It is a **press**, not a held button, and it answers only a dash. Every dodge in the game
 has a punishable tail, and a jump out of *that* would be a universal escape rather than one
@@ -392,10 +389,8 @@ makes with Rush.
 
 - Does the shadow have collision, or is it purely a marker? Collision makes it
   denial-able, which cuts both ways. **It has none today.**
-- **How long should the carry be, and how much of the dash should survive it?** Ten frames
-  is the first value and it is a guess. The slide itself is inherited rather than chosen —
-  it is what the dodge's decay does to thirty-four metres a second — and it carries her a
-  good four metres past the shadow, which on a dais is most of the way to the far edge.
+- **How long should the carry be, and how much of the dash should the jump keep?** Ten
+  frames and a fifth are first values. The dash no longer slides past the shadow at all.
   Nobody has played it.
 - **Where does Deadly mistake go?** It is the only ability in the kit with no input.
 - **The tally's numbers.** Five marks, a fade of a second and a half, 0.4 a mark. All first guesses; see the open questions in
