@@ -5039,3 +5039,76 @@ pushback, and nothing spends it.
 **Verdict** open — **built, unverified**. Awaiting the first play (checkpoint C1 in
 [plans/bulwark-v2.md](plans/bulwark-v2.md)): *can you see the shield loading, does the parry
 feel like a bigger deposit, does the decay feel like a clock or a leak.*
+
+---
+
+### 2026-09-23 — Slam on middle click spends the weight; the leap brings the shield back (Bulwark v2, M2)
+
+**Changed** Slam is bound to middle click and spends the shield's weight. First values:
+`Slam, damage per weight` ×0.5; `Slam, shake radius added when full` 1.6 m; `Slam, damage per m/s
+fallen` 6; `Slam, staggers from` 90 % of the cap; `Slam, stagger at the cap` 45 frames. Three
+more changes the milestone could not be met without, each a decision rather than a knob:
+
+1. **The leap turns the shield around.** `E` on a shield in flight throws him toward it *and*
+   sends it homing back, so the two meet and he arrives with it in hand, in the air. Before,
+   the leap (15 m/s) was slower than the throw (19 m/s) and landed short every time, and
+   every Bulwark move needs the shield in hand — so "throw, leap, slam", the loop both the kit
+   and the proposal are built on, could not be done at all.
+2. **A Slam thrown in the air lands with the feet.** Once its wind-up is spent it waits for the
+   floor, the way Landfall does. Without it the flat shake connected while he was still half a
+   metre up, so the fall bonus was paid on about 2 m/s of a 6.6 m/s fall. A Slam pressed a
+   frame before landing still owes all fourteen frames of its wind-up — letting the landing
+   skip them made it an instant 170, and a test now pins that.
+3. **A crouch does not duck Slam.** It was flagged as a high move (`hits_crouching` off) while
+   the kit said a crouch does not duck it. A shake through the floor is not something you duck
+   under; the kit won. The Bulwark's answer to a turtle is still Grapple, so
+   `every_class_can_beat_a_turtle` is unchanged.
+
+**Measured**, `cargo run -p sim --bin weight slam`:
+
+| Weight | Damage | Shake radius | Weight after | Staggered |
+| --- | --- | --- | --- | --- |
+| 0 | 170 | 1.4 m | 0 | no |
+| 100 | 219 | 1.8 m | 0 | no |
+| 200 | 269 | 2.2 m | 0 | no |
+| 300 | 319 | 2.6 m | 0 | no |
+| 400 | 369 | 3.0 m | 0 | yes |
+
+Out of the leap: caught in the air, fell at 4.1 m/s — 194 empty, 389 full with the stagger. Out
+of a full jump, empty: 15.7 m/s, 260. Into a crouch: 170. A blocked Slam leaves the same
+blockstun at every weight, and all of `feel.rs` passes unchanged — the frames did not move.
+
+**Seen**, headless capture of the demo's Slam on its first active frame with the overlay on
+(`SHOT_FRAME=166 SHOT_WEIGHT=… DEBUG_OVERLAY=1 DEMO=1`): the red shake ring is visibly twice as
+wide at 299 weight as at 0, and it is the ring the hit test uses.
+
+**Why** This is the withdrawal. A full Slam is now the largest hit the Bulwark has, and it is
+largest because of what he took — a Slam at 400 deals 369, more than twice the empty one, and
+the full-shield stagger is the area stagger `bulwark.md` wanted a class to own.
+
+**Watch** A full Slam out of a leap is 389 of a Champion's 1000 — the biggest single blow on the
+roster now. It costs 400 of blocked damage, which has to be taken first, and a Slam's wind-up
+is fourteen frames anybody can see coming, with a shield that has visibly gone dark. If it
+reads as a round-ender, the lever is `Slam, damage per weight`, not the cap.
+
+**The hunt.** The scripted hunter (`cargo run -p hunt --bin fight -- --class bulwark`) now plays
+the class's plan: a Bulwark at a foot holds its guard between openings, and a blow felt on the
+shield is answered with Slam on the first free frame. Its report gained *blows guarded*, *weight
+stored* and *weight spent*. Default seed, before and after:
+
+| | Before (no guard) | After |
+| --- | --- | --- |
+| Outcome | unresolved at 1200 s | died at 520 s |
+| Damage dealt | 1471 | 1675 |
+| Blows guarded / stored / spent | — | 4 / 640 / 440 |
+
+A traced run shows the loop happening: a tail sweep taken on the guard (+160), then a Slam
+spending 148 into a hind foot for 244 — against 170 empty. The leg that broke was finished by
+pokes, not by the Slam. **Finding:** standing at the foot with the guard up deals damage more
+than twice as fast and dies in half the time, because the guard does nothing against the
+unblockable rear-and-slam and a Bulwark planted at the foot is under it. Across four seeds the
+guarding hunter dies at 520–590 s where the dodging one died at 660–1000 s or outlasted the
+budget. Whether that is the right trade for the class is a design question, not a bot one.
+
+**Verdict** open — built and measured, unplayed. The remaining felt question: whether an empty
+Slam is still worth pressing at 170 over 1.4 m for a 14-frame wind-up.

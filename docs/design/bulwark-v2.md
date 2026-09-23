@@ -1,5 +1,5 @@
 ---
-status: being built — M1 (weight, the health table) built 2026-09-23, unverified; M2–M5 not started
+status: being built — M1 (weight, the health table) and M2 (Slam on middle click, spending weight) built 2026-09-23, unplayed; M3–M5 not started
 decided: 2026-09-23
 supersedes: the mechanic section of kits/bulwark.md and the "shield as volume" promise in bulwark.md, once built
 sources: bulwark.md, kits/bulwark.md, defense.md, docs/archive/combat-design/blood-mage-skills.md (Seal of the unforgiven), this design thread

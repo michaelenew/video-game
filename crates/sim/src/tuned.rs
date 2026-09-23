@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 300] = [
+pub const SCALARS: [i32; 305] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -308,6 +308,11 @@ pub const SCALARS: [i32; 300] = [
            65536, // health.elementalist_(x) = 1
            65536, // health.blood_mage_(x) = 1
            65536, // health.dual_mage_(x) = 1
+           32768, // bulwark.slam,_damage_per_weight_(x) = 0.5
+          104858, // bulwark.slam,_shake_radius_added_when_full = 1.6
+               6, // bulwark.slam,_damage_per_m/s_fallen = 6
+              90, // bulwark.slam,_staggers_from_(%_of_the_cap) = 90
+              45, // bulwark.slam,_stagger_at_the_cap = 45
 ];
 
 #[rustfmt::skip]
@@ -380,7 +385,7 @@ pub const MOVES: [i32; 1204] = [
               20, // move.bulwark.slam.mobility_(%) = 20
               12, // move.bulwark.slam.aerial_hang = 12
                0, // move.bulwark.slam.unblockable = off
-               0, // move.bulwark.slam.hits_crouching = off
+               1, // move.bulwark.slam.hits_crouching = on
                0, // move.bulwark.slam.needs_mechanic = off
                0, // move.bulwark.slam.launch = 0
                0, // move.bulwark.slam.self_lift = 0

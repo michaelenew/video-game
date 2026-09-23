@@ -242,3 +242,227 @@ fn a_blocked_creature_blow_loads_the_shield() {
     );
     assert!(heaviest.raw() > 0, "a blocked stomp stored nothing");
 }
+
+// ---------------------------------------------------------------------------
+// Slam: M2
+// ---------------------------------------------------------------------------
+
+const M: u16 = Input::MIDDLE;
+
+/// Two Bulwarks, the left one holding `load`, the other a dummy in Slam's
+/// reach.
+fn slam_at(load: Fx) -> World {
+    let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
+    w.players[0].pos.x = Fx::from_int(-2);
+    w.players[1].pos.x = Fx::ratio(-1, 2);
+    set_weight(&mut w, 0, load);
+    w
+}
+
+/// One standing Slam from `load`, into a dummy doing `guard`. Damage dealt,
+/// the widest the drawn volume was, weight after, and whether the dummy was
+/// left staggered.
+fn slam_from(load: Fx, dummy: u16) -> (i32, Fx, Fx, bool) {
+    let mut w = slam_at(load);
+    run(&mut w, 20, 0, dummy);
+    let before = w.players[1].health;
+    let mut radius = Fx::ZERO;
+    let mut staggered = false;
+    for f in 0..60 {
+        run(&mut w, 1, if f == 0 { M } else { 0 }, dummy);
+        if let Some(h) = sim::state::hitbox(&w.players[0]) {
+            radius = radius.max(h.radius);
+        }
+        staggered |= matches!(w.players[1].action, Action::Stagger { .. });
+    }
+    (
+        before - w.players[1].health,
+        radius,
+        weight(&w, 0),
+        staggered,
+    )
+}
+
+#[test]
+fn middle_click_is_slam() {
+    let mut w = slam_at(Fx::ZERO);
+    run(&mut w, 1, M, 0);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Startup { kind, .. } if kind == sim::state::SLOT_COMMITTED
+        ),
+        "middle click threw {:?}",
+        w.players[0].action
+    );
+}
+
+#[test]
+fn slam_hits_harder_and_shakes_wider_with_weight_and_spends_it() {
+    let mut last = (0, Fx::ZERO);
+    for quarter in 0..=4 {
+        let load = t::weight_cap().mul(Fx::ratio(quarter, 4));
+        let (damage, radius, after, _) = slam_from(load, 0);
+        assert!(damage > 0, "a slam from {load:?} did not connect");
+        if quarter > 0 {
+            assert!(
+                damage > last.0 && radius.raw() > last.1.raw(),
+                "a slam from {load:?} dealt {damage} over {radius:?}, no more than {last:?}"
+            );
+        }
+        assert_eq!(after, Fx::ZERO, "a slam from {load:?} left {after:?}");
+        last = (damage, radius);
+    }
+}
+
+#[test]
+fn only_a_nearly_full_slam_staggers() {
+    let (_, _, _, full) = slam_from(t::weight_cap(), 0);
+    assert!(full, "a full slam did not stagger");
+    let short = t::weight_cap()
+        .mul(t::slam_stagger_share())
+        .sub(Fx::from_int(20));
+    let (_, _, _, partly) = slam_from(short, 0);
+    assert!(!partly, "a slam from {short:?} staggered");
+}
+
+#[test]
+fn a_blocked_slam_costs_the_same_frames_at_any_weight() {
+    // Frames do not change with weight -- only damage and radius do -- so a
+    // blocked full slam is exactly as punishable as an empty one.
+    let blockstun = |load: Fx| {
+        let mut w = slam_at(load);
+        run(&mut w, 20, 0, R);
+        let mut longest = 0;
+        for f in 0..60 {
+            run(&mut w, 1, if f == 0 { M } else { 0 }, R);
+            if let Action::BlockStun { left } = w.players[1].action {
+                longest = longest.max(left);
+            }
+            assert!(
+                !matches!(w.players[1].action, Action::Stagger { .. }),
+                "a blocked slam from {load:?} staggered through the guard"
+            );
+        }
+        longest
+    };
+    let empty = blockstun(Fx::ZERO);
+    assert!(empty > 0, "the fixture's guard never blocked");
+    assert_eq!(blockstun(t::weight_cap()), empty);
+}
+
+#[test]
+fn a_crouch_does_not_duck_the_shake() {
+    let (damage, _, _, _) = slam_from(Fx::ZERO, Input::CROUCH);
+    assert!(damage > 0, "a crouching dummy ducked the slam");
+}
+
+/// A Slam thrown on the way down from a full jump, the frame the fall begins.
+fn slam_out_of_a_jump() -> (World, i32) {
+    let mut w = slam_at(Fx::ZERO);
+    w.players[1].pos.x = Fx::from_int(8);
+    let mut pressed = false;
+    for f in 0..90 {
+        let p = w.players[0];
+        let bits = if f <= 20 {
+            Input::SPACE
+        } else if !pressed && !p.grounded && p.vel.y.raw() < 0 {
+            pressed = true;
+            M
+        } else {
+            0
+        };
+        run(&mut w, 1, bits, 0);
+    }
+    let fell = w.players[0].pos;
+    // Again, with the dummy where the shake lands.
+    let mut again = slam_at(Fx::ZERO);
+    again.players[1].pos.x = fell.x.add(Fx::from_int(2));
+    let before = again.players[1].health;
+    let mut pressed = false;
+    for f in 0..90 {
+        let p = again.players[0];
+        let bits = if f <= 20 {
+            Input::SPACE
+        } else if !pressed && !p.grounded && p.vel.y.raw() < 0 {
+            pressed = true;
+            M
+        } else {
+            0
+        };
+        run(&mut again, 1, bits, 0);
+    }
+    let dealt = before - again.players[1].health;
+    (again, dealt)
+}
+
+#[test]
+fn a_slam_out_of_a_fall_hits_harder_and_lands_with_the_feet() {
+    let (standing, _, _, _) = slam_from(Fx::ZERO, 0);
+    let (_, fallen) = slam_out_of_a_jump();
+    assert!(
+        fallen > standing,
+        "a slam out of a full jump dealt {fallen}, a standing one {standing}"
+    );
+}
+
+#[test]
+fn landing_does_not_skip_the_slams_wind_up() {
+    // Hop, and press Slam the frame before the feet arrive. The wind-up is
+    // still owed in full.
+    let mut w = slam_at(Fx::ZERO);
+    run(&mut w, 1, Input::SPACE, 0);
+    let mut pressed_at = None;
+    let mut active_at = None;
+    for f in 0..80 {
+        let p = w.players[0];
+        // One frame of fall left: this frame's step would reach the floor.
+        let landing =
+            !p.grounded && p.vel.y.raw() < 0 && p.pos.y.add(p.vel.y.mul(sim::DT)).raw() <= 0;
+        let bits = if pressed_at.is_none() && landing {
+            pressed_at = Some(f);
+            M
+        } else {
+            0
+        };
+        run(&mut w, 1, bits, 0);
+        if active_at.is_none()
+            && matches!(w.players[0].action, Action::Active { kind, .. } if kind == sim::state::SLOT_COMMITTED)
+        {
+            active_at = Some(f);
+        }
+    }
+    let (Some(pressed), Some(active)) = (pressed_at, active_at) else {
+        panic!("the fixture never slammed: pressed {pressed_at:?}, active {active_at:?}");
+    };
+    let startup = sim::moves::get(Class::Bulwark, sim::state::SLOT_COMMITTED).startup as i32;
+    assert!(
+        active - pressed >= startup,
+        "pressed a frame before landing, active {} frames later against a {startup}-frame wind-up",
+        active - pressed
+    );
+}
+
+#[test]
+fn the_leap_catches_the_shield_in_the_air() {
+    let mut w = World::new();
+    let load = Fx::from_int(300);
+    set_weight(&mut w, 0, load);
+    run(&mut w, 1, Input::MECHANIC, 0);
+    run(&mut w, 5, 0, 0);
+    run(&mut w, 1, Input::MECHANIC, 0);
+    let mut caught_airborne = false;
+    for _ in 0..30 {
+        run(&mut w, 1, 0, 0);
+        let p = w.players[0];
+        if p.shield().is_some_and(|s| s.in_hand()) {
+            caught_airborne = !p.grounded;
+            break;
+        }
+    }
+    assert!(
+        caught_airborne,
+        "the leap did not bring the shield back in the air"
+    );
+    assert!(weight(&w, 0).raw() > 0, "the shield came back empty");
+}

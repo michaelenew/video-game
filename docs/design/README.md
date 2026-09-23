@@ -84,7 +84,7 @@ poke is a design choice in a closed arena, not a gap.
 | [Blood mage](kits/blood-mage.md) | Health — **grey health and essence pools, proposed** | `L` Bloodletter · `Q` Grasp · `E` Black spike | Reworked; [v1 kit proposed](blood-mage.md) |
 | [Dual mage](kits/dual-mage.md) | Two bars, Dark and Light, and the hill between them | `L` dark auto (pulls) · `R` light auto (pushes) · `M` Lance, two forms · `Q` Judgement · `E` Sweep · **the lower bar unlocks a blink, a second jump, wings** | **Rebuilt on two bars**, unplayed |
 | [Champion](kits/champion.md) | Rush charge (one, cancels recoveries) | `L`/`M`/`R` = sword/hammer/spear, three hits deep · `space` + weapon = takeoff · `E` Rush | Shaped |
-| [Bulwark](kits/bulwark.md) | Shield position — **and its weight, M1 built** (stored, drains, resists pushback; nothing spends it yet) | `L` Bash · `M` Slam (proposed) · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New; [v2 being built](bulwark-v2.md), M1 unplayed |
+| [Bulwark](kits/bulwark.md) | Shield position — **and its weight**: stored when blocked, spent by Slam | `L` Bash · `M` Slam · `Q` Grapple · `R` Guard · `E` Throw/Recall/leap | New; [v2 being built](bulwark-v2.md), M1–M2 unplayed |
 | ~~Gatekeeper~~ | — | — | Retired |
 
 *Dual mage was Statera. Champion was Bellator, and Shifter before that.*
@@ -107,7 +107,7 @@ few enough to balance and to read in third person.
 | [plans/](plans/) | Action plans for implementation threads: [Blood mage v1](plans/blood-mage-v1.md), [Dual mage v2](plans/dual-mage-v2.md) (built), [Shadow Reaver v2](plans/shadow-reaver-v2.md), [Bulwark v2](plans/bulwark-v2.md) | Briefs |
 | [champion.md](champion.md) | Forms, the three-hit chain, and the mid-animation swap | Decided |
 | [bulwark.md](bulwark.md) | Why the class exists; shield as volume | Proposed; v2 proposed |
-| [bulwark-v2.md](bulwark-v2.md) | v2: the shield is a battery — weight, Slam on `M`, the planted wall | **Being built** — M1 (weight, health table) built, unverified |
+| [bulwark-v2.md](bulwark-v2.md) | v2: the shield is a battery — weight, Slam on `M`, the planted wall | **Being built** — M1 (weight, health table) and M2 (Slam on `M`, spending it) built, unplayed |
 | [shadow-reaver-v2.md](shadow-reaver-v2.md) | v2: the shadow aims itself, marks, and the cash-in on arrival | **Proposed** |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |

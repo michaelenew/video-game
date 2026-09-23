@@ -522,6 +522,17 @@ scalars! {
     HealthElementalist, "Health", "Elementalist (x)",                     Fixed,   fx(1,2), fx(2,1);
     HealthBloodMage,  "Health",   "Blood mage (x)",                       Fixed,   fx(1,2), fx(2,1);
     HealthDualMage,   "Health",   "Dual mage (x)",                        Fixed,   fx(1,2), fx(2,1);
+    // Slam spends the weight -- M2 of the Bulwark's v2. What each unit of it
+    // adds to the blow and to the width of the shake, what falling into it
+    // adds, and the area stagger a nearly full shield buys. The stagger's
+    // threshold is a share of the cap rather than the cap itself, because the
+    // shield drains between the last block and the press and a threshold of
+    // exactly full would be a number nobody ever reaches.
+    SlamWeightDamage, "Bulwark",  "Slam, damage per weight (x)",          Fixed,   0,       fx(2,1);
+    SlamWeightRadius, "Bulwark",  "Slam, shake radius added when full",   Fixed,   0,       fx(4,1);
+    SlamFallDamage,   "Bulwark",  "Slam, damage per m/s fallen",          Int,     0,       40;
+    SlamStaggerShare, "Bulwark",  "Slam, staggers from (% of the cap)",   Percent, 0,       100;
+    SlamStaggerFrames,"Bulwark",  "Slam, stagger at the cap",             Frames,  0,       120;
 }
 
 // ---------------------------------------------------------------------------

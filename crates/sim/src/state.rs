@@ -373,6 +373,11 @@ pub struct Player {
     /// bounded above by terminal velocity, which is what makes the worst case
     /// knowable.
     pub slam: Fx,
+    /// The fastest the Bulwark has fallen during Slam's wind-up, in metres per
+    /// second. What the kit's fall-speed scaling reads: a slam out of a leap is
+    /// worth more than one thrown standing. Zero outside a Slam. See
+    /// `crate::bulwark::track_fall`.
+    pub slam_fall: Fx,
 
     // -- Animation clocks ---------------------------------------------------
     //
@@ -837,6 +842,7 @@ impl Default for Player {
             space_held: false,
             leap_used: false,
             slam: Fx::ZERO,
+            slam_fall: Fx::ZERO,
             stride: 0,
             air_frames: 0,
             since_landed: 0,
@@ -1202,6 +1208,15 @@ impl World {
                     hit.damage.min(snapshot[defender].health)
                 };
                 apply_hit(&mut self.players[defender], hit);
+                // A full shield's Slam staggers what its shake catches
+                // unguarded: the area stagger weight buys. Blocked, it is an
+                // ordinary blocked Slam -- its frames do not change with weight.
+                if !hit.blocked && !hit.parried && bulwark::slam_staggers(&snapshot[attacker]) {
+                    self.players[defender].action = Action::Stagger {
+                        left: t::slam_full_stagger(),
+                    };
+                    self.players[defender].stun_total = t::slam_full_stagger();
+                }
                 let owed = snapshot[attacker]
                     .action
                     .attack_kind()
@@ -1455,6 +1470,7 @@ impl World {
             h.write_u32(p.space_held as u32);
             h.write_u32(p.leap_used as u32);
             h.write_i32(p.slam.raw());
+            h.write_i32(p.slam_fall.raw());
             h.write_u32(p.held_by as u32);
             h.write_u32(p.jump_hold as u32);
             h.write_u32(p.air_stall as u32);
@@ -1670,6 +1686,10 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     // rather than a branch per ability. Every other class, and both of her
     // autos, get exactly one back and nothing changes. See [`depth`].
     m.radius = m.radius.mul(depth_of_size(p, kind));
+    // **And the Bulwark's weight changes how wide Slam's shake is.** Here, in
+    // the one description of an attack's volume, so the overlay draws the
+    // shake at the radius it is tested at. See `crate::bulwark`.
+    m.radius = bulwark::slam_radius(p, kind, m.radius);
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -2044,8 +2064,11 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
         launch
     };
 
+    // The Bulwark's Slam spends his weight and his fall. The base for
+    // everybody else and every other move.
+    let damage = bulwark::slam_damage(attacker, kind, m.damage);
     Some(Hit {
-        damage: Fx::from_int(m.damage).mul(damage_mul).to_int(),
+        damage: Fx::from_int(damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
         blockstun: m.blockstun,
         knockback: speed.mul(air_mul),
@@ -2252,10 +2275,14 @@ fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
             kind,
             left: left - 1,
         },
-        Action::Active { kind, .. } => Action::Recovery {
-            kind,
-            left: moves::get(p.class, kind).recovery,
-        },
+        Action::Active { kind, .. } => {
+            // Slam's weight goes with its active frames, landed or not.
+            bulwark::spend_on_slam(p, kind);
+            Action::Recovery {
+                kind,
+                left: moves::get(p.class, kind).recovery,
+            }
+        }
         Action::Recovery { kind, left } if left > 0 => Action::Recovery {
             kind,
             left: left - 1,
@@ -2306,6 +2333,9 @@ fn step_player(
     // frame it was meant to come back.
     let out = p.abilities_out(who, scene);
     p.tick_repeat_locks(&out);
+    // Before anything moves the body, so the frame the feet land on still
+    // sees the fall that got them there.
+    bulwark::track_fall(p);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
     if p.aboard() {
@@ -2894,8 +2924,20 @@ fn step_player(
         // begin on the frame her feet reach something rather than on a number
         // -- see [`plunging`]. Held at zero by `countdown` until this happens,
         // which is what lets the wind-up be as long as the height she chose.
-        if let Action::Startup { kind, .. } = p.action {
-            if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
+        //
+        // The Bulwark's airborne Slam arrives the same way. Only one thrown
+        // in the air: a Slam started on the floor is on its own clock, and
+        // `was_grounded` is what tells the two apart.
+        //
+        // **And only once its wind-up is spent.** A Slam pressed a frame
+        // before landing is a Slam with fourteen frames still to go, and
+        // arriving must not skip them -- otherwise the answer to "how do I
+        // make my slowest move instant" is "hop first".
+        if let Action::Startup { kind, left } = p.action {
+            let slam_from_the_air = !was_grounded && p.class == Class::Bulwark && left == 0;
+            if lands_on_the_floor(p.class, kind)
+                && (p.class == Class::Elementalist || slam_from_the_air)
+            {
                 p.action = Action::Active {
                     kind,
                     left: moves::get(p.class, kind).active,
@@ -2967,6 +3009,14 @@ fn clicked_move(p: &Player, input: Input) -> Option<u8> {
         // Blood mage's Rend -- and that is deliberate and temporary: finding
         // each of them a home is a separate job, one kit at a time, and the
         // Reaver's is already on `E`. See `docs/design/controls.md`.
+        //
+        // **The Bulwark's has one**, since 2026-09-23: the free third click.
+        // Slam is where his weight is spent, so it wanted a button of its own
+        // rather than a modifier -- see `bulwark-v2.md`. Left first, so both at
+        // once is the poke, the same tie-break every other class makes.
+        Class::Bulwark if !input.has(Input::LEFT) && input.has(Input::MIDDLE) => {
+            Some(SLOT_COMMITTED)
+        }
         _ => input.has(Input::LEFT).then_some(SLOT_POKE),
     }
 }
@@ -3056,8 +3106,20 @@ fn plunging(p: &Player) -> bool {
 }
 
 /// Is this startup one that waits for the floor rather than for its own clock?
+///
+/// Two do. Landfall, and the Bulwark's **Slam thrown in the air**: he drives
+/// the shield into the ground, so the shake is where the ground is and it comes
+/// when his feet do -- which is also what lets the fall into it be counted,
+/// because the fall is not over until then. Unlike Landfall it is not driven:
+/// he falls the way he was falling, and how fast is what it pays.
 fn waits_for_the_floor(p: &Player, kind: u8) -> bool {
-    !p.grounded && p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL
+    !p.grounded && lands_on_the_floor(p.class, kind)
+}
+
+/// The moves whose active frames begin on the frame the feet arrive.
+fn lands_on_the_floor(class: Class, kind: u8) -> bool {
+    (class == Class::Elementalist && kind == moves::elementalist::LANDFALL)
+        || (class == Class::Bulwark && kind == SLOT_COMMITTED)
 }
 
 /// Which of the Dual mage's six a click asks for.
@@ -4135,12 +4197,20 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                         weight,
                     }
                 }
+                // **The leap and the shield meet in the middle**, since
+                // 2026-09-23. He is thrown toward it and it turns and comes
+                // back to meet him, homing like a recall, so he arrives with
+                // it in hand and in the air -- which is what makes "throw,
+                // leap, slam" a thing he can do. Before, the leap was slower
+                // than the throw and fell short of it every time, and every
+                // Bulwark move needs the shield in hand, so the slam out of a
+                // leap the kit promised had no way to happen. See
+                // `bulwark-v2.md` and the feel log.
                 Shield::Flying {
                     pos,
-                    vel,
-                    outbound,
                     travelled,
                     weight,
+                    ..
                 } => {
                     let to_shield = pos.sub(p.pos);
                     if to_shield.flat_len().raw() > Fx::ONE.raw() {
@@ -4152,8 +4222,8 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                     }
                     Shield::Flying {
                         pos,
-                        vel,
-                        outbound,
+                        vel: from.sub(pos).normalized().scale(t::shield_speed()),
+                        outbound: false,
                         travelled,
                         weight,
                     }
@@ -6586,7 +6656,7 @@ impl World {
                 continue;
             };
             let m = moves::get(attacker.class, kind);
-            let raw = Fx::from_int(m.damage)
+            let raw = Fx::from_int(bulwark::slam_damage(&attacker, kind, m.damage))
                 .mul(preying(attacker.class, beast.disabled()))
                 .to_int();
             let dealt = beast.take_hit(part, raw);

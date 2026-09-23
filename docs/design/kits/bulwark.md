@@ -11,7 +11,8 @@ depends: ../bulwark.md, ../defense.md
 > **weight**; Slam (on middle click) and Throw spend it, and a planted shield becomes a real
 > structure sized by it. **Built so far (M1):** weight itself — loading, the drain, the
 > pushback it resists, drawn on the shield — and the Bulwark's health, highest on the roster.
-> See [Weight](#weight--built-m1) below. Nothing spends it yet, and Slam still has no button.
+> See [Weight](#weight--built-m1) below. **M2:** Slam is on middle click and spends it — see
+> [Slam](#slam--m-and-it-spends-the-weight). The throw and the planted wall (M3) are not built.
 
 **Identity.** The wall. Wins by denying space and funnelling the opponent into where you are
 already aimed. Committed, not slow.
@@ -66,19 +67,20 @@ the four knobs under the Bulwark.
 **Health**: 1250 against everyone else's 1000, from the `Health` family in the Oven — one
 multiplier per class, shared with the Reaver's v2.
 
-**What does not spend it yet**: Slam (M2) and the throw and the planted wall (M3). Until then
-weight is a number you can see that changes one thing.
+**What spends it**: Slam, since M2 — see below. The throw and the planted wall (M3) do not
+yet.
 
 ## What is bound today
 
 Three moves and the mechanic. The shared grammar puts the poke on the bare click, so Bash sits
 one rung lower than the six-ability sketch below implies — and Slam sat on the modifier until
-shift stopped modifying clicks on 2026-09-16, which left it with no input at all.
+shift stopped modifying clicks on 2026-09-16, which left it with no input at all until it took
+the free middle click on 2026-09-23.
 
 | Input | Move | Bound |
 | --- | --- | --- |
 | `L` | **Bash** — the shield strike | yes |
-| ~~`shift` + `L`~~ | **Slam** — the overhead | **no button since 2026-09-16** |
+| `M` | **Slam** — the shield into the ground, spending its weight | yes, since 2026-09-23 |
 | `Q` | **Grapple** — the command grab | yes |
 | `R` (hold) | **Guard**, with the parry in its opening frames | yes |
 | `E` | **Throw** / **Recall** / **leap to it**, by shield state | yes |
@@ -115,25 +117,33 @@ A short forward shield strike. The safe poke, and the natural follow-up to a par
 > 17 frames and the lockout is 30, so throwing it twice in a row waits 13. See
 > [../combat-kernel.md](../combat-kernel.md) §"The repeat lockout".
 
-### Slam — and it has no input at the moment
+### Slam — `M`, and it spends the weight
 **Startup** slow · **Recovery** committed · **Range** short area · **Mechanic** requires the
-shield held
-
-> **Stranded, 2026-09-16.** Shift plus a click is not an attack input any more, on any class —
-> see [../controls.md](../controls.md#shift-is-one-verb-now-2026-09-16). Slam is still in the
-> table, still tuned and still printed by the frame table, and there is no button that throws
-> it. Finding it a home is its own job: the right answer is different per class, and guessing
-> three of them at once is how a grammar gets worse.
+shield held, and spends everything it holds
 
 Drive the shield into the ground. Shakes the ground and staggers everything close.
 
-> **Implemented** as a flat overhead — 14/4/24, and a crouching opponent does not duck it.
+> **Built, 2026-09-23 (v2, M2).** On middle click — it had no input from 2026-09-16, when shift
+> stopped modifying clicks, until the proposal gave it the free third button. 14/4/24, and the
+> frames never change with weight: a blocked full Slam is exactly as punishable as an empty one.
 >
-> **The velocity scaling is not built.** The intent is that damage and stagger strength scale
-> with how fast you were falling, so the move rewards being thrown out of a jump or a leap
-> recall; today it deals the same wherever it is thrown from. The Champion's aerial hammer has
-> the machinery this wants (`champion::slam_damage_per_m/s` charges a spiked victim for the
-> speed they land at), so it is a knob and a branch rather than a system.
+> - **Weight.** Damage is the move's 170 plus `Slam, damage per weight` of what the shield
+>   holds; the shake's radius is the move's 1.4 m plus `Slam, shake radius added when full` in
+>   proportion to how full it is. 170 over 1.4 m empty, 369 over 3.0 m full.
+> - **The stagger.** From `Slam, staggers from` of the cap (90 %), whatever the shake catches
+>   unguarded is staggered for `Slam, stagger at the cap` frames rather than put in hitstun.
+>   Blocked, it is an ordinary blocked Slam.
+> - **Spent** on its last active frame, landed or not. The shield does not drain while Slam is
+>   out, so what the shake is worth and how wide it is drawn is what he had when he committed.
+> - **The fall.** `Slam, damage per m/s fallen`, for the fastest he fell during the wind-up.
+>   **Thrown in the air it lands with the feet**: once its wind-up is spent it waits for the
+>   floor, the way Landfall does, so the shake is where the ground is and the fall is counted to
+>   the end. A Slam pressed a frame before landing still owes its whole wind-up. Out of a full
+>   jump, 260 against 170 standing; out of the leap, which is low, 194.
+> - **A crouch does not duck it.** It was marked as an overhead (`hits_crouching` off) while
+>   this document said otherwise; the shake goes through the floor, so the document won.
+>
+> `cargo run -p sim --bin weight slam` prints all of it.
 
 ### Throw / Recall — `E`, the mechanic
 **Startup** instant · **Recovery** none · **Range** the throw's own reach · **Mechanic**
@@ -145,8 +155,11 @@ One key, and which of three things it does depends on where the shield is.
   chest — damaging along its path, and plants where it lands. You are now faster, exposed,
   and unable to block.
 - **Planted → recalled.** It flies back, damaging everything along the return path.
-- **In flight → leap to it.** Pressed while it travels, you are thrown toward it and arrive
-  where it is.
+- **In flight → leap to it.** Pressed while it travels, you are thrown toward it **and it turns
+  to meet you**, homing like a recall, so you arrive with it in hand and still in the air — which
+  is what lets a Slam come out of the leap. Since 2026-09-23: before, the leap was slower than the
+  throw and fell short of it every time, and every Bulwark move needs the shield in hand, so the
+  slam out of a leap this document promised could not happen.
 
 > **Implemented**, and **with no frames at all**. The kit above specified a startup and a
 > recovery for Throw and Recall as though they were abilities; they are the class mechanic,
@@ -158,9 +171,10 @@ One key, and which of three things it does depends on where the shield is.
 >
 > What is not built is the planting: a planted shield stops nothing, per the warning above.
 
-Recall is the class's mobility and its approach tool — throw to commit, leap to follow. It is
-*meant* to set up Slam, since arriving from a leap carries downward velocity; that only pays
-once Slam scales with it.
+Recall is the class's mobility and its approach tool — throw to commit, leap to follow. It
+sets up Slam: the leap brings the shield back in the air, and a Slam thrown there lands with
+the feet and is paid for the fall. The leap is low, so the fall is worth little (about 4 m/s,
++24); a Slam out of a full jump is worth much more.
 
 ### Grapple — `Q`
 **Startup** slow · **Recovery** committed · **Range** melee · **Mechanic** requires the

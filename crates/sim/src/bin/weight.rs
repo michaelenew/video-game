@@ -54,7 +54,7 @@ fn main() {
             "decay" => decay(),
             "pushback" => pushback(),
             "stomp" => stomp(),
-            "slam" => println!("slam\n  not built: Slam on middle click is M2\n"),
+            "slam" => slam(),
             "wall" => println!("wall\n  not built: the throw and the planted wall are M3\n"),
             other => println!("{other}: no such script (have {})\n", SCRIPTS.join(", ")),
         }
@@ -307,6 +307,147 @@ fn pushback() {
         );
     }
     println!();
+}
+
+/// Two Bulwarks, the one on the left holding `weight`, the other a dummy in
+/// reach of his Slam.
+fn slam_at(weight: Fx) -> World {
+    let mut w = World::with_classes([Class::Bulwark, Class::Bulwark]);
+    w.players[0].pos.x = Fx::from_int(-2);
+    w.players[1].pos.x = Fx::ratio(-1, 2);
+    if let Mechanic::Shield(s) = w.players[0].mechanic {
+        w.players[0].mechanic = Mechanic::Shield(s.with_weight(weight));
+    }
+    w
+}
+
+/// What one Slam did: damage, the widest its volume was drawn, what the
+/// shield held after, and whether the dummy was left staggered.
+struct Slammed {
+    damage: i32,
+    radius: Fx,
+    after: Fx,
+    staggered: bool,
+    fell: Fx,
+}
+
+/// Run a world with player one pressing `bits` on the frames `press` says,
+/// until his Slam is over, and report it.
+fn slam_run(w: &mut World, frames: i32, press: impl Fn(i32, &World) -> u16) -> Slammed {
+    let before = w.players[1].health;
+    let mut radius = Fx::ZERO;
+    let mut staggered = false;
+    let mut fell = Fx::ZERO;
+    for f in 0..frames {
+        let bits = press(f, w);
+        w.advance(face_off(bits, 0));
+        if let Some(h) = sim::state::hitbox(&w.players[0]) {
+            if matches!(w.players[0].action, Action::Active { kind, .. } if kind == sim::state::SLOT_COMMITTED)
+            {
+                radius = radius.max(h.radius);
+            }
+        }
+        fell = fell.max(w.players[0].slam_fall);
+        staggered |= matches!(w.players[1].action, Action::Stagger { .. });
+    }
+    Slammed {
+        damage: before - w.players[1].health,
+        radius,
+        after: bulwark::weight(&w.players[0]),
+        staggered,
+        fell,
+    }
+}
+
+/// Slam at five weights, and Slam out of a leap to a thrown shield.
+fn slam() {
+    println!("slam -- a standing Slam into an unguarded dummy, at five weights");
+    println!("  weight   damage   shake radius   weight after   staggered");
+    for fifth in 0..=4 {
+        let mut w = slam_at(t::weight_cap().mul(Fx::ratio(fifth, 4)));
+        let held = bulwark::weight(&w.players[0]);
+        let r = slam_run(&mut w, 60, |f, _| if f == 0 { Input::MIDDLE } else { 0 });
+        println!(
+            "  {:>6}   {:>6}   {:>9} m   {:>12}   {}",
+            held.to_int(),
+            r.damage,
+            tenths(r.radius),
+            r.after.to_int(),
+            if r.staggered { "yes" } else { "no" },
+        );
+    }
+    // Crouching does not duck a shake.
+    let mut w = slam_at(Fx::ZERO);
+    let before = w.players[1].health;
+    for f in 0..60 {
+        w.advance(face_off(
+            if f == 0 { Input::MIDDLE } else { 0 },
+            Input::CROUCH,
+        ));
+    }
+    println!(
+        "  into a crouch: {} damage{}",
+        before - w.players[1].health,
+        if before == w.players[1].health {
+            "  (DUCKED)"
+        } else {
+            ""
+        }
+    );
+
+    // Out of a leap: throw the shield, leap to it, slam on the way down.
+    println!("  out of a leap to a thrown shield, empty:");
+    let leap = |f: i32, w: &World| -> u16 {
+        let p = &w.players[0];
+        match f {
+            0 => Input::MECHANIC,
+            6 => Input::MECHANIC,
+            _ if !p.grounded && p.vel.y.raw() < 0 && p.action.actionable() => Input::MIDDLE,
+            _ => 0,
+        }
+    };
+    let standing = sim::moves::get(Class::Bulwark, sim::state::SLOT_COMMITTED).damage;
+    for (label, load) in [("empty", Fx::ZERO), ("full", t::weight_cap())] {
+        let r = arriving(load, leap);
+        println!(
+            "    {label}: caught it in the air, fell at {} m/s into the slam: {} damage, shake {} m, weight after {}{}",
+            tenths(r.fell),
+            r.damage,
+            tenths(r.radius),
+            r.after.to_int(),
+            if r.staggered { ", staggered" } else { "" },
+        );
+    }
+    // Out of a full jump: the most fall a Slam from level ground can carry.
+    let jump = |f: i32, w: &World| -> u16 {
+        let p = &w.players[0];
+        match f {
+            0..=20 => Input::SPACE,
+            _ if !p.grounded && p.vel.y.raw() < 0 && p.action.actionable() => Input::MIDDLE,
+            _ => 0,
+        }
+    };
+    let r = arriving(Fx::ZERO, jump);
+    println!(
+        "  out of a full jump, empty: fell at {} m/s into it: {} damage, against {standing} standing",
+        tenths(r.fell),
+        r.damage,
+    );
+    println!();
+}
+
+/// A Slam thrown by a script that moves the Bulwark before it lands: run it
+/// once with nobody there to find where he comes down, then again with the
+/// dummy standing where the shake lands.
+fn arriving(load: Fx, press: impl Fn(i32, &World) -> u16 + Copy) -> Slammed {
+    let mut dry = slam_at(load);
+    dry.players[1].pos.x = sim::arena::ARENA_HALF;
+    slam_run(&mut dry, 90, press);
+    let landed = dry.players[0].pos;
+    let mut w = slam_at(load);
+    let reach = sim::moves::get(Class::Bulwark, sim::state::SLOT_COMMITTED).reach;
+    w.players[1].pos.x = landed.x.add(reach);
+    slam_run(&mut w, 90, press)
 }
 
 /// A Bulwark with his guard up at each creature move's own range, facing it.
