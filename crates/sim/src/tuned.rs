@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 290] = [
+pub const SCALARS: [i32; 304] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -298,6 +298,20 @@ pub const SCALARS: [i32; 290] = [
            39321, // dual_mage.slow_fall,_fall_cap_(x) = 0.6
               40, // dual_mage.ascension,_health_back_per_hit_landed = 40
               10, // dual_mage.ascension,_stun_on_the_way_out,_at_least = 10
+           32768, // reaver.shadow_turns_to_a_body_this_far_past_reach = 0.5
+              12, // reaver.shadow_damage,_attending_(%) = 12
+               5, // reaver.marks,_most_a_body_can_carry = 5
+              90, // reaver.marks,_one_fades_every = 90
+           26214, // reaver.cash-in,_damage_per_mark_(x) = 0.4
+              30, // reaver.cash-in,_stagger_at_a_full_tally = 30
+           65536, // health.bulwark_(x) = 1
+           65536, // health.champion_(x) = 1
+           49152, // health.shadow_reaver_(x) = 0.75
+           65536, // health.elementalist_(x) = 1
+           65536, // health.blood_mage_(x) = 1
+           65536, // health.dual_mage_(x) = 1
+               1, // reaver.shadow_turns_its_copy_to_a_body = on
+              20, // reaver.dash_jump,_keeps_of_the_dash_speed_(%) = 20
 ];
 
 #[rustfmt::skip]

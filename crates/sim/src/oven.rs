@@ -503,6 +503,31 @@ scalars! {
     // `AscensionStun` above is its ceiling.
     AscensionRefund,  "Dual mage", "Ascension, health back per hit landed", Int,   0,        400;
     AscensionStunFloor, "Dual mage", "Ascension, stun on the way out, at least", Frames, 0,  120;
+    // **The Reaver's v2**, 2026-09-23: the shadow aims itself, keeps a tally,
+    // and her own hits cash it. Appended for the reason everything above
+    // is. See `docs/design/shadow-reaver-v2.md`.
+    ShadowAimSlack,   "Reaver",    "Shadow turns to a body this far past reach", Fixed, 0,    fx(4,1);
+    ShadowEchoAttending, "Reaver", "Shadow damage, attending (%)",           Percent, 0,       100;
+    MarkCap,          "Reaver",    "Marks, most a body can carry",           Int,    1,        12;
+    MarkFade,         "Reaver",    "Marks, one fades every",                 Frames, 1,        600;
+    MarkWorth,        "Reaver",    "Cash-in, damage per mark (x)",           Fixed,  0,        fx(2,1);
+    CashStagger,      "Reaver",    "Cash-in, stagger at a full tally",       Frames, 0,        120;
+    // **Health per class**, as a multiple of `MaxHealth`. Shared with the
+    // Bulwark's v2, which sets its own; weight is the most legible difference a
+    // character can have and health is the second.
+    HealthBulwark,    "Health",    "Bulwark (x)",                            Fixed,  fx(1,2),  fx(2,1);
+    HealthChampion,   "Health",    "Champion (x)",                           Fixed,  fx(1,2),  fx(2,1);
+    HealthReaver,     "Health",    "Shadow Reaver (x)",                      Fixed,  fx(1,2),  fx(2,1);
+    HealthElementalist, "Health",  "Elementalist (x)",                       Fixed,  fx(1,2),  fx(2,1);
+    HealthBloodMage,  "Health",    "Blood mage (x)",                         Fixed,  fx(1,2),  fx(2,1);
+    HealthDualMage,   "Health",    "Dual mage (x)",                          Fixed,  fx(1,2),  fx(2,1);
+    // Off puts the shadow's copies back on her yaw, which is how they were
+    // before v2 -- so the difference can be felt in one match rather than
+    // remembered across two builds, and measured by `tally`'s `range`.
+    ShadowAims,       "Reaver",    "Shadow turns its copy to a body",        Flag,   0,        1;
+    // What a jump out of the dash keeps of the dash's speed. The dash stops
+    // dead on the shadow now; this is the only way its speed carries on.
+    DashJumpKeep,     "Reaver",    "Dash jump, keeps of the dash speed (%)", Percent, 0,       100;
 }
 
 // ---------------------------------------------------------------------------

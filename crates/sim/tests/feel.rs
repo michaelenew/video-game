@@ -280,16 +280,22 @@ fn time_to_kill_is_in_the_right_neighbourhood() {
     // Target is roughly 60 seconds in versus. This assumes a generous hit rate,
     // so it is a sanity bound rather than a prediction: it catches damage
     // numbers that are wrong by an order of magnitude, not by 20%.
+    //
+    // Against every class's bar, because health is per class now: the Reaver's
+    // is the shortest on the roster and the bound has to hold for her too.
     for class in ALL_CLASSES {
         let table = moves::table(class);
         let best = table.iter().max_by_key(|m| m.damage).unwrap();
-        let hits_to_kill = t::max_health() / best.damage;
-        assert!(
-            (3..=30).contains(&hits_to_kill),
-            "{}: {} kills in {hits_to_kill} hits",
-            class.name(),
-            best.name
-        );
+        for victim in ALL_CLASSES {
+            let hits_to_kill = t::health_of(victim) / best.damage;
+            assert!(
+                (3..=30).contains(&hits_to_kill),
+                "{}: {} kills a {} in {hits_to_kill} hits",
+                class.name(),
+                best.name,
+                victim.name()
+            );
+        }
     }
 }
 
@@ -1154,4 +1160,93 @@ fn every_weapon_has_its_own_way_off_the_ground_and_they_are_three_decisions() {
         holder.name, "Uppercut",
         "the hammer's takeoff does not hold on to anybody"
     );
+}
+
+// ---------------------------------------------------------------------------
+// The Reaver's cash-in -- `docs/design/shadow-reaver-v2.md`
+// ---------------------------------------------------------------------------
+
+/// Her biggest swing, cashed at a full tally: the largest hit she can land.
+fn reaver_cash_at_the_cap() -> (&'static str, i32) {
+    let kit = moves::table(sim::class::Class::ShadowReaver);
+    let biggest = kit
+        .iter()
+        .filter(|m| m.aim() == sim::aim::Kind::Swing)
+        .max_by_key(|m| m.damage)
+        .expect("she has swings");
+    let cashed = Fx::from_int(biggest.damage)
+        .mul(sim::shadow::cash_multiple(t::mark_cap()))
+        .to_int();
+    (biggest.name, cashed)
+}
+
+#[test]
+fn a_classs_largest_hit_is_gated_behind_something_the_opponent_could_see_coming() {
+    // Pinned for the Reaver, whose largest hit is the cash-in and whose gate is
+    // the marks drawn on the victim's own body. Whether the relationship holds
+    // for the whole roster is open: the Champion's largest hit is Rush stab, a
+    // nine-frame startup behind a charge, and what counts as "could see it
+    // coming" for him is his thread's call, not this one's. See the feel log,
+    // 2026-09-23.
+    let (name, cashed) = reaver_cash_at_the_cap();
+    let plain = moves::table(sim::class::Class::ShadowReaver)
+        .iter()
+        .map(|m| m.damage)
+        .max()
+        .unwrap();
+    assert!(
+        cashed > plain,
+        "a full tally makes {name} worth {cashed}, no more than her plain best of {plain}"
+    );
+    // The gate: with nothing on the body, the cash-in is the plain swing. A
+    // burst that paid out without marks would have nothing to be seen coming.
+    assert_eq!(
+        sim::shadow::cash_multiple(0),
+        Fx::ONE,
+        "a cash-in on an unmarked body is worth more than the swing"
+    );
+    // And the full tally takes more than one event to build: at least two
+    // separate hits from the field, each of which draws a pip on the victim.
+    assert!(
+        t::mark_cap() >= 2,
+        "a single shadow hit fills the tally, so there is nothing to watch climb"
+    );
+}
+
+#[test]
+fn a_full_cash_in_is_the_biggest_hit_in_the_game_and_still_not_a_round() {
+    // The sibling of the preying test below it, for the Reaver's burst: at the
+    // cap, with Executioner, it should be the largest single hit anybody can
+    // land -- that is the assassin's strike -- and still not take a full bar
+    // in one press, the most fragile bar on the roster included. A round that
+    // ends on one connection is not a game built on reads.
+    let (name, cashed) = reaver_cash_at_the_cap();
+    for class in ALL_CLASSES {
+        // One connection, not a field over its life: this is about the
+        // single blow. The Dual mage's deepest cast is her listed damage times
+        // the top of her depth curve, so that is what she is measured at.
+        let most = if class == sim::class::Class::DualMage {
+            t::depth_ceiling()
+        } else {
+            Fx::ONE
+        };
+        for m in moves::table(class).iter() {
+            if class == sim::class::Class::ShadowReaver {
+                continue;
+            }
+            let blow = Fx::from_int(m.damage).mul(most).to_int();
+            assert!(
+                cashed > blow,
+                "{}'s {} ({blow}) out-hits a full cash-in with {name} ({cashed})",
+                class.name(),
+                m.name,
+            );
+        }
+        assert!(
+            cashed < t::health_of(class),
+            "a full cash-in with {name} deals {cashed}, a {}'s whole bar of {}",
+            class.name(),
+            t::health_of(class)
+        );
+    }
 }

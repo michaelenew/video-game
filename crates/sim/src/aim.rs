@@ -815,6 +815,99 @@ pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field) -> V3 {
     settle(pos.add(flat.scale(ahead)), stones)
 }
 
+/// Which way the Reaver's shadow, **out on the field**, throws its copy of
+/// her swing: flat, at the nearest body inside `reach` -- or `None`, and it
+/// keeps her yaw.
+///
+/// Not a fifth line of effect either. The copy is still a [`Kind::Swing`] and
+/// keeps everything about hers but the yaw: the pitch she committed to, the
+/// shape, the frames. What this answers is the one thing a copy thrown from
+/// somewhere else cannot take from her -- which way is *forward* over there.
+/// With her yaw, a copy six metres away was a quarter-damage arc pointed
+/// wherever her shoulders happened to be, and landed only on somebody standing
+/// at exactly her offset from it. See `docs/design/shadow-reaver-v2.md`.
+///
+/// "In reach" is the copied move's own reach from the shadow's feet to the
+/// nearest edge of a body, plus `tuning::shadow_aim_slack`. A fighter counts
+/// by the edge of their column; the creature by the nearest point of whichever
+/// part of it is closest to the height the swing leaves at, so a shadow standing at a Ridgeback's flank cuts the
+/// flank rather than turning to face the middle of the animal. The owner is
+/// never a candidate, nor anybody already down, and `fighters` is false in a
+/// hunt -- the copy cannot hurt a partner, so it does not turn to one.
+///
+/// Here rather than beside the shadow because it is a decision about where
+/// something goes, and the alternative -- a yaw to the nearest body worked out
+/// in `shadow.rs` -- is the thing this file exists to stop.
+pub fn shadow_faces(
+    from: V3,
+    owner: usize,
+    reach: Fx,
+    fighters: bool,
+    scene: &Scene,
+) -> Option<V3> {
+    if !t::shadow_aims() {
+        return None;
+    }
+    let limit = reach.add(t::shadow_aim_slack());
+    let mut best: Option<(V3, Fx)> = None;
+    let mut consider = |at: V3, gap: Fx| {
+        if gap.raw() <= limit.raw() && best.is_none_or(|(_, seen)| gap.raw() < seen.raw()) {
+            best = Some((at, gap));
+        }
+    };
+    for (i, body) in scene.players.iter().enumerate() {
+        if !fighters || i == owner || body.health <= 0 {
+            continue;
+        }
+        let gap = body.pos.sub(from).flat_len().sub(t::body_radius());
+        consider(body.pos, gap);
+    }
+    // From the height the swing leaves at, and in three dimensions: a part
+    // overhead is not in reach however close its footprint is.
+    if let Some(beast) = scene.quarry.filter(|b| b.alive()) {
+        let hub = origin(from);
+        let at = beast.nearest_to(hub);
+        consider(at, crate::math::big_len(at.sub(hub)));
+    }
+    let (at, _) = best?;
+    let flat = V3::new(at.x.sub(from.x), Fx::ZERO, at.z.sub(from.z));
+    if flat.flat_len().raw() <= 0 {
+        return None;
+    }
+    Some(flat.normalized())
+}
+
+/// Her swing's line, **thrown from the shadow** at `at` and turned onto
+/// `facing`.
+///
+/// The copy keeps her line: where along her body it leaves, how far it goes,
+/// the pitch it goes at. Only two things change, which place it starts from
+/// and which way is forward. Turned rather than recomputed, because the pitch
+/// on her path is what she committed to when she threw the move, and a copy
+/// that re-read the camera would be a second swing rather than a copy of hers.
+///
+/// With `facing` equal to her own this is a plain translation, which is what an
+/// attending shadow gets -- it is at her heel copying her, not fighting on its
+/// own.
+pub fn copied_swing(path: Path, her_pos: V3, her_facing: V3, at: V3, facing: V3) -> Path {
+    let turn = |p: V3| {
+        let v = p.sub(her_pos);
+        // Her frame: along her facing, and across it. Then the same two
+        // amounts along the new facing and across that. No angles, so no
+        // trigonometry and nothing to round differently on two machines.
+        let across_hers = V3::new(her_facing.z.neg(), Fx::ZERO, her_facing.x);
+        let across_new = V3::new(facing.z.neg(), Fx::ZERO, facing.x);
+        let along = V3::new(v.x, Fx::ZERO, v.z).dot(her_facing);
+        let side = V3::new(v.x, Fx::ZERO, v.z).dot(across_hers);
+        let flat = facing.scale(along).add(across_new.scale(side));
+        at.add(V3::new(flat.x, v.y, flat.z))
+    };
+    Path {
+        from: turn(path.from),
+        to: turn(path.to),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // What a path runs into
 // ---------------------------------------------------------------------------

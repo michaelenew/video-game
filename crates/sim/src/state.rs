@@ -290,6 +290,21 @@ pub struct Player {
     /// strongest wins** rather than compounding -- two slows that multiplied
     /// would freeze you, and every new source would make the last one worse.
     pub slow_mul: Fx,
+    /// How many marks the Reaver's shadow has put on this fighter.
+    ///
+    /// **On the victim, not on her**, because the victim is who has to read
+    /// it: pips over a body are the counterplay made visible, and a fighter
+    /// watching his own marks climb knows what is coming and where from. Every
+    /// hit the shadow lands from the field adds one, up to `tuning::mark_cap`;
+    /// the first swing of hers to connect inside the window a dash to the
+    /// shadow opens spends them all. See `docs/design/shadow-reaver-v2.md`.
+    ///
+    /// Zero for everybody nobody is marking, which is everybody in a match
+    /// without a Reaver in it.
+    pub marks: u8,
+    /// Frames until the next mark fades. Reset by every new mark, so a target
+    /// who gets away from the shadow cleans himself one mark at a time.
+    pub mark_clock: u16,
     /// Frames of **haste** left, and the mirror of `slowed`.
     ///
     /// One source in the game: standing in the field a Judgement left, which is
@@ -542,8 +557,15 @@ impl Player {
         Player {
             class,
             mechanic: class.starting_mechanic(),
+            health: t::health_of(class),
             ..Player::default()
         }
+    }
+
+    /// What this fighter's bar holds when it is full. Per class -- see
+    /// `tuning::health_of`.
+    pub fn full_health(&self) -> i32 {
+        t::health_of(self.class)
     }
 
     /// The Bulwark's shield, if this is one.
@@ -764,7 +786,7 @@ impl Player {
 
     pub fn heal(&mut self, amount: i32) {
         if amount > 0 && self.health > 0 {
-            self.health = (self.health + amount).min(t::max_health());
+            self.health = (self.health + amount).min(self.full_health());
         }
     }
 
@@ -820,6 +842,8 @@ impl Default for Player {
             slowed: 0,
             slow_mul: Fx::ONE,
             hasted: 0,
+            marks: 0,
+            mark_clock: 0,
             thrown_at: Fx::ONE,
             bound: 0,
             mechanic_held: false,
@@ -1183,8 +1207,13 @@ impl World {
                 break;
             }
             let defender = 1 - attacker;
-            if let Some(hit) = resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
+            if let Some(mut hit) =
+                resolve_hit(&snapshot[attacker], &snapshot[defender], attacker as u8)
             {
+                // The Reaver's cash-in: any blow of hers spends the marks on
+                // whoever it lands on. A no-op for every other blow in the
+                // game, and for anybody carrying no marks.
+                let staggers = cash_the_tally(&mut self.players, attacker, defender, &mut hit);
                 // What the blow is actually worth, before it lands: a killing
                 // hit on someone with forty health left is worth forty, not its
                 // listed damage, so leeching cannot pay out of an empty bar.
@@ -1194,6 +1223,9 @@ impl World {
                     hit.damage.min(snapshot[defender].health)
                 };
                 apply_hit(&mut self.players[defender], hit);
+                if staggers {
+                    stagger_the_cashed(&mut self.players[defender]);
+                }
                 let owed = snapshot[attacker]
                     .action
                     .attack_kind()
@@ -1438,6 +1470,8 @@ impl World {
             h.write_u32(p.slowed as u32);
             h.write_i32(p.slow_mul.raw());
             h.write_u32(p.hasted as u32);
+            h.write_u32(p.marks as u32);
+            h.write_u32(p.mark_clock as u32);
             h.write_i32(p.thrown_at.raw());
             h.write_u32(p.bound as u32);
             h.write_u32(p.mechanic_held as u32);
@@ -1505,6 +1539,8 @@ impl World {
                 h.write_u32(m.slowed as u32);
                 h.write_i32(m.slow_mul.raw());
                 h.write_u32(m.rooted as u32);
+                h.write_u32(m.marks as u32);
+                h.write_u32(m.mark_clock as u32);
                 for limb in &m.part_health {
                     h.write_i32(*limb);
                 }
@@ -2382,6 +2418,12 @@ fn step_player(
 
     queue_the_shadow(p, input);
 
+    // **A swing out of the Reaver's carry.** The strike on arrival: it cuts the
+    // dodge's tail the way the jump out of it does, before the countdown, so
+    // the swing comes out on this frame rather than a slide's length later.
+    // See `shadow::swing_out_of_the_carry`.
+    shadow::swing_out_of_the_carry(p, input);
+
     // A channel resolves **instead of** the countdown, because it is the one
     // action whose next state depends on a button and on the scene rather than
     // on a number running down: held, it winds on and re-aims; released, it
@@ -2745,18 +2787,18 @@ fn step_player(
         p.jump_hold = t::jump_hold_frames();
     }
 
-    // **The dash jump.** Arriving from a dash leaves the Reaver sliding for a
-    // few frames with the speed she crossed at still under her -- the carry --
-    // and a jump pressed inside that window takes the slide up with her instead
-    // of letting the floor have it. It cuts the dodge's tail short, which is the
-    // other half of the reward: the frames she would have spent standing there
-    // being punished are spent in the air going somewhere.
+    // **The dash jump.** The dash stops dead on the shadow, and for a few
+    // frames after -- the carry -- a jump takes a share of the crossing's speed
+    // up with her (`tuning::dash_jump_keep`). It cuts the dodge's tail short,
+    // which is the other half of the reward: the frames she would have spent
+    // standing there being punished are spent in the air going somewhere.
     //
-    // A press rather than a hold, and the slide decays while the window is open,
-    // so the tech has a gradient -- the earlier she finds it, the further she
-    // goes. The ordinary jump above cannot fire here: the carry runs inside the
-    // dodge, and a dodge is not actionable.
+    // A share rather than all of it, since 2026-09-23: the whole fifty metres a
+    // second cleared the arena. The ordinary jump above cannot fire here: the
+    // carry runs inside the dodge, and a dodge is not actionable.
     if pressed_space && shadow::carrying_a_dash(p) {
+        let lunge = shadow::lunge(p);
+        p.vel = V3::new(lunge.x, p.vel.y, lunge.z);
         p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
@@ -4456,6 +4498,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(shadow.echo_used as u32);
             h.write_u32(shadow.dash as u32);
             h.write_u32(shadow.carry as u32);
+            hash_v3(h, &shadow.lunge);
         }
         Mechanic::Structures(slots) => {
             h.write_u32(5);
@@ -4709,9 +4752,34 @@ impl World {
     /// What the second body does to the other one, this frame.
     fn step_shadows(&mut self) {
         for owner in 0..MAX_PLAYERS {
+            self.aim_the_copy(owner);
             self.echo_strikes(owner);
             self.recall_cuts(owner);
         }
+    }
+
+    /// Out on the field, the shadow turns to whoever is in reach while its copy
+    /// winds up -- and keeps her yaw if nobody is. The decision is
+    /// `aim::shadow_faces`'s; this only hands it the scene.
+    ///
+    /// The scene is built only on the frames a copy is winding up out there,
+    /// which is a handful of frames per swing for one class. Every other frame
+    /// for every other fighter this is a match on the mechanic and nothing
+    /// more.
+    fn aim_the_copy(&mut self, owner: usize) {
+        let Some((at, reach)) = shadow::copy_needs_a_target(&self.players[owner]) else {
+            return;
+        };
+        let stones = stones::gather(&self.players);
+        let scene = aim::Scene {
+            stones: &stones,
+            players: &self.players,
+            effects: &self.effects,
+            quarry: self.monster.as_ref(),
+        };
+        let facing = aim::shadow_faces(at, owner, reach, self.monster.is_none(), &scene)
+            .unwrap_or(self.players[owner].facing);
+        shadow::turn_to(&mut self.players[owner], facing);
     }
 
     /// The shadow's copy of her swing, landing a beat after hers.
@@ -4735,16 +4803,32 @@ impl World {
         // creature to swing at instead -- the same condition direct hits use,
         // and for the same reason: a mechanic that only works in versus is half
         // a mechanic.
+        // **Where it is standing decides what the copy is worth and whether it
+        // counts.** Out on the field it deals the full share and marks what it
+        // hits -- that is the tally. At her heel it deals half that and marks
+        // nothing: it is at her shoulder, and there is nothing being set up.
+        let out = shadow::of(&self.players[owner]).is_some_and(|s| s.is_out());
+        let share = if out {
+            t::shadow_echo()
+        } else {
+            t::shadow_echo_attending()
+        };
         let landed = match self.monster {
-            Some(_) => self.echo_gores_the_creature(&ghost),
-            None => self.echo_cuts_the_other_fighter(owner, &ghost),
+            Some(_) => self.echo_gores_the_creature(&ghost, share, out),
+            None => self.echo_cuts_the_other_fighter(owner, &ghost, share, out),
         };
         if landed {
             shadow::echo_landed(&mut self.players[owner]);
         }
     }
 
-    fn echo_cuts_the_other_fighter(&mut self, owner: usize, ghost: &Player) -> bool {
+    fn echo_cuts_the_other_fighter(
+        &mut self,
+        owner: usize,
+        ghost: &Player,
+        share: Fx,
+        marks: bool,
+    ) -> bool {
         let target = 1 - owner;
         let defender = self.players[target];
         if defender.health <= 0 {
@@ -4753,13 +4837,18 @@ impl World {
         let Some(mut hit) = resolve_hit(ghost, &defender, owner as u8) else {
             return false;
         };
-        hit.damage = Fx::from_int(hit.damage).mul(t::shadow_echo()).to_int();
+        hit.damage = Fx::from_int(hit.damage).mul(share).to_int();
         hit.parried = false;
         apply_hit(&mut self.players[target], hit);
+        // A mark for a hit that *landed*. Blocked, the copy did what a blocked
+        // swing does and nothing more; the tally counts what got through.
+        if marks && !hit.blocked {
+            shadow::mark(&mut self.players[target]);
+        }
         true
     }
 
-    fn echo_gores_the_creature(&mut self, ghost: &Player) -> bool {
+    fn echo_gores_the_creature(&mut self, ghost: &Player, share: Fx, marks: bool) -> bool {
         let (Some(mut beast), Some(box_out), Some(kind)) =
             (self.monster, hitbox(ghost), ghost.action.attack_kind())
         else {
@@ -4773,9 +4862,12 @@ impl World {
         };
         let raw = Fx::from_int(moves::get(ghost.class, kind).damage)
             .mul(preying(ghost.class, beast.disabled()))
-            .mul(t::shadow_echo())
+            .mul(share)
             .to_int();
         beast.take_hit(part, raw);
+        if marks {
+            beast.mark();
+        }
         self.monster = Some(beast);
         true
     }
@@ -4803,6 +4895,7 @@ impl World {
                         .mul(preying(Class::ShadowReaver, beast.disabled()))
                         .to_int();
                     beast.take_hit(part, raw);
+                    beast.mark();
                     // The recall's slow, offered the same way everything else
                     // is. It is half the reason to recall through something.
                     beast.take_control(monster::Control::slowing(
@@ -4859,8 +4952,52 @@ impl World {
             },
         );
         self.players[target].slow(t::slow_frames(), t::shadow_recall_slow());
+        // One mark for the way home, the way it cuts once. Not if he blocked
+        // it: the tally counts what got through.
+        if !guarding {
+            shadow::mark(&mut self.players[target]);
+        }
         shadow::mark_cut(&mut self.players[owner], target);
     }
+}
+
+/// Spend the marks on `defender` if this blow is the Reaver's own, and say
+/// whether it was a full tally -- the one that also staggers.
+///
+/// **Any hit of hers cashes.** Every blow her body lands on a marked target
+/// multiplies by the marks and clears them; the shadow puts them on, she takes
+/// them off. The copies are not her body -- they go through
+/// `echo_cuts_the_other_fighter` and mark rather than spend, or the tally
+/// could never climb past one. **Blocked or parried, nothing is spent**: it
+/// was not a hit, and the tally stays on him. That is the counterplay the pips
+/// exist to make possible. See `docs/design/shadow-reaver-v2.md`.
+fn cash_the_tally(
+    players: &mut [Player; MAX_PLAYERS],
+    attacker: usize,
+    defender: usize,
+    hit: &mut Hit,
+) -> bool {
+    let marks = players[defender].marks;
+    if players[attacker].class != Class::ShadowReaver || hit.blocked || hit.parried || marks == 0 {
+        return false;
+    }
+    hit.damage = Fx::from_int(hit.damage)
+        .mul(shadow::cash_multiple(marks))
+        .to_int();
+    players[defender].marks = 0;
+    players[defender].mark_clock = 0;
+    shadow::full_tally(marks)
+}
+
+/// A cash-in at a full tally is a hard stop: the stagger replaces the swing's
+/// own hitstun, and only if it is longer.
+fn stagger_the_cashed(p: &mut Player) {
+    if p.health <= 0 {
+        return;
+    }
+    let left = t::cash_stagger().max(p.action.frames_left());
+    p.action = Action::Stagger { left };
+    p.stun_total = left;
 }
 
 /// Age every effect, apply what it does, and drop the expired.
@@ -4984,6 +5121,11 @@ impl World {
             // expires, so standing in the field holds it and leaving lets the
             // tail run.
             p.hasted = p.hasted.saturating_sub(1);
+            // The Reaver's marks fade one at a time, so a target who gets away
+            // from the shadow slowly cleans himself. Here beside the slow's
+            // tail because it is the same kind of thing: a count on the victim
+            // that whatever set it refreshes, and that runs down otherwise.
+            shadow::fade_mark(p);
         }
     }
 
@@ -5279,6 +5421,12 @@ impl World {
                         {
                             continue;
                         }
+                        // The first blade of this pass to reach somebody
+                        // marks them, and the other eleven do not: once per
+                        // pass, so a flower out and home is two marks rather
+                        // than a full tally on its own. The mask is cleared at
+                        // the turn, which is what makes it once per *pass*.
+                        let first_this_pass = (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, i));
                         effect.take_hit(blade, i);
                         let share = if coming_back {
                             t::lotus_return_damage()
@@ -5286,10 +5434,19 @@ impl World {
                             Fx::ONE
                         };
                         let blow = Fx::from_int(effect.source().damage).mul(share).to_int();
-                        self.cut(i, effect, at, blow);
+                        let dealt = self.cut(i, effect, at, blow);
                         self.players[i].slow(t::slow_frames(), t::lotus_slow());
+                        if first_this_pass && dealt > 0 {
+                            shadow::mark(&mut self.players[i]);
+                        }
                     }
-                    self.gore_the_creature(effect, blade, at, radius);
+                    let first_this_pass =
+                        (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, QUARRY_VICTIM));
+                    if self.gore_the_creature(effect, blade, at, radius) > 0 && first_this_pass {
+                        if let Some(beast) = self.monster.as_mut() {
+                            beast.mark();
+                        }
+                    }
                 }
             }
 
@@ -5915,6 +6072,9 @@ fn step_rider(
     // move that spent the jump on an attack would take that away.
     chain_cancel(p, input);
     queue_the_shadow(p, input);
+    // And the Reaver's strike on arrival, for a shadow left standing on the
+    // creature's back -- the same cut as on the floor.
+    shadow::swing_out_of_the_carry(p, input);
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
 
     // Resolved instead of the countdown, exactly as on the ground -- see
@@ -6554,8 +6714,19 @@ impl World {
                 continue;
             };
             let m = moves::get(attacker.class, kind);
+            // The Reaver's cash-in, on a leg rather than a person: any blow of
+            // hers spends the creature's marks, and it cannot block.
+            // What a full tally does to something this size is its own flinch
+            // and poise rules' business -- a hit three times the size is
+            // already the thing those read.
+            let cash = if attacker.class == Class::ShadowReaver {
+                shadow::cash_multiple(beast.spend_marks())
+            } else {
+                Fx::ONE
+            };
             let raw = Fx::from_int(m.damage)
                 .mul(preying(attacker.class, beast.disabled()))
+                .mul(cash)
                 .to_int();
             let dealt = beast.take_hit(part, raw);
             // An uppercut does not put thirteen metres of animal in the air and

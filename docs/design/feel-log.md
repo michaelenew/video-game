@@ -4989,3 +4989,170 @@ the bars now, and two sets of wings on one back said two different things. **Not
 Whether the walk-speed step feels right at three quarters, or wants to be at half, is a play
 question on the same list as the rest of the two-bar work.
 
+
+---
+
+### 2026-09-23 — the Reaver's shadow aims itself, and a health table (v2, M1)
+
+**Changed** Out on the field, the shadow turns its copy of her swing to the nearest body inside
+the copied move's reach plus `Shadow turns to a body this far past reach` (0.5 m), tracking
+through the copy's wind-up and holding once it is out. At her heel it keeps her yaw, as
+before. The decision is `aim::shadow_faces`; the swing is carried over by
+`aim::copied_swing`, which turns her line onto the new yaw and keeps its pitch. A flag,
+`Shadow turns its copy to a body`, switches it off, so the before and after can be played in
+one match. And a **Health** family in the Oven: one multiplier per class on `Max health`, read
+by `tuning::health_of`. The Reaver at 0.75 (750); everyone else at 1.
+
+**Why** `docs/design/shadow-reaver-v2.md`: a copy thrown from six metres away on her yaw landed
+only on somebody standing at exactly her offset from it, so the shadow's utility at range was
+real and unusable, and the tally below is worthless without it. Glass, because a class whose
+whole pattern is not being there should be the one that cannot afford to be.
+
+**The Bulwark's number was left at one.** Both plans say it goes above one, and the Bulwark
+thread owns it. Setting it here would have moved every test that uses a Bulwark as the dummy
+and measures damage against the universal bar, which is that thread's change to make.
+
+**What the instrument says** — `cargo run -p sim --bin tally range`: the shadow six metres
+out, a dummy walking a circle round it inside reach, the Reaver swinging at the air every 36
+frames. Self-aim off: **9 copies of 24 landed (37%)**. On: **24 of 24 (100%)**.
+
+**A bug the creature found.** The creature's "nearest point" was first measured flat across the
+floor, so a shadow standing under a Ridgeback's neck turned to the head five metres overhead
+and swung at the air. It is measured in three dimensions from the height the swing leaves at
+now. `reaver::the_shadow_marks_the_creature_from_the_field` is what caught it.
+
+**Verdict** open — built, unverified. **Play script C1:** *Send the shadow to mid range beside
+the dummy. Stand off and swing at the air. Then move the dummy around the shadow.* Questions:
+Do the copies now land on something? Does the shadow turning read as it fighting, or as it
+twitching?
+
+### 2026-09-23 — the tally (v2, M2)
+
+**Changed** `Player::marks` and `mark_clock`, and the same pair on the creature. Every hit the
+shadow lands from the field adds one, up to `Marks, most a body can carry` (5): the copy out on
+the field (not blocked), the lotus once per pass (the first blade of a pass to reach somebody
+marks them; the other eleven do not), the recall's cut (not blocked). One fades every
+`Marks, one fades every` (90 frames); a new mark restarts the clock. The attending copy deals
+`Shadow damage, attending` (12%, was 25%) and marks nothing. Pips: a ring of dark pellets over
+the marked body's head, read straight off `marks`, and rings in the F1 overlay.
+
+**What the instrument says** — `stall`: a full tally left alone goes 5 → 0 in 450 frames,
+one every 90. `pattern`: five swings on a rhythm fill the tally. `stick`: eight swings in melee
+with the shadow at her heel dealt 552 (69 a swing) and marked nothing.
+
+**Verdict** open — built, unverified. **Play script C2:** *Send, then watch the dummy as the
+copies land. Walk away and watch the marks fade. Then fight from the shadow's shoulder for the
+same time.* Questions: Can you read the tally on the body without the HUD? Does the fade feel
+like a clock you are racing? Does fighting with the shadow at your heel feel like the wrong
+way to play now?
+
+### 2026-09-23 — the cash-in, and the strike out of the carry (v2, M3)
+
+**Changed** Arriving at the shadow by dash opens `Cash-in, window after the dash arrives`
+(10 frames, the carry's length). The first swing she *throws* inside it is the one that
+cashes, when it lands: damage × (1 + marks × `Cash-in, damage per mark` (0.4)), the marks are
+spent, and at a full tally the victim is staggered for `Cash-in, stagger at a full tally`
+(30 frames). A full tally triples the swing: Slash 185, Executioner 554. Blocked or parried,
+it spends the window and not the marks. The recall and the leash open nothing.
+
+**And a swing pressed inside the carry cuts the dash's tail short, plants her and turns her
+to the crosshair** — `shadow::swing_out_of_the_carry`. This was not in the proposal, and it is
+the decision in this entry most worth a person's confirmation. Two things were tried first and
+did not work, both measured with `tally pattern`:
+
+1. *A window counted from arrival, swing after the dodge.* The dash leaves her in the dodge's
+   tail for exactly the carry's ten frames, so the window closed before she could start a swing.
+   On paper, at the plan's own first value.
+2. *A window counted only in frames she was free to act.* That made the swing possible and
+   useless: the slide under the dash carried her **4.9 m** past the shadow, and a Slash thrown
+   the moment she was free missed a dummy standing beside it by 3.5 m. Every scripted cash-in
+   missed.
+
+The jump out of the carry already cuts the tail and keeps the slide, to go somewhere. The
+swing now cuts it and **spends** the slide, to strike here. With that, `pattern` arrives 10
+frames after the dash press, 0.5 m from the dummy, and Slash cashes for 185 (×2.98) with the
+stagger; `greedy` cashes Executioner for 554. Send to cash is 197 frames, 180 of them the five
+marking swings. It buys no safety: a blocked Slash is still −5.
+
+**The window is the swing thrown, not the swing landed.** Measured on the landing, Executioner's
+sixteen-frame wind-up would need a window nearly three times Slash's, and the choice between
+them would be about fitting a timer rather than about risk.
+
+**What did not hold, roster-wide.** The plan asked `feel.rs` for "a class's largest hit is
+gated behind something the opponent could see coming", for the whole roster. It is pinned for
+the Reaver (`a_classs_largest_hit_is_gated_behind_something_the_opponent_could_see_coming`),
+and it does not hold for the Champion today: his largest hit is Rush stab, 165 in nine frames
+behind a charge. What counts as a visible gate for him is his thread's call; recorded rather
+than decided. The full cash-in *is* the largest single hit in the game and still under the
+most fragile bar on the roster (554 against 750) —
+`a_full_cash_in_is_the_biggest_hit_in_the_game_and_still_not_a_round`.
+
+**Verdict** open — built, unverified. **Play script C3:** *Run the pattern: send, let it mark,
+dash, Slash inside the slide. Then again with Executioner. Then dash and wait a beat before
+swinging.* Questions: Is the window findable, and is missing it your fault? Does swinging out of
+the slide feel like arriving and striking, or like being stopped? Does the greedy cash feel
+worth its risk? Does the stagger at a full tally feel earned?
+
+### 2026-09-23 — marks on the creature (v2, M4, first part)
+
+**Changed** The creature carries marks with the same cap and fade as a fighter. The copy from
+the field, the recall and the lotus mark it; her cashing swing spends them on whichever part
+it lands on. It cannot block, so the cashing swing always spends. What a full tally does to a
+body that size is left to its own flinch and poise rules — a hit three times the size is what
+those already read — rather than a stagger of its own.
+
+**Not built from M4:** the knob pass, which wants a person's answers from C1–C3 first, and the
+hunt bot playing the pattern. `cargo run -p hunt --bin fight -- --class reaver` completes, but
+the scripted hunter never sends the shadow, so it cannot show her crossing to cash on a leg;
+teaching it the pattern is its own piece of work. The creature's half is pinned in
+`reaver::a_cash_in_lands_on_the_creature_too` instead.
+
+**Verdict** open. **Play script C4** is in `plans/shadow-reaver-v2.md`.
+
+### 2026-09-23 — any hit cashes; the dash window is cut
+
+**Changed** The cash-in window is gone, and with it the `Cash-in, window after the dash
+arrives` knob. **Any hit of the Reaver's own body on a marked target spends the marks**:
+×(1 + 0.4 a mark), and the stagger at a full tally, exactly as before. The shadow's copies
+still mark rather than spend. Blocked or parried swings are not hits and spend nothing.
+
+**Why** On review: the marks are the setup and her hit is the payoff, and gating the payoff
+behind "a swing thrown in the ten frames after a dash" was a rule the proposal wrote and play
+had not asked for. It made the burst a timing test layered on top of the pattern rather than
+the pattern itself. Reverted from the M3 entry above, which is kept as the record of what was
+tried: the window counted from arrival, the window counted in free frames, and the window as
+the swing thrown rather than landed. All three are moot now.
+
+**What stays** The strike out of the carry. It was built to make the window reachable, but
+the reason underneath is independent of it: the dash's slide leaves her nearly five metres
+past the shadow, so without it the dash cannot put her next to anybody standing there.
+
+**What the instrument says** `tally` is unchanged in its numbers — `pattern` cashes Slash for
+185 and `greedy` Executioner for 554, both staggering — because those scripts already swung on
+arrival. The tests that pinned the window are replaced by: any hit spends, an unmarked hit is
+plain, every hit cashes rather than only the first, a blocked hit spends nothing.
+
+**Open, and worth the person's eye at C3:** with no gate, stepping in and hitting a marked
+target is as good as crossing to it. Whether the dash still feels like the verb of the class
+or becomes one way among several to arrive is a play question.
+
+### 2026-09-23 — the dash stops on the shadow, and the dash jump is a lunge
+
+**Changed** Arriving by dash zeroes her velocity: she stops on the shadow's spot instead of
+sliding on past it. The carry — the ten-frame window after arrival — is unchanged, and a jump
+inside it now takes `Dash jump, keeps of the dash speed` (20%, new knob) of the crossing's flat
+velocity, banked on arrival, instead of the whole slide.
+
+**Why** From play: the follow-through made precision combat hard, and the dash jump cleared the
+arena. The dash is fifty metres a second; it used to leave her four to five metres past the
+shadow, and a jump in the carry took all fifty up with her. Measured now
+(`reaver::the_dash_jump_does_not_clear_the_arena`): a dash jump across the whole arena's width
+carries her **10.5 m**, against 28 m of arena. A fifth of the dash is ten metres a second, about
+one and a half walks — a lunge rather than a launch.
+
+**What else moved** The strike out of the carry no longer has a slide to spend, so it is only
+the tail cut and the turn to the crosshair. `tally pattern` is unchanged: she already swung on
+arrival.
+
+**Verdict** open. Questions for the next play: is ten frames enough to find the jump? Is a
+fifth the right lunge, or does the dash jump want to be vertical more than horizontal?

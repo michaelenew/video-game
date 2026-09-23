@@ -486,6 +486,10 @@ pub const SECTIONS: &[Section] = &[
                 "The Dual mage's two bars, driven by named input scripts -- alternate, one-sided, finisher, idle, ascend -- in an empty arena and against a dummy. Prints when each tier is reached, when the band is left, how long the lower bar lasts outside it, what the burn cost, and whether she ascended. Name one script for it frame by frame.",
             ),
             e(
+                "cargo run -p sim --bin tally",
+                "The Shadow Reaver's v2, driven by named scripts -- range, stall, pattern, greedy, stick. Prints how many of the shadow's copies land at range with and without its self-aim, how a full tally fades, what the whole send-mark-cross-cash pattern deals and how long it takes, and what melee with the shadow at her heel is worth. Name one script for it frame by frame.",
+            ),
+            e(
                 "cargo run -p anim --bin bake",
                 "Re-bake the animation clips from their recipes.",
             ),
