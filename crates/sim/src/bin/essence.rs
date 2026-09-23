@@ -343,12 +343,18 @@ fn grey_over_time() {
 }
 
 fn against_the_creature() {
-    println!("Against the creature: the pool under a Ridgeback swept standing, and toppled");
     println!(
-        "  {:<12}{:>8}{:>8}{:>10}",
+        "Against the creature: the pool under a Ridgeback swept standing and toppled, and Reaped toppled"
+    );
+    println!(
+        "  {:<18}{:>8}{:>8}{:>10}",
         "state", "dealt", "volume", "radius m"
     );
-    for (name, toppled) in [("standing", false), ("toppled", true)] {
+    for (name, toppled, slot, button) in [
+        ("swept, standing", false, b::SWEEP, Input::LEFT),
+        ("swept, toppled", true, b::SWEEP, Input::LEFT),
+        ("Reaped, toppled", true, b::REAP, Input::RIGHT),
+    ] {
         let mut w = World::hunt([Class::BloodMage, Class::BloodMage]);
         let mut beast = w.monster.expect("a hunt has a creature");
         beast.pos = V3::ZERO;
@@ -362,19 +368,18 @@ fn against_the_creature() {
         beast.brain.think_left = u16::MAX;
         w.monster = Some(beast);
         w.players[1].pos = V3::new(Fx::from_int(-12), Fx::ZERO, Fx::from_int(8));
-        let sweep = sim::moves::get(Class::BloodMage, b::SWEEP);
+        let m = sim::moves::get(Class::BloodMage, slot);
         // Walk in from the side until the blade, held level at half its
         // reach, meets a part: a scan over where she stands rather than a
         // typed spot, because a toppled Ridgeback lies lower and elsewhere.
-        let mut dealt = 0;
         let mut spot = None;
         'scan: for zi in -30..=30 {
             for step in (-90..0).rev() {
                 let x = Fx::ratio(step, 10);
                 let z = Fx::ratio(zi, 10);
                 let part = w.monster.expect("creature").part_struck(
-                    V3::new(x.add(sweep.reach.mul(Fx::ratio(1, 2))), Fx::ZERO, z),
-                    sweep.radius,
+                    V3::new(x.add(m.reach.mul(Fx::ratio(1, 2))), Fx::ZERO, z),
+                    m.radius,
                     t::body_height(),
                 );
                 if part.is_some() {
@@ -385,26 +390,33 @@ fn against_the_creature() {
         }
         let Some(stand) = spot else {
             println!(
-                "  {:<12}{:>8}{:>8}{:>10}",
+                "  {:<18}{:>8}{:>8}{:>10}",
                 name, "--", "--", "no part in reach"
             );
             continue;
         };
         w.players[0].pos = stand;
         let full = w.monster.expect("creature").health;
-        run(&mut w, 2, Input::LEFT, 0);
-        run(&mut w, sweep.whiff_cost() as u32, 0, 0);
-        dealt += full - w.monster.expect("creature").health;
-        let made = pools(&w);
-        match made.iter().max_by_key(|p| p.pool_volume()) {
+        run(&mut w, 2, button, 0);
+        let mut biggest: Option<Effect> = None;
+        for _ in 0..m.whiff_cost() as u32 {
+            run(&mut w, 1, 0, 0);
+            for pool in pools(&w) {
+                if biggest.is_none_or(|b| pool.pool_volume() > b.pool_volume()) {
+                    biggest = Some(pool);
+                }
+            }
+        }
+        let dealt = full - w.monster.expect("creature").health;
+        match biggest {
             Some(pool) => println!(
-                "  {:<12}{:>8}{:>8}{:>10}",
+                "  {:<18}{:>8}{:>8}{:>10}",
                 name,
                 dealt,
                 pool.pool_volume(),
                 hundredths(pool.pool_radius())
             ),
-            None => println!("  {:<12}{:>8}{:>8}{:>10}", name, dealt, "--", "--"),
+            None => println!("  {:<18}{:>8}{:>8}{:>10}", name, dealt, "--", "--"),
         }
     }
     println!();
