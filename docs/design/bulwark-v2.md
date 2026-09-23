@@ -1,5 +1,5 @@
 ---
-status: being built — M1 (weight, the health table), M2 (Slam on middle click) and M3 (the loaded throw, the planted wall) built 2026-09-23, unplayed; M4–M5 not started
+status: built 2026-09-23, unplayed — every milestone's measured criteria pass (see the feel log); the felt questions are open
 decided: 2026-09-23
 supersedes: the mechanic section of kits/bulwark.md and the "shield as volume" promise in bulwark.md, once built
 sources: bulwark.md, kits/bulwark.md, defense.md, docs/archive/combat-design/blood-mage-skills.md (Seal of the unforgiven), this design thread

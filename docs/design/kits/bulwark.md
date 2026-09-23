@@ -6,7 +6,7 @@ depends: ../bulwark.md, ../defense.md
 
 # Bulwark — kit
 
-> ⚠️ **A v2 of the mechanic is being built, 2026-09-23** — see [../bulwark-v2.md](../bulwark-v2.md)
+> ⚠️ **A v2 of the mechanic is built, 2026-09-23, and unplayed** — see [../bulwark-v2.md](../bulwark-v2.md)
 > and [../plans/bulwark-v2.md](../plans/bulwark-v2.md). Every hit taken on the shield is stored as
 > **weight**; Slam (on middle click) and Throw spend it, and a planted shield becomes a real
 > structure sized by it. **Built so far (M1):** weight itself — loading, the drain, the

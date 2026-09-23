@@ -5170,3 +5170,45 @@ the intent — big cover is earned — but it means the "cover for the party" pr
 taken first.
 
 **Verdict** open — built and measured, unplayed.
+
+---
+
+### 2026-09-23 — the knob pass without a player, and the class done (Bulwark v2, M4–M5)
+
+**Changed** Nothing numeric. The M4 knob pass was meant to be driven by play; there was none,
+so it was driven by what can be measured, and nothing measured asked for a knob to move.
+
+**What was measured, and why each number stays.**
+
+- *A full Slam against the roster.* The biggest single hits elsewhere are 165–210 (Grapple 210,
+  Cataclysm 190, Executioner 185). A full Slam is 369, 389 out of the leap — about 1.8 times the
+  next. It costs 400 of blocked damage first, it is a 14-frame wind-up from a visibly dark
+  shield, and it returns exactly the proposal's "half of what it took". Its stagger leaves the
+  Bulwark about 19 frames ahead: enough for Bash (Slam + Bash = 429, under half a bar, the
+  line `feel.rs` draws for a combo), not enough for Grapple. Left alone.
+- *The hunt*, eight seeds, the default and the seven after it: the hunter guards 2–6 creature
+  blows a hunt and Slams 3–8 times; **in 6 of 8 runs a Slam lands the blow that breaks a leg**,
+  which is the plan's M4 criterion. Every run the hunter dies, at 518–625 s — the guard does
+  nothing about the unblockable rear-and-slam, and a Bulwark planted at a foot is under it.
+  That is a class-design finding (see *Open*), not a knob.
+- *Drain.* Ten seconds from full. Creature blows arrive minutes apart in a hunt, so the hunter
+  Slams straight after the block rather than banking; in versus, a string's worth of blocks
+  arrives inside it. Left alone.
+
+**The browser build runs the class.** `./crates/web/build-game.sh` built (the module
+validates), and headless Chromium loaded it with `?p1=bulwark&p2=bulwark&demo=1&shot_frame=166
+&shot_weight=400&debug_overlay=1`: Slam active, weight 299, the same shake ring and the same
+32 frames of hitstun on the dummy as the desktop capture of the same frame.
+
+**Also fixed along the way**: the desktop game panicked on launch on `main` — `hud::update`'s
+frame-step text query was not provably disjoint from the round counter's, which Bevy refuses.
+
+**Open — the felt questions no measurement answers.** Whether blocking feels like loading
+rather than waiting; whether a loaded throw is a decision or the obvious button; whether the
+wall's size reads as what was taken; whether an empty Slam is worth pressing; whether the
+opponent can read the shield's weight from across the arena (the capture says it can be
+*seen*; whether it *reads* is the question). And the one the proposal made a stop condition:
+whether this is enough of a reason to use a shield alone. If a player says it is not, the
+fallback is the grappler, and that is a new document.
+
+**Verdict** built and measured; felt verdict open.
