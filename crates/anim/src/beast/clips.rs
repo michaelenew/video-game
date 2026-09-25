@@ -201,25 +201,32 @@ fn bite() -> Recipe {
     // The coil. Head drawn back and high, weight onto the hind legs, neck
     // folded like a spring -- from across the arena this is a completely
     // different silhouette from anything else it does, which is the point.
+    //
+    // **The coil is in the neck, not the chest.** The body leans a little and
+    // no more: the shoulders are where a rider going for the nape is standing,
+    // and a bite that heaves the whole chest back and forward throws a braced
+    // rider off them once its startup is short enough to be a bite. At the
+    // old three-body-part heave the tell could not come under thirty-four
+    // frames without doing exactly that. See `docs/design/feel-log.md`.
     let coil = Pose::standing()
-        .hips(-0.14, 0.05, 0.0)
-        .root(6.0, 0.0, 0.0)
-        .spine(5.0, 0.0, 0.0)
-        .chest(5.0, 0.0, 0.0)
-        .neck(32.0, 0.0)
-        .head(-22.0, 0.0, 0.0)
+        .hips(-0.08, 0.04, 0.0)
+        .root(3.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .chest(2.0, 0.0, 0.0)
+        .neck(38.0, 0.0)
+        .head(-24.0, 0.0, 0.0)
         .tail_lift(16.0)
         .plant_fore(-0.12, 0.0)
         .plant_hind(-0.50, 0.0);
     // Thrown. The neck unfolds completely and the head goes past where it looks
     // like it can, which is most of what makes a lunge read as committed.
     let strike = Pose::standing()
-        .hips(0.16, -0.05, 0.0)
-        .root(-5.0, 0.0, 0.0)
-        .spine(-7.0, 0.0, 0.0)
-        .chest(-6.0, 0.0, 0.0)
-        .neck(-28.0, 0.0)
-        .head(14.0, 0.0, 0.0)
+        .hips(0.10, -0.04, 0.0)
+        .root(-2.0, 0.0, 0.0)
+        .spine(-3.0, 0.0, 0.0)
+        .chest(-3.0, 0.0, 0.0)
+        .neck(-34.0, 0.0)
+        .head(16.0, 0.0, 0.0)
         .tail_lift(-10.0)
         .plant_fore(0.34, 0.0)
         .plant_hind(-0.10, 0.0);

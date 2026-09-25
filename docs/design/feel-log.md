@@ -5585,3 +5585,78 @@ arrival.
 
 **Verdict** open. Questions for the next play: is ten frames enough to find the jump? Is a
 fifth the right lunge, or does the dash jump want to be vertical more than horizontal?
+
+### 2026-09-25 — the Ridgeback, made dangerous
+
+**Changed** every tell is shorter: bite 34 → 24, stomp 13 → 11, sweep 36 → 32, charge
+34 → 26, slam 52 → 46, kick 22 → 20. The shake's forty is the ride's design and is untouched.
+Every hit is bigger and a quarter harder: bite 190 → 240 in a 2.8 m volume (was 2.2), stomp
+140 → 175 at 3.0 m (2.4) and 2.6 m high (2.2), sweep 160 → 200 at 3.8 m (3.2), charge
+210 → 260 at 3.4 m (2.8), 3.8 m high (3.4) and 26 m/s (20), slam 290 → 360 at 4.2 m (3.8)
+and 3.6 m high (3.0), kick 170 → 210 and 3.2 m high (2.8) **with its 2.4 m radius kept**.
+Recoveries came in by a few frames each (bite 34 → 30, stomp 26 → 24, sweep 46 → 42,
+charge 44 → 42, slam 54 → 52, kick 34 → 30). It turns at 0.34 turns/s (0.28), gain 2.6 (2.2),
+acceleration 1.5 (1.1); it gallops at 15 m/s (12); it glances every 7 frames (8), pauses 6
+between moves (8), and commits harder when wounded (120, was 90). The slam is locked out for
+150 frames from its start — the first lockout on a damaging move that outlasts the move. The
+bite's windup moved out of the chest and into the neck, and the creature's clips were rebaked
+over the new frame counts. The scripted hunter judges a tell by where it will be when the move
+lands rather than where it is standing when it sees it.
+
+**Why** a report from play: *everything is still too telegraphed, too small, and too slow.*
+The harness agreed once it was asked per move. Across twelve hunts the bite had landed once in
+192 throws, the charge never in 230, the slam twice in 375. Three of six damaging moves were
+decoration, and a player who found the flank had found the whole fight.
+
+**Measured one family at a time first**, against the committed numbers, six seeds each, because
+"make it dangerous" is five different levers and they do not cost the same. Shorter tells alone
+left the scripted hunter winning two of six as before. Bigger volumes alone dropped it to none,
+and all of that was the kick: at 2.6 m a hunter lagging a hundred and thirty degrees round
+behind a faster-turning animal is inside it, and it lost every hunt standing in kicks. The turn
+rate alone cost nothing. A four-frame pause between moves left two of six hunts unresolved at
+ten minutes — the pause is the player's turn, and four frames of it is none. The damage alone,
+oddly, won three of six: shorter fights, fewer rides, fewer falls.
+
+**Three things the harness found.**
+
+- **A lockout shorter than the move is decoration.** A cooldown counts from the frame the move
+  starts, and the sweep, kick, stomp and slam all outlast theirs, so none of the four had ever
+  bound once; setting the sweep's to 70 changed nothing to the frame. The slam's is real now —
+  150 against a 103-frame move, a forty-seven frame gap — because with wounded aggression
+  scaling with a move's damage, the biggest hit went eight times running on one seed. The
+  others are left as they were and named here as decorative. Real lockouts on the sweep and the
+  kick were tried and reverted: the kick filled the sweep's gap and landed twenty-eight times in
+  448.
+- **The bite could not come under thirty-four frames without throwing a braced rider off the
+  shoulders.** The clip heaved the hips thirty centimetres and pitched root, spine and chest
+  through eleven degrees each between coil and strike; compressed into twenty-two frames that is
+  two and a half times the acceleration, and the shoulders are where a rider going for the nape
+  stands. The coil is in the neck now — 38° back and 34° through against 32 and 28 — and the
+  body leans three degrees. Measured, a braced rider on the shoulders holds through the bite at
+  every startup down to fourteen frames. The slam still throws a braced rider at every startup,
+  which is its design, and the sweep still throws nobody off the back.
+- **The slam catches a hunter running in from the front.** It is thrown at the lead point, and
+  the hunter judged a threat by the distance at which it saw the tell — so a slam laid across
+  the spot it was running to was "out of reach" until the frame it landed. Fifty-two frames
+  gave it time to notice by accident; forty-six did not. It now judges by its own speed toward
+  the animal over the frames the tell has left, which is what a person who has eaten one does.
+  That is the one lesson taught this pass, and it is why the hunter is hit *less* often per
+  minute than before (1.4 against 1.7 across twelve hunts) while dying in four to nine hits
+  where it took seven to nine.
+
+**Reverted.** Kick radius 2.6 (above). Sweep at 26 to 30 frames: the hop needs fifteen frames
+of reaction and seven of rise to clear 1.6 m, and thirty leaves nothing for a poke already
+thrown, so sweeps landed on a hunter in the air. Slam at 42 frames and 4.6 m: from the front a
+sidestep no longer left it, eighteen of 307 landed. Walk 7, lead 1.2, decisiveness 68, glance
+6, think 4: each cost a hunt or two for nothing a person would notice. Damage a tenth lower: no
+difference to the outcome, so the full quarter stayed.
+
+**Verdict** kept. The scripted hunter wins one of the six test seeds and one of twelve overall,
+against two of six and two of twelve before; `the_fight_is_neither_free_nor_hopeless` passes on
+that one seed. Thinner than it stood on, and both were thin: the bot has a fixed reaction and
+one plan and cannot learn, so its win rate is a floor. What it measures held — no unanswerable
+hit in twelve hunts, five of six moves readable, openings twice the punish, every move used, no
+move over a third of the whole. What a person will notice: the bite is a snap, the slam lands
+where they were running, the flank is still the place to stand and the sweep is still the read
+there, and four hits is the fight. Whether that is dangerous or cheap is theirs to say, and the
+answer decides whether the damage or the tells is the next knob.

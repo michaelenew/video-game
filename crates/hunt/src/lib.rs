@@ -257,7 +257,7 @@ fn hind_foot(seen: Seen, right: bool) -> V3 {
 ///
 /// **Since the back kick, beside the hind leg rather than behind it.** About
 /// a hundred and twelve degrees round: inside the sweep's cone and just
-/// outside the kick's. The kick's tell is twenty-two frames and a poke is
+/// outside the kick's. The kick's tell is twenty frames and a poke is
 /// twenty, so a hunter standing where the kick is aimed cannot both attack
 /// and be sure of answering it -- which is the kick doing its job, and the
 /// reason the station moved. From the flank the one threat is the tail, whose
@@ -319,7 +319,7 @@ const SWING_GAP_OPEN: u16 = 8;
 /// Frames between attacks, so it does not mash into its own recovery.
 ///
 /// **Wider than the recovery.** A poke is twenty frames of not being able to
-/// jump, and the sweep's tell is thirty-six; a bot that pokes the moment it
+/// jump, and the sweep's tell is thirty-two; a bot that pokes the moment it
 /// can is committed for most of every window it has to read the tail in,
 /// and got swept about one time in two. Poking, then watching, then poking
 /// is what a person does at the feet of something with a tail.
@@ -445,8 +445,23 @@ impl Hunter {
             .then_some(seen.kind)
             .filter(|k| *k != monster::NO_PART)
             .map(monster::attack);
+        // **Judged where the hunter will be when it lands, not where it is
+        // standing now.** The creature aims at a lead point, so a slam begun
+        // while the hunter is running in is laid across the spot they are
+        // running to; read at the distance on sight, that slam is "out of
+        // reach" right up to the frame it flattens them. A person who has
+        // eaten one learns to stop running at a rearing animal, and what
+        // they are judging is exactly this: their own speed toward it, over
+        // the frames the tell has left.
+        let to_land = if seen.doing == STARTUP {
+            seen.left as i32
+        } else {
+            0
+        };
+        let closing = me.vel.dot(toward).max(Fx::ZERO);
+        let at_landing = range.sub(closing.mul(Fx::from_int(to_land)).mul(sim::DT));
         let threatened = coming.is_some_and(|m| {
-            m.damage > 0 && range.raw() < m.ideal_range.add(m.range_span.mul(HALF)).raw()
+            m.damage > 0 && at_landing.raw() < m.ideal_range.add(m.range_span.mul(HALF)).raw()
         });
 
         // 0. A Bulwark with the shield in hand takes a blockable blow on it
