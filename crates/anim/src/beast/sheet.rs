@@ -324,6 +324,13 @@ pub fn states() -> Canvas {
             }),
         ),
         (
+            "spray, cocked",
+            with(Doing::Startup {
+                kind: monster::SPRAY,
+                left: 4,
+            }),
+        ),
+        (
             "stumbling",
             with(Doing::Stumble {
                 left: sim::tuning::stumble_frames() / 2,

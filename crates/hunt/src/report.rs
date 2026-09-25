@@ -85,6 +85,12 @@ pub struct Report {
     /// Frames it was doing nothing at all.
     pub idle_frames: u32,
 
+    /// **The fight divided by what it lets you do**, frame by frame, by how
+    /// long until it can start its next move. See [`Threat`]. The design asks
+    /// for about four tenths threatening, a fifth safe to walk up on, and
+    /// most of the rest open only to a poke or a fast way in.
+    pub threat: [u32; 4],
+
     /// Riding.
     pub ride_frames: u32,
     pub rides: u32,
@@ -92,9 +98,12 @@ pub struct Report {
     run_ride: u32,
     was_aboard: bool,
     pub thrown: u32,
-    /// Rides that ended, not by a buck, while a bucking move was in progress:
-    /// the rider read it and left. The buck working, by the other route.
+    /// Rides that ended, not by a buck, while a bucking move was in progress
+    /// or had just been: the rider read it and left. The buck working, by the
+    /// other route.
     pub fled: u32,
+    /// The last frame a bucking move was winding up or out.
+    last_buck: u32,
 
     /// Attacks the hunters started, and frames on which one connected with
     /// the creature. The ratio is whether the hunter is hitting what it is
@@ -148,6 +157,8 @@ pub struct Report {
     /// rather than arguable.
     commit_kind: u8,
     commit_range: [Fx; MAX_PLAYERS],
+    /// Where the creature stood when it committed.
+    commit_at: V3,
 
     pub timeline: Vec<Beat>,
 }
@@ -176,6 +187,7 @@ impl Report {
             run_open: 0,
             was_open: false,
             idle_frames: 0,
+            threat: [0; 4],
             ride_frames: 0,
             rides: 0,
             longest_ride: 0,
@@ -183,6 +195,7 @@ impl Report {
             was_aboard: false,
             thrown: 0,
             fled: 0,
+            last_buck: 0,
             swings: 0,
             connected: 0,
             dealt: 0,
@@ -206,6 +219,7 @@ impl Report {
             was_pools: 0,
             commit_kind: monster::NO_PART,
             commit_range: [Fx::ZERO; MAX_PLAYERS],
+            commit_at: V3::ZERO,
             timeline: Vec::new(),
         }
     }
@@ -216,6 +230,9 @@ impl Report {
             return;
         };
         self.frames = after.frame;
+        if now.alive() {
+            self.threat[Threat::of(now.frames_until_free() as i32) as usize] += 1;
+        }
 
         // Where the fight is happening.
         if self.frames == 1 {
@@ -246,6 +263,7 @@ impl Report {
                 self.longest_repeat = self.longest_repeat.max(self.run_len);
 
                 self.commit_kind = kind;
+                self.commit_at = now.pos;
                 let mut nearest = Fx::MAX;
                 for i in 0..MAX_PLAYERS {
                     let d = V3::new(
@@ -317,6 +335,20 @@ impl Report {
         }
 
         // Riding, and being removed from the ride.
+        //
+        // A bucking move seen begin is a reason to leave even once it has been
+        // cut short: a rider who read a slam's rear and jumped, a moment
+        // after their own hit on the ridge flinched it out of the slam, left
+        // because of the slam. Counted from the last frame one was running,
+        // for as long as it takes to see it.
+        if now
+            .doing
+            .attacking()
+            .is_some_and(|k| matches!(k, monster::SWEEP | monster::SLAM | monster::SHAKE))
+            && !matches!(now.doing, Doing::Recovery { .. })
+        {
+            self.last_buck = after.frame;
+        }
         let aboard = after.players.iter().any(|p| p.aboard());
         if aboard {
             self.ride_frames += 1;
@@ -333,11 +365,7 @@ impl Report {
                 .any(|p| matches!(p.action, sim::state::Action::HitStun { .. }))
             {
                 self.thrown += 1;
-            } else if now
-                .doing
-                .attacking()
-                .is_some_and(|k| matches!(k, monster::SWEEP | monster::SLAM | monster::SHAKE))
-            {
+            } else if after.frame.saturating_sub(self.last_buck) <= REACTION as u32 * 2 {
                 self.fled += 1;
             }
         }
@@ -426,12 +454,29 @@ impl Report {
             // decision you made. Being hit from *outside* it, by something you
             // could not react to, is not, and it happens when the animal walks
             // into you during a startup too short to answer.
+            //
+            // **Measured from where the animal stood when it committed, to
+            // where the hunter is when it lands.** Measured from the hunter's
+            // position at the commit instead, it blamed the creature for a
+            // hunter walking into a stomp at a full run -- which is the one
+            // thing the stomp exists to punish, and the answer to it is a
+            // position the hunter chose. What is unanswerable is the animal
+            // closing a gap you had left it, not you closing one.
             let reach = m
                 .hit_x
                 .abs()
                 .add(m.hit_radius)
                 .add(sim::tuning::body_radius());
-            if (m.startup as usize) < REACTION && self.commit_range[i].raw() > reach.raw() {
+            let from_commit = V3::new(
+                after.players[i].pos.x.sub(self.commit_at.x),
+                Fx::ZERO,
+                after.players[i].pos.z.sub(self.commit_at.z),
+            )
+            .flat_len();
+            if (m.startup as usize) < REACTION
+                && self.commit_range[i].raw() > reach.raw()
+                && from_commit.raw() > reach.raw()
+            {
                 self.unanswerable += 1;
             }
         }
@@ -509,6 +554,12 @@ impl Report {
     /// meaningful attack and it is not an opening, it is a tease.
     pub fn mean_opening(&self) -> f32 {
         ratio(self.open_frames, self.openings)
+    }
+
+    /// The share of the fight it spent in one kind of window.
+    pub fn threat_share(&self, t: Threat) -> f32 {
+        let total: u32 = self.threat.iter().sum();
+        ratio(self.threat[t as usize], total)
     }
 
     pub fn idle_share(&self) -> f32 {
@@ -630,6 +681,19 @@ impl Report {
             format!("{}f", self.shortest_opening),
             "the worst case",
         );
+        for (t, what) in [
+            (Threat::Threatening, "nothing lands before it answers"),
+            (Threat::PokeOnly, "a poke from where you stand"),
+            (Threat::Skilled, "a dash or a leap gets you in"),
+            (Threat::WalkUp, "walk in and swing"),
+        ] {
+            line(
+                &mut out,
+                t.label(),
+                format!("{:.0}%", self.threat_share(t) * 100.0),
+                what,
+            );
+        }
         line(
             &mut out,
             "idle share",
@@ -841,4 +905,60 @@ impl Report {
 
 fn ratio(a: u32, b: u32) -> f32 {
     if b == 0 { 0.0 } else { a as f32 / b as f32 }
+}
+
+/// What a window lets a hunter do, by how many frames it has.
+///
+/// Every threshold is a hunter's own reaction plus the swing, plus whatever
+/// it takes to get there from the standoff -- nothing for a hunter already in
+/// reach or shooting from range, a dash for one with a way in, a walk for
+/// anybody. The gap is [`APPROACH_GAP`], the ground between waiting just
+/// outside its reach and a foot.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Threat {
+    /// Shorter than a reaction and a swing. It answers anything that closes.
+    Threatening,
+    /// Long enough to swing from where you are. A poke already in reach, or a
+    /// shot from range.
+    PokeOnly,
+    /// Long enough to get in with the fastest thing a fighter has, and not
+    /// on foot: a dodge, a vault, a structure jump, a dash to a shadow.
+    Skilled,
+    /// Long enough to walk in from the standoff and swing.
+    WalkUp,
+}
+
+/// The ground between waiting at the edge of its close reach and a foot.
+pub const APPROACH_GAP: Fx = Fx::from_raw(9 << 15);
+
+/// The frames a swing takes to land: a quick poke's startup and first active
+/// frame. Deliberately the fastest in the roster rather than any one class's,
+/// so that a window called too short is too short for everybody.
+const SWING: i32 = 9;
+
+impl Threat {
+    pub fn of(frames: i32) -> Threat {
+        let step = |speed: Fx| APPROACH_GAP.div(speed.mul(sim::DT)).to_int();
+        let poke = REACTION as i32 + SWING;
+        let skilled = poke + step(sim::tuning::dodge_speed());
+        let walk = poke + step(sim::tuning::move_speed());
+        if frames < poke {
+            Threat::Threatening
+        } else if frames < skilled {
+            Threat::PokeOnly
+        } else if frames < walk {
+            Threat::Skilled
+        } else {
+            Threat::WalkUp
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Threat::Threatening => "threatening",
+            Threat::PokeOnly => "open to a poke",
+            Threat::Skilled => "open to a way in",
+            Threat::WalkUp => "safe to walk up",
+        }
+    }
 }

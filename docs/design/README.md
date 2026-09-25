@@ -111,7 +111,7 @@ few enough to balance and to read in third person.
 | [shadow-reaver-v2.md](shadow-reaver-v2.md) | v2: the shadow aims itself, marks, and the cash-in on arrival | **Built, unplayed** |
 | [elementalist.md](elementalist.md) | Structure interaction in versus | Decided |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
-| [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt; **sharpened 2026-09-25**, unplayed |
+| [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt; **hunts since 2026-09-25**: eight moves, a threat at every range, unplayed |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |

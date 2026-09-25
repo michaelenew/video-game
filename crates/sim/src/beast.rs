@@ -817,6 +817,9 @@ pub enum Clip {
     /// Both hind legs, straight back. The one move aimed at whoever is standing
     /// directly behind it.
     Kick,
+    /// The tail curls over the back and flings its spikes forward. The one
+    /// move whose hit leaves the animal.
+    Spray,
     Flinch,
     /// Down on a knee. What a broken leg and a landed crowd-control both
     /// produce, and the way onto its back from the floor.
@@ -825,7 +828,7 @@ pub enum Clip {
     Dead,
 }
 
-pub const CLIPS: usize = 14;
+pub const CLIPS: usize = 15;
 
 impl Clip {
     pub const ALL: [Clip; CLIPS] = [
@@ -839,6 +842,7 @@ impl Clip {
         Clip::Slam,
         Clip::Shake,
         Clip::Kick,
+        Clip::Spray,
         Clip::Flinch,
         Clip::Stumble,
         Clip::Topple,
@@ -861,6 +865,7 @@ impl Clip {
             Clip::Slam => "slam",
             Clip::Shake => "shake",
             Clip::Kick => "kick",
+            Clip::Spray => "spray",
             Clip::Flinch => "flinch",
             Clip::Stumble => "stumble",
             Clip::Topple => "topple",
@@ -892,6 +897,7 @@ impl Clip {
                 | Clip::Slam
                 | Clip::Shake
                 | Clip::Kick
+                | Clip::Spray
         )
     }
 
@@ -904,7 +910,8 @@ impl Clip {
             3 => Clip::Charge,
             4 => Clip::Slam,
             5 => Clip::Shake,
-            _ => Clip::Kick,
+            6 => Clip::Kick,
+            _ => Clip::Spray,
         }
     }
 }

@@ -35,6 +35,7 @@ pub fn all() -> Vec<Recipe> {
         slam(),
         shake(),
         kick(),
+        spray(),
         flinch(),
         stumble(),
         topple(),
@@ -635,6 +636,57 @@ fn kick() -> Recipe {
          -- so it is the tail going up and the rump going down. Its answer is \
          a sidestep, which is not the sweep's answer, so being behind the \
          animal is now two reads rather than none."
+            .to_string(),
+    )
+}
+
+fn spray() -> Recipe {
+    let ready = Pose::standing();
+    // The tell, and it is readable from the front, which is where the person
+    // it is for is standing: the tail comes up and *over* the back until the
+    // tip is above the shoulders, and the head goes down out of its way. A
+    // scorpion's silhouette, on an animal that has never shown it before.
+    let cocked = Pose::standing()
+        .hips(-0.10, -0.10, 0.0)
+        .root(4.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .neck(-18.0, 0.0)
+        .head(10.0, 0.0, 0.0)
+        .tail(80.0, 0.0)
+        .tail_from_base(30.0)
+        .plant_fore(0.04, 0.0)
+        .plant_hind(-0.30, 0.0);
+    // Flung. The tail whips forward over the shoulders and the spikes leave
+    // the tip; the body rocks onto the forelegs behind it.
+    let flung = Pose::standing()
+        .hips(0.12, -0.14, 0.0)
+        .root(-4.0, 0.0, 0.0)
+        .spine(-2.0, 0.0, 0.0)
+        .neck(-22.0, 0.0)
+        .head(12.0, 0.0, 0.0)
+        .tail(120.0, 0.0)
+        .tail_from_base(50.0)
+        .plant_fore(0.20, 0.0)
+        .plant_hind(-0.16, 0.0);
+    Recipe::new(
+        Clip::Spray,
+        vec![
+            Key::eased(0.0, ready, Ease::ANTICIPATE),
+            Key::eased(mark(Clip::Spray, 0, 0.7), cocked, Ease::SNAP),
+            Key::eased(mark(Clip::Spray, 1, 0.0), flung, Ease::STRIKE),
+            Key::eased(mark(Clip::Spray, 1, 1.0), flung, Ease::OUT),
+            Key::eased(mark(Clip::Spray, 2, 0.5), ready, Ease::SMOOTH),
+            Key::at(1.0, ready),
+        ],
+        Looseness::HEAVY,
+    )
+    .noting(
+        "The long-range answer. The tail comes over the back and the spikes \
+         leave the tip, travelling out along the facing and rooting whoever \
+         they meet -- which is what the charge after it is for. Aimed at the \
+         fighter who stands at the edge of everything else's reach, and \
+         answered by a dodge through the spikes or a jump over them, never by \
+         walking, because the windup follows you."
             .to_string(),
     )
 }

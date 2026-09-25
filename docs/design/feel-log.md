@@ -5660,3 +5660,97 @@ move over a third of the whole. What a person will notice: the bite is a snap, t
 where they were running, the flank is still the place to stand and the sweep is still the read
 there, and four hits is the fight. Whether that is dangerous or cheap is theirs to say, and the
 answer decides whether the damage or the tells is the next knob.
+
+### 2026-09-25 — the Ridgeback hunts
+
+**Changed** It chases: a gallop of 17 m/s (was 15) and a pursuit term that
+matches a target moving away. The windup of every forward move follows you at
+nine tenths of its turn rate, leading to where you will be when the hit lands;
+the hit locks. It keeps its target unless somebody is much nearer. It meets an
+approach (a closing target raises its appetite for forward moves) and presses a
+set-up (a staggered or rooted one does too, and skips its turn-round pause).
+After a rear move it takes forty frames to come about. **An eighth move, the
+spike spray**: the tail comes over the back and flings spikes out along the
+facing at 60 m/s from four metres to twenty, rooting for 120 frames. The tail
+sweep became the mid-range set-up: less damage (150), a hundred-frame stagger,
+a volume that reaches both flanks to seven or eight metres. The slam is the
+slow, huge one (48 frames, 5 m, 110 recovery); the bite lunges and recovers
+for 90 frames; the charge runs at 30 m/s for 40 frames. It plants for moves,
+launches into a charge, and brakes short of a wall. In the game, a hunt starts
+without the training dummy unless somebody has its keys. The fight report
+divides the fight into four windows and a test pins their bands; a new test
+file, `crates/sim/tests/hunted.rs`, pins the rest.
+
+**Why** a report from play: damage was better, but it was still too slow and too
+small. A fighter's walk beat the fastest thing it did, so backpedalling and
+shooting was free; it got distracted and wandered off; walking up to it worked;
+and walking out of its moves worked. Asked for, in so many words: a charge much
+faster than a fighter; a slow, scary front move; a mid-range tail that staggers
+into a follow-up; a long-range spray that roots so it can charge; and a fight
+that is about four tenths threatening, a fifth safe to walk into, and the rest
+open to a poke or to movement tech.
+
+**Four real bugs, three of them older than this pass.**
+
+- *The charge never charged.* It accelerated at the walking rate, 9 m/s² then
+  16, so a 20 m/s charge reached four metres a second by the end of its active
+  window and covered a metre and a half. That is why it had landed zero times in
+  230 throws in the first baseline of the day. It is launched now, at 600 m/s²:
+  under twice a rider's grip, because the first version set the speed in one
+  frame, which is an unbounded acceleration and threw braced riders.
+- *It charged into walls.* Twenty metres of charge in a twenty-eight metre arena
+  ran into the edge, where the position clamp stopped it in a frame and threw
+  braced riders again. It brakes within its stopping distance of the wall.
+- *The "distraction" was the training dummy.* Nearest-wins targeting plus an idle
+  body standing in the arena: back off further than the dummy stood and the
+  animal walked to the dummy. The harness had always removed absent hunters;
+  the game had not.
+- *Galloping over a body picked it up.* A fallen fighter was scooped onto the
+  animal's back as though they had landed there, and the report counted the
+  corpse's "rides". The dead do not mount, and a rider killed aboard falls off.
+
+**The harness had to learn the fight too.** Its old plan — walk to a station
+beside the hind leg and poke — met an animal that tracks, chases and punishes
+approaches, and it swung twice in a fight. It waits at a standoff now, dodges
+at the hit rather than at the tell, jumps the sweep, judges a threat by the
+move's real volume (it had judged by the distance the move is thrown at, and
+the slam flattened it from eight and a half metres every time), goes in only on
+a window it can see will still be open when it arrives, counts the creature's
+beat between moves as part of that window, dashes in when the gap is worth it,
+and leaves before the window closes. And it is a few frames early or late at
+random on every dodge and jump: **a perfect-timing bot dodged every reactable
+move there is**, so the sweep, slam, bite and spray landed zero times across
+twelve hunts and "landed" meant nothing.
+
+**The report's "unanswerable" was also measuring the wrong thing.** It compared
+the hunter's distance *when the move began* against the move's reach, so a
+hunter walking into a stomp at a full run counted as the creature's fault. It
+measures from where the creature stood when it committed now; walking into a
+stomp is what the stomp is for.
+
+**The dodge windows, measured**, as the frames on which a dodge can be pressed
+and get clear: bite 4 and slam 4 at six active frames, which is a coin toss;
+bite 6, slam 6, charge 9 and spray 7 with the bite and slam out for four. The
+charge's width sits between 1.8 m, where walking sideways gets clear, and
+2.4 m, where a dodge's ten invulnerable frames end inside it. It is 2.0.
+
+**Reverted.** Windup tracking at half the turn rate: a sidestepper at ten metres
+walked out of the charge. Leading the windup by the startup alone: the same,
+because the charge keeps travelling after the windup ends. A 26 m/s charge at
+2.4 m: undodgeable once it actually moved. A 3.0 m stomp: with the animal facing
+you, "in front of it" became everywhere, for a move nobody can react to. The
+sweep's old volume, behind the hips only: it never reached the flanks, so it
+could not be a mid-range move and never landed. Pauses of 28 and 36 frames: they
+moved the shares toward the targets and made the bite land seven times in eight,
+because the bot spent its dodge leaving and had none left. Bite damage 260 and
+240: with tracking, the lunge and the follow-up, a decent bot died in 20 to 40
+seconds.
+
+**Verdict** kept, and unplayed. The scripted hunter wins four hunts in twelve and
+none of its losses has an unanswerable hit in it. Every threat mode lands on a
+decent player at a rate they would feel. The shares are 46 / 13 / 19 / 21
+against a target of 40 / 16 / 24 / 20. What only a person can say: whether a
+minute is a fight or a mugging; whether a tell that follows you reads as an
+animal or as a homing missile; whether "wait at the edge and go in on the
+recovery" is what they find themselves doing; and whether being rooted from
+twenty metres and charged is a lesson or a tax.

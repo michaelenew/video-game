@@ -593,6 +593,18 @@ scalars! {
     BleedLasts,       "Blood mage", "Bleed lasts",                            Frames, 1,       900;
     BleedTick,        "Blood mage", "Bleed ticks every",                      Frames, 1,       120;
     BleedDamage,      "Blood mage", "Bleed damage per tick",                  Int,   0,        200;
+    // The Ridgeback's hunt, 2026-09-25: pursuit, the tracking windup, and the
+    // two situations that raise its appetite. Appended here rather than beside
+    // the rest of its knobs for the reason the Lotus note above gives.
+    StartupTracking,  "Ridgeback · mind","Windup follows you (x turn rate)", Fixed,  0,       fx(1,1);
+    ClosingSpeed,     "Ridgeback · mind","Closing speed that provokes it",   Fixed,  0,       fx(12,1);
+    ClosingAppetite,  "Ridgeback · mind","Appetite for a closing target",    Int,    0,       4000;
+    ComboAppetite,    "Ridgeback · mind","Appetite for a stunned target",    Int,    0,       4000;
+    TargetSwitch,     "Ridgeback · mind","Switch targets when nearer than (x)", Fixed, 0,   fx(1,1);
+    PursuitGain,      "Ridgeback","Matches a fleeing target's speed (x)",     Fixed,  0,       fx(3,1);
+    RearPause,        "Ridgeback · mind","Turns to face you after a rear move", Frames, 0,      180;
+    MonsterBrake,     "Ridgeback","Braking, committed (m/s2)",                Fixed,  fx(1,1), fx(200,1);
+    MonsterLaunch,    "Ridgeback","Launching into a charge (m/s2)",           Fixed,  fx(10,1), fx(2000,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,6 +1030,13 @@ pub enum MonsterField {
     RiderWeight,
     /// Frames before this move can come back. What makes baiting one worth it.
     Cooldown,
+    /// How fast the hit volume travels along the facing while the move is
+    /// active. Zero for everything that happens where the animal is standing;
+    /// the spike spray is the one move whose hit leaves it.
+    Travel,
+    /// Frames the fighter it hits is rooted to the spot, held by nobody.
+    /// Zero is an ordinary hit.
+    Root,
 }
 
 impl MonsterField {
@@ -1045,6 +1064,8 @@ impl MonsterField {
         MonsterField::Weight,
         MonsterField::RiderWeight,
         MonsterField::Cooldown,
+        MonsterField::Travel,
+        MonsterField::Root,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -1072,6 +1093,8 @@ impl MonsterField {
             MonsterField::Weight => "Appetite",
             MonsterField::RiderWeight => "Appetite per rider",
             MonsterField::Cooldown => "Lockout after use",
+            MonsterField::Travel => "Hit travels at",
+            MonsterField::Root => "Roots for",
         }
     }
 
@@ -1082,7 +1105,8 @@ impl MonsterField {
             | MonsterField::Recovery
             | MonsterField::Hitstun
             | MonsterField::Blockstun
-            | MonsterField::Cooldown => Unit::Frames,
+            | MonsterField::Cooldown
+            | MonsterField::Root => Unit::Frames,
             MonsterField::Damage
             | MonsterField::Follows
             | MonsterField::Weight
@@ -1096,7 +1120,9 @@ impl MonsterField {
         match self {
             MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 120),
             MonsterField::Cooldown => (0, 600),
-            MonsterField::Hitstun | MonsterField::Blockstun => (0, 90),
+            MonsterField::Root => (0, 300),
+            MonsterField::Travel => (0, fx(90, 1)),
+            MonsterField::Hitstun | MonsterField::Blockstun => (0, 120),
             MonsterField::Damage => (0, 900),
             MonsterField::Follows => (0, 2),
             MonsterField::Weight | MonsterField::RiderWeight => (0, 4000),
@@ -1112,8 +1138,8 @@ impl MonsterField {
     }
 }
 
-pub const MONSTER_MOVES: usize = 7;
-pub const MONSTER_FIELDS: usize = 23;
+pub const MONSTER_MOVES: usize = 8;
+pub const MONSTER_FIELDS: usize = 25;
 pub const MONSTER_COUNT: usize = MONSTER_MOVES * MONSTER_FIELDS;
 
 pub const CLASSES: usize = 6;

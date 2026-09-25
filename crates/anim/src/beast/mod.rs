@@ -696,6 +696,7 @@ fn move_of(clip: Clip) -> Option<u8> {
         Clip::Slam => SLAM,
         Clip::Shake => SHAKE,
         Clip::Kick => KICK,
+        Clip::Spray => SPRAY,
         _ => return None,
     })
 }

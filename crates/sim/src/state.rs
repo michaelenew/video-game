@@ -1153,6 +1153,7 @@ impl World {
                 vel: self.players[i].vel,
                 alive: self.players[i].health > 0,
                 aboard: self.players[i].aboard(),
+                stunned: self.players[i].action.stunned(),
             });
             beast.step(&seen);
             // Its *heading*, not its wobble: a shake would otherwise spin the
@@ -2684,6 +2685,15 @@ fn step_player(
     bulwark::track_fall(p);
     // Standing on the creature is a different tick: no gravity, no arena, and
     // movement that happens in the animal's frame rather than the world's.
+    // **The dead do not ride.** A fighter killed on its back falls off it,
+    // rather than being carried round the arena for the rest of the hunt.
+    if p.aboard() && p.health <= 0 {
+        if let Some(beast) = beast {
+            p.pos = beast.world_of(p.mount as usize, p.local);
+        }
+        p.mount = monster::NO_PART;
+        p.grounded = false;
+    }
     if p.aboard() {
         match beast {
             Some(beast) => return step_rider(p, who, input, beast, scene, &out),
@@ -6796,6 +6806,12 @@ fn drag_the_held(players: &mut [Player; MAX_PLAYERS]) {
         };
         let by = victim.held_by as usize;
         if by >= MAX_PLAYERS {
+            // Held by nobody: the creature's spikes, which pin a fighter
+            // where they stand rather than haul them anywhere. The pin is
+            // the whole of it -- no momentum of their own, and whatever
+            // the hit carried stops at the spikes.
+            victim.vel.x = Fx::ZERO;
+            victim.vel.z = Fx::ZERO;
             continue;
         }
         let holder = &snapshot[by];
@@ -7184,6 +7200,13 @@ fn meet_the_creature(p: &mut Player, beast: &Monster) {
     // knocked off by a hit. They are solid to the animal still -- `resolve`
     // above -- so they slide off it rather than through it.
     if p.action.stunned() {
+        return;
+    }
+    // Nor does a body. Since the creature learned to gallop and to charge, it
+    // ran over the spot a fallen fighter lay on often enough to scoop them up
+    // and carry them -- which the fight report counted as rides, and the game
+    // drew as a corpse on its back.
+    if p.health <= 0 {
         return;
     }
     let Some((part, top)) = beast.surface_under(p.pos, radius) else {
@@ -7594,7 +7617,10 @@ impl World {
                         blockstun: m.blockstun,
                         knockback: m.knockback,
                         launch: m.launch,
-                        grabs: 0,
+                        // A rooting hit holds the victim where they stand,
+                        // by nobody: `drag_the_held` hauls only toward a
+                        // fighter, so a hold by the creature is a pin.
+                        grabs: m.root,
                         by: QUARRY,
                         dir: away,
                         blocked: guarding,

@@ -9,7 +9,7 @@
 //! Everything is measured over several seeds. A creature that chooses produces
 //! a distribution, and one run of a distribution is an anecdote.
 
-use hunt::{Outcome, Report, play, report::REACTION_NOTE};
+use hunt::{Outcome, Report, play, report::REACTION_NOTE, report::Threat};
 use sim::monster::{self, MOVES};
 use sim::moves;
 use sim::state::MAX_PLAYERS;
@@ -119,6 +119,39 @@ fn it_is_never_just_standing_there() {
             report.moves_per_minute() > 20.0,
             "seed {seed}: only {:.0} moves a minute",
             report.moves_per_minute()
+        );
+    }
+}
+
+#[test]
+fn it_is_dangerous_most_of_the_time_and_open_the_rest() {
+    // **The shape asked for, 2026-09-25**: about four tenths of the fight in
+    // which nothing lands before it answers, about a fifth in which anybody
+    // can walk up and swing, and the rest open only to a poke or to a fast
+    // way in -- a dash, a vault, a structure jump. These are bands rather
+    // than the targets, because the targets are a feel and the bands are
+    // what says the feel has not been lost: it is threatening for less than
+    // two thirds of the fight, it has a walk-up window worth an eighth of it,
+    // and the windows between are a real share rather than a rounding error.
+    // See `docs/design/monsters.md` §"Threat modes".
+    for (seed, report) in SEEDS.iter().zip(hunts()) {
+        let threat = report.threat_share(Threat::Threatening);
+        let walk = report.threat_share(Threat::WalkUp);
+        let between = report.threat_share(Threat::PokeOnly) + report.threat_share(Threat::Skilled);
+        assert!(
+            (0.35..0.62).contains(&threat),
+            "seed {seed}: threatening {:.0}% of the fight",
+            threat * 100.0
+        );
+        assert!(
+            walk > 0.12,
+            "seed {seed}: safe to walk up on only {:.0}% of the fight",
+            walk * 100.0
+        );
+        assert!(
+            between > 0.2,
+            "seed {seed}: open to a poke or a way in for only {:.0}% of the fight",
+            between * 100.0
         );
     }
 }
