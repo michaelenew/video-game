@@ -5754,3 +5754,31 @@ minute is a fight or a mugging; whether a tell that follows you reads as an
 animal or as a homing missile; whether "wait at the edge and go in on the
 recovery" is what they find themselves doing; and whether being rooted from
 twenty metres and charged is a lesson or a tax.
+
+### 2026-09-25 — the hunt opens with a moment to notice you
+
+**Changed** For the first three seconds of a hunt (`hunt_grace`, 180 frames) the
+Ridgeback stands its ground, turns to face the hunters, and throws nothing. A
+hit ends the moment at once.
+
+**Why** a report from play: it charged and hit players before they could adjust
+their camera. The spray and the charge were its first moves on frame one.
+
+**Reverted, the same hour: letting it walk toward you through the moment.** A
+fighter who spent the moment getting their bearings — or the scripted hunter,
+walking to its usual place to wait — was standing in front of it when the moment
+ended, so the ambush happened three seconds later instead of not at all. Hunts
+ended in thirteen to nineteen seconds.
+
+**The harness.** The scripted hunter now holds back until it sees the creature's
+first move, which is what a person getting their bearings does. The fight
+report's rhythm and window shares start when the moment ends, since an animal
+not allowed to attack is not a sample of how it fights. And the one test that
+judges a win rate runs eighteen hunts rather than six: over thirty hunts the
+bot won thirteen both with and without the moment, but the six fixed test seeds
+happened to all be losses afterwards, which at four wins in ten happens about
+one time in twenty. It wins four of the eighteen.
+
+**Verdict** kept, unplayed. Whether three seconds is long enough to find the
+camera, and whether a creature that stands and stares reads as noticing you or
+as idling, is a person's question.

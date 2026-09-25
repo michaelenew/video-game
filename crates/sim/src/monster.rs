@@ -530,6 +530,10 @@ pub struct Brain {
     /// Deterministic, advanced only from inside the tick, and part of the
     /// snapshot -- so a rollback replays the same choices.
     pub rng: u32,
+    /// **Frames left of the moment it takes to notice you**, at the start of a
+    /// hunt. It stands its ground and turns to face you, and throws nothing;
+    /// a hit wakes it at once. See `tuning::hunt_grace`.
+    pub grace: u16,
 }
 
 impl Default for Brain {
@@ -548,6 +552,7 @@ impl Default for Brain {
             // Any odd seed. Xorshift is stuck at zero, and one is as good a
             // starting point as any other.
             rng: 0x2545_F491,
+            grace: 0,
         }
     }
 }
@@ -1387,6 +1392,8 @@ impl Monster {
         if !self.alive() {
             return 0;
         }
+        // Hit while it is still taking you in, and it has taken you in.
+        self.brain.grace = 0;
         let dealt = Fx::from_int(raw).mul(vulnerability(part)).to_int().max(0);
         self.health = (self.health - dealt).max(0);
         self.strain += dealt;
@@ -1849,6 +1856,8 @@ impl Monster {
     fn walk(&mut self) {
         let want = match self.doing {
             _ if self.rooted > 0 => Fx::ZERO,
+            // Noticing you: it stands its ground and turns to face you.
+            Doing::Prowl if self.brain.grace > 0 => Fx::ZERO,
             Doing::Active { kind, .. } => attack(kind).advance,
             Doing::Prowl => {
                 let to = V3::new(
@@ -2048,7 +2057,9 @@ impl Monster {
         self.bleed_off();
 
         let riders = quarry.iter().filter(|q| q.alive && q.aboard).count() as i32;
-        if self.doing.free() {
+        let noticing = self.brain.grace > 0;
+        self.brain.grace = self.brain.grace.saturating_sub(1);
+        if self.doing.free() && !noticing {
             if self.brain.think_left > 0 {
                 self.brain.think_left -= 1;
             } else {

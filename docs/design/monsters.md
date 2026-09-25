@@ -139,6 +139,13 @@ face you (`rear_pause`) — unless you are staggered. Without it a target
 behind the animal could only be scored against by the two rear moves, and it
 threw them one after the other for ten minutes and never turned round.
 
+**It takes a moment to notice you.** For the first three seconds of a hunt
+(`hunt_grace`) it stands its ground, turns to face you, and throws nothing; a
+hit ends the moment at once. It used to open with a spray and a charge that
+landed before anybody had moved the camera. The first version walked toward
+you through the moment, which only moved the ambush three seconds later: a
+fighter getting their bearings was standing under it when the moment ended.
+
 **It plants for a move, launches into a charge, and pulls up short of a
 wall.** Committed to a move that does not travel, it brakes at seventy metres
 a second squared, so it no longer slides a body length into you through a
@@ -786,9 +793,9 @@ have reported as "the ride feels random".
 - **The windup's tracking is a feel number.** At nine tenths nobody walks out
   of a tell; whether it reads as an animal following you or as a homing
   missile is a person's question, and the knob is `startup_tracking`.
-- **It opens with the spray.** The first thing it does in most hunts is root
-  whoever is furthest out. That is the long-range answer doing its job; it may
-  also be a cheap first second.
+- **It still often opens with the spray**, now after the three-second moment
+  rather than on the first frame. Whether three seconds is enough to get your
+  bearings is the knob `hunt_grace`.
 
 - **The Dual mage can decline the ground game.** Her float clears the tail from
   the floor by seventy centimetres. Whether that is her identity or a hole in

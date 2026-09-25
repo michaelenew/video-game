@@ -337,3 +337,48 @@ fn the_dead_are_not_carried() {
         "a rider killed on its back stayed on it"
     );
 }
+
+#[test]
+fn a_hunt_gives_you_a_moment_before_it_attacks() {
+    // It opened most hunts with a spray and a charge that landed before a
+    // player had moved the camera. It takes a moment to notice you now: it
+    // stands its ground and turns to face you, throws nothing, and then gets
+    // on with it.
+    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    let grace = sim::tuning::hunt_grace() as u32;
+    let start = w.monster.unwrap().pos;
+    for f in 0..grace {
+        w.advance([Input::default(); MAX_PLAYERS]);
+        let beast = w.monster.unwrap();
+        assert!(
+            beast.doing.attacking().is_none(),
+            "it started {} on frame {f} of a {grace}-frame grace",
+            monster::MOVE_NAMES[beast.doing.attacking().unwrap() as usize]
+        );
+    }
+    let moved = w.monster.unwrap().pos.sub(start).flat_len();
+    assert!(
+        moved.raw() < Fx::ONE.raw(),
+        "it walked {moved:?} m toward the hunters while it was meant to be taking them in"
+    );
+    let mut attacked = false;
+    for _ in 0..180 {
+        w.advance([Input::default(); MAX_PLAYERS]);
+        attacked |= w.monster.unwrap().doing.attacking().is_some();
+    }
+    assert!(
+        attacked,
+        "it did nothing for three seconds after the grace ended"
+    );
+}
+
+#[test]
+fn hitting_it_wakes_it() {
+    let mut beast = Monster::new();
+    beast.brain.grace = 180;
+    beast.take_hit(monster::HINDFOOT_L, 10);
+    assert_eq!(
+        beast.brain.grace, 0,
+        "it was hit and kept on taking the view in"
+    );
+}

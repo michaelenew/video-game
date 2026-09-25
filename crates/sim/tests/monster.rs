@@ -55,6 +55,8 @@ fn walk_only(w: &mut World, frames: u32) {
         // something on the first frame, and a creature mid-move neither steers
         // nor walks -- which would make this a test of standing still.
         beast.brain.think_left = u16::MAX;
+        // And past the moment a hunt opens with, in which it stands its ground.
+        beast.brain.grace = 0;
         w.advance([Input::default(); MAX_PLAYERS]);
     }
 }

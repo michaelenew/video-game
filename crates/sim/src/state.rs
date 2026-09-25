@@ -1092,6 +1092,12 @@ impl World {
             beast.pos = V3::new(t::monster_spawn(), Fx::ZERO, Fx::ZERO);
             beast.yaw = HALF_TURN;
             beast.brain.seen = self.players[0].pos;
+            // And it takes a moment to notice you: it stands its ground,
+            // turns to face you, and throws nothing until the moment is spent
+            // or somebody hits it. It opened with a spray and a charge that
+            // landed before anybody had moved the camera. See
+            // `tuning::hunt_grace`.
+            beast.brain.grace = t::hunt_grace();
             for (i, p) in self.players.iter_mut().enumerate() {
                 p.pos = V3::new(
                     t::hunter_spawn().neg(),
@@ -1812,6 +1818,7 @@ impl World {
                     h.write_u32(*slot as u32);
                 }
                 h.write_u32(m.brain.rng);
+                h.write_u32(m.brain.grace as u32);
             }
         }
         match self.phase {

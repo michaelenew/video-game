@@ -2254,6 +2254,19 @@ pub fn rear_pause() -> u16 {
     oven::scalar(Scalar::RearPause) as u16
 }
 
+/// **A moment to get your bearings.** Frames at the start of a hunt in which it
+/// is taking you in: it stands its ground and turns to face you, and throws
+/// nothing. Hitting it ends the moment at once. Without it the spray and the
+/// charge landed before a player had moved the camera.
+///
+/// Standing rather than closing, because the first version walked toward you
+/// through it -- and a fighter who spent the moment getting their bearings
+/// was standing under it when the moment ended, which only moved the ambush
+/// three seconds later.
+pub fn hunt_grace() -> u16 {
+    oven::scalar(Scalar::HuntGrace) as u16
+}
+
 /// **It keeps the target it has.** Another fighter has to be nearer than this
 /// fraction of the current target's distance before its attention moves.
 pub fn target_switch() -> Fx {

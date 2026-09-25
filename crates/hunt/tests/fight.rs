@@ -255,23 +255,54 @@ fn the_fight_is_neither_free_nor_hopeless() {
     // A scripted hunter with a fixed reaction delay and no adaptation is a
     // mediocre player. A creature that always beats one is too hard for anyone
     // to learn against; one that never does is not a monster.
-    let reports = hunts();
-    let won = reports
+    //
+    // **Over eighteen hunts rather than the six the rest use.** A win rate is
+    // the one measure here that is a coin flip per hunt: at the four in ten
+    // this fight sits at since 2026-09-25, six losses in a row happen about
+    // one time in twenty, and they did, the day the hunt's opening moved by
+    // three seconds and nothing about the difficulty changed -- thirty hunts
+    // either side of it won thirteen. Eighteen puts that chance near one in
+    // ten thousand.
+    let won = WIN_RATE_SEEDS
         .iter()
+        .map(|s| play([sim::Class::Champion; MAX_PLAYERS], 1, BUDGET, *s))
         .filter(|r| matches!(r.outcome, Outcome::Killed(_)))
         .count();
     assert!(
         won > 0,
         "the scripted hunter lost every one of {} hunts",
-        SEEDS.len()
+        WIN_RATE_SEEDS.len()
     );
     assert!(
-        won < SEEDS.len(),
+        won < WIN_RATE_SEEDS.len(),
         "the scripted hunter won every one of {} hunts, and it is not a good \
          player",
-        SEEDS.len()
+        WIN_RATE_SEEDS.len()
     );
 }
+
+/// The six the rest of the file uses, and twelve more. See
+/// `the_fight_is_neither_free_nor_hopeless`.
+const WIN_RATE_SEEDS: [u32; 18] = [
+    1,
+    7,
+    101,
+    2_222,
+    60_013,
+    0x2545_F491,
+    3,
+    11,
+    42,
+    999,
+    31_337,
+    7_777,
+    12_345,
+    65_537,
+    271_828,
+    314_159,
+    1_618_033,
+    8_675_309,
+];
 
 #[test]
 fn the_fight_uses_the_arena() {

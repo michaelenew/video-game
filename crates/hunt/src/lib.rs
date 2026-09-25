@@ -157,6 +157,11 @@ pub struct Hunter {
     /// the same length every time, so standing there for part of it tells
     /// you how much of it is left.
     between: u16,
+    /// It has seen the creature begin a move this hunt. Until then it holds
+    /// back where it started: the hunt opens with the animal standing and
+    /// taking you in, and a person spends that getting their bearings and
+    /// watching, not walking up to where its first move will land.
+    stirred: bool,
     /// Frames left of holding the jump button.
     ///
     /// Jump height is variable here -- hold for higher -- so a bot that presses
@@ -187,6 +192,7 @@ impl Hunter {
             hit_due: i32::MAX,
             slop: 0,
             between: 0,
+            stirred: false,
             rng: 0x9E37_79B9 ^ (who as u32).wrapping_mul(0x85EB_CA6B) | 1,
             leap_left: 0,
             hop: Fx::ZERO,
@@ -500,6 +506,14 @@ impl Hunter {
             return Input::default();
         };
         let mut seen = self.recall();
+        self.stirred |= seen.doing == STARTUP;
+        if !self.stirred && !me.aboard() {
+            // Face it, and wait.
+            let to = seen.beast_pos.sub(me.pos);
+            let wire = turns_to_aim(atan2_turns(to.z, to.x).sub(me.carry_yaw));
+            self.intent = Intent::Circle;
+            return Input::aimed(0, wire);
+        }
         // The beat between moves, read as the opening it is: how much of the
         // pause is left, as a person who has counted it would know.
         if seen.doing == PROWL && seen.alive {

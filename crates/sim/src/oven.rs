@@ -605,6 +605,7 @@ scalars! {
     RearPause,        "Ridgeback · mind","Turns to face you after a rear move", Frames, 0,      180;
     MonsterBrake,     "Ridgeback","Braking, committed (m/s2)",                Fixed,  fx(1,1), fx(200,1);
     MonsterLaunch,    "Ridgeback","Launching into a charge (m/s2)",           Fixed,  fx(10,1), fx(2000,1);
+    HuntGrace,        "Ridgeback · mind","Holds off when a hunt begins",   Frames, 0,        600;
 }
 
 // ---------------------------------------------------------------------------

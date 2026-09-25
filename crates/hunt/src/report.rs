@@ -84,6 +84,12 @@ pub struct Report {
 
     /// Frames it was doing nothing at all.
     pub idle_frames: u32,
+    /// Frames of the fight proper: after the moment the hunt opens with, in
+    /// which it stands and takes you in. Every rate and share of the rhythm is
+    /// over these, because three seconds of an animal that is not allowed to
+    /// do anything is not three seconds of how it fights -- and in a fight won
+    /// inside a minute it was enough to read as a creature that stands about.
+    pub fought: u32,
 
     /// **The fight divided by what it lets you do**, frame by frame, by how
     /// long until it can start its next move. See [`Threat`]. The design asks
@@ -187,6 +193,7 @@ impl Report {
             run_open: 0,
             was_open: false,
             idle_frames: 0,
+            fought: 0,
             threat: [0; 4],
             ride_frames: 0,
             rides: 0,
@@ -230,7 +237,11 @@ impl Report {
             return;
         };
         self.frames = after.frame;
-        if now.alive() {
+        let fighting = now.brain.grace == 0;
+        if fighting {
+            self.fought += 1;
+        }
+        if now.alive() && fighting {
             self.threat[Threat::of(now.frames_until_free() as i32) as usize] += 1;
         }
 
@@ -299,7 +310,7 @@ impl Report {
         }
         self.was_open = open;
 
-        if matches!(now.doing, Doing::Prowl) {
+        if matches!(now.doing, Doing::Prowl) && fighting {
             self.idle_frames += 1;
         }
         if matches!(now.doing, Doing::Toppled { .. }) && !matches!(was.doing, Doing::Toppled { .. })
@@ -537,17 +548,17 @@ impl Report {
     /// Moves it started per minute. The rhythm of the fight, as one number.
     pub fn moves_per_minute(&self) -> f32 {
         let total: u32 = self.starts.iter().sum();
-        if self.frames == 0 {
+        if self.fought == 0 {
             return 0.0;
         }
-        total as f32 * 3600.0 / self.frames as f32
+        total as f32 * 3600.0 / self.fought as f32
     }
 
     pub fn openings_per_minute(&self) -> f32 {
-        if self.frames == 0 {
+        if self.fought == 0 {
             return 0.0;
         }
-        self.openings as f32 * 3600.0 / self.frames as f32
+        self.openings as f32 * 3600.0 / self.fought as f32
     }
 
     /// Average punish window, in frames. Shorter than the hunter's fastest
@@ -563,7 +574,7 @@ impl Report {
     }
 
     pub fn idle_share(&self) -> f32 {
-        ratio(self.idle_frames, self.frames)
+        ratio(self.idle_frames, self.fought)
     }
 
     pub fn ride_share(&self) -> f32 {
