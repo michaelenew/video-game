@@ -668,10 +668,20 @@ impl Player {
                 // the frame it is back at it, flight home included.
                 SLOT_MECHANIC => shadow::of(self).is_some_and(|s| s.is_out()),
                 // Guillotine lotus: out for as long as a blade of it is still
-                // hanging or still chasing.
-                SLOT_SPECIAL => scene.effects.iter().flatten().any(|e| {
-                    e.kind == crate::effects::EffectKind::GuillotineLotus && e.owner == who as u8
-                }),
+                // hanging or still chasing. The fire pillar: out for as long as
+                // it burns -- one of hers at a time. A tornado Cataclysm tore
+                // loose from it is not a pillar any more, and does not count.
+                SLOT_SPECIAL => {
+                    let kind = match self.class {
+                        Class::Elementalist => crate::effects::EffectKind::FirePillar,
+                        _ => crate::effects::EffectKind::GuillotineLotus,
+                    };
+                    scene
+                        .effects
+                        .iter()
+                        .flatten()
+                        .any(|e| e.kind == kind && e.owner == who as u8)
+                }
                 _ => false,
             };
         }

@@ -1344,9 +1344,12 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
 /// Does this ability stay **out in the world** after the cast, so that its
 /// repeat lockout has to wait for it?
 ///
-/// Two abilities do, and both are the Reaver's: the shadow stands where it was
+/// Three abilities do. Two are the Reaver's: the shadow stands where it was
 /// sent until it is called back, and the lotus hangs its blades until a recall
-/// drags them home. An ability is not *used* until it is spent, so their
+/// drags them home. The third is the Elementalist's **fire pillar**, since
+/// 2026-09-25: one of hers on the field at a time, and pressing it again while
+/// one burns does nothing at all. Stacking them was a free win -- a wall of
+/// fire that cost a button press each. An ability is not *used* until it is spent, so their
 /// lockouts are parked at full for as long as any of it is still out there --
 /// otherwise leaving the shadow parked in a corner would quietly serve the
 /// lockout for the next send while it waited.
@@ -1364,11 +1367,14 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
 /// ordinary rule, which is the safe direction to be wrong in: its lockout
 /// starts at the cast rather than never starting at all.
 pub const fn lingers(class: Class, kind: u8) -> bool {
-    matches!(class, Class::ShadowReaver)
-        && matches!(
+    match class {
+        Class::ShadowReaver => matches!(
             kind,
             crate::state::SLOT_MECHANIC | crate::state::SLOT_SPECIAL
-        )
+        ),
+        Class::Elementalist => kind == crate::state::SLOT_SPECIAL,
+        _ => false,
+    }
 }
 
 /// Does this slot's own button, pressed again, **reactivate** what the first

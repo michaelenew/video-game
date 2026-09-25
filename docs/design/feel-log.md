@@ -5782,3 +5782,16 @@ one time in twenty. It wins four of the eighteen.
 **Verdict** kept, unplayed. Whether three seconds is long enough to find the
 camera, and whether a creature that stands and stares reads as noticing you or
 as idling, is a person's question.
+
+### 2026-09-25 — one fire pillar at a time
+
+**Changed** While an Elementalist's fire pillar is burning, pressing it again does
+nothing: no startup, no eruption, no second pillar. It uses the gate the Reaver's
+shadow and lotus already use, so its repeat lockout starts when the pillar burns
+out. A tornado torn loose by Cataclysm does not count as a pillar.
+
+**Why** a report from play: stacking pillars was too free a win.
+
+**Verdict** kept, unplayed. `one_fire_pillar_at_a_time_and_a_second_press_does_nothing`
+pins it. Whether she wants the tornado counted too, so that a pillar thrown with
+Cataclysm is still her one pillar, is open.
