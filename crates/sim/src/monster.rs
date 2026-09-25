@@ -102,7 +102,7 @@ pub const fn is_weak_point(part: usize) -> bool {
 // Moves
 // ---------------------------------------------------------------------------
 
-pub const MOVES: usize = 7;
+pub const MOVES: usize = 8;
 
 pub const BITE: u8 = 0;
 pub const STOMP: u8 = 1;
@@ -119,6 +119,12 @@ pub const SHAKE: u8 = 5;
 /// sidestep rather than the sweep's jump, so being behind it is now two
 /// questions rather than none.
 pub const KICK: u8 = 6;
+/// The tail curls over the back and flings a spray of spikes forward that
+/// **roots** whoever it catches. The long-range answer, and the one move
+/// whose hit leaves the animal: it exists for the fighter who stands at the
+/// edge of everything else's reach and backpedals, and what it sets up is the
+/// charge. See `docs/design/monsters.md` §"Threat modes".
+pub const SPRAY: u8 = 7;
 
 pub const MOVE_NAMES: [&str; MOVES] = [
     "Bite",
@@ -128,6 +134,7 @@ pub const MOVE_NAMES: [&str; MOVES] = [
     "Rear and slam",
     "Shake",
     "Back kick",
+    "Spike spray",
 ];
 
 /// One of the creature's moves, read live from the Oven.
@@ -189,6 +196,12 @@ pub struct Attack {
     /// a move buys a window whose length you can learn. See
     /// `docs/design/monsters.md` §3.
     pub cooldown: u16,
+    /// How fast the hit volume travels out along the facing while the move is
+    /// active. Zero for a move that happens where the animal is standing.
+    pub travel: Fx,
+    /// Frames the fighter it hits is rooted to the spot. Zero is an ordinary
+    /// hit; the spray's is what the charge after it is for.
+    pub root: u16,
 }
 
 impl Attack {
@@ -238,20 +251,14 @@ pub fn attack(kind: u8) -> Attack {
         weight: raw(F::Weight),
         rider_weight: raw(F::RiderWeight),
         cooldown: raw(F::Cooldown) as u16,
+        travel: Fx::from_raw(raw(F::Travel)),
+        root: raw(F::Root) as u16,
     }
 }
 
 /// Every move, live.
 pub fn attacks() -> [Attack; MOVES] {
-    [
-        attack(0),
-        attack(1),
-        attack(2),
-        attack(3),
-        attack(4),
-        attack(5),
-        attack(6),
-    ]
+    std::array::from_fn(|kind| attack(kind as u8))
 }
 
 /// Which bone an attack's hit volume rides. The numbering is the move table's
@@ -493,6 +500,10 @@ pub struct Quarry {
     pub alive: bool,
     /// Standing on the creature.
     pub aboard: bool,
+    /// In hitstun, staggered, or rooted: unable to act for the moment. What
+    /// the follow-up appetite reads -- a sweep that staggers is a sweep that
+    /// sets up the bite, and this is how the animal knows to throw it.
+    pub stunned: bool,
 }
 
 /// Where its attention is, and what it remembers seeing.
@@ -501,6 +512,8 @@ pub struct Brain {
     /// The last sample it took, and when the next one is due.
     pub seen: V3,
     pub seen_vel: V3,
+    /// Whether the target could act, as of the last glance.
+    pub seen_stunned: bool,
     pub target: u8,
     pub glance_left: u16,
     /// The pause between moves. Without one it is a chain gun.
@@ -517,6 +530,10 @@ pub struct Brain {
     /// Deterministic, advanced only from inside the tick, and part of the
     /// snapshot -- so a rollback replays the same choices.
     pub rng: u32,
+    /// **Frames left of the moment it takes to notice you**, at the start of a
+    /// hunt. It stands its ground and turns to face you, and throws nothing;
+    /// a hit wakes it at once. See `tuning::hunt_grace`.
+    pub grace: u16,
 }
 
 impl Default for Brain {
@@ -524,6 +541,7 @@ impl Default for Brain {
         Brain {
             seen: V3::ZERO,
             seen_vel: V3::ZERO,
+            seen_stunned: false,
             target: 0,
             glance_left: 0,
             think_left: 0,
@@ -534,6 +552,7 @@ impl Default for Brain {
             // Any odd seed. Xorshift is stuck at zero, and one is as good a
             // starting point as any other.
             rng: 0x2545_F491,
+            grace: 0,
         }
     }
 }
@@ -1170,13 +1189,22 @@ impl Monster {
     /// from the rule it illustrates, and then it is confidently wrong at
     /// exactly the moment you are using it to work out why something missed.
     pub fn hit_volume(&self) -> Option<(V3, Fx, Fx, Fx)> {
-        let Doing::Active { kind, .. } = self.doing else {
+        let Doing::Active { kind, left } = self.doing else {
             return None;
         };
         let m = attack(kind);
         if m.damage <= 0 {
             return None;
         }
+        // The spray's volume leaves the animal: so many metres a second along
+        // the facing, from the first active frame. Everything else has zero
+        // here and happens where it is standing.
+        let flown = m
+            .travel
+            .mul(Fx::from_int(
+                m.active.saturating_sub(left).saturating_sub(1) as i32,
+            ))
+            .mul(DT);
         let rig = self.rig();
         // The anchor is authored in body space and carried by whichever bone
         // the move rides, so a bite whose head has been thrown forward puts its
@@ -1191,7 +1219,7 @@ impl Monster {
         let which = follow_bone(m.follows);
         let carried = rig.bone[which].at.sub(rig.rest_at(which));
         let anchor = rig
-            .to_world(V3::new(m.hit_x, Fx::ZERO, m.hit_z))
+            .to_world(V3::new(m.hit_x.add(flown), Fx::ZERO, m.hit_z))
             .add(V3::new(carried.x, Fx::ZERO, carried.z));
         let base = rig.origin.y;
         Some((
@@ -1364,6 +1392,8 @@ impl Monster {
         if !self.alive() {
             return 0;
         }
+        // Hit while it is still taking you in, and it has taken you in.
+        self.brain.grace = 0;
         let dealt = Fx::from_int(raw).mul(vulnerability(part)).to_int().max(0);
         self.health = (self.health - dealt).max(0);
         self.strain += dealt;
@@ -1570,12 +1600,29 @@ impl Monster {
             }
             best.map(|(i, _)| i)
         };
-        let Some(pick) = nearest(false).or_else(|| nearest(true)) else {
+        let Some(mut pick) = nearest(false).or_else(|| nearest(true)) else {
             return;
         };
+        // **It keeps the target it has.** Nearest-wins alone made it turn
+        // away from the fighter it was trading with the moment their partner
+        // -- or an idle second fighter -- drifted a metre closer, which from
+        // the first fighter's side reads as an animal losing interest and
+        // lumbering off. Somebody else has to be *much* nearer, or the one it
+        // has must be gone or aboard, before its attention moves.
+        let held = self.brain.target as usize;
+        if held < quarry.len() && held != pick {
+            let q = quarry[held];
+            let usable = q.alive && (!q.aboard || quarry[pick].aboard);
+            let mine = q.pos.sub(self.pos).flat_len();
+            let theirs = quarry[pick].pos.sub(self.pos).flat_len();
+            if usable && theirs.raw() >= mine.mul(t::target_switch()).raw() {
+                pick = held;
+            }
+        }
         self.brain.target = pick as u8;
         self.brain.seen = quarry[pick].pos;
         self.brain.seen_vel = quarry[pick].vel;
+        self.brain.seen_stunned = quarry[pick].stunned;
     }
 
     /// Where it thinks the target will be in `frames` frames.
@@ -1611,8 +1658,26 @@ impl Monster {
             .sub(cos.sub(m.aim_cos).abs().div(m.aim_span))
             .clamp(Fx::ZERO, Fx::ONE);
 
-        let mut score = Fx::from_int(m.weight).mul(range_fit).mul(aim_fit).to_int();
+        let fit = range_fit.mul(aim_fit);
+        let mut score = Fx::from_int(m.weight).mul(fit).to_int();
         score += riders * m.rider_weight;
+
+        // **Walking up to it is provoked.** A target closing on it faster than
+        // a stroll raises its appetite for whatever forward move fits, so the
+        // approach is met by something rather than watched. The bonus is
+        // scaled by the fit, so a move that does not reach the approach does
+        // not score for it.
+        let toward = to.normalized().scale(Fx::ONE.neg());
+        let closing = self.brain.seen_vel.dot(toward);
+        if closing.raw() > t::closing_speed().raw() && m.aim_cos.raw() > 0 && m.damage > 0 {
+            score += Fx::from_int(t::closing_appetite()).mul(fit).to_int();
+        }
+        // **A stunned target is a target to follow up on.** The sweep's
+        // stagger and the spray's root are only worth having if the animal
+        // presses them, and the bite and the charge are what it presses with.
+        if self.brain.seen_stunned && m.aim_cos.raw() > 0 && m.damage > 0 {
+            score += Fx::from_int(t::combo_appetite()).mul(fit).to_int();
+        }
 
         // Wounded animals commit harder, and they commit to bigger swings.
         score += (t::hurt_aggression() * self.missing() * m.damage) / 10_000;
@@ -1692,7 +1757,20 @@ impl Monster {
     /// gets for cutting back across its nose. A rate limit alone would not give
     /// them one.
     fn steer(&mut self) {
-        if !self.doing.free() {
+        // **The windup follows you; the hit does not.** During a startup the
+        // animal keeps turning toward where it thinks you will be, at a
+        // fraction of its free turn rate, and the yaw locks on the first active
+        // frame. Walking out of the way of a tell is therefore not an answer
+        // -- a timed dodge, a jump, or a real change of direction is -- while
+        // the hit itself still commits, so whiff punishment exists. The
+        // fraction is `startup_tracking`; at zero this is the old rule.
+        //
+        // **Only a move aimed ahead of it tracks.** Turning toward the target
+        // during a sweep's windup swings the tail *away* from them, which is a
+        // tell that makes its own move miss.
+        let winding =
+            matches!(self.doing, Doing::Startup { kind, .. } if attack(kind).aim_cos.raw() > 0);
+        if !self.doing.free() && !winding {
             // Committed, or down. Whatever swing was in progress bleeds off
             // rather than stopping dead, so a move does not visibly clamp the
             // animal mid-turn.
@@ -1700,7 +1778,34 @@ impl Monster {
             self.yaw = self.yaw.add(self.yaw_rate.mul(DT));
             return;
         }
-        let aim = self.lead_point(t::prowl_lead());
+        // Prowling, it leads by its walking horizon. Winding up, it leads to
+        // **where you will be when the hit arrives**: the startup it has left,
+        // and for a move that travels -- the charge, the spray, the bite's
+        // lunge -- the time the hit takes to cross the gap. Leading by the
+        // startup alone aimed a charge at where a sidestepping fighter would
+        // be when it set off, and they had walked out of it by the time it
+        // got there.
+        let horizon = match self.doing {
+            Doing::Startup { kind, left } if winding => {
+                let m = attack(kind);
+                let speed = m.travel.add(m.advance);
+                let gap = self
+                    .brain
+                    .seen
+                    .sub(self.pos)
+                    .flat_len()
+                    .sub(m.hit_x.abs())
+                    .max(Fx::ZERO);
+                let crossing = if speed.raw() > 0 {
+                    gap.div(speed.mul(DT)).to_int().clamp(0, m.active as i32) as u16
+                } else {
+                    0
+                };
+                left.saturating_add(crossing)
+            }
+            _ => t::prowl_lead(),
+        };
+        let aim = self.lead_point(horizon);
         let want = crate::math::atan2_turns(aim.z.sub(self.pos.z), aim.x.sub(self.pos.x));
         let error = crate::math::wrap_turns(want.sub(self.yaw));
 
@@ -1720,6 +1825,9 @@ impl Monster {
         }
         if self.slowed > 0 {
             cap = cap.mul(self.slow_mul);
+        }
+        if winding {
+            cap = cap.mul(t::startup_tracking());
         }
 
         let desired = error.mul(t::turn_gain()).clamp(cap.neg(), cap);
@@ -1748,6 +1856,8 @@ impl Monster {
     fn walk(&mut self) {
         let want = match self.doing {
             _ if self.rooted > 0 => Fx::ZERO,
+            // Noticing you: it stands its ground and turns to face you.
+            Doing::Prowl if self.brain.grace > 0 => Fx::ZERO,
             Doing::Active { kind, .. } => attack(kind).advance,
             Doing::Prowl => {
                 let to = V3::new(
@@ -1761,9 +1871,25 @@ impl Monster {
                 // walking away from it at leisure. Wanting to close a long gap
                 // now runs it up to the gallop, and the gait blends to match;
                 // the walk is what it does inside striking distance.
+                //
+                // **And it matches a target that is leaving.** The proportional
+                // term alone asks for a walk at eight metres and a stroll at
+                // seven, so a fighter backpedalling at their own walk from
+                // just outside its reach was never caught: it only galloped
+                // once they were far away, and slowed as it arrived. The speed
+                // the target is moving away at is added, times `pursuit_gain`,
+                // so a fleeing fighter is a galloped-at fighter whatever the
+                // distance.
+                let fleeing = self
+                    .brain
+                    .seen_vel
+                    .dot(to.normalized())
+                    .max(Fx::ZERO)
+                    .mul(t::pursuit_gain());
                 let want = range
                     .sub(t::prowl_range())
                     .mul(t::approach_gain())
+                    .add(fleeing)
                     .clamp(t::monster_back().neg(), t::gallop_speed());
                 // **It turns before it runs.** Forward speed is scaled by how
                 // squarely it is facing the target, so a creature that has
@@ -1782,10 +1908,47 @@ impl Monster {
             _ => Fx::ZERO,
         }
         .mul(self.hobbled());
-        let budget = t::monster_accel().mul(DT);
-        self.speed = self
+        // **It pulls up short of the wall.** A charge covers twenty metres and
+        // the arena is twenty-eight across, so a charge thrown from anywhere
+        // but the middle ran into the edge, where the clamp below stopped it
+        // dead in a frame -- an unbounded deceleration, which the grip test
+        // reads as a buck, so it threw braced riders off the barrel. Within
+        // its braking distance of the wall it brakes instead: speed squared
+        // over twice the braking rate.
+        let room = self.room_ahead();
+        let stopping = self
             .speed
-            .add(want.sub(self.speed).clamp(budget.neg(), budget));
+            .mul(self.speed)
+            .div(t::monster_brake().mul(Fx::from_int(2)));
+        let want = if self.speed.raw() > 0 && room.raw() <= stopping.raw() {
+            Fx::ZERO
+        } else {
+            want
+        };
+        let walled = self.speed.raw() > 0 && room.raw() <= stopping.raw();
+        let planted = walled || !matches!(self.doing, Doing::Prowl | Doing::Active { .. });
+        let budget = if planted {
+            t::monster_brake()
+        } else {
+            t::monster_accel()
+        }
+        .mul(DT);
+        self.speed = match self.doing {
+            // **A move that travels is launched, not accelerated into.** At
+            // the walking acceleration a thirty-metre-a-second charge reached
+            // about four metres a second by the end of its active window and
+            // covered a metre and a half -- which is why the charge had never
+            // once landed. It reaches its speed in a few frames now; the skid
+            // after it is braking. See `tuning::monster_launch`.
+            Doing::Active { kind, .. } if attack(kind).advance.raw() > 0 && !walled => {
+                let burst = t::monster_launch().mul(DT);
+                self.speed
+                    .add(want.sub(self.speed).clamp(burst.neg(), burst))
+            }
+            _ => self
+                .speed
+                .add(want.sub(self.speed).clamp(budget.neg(), budget)),
+        };
 
         let forward = V3::from_turns(self.yaw);
         self.pos = self.pos.add(forward.scale(self.speed.mul(DT)));
@@ -1807,6 +1970,25 @@ impl Monster {
         self.pos.x = self.pos.x.clamp(limit.neg(), limit);
         self.pos.z = self.pos.z.clamp(limit.neg(), limit);
         self.pos.y = Fx::ZERO;
+    }
+
+    /// Metres of floor ahead of it before the wall it is kept off, along its
+    /// facing.
+    fn room_ahead(&self) -> Fx {
+        let limit = crate::arena::ARENA_HALF.sub(t::monster_margin());
+        let forward = V3::from_turns(self.yaw);
+        let along = |pos: Fx, dir: Fx| -> Fx {
+            if dir.raw() > 0 {
+                limit.sub(pos).div(dir)
+            } else if dir.raw() < 0 {
+                limit.neg().sub(pos).div(dir)
+            } else {
+                Fx::MAX
+            }
+        };
+        along(self.pos.x, forward.x)
+            .min(along(self.pos.z, forward.z))
+            .max(Fx::ZERO)
     }
 
     /// Advance the frame-data clock, exactly the way a fighter's does.
@@ -1841,7 +2023,15 @@ impl Monster {
                 kind,
                 left: left - 1,
             },
-            Doing::Recovery { .. } => rest(self),
+            Doing::Recovery { kind, .. } => {
+                let next = rest(self);
+                // Turning to face somebody it has just staggered would waste
+                // the stagger: the sweep is a set-up, and a set-up is pressed.
+                if attack(kind).aim_cos.raw() < 0 && !self.brain.seen_stunned {
+                    self.brain.think_left = t::rear_pause();
+                }
+                next
+            }
             Doing::Flinch { left } if left > 0 => Doing::Flinch { left: left - 1 },
             Doing::Flinch { .. } => rest(self),
             Doing::Stumble { left, front } if left > 0 => Doing::Stumble {
@@ -1867,7 +2057,9 @@ impl Monster {
         self.bleed_off();
 
         let riders = quarry.iter().filter(|q| q.alive && q.aboard).count() as i32;
-        if self.doing.free() {
+        let noticing = self.brain.grace > 0;
+        self.brain.grace = self.brain.grace.saturating_sub(1);
+        if self.doing.free() && !noticing {
             if self.brain.think_left > 0 {
                 self.brain.think_left -= 1;
             } else {
@@ -1881,6 +2073,29 @@ impl Monster {
 
         self.steer();
         self.walk();
+    }
+
+    /// Frames until it can start another move, as things stand.
+    ///
+    /// Zero while a move is winding up or out; the frames left plus its pause
+    /// while it is recovering or down; the pause alone while it prowls. This
+    /// is the one number every opening is made of, and the fight report
+    /// divides the fight by it: a window shorter than a reaction and a swing
+    /// is no window, and one long enough to walk in on is a free one.
+    pub fn frames_until_free(&self) -> u16 {
+        let pause = |kind: Option<u8>| match kind {
+            Some(k) if attack(k).aim_cos.raw() < 0 && !self.brain.seen_stunned => t::rear_pause(),
+            _ => t::think_frames(),
+        };
+        match self.doing {
+            Doing::Dead => u16::MAX,
+            Doing::Startup { .. } | Doing::Active { .. } => 0,
+            Doing::Prowl => self.brain.think_left,
+            Doing::Recovery { kind, left } => left.saturating_add(pause(Some(kind))),
+            Doing::Flinch { left } | Doing::Stumble { left, .. } | Doing::Toppled { left } => {
+                left.saturating_add(pause(None))
+            }
+        }
     }
 
     /// Everything that ticks down on its own.

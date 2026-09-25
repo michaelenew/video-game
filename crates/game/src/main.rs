@@ -70,6 +70,23 @@ fn hunting() -> bool {
     platform::flag("--hunt")
 }
 
+/// A hunt, with only the people who are actually hunting in it.
+///
+/// **Player two is out of it unless a person has their keys.** The training
+/// dummy is a body standing in the arena, and the creature attends to whoever
+/// is nearest -- so a player who backed off further than the dummy stood saw
+/// the animal turn round and walk away from them to stand over a fighter doing
+/// nothing. `cargo run -p hunt --bin fight` has always taken absent hunters
+/// out for the same reason; the game did not, which is why the harness never
+/// saw it. Pressing `4` and then `R` brings the second hunter in.
+fn hunt_with(classes: [sim::Class; 2], dummy: Dummy) -> World {
+    let mut w = World::hunt(classes);
+    if dummy != Dummy::Human {
+        w.players[1].health = 0;
+    }
+    w
+}
+
 fn chosen_classes() -> [sim::Class; 2] {
     [
         platform::value("--p1")
@@ -157,6 +174,7 @@ fn main() {
                 crosshair::update,
                 debug::draw,
                 beast::overlay,
+                beast::spikes,
                 palette::toggle,
                 palette::draw,
             )
@@ -325,7 +343,7 @@ enum Dummy {
 impl Default for Sim {
     fn default() -> Self {
         let mut w = if hunting() {
-            World::hunt(chosen_classes())
+            hunt_with(chosen_classes(), Dummy::Idle)
         } else {
             World::with_classes(chosen_classes())
         };
@@ -2237,7 +2255,7 @@ fn tick_sim(
         let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
         let classes = [ALL[next], sim.cur.players[1].class];
         let w = if sim.cur.monster.is_some() {
-            World::hunt(classes)
+            hunt_with(classes, sim.dummy)
         } else {
             World::with_classes(classes)
         };
@@ -2247,7 +2265,7 @@ fn tick_sim(
     if keys.just_pressed(KeyCode::KeyR) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
         let w = if sim.cur.monster.is_some() {
-            World::hunt(classes)
+            hunt_with(classes, sim.dummy)
         } else {
             World::with_classes(classes)
         };
@@ -2262,7 +2280,7 @@ fn tick_sim(
         let w = if sim.cur.monster.is_some() {
             World::with_classes(classes)
         } else {
-            World::hunt(classes)
+            hunt_with(classes, sim.dummy)
         };
         sim.prev = w.clone();
         sim.cur = w;

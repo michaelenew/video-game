@@ -159,6 +159,46 @@ fn the_fire_pillar_stands_after_the_move_is_over() {
 }
 
 #[test]
+fn one_fire_pillar_at_a_time_and_a_second_press_does_nothing() {
+    // **Since 2026-09-25.** Stacking pillars was a free win: a wall of fire
+    // that cost a button press each. While hers burns, pressing it again does
+    // nothing -- no pillar, no eruption, and none of her frames spent. Once
+    // it has burned out she may cast the next.
+    let mut w = engaged(Class::Elementalist);
+    tap(&mut w, Q, 60);
+    let first = effects_of(&w, EffectKind::FirePillar);
+    assert_eq!(first.len(), 1, "fixture: the first pillar did not go up");
+    run(&mut w, 1, Q, 0);
+    assert!(
+        w.players[0].action.actionable(),
+        "a second press committed her to something while her pillar still burned"
+    );
+    tap(&mut w, Q, 60);
+    let now = effects_of(&w, EffectKind::FirePillar);
+    assert_eq!(now.len(), 1, "a second pillar went up beside the first");
+    assert_eq!(
+        now[0].age,
+        first[0].age + 63,
+        "the pillar standing is not the one she cast first"
+    );
+    // Burned out, and she can plant another.
+    let life = sim::tuning::pillar_life() as u32;
+    run(&mut w, life, 0, 0);
+    assert!(
+        effects_of(&w, EffectKind::FirePillar).is_empty(),
+        "fixture: the pillar outlived its own life"
+    );
+    let lock = sim::moves::get(Class::Elementalist, sim::state::SLOT_SPECIAL).repeat_lock();
+    run(&mut w, lock as u32 + 2, 0, 0);
+    tap(&mut w, Q, 60);
+    assert_eq!(
+        effects_of(&w, EffectKind::FirePillar).len(),
+        1,
+        "once the first had burned out she could not cast another"
+    );
+}
+
+#[test]
 fn the_fire_pillar_spreads_at_the_base_and_climbs_at_the_top() {
     // Two volumes doing two jobs. The base gets wide, which is what catches
     // someone walking past it; the column gets tall, which is what stops them

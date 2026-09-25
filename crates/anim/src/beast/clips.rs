@@ -35,6 +35,7 @@ pub fn all() -> Vec<Recipe> {
         slam(),
         shake(),
         kick(),
+        spray(),
         flinch(),
         stumble(),
         topple(),
@@ -201,25 +202,32 @@ fn bite() -> Recipe {
     // The coil. Head drawn back and high, weight onto the hind legs, neck
     // folded like a spring -- from across the arena this is a completely
     // different silhouette from anything else it does, which is the point.
+    //
+    // **The coil is in the neck, not the chest.** The body leans a little and
+    // no more: the shoulders are where a rider going for the nape is standing,
+    // and a bite that heaves the whole chest back and forward throws a braced
+    // rider off them once its startup is short enough to be a bite. At the
+    // old three-body-part heave the tell could not come under thirty-four
+    // frames without doing exactly that. See `docs/design/feel-log.md`.
     let coil = Pose::standing()
-        .hips(-0.14, 0.05, 0.0)
-        .root(6.0, 0.0, 0.0)
-        .spine(5.0, 0.0, 0.0)
-        .chest(5.0, 0.0, 0.0)
-        .neck(32.0, 0.0)
-        .head(-22.0, 0.0, 0.0)
+        .hips(-0.08, 0.04, 0.0)
+        .root(3.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .chest(2.0, 0.0, 0.0)
+        .neck(38.0, 0.0)
+        .head(-24.0, 0.0, 0.0)
         .tail_lift(16.0)
         .plant_fore(-0.12, 0.0)
         .plant_hind(-0.50, 0.0);
     // Thrown. The neck unfolds completely and the head goes past where it looks
     // like it can, which is most of what makes a lunge read as committed.
     let strike = Pose::standing()
-        .hips(0.16, -0.05, 0.0)
-        .root(-5.0, 0.0, 0.0)
-        .spine(-7.0, 0.0, 0.0)
-        .chest(-6.0, 0.0, 0.0)
-        .neck(-28.0, 0.0)
-        .head(14.0, 0.0, 0.0)
+        .hips(0.10, -0.04, 0.0)
+        .root(-2.0, 0.0, 0.0)
+        .spine(-3.0, 0.0, 0.0)
+        .chest(-3.0, 0.0, 0.0)
+        .neck(-34.0, 0.0)
+        .head(16.0, 0.0, 0.0)
         .tail_lift(-10.0)
         .plant_fore(0.34, 0.0)
         .plant_hind(-0.10, 0.0);
@@ -628,6 +636,57 @@ fn kick() -> Recipe {
          -- so it is the tail going up and the rump going down. Its answer is \
          a sidestep, which is not the sweep's answer, so being behind the \
          animal is now two reads rather than none."
+            .to_string(),
+    )
+}
+
+fn spray() -> Recipe {
+    let ready = Pose::standing();
+    // The tell, and it is readable from the front, which is where the person
+    // it is for is standing: the tail comes up and *over* the back until the
+    // tip is above the shoulders, and the head goes down out of its way. A
+    // scorpion's silhouette, on an animal that has never shown it before.
+    let cocked = Pose::standing()
+        .hips(-0.10, -0.10, 0.0)
+        .root(4.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .neck(-18.0, 0.0)
+        .head(10.0, 0.0, 0.0)
+        .tail(80.0, 0.0)
+        .tail_from_base(30.0)
+        .plant_fore(0.04, 0.0)
+        .plant_hind(-0.30, 0.0);
+    // Flung. The tail whips forward over the shoulders and the spikes leave
+    // the tip; the body rocks onto the forelegs behind it.
+    let flung = Pose::standing()
+        .hips(0.12, -0.14, 0.0)
+        .root(-4.0, 0.0, 0.0)
+        .spine(-2.0, 0.0, 0.0)
+        .neck(-22.0, 0.0)
+        .head(12.0, 0.0, 0.0)
+        .tail(120.0, 0.0)
+        .tail_from_base(50.0)
+        .plant_fore(0.20, 0.0)
+        .plant_hind(-0.16, 0.0);
+    Recipe::new(
+        Clip::Spray,
+        vec![
+            Key::eased(0.0, ready, Ease::ANTICIPATE),
+            Key::eased(mark(Clip::Spray, 0, 0.7), cocked, Ease::SNAP),
+            Key::eased(mark(Clip::Spray, 1, 0.0), flung, Ease::STRIKE),
+            Key::eased(mark(Clip::Spray, 1, 1.0), flung, Ease::OUT),
+            Key::eased(mark(Clip::Spray, 2, 0.5), ready, Ease::SMOOTH),
+            Key::at(1.0, ready),
+        ],
+        Looseness::HEAVY,
+    )
+    .noting(
+        "The long-range answer. The tail comes over the back and the spikes \
+         leave the tip, travelling out along the facing and rooting whoever \
+         they meet -- which is what the charge after it is for. Aimed at the \
+         fighter who stands at the edge of everything else's reach, and \
+         answered by a dodge through the spikes or a jump over them, never by \
+         walking, because the windup follows you."
             .to_string(),
     )
 }

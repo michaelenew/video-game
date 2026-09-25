@@ -260,6 +260,13 @@ if there happens to be one there.
 > a structure being there, and it does not detonate or otherwise touch one that happens to be.
 > Earth plus Fire is the loadout, not a dependency chain where Fire only works after Earth has
 > gone first.
+>
+> **One at a time, since 2026-09-25.** While a pillar of hers is burning, pressing `Q` does
+> nothing: no startup, no eruption, no second pillar. Stacking them was a free win, a wall of
+> fire at a button press each. It is the same gate the Reaver's shadow and lotus use
+> (`moves::lingers`), so the repeat lockout starts when the pillar burns out rather than when
+> it was cast. A tornado Cataclysm tore loose from a pillar is no longer a pillar and does not
+> hold the button.
 
 ### Cataclysm
 **Startup** slow · **Recovery** slow · **Range** long, skillshot

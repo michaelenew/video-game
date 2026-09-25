@@ -2097,6 +2097,24 @@ pub fn monster_back() -> Fx {
 pub fn monster_accel() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::MonsterAccel))
 }
+/// **It plants its feet for a move.** How hard it stops once committed to
+/// anything that does not itself travel. At the walking acceleration a
+/// creature that had been galloping slid most of a body length through a
+/// stomp's windup, and a stomp is faster than anybody reacts -- so it hit
+/// people from outside its own reach, which is the one kind of hit the fight
+/// report calls unanswerable.
+pub fn monster_brake() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterBrake))
+}
+/// **How hard it launches into a move that travels.** The charge and the
+/// bite's lunge reach their speed in a few frames rather than one: a single
+/// frame is an unbounded acceleration, and the grip test that decides whether
+/// a rider holds on reads acceleration -- so a charge from a standstill threw
+/// braced riders off the barrel, which the design says only the slam does.
+/// Under twice the grip, braced; over it, loose.
+pub fn monster_launch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::MonsterLaunch))
+}
 
 /// The speed the gait has fully changed over to a gallop at, **and the fastest
 /// it goes**: wanting to close a long gap runs it up to this. Above the
@@ -2117,6 +2135,13 @@ pub fn prowl_range() -> Fx {
 }
 pub fn approach_gain() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::ApproachGain))
+}
+/// **A fleeing target is a galloped-at target.** The speed the target is
+/// moving away at is added to what the distance alone asks for, times this,
+/// so backpedalling from just outside its reach is not a way to stay there.
+/// See `monster::Monster::walk`.
+pub fn pursuit_gain() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::PursuitGain))
 }
 
 /// Turning, in turns per second and turns per second squared.
@@ -2191,6 +2216,61 @@ pub fn variety_penalty() -> i32 {
 }
 pub fn variety_frames() -> u16 {
     oven::scalar(Scalar::VarietyFrames) as u16
+}
+
+/// **The windup follows you.** How much of its free turn rate it keeps during
+/// a startup, before the yaw locks on the first active frame. Zero is the old
+/// rule -- facing locked at commit -- and one is a tell you cannot walk out
+/// of at all. See `monster::Monster::steer`.
+pub fn startup_tracking() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StartupTracking))
+}
+
+/// **Walking up to it is provoked.** A target closing faster than this raises
+/// its appetite for every forward move that fits by `closing_appetite`, so an
+/// approach is met rather than watched.
+pub fn closing_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::ClosingSpeed))
+}
+pub fn closing_appetite() -> i32 {
+    oven::scalar(Scalar::ClosingAppetite)
+}
+
+/// **A stunned target is a target to follow up on.** Added to every forward
+/// move's appetite while the target cannot act: the sweep's stagger and the
+/// spray's root are set-ups, and this is what makes it press them.
+pub fn combo_appetite() -> i32 {
+    oven::scalar(Scalar::ComboAppetite)
+}
+
+/// **After a move aimed behind it, it comes about.** The pause before its next
+/// move, in place of `think_frames`, after a sweep or a kick. Without it a
+/// target standing behind the animal is a target only the two rear moves can
+/// score against, so it threw them one after the other for ten minutes and
+/// never turned round -- which is a turret, not an animal. The pause is spent
+/// turning at the full rate, and it is a real opening at the rear: the
+/// walk-up window behind the hips. See `monster::Monster::tick_action`.
+pub fn rear_pause() -> u16 {
+    oven::scalar(Scalar::RearPause) as u16
+}
+
+/// **A moment to get your bearings.** Frames at the start of a hunt in which it
+/// is taking you in: it stands its ground and turns to face you, and throws
+/// nothing. Hitting it ends the moment at once. Without it the spray and the
+/// charge landed before a player had moved the camera.
+///
+/// Standing rather than closing, because the first version walked toward you
+/// through it -- and a fighter who spent the moment getting their bearings
+/// was standing under it when the moment ended, which only moved the ambush
+/// three seconds later.
+pub fn hunt_grace() -> u16 {
+    oven::scalar(Scalar::HuntGrace) as u16
+}
+
+/// **It keeps the target it has.** Another fighter has to be nearer than this
+/// fraction of the current target's distance before its attention moves.
+pub fn target_switch() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::TargetSwitch))
 }
 
 /// Damage to a weak point fills the poise pool; a full pool is a topple.

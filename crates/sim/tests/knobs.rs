@@ -74,6 +74,13 @@ const EXEMPT: &[(&str, &str)] = &[
          up to the crosshair and no further.",
     ),
     (
+        ".div(t::monster_brake().mul(Fx::from_int(2)))",
+        "The distance to stop from a speed at a constant deceleration is the \
+         speed squared over twice the deceleration. The 2 is that formula -- \
+         kinematics, not a number with a feel to it. The feel is the braking \
+         rate, and that is in the Oven.",
+    ),
+    (
         "const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10)",
         "A division guard, not a stride. Far below any value the stride constants \
          can produce; it exists so the phase cannot be divided by nearly zero.",

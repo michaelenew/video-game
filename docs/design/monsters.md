@@ -4,11 +4,13 @@ proposed: 2026-09-11
 built: 2026-09-12
 rebuilt: 2026-09-13
 hardened: 2026-09-23
+sharpened: 2026-09-25
+hunts: 2026-09-25
 ---
 
 # Monsters — the Ridgeback
 
-The first monster, end to end: a body you can stand on, seven moves, a control
+The first monster, end to end: a body you can stand on, eight moves, a control
 algorithm that decides between them, and a way to measure whether the fight is
 any good.
 
@@ -72,15 +74,116 @@ So the loop is:
 Each of its moves has a *different* answer. That is the whole test of a
 monster's move set, and it is the one the fight report measures directly.
 
-| Move | What it is | The answer |
+| Move | Range | What it is | The answer |
+| --- | --- | --- | --- |
+| Bite | close | Neck coils, head is thrown and the body lunges | 30 frames that **follow you** — a dodge timed to the snap. Then ninety frames of recovery: the walk-up window |
+| Stomp | close | Foreleg comes up past the shoulder and down | 11 frames — *positional*: do not stay in front of it once a window closes |
+| Rear and slam | close | Both forelegs up, a held pose at the top, then down, five metres wide | 48 frames that follow you — run if you are at the edge of it, dodge if you are not, and get *off* it. A hundred and ten frames of recovery after |
+| Tail sweep | mid | A low arc round the hips, **to the side you are on**, out to seven or eight metres | **Jump it**. Caught, you are staggered for a hundred frames — long enough for the bite or the charge |
+| Back kick | close, behind | Both hind legs, straight back; the tail lifts and the rump drops | 20 frames — **sidestep**, and do not linger dead astern |
+| Charge | long | A straight line at **30 m/s**, twenty metres of it | 26 frames that follow you, then a dodge through it — it is too wide to walk out of and too fast to outrun |
+| Spike spray | long | The tail comes up over the back and flings spikes out along its facing, eight to twenty metres | A dodge through them, timed to their arrival. Caught, you are **rooted for two seconds** — and the charge is what it roots you for |
+| Shake | aboard | No damage; pure buck | Brace, leave, or jump the whip |
+
+## 1a · Threat modes
+
+**Added 2026-09-25**, from a report from play: the animal could be walked
+away from, walked out of, and distracted, and a fighter at range could
+backpedal and shoot it for free. So it hunts now, and there is something to
+fear at every range a class fights from.
+
+**It chases.** Its gallop is seventeen metres a second against a fighter's
+walk of seven, and it matches a target that is leaving: the speed you are
+moving away at is added to what the distance alone asks for
+(`pursuit_gain`). It used to ask for a stroll at seven metres and a walk at
+eight, so a fighter backing off from just outside its reach stayed there for
+as long as they liked. Its charge is thirty metres a second, faster than a
+dodge, and it is launched rather than accelerated into (see below).
+
+**The windup follows you; the hit does not.** During a forward move's startup
+it keeps turning toward where you will be *when the hit arrives* — the startup
+left, plus the time a travelling hit takes to cross the gap — at nine tenths
+of its free turn rate. The yaw locks on the first active frame, so the hit
+still commits and whiff punishment still exists. What this removes is walking
+out of a tell: the bite, the slam and the charge are dodged, jumped or read,
+never strolled away from. Moves aimed behind it do not track, because turning
+its head toward you swings the tail away. `the_bite_is_dodged_not_walked_out_of`
+and its siblings in `crates/sim/tests/hunted.rs` pin both halves.
+
+**It meets an approach.** A target closing on it faster than a stroll raises
+its appetite for every forward move that fits (`closing_appetite`). Walking
+up to it is how you get bitten.
+
+**It presses a set-up.** A target that cannot act — staggered, stunned or
+rooted — raises its appetite for every forward move that fits
+(`combo_appetite`), and it skips the pause it would otherwise take to turn
+round after a rear move. Two set-ups, each pinned by arithmetic in
+`a_set_up_lasts_long_enough_for_what_follows_it`:
+
+- the **sweep** staggers for a hundred frames, which outlasts the rest of the
+  sweep, the beat and a bite;
+- the **spray** roots for a hundred and twenty, which outlasts the rest of the
+  spray, the beat, a charge's windup and its run across the ground the spray
+  was thrown over.
+
+**It keeps its target.** Somebody else has to be nearer than six tenths of
+the current target's distance before its attention moves (`target_switch`).
+The report of it "turning round and lumbering away" was two things. One was
+nearest-wins targeting; the other was the game leaving the training dummy
+standing in a hunt, so a player who backed off further than the dummy stood
+was abandoned for it. A hunt in the game now starts without the dummy unless
+somebody has its keys, which is what the fight harness always did.
+
+**It comes about.** After a sweep or a kick it takes forty frames to turn to
+face you (`rear_pause`) — unless you are staggered. Without it a target
+behind the animal could only be scored against by the two rear moves, and it
+threw them one after the other for ten minutes and never turned round.
+
+**It takes a moment to notice you.** For the first three seconds of a hunt
+(`hunt_grace`) it stands its ground, turns to face you, and throws nothing; a
+hit ends the moment at once. It used to open with a spray and a charge that
+landed before anybody had moved the camera. The first version walked toward
+you through the moment, which only moved the ambush three seconds later: a
+fighter getting their bearings was standing under it when the moment ended.
+
+**It plants for a move, launches into a charge, and pulls up short of a
+wall.** Committed to a move that does not travel, it brakes at seventy metres
+a second squared, so it no longer slides a body length into you through a
+stomp's windup. A charge reaches its speed in a few frames at six hundred,
+under twice a rider's grip, so a braced rider holds on. And within its braking
+distance of the wall it brakes instead: charging into the edge used to stop it
+dead in a frame, which the grip test reads as a buck.
+
+### How much of the fight is which
+
+The target from play, as shares of the whole fight: about **four tenths** in
+which nothing lands before it answers; about **a fifth** in which anybody can
+walk up and swing; and the rest open only to a poke from where you stand or
+to a fast way in — a dash, a vault, a structure jump, a dash to the shadow.
+
+`cargo run -p hunt --bin fight` measures it frame by frame from one number,
+how long until the creature can start its next move (`frames_until_free`),
+against what each kind of approach takes from a standoff four and a half
+metres from a foot: a reaction and a swing for a poke; add a dodge's worth of
+ground for a way in; add a walk's for walking up.
+
+| Window | Asked for | Across twelve hunts |
 | --- | --- | --- |
-| Bite | Neck coils, head is thrown | Sidestep, or dodge through it |
-| Stomp | Foreleg comes up past the shoulder and down | 13 frames — *positional*: do not stand in front |
-| Tail sweep | Wide, low arc behind and to the sides, **to the side you are on** | **Jump it** — the hitbox is 1.6 m, and a tapped hop is not enough |
-| Charge | Commits to a straight line at 20 m/s | Step laterally late — it cannot turn |
-| Rear and slam | Both forelegs up, a held pose at the top, then down | 52-frame telegraph; get out from under it, and *off* it |
-| Shake | No damage; pure buck | Brace, leave, or jump the whip |
-| Back kick | Both hind legs, straight back; the tail lifts and the rump drops | 22 frames — **sidestep**, and do not linger dead astern |
+| Threatening | ~40% | 46% |
+| Open to a poke | the rest | 13% |
+| Open to a way in | the rest | 19% |
+| Safe to walk up | ~20% | 21% |
+
+The walk-up share is where it was asked for. Threatening is six points over,
+and the lever is the beat between moves (`think_frames`): each frame of it
+moves time from threatening into the bands below, and each also shortens the
+fight, because a longer beat is a longer opening for the hunter as well. The
+bands are pinned in `it_is_dangerous_most_of_the_time_and_open_the_rest`.
+
+The long openings are the slow, scary moves missing: ninety frames after a
+bite, a hundred and ten after a slam, seventy after a charge that has run
+twenty metres past you, and the forty-frame flinch that a big enough burst
+earns.
 
 ## 2 · Getting on it
 
@@ -496,16 +599,24 @@ but the shake's — which the first version of this document called the spot the
 ground game is played from, and a player called a safe spot, because it was
 one: you stood at the tail root and hit a hind foot and nothing reached you.
 Two things fixed that. The **back kick** is aimed at exactly that patch, its
-tell is twenty-two frames and its answer is a sidestep, which is not the
+tell is twenty frames and its answer is a sidestep, which is not the
 sweep's answer. And the sweep's cone now runs to dead astern and the whip goes
 to whichever side you are on — the clip is baked one way and mirrored on the
 side the target was on when it committed, so the left flank is no longer the
 side the tail never came to. There is still a place the ground game is played
 from: **beside a hind leg**, about a hundred and ten degrees round, where the
-kick does not reach and the sweep's thirty-six frame tell is long enough to
-see over a twenty-frame poke. Directly behind, both threats are live and the
-kick's tell is barely longer than a poke, which is the point. The scripted
+kick does not reach and the sweep's thirty-frame tell is long enough to
+see over a poke you have already thrown — and not over one you throw into it,
+which is the rhythm the flank teaches. Directly behind, both threats are live
+and the kick's tell is the length of a poke, which is the point. The scripted
 hunter stands where a person learns to.
+
+⚠️ **The kick's radius is the station's definition.** At 2.4 m the flank is
+outside it with a body's width to spare; at 2.6 m, tried on 2026-09-25, a
+hunter that lags a hundred and thirty degrees round behind a turning animal is
+inside it, and the scripted hunter lost every hunt to kicks it was standing
+in. Every other volume on the animal grew that day. This one did not, because
+a station that a person can find is worth more than a bigger kick.
 
 Selection is **not** the maximum. Everything scoring at least
 `decisiveness × best` goes into a weighted draw, seeded from the snapshot.
@@ -519,8 +630,10 @@ fought the thing fifty times.
 Its walk is slower than a fighter's on purpose — inside striking distance it
 catches you by cornering, not by outrunning. But the same was true at any
 distance until 2026-09-23, and a fight you could walk away from at leisure is
-not a hunt. Wanting to close a long gap now runs it up to the **gallop**, twelve
-metres a second against a walk of seven, and the gait blends to match. Forward
+not a hunt. Wanting to close a long gap now runs it up to the **gallop**, seventeen
+metres a second against a walk of seven, and the gait blends to match — and
+since 2026-09-25 a target that is leaving is matched as well as closed on. See
+§"Threat modes". Forward
 speed is scaled by how squarely it faces you, so a creature that has been got
 behind comes about on the spot rather than galloping off in the wrong direction
 and swinging round in an arc — which is what the first version did, and is the
@@ -541,8 +654,10 @@ yaw           += yaw_rate · dt
 The rate limit is how fast it can turn. The **acceleration** limit is what gives
 it mass: it cannot reverse a turn instantly, so it overshoots slightly when it
 has been swinging hard, and a player who cuts back across its nose gets a window
-that a rate limit alone would not have given them. Committed moves lock the yaw
-entirely, for exactly the reason the players' moves do.
+that a rate limit alone would not have given them. A hit that is out locks the
+yaw entirely, for exactly the reason the players' moves do; a forward move's
+windup keeps turning at a fraction of the rate, since 2026-09-25 — see
+§"Threat modes".
 
 Each broken foot multiplies `turn_rate_max` toward that side, applied once per
 break — so an animal with both legs gone on one side barely comes round at all.
@@ -578,6 +693,7 @@ scripted hunter against the creature and reports them.
 | **Unanswerable hits** | Hits from an attack below reaction *and* with no positional warning | as close to none as the design allows |
 | **Landed, per move** | Beside how often each was thrown: a move's hit rate on the hunter | a telegraph that never lands is decoration; one that always does is unreadable |
 | **Swings and connected** | Attacks the hunter started, and frames one of them touched the animal | whether "damage dealt" is a cautious hunter or one swinging at air |
+| **Threatening / poke / way in / walk up** | The fight divided by how long until it can move again, against what each approach takes | about four tenths, the rest, the rest, a fifth — see §"Threat modes" |
 
 The last one is the important one and the easiest to get wrong. A monster can
 score well on every other line and still feel cheap, and it will be because of
@@ -594,69 +710,66 @@ creature is on stilts, and the bot was standing where nothing could be hit.
 ## 9 · Where it landed
 
 Numbers from `cargo run -p hunt --bin fight`, against a Champion, after the
-2026-09-23 pass. **The scripted hunter is a mediocre player** — a fixed
-fifteen-frame reaction delay, one plan, no adaptation — so these are the numbers
-for someone who has just learned the fight, not for someone who is good at it.
+second 2026-09-25 pass — the one that made it hunt. **The scripted hunter is a
+decent player, and no better**: a fixed fifteen-frame reaction, dodges and
+jumps a few frames early or late at random (`SLOP_EARLY`, `SLOP_LATE`), and one
+plan. That plan is the one this fight is meant to teach: wait just outside the
+reach of the close moves, dodge at the hit rather than at the tell, jump the
+sweep, go in only on a window it can see will still be open when it arrives,
+and be gone before the recovery ends.
+
+Across twelve hunts:
 
 ```text
-  the hunters went down  --  9474 frames, 157.9 s
+  won 4 of 12, the wins in 56 to 71 s and the losses in 25 to 68 s
+  hits taken per minute   7.4
+  threatening / poke / way in / walk up   46 / 13 / 19 / 21 %
+  unanswerable hits         0
 
-WHAT IT DID                thrown   landed   frames
-  Bite                      9        0   34/ 5/34
-  Stomp                     1        0   13/ 3/26   unreactable
-  Tail sweep               33        3   36/ 8/46
-  Charge                   10        0   34/30/44
-  Rear and slam            18        0   52/ 5/54
-  Shake                     6        0   40/36/44
-  Back kick                18        3   22/ 4/34
-
-  reactable moves            5/6   answerable on sight, not from memory
-  moves per minute          36.1   the rhythm
-  openings per minute       35.7   how often you get a turn
-  mean opening               46f   long enough to punish?
-  shortest opening           18f   the worst case
-  idle share                  8%   doing nothing at all
-  move coverage              7/7   moves it ever used
-  favourite move share       35%   one-note?
-  move entropy              0.86   1.00 is an even mix
-
-  rides                        9   times anyone got on
-  ride share                  5%   of the fight spent aboard
-  mean ride                  51f   long enough to reach the ridge?
-  thrown off                   1   ended by a buck, not a jump
-  left under a buck            7   read it and jumped, or stepped off
-  ridge hits                   9   damage on a weak point
-  topples                      0   poise broken
-  legs broken                  2
-  damage into feet          1256   the ground game
-
-  swings                      77   attacks the hunters started
-  connected                   54   frames one of them landed
-  damage dealt              3668   to the creature
-  damage taken              1000   by the hunters
-  hits taken                   7
-  unanswerable hits            0   too fast to read, from outside its range
+  landed / thrown, all twelve
+    Bite       20/38    Stomp   16/45    Tail sweep   2/41    Charge  6/35
+    Rear+slam   8/36    Kick     0/3     Spike spray  3/25
 ```
 
-Across six seeds the hunter wins two, at a mean of five minutes, and the losses
-run from two and a half minutes to five and a half. Before the pass it won one
-of six and every fight was over inside a hundred seconds either way; before the
-tail was raised it won five of six. Two of six is where a first monster wants to
-sit: a bot this crude losing every time would mean nobody could learn against
-it, and winning most of the time would mean it is not a monster. Seven hits is a
-dead hunter, and every one of the seven is a move it could have seen.
+**Every threat mode lands.** Before this pass, across twelve hunts, the bite
+had landed 1 time in 192, the charge 0 in 230 and the slam 2 in 375. Now each
+one does at a rate a decent player feels. The charge had never landed because
+it never charged: it accelerated at its walking rate and crawled a metre and a
+half in its whole active window.
 
-**What the pass changed, in the numbers.** The bite lands where it is thrown
-(it is chosen for a target at three to eight metres and its volume used to
-start at nine); the sweep covers the tail root and goes to the side you are on;
-the kick exists and lands on a hunter that lingers astern. The creature closes a
-gap at twelve metres a second and comes about before it runs. Nothing on the
-standing animal is inside a hop for five of six classes, and the earned routes
-are where they were. The hunter, meanwhile, stopped jumping at a tail it cannot
-reach and learned three things a person learns in the first ten minutes: poke,
-then watch, then poke — a poke is twenty frames of not being able to jump and a
-chained one is forty; unload into a recovery you can see is long enough, and
-nowhere else; and stand beside the hind leg rather than behind it.
+**It is lethal, and the fights are short.** Five to ten hits is a dead
+hunter, and a decent player's hunt is over, one way or the other, in about a
+minute. That is at the floor of the one-to-twenty-minute band the design
+document asks of coop. The bite is the move that does it: it lands half the
+time, often as the follow-up to a stomp or a sweep, which is the set-up system
+working. Its damage came back down to 190 from the previous pass's 240 because
+a bite that tracks, lunges and follows a stagger is a far more dangerous move
+per throw than the one that never landed.
+
+**What the harness caught.** A perfect-timing bot dodged every reactable move
+there is, so "landed" said nothing about whether a tell could be read; the
+timing error is what made it a measure again. The dodge windows came out at
+four frames for the bite and the slam — a coin toss — and are six to nine now,
+because their hits are out for four frames rather than six. The charge's
+width is on a knife edge between "too wide to dodge" (2.4 m, where a dodge's
+ten invulnerable frames end inside it) and "narrow enough to walk out of"
+(1.8 m); it is 2.0, and `the_charge_is_dodged_not_walked_out_of` holds both
+sides. A dead fighter was scooped onto its back by a galloping animal and
+carried as a rider; the dead do not mount any more. And the report's
+"unanswerable" blamed the creature for a hunter walking into a stomp at a full
+run; it measures from where the animal stood when it committed now, which is
+what the rule was always meant to catch.
+
+**What the 2026-09-23 pass changed.** The bite lands where it is thrown (it is
+chosen for a target at three to eight metres and its volume used to start at
+nine); the sweep covers the tail root and goes to the side you are on; the kick
+exists and lands on a hunter that lingers astern. Nothing on the standing
+animal is inside a hop for five of six classes, and the earned routes are where
+they were. The hunter stopped jumping at a tail it cannot reach and learned
+three things a person learns in the first ten minutes: poke, then watch, then
+poke — a poke is twenty frames of not being able to jump and a chained one is
+forty; unload into a recovery you can see is long enough, and nowhere else; and
+stand beside the hind leg rather than behind it.
 
 **What the harness caught, and what it did not.** Two of the day's four real
 bugs were invisible in the old report and obvious in the new one. `landed`
@@ -670,6 +783,20 @@ have reported as "the ride feels random".
 
 ### Still open
 
+- **Is it too lethal?** A decent player's hunt is over in a minute, won or
+  lost, which is the floor of the band the design asks for. The levers, in
+  the order they cost the least of what was asked for: the beat between moves
+  (`think_frames`), the follow-up appetite (`combo_appetite`), and the bite's
+  damage.
+- **The threatening share is six points over.** The same beat is the lever,
+  and it trades against the length of the fight.
+- **The windup's tracking is a feel number.** At nine tenths nobody walks out
+  of a tell; whether it reads as an animal following you or as a homing
+  missile is a person's question, and the knob is `startup_tracking`.
+- **It still often opens with the spray**, now after the three-second moment
+  rather than on the first frame. Whether three seconds is enough to get your
+  bearings is the knob `hunt_grace`.
+
 - **The Dual mage can decline the ground game.** Her float clears the tail from
   the floor by seventy centimetres. Whether that is her identity or a hole in
   the premise is a decision, not a tuning pass; making the animal tall enough
@@ -677,10 +804,16 @@ have reported as "the ride feels random".
 - **The Bulwark's routes are the two lowest and nothing else.** A stumbling
   shoulder and a toppled barrel. Unchanged by the metre, and still the sharpest
   form of the question §2 asks.
-- **Is the kick's tell long enough?** Twenty-two frames is readable from
-  neutral and not from inside a poke, which is the design — but the scripted
-  hunter answers it by standing where it does not reach, and whether a person
-  finds that spot or eats kicks until they stop playing is a person's question.
+- **Is the kick's tell long enough?** Twenty frames is readable from neutral
+  and not from inside a poke, which is the design — but the scripted hunter
+  answers it by standing where it does not reach, and whether a person finds
+  that spot or eats kicks until they stop playing is a person's question.
+- **Is one win in twelve a floor or a wall?** The scripted hunter cannot learn,
+  so its losing says the fight is dangerous for somebody with a quarter-second
+  reaction and one plan, which is what was asked for. Whether a person who has
+  played it ten times finds it dangerous or cheap is the question the pass was
+  made to ask, and the answer decides whether the damage (a quarter of a
+  fighter a hit) or the tells (bite 24, kick 20, sweep 32) is the next knob.
 - **Is the buck's damage the right lever?** Forty-five a throw is now paid
   once per throw rather than five times, and the shake is jumpable as
   documented. A player who rides well should barely feel it, and whether that

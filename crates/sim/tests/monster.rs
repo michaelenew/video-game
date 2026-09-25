@@ -55,6 +55,8 @@ fn walk_only(w: &mut World, frames: u32) {
         // something on the first frame, and a creature mid-move neither steers
         // nor walks -- which would make this a test of standing still.
         beast.brain.think_left = u16::MAX;
+        // And past the moment a hunt opens with, in which it stands its ground.
+        beast.brain.grace = 0;
         w.advance([Input::default(); MAX_PLAYERS]);
     }
 }
@@ -365,32 +367,78 @@ fn the_tail_and_the_back_are_one_animal_to_walk_around() {
 // The control algorithm
 // ---------------------------------------------------------------------------
 
-#[test]
-fn a_committed_move_locks_the_creatures_facing() {
-    // Same rule the fighters have, for the same reason: without it a whiff can
-    // be rescued by turning after the fact, and whiff punishment is most of the
-    // game.
+/// How far it turns in `frames` of a given state, toward a target off to one side.
+fn turned_during(doing: Doing, frames: u32) -> Fx {
     let mut beast = Monster::new();
     let far = Quarry {
         pos: V3::new(Fx::from_int(6), Fx::ZERO, Fx::from_int(6)),
         vel: V3::ZERO,
         alive: true,
         aboard: false,
+        stunned: false,
     };
-    beast.doing = Doing::Startup {
-        kind: monster::BITE,
-        left: 30,
-    };
+    beast.doing = doing;
     beast.yaw_rate = Fx::ZERO;
     let before = beast.yaw;
-    for _ in 0..20 {
+    for _ in 0..frames {
+        // A free animal would start something on its first frame, and then
+        // this would be two windups compared with each other.
+        beast.brain.think_left = u16::MAX;
         beast.step(&[far]);
     }
+    wrap_turns(beast.yaw.sub(before)).abs()
+}
+
+#[test]
+fn the_hit_locks_its_facing_and_the_windup_follows_you() {
+    // **Half of the fighters' rule, since 2026-09-25.** The hit is committed:
+    // without that a whiff can be rescued by turning after the fact, and whiff
+    // punishment is most of the game. The windup is not: a tell that could be
+    // walked out of made "walk away" the answer to every forward move, and the
+    // design asks for a dodge, a jump or a real change of direction instead.
+    // See `docs/design/monsters.md` §"Threat modes".
+    let bite = monster::attack(monster::BITE);
+    let hit = turned_during(
+        Doing::Active {
+            kind: monster::BITE,
+            left: bite.active,
+        },
+        bite.active as u32,
+    );
     assert!(
-        wrap_turns(beast.yaw.sub(before)).abs().raw() < Fx::ratio(1, 200).raw(),
-        "it steered mid-move: {:?} to {:?}",
-        before,
-        beast.yaw
+        hit.raw() < Fx::ratio(1, 200).raw(),
+        "it steered while its bite was out: {hit:?} of a turn"
+    );
+    let windup = turned_during(
+        Doing::Startup {
+            kind: monster::BITE,
+            left: bite.startup,
+        },
+        20,
+    );
+    let free = turned_during(Doing::Prowl, 20);
+    assert!(
+        windup.raw() > Fx::ratio(1, 100).raw(),
+        "the bite's windup did not follow a target off its shoulder: {windup:?} of a turn"
+    );
+    assert!(
+        windup.raw() < free.raw(),
+        "the windup turned as fast as a free animal ({windup:?} against {free:?}), so a \
+         tell is not a commitment at all"
+    );
+    // A move aimed behind it does not follow: turning its head toward the
+    // target would swing the tail away from them.
+    let sweep = monster::attack(monster::SWEEP);
+    let rear = turned_during(
+        Doing::Startup {
+            kind: monster::SWEEP,
+            left: sweep.startup,
+        },
+        20,
+    );
+    assert!(
+        rear.raw() < Fx::ratio(1, 200).raw(),
+        "the sweep's windup turned toward the target: {rear:?} of a turn"
     );
 }
 
@@ -402,6 +450,7 @@ fn it_turns_toward_a_target_but_not_instantly() {
         vel: V3::ZERO,
         alive: true,
         aboard: false,
+        stunned: false,
     };
     // Held in its pause between moves for the whole test. Its charge reaches
     // eight metres, and a committed move locks the yaw -- which is correct, and
@@ -435,6 +484,7 @@ fn it_acts_on_what_it_last_looked_at_rather_than_on_the_present() {
         vel: V3::ZERO,
         alive: true,
         aboard: false,
+        stunned: false,
     };
     beast.step(&[seen]);
     let remembered = beast.brain.seen;
@@ -599,6 +649,11 @@ fn hunters_cannot_hurt_each_other_while_there_is_something_else_to_fight() {
     w.players[1].pos = w.players[0].pos.add(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO));
     let before = w.players[1].health;
     for _ in 0..60 {
+        // Held still: this is about the fighters. It opens a hunt with a
+        // spray at whoever is furthest out, and that would be its damage.
+        let beast = w.monster.as_mut().expect("a hunt has a creature");
+        beast.doing = Doing::Prowl;
+        beast.brain.think_left = u16::MAX;
         w.advance([Input::new(Input::LEFT), Input::default()]);
     }
     assert_eq!(
@@ -712,15 +767,18 @@ fn the_sweep_goes_to_the_side_you_are_on() {
         let x = sim::beast::rest(sim::beast::ROOT).x.add(hip.min.x);
         V3::new(x, Fx::ZERO, z)
     };
-    let left = flank(Fx::from_int(-3));
-    let right = flank(Fx::from_int(3));
+    // **At mid range**, which is what the sweep is for since 2026-09-25. Right
+    // under the hips the tail passes over both sides on its way through, and
+    // that is the tail being a tail rather than the side being wrong.
+    let left = flank(Fx::from_int(-5));
+    let right = flank(Fx::from_int(5));
     assert!(reaches_from(monster::SWEEP, false, right.x, right.z));
     assert!(!reaches_from(monster::SWEEP, false, left.x, left.z));
     assert!(reaches_from(monster::SWEEP, true, left.x, left.z));
     assert!(!reaches_from(monster::SWEEP, true, right.x, right.z));
 
     // And it is the target's side that decides, at the moment of choosing.
-    for (z, expect) in [(Fx::from_int(-3), true), (Fx::from_int(3), false)] {
+    for (z, expect) in [(Fx::from_int(-5), true), (Fx::from_int(5), false)] {
         let mut beast = Monster::new();
         beast.brain.think_left = 0;
         beast.brain.seen = beast.rig().to_world(flank(z));
@@ -735,6 +793,7 @@ fn the_sweep_goes_to_the_side_you_are_on() {
             vel: V3::ZERO,
             alive: true,
             aboard: false,
+            stunned: false,
         };
         beast.step(&[behind]);
         assert_eq!(
@@ -1224,6 +1283,7 @@ fn a_move_it_has_just_thrown_cannot_come_straight_back() {
         vel: V3::ZERO,
         alive: true,
         aboard: true,
+        stunned: false,
     }];
     // Let it pick something; with a rider aboard and nothing on the ground, the
     // shake is what it wants.

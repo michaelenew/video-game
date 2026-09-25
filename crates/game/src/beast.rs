@@ -303,6 +303,51 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
     gizmos.line(nose, nose + ahead * length, intent_colour(&beast));
 }
 
+/// **The spikes in flight**, always drawn, not only with the overlay on.
+///
+/// The spray is the one move whose hit leaves the animal, so the animal's pose
+/// cannot show where it is: without this the only thing a fighter at range
+/// sees is a tail flicking, and then being rooted. Drawn from the simulation's
+/// own hit volume, for the rule the overlay above follows -- a picture of a
+/// hit that is not the hit is worse than none. A spread of streaks across the
+/// volume's width at the height it catches you, each pointing the way the
+/// volume is going; once it has caught somebody it stops being drawn, because
+/// the simulation has stopped testing it.
+pub fn spikes(sim: Res<crate::Sim>, mut gizmos: Gizmos) {
+    let Some(beast) = sim.cur.monster else {
+        return;
+    };
+    let Some(kind) = beast.doing.attacking() else {
+        return;
+    };
+    if monster::attack(kind).travel.raw() <= 0 || beast.hit_used {
+        return;
+    }
+    let Some((anchor, radius, low, high)) = beast.hit_volume() else {
+        return;
+    };
+    let rig = beast.rig();
+    let ahead = fx3(rig.dir_to_world(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)));
+    let across = Vec3::new(-ahead.z, 0.0, ahead.x);
+    let centre = fx3(anchor);
+    let r = radius.to_f32_for_render();
+    let (lo, hi) = (low.to_f32_for_render(), high.to_f32_for_render());
+    for i in 0..SPIKES {
+        // Spread across the width and up the height band, staggered along
+        // the flight so they read as a volley rather than a wall.
+        let u = i as f32 / (SPIKES - 1) as f32;
+        let side = (u * 2.0 - 1.0) * r;
+        let up = lo + (hi - lo) * (0.25 + 0.5 * ((i * 7 % SPIKES) as f32 / SPIKES as f32));
+        let back = ((i * 3 % 5) as f32) * 0.25;
+        let tip = Vec3::new(centre.x, up, centre.z) + across * side - ahead * back;
+        gizmos.line(tip - ahead * SPIKE_LENGTH, tip, SPIKE);
+    }
+}
+
+const SPIKES: usize = 9;
+const SPIKE_LENGTH: f32 = 0.9;
+const SPIKE: Color = Color::srgb(0.93, 0.86, 0.70);
+
 const MOUNTABLE: Color = Color::srgb(0.38, 0.85, 0.62);
 const HIT: Color = Color::srgb(1.0, 0.23, 0.31);
 const HIT_SPENT: Color = Color::srgb(0.55, 0.16, 0.20);

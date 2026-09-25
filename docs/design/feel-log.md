@@ -5585,3 +5585,213 @@ arrival.
 
 **Verdict** open. Questions for the next play: is ten frames enough to find the jump? Is a
 fifth the right lunge, or does the dash jump want to be vertical more than horizontal?
+
+### 2026-09-25 — the Ridgeback, made dangerous
+
+**Changed** every tell is shorter: bite 34 → 24, stomp 13 → 11, sweep 36 → 32, charge
+34 → 26, slam 52 → 46, kick 22 → 20. The shake's forty is the ride's design and is untouched.
+Every hit is bigger and a quarter harder: bite 190 → 240 in a 2.8 m volume (was 2.2), stomp
+140 → 175 at 3.0 m (2.4) and 2.6 m high (2.2), sweep 160 → 200 at 3.8 m (3.2), charge
+210 → 260 at 3.4 m (2.8), 3.8 m high (3.4) and 26 m/s (20), slam 290 → 360 at 4.2 m (3.8)
+and 3.6 m high (3.0), kick 170 → 210 and 3.2 m high (2.8) **with its 2.4 m radius kept**.
+Recoveries came in by a few frames each (bite 34 → 30, stomp 26 → 24, sweep 46 → 42,
+charge 44 → 42, slam 54 → 52, kick 34 → 30). It turns at 0.34 turns/s (0.28), gain 2.6 (2.2),
+acceleration 1.5 (1.1); it gallops at 15 m/s (12); it glances every 7 frames (8), pauses 6
+between moves (8), and commits harder when wounded (120, was 90). The slam is locked out for
+150 frames from its start — the first lockout on a damaging move that outlasts the move. The
+bite's windup moved out of the chest and into the neck, and the creature's clips were rebaked
+over the new frame counts. The scripted hunter judges a tell by where it will be when the move
+lands rather than where it is standing when it sees it.
+
+**Why** a report from play: *everything is still too telegraphed, too small, and too slow.*
+The harness agreed once it was asked per move. Across twelve hunts the bite had landed once in
+192 throws, the charge never in 230, the slam twice in 375. Three of six damaging moves were
+decoration, and a player who found the flank had found the whole fight.
+
+**Measured one family at a time first**, against the committed numbers, six seeds each, because
+"make it dangerous" is five different levers and they do not cost the same. Shorter tells alone
+left the scripted hunter winning two of six as before. Bigger volumes alone dropped it to none,
+and all of that was the kick: at 2.6 m a hunter lagging a hundred and thirty degrees round
+behind a faster-turning animal is inside it, and it lost every hunt standing in kicks. The turn
+rate alone cost nothing. A four-frame pause between moves left two of six hunts unresolved at
+ten minutes — the pause is the player's turn, and four frames of it is none. The damage alone,
+oddly, won three of six: shorter fights, fewer rides, fewer falls.
+
+**Three things the harness found.**
+
+- **A lockout shorter than the move is decoration.** A cooldown counts from the frame the move
+  starts, and the sweep, kick, stomp and slam all outlast theirs, so none of the four had ever
+  bound once; setting the sweep's to 70 changed nothing to the frame. The slam's is real now —
+  150 against a 103-frame move, a forty-seven frame gap — because with wounded aggression
+  scaling with a move's damage, the biggest hit went eight times running on one seed. The
+  others are left as they were and named here as decorative. Real lockouts on the sweep and the
+  kick were tried and reverted: the kick filled the sweep's gap and landed twenty-eight times in
+  448.
+- **The bite could not come under thirty-four frames without throwing a braced rider off the
+  shoulders.** The clip heaved the hips thirty centimetres and pitched root, spine and chest
+  through eleven degrees each between coil and strike; compressed into twenty-two frames that is
+  two and a half times the acceleration, and the shoulders are where a rider going for the nape
+  stands. The coil is in the neck now — 38° back and 34° through against 32 and 28 — and the
+  body leans three degrees. Measured, a braced rider on the shoulders holds through the bite at
+  every startup down to fourteen frames. The slam still throws a braced rider at every startup,
+  which is its design, and the sweep still throws nobody off the back.
+- **The slam catches a hunter running in from the front.** It is thrown at the lead point, and
+  the hunter judged a threat by the distance at which it saw the tell — so a slam laid across
+  the spot it was running to was "out of reach" until the frame it landed. Fifty-two frames
+  gave it time to notice by accident; forty-six did not. It now judges by its own speed toward
+  the animal over the frames the tell has left, which is what a person who has eaten one does.
+  That is the one lesson taught this pass, and it is why the hunter is hit *less* often per
+  minute than before (1.4 against 1.7 across twelve hunts) while dying in four to nine hits
+  where it took seven to nine.
+
+**Reverted.** Kick radius 2.6 (above). Sweep at 26 to 30 frames: the hop needs fifteen frames
+of reaction and seven of rise to clear 1.6 m, and thirty leaves nothing for a poke already
+thrown, so sweeps landed on a hunter in the air. Slam at 42 frames and 4.6 m: from the front a
+sidestep no longer left it, eighteen of 307 landed. Walk 7, lead 1.2, decisiveness 68, glance
+6, think 4: each cost a hunt or two for nothing a person would notice. Damage a tenth lower: no
+difference to the outcome, so the full quarter stayed.
+
+**Verdict** kept. The scripted hunter wins one of the six test seeds and one of twelve overall,
+against two of six and two of twelve before; `the_fight_is_neither_free_nor_hopeless` passes on
+that one seed. Thinner than it stood on, and both were thin: the bot has a fixed reaction and
+one plan and cannot learn, so its win rate is a floor. What it measures held — no unanswerable
+hit in twelve hunts, five of six moves readable, openings twice the punish, every move used, no
+move over a third of the whole. What a person will notice: the bite is a snap, the slam lands
+where they were running, the flank is still the place to stand and the sweep is still the read
+there, and four hits is the fight. Whether that is dangerous or cheap is theirs to say, and the
+answer decides whether the damage or the tells is the next knob.
+
+### 2026-09-25 — the Ridgeback hunts
+
+**Changed** It chases: a gallop of 17 m/s (was 15) and a pursuit term that
+matches a target moving away. The windup of every forward move follows you at
+nine tenths of its turn rate, leading to where you will be when the hit lands;
+the hit locks. It keeps its target unless somebody is much nearer. It meets an
+approach (a closing target raises its appetite for forward moves) and presses a
+set-up (a staggered or rooted one does too, and skips its turn-round pause).
+After a rear move it takes forty frames to come about. **An eighth move, the
+spike spray**: the tail comes over the back and flings spikes out along the
+facing at 60 m/s from four metres to twenty, rooting for 120 frames. The tail
+sweep became the mid-range set-up: less damage (150), a hundred-frame stagger,
+a volume that reaches both flanks to seven or eight metres. The slam is the
+slow, huge one (48 frames, 5 m, 110 recovery); the bite lunges and recovers
+for 90 frames; the charge runs at 30 m/s for 40 frames. It plants for moves,
+launches into a charge, and brakes short of a wall. In the game, a hunt starts
+without the training dummy unless somebody has its keys. The fight report
+divides the fight into four windows and a test pins their bands; a new test
+file, `crates/sim/tests/hunted.rs`, pins the rest.
+
+**Why** a report from play: damage was better, but it was still too slow and too
+small. A fighter's walk beat the fastest thing it did, so backpedalling and
+shooting was free; it got distracted and wandered off; walking up to it worked;
+and walking out of its moves worked. Asked for, in so many words: a charge much
+faster than a fighter; a slow, scary front move; a mid-range tail that staggers
+into a follow-up; a long-range spray that roots so it can charge; and a fight
+that is about four tenths threatening, a fifth safe to walk into, and the rest
+open to a poke or to movement tech.
+
+**Four real bugs, three of them older than this pass.**
+
+- *The charge never charged.* It accelerated at the walking rate, 9 m/s² then
+  16, so a 20 m/s charge reached four metres a second by the end of its active
+  window and covered a metre and a half. That is why it had landed zero times in
+  230 throws in the first baseline of the day. It is launched now, at 600 m/s²:
+  under twice a rider's grip, because the first version set the speed in one
+  frame, which is an unbounded acceleration and threw braced riders.
+- *It charged into walls.* Twenty metres of charge in a twenty-eight metre arena
+  ran into the edge, where the position clamp stopped it in a frame and threw
+  braced riders again. It brakes within its stopping distance of the wall.
+- *The "distraction" was the training dummy.* Nearest-wins targeting plus an idle
+  body standing in the arena: back off further than the dummy stood and the
+  animal walked to the dummy. The harness had always removed absent hunters;
+  the game had not.
+- *Galloping over a body picked it up.* A fallen fighter was scooped onto the
+  animal's back as though they had landed there, and the report counted the
+  corpse's "rides". The dead do not mount, and a rider killed aboard falls off.
+
+**The harness had to learn the fight too.** Its old plan — walk to a station
+beside the hind leg and poke — met an animal that tracks, chases and punishes
+approaches, and it swung twice in a fight. It waits at a standoff now, dodges
+at the hit rather than at the tell, jumps the sweep, judges a threat by the
+move's real volume (it had judged by the distance the move is thrown at, and
+the slam flattened it from eight and a half metres every time), goes in only on
+a window it can see will still be open when it arrives, counts the creature's
+beat between moves as part of that window, dashes in when the gap is worth it,
+and leaves before the window closes. And it is a few frames early or late at
+random on every dodge and jump: **a perfect-timing bot dodged every reactable
+move there is**, so the sweep, slam, bite and spray landed zero times across
+twelve hunts and "landed" meant nothing.
+
+**The report's "unanswerable" was also measuring the wrong thing.** It compared
+the hunter's distance *when the move began* against the move's reach, so a
+hunter walking into a stomp at a full run counted as the creature's fault. It
+measures from where the creature stood when it committed now; walking into a
+stomp is what the stomp is for.
+
+**The dodge windows, measured**, as the frames on which a dodge can be pressed
+and get clear: bite 4 and slam 4 at six active frames, which is a coin toss;
+bite 6, slam 6, charge 9 and spray 7 with the bite and slam out for four. The
+charge's width sits between 1.8 m, where walking sideways gets clear, and
+2.4 m, where a dodge's ten invulnerable frames end inside it. It is 2.0.
+
+**Reverted.** Windup tracking at half the turn rate: a sidestepper at ten metres
+walked out of the charge. Leading the windup by the startup alone: the same,
+because the charge keeps travelling after the windup ends. A 26 m/s charge at
+2.4 m: undodgeable once it actually moved. A 3.0 m stomp: with the animal facing
+you, "in front of it" became everywhere, for a move nobody can react to. The
+sweep's old volume, behind the hips only: it never reached the flanks, so it
+could not be a mid-range move and never landed. Pauses of 28 and 36 frames: they
+moved the shares toward the targets and made the bite land seven times in eight,
+because the bot spent its dodge leaving and had none left. Bite damage 260 and
+240: with tracking, the lunge and the follow-up, a decent bot died in 20 to 40
+seconds.
+
+**Verdict** kept, and unplayed. The scripted hunter wins four hunts in twelve and
+none of its losses has an unanswerable hit in it. Every threat mode lands on a
+decent player at a rate they would feel. The shares are 46 / 13 / 19 / 21
+against a target of 40 / 16 / 24 / 20. What only a person can say: whether a
+minute is a fight or a mugging; whether a tell that follows you reads as an
+animal or as a homing missile; whether "wait at the edge and go in on the
+recovery" is what they find themselves doing; and whether being rooted from
+twenty metres and charged is a lesson or a tax.
+
+### 2026-09-25 — the hunt opens with a moment to notice you
+
+**Changed** For the first three seconds of a hunt (`hunt_grace`, 180 frames) the
+Ridgeback stands its ground, turns to face the hunters, and throws nothing. A
+hit ends the moment at once.
+
+**Why** a report from play: it charged and hit players before they could adjust
+their camera. The spray and the charge were its first moves on frame one.
+
+**Reverted, the same hour: letting it walk toward you through the moment.** A
+fighter who spent the moment getting their bearings — or the scripted hunter,
+walking to its usual place to wait — was standing in front of it when the moment
+ended, so the ambush happened three seconds later instead of not at all. Hunts
+ended in thirteen to nineteen seconds.
+
+**The harness.** The scripted hunter now holds back until it sees the creature's
+first move, which is what a person getting their bearings does. The fight
+report's rhythm and window shares start when the moment ends, since an animal
+not allowed to attack is not a sample of how it fights. And the one test that
+judges a win rate runs eighteen hunts rather than six: over thirty hunts the
+bot won thirteen both with and without the moment, but the six fixed test seeds
+happened to all be losses afterwards, which at four wins in ten happens about
+one time in twenty. It wins four of the eighteen.
+
+**Verdict** kept, unplayed. Whether three seconds is long enough to find the
+camera, and whether a creature that stands and stares reads as noticing you or
+as idling, is a person's question.
+
+### 2026-09-25 — one fire pillar at a time
+
+**Changed** While an Elementalist's fire pillar is burning, pressing it again does
+nothing: no startup, no eruption, no second pillar. It uses the gate the Reaver's
+shadow and lotus already use, so its repeat lockout starts when the pillar burns
+out. A tornado torn loose by Cataclysm does not count as a pillar.
+
+**Why** a report from play: stacking pillars was too free a win.
+
+**Verdict** kept, unplayed. `one_fire_pillar_at_a_time_and_a_second_press_does_nothing`
+pins it. Whether she wants the tornado counted too, so that a pillar thrown with
+Cataclysm is still her one pillar, is open.
