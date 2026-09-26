@@ -36,6 +36,9 @@
 //! fight from one seed is the same fight every time, which is what lets a test
 //! or the `duel` binary say anything about it.
 
+mod mechanics;
+
+use mechanics::{ClassOut, Cues};
 use sim::aim::{self, Kind};
 use sim::bolt::Flight;
 use sim::fixed::Fx;
@@ -200,7 +203,14 @@ const EDGE: Fx = Fx::from_int(2);
 /// How far inside the walls it keeps its jumps.
 const JUMP_CLEAR: Fx = Fx::from_int(4);
 /// How close to a wall it jumps from, to get back over it.
-const HOP_THE_WALL: Fx = Fx::ratio(15, 10);
+/// Measured from the inside face; the wall is a metre thick, so from outside
+/// this is under a metre and a half from it.
+const HOP_THE_WALL: Fx = Fx::ratio(25, 10);
+/// Frames of walking without getting anywhere before it jumps whatever it is
+/// walking into -- a platform's side, usually.
+const STUCK: u16 = 12;
+/// Slower than this, walking, is not getting anywhere.
+const CRAWL: Fx = Fx::ratio(5, 10);
 /// The number of plans it remembers, to avoid doing one of them again.
 const RECENT: usize = 4;
 
@@ -367,6 +377,80 @@ struct Attempt {
     lead: bool,
 }
 
+/// An aimed press of something that is not an attack -- `E`, the shadow's
+/// right click, the lotus, a blink -- made by the same hands as an attack: the
+/// mouse comes round to `at` first, at the same speed, off by the same error.
+#[derive(Clone, Copy, Debug)]
+struct Gesture {
+    bits: u16,
+    /// Where the crosshair goes.
+    at: V3,
+    /// Where to walk while it is pressed, for anything that reads the stick:
+    /// the Rush's direction, a dodge's.
+    walk: Option<V3>,
+    /// Wait for the fighter to be free before pressing.
+    free: bool,
+    /// Keep the look level rather than on `at`. For a press that does not
+    /// care where the crosshair is and a button that does: the Champion's
+    /// spear thrown looking at the floor out of a Rush is the Pole vault,
+    /// which clears the arena's walls.
+    level: bool,
+    turning: u16,
+    pressing: u16,
+    age: u16,
+    error: Fx,
+    then: After,
+}
+
+/// What follows a gesture once it is pressed.
+#[derive(Clone, Copy, Debug)]
+enum After {
+    Nothing,
+    /// Swing this, this many frames later.
+    Swing(Tool, u16),
+    /// Hold the jump this long -- riding a stone up.
+    Jump(u16),
+}
+
+impl Gesture {
+    fn press(bits: u16, at: V3) -> Gesture {
+        Gesture {
+            bits,
+            at,
+            walk: None,
+            free: false,
+            level: false,
+            turning: 0,
+            pressing: 0,
+            age: 0,
+            error: Fx::ZERO,
+            then: After::Nothing,
+        }
+    }
+
+    fn walking(self, dir: V3) -> Gesture {
+        Gesture {
+            walk: Some(dir),
+            ..self
+        }
+    }
+
+    fn level(self) -> Gesture {
+        Gesture {
+            level: true,
+            ..self
+        }
+    }
+
+    fn free(self) -> Gesture {
+        Gesture { free: true, ..self }
+    }
+
+    fn then(self, then: After) -> Gesture {
+        Gesture { then, ..self }
+    }
+}
+
 /// What it saw, one frame of it.
 #[derive(Clone, Copy)]
 struct Seen {
@@ -430,6 +514,29 @@ pub struct Duelist {
     /// Did it bait already this plan, and is it retreating from one.
     bait_out: u16,
     dashed: bool,
+    /// A press of the class's own, being aimed or made.
+    gesture: Option<Gesture>,
+    /// Frames before the class's play starts another gesture.
+    mech_cool: u16,
+    /// How many times it has used its mechanic. For the harness.
+    pub mechanic_uses: u32,
+    cues: Cues,
+    /// The Champion holding the next weapon through a recovery: which
+    /// button, for how much longer, and the move it is waiting out.
+    chain_hold: Option<(u16, u16, u8)>,
+    /// Frames the Bulwark's shield has been out of his hand.
+    shield_out: u16,
+    /// Frames the Reaver's shadow has been out, and a recall on a timer.
+    shadow_out: u16,
+    recall_in: Option<u16>,
+    /// The Dual mage's second jump: a released frame, then a press.
+    second_jump: u8,
+    /// Buttons it held last frame, so a press that needs an edge gets one.
+    last_bits: u16,
+    /// Frames it has been walking into something.
+    stuck: u16,
+    /// The Dual mage's gap between her bars last frame, to count a mend.
+    gap_was: Fx,
 }
 
 impl Duelist {
@@ -491,6 +598,18 @@ impl Duelist {
             tempo_clock: 0,
             bait_out: 0,
             dashed: false,
+            gesture: None,
+            mech_cool: 0,
+            mechanic_uses: 0,
+            cues: Cues::default(),
+            chain_hold: None,
+            shield_out: 0,
+            shadow_out: 0,
+            recall_in: None,
+            second_jump: 0,
+            last_bits: 0,
+            stuck: 0,
+            gap_was: Fx::ZERO,
         }
     }
 
@@ -602,6 +721,7 @@ impl Duelist {
             return Input::aimed(0, turns_to_aim(self.yaw.sub(me.carry_yaw)));
         }
         self.feel(w);
+        self.read_cues(&me, &seen, w);
         self.notice(&me, &seen);
         self.dodge_bolts(&me, &seen);
 
@@ -611,7 +731,10 @@ impl Duelist {
             let (lo, hi) = (self.skill.think_min as i32, self.skill.think_max as i32);
             self.think_in = self.between(lo, hi) as u16;
         }
-        self.steer_plan(&me, &seen)
+        let class = self.class_play(&me, &seen, w);
+        let input = self.steer_plan(&me, &seen, class);
+        self.last_bits = input.bits;
+        input
     }
 
     fn stand_down(&mut self) {
@@ -621,6 +744,10 @@ impl Duelist {
         self.string_in = None;
         self.jump_left = 0;
         self.dodge_left = 0;
+        self.gesture = None;
+        self.chain_hold = None;
+        self.recall_in = None;
+        self.second_jump = 0;
     }
 
     fn new_round(&mut self, round: u32, me: &Player) {
@@ -845,7 +972,10 @@ impl Duelist {
 
     fn usable(&self, me: &Player, t: Tool) -> bool {
         let m = moves::get(me.class, t.kind);
-        m.aim() != Kind::AtTheMechanic && me.mechanic_ready(t.kind) && !me.locked_out(t.kind)
+        m.aim() != Kind::AtTheMechanic
+            && me.mechanic_ready(t.kind)
+            && !me.locked_out(t.kind)
+            && self.tool_bias(me, t) > 0
     }
 
     /// Something in reach worth throwing, chosen by chance weighted by what it
@@ -867,7 +997,7 @@ impl Duelist {
             // Worth, and a floor under it so a slow move is still sometimes
             // the one it goes for.
             let worth = (m.damage.max(1) * 100 / cost).clamp(5, 200) + 10;
-            options[i] = (Some(t), worth);
+            options[i] = (Some(t), worth * self.tool_bias(me, t) / 100);
         }
         let total: i32 = options.iter().map(|o| o.1).sum();
         if total == 0 {
@@ -885,7 +1015,7 @@ impl Duelist {
 
     /// Decide to throw something.
     fn attempt(&mut self, tool: Tool) {
-        if self.attempt.is_some() {
+        if self.attempt.is_some() || self.gesture.is_some() {
             return;
         }
         let spread = self.skill.aim_error.raw();
@@ -1049,7 +1179,7 @@ impl Duelist {
 
     /// Turn the plan, the pending answers and the attempt into this frame's
     /// buttons and look.
-    fn steer_plan(&mut self, me: &Player, seen: &Seen) -> Input {
+    fn steer_plan(&mut self, me: &Player, seen: &Seen, class: ClassOut) -> Input {
         self.plan_left = self.plan_left.saturating_sub(1);
         self.jump_left = self.jump_left.saturating_sub(1);
         self.dodge_left = self.dodge_left.saturating_sub(1);
@@ -1067,7 +1197,7 @@ impl Duelist {
         let toward = to.normalized();
         let side = V3::new(toward.z.neg(), Fx::ZERO, toward.x).scale(Fx::from_int(self.strafe));
         let theirs = self.theirs.threat();
-        let mut bits = 0u16;
+        let mut bits = class.hold;
 
         // Where it wants to go, by plan.
         let mut want = match self.plan {
@@ -1203,6 +1333,28 @@ impl Duelist {
             }
         }
 
+        if let Some(w) = class.want {
+            want = w;
+        }
+
+        // Walking into something it could jump onto -- a platform -- it
+        // jumps; into the arena's wall, it goes round.
+        let walking = want.flat_len().raw() > 0 && me.grounded && me.action.actionable();
+        if walking && flat(me.vel).flat_len().raw() < CRAWL.raw() {
+            self.stuck += 1;
+        } else {
+            self.stuck = 0;
+        }
+        if self.stuck > STUCK {
+            self.stuck = 0;
+            if by_the_wall(me.pos, JUMP_CLEAR) && out_me == out_them {
+                self.strafe = -self.strafe;
+                self.plan_left = self.plan_left.min(10);
+            } else {
+                self.jump_left = 24;
+            }
+        }
+
         // A timed answer outranks the plan while it runs.
         if let Some(p) = self.pending.as_mut() {
             p.start_in -= 1;
@@ -1246,7 +1398,15 @@ impl Duelist {
         let mut target = them.pos;
         let mut error = Fx::ZERO;
         let mut kind = Kind::Swing;
-        if let Some(a) = self.attempt {
+        if let Some(g) = self.gesture {
+            target = g.at;
+            error = g.error;
+            kind = if g.level {
+                Kind::Swing
+            } else {
+                Kind::Skillshot
+            };
+        } else if let Some(a) = self.attempt {
             let m = moves::get(me.class, a.tool.kind);
             kind = m.aim();
             error = a.error;
@@ -1258,7 +1418,7 @@ impl Duelist {
             }
         }
         let to_target = flat(target.sub(me.pos));
-        let wanted = if to_target.flat_len().raw() > 0 {
+        let wanted = if to_target.flat_len().raw() > Fx::ratio(3, 10).raw() {
             atan2_turns(to_target.z, to_target.x).add(error)
         } else {
             self.yaw
@@ -1278,8 +1438,50 @@ impl Duelist {
             _ => 0,
         };
 
+        // A gesture: wait for the mouse, then press, then whatever follows.
+        let mut walk = None;
+        if let Some(mut g) = self.gesture {
+            let mut done = false;
+            if g.pressing > 0 {
+                bits |= g.bits;
+                walk = g.walk;
+                g.pressing -= 1;
+                if g.pressing == 0 {
+                    done = true;
+                    match g.then {
+                        After::Nothing => {}
+                        After::Swing(t, after) => self.string_in = Some((after, t)),
+                        After::Jump(frames) => self.jump_left = frames,
+                    }
+                }
+            } else if !g.free || me.action.actionable() {
+                if g.turning == 0 {
+                    let spread = self.skill.aim_error.raw();
+                    g.error = Fx::from_raw(self.between(-spread, spread));
+                }
+                let settled = wrap_turns(wanted.sub(self.yaw)).abs().raw() <= ON_TARGET.raw();
+                g.turning += 1;
+                // A press that needs an edge needs the button up first.
+                let edge = self.last_bits & g.bits == 0;
+                if edge && (settled || g.turning >= TURN_PATIENCE) {
+                    g.pressing = PRESS - 1;
+                    bits |= g.bits;
+                    walk = g.walk;
+                    if g.pressing == 0 {
+                        done = true;
+                    }
+                }
+            } else {
+                g.age += 1;
+                done = g.age > ATTEMPT_LIFE;
+            }
+            self.gesture = (!done).then_some(g);
+        }
+
         // The attempt: wait for the mouse, then press.
-        if let Some(mut a) = self.attempt {
+        if self.gesture.is_some() {
+            // Its hands are busy.
+        } else if let Some(mut a) = self.attempt {
             let mut done = false;
             if a.pressing > 0 {
                 bits |= a.tool.bits;
@@ -1316,13 +1518,29 @@ impl Duelist {
             }
         }
 
-        if self.dodge_left > 0 {
+        if let Some(dir) = walk {
+            bits |= steer(self.yaw, dir);
+        } else if self.dodge_left > 0 {
             bits |= Input::SHIFT | steer(self.yaw, self.dodge_dir);
         } else {
             bits |= steer(self.yaw, want);
         }
         if self.jump_left > 0 {
             bits |= Input::SPACE;
+        }
+        // The Dual mage's second jump wants the button up for a frame, then
+        // down again.
+        match self.second_jump {
+            2 => {
+                bits &= !Input::SPACE;
+                self.second_jump = 1;
+            }
+            1 => {
+                bits |= Input::SPACE;
+                self.jump_left = 10;
+                self.second_jump = 0;
+            }
+            _ => {}
         }
         Input::looking_at(bits, wire, pitch)
     }
@@ -1400,6 +1618,8 @@ pub struct Bout {
     pub landed: [u32; MAX_PLAYERS],
     /// Dodges each side made.
     pub dodges: [u32; MAX_PLAYERS],
+    /// Times each side used its class mechanic on purpose.
+    pub mechanic: [u32; MAX_PLAYERS],
 }
 
 /// Play two bots against each other for `frames`, and count.
@@ -1431,6 +1651,7 @@ pub fn spar_traced(
         thrown: [0; MAX_PLAYERS],
         landed: [0; MAX_PLAYERS],
         dodges: [0; MAX_PLAYERS],
+        mechanic: [0; MAX_PLAYERS],
     };
     while w.frame < frames {
         for b in bots.iter_mut() {
@@ -1464,6 +1685,7 @@ pub fn spar_traced(
         trace(&w, &bots);
     }
     bout.rounds = [w.players[0].rounds_won, w.players[1].rounds_won];
+    bout.mechanic = [bots[0].mechanic_uses, bots[1].mechanic_uses];
     bout.frames = w.frame;
     bout
 }

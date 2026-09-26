@@ -167,3 +167,57 @@ fn harder_is_better() {
         "hard took {hard} rounds and easy took {easy}"
     );
 }
+
+/// **It plays its class.** Every class uses the thing that makes it that
+/// class, over and over, against its own mirror: the Rush, the shield, the
+/// shadow, the stones, the pools, the bars.
+#[test]
+fn every_class_uses_its_mechanic() {
+    for class in ALL_CLASSES {
+        let bout = spar([class, class], [Level::Normal; MAX_PLAYERS], 3 * MINUTE, 5);
+        for i in 0..MAX_PLAYERS {
+            assert!(
+                bout.mechanic[i] >= 10,
+                "{} bot {i} used its mechanic {} times in three minutes: {bout:?}",
+                class.name(),
+                bout.mechanic[i]
+            );
+        }
+    }
+}
+
+/// **The Dual mage keeps her bars level.** Outside the band she burns her
+/// own health, so a bot that throws whatever it likes kills itself slowly.
+/// Most of the fight is inside it, and she gets high enough to use what the
+/// bars unlock.
+#[test]
+fn the_dual_mage_keeps_her_balance() {
+    let band = sim::Fx::from_int(sim::tuning::meter_band());
+    let (mut inside, mut total, mut best) = (0u32, 0u32, sim::Fx::ZERO);
+    spar_traced(
+        [Class::DualMage, Class::Champion],
+        [Level::Normal; MAX_PLAYERS],
+        3 * MINUTE,
+        8,
+        |w, _| {
+            let me = &w.players[0];
+            if !matches!(w.phase, Phase::Fighting) || sim::dual::ascending(me) {
+                return;
+            }
+            total += 1;
+            if sim::dual::gap(me).raw() <= band.raw() {
+                inside += 1;
+            }
+            best = best.max(sim::dual::lower(me));
+        },
+    );
+    assert!(
+        inside * 10 >= total * 8,
+        "inside the band for {inside} of {total} frames"
+    );
+    assert!(
+        best.raw() >= sim::Fx::from_int(sim::tuning::tier_blink()).raw(),
+        "her lower bar never reached the blink: best {}",
+        best.to_int()
+    );
+}

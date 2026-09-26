@@ -5902,3 +5902,31 @@ arena itself is unchanged, and whether it should let anybody out is open.
 **Verdict** built, unplayed. `crates/hunt/tests/duel.rs` holds that it never
 sees the present, is not the same twice, stays in the fight, and that its levels
 are ordered. Whether it is fun to fight is a person's question.
+
+### 2026-09-26 — the sparring bot plays its class
+
+**Changed** Every class's bot uses its mechanic: the Champion's Rush and chains,
+the Bulwark's guard, throw, leap, recall and Slam, the Reaver's shadow, lotus
+and dash, the Elementalist's stones, the Blood mage's pool blinks, the Dual
+mage's bars. See [sparring.md](sparring.md) §"Its class".
+
+**Why** From play: "Needs to use class mechanics. I need to see how fighting a
+player feels."
+
+**Found** Three things on the way. The Dual mage's lance takes the colour she
+is carrying, whatever the move table names it; weighed as its table colour it
+was refused every time the dark bar led, and she stood at range throwing
+nothing. The Champion's spear out of a Rush while looking at the floor is the
+Pole vault, and it clears the walls; the bot kept going over them until its
+Rushes looked level. And a bot walking into a platform's side walked into it
+forever; it now jumps anything it has been walking into for a fifth of a
+second.
+
+**Tried, reverted: sending a lopsided Dual mage into the Press plan.** It kept
+her bars level and had her pressing for more than half of every fight, which
+is one plan. Walking in whatever the plan does the same job.
+
+**Verdict** built, unplayed. The uneven pairings came out lopsided — the Reaver
+and the Elementalist win most of theirs — and whether that is the bot or the
+classes is a person's question.
+

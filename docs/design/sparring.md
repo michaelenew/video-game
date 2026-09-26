@@ -102,25 +102,46 @@ has just been doing, so it does not repeat itself into being read.
 somebody who throws a lot it baits and plays footsies; against somebody who
 throws nothing it presses.
 
+## Its class
+
+Since the second day it plays its class, not just its buttons —
+`crates/hunt/src/duel/mechanics.rs`. Two hooks per class: one that may start a
+**gesture** each frame (an aimed press of `E`, of right click, of `Q` or of a
+dodge, made with the same slow mouse and the same aim error as an attack), and
+one that weighs its moves by the state of the mechanic.
+
+| Class | What it does with it |
+| --- | --- |
+| Champion | **Chains on a hit it felt** — its own swing connecting is proprioception, not sight, so it holds the next weapon through the recovery and the link comes out when the window opens. **Rush-cancels a whiff or a block** out of the recovery, away or past, never toward a wall. Rushes in from mid range and swings out of it — with the sword or the hammer, and looking level, because the spear looking down out of a Rush is the Pole vault. |
+| Bulwark | **Guards at the edge of your reach** to load the shield, and weighs Slam by how full it is: seven times as likely at nine tenths. Grapples you when you guard. **Throws** from five to nine metres, sometimes **leaps after it**, and **recalls** it the moment you are standing on the way home, or before long anyway, since he cannot guard without it. |
+| Shadow Reaver | **Sends the shadow** at you (never as a poke). With it beside you: **the lotus**, then a recall that drags the blades through you; or, with two marks on you, **dashes to it and slashes** out of the carry. Recalls a shadow left somewhere useless. Swings harder for her own body with three marks up. |
+| Elementalist | **Raises a stone under your feet**, led by the fourteen frames it takes to rise. Puts one **in front of her** when you are on top of her and she is backing off. **Rides one up** out of trouble, jump held. **Kicks** a stone at you with the beam when one is on the line. Landfall from above you. |
+| Blood mage | **Blinks to a pool beside you and sweeps**, or to one far from you when she is low. Weighs Black spike by whether a pool is at your feet, the scythe by her grey, and her costly moves down when her red is short. |
+| Dual mage | **Keeps her bars level.** A move that would push the gap past the band — where she burns — is never thrown; one on the low side is three times as likely; lopsided, she walks in whatever her plan, because the autos that mend it are thrown up close. **No ascension from behind** — it costs a great deal of health. The **second jump** off the tier, and all-in while the wings are out. |
+
 ## Measured
 
 `cargo run -p hunt --bin duel` plays every pairing for three minutes;
 `--level hard --against easy` sets the two sides; `--trace` prints the fight
-twice a second. On the first day:
+twice a second; the last column counts deliberate uses of the mechanic. On the
+second day:
 
-- Every class fights its mirror: both sides throw 70–160 moves in three minutes,
-  land 35–60 of them and finish rounds, and the rounds split rather than going
-  one way. `tests/duel.rs::every_class_fights` holds it.
-- Hard beats easy about three rounds to one across every pairing, and easy
-  still wins some. `harder_is_better` holds that it is better and that it is
-  not total.
-- No single plan takes up half its time, and it uses at least six of the nine.
-  `it_mixes_it_up`.
-- **The Elementalist wins the uneven pairings heavily** — twelve rounds to none
-  against the Blood mage and the Dual mage. That is either a bot that plays the
-  zoner better than the mages, or a zoner that is strong against the mages.
-  The mirrors say the bot is not simply broken; which of those two it is needs
-  a person.
+- Every class fights its mirror: both sides throw 75–200 moves in three minutes,
+  land 30–120 of them and finish rounds. `tests/duel.rs::every_class_fights`
+  holds it, and that nobody spends ten seconds outside the walls.
+- Every class uses its mechanic at least ten times in three minutes —
+  the Reaver over a hundred, the Blood mage least, about fifteen, because her
+  pools have to be in the right place. `every_class_uses_its_mechanic`.
+- The Dual mage stays inside her band four fifths of the time and gets high
+  enough to blink. `the_dual_mage_keeps_her_balance`.
+- Hard beats easy across every pairing, and easy still wins some.
+  `harder_is_better`. No plan takes half its time. `it_mixes_it_up`.
+- **The uneven pairings are lopsided**: the Reaver and the Elementalist win
+  nearly everything against the Blood mage and the Dual mage, and the Reaver
+  beats the Bulwark and the Champion. The Reaver jumped once she started
+  using her shadow. That is either the bot playing some classes better than
+  others, or those classes being stronger; the mirrors say it is not simply
+  broken, and which it is needs a person.
 
 ## Found by building it
 
@@ -136,11 +157,10 @@ question for [README.md](README.md) §4, not something a bot should decide.
 
 - **The creature.** In a hunt, player two sits out as the dummy always has; the
   hunter (`hunt::Hunter`) is the bot for that fight.
-- **The class mechanics as mechanics.** It throws what its buttons throw, and
-  never presses `E` for a state change: it does not throw the Bulwark's shield,
-  raise the Elementalist's stones, Rush with the Champion or place the Reaver's
-  shadow on purpose. Each is a class's whole identity and would want its own
-  small plan.
+- **The deeper tech.** No double structure jump, no throw-leap-Slam as one
+  deliberate string, no Earthbreaker leap, no Grasp onto a pool, no drinking
+  on purpose. Each is a thing a strong player of that class does and none is
+  needed to make it that class.
 - **Aerials beyond the jump-in.** It swings in the air only on the way down from
   a jump it chose.
 - **Online.** It drives player two in local play and the browser. It could

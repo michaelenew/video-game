@@ -83,7 +83,7 @@ fn main() {
             .collect(),
     };
     println!(
-        "  {} against {}, {}s each\n\n  {:14} {:14} {:>7} {:>13} {:>13} {:>11}",
+        "  {} against {}, {}s each\n\n  {:14} {:14} {:>7} {:>13} {:>13} {:>11} {:>11}",
         lv.name(),
         lv2.name(),
         frames / 60,
@@ -92,7 +92,8 @@ fn main() {
         "rounds",
         "thrown",
         "landed",
-        "dodges"
+        "dodges",
+        "mechanic"
     );
     let tracing = std::env::args().any(|a| a == "--trace");
     for (a, b) in pairs {
@@ -124,7 +125,7 @@ fn main() {
             spar([a, b], [lv, lv2], frames, seed)
         };
         println!(
-            "  {:14} {:14} {:>3}-{:<3} {:>6}/{:<6} {:>6}/{:<6} {:>5}/{:<5}",
+            "  {:14} {:14} {:>3}-{:<3} {:>6}/{:<6} {:>6}/{:<6} {:>5}/{:<5} {:>5}/{:<5}",
             a.name(),
             b.name(),
             bout.rounds[0],
@@ -135,6 +136,8 @@ fn main() {
             bout.landed[1],
             bout.dodges[0],
             bout.dodges[1],
+            bout.mechanic[0],
+            bout.mechanic[1],
         );
     }
 }
