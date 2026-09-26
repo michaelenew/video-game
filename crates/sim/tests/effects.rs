@@ -2808,11 +2808,16 @@ fn the_way_home_sweeps_floor_the_way_out_never_touched() {
 /// She casts it at her own shadow, which is at her heel, so the blades sweep
 /// out through anybody standing inside `lotus_radius` of her.
 fn lotus_takes_off_a_victim_at(feet: Fx) -> i32 {
+    // Well inside the blades' reach, and well outside her own body.
+    lotus_takes_off_a_victim_standing(sim::V3::new(Fx::from_int(3), feet, Fx::ZERO))
+}
+
+/// The same, with the victim held at `stand` -- she is at the origin facing
+/// +X, and her shadow is at her heel.
+fn lotus_takes_off_a_victim_standing(stand: sim::V3) -> i32 {
     let mut w = World::with_classes([Class::ShadowReaver, Class::Bulwark]);
     w.players[0].pos = sim::V3::ZERO;
     w.players[0].facing = sim::V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO);
-    // Well inside the blades' reach, and well outside her own body.
-    let stand = sim::V3::new(Fx::from_int(3), feet, Fx::ZERO);
     // Held there every frame, falling or not. This is a question about the
     // shape of the volume, not about how long somebody can hang in the air --
     // without the pin the airborne case simply lands before the blades arrive
@@ -2900,6 +2905,29 @@ fn the_flower_cuts_what_is_standing_in_it() {
     assert!(
         dealt > 0,
         "a fighter standing inside the flower took nothing at all"
+    );
+}
+
+#[test]
+fn only_the_first_blades_of_a_pass_cut_a_fighter() {
+    // The cap the creature needed, applied to people too: the first blades of
+    // a pass to reach somebody cut them and the rest go through, out and home
+    // alike, and home is worth a share of out.
+    //
+    // Standing on the shadow, where every blade crosses them: uncapped, that
+    // was around four hundred health from one Guillotine.
+    let blade = moves::get(Class::ShadowReaver, sim::state::SLOT_SPECIAL).damage;
+    let cap = sim::tuning::lotus_blades_a_pass() as i32;
+    let home = Fx::from_int(blade)
+        .mul(sim::tuning::lotus_return_damage())
+        .to_int();
+    let most = cap * (blade + home) + 2;
+    let dealt = lotus_takes_off_a_victim_standing(sim::V3::new(Fx::ONE.neg(), Fx::ZERO, Fx::ZERO));
+    assert!(dealt > 0, "a fighter standing on the shadow took nothing");
+    assert!(
+        dealt <= most,
+        "a fighter standing in the flower took {dealt}; {cap} blades a pass, \
+         {blade} out and {home} home, allow {most}"
     );
 }
 

@@ -5819,3 +5819,60 @@ that left the fight alone.
 test holds the marker drawn on the last windup frame to the hit that lands on
 the next. What only a person can say: whether a floor marker reads as fair
 warning or as a crutch, and whether the fill's timing gets used as a dodge cue.
+
+### 2026-09-26 — the lotus on the Ridgeback, and a stone's lid under the crosshair
+
+**Changed** Two things from one report. First, the Guillotine lotus cuts the
+creature with at most two blades a pass, out or home (`lotus_blades_a_pass`, a
+new Oven knob, 1–12). Second, and bigger: the lotus never marked the creature
+struck at all. Whether an effect's hit on the creature is spent was answered by
+"does it travel", and the lotus sits on the shadow rather than travelling, so
+every blade touching the animal cut it again on every frame. One Guillotine next
+to its head took about 1,430 health. With that fixed it takes 235; with the cap,
+62 — two blades out and two home, the same order as a fighter takes.
+
+To an attack, the top of an Elementalist stone is no longer ground. Somebody
+standing just in front of a stone put the crosshair through them and onto its
+lid, a body's height up, and a skillshot aimed at ground is raised to the middle
+of a fighter standing there: Cataclysm went 2.7 m up and over their head at point
+blank. The lid is now met exactly, like a wall. Placing still reads it as ground,
+so a stone still stacks on a stone.
+
+**Why** a report from play: "the shadow blades do way too much damage to the
+ridgeback — probably cap at 1 or 2 hits per in/out", and "it's possible to whiff
+a Cataclysm because of the height difference".
+
+**Tried first, reverted: taking stones off an attack's ray altogether**, as the
+report worded it. It fixed the whiff and broke the Bolt's kick: aiming high on a
+stone's face is how you send it up (`a_stone_goes_where_on_it_you_were_pointing`),
+and with stones off the ray the crosshair went through the face to the floor.
+
+**Verdict** kept, unplayed. `the_lotus_cuts_the_creature_a_couple_of_times_a_pass_not_twelve`
+and `an_attack_at_somebody_in_front_of_a_stone_reaches_them` pin
+them. Open: whether the cap should be one rather than two.
+
+### 2026-09-26 — the lotus cap on fighters, and the way home on the creature
+
+**Changed** The two-blades-a-pass cap applies to fighters as well as the
+creature: one knob, `lotus_blades_a_pass`, renamed from `lotus_quarry_blades`. And
+a blade coming home cuts the creature for `lotus_return_damage` (70%) of its way
+out, as it already did a fighter; it was cutting the creature at full damage.
+
+**Why** a follow-up to the entry above: the return share should hold for the
+Ridgeback too, and fighters should be capped at the same number.
+
+**Measured** one Guillotine, the victim held still:
+
+| | before | after |
+| --- | --- | --- |
+| Fighter standing on the shadow | 396 | 66 |
+| Fighter 3 m out | 13 | 13 |
+| Ridgeback, the shadow by its head | 62 | 51 |
+
+The fighter on the shadow is the big one: every blade crosses a body standing
+at the centre of the flower. Out at the petals one blade reaches them and the
+cap changes nothing, so the rim-gap counterplay is untouched.
+
+**Verdict** kept, unplayed. `only_the_first_blades_of_a_pass_cut_a_fighter` pins
+the fighter side. The lotus is now a much smaller threat to somebody standing on
+the shadow; whether it still reads as the class's big turn is a person's question.

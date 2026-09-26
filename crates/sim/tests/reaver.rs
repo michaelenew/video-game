@@ -888,6 +888,44 @@ fn the_recall_cuts_the_creature_on_its_way_home() {
     );
 }
 
+#[test]
+fn the_lotus_cuts_the_creature_a_couple_of_times_a_pass_not_twelve() {
+    // Every blade of the flower reached the Ridgeback, because it is thirteen
+    // metres long, and a Guillotine on it was twelve hits out and twelve home:
+    // around four hundred health, several times what the same move takes off
+    // a person. Only the first few blades of each pass cut it now.
+    let mut w = hunting();
+    let before = beast_health(&w);
+    let lotus = sim::moves::get(Class::ShadowReaver, SLOT_SPECIAL);
+    tap(
+        &mut w,
+        Q,
+        0,
+        lotus.whiff_cost() as u32
+            + (t::lotus_erupt() + t::lotus_hold() + t::lotus_return()) as u32
+            + 10,
+    );
+    let dealt = before - beast_health(&w);
+
+    let worst = (0..sim::monster::PARTS)
+        .map(|part| sim::monster::vulnerability(part).raw())
+        .max()
+        .expect("the creature has parts");
+    let a_blade = Fx::from_int(lotus.damage).mul(Fx::from_raw(worst)).to_int() + 1;
+    // Home is worth a share of out, to the creature as to a fighter.
+    let passes = Fx::ONE.add(t::lotus_return_damage());
+    let most = Fx::from_int(a_blade * t::lotus_blades_a_pass() as i32)
+        .mul(passes)
+        .to_int()
+        + 2;
+    assert!(dealt > 0, "the lotus never touched the creature");
+    assert!(
+        dealt <= most,
+        "a Guillotine took {dealt} off the creature; {} blades a pass allow {most}",
+        t::lotus_blades_a_pass()
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Which button is which
 // ---------------------------------------------------------------------------

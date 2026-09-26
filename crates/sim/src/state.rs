@@ -5991,25 +5991,34 @@ impl World {
                 let half_thick = t::lotus_blade_thickness();
                 for blade in 0..LOTUS_BLADES {
                     let (was, at) = effect.lotus_span(blade, effect.pos);
+                    // Coming home, a blade is worth a share of what it was
+                    // going out -- to a fighter and to the creature alike.
+                    let share = if coming_back {
+                        t::lotus_return_damage()
+                    } else {
+                        Fx::ONE
+                    };
                     for i in 0..MAX_PLAYERS {
+                        // Only the first few blades of a pass to reach a body
+                        // cut it; the rest go through. See
+                        // `tuning::lotus_blades_a_pass`.
+                        let landed = (0..LOTUS_BLADES)
+                            .filter(|&b| effect.already_hit(b, i))
+                            .count();
                         if !self.effects_reach(i, effect.owner)
                             || effect.already_hit(blade, i)
+                            || landed >= t::lotus_blades_a_pass()
                             || !self.sliced(i, was, at, radius, half_thick)
                         {
                             continue;
                         }
                         // The first blade of this pass to reach somebody
-                        // marks them, and the other eleven do not: once per
-                        // pass, so a flower out and home is two marks rather
-                        // than a full tally on its own. The mask is cleared at
-                        // the turn, which is what makes it once per *pass*.
-                        let first_this_pass = (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, i));
+                        // marks them, and the others do not: once per pass,
+                        // so a flower out and home is two marks rather than a
+                        // full tally on its own. The mask is cleared at the
+                        // turn, which is what makes it once per *pass*.
+                        let first_this_pass = landed == 0;
                         effect.take_hit(blade, i);
-                        let share = if coming_back {
-                            t::lotus_return_damage()
-                        } else {
-                            Fx::ONE
-                        };
                         let blow = Fx::from_int(effect.source().damage).mul(share).to_int();
                         let dealt = self.cut(i, effect, at, blow);
                         self.players[i].slow(t::slow_frames(), t::lotus_slow());
@@ -6017,9 +6026,19 @@ impl World {
                             shadow::mark(&mut self.players[i]);
                         }
                     }
-                    let first_this_pass =
-                        (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, QUARRY_VICTIM));
-                    if self.gore_the_creature(effect, blade, at, radius) > 0 && first_this_pass {
+                    // The same count for the creature, which is wide enough
+                    // that every blade reaches it: without it, twelve hits a
+                    // pass.
+                    let landed = (0..LOTUS_BLADES)
+                        .filter(|&b| effect.already_hit(b, QUARRY_VICTIM))
+                        .count();
+                    if landed >= t::lotus_blades_a_pass() {
+                        continue;
+                    }
+                    let first_this_pass = landed == 0;
+                    if self.gore_for_a_share(effect, blade, at, radius, share) > 0
+                        && first_this_pass
+                    {
                         if let Some(beast) = self.monster.as_mut() {
                             beast.mark();
                         }
@@ -6444,6 +6463,20 @@ impl World {
     /// Land an effect on whichever part of the creature is inside it, once per
     /// part of the effect. Returns what went in after the hide, or nought.
     fn gore_the_creature(&mut self, effect: &mut Effect, part: usize, at: V3, radius: Fx) -> i32 {
+        self.gore_for_a_share(effect, part, at, radius, Fx::ONE)
+    }
+
+    /// [`Self::gore_the_creature`] for `share` of the effect's damage: the
+    /// lotus coming home, which deals the creature the same fraction of its
+    /// way out that it deals a fighter.
+    fn gore_for_a_share(
+        &mut self,
+        effect: &mut Effect,
+        part: usize,
+        at: V3,
+        radius: Fx,
+        share: Fx,
+    ) -> i32 {
         if effect.already_hit(part, QUARRY_VICTIM) {
             return 0;
         }
@@ -6457,6 +6490,7 @@ impl World {
             return 0;
         };
         let raw = Fx::from_int(effect.damage())
+            .mul(share)
             .mul(preying(effect.class, beast.disabled()))
             .to_int();
         let dealt = beast.take_hit(struck, raw);
@@ -6467,7 +6501,7 @@ impl World {
         self.monster = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
-        if effect.kind.travels() {
+        if effect.kind.once_a_pass() {
             effect.take_hit(part, QUARRY_VICTIM);
         }
         // The creature bleeds too: under the struck part, projected to the

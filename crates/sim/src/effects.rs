@@ -268,6 +268,18 @@ impl EffectKind {
         )
     }
 
+    /// Does it cut the creature once a pass, rather than on a tick?
+    ///
+    /// Everything that [`travels`](Self::travels), and the Guillotine lotus,
+    /// which does not travel -- it sits on the shadow -- but is twelve blades
+    /// each with a way out and a way home, exactly like a thrown one. It was
+    /// left out when this was the `travels` question, so its blades never
+    /// marked the creature struck and every one of them touching it cut it
+    /// again on every frame: well over a thousand health for one Guillotine.
+    pub const fn once_a_pass(self) -> bool {
+        self.travels() || matches!(self, EffectKind::GuillotineLotus)
+    }
+
     /// Does a grab in the move table mean anything for this effect?
     ///
     /// Only the Grasp, and only as the payoff for catching somebody with every

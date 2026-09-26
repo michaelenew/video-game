@@ -217,6 +217,13 @@ into the same line. Turning past the start means the way home crosses floor the 
 never touched, which is what makes the drag through a crowd the ability's own description
 of itself rather than a second helping of the first pass.
 
+**Two blades a pass, on anybody.** Only the first blades of a pass to reach a body cut
+it, out or home, and the rest go through (`lotus_blades_a_pass`); the way home is worth
+70% of the way out, to the creature as to a fighter. The Ridgeback is wide enough that
+every blade reached it, which made a Guillotine on it twelve hits out and twelve home; a
+fighter standing on the shadow took about four hundred the same way. See
+[feel-log.md](../feel-log.md), 2026-09-26.
+
 **The blades track the shadow's live position every frame.** Recall the shadow with a
 lotus open and the twelve of them are dragged the length of the arena after it — a long
 scything smear through everything in between. That is the class's biggest turn, and it is

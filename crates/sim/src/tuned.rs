@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 346] = [
+pub const SCALARS: [i32; 347] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -354,6 +354,7 @@ pub const SCALARS: [i32; 346] = [
          4587520, // ridgeback.braking,_committed_(m/s2) = 70
         39321600, // ridgeback.launching_into_a_charge_(m/s2) = 600
              180, // ridgeback_·_mind.holds_off_when_a_hunt_begins = 180
+               2, // reaver.lotus,_blades_that_cut_one_body_a_pass = 2
 ];
 
 #[rustfmt::skip]

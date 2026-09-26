@@ -88,6 +88,16 @@ upward**: the floor, the top of a platform, the top of a stone. That is "the
 ground". The side of a platform, the side of a stone and the range sphere are
 not. Bodies do not come up: they are not on the ray.
 
+**To an attack, the top of a stone is not ground** (`aim::sight_for_attack`,
+2026-09-26). It is ground for *placing*, because it is where the next thing
+goes. For a shot it was a trap: somebody standing just in front of a stone puts
+the crosshair through them and onto its lid, a body's height up, and a skillshot
+raised half a body above *that* went over their head — Cataclysm whiffed at
+point blank. So an attack meets a stone exactly where the crosshair touches it,
+lid or side, like a wall. The stone stays on the ray rather than coming off it,
+because where on a stone you point is a mechanic: the Bolt kicks one along the
+line it was shot along.
+
 ## The four lines of effect
 
 Two are **skillshots**: they start with the raycast above and go where it lands.
@@ -133,8 +143,8 @@ landing spot. The Grasp then picks a point along that line with a channel — se
   at somebody below flew out level and over their head, and the only way to land
   one was to aim at a patch of floor well short of them. Measuring from the
   ground the ray met makes the rule true from any height.
-- **Hit terrain that is not ground, a structure, or the range sphere** — the
-  point of intersection, exactly.
+- **Hit terrain that is not ground, a structure (its top included), or the
+  range sphere** — the point of intersection, exactly.
 - Either way the ability follows a **straight line from the caster to that
   point**, and that line is its whole reach. There is no separate range number:
   the sphere is part of the raycast.
