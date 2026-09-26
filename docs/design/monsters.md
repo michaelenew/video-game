@@ -82,7 +82,7 @@ monster's move set, and it is the one the fight report measures directly.
 | Tail sweep | mid | A low arc round the hips, **to the side you are on**, out to seven or eight metres | **Jump it**. Caught, you are staggered for a hundred frames — long enough for the bite or the charge |
 | Back kick | close, behind | Both hind legs, straight back; the tail lifts and the rump drops | 20 frames — **sidestep**, and do not linger dead astern |
 | Charge | long | A straight line at **30 m/s**, twenty metres of it | 26 frames that follow you, then a dodge through it — it is too wide to walk out of and too fast to outrun |
-| Spike spray | long | The tail comes up over the back and flings spikes out along its facing, eight to twenty metres | A dodge through them, timed to their arrival. Caught, you are **rooted for two seconds** — and the charge is what it roots you for |
+| Spike spray | long | The tail comes up over the back with a crest of spikes rising along it, and flings them out along its facing, eight to twenty metres | A dodge through them, timed to their arrival. Caught, you are **rooted for two seconds** — and the charge is what it roots you for |
 | Shake | aboard | No damage; pure buck | Brace, leave, or jump the whip |
 
 ## 1a · Threat modes
@@ -153,6 +153,37 @@ stomp's windup. A charge reaches its speed in a few frames at six hundred,
 under twice a rider's grip, so a braced rider holds on. And within its braking
 distance of the wall it brakes instead: charging into the edge used to stop it
 dead in a frame, which the grip test reads as a buck.
+
+### Reading it
+
+**Added 2026-09-26**, from a report from play: the fight was better, but the
+hits were much larger than they looked, and the spray came out of nowhere.
+Both were true. The bite's hit is a circle six metres across in front of a
+head one metre wide; the slam's is ten across; the spray's volley started in
+front of the chest while the tail that throws it was behind the hips, and it
+was drawn as a few lines.
+
+The hits stayed the size they are — the fight was tuned on them — and now they
+are drawn:
+
+- **Every windup marks the floor it will hit.** The whole footprint faintly,
+  and a fill growing out of its middle that reaches the edge on the frame the
+  hit comes out. A move that travels, the charge and the spray, marks its lane
+  as well. The marker turns red while the hit is out, and goes once it has
+  caught somebody.
+- **The marker is the hit test's own answer.** `Monster::telegraph` poses the
+  animal on its first active frame and asks `Monster::hit_volume` where the
+  hit is; nothing in the renderer knows how big a bite is.
+  `what_is_drawn_through_the_windup_is_where_the_hit_lands` holds it to that.
+  It follows the windup as the windup follows you.
+- **It is drawn over the arena rather than under it**, so a platform does not
+  hide a marker whose hit reaches the fighter standing on it.
+- **The spikes are models.** Through the spray's windup, now 40 frames rather
+  than 30, a crest of them rises along the tail as it comes over the back;
+  then they fly as a volley down the lane, points first.
+
+`SHOT_MOVE=<move>` starts a hunt with the animal winding up that move at
+player one, so each marker can be captured with `./scripts/screenshot.sh`.
 
 ### How much of the fight is which
 
