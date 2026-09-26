@@ -912,15 +912,17 @@ fn the_lotus_cuts_the_creature_a_couple_of_times_a_pass_not_twelve() {
         .max()
         .expect("the creature has parts");
     let a_blade = Fx::from_int(lotus.damage).mul(Fx::from_raw(worst)).to_int() + 1;
-    let passes = Fx::ONE.add(t::lotus_return_damage().max(Fx::ONE));
-    let most = Fx::from_int(a_blade * t::lotus_quarry_blades() as i32)
+    // Home is worth a share of out, to the creature as to a fighter.
+    let passes = Fx::ONE.add(t::lotus_return_damage());
+    let most = Fx::from_int(a_blade * t::lotus_blades_a_pass() as i32)
         .mul(passes)
-        .to_int();
+        .to_int()
+        + 2;
     assert!(dealt > 0, "the lotus never touched the creature");
     assert!(
         dealt <= most,
         "a Guillotine took {dealt} off the creature; {} blades a pass allow {most}",
-        t::lotus_quarry_blades()
+        t::lotus_blades_a_pass()
     );
 }
 

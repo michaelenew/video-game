@@ -354,7 +354,7 @@ pub const SCALARS: [i32; 347] = [
          4587520, // ridgeback.braking,_committed_(m/s2) = 70
         39321600, // ridgeback.launching_into_a_charge_(m/s2) = 600
              180, // ridgeback_·_mind.holds_off_when_a_hunt_begins = 180
-               2, // reaver.lotus,_blades_that_cut_the_creature_a_pass = 2
+               2, // reaver.lotus,_blades_that_cut_one_body_a_pass = 2
 ];
 
 #[rustfmt::skip]

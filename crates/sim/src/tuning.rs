@@ -1029,14 +1029,14 @@ pub fn lotus_return_damage() -> Fx {
     Fx::ratio(oven::scalar(Scalar::LotusReturnDamage), 100)
 }
 
-/// **How many of the twelve blades can cut the creature on one pass**, out or
-/// home. A fighter is narrow enough that one or two blades reach them; the
-/// Ridgeback is wide enough that every blade did, so a Guillotine on it was
-/// twelve hits out and twelve back -- around four hundred health, several times
-/// what the same move does to a person. The first blades to arrive land and the
-/// rest pass through, and the count starts again at the turn.
-pub fn lotus_quarry_blades() -> usize {
-    oven::scalar(Scalar::LotusQuarryBlades).max(1) as usize
+/// **How many of the twelve blades can cut one body on one pass**, out or home
+/// -- a fighter or the creature, the same number. The Ridgeback is wide enough
+/// that every blade reached it, so a Guillotine on it was twelve hits out and
+/// twelve back, several times what the same move did to a person; a fighter
+/// caught near the shadow could take several too. The first blades to arrive
+/// land and the rest pass through, and the count starts again at the turn.
+pub fn lotus_blades_a_pass() -> usize {
+    oven::scalar(Scalar::LotusBladesAPass).max(1) as usize
 }
 
 /// How much speed a blade leaves whoever it catches.
