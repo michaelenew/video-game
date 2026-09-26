@@ -208,6 +208,24 @@ pub struct Move {
     /// [`mobility`]: Move::mobility
     /// [`tuning::step_lead`]: crate::tuning::step_lead
     pub step: Fx,
+    /// Frames both bodies hold still for when this move connects: the impact
+    /// freeze, which fighting games call hitstop.
+    ///
+    /// **Most of what makes a blow read as heavy is this number**, and not
+    /// the damage. A swing that passes through a body at full speed reads as
+    /// a swing through air, whatever it took off the bar; one that *stops* for
+    /// a beat on contact reads as having hit something. The length is the
+    /// weight: the sword's cuts barely catch, the hammer sticks, and the
+    /// hammer's finisher holds long enough that both players see it land.
+    ///
+    /// Both the attacker and the victim freeze, together, so it moves no
+    /// frame-advantage number -- on hit and on block are what the frame table
+    /// prints. Buttons pressed during it are kept and delivered on the first
+    /// frame after, so a freeze never eats an input. A blocked blow freezes
+    /// for [`tuning::freeze_on_block`] of this. See `state::World::advance`.
+    ///
+    /// [`tuning::freeze_on_block`]: crate::tuning::freeze_on_block
+    pub hitstop: u16,
     /// The volume this move puts in the world. See [`Shape`].
     pub shape: Shape,
     /// Which arm it comes out of. See [`crate::aim::Hand`].
@@ -388,6 +406,31 @@ impl Move {
     /// frames later has not finished the exchange.
     pub const fn on_hit(&self) -> i32 {
         self.hitstun as i32 - self.busy_after_contact()
+    }
+
+    /// How far a clean hit moves somebody standing on the floor, in metres.
+    /// Negative is a pull.
+    ///
+    /// **Knockback is a speed, and this is the distance**, which is the number
+    /// anybody playing actually sees. The speed is set once and then spent by
+    /// [`tuning::stun_decay`] a frame for as long as the stun lasts, so what
+    /// it carries somebody is a geometric series cut off at the hitstun --
+    /// worked out here the way the simulation spends it, so that the frame
+    /// table and the feel tests can say "a metre" rather than "six".
+    ///
+    /// Not the airborne distance: a body in the air goes further, by
+    /// `tuning::air_hit_knockback`, and then falls. Not a launch either.
+    ///
+    /// [`tuning::stun_decay`]: crate::tuning::stun_decay
+    pub fn shove(&self) -> Fx {
+        let decay = crate::tuning::stun_decay();
+        let mut speed = self.knockback;
+        let mut travelled = Fx::ZERO;
+        for _ in 0..self.hitstun {
+            speed = speed.mul(decay);
+            travelled = travelled.add(speed.mul(crate::DT));
+        }
+        travelled
     }
 
     /// Total commitment if it whiffs entirely.
@@ -1455,6 +1498,7 @@ pub fn get(class: Class, kind: u8) -> Move {
         repeat_mul: raw(F::RepeatMul).clamp(0, 255) as u8,
         reactivate: raw(F::Reactivate).max(0) as u16,
         step: Fx::from_raw(raw(F::Step)),
+        hitstop: raw(F::Hitstop).clamp(0, 60) as u16,
         shape: shape(class, slot as u8),
         hand: hand(class, slot as u8),
         grey_scaled: class == Class::BloodMage && blood::scythe(slot as u8),

@@ -5876,3 +5876,112 @@ cap changes nothing, so the rim-gap counterplay is untouched.
 **Verdict** kept, unplayed. `only_the_first_blades_of_a_pass_cut_a_fighter` pins
 the fighter side. The lotus is now a much smaller threat to somebody standing on
 the shadow; whether it still reads as the class's big turn is a person's question.
+
+### 2026-09-26 — weight: the impact freeze, knockback you can see, and three weapons that feel like three
+
+**The complaint**, from play: the Champion's attacks did not feel real, the hammer, spear
+and sword were not felt as different weapons — "they're all pretty fast" — and the stagger
+and the knockback were hard to detect. And more generally: the whole game would feel better
+with more knockback, especially on heavy hits, so that everything feels more powerful and
+positioning is a constant thing.
+
+**What was actually wrong**, measured rather than guessed:
+
+1. **Nothing stopped on contact.** A blow landed and both bodies carried straight on through
+   it at full speed, so a hit read as a swing through air that took some health off a bar.
+2. **Knockback barely moved anybody.** A hit sets a speed; the speed kept 86% of itself a
+   frame and stopped dead when the stun ran out. The sum of that is about a tenth of a metre
+   per unit of speed, so the sword's and hammer's openers (speed 1.5) moved people **fifteen
+   centimetres**, and the heaviest link in the Champion's chain (Whirl, 8) under a metre.
+   Every class had the same problem; the Bulwark's Slam, the biggest shove in the game, was
+   1.3 m.
+3. **The Oven had a dead knob.** `Defence → Knockback decay` was read by one test and by
+   nothing in the simulation; the slide was `Defence → Hitstun decay`. Anybody trying to
+   fix (2) from the running game would have moved the one that does nothing.
+4. **The hammer was only a little slower than the others and the least damaging of them**,
+   so it was slow and soft at once and felt like neither.
+
+**Changed**
+
+- **The impact freeze** (hitstop), a new per-move column: `Impact freeze` in each move's
+  row in the Oven, `Move::hitstop`. When a blow connects, the attacker and the victim both
+  hold exactly still — action, clocks, position — for that many frames, and the knockback
+  is spent after. Both freeze together, so **no frame-advantage number moves**. A blocked
+  blow freezes for `Offence → Impact freeze on block` (60%) of it; the creature's blows
+  freeze their victim for `Offence → Impact freeze, the creature's blows` (6f) and the
+  creature not at all; a fighter's blow on the creature freezes the fighter. Buttons
+  pressed during a freeze are kept and pressed on the first frame after it. Every move
+  outside the Champion started from its damage (2 + damage/22, 3 to 12 frames).
+- **The struck body shudders** through the freeze: `view::interp::shudder_of`, seven
+  centimetres forward and back, alternating, dying away as the freeze runs out. Only the
+  one who was hit; the attacker is frozen too and reads as solid. Presentation only — it
+  moves the drawn hips, never the body, the camera or the aim.
+- **Hitstun decay 0.86 → 0.90**, and the dead knob removed. A shove now carries about a
+  sixth of a metre per unit of speed and keeps going long enough to read as travel.
+- **Knockback, the whole roster.** Every heavy hit (a hundred damage or more) doubled; the
+  lighter ones ×1.4. Slam 11 → 22, Executioner, Cataclysm and Judgement 10 → 20, Fire
+  pillar 8 → 16, Fissure 6 → 12, Grapple 6 → 12; Bash, Slash, Air bolt, Landfall and the
+  Reaping sweep ×1.4. The thrown shield 7 → 10, the fire bolt 3 → 4. The creature ×1.35 or
+  so: bite 12, stomp 9, tail 6, charge 22, rear-and-slam 16, back kick 18. The Dual mage's
+  two autos went the *other* way, −4.4 → −3.4 and 4.8 → 3.7, so that they move people the
+  distance they did before: their spacing was tuned to the centimetre (`the light auto's
+  step back lands its tip`) and the slower decay alone had pushed the dark auto's pull into
+  the body-contact cap.
+- **The Champion, weapon by weapon.**
+
+  | | Startup, hit 1 / 2 / 3 | Freeze | Shove | Damage |
+  | --- | --- | --- | --- | --- |
+  | Sword | 6 / 5 / 9 (unchanged) | 3 / 3 / 6 | 0.4 / 0.4 / 0.8 m | 64 / 72 / 100 |
+  | Spear | 9 → 10 / 16 → 18 / 12 | 4 / 7 / 8 | 0.8 / 1.0 / 2.5 m | 60 / 80 / 115 |
+  | Hammer | 15 → 20 / 12 → 16 / 20 → 26 | 9 / 8 / 13 | 1.0 / 1.2 / 1.5 m | 70 / 85 / 140 |
+
+  Recoveries grew with the hammer's startups (22 → 26, 18 → 22, 28 → 32) so that every
+  link is still punishable on block; the hammer's second link steps 0.9 m rather than 0.5 so
+  the string keeps up with its own shove. Air hammer 22 → 24 startup; Rush stab shoves
+  2.9 m, Air hammer 1.3 m. `Knockback on an airborne target` 1.8 → 1.5, because it now
+  multiplies numbers twice the size.
+- **The frame table** prints the shove in metres and the freeze in frames beside every
+  move (`cargo run -p sim --bin frametable`), off `Move::shove`, which spends a knockback
+  the way the simulation does.
+
+**What the strings cost now**, played out in the simulation on open floor:
+
+| | Frames, start to free | Of which freeze | Damage | Where they end up |
+| --- | --- | --- | --- | --- |
+| Sword ×3 | 65 → 77 | 12 | 236 | 1.5 m away: you walked them backwards and stayed on them |
+| Spear ×3 | 101 → 120 | 19 | 244 → 255 | 4.1 m away: cleared out |
+| Hammer ×3 | 128 → 173 | 30 | 220 → 295 | in the air |
+
+**New properties**, in `crates/sim/tests/feel.rs`:
+`a_heavy_hit_moves_somebody_a_distance_you_can_see` (a hit worth a hundred that neither
+lifts nor grabs moves them at least 1.5 m) and `the_heavier_the_weapon_the_longer_it_sticks`
+(hammer > spear > sword on the freeze at every link; the sword the fastest at every link).
+The freeze's own contract is `crates/sim/tests/impact.rs`: both bodies freeze for the move's
+length and together, nothing moves during it, the knockback survives it, a block freezes
+for less, and a button pressed inside it does exactly what it does pressed on the frame
+after.
+
+**Found on the way, and worth knowing before anybody writes a knockback test**: the usual
+fixture — walk one fighter into the other — pushes the victim up against the side of a
+platform, and a body pinned to a wall slides nowhere. It looks exactly like knockback that
+does not work. `impact.rs` stages its fights out on open floor at z = 8 for that reason.
+
+**Verdict** open — nobody has played it. Things to watch:
+
+1. **Is the hammer too slow now?** A held hammer string is 173 frames, nearly three
+   seconds, and its opener is twenty frames of telegraph. It is meant to be the weapon you
+   commit to, but a string nobody finishes against a person who is moving is a weapon
+   nobody picks. If it is, take the recovery down before the startup — the startup is the
+   read.
+2. **Is thirteen frames of freeze on Earthbreaker too long?** Long freezes feel wonderful
+   on the first hit and like lag on the hundredth. And over a connection with real latency
+   a rollback that lands inside a freeze is more visible than one that lands in a slide.
+3. **Does the sword's 0.4 m shove against its 0.55 m step feel like pressure or like
+   pushing a box?** The intent is that you stay on top of them. If the string feels like
+   chasing, the shove wants to come down rather than the step go up.
+4. **Is doubling heavy knockback too much in the corners?** Nobody has a wall game yet — a
+   body shoved into a wall stops and nothing else happens. Three metres of Slam in a
+   twenty-eight metre arena will put people against walls much more often, and the absence
+   of anything happening there will start to be noticed.
+5. **Do the Reaver and the Bulwark feel their heavies differently now?** They got the same
+   freeze and knockback treatment by formula, not by hand.

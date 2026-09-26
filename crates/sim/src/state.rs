@@ -472,6 +472,27 @@ pub struct Player {
     /// to: those get different animations, and picking between them halfway
     /// through would visibly switch clips mid-flinch.
     pub stun_total: u16,
+    /// Frames left of the impact freeze: this body holds exactly still,
+    /// action and clocks and position, until it runs out.
+    ///
+    /// Set on both bodies when a blow connects -- see [`Move::hitstop`] -- so
+    /// the pair of them stop together and start together, and no frame
+    /// advantage moves. The knockback is already in `vel` when it starts and
+    /// is spent after, which is what makes a freeze followed by a slide read
+    /// as a single impact rather than as two events. In the snapshot for the
+    /// same reason every clock is: a rollback that forgot it would replay the
+    /// hit without the stop.
+    ///
+    /// The renderer reads it too, for the one thing the simulation cannot do
+    /// about weight: shake the view. See `view::camera`.
+    ///
+    /// [`Move::hitstop`]: crate::moves::Move::hitstop
+    pub frozen: u8,
+    /// Buttons pressed at any point during the freeze, delivered on the first
+    /// frame after it. A freeze is a pause in the fight, not a pause in the
+    /// player, and a click that started and finished inside one would
+    /// otherwise have been thrown away.
+    pub frozen_bits: u16,
     /// How far the camera's framing has swung over to the **airborne** one:
     /// zero with their feet on something, one well above it.
     ///
@@ -985,6 +1006,8 @@ impl Default for Player {
             parried: 0,
             crouched_for: 0,
             stun_total: 0,
+            frozen: 0,
+            frozen_bits: 0,
             aloft: Fx::ZERO,
             mount: monster::NO_PART,
             local: V3::ZERO,
@@ -1200,8 +1223,15 @@ impl World {
             if p.aboard() {
                 p.carry_yaw = crate::math::wrap_turns(p.carry_yaw.add(spin));
             }
-            wire[i].turned(p.carry_yaw)
+            thaw(p, wire[i].turned(p.carry_yaw))
         });
+        // Who is held in an impact freeze this frame. Worked out once, before
+        // anybody moves, because three separate passes below have to agree
+        // about it: the step, what a move does on its first active frame, and
+        // the beams. A body that is frozen on the first frame of its hit would
+        // otherwise fire its leap or its beam again on every frame of the
+        // freeze, since nothing about its action moved.
+        let frozen: [bool; MAX_PLAYERS] = std::array::from_fn(|i| self.players[i].frozen > 0);
 
         // Everything the aiming ray can meet, as it stood at the top of the
         // frame. Copied rather than borrowed because the loop below takes each
@@ -1219,6 +1249,12 @@ impl World {
         });
         let frame = self.frame;
         for (i, (p, input)) in self.players.iter_mut().zip(inputs).enumerate() {
+            // Held still: no step, no clocks, not a centimetre of travel. The
+            // knockback waiting in `vel` is spent when it ends.
+            if frozen[i] {
+                p.frozen -= 1;
+                continue;
+            }
             let scene = Scene {
                 stones: &field,
                 players: &seen,
@@ -1243,6 +1279,9 @@ impl World {
         // What a move does *as it comes out*, on its first active frame: the
         // leap of a leaping move, and whatever it leaves standing in the world.
         for (i, input) in inputs.into_iter().enumerate() {
+            if frozen[i] {
+                continue;
+            }
             let p = self.players[i];
             let Action::Active { kind, left } = p.action else {
                 continue;
@@ -1358,7 +1397,10 @@ impl World {
         // instant resolution, and never both at once for one fighter -- reset
         // once, here, rather than in each, so neither can clobber the other's
         // answer on the frame it is the one actually firing.
-        for i in 0..MAX_PLAYERS {
+        for (i, &held) in frozen.iter().enumerate() {
+            if held {
+                continue;
+            }
             self.players[i].beam_reach = Fx::ZERO;
             self.fire_the_beam(i);
             self.fire_the_cataclysm(i);
@@ -1478,6 +1520,15 @@ impl World {
                     };
                     self.players[attacker].stun_total = t::parry_stagger();
                     self.players[defender].parried = PARRY_FLOURISH;
+                }
+                // Both bodies stop, together. A parry is the cleanest contact
+                // in the game and freezes as long as a hit; a block is a blow
+                // that arrived and was taken, and freezes for less.
+                if let Some(kind) = snapshot[attacker].action.attack_kind() {
+                    let m = moves::get(snapshot[attacker].class, kind);
+                    let hold = impact_freeze(m.hitstop, hit.blocked && !hit.parried);
+                    freeze(&mut self.players[attacker], hold);
+                    freeze(&mut self.players[defender], hold);
                 }
             }
         }
@@ -1764,6 +1815,8 @@ impl World {
             h.write_u32(p.parried as u32);
             h.write_u32(p.crouched_for as u32);
             h.write_u32(p.stun_total as u32);
+            h.write_u32(p.frozen as u32);
+            h.write_u32(p.frozen_bits as u32);
             h.write_i32(p.aloft.raw());
             h.write_u32(p.action.tag());
             h.write_u32(p.action.frames_left() as u32);
@@ -2504,6 +2557,38 @@ pub(crate) fn guard_against(defender: &Player, from: V3, unblockable: bool) -> (
     let parried =
         facing_it && matches!(defender.action, Action::Guard { held } if held < t::parry_window());
     (guarding, parried)
+}
+
+/// How long a blow of `hitstop` frames freezes for, blocked or not.
+fn impact_freeze(hitstop: u16, blocked: bool) -> u16 {
+    if blocked {
+        (hitstop as u32 * t::freeze_on_block() as u32 / 100) as u16
+    } else {
+        hitstop
+    }
+}
+
+/// Hold a body still for `frames`, or for whatever freeze it is already in if
+/// that is longer. Two blows landing on one frame are one impact, not two in
+/// a row.
+fn freeze(p: &mut Player, frames: u16) {
+    p.frozen = p.frozen.max(frames.min(u8::MAX as u16) as u8);
+}
+
+/// What a fighter's input is this frame, given the freeze.
+///
+/// Held: every button pressed is remembered and the input goes on as it came
+/// in, for whoever reads it -- nothing does, except the one step that is
+/// skipped. Out of it: whatever was remembered is pressed on this frame, once.
+/// Buttons only; where the stick points is always where it points now.
+fn thaw(p: &mut Player, input: Input) -> Input {
+    if p.frozen > 0 {
+        p.frozen_bits |= input.bits & Input::PRESSES;
+        return input;
+    }
+    let kept = p.frozen_bits;
+    p.frozen_bits = 0;
+    input.with(kept)
 }
 
 pub(crate) fn apply_hit(defender: &mut Player, hit: Hit) {
@@ -7690,6 +7775,12 @@ impl World {
                 if !parried && !guarding {
                     fall_off(&mut self.players[i], &beast);
                 }
+                // The victim's half of an impact freeze. The animal does not
+                // stop for one fighter; see `tuning::creature_freeze`.
+                freeze(
+                    &mut self.players[i],
+                    impact_freeze(t::creature_freeze(), guarding && !parried),
+                );
                 landed = true;
             }
             if landed {
@@ -7759,6 +7850,10 @@ impl World {
             if dealt > 0 {
                 dual::landed_a_hit(&mut self.players[i]);
             }
+            // Only the fighter freezes: a hammer that sticks in a leg for a
+            // beat reads as having hit thirteen metres of animal, and the
+            // animal stopping for it would read as the opposite.
+            freeze(&mut self.players[i], impact_freeze(m.hitstop, false));
         }
 
         // Nothing to stand on any more.

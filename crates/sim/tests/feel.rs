@@ -973,13 +973,13 @@ fn one_press_can_never_lock_more_than_one_move() {
 
 /// How far a knockback of `speed` actually carries somebody, in metres.
 ///
-/// The speed is applied once and decays by `knockback_decay` a frame, so what
+/// The speed is applied once and decays by `stun_decay` a frame, so what
 /// they travel is `speed * dt * (1 + d + d^2 + ...)` -- a geometric series, and
 /// nowhere near the speed itself. Worked out rather than measured because the
 /// thing being pinned is the relationship, and a simulated hit would drag in
 /// hitstun, the floor and whoever is standing where.
 fn shoved(speed: Fx) -> f32 {
-    let decay = t::knockback_decay().to_f32_for_render();
+    let decay = t::stun_decay().to_f32_for_render();
     speed.to_f32_for_render() * sim::DT.to_f32_for_render() / (1.0 - decay).max(1e-3)
 }
 
@@ -1074,6 +1074,76 @@ fn the_first_two_hits_leave_somebody_standing_where_the_third_can_reach_them() {
             );
         }
     }
+}
+
+#[test]
+fn a_heavy_hit_moves_somebody_a_distance_you_can_see() {
+    // **Knockback is a positioning tool only if somebody can see it happen.**
+    // Every hit worth a hundred or more, that neither lifts them nor holds on
+    // to them, has to put a metre and a half of floor between the two of you --
+    // about three body widths, which is the difference between "still in
+    // reach" and "somewhere else". Before 2026-09-26 the biggest shove in the
+    // Champion's kit was under a metre and a sword cut moved people fifteen
+    // centimetres, which is why the complaint was that knockback could not be
+    // seen at all.
+    //
+    // Measured as the distance, not the speed: see `Move::shove`.
+    for (class, m) in every_move().filter(|(_, m)| {
+        m.damage >= 100 && m.knockback.raw() > 0 && m.launch.raw() == 0 && m.grabs == 0
+    }) {
+        let travel = m.shove().to_f32_for_render();
+        assert!(
+            travel >= 1.5,
+            "{class} {}: deals {} and moves them {travel:.2} m. A heavy hit that leaves \
+             them standing where they were reads as a light one",
+            m.name,
+            m.damage
+        );
+    }
+}
+
+#[test]
+fn the_heavier_the_weapon_the_longer_it_sticks() {
+    // **Weight is the impact freeze, not the damage.** The three weapons are
+    // told apart by how long a blow holds both bodies still when it lands, and
+    // the order is the order of their mass: the hammer sticks, the spear
+    // catches, the sword barely stops. Link by link, so a string of one weapon
+    // feels like that weapon all the way through.
+    //
+    // And the sword is the fastest thing on every link, which is the other
+    // half of the same sentence: what the sword gives up in weight it takes
+    // back in time.
+    let [sword, hammer, spear] = [0, 1, 2].map(|w| {
+        chains()
+            .nth(w)
+            .map(|(_, links)| links)
+            .expect("three weapons")
+    });
+    for link in 0..3 {
+        let (s, h, p) = (&sword[link], &hammer[link], &spear[link]);
+        assert!(
+            h.hitstop > p.hitstop && p.hitstop > s.hitstop,
+            "link {}: the hammer's {} freezes {}f, the spear's {} {}f and the sword's {} {}f \
+             -- the heaviest weapon has to stick the longest",
+            link + 1,
+            h.name,
+            h.hitstop,
+            p.name,
+            p.hitstop,
+            s.name,
+            s.hitstop
+        );
+        assert!(
+            s.startup < h.startup && s.startup < p.startup,
+            "link {}: the sword's {} is not the fastest thing on it",
+            link + 1,
+            s.name
+        );
+    }
+    assert!(
+        hammer[0].startup > spear[0].startup,
+        "the hammer opens faster than the spear, so nothing about swinging it is heavy"
+    );
 }
 
 #[test]

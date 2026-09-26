@@ -1090,6 +1090,14 @@ fn right_click_does_not_cut_a_stun_short() {
             break;
         }
     }
+    // Out of the impact freeze first: a stun does not run while both bodies
+    // are held still, so the frame after the hit is not the frame it starts.
+    for _ in 0..60 {
+        if w.players[0].frozen == 0 {
+            break;
+        }
+        w.advance([Input::default(), Input::default()]);
+    }
     let Action::HitStun { left } = w.players[0].action else {
         panic!("the dummy never managed to hit her");
     };

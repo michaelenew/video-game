@@ -91,6 +91,36 @@ pub struct PlayerView {
     /// Which force she is carrying, for whatever is drawn in its colour. Only
     /// the Dual mage has one.
     pub force: Option<sim::class::Force>,
+    /// How far the body is shaken off its mark this frame, in metres, forward
+    /// and back: the **shudder** of a body that has just been struck, for the
+    /// length of the impact freeze.
+    ///
+    /// The freeze holds both bodies still, and a still body is half of what
+    /// reads as a hit; the other half is that the one who was struck is seen
+    /// to take it. Alternating every frame and dying away as the freeze runs
+    /// out, off `sim::state::Player::frozen` -- a pure function of the
+    /// snapshot, so a rollback redraws the same shake. Presentation only: it
+    /// moves the drawn hips, never the body, the camera or the aim.
+    pub shudder: f32,
+}
+
+/// How far a struck body is thrown off its mark at the start of the freeze.
+/// Centimetres: enough to see, not enough to look like movement.
+const SHUDDER: f32 = 0.07;
+/// The freeze length over which the shudder is at full size. A freeze shorter
+/// than this shakes less, which is right: a sword cut barely catches.
+const SHUDDER_FULL: f32 = 8.0;
+
+/// The shudder of a body on this snapshot. See [`PlayerView::shudder`].
+///
+/// Only a body that was *struck* shakes -- stunned, frozen -- and not the one
+/// that did the striking, which is frozen too and has to read as solid.
+pub fn shudder_of(p: &sim::state::Player) -> f32 {
+    if p.frozen == 0 || !p.action.stunned() {
+        return 0.0;
+    }
+    let size = SHUDDER * (p.frozen as f32 / SHUDDER_FULL).min(1.0);
+    if p.frozen % 2 == 0 { size } else { -size }
 }
 
 /// The Reaver's second body, ready to draw.
@@ -235,6 +265,7 @@ fn view_of(p: &sim::state::Player, c: &sim::state::Player, a: f32) -> PlayerView
             sim::class::Mechanic::Meter { colour, .. } => Some(colour),
             _ => None,
         },
+        shudder: shudder_of(c),
     }
 }
 

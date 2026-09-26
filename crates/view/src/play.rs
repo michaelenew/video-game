@@ -123,6 +123,10 @@ pub struct PoseInput {
     /// deterministic -- and unlike the saturating counters it never stops
     /// advancing, which is what an idle that loops for twenty minutes needs.
     pub sim_frame: u32,
+    /// How far a struck body is shaken off its mark, forward and back. See
+    /// `interp::PlayerView::shudder`; added to the hips on top of whatever
+    /// the clip does, so it shakes the body without choosing its pose.
+    pub shudder: f32,
     /// Show the skeleton at rest instead of animating it. The toggle exists so
     /// that "is this the clip or is this the rig?" can be answered in one
     /// keypress while looking at the thing.
@@ -153,6 +157,7 @@ impl PoseInput {
             health: view.health,
             round_left: frame.round_left,
             sim_frame: frame.sim_frame,
+            shudder: view.shudder,
             bind_pose: false,
         }
     }
@@ -420,7 +425,18 @@ pub fn pose_for(input: PoseInput) -> Pose {
     if input.bind_pose {
         return Pose::rest();
     }
+    let mut pose = chosen(input);
+    // The shudder of a body that has just been struck, over whatever the clip
+    // says. Forward and back along the body, which is the line the blow came
+    // in on for anybody who was facing it.
+    if input.shudder != 0.0 {
+        pose.channels[2] += input.shudder;
+    }
+    pose
+}
 
+/// The pose the clips say, before anything is laid over it.
+fn chosen(input: PoseInput) -> Pose {
     // Dead overrides everything. A body that keeps guarding after the round is
     // over reads as a bug even when every other frame is right.
     if input.health <= 0 {
