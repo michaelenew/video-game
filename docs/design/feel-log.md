@@ -5819,3 +5819,36 @@ that left the fight alone.
 test holds the marker drawn on the last windup frame to the hit that lands on
 the next. What only a person can say: whether a floor marker reads as fair
 warning or as a crutch, and whether the fill's timing gets used as a dodge cue.
+
+### 2026-09-26 — the lotus on the Ridgeback, and a stone's lid under the crosshair
+
+**Changed** Two things from one report. First, the Guillotine lotus cuts the
+creature with at most two blades a pass, out or home (`lotus_quarry_blades`, a
+new Oven knob, 1–12). Second, and bigger: the lotus never marked the creature
+struck at all. Whether an effect's hit on the creature is spent was answered by
+"does it travel", and the lotus sits on the shadow rather than travelling, so
+every blade touching the animal cut it again on every frame. One Guillotine next
+to its head took about 1,430 health. With that fixed it takes 235; with the cap,
+62 — two blades out and two home, the same order as a fighter takes.
+
+To an attack, the top of an Elementalist stone is no longer ground. Somebody
+standing just in front of a stone put the crosshair through them and onto its
+lid, a body's height up, and a skillshot aimed at ground is raised to the middle
+of a fighter standing there: Cataclysm went 2.7 m up and over their head at point
+blank. The lid is now met exactly, like a wall. Placing still reads it as ground,
+so a stone still stacks on a stone.
+
+**Why** a report from play: "the shadow blades do way too much damage to the
+ridgeback — probably cap at 1 or 2 hits per in/out", and "it's possible to whiff
+a Cataclysm because of the height difference".
+
+**Tried first, reverted: taking stones off an attack's ray altogether**, as the
+report worded it. It fixed the whiff and broke the Bolt's kick: aiming high on a
+stone's face is how you send it up (`a_stone_goes_where_on_it_you_were_pointing`),
+and with stones off the ray the crosshair went through the face to the floor.
+
+**Verdict** kept, unplayed. `the_lotus_cuts_the_creature_a_couple_of_times_a_pass_not_twelve`
+and `an_attack_at_somebody_in_front_of_a_stone_reaches_them` pin
+them. Open: whether the cap should be one rather than two, and whether it should
+apply to fighters too. The blades coming home also still cut the creature at full
+damage rather than the 70% a fighter takes; untouched here.

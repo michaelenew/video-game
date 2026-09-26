@@ -623,7 +623,7 @@ fn a_skillshot_ends_on_whatever_the_crosshair_is_on() {
         let look = Input::looking_at(0, 0, down(step));
         let (seen, path) = with_scene(&w, |scene| {
             (
-                aim::sight(0, look, Fx::from_int(14), scene),
+                aim::sight_for_attack(0, look, Fx::from_int(14), scene),
                 aim::skillshot_path(0, look, Fx::from_int(14), scene),
             )
         });
@@ -640,6 +640,58 @@ fn a_skillshot_ends_on_whatever_the_crosshair_is_on() {
         );
     }
     assert!(checked > 0, "the sweep never met anything solid at all");
+}
+
+#[test]
+fn an_attack_at_somebody_in_front_of_a_stone_reaches_them() {
+    // To an attack, a stone's lid stopped being ground on 2026-09-26. Somebody
+    // standing just in front of one put the crosshair through them and onto
+    // its lid, a body's height up; the shot was raised to the middle of a
+    // fighter standing on *that*, and went over their head. Cataclysm whiffed
+    // that way at point blank. Now the lid is met exactly, like a wall.
+    //
+    // Placing still reads the lid as ground, because the top of a stone is
+    // where the next one goes.
+    let mut w = elementalist();
+    let theirs = V3::new(Fx::from_int(-1), Fx::ZERO, Fx::from_int(8));
+    w.players[1].pos = theirs;
+    stone_at(&mut w, V3::new(Fx::ZERO, Fx::ZERO, Fx::from_int(8)));
+
+    let mut crossed = 0;
+    for step in 0..40 {
+        let look = Input::looking_at(0, 0, down(step));
+        let (placing, path, over) = with_scene(&w, |scene| {
+            let path = aim::skillshot_path(0, look, Fx::from_int(14), scene);
+            (
+                aim::sight(0, look, Fx::from_int(14), scene),
+                path,
+                aim::first_along(
+                    path,
+                    Fx::ZERO,
+                    0,
+                    scene,
+                    aim::Targets::none().fighters(true).stones(),
+                ),
+            )
+        });
+        // Only the looks where the crosshair was on the stone's lid, which
+        // is where it used to go wrong.
+        if placing.met != aim::Met::Ground || placing.at.y.raw() == 0 {
+            continue;
+        }
+        crossed += 1;
+        assert!(
+            matches!(over, Some(aim::Contact::Fighter { index: 1, .. })),
+            "aiming at the fighter in front of the stone, the shot ended at \
+             {:?} and met {:?}",
+            path.to,
+            over
+        );
+    }
+    assert!(
+        crossed > 0,
+        "the sweep never put the crosshair on the stone's lid"
+    );
 }
 
 #[test]

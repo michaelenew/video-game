@@ -11,7 +11,9 @@
 //!
 //! That ray meets **terrain, structures, and the ability's own max-range
 //! sphere** — one list, a property of the world rather than of the ability
-//! doing the aiming. Whatever it reaches first wins.
+//! doing the aiming. Whatever it reaches first wins. **One difference:** to an
+//! *attack*, the top of a structure is not ground, because it is a place to put
+//! things rather than a floor to shoot across — see [`sight_for_attack`].
 //!
 //! **Bodies are not on that list.** Neither other fighters nor the creature.
 //! The ray is answering *which place is the player pointing at*, and a body is
@@ -45,8 +47,9 @@
 //! - Hit the ground, and the target is that spot raised straight up to the
 //!   height the ability leaves the caster at. The shot flies level over the
 //!   place the crosshair is on rather than diving into the dirt.
-//! - Hit anything else — terrain that is not ground, a structure, or the
-//!   max-range sphere — and the target is the point of intersection exactly.
+//! - Hit anything else — terrain that is not ground, a structure (its top
+//!   included), or the max-range sphere — and the target is the point of
+//!   intersection exactly.
 //! - Either way the ability travels in a straight line from the caster to that
 //!   point, and that line is its whole reach.
 //!
@@ -373,6 +376,29 @@ pub struct Sighted {
 /// were never the same line and a body the camera could not see was always
 /// still a body the shot went through.
 pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
+    sight_over(who, look, reach, scene, true)
+}
+
+/// [`sight`] for an **attack**: the same ray, on which a stone is never
+/// ground -- its lid is as solid as its side.
+///
+/// The top of a stone *is* ground for placing, because it is where the next
+/// thing goes, so [`grounded_path`] keeps it. For a shot it is not. A skillshot
+/// that meets ground is raised to the middle of a fighter standing there, and
+/// somebody standing just in front of a stone puts the crosshair through them
+/// and onto its lid, a body's height up: raised another half a body from there,
+/// the shot went clean over their head. Cataclysm whiffed that way at point
+/// blank. So a stone is met exactly where the crosshair touches it, like a wall.
+///
+/// It stays on the ray rather than coming off it, because where on a stone you
+/// point is a mechanic: the Bolt kicks one along the line it was shot along, so
+/// aiming high on the face sends it up (`tests/beam.rs`).
+pub fn sight_for_attack(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
+    sight_over(who, look, reach, scene, false)
+}
+
+/// The raycast itself; `lids` is whether the top of a stone counts as ground.
+fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> Sighted {
     let caster = &scene.players[who];
     let eye = crate::camera::eye(caster.pos, look, caster.aloft);
     let dir = look.look_dir();
@@ -409,7 +435,11 @@ pub fn sight(who: usize, look: Input, reach: Fx, scene: &Scene) -> Sighted {
     }
     for stone in scene.stones.iter().flatten() {
         let hit = stone_hit(eye, dir, stone);
-        keep(hit, facing(hit, eye, dir, stone.top()));
+        let met = match lids {
+            true => facing(hit, eye, dir, stone.top()),
+            false => Met::Solid,
+        };
+        keep(hit, met);
     }
     // **Bodies are not on this list, and that is deliberate.** See the note on
     // this function: the ray is asking which *place* the player is pointing at,
@@ -492,15 +522,16 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
 /// on the sphere and a shot that meets something ends on that.
 pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path {
     let from = origin(scene.players[who].pos);
-    let seen = sight(who, look, reach, scene);
+    let seen = sight_for_attack(who, look, reach, scene);
     let to = match seen.met {
         // Aimed at the floor, which is never really the target: raised to the
         // middle of a fighter standing there, so it goes through whoever is on
         // that spot instead of burying itself in the dirt. See
         // [`standing_middle`].
         Met::Ground => standing_middle(seen.at),
-        // A wall, the side of a stone, the edge of the range: the point
-        // itself, because that is the thing the player is looking at.
+        // A wall, a stone -- lid or side -- the edge of the range: the point
+        // itself, because that is the thing the player is looking at. See
+        // [`sight_for_attack`] for why a stone's lid is not ground here.
         Met::Solid | Met::Reach => seen.at,
     };
     Path { from, to }

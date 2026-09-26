@@ -6017,8 +6017,17 @@ impl World {
                             shadow::mark(&mut self.players[i]);
                         }
                     }
-                    let first_this_pass =
-                        (0..LOTUS_BLADES).all(|b| !effect.already_hit(b, QUARRY_VICTIM));
+                    // The creature is wide enough that every blade reaches
+                    // it, which made this twelve hits a pass where a fighter
+                    // takes one or two. So only the first few to arrive cut
+                    // it; the rest go through. See `tuning::lotus_quarry_blades`.
+                    let landed = (0..LOTUS_BLADES)
+                        .filter(|&b| effect.already_hit(b, QUARRY_VICTIM))
+                        .count();
+                    if landed >= t::lotus_quarry_blades() {
+                        continue;
+                    }
+                    let first_this_pass = landed == 0;
                     if self.gore_the_creature(effect, blade, at, radius) > 0 && first_this_pass {
                         if let Some(beast) = self.monster.as_mut() {
                             beast.mark();
@@ -6467,7 +6476,7 @@ impl World {
         self.monster = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
-        if effect.kind.travels() {
+        if effect.kind.once_a_pass() {
             effect.take_hit(part, QUARRY_VICTIM);
         }
         // The creature bleeds too: under the struck part, projected to the

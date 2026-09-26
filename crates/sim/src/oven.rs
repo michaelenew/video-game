@@ -606,6 +606,7 @@ scalars! {
     MonsterBrake,     "Ridgeback","Braking, committed (m/s2)",                Fixed,  fx(1,1), fx(200,1);
     MonsterLaunch,    "Ridgeback","Launching into a charge (m/s2)",           Fixed,  fx(10,1), fx(2000,1);
     HuntGrace,        "Ridgeback · mind","Holds off when a hunt begins",   Frames, 0,        600;
+    LotusQuarryBlades,"Reaver",   "Lotus, blades that cut the creature a pass", Int, 1,      12;
 }
 
 // ---------------------------------------------------------------------------
