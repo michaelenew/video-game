@@ -5795,3 +5795,27 @@ out. A tornado torn loose by Cataclysm does not count as a pillar.
 **Verdict** kept, unplayed. `one_fire_pillar_at_a_time_and_a_second_press_does_nothing`
 pins it. Whether she wants the tornado counted too, so that a pillar thrown with
 Cataclysm is still her one pillar, is open.
+
+### 2026-09-26 — reading the Ridgeback: floor markers and real spikes
+
+**Changed** Every windup marks the floor its hit will cover: the footprint
+faintly, a fill growing from the middle that reaches the edge as the hit lands,
+and a lane for the charge and the spray. The markers are drawn over the arena so
+a platform cannot hide them. The spray's spikes are models: a crest rises along
+the tail through the windup, then a volley flies down the lane. The spray's
+windup is 40 frames rather than 30.
+
+**Why** a report from play: the fight was better, but the hits were much larger
+than they looked, and the spikes needed a windup and more apparent models.
+Measured, the bite's hit is a circle six metres across in front of a one-metre
+head, the slam's ten metres across, and the spray's volley began in front of the
+chest while the tail that throws it was behind the hips.
+
+**Not done: shrinking the hits to the body.** The fight was tuned on these
+volumes, and the report said the fight was better. Drawing them was the change
+that left the fight alone.
+
+**Verdict** kept, unplayed. The marker's shape comes from the hit test, and a
+test holds the marker drawn on the last windup frame to the hit that lands on
+the next. What only a person can say: whether a floor marker reads as fair
+warning or as a crutch, and whether the fill's timing gets used as a dodge cue.

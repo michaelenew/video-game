@@ -16,7 +16,15 @@
 //! They are the only places on the animal worth hitting, and a player should be
 //! able to see that from across the arena without being told.
 
+use bevy::pbr::{
+    ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
+    NotShadowCaster,
+};
 use bevy::prelude::*;
+use bevy::render::mesh::MeshVertexBufferLayoutRef;
+use bevy::render::render_resource::{
+    AsBindGroup, CompareFunction, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+};
 use sim::beast;
 use sim::monster::{self, Doing, Monster};
 
@@ -91,6 +99,15 @@ pub fn setup(
         ));
     }
     commands.insert_resource(hide);
+}
+
+pub fn setup_signs(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut marks: ResMut<Assets<MarkMaterial>>,
+) {
+    make_signs(&mut commands, &mut meshes, &mut materials, &mut marks);
 }
 
 /// Put every part where the simulation says it is.
@@ -303,50 +320,319 @@ pub fn overlay(show: Res<crate::debug::ShowDebug>, sim: Res<crate::Sim>, mut giz
     gizmos.line(nose, nose + ahead * length, intent_colour(&beast));
 }
 
-/// **The spikes in flight**, always drawn, not only with the overlay on.
-///
-/// The spray is the one move whose hit leaves the animal, so the animal's pose
-/// cannot show where it is: without this the only thing a fighter at range
-/// sees is a tail flicking, and then being rooted. Drawn from the simulation's
-/// own hit volume, for the rule the overlay above follows -- a picture of a
-/// hit that is not the hit is worse than none. A spread of streaks across the
-/// volume's width at the height it catches you, each pointing the way the
-/// volume is going; once it has caught somebody it stops being drawn, because
-/// the simulation has stopped testing it.
-pub fn spikes(sim: Res<crate::Sim>, mut gizmos: Gizmos) {
-    let Some(beast) = sim.cur.monster else {
-        return;
-    };
-    let Some(kind) = beast.doing.attacking() else {
-        return;
-    };
-    if monster::attack(kind).travel.raw() <= 0 || beast.hit_used {
-        return;
-    }
-    let Some((anchor, radius, low, high)) = beast.hit_volume() else {
-        return;
-    };
-    let rig = beast.rig();
-    let ahead = fx3(rig.dir_to_world(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)));
-    let across = Vec3::new(-ahead.z, 0.0, ahead.x);
-    let centre = fx3(anchor);
-    let r = radius.to_f32_for_render();
-    let (lo, hi) = (low.to_f32_for_render(), high.to_f32_for_render());
-    for i in 0..SPIKES {
-        // Spread across the width and up the height band, staggered along
-        // the flight so they read as a volley rather than a wall.
-        let u = i as f32 / (SPIKES - 1) as f32;
-        let side = (u * 2.0 - 1.0) * r;
-        let up = lo + (hi - lo) * (0.25 + 0.5 * ((i * 7 % SPIKES) as f32 / SPIKES as f32));
-        let back = ((i * 3 % 5) as f32) * 0.25;
-        let tip = Vec3::new(centre.x, up, centre.z) + across * side - ahead * back;
-        gizmos.line(tip - ahead * SPIKE_LENGTH, tip, SPIKE);
+// ---------------------------------------------------------------------------
+// Reading it: what is coming, drawn on the floor, and the spikes
+// ---------------------------------------------------------------------------
+
+/// One piece of the floor marker under a windup. See [`signs`].
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+pub enum Mark {
+    /// The whole footprint of the hit: where it lands.
+    Area,
+    /// The far end of a lane, for a hit that travels.
+    AreaEnd,
+    /// The ground a travelling hit crosses.
+    Lane,
+    /// Growing out of the middle through the windup. Full is now.
+    Fill,
+    /// The same, down the lane.
+    FillLane,
+}
+
+/// One of the spray's spikes: bristling along the tail through the windup,
+/// then flying as a volley.
+#[derive(Component)]
+pub struct Spike(pub usize);
+
+/// **Drawn over the arena, not under it.** A marker lies on the floor, and a
+/// raised platform between it and the camera hid it -- while the hit it marks
+/// reaches a fighter standing on top of that platform just the same. So the
+/// markers skip the depth test: they read as projected onto whatever you are
+/// standing on. They are faint and see-through, so passing over a body or a
+/// leg tints it rather than hiding it.
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct OnTop {}
+
+impl MaterialExtension for OnTop {
+    fn specialize(
+        _pipeline: &MaterialExtensionPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialExtensionKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        if let Some(depth) = descriptor.depth_stencil.as_mut() {
+            depth.depth_compare = CompareFunction::Always;
+            depth.depth_write_enabled = false;
+        }
+        Ok(())
     }
 }
 
-const SPIKES: usize = 9;
-const SPIKE_LENGTH: f32 = 0.9;
-const SPIKE: Color = Color::srgb(0.93, 0.86, 0.70);
+/// A marker's material: a flat tint that ignores depth.
+pub type MarkMaterial = ExtendedMaterial<StandardMaterial, OnTop>;
+
+/// Materials for the signs, made once and swapped between rather than edited.
+#[derive(Resource)]
+pub struct Signs {
+    area: Handle<MarkMaterial>,
+    fill: Handle<MarkMaterial>,
+    live: Handle<MarkMaterial>,
+}
+
+fn make_signs(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    marks: &mut Assets<MarkMaterial>,
+) {
+    let mut tint = |c: Color| {
+        marks.add(MarkMaterial {
+            base: StandardMaterial {
+                base_color: c,
+                unlit: true,
+                alpha_mode: AlphaMode::Blend,
+                cull_mode: None,
+                ..default()
+            },
+            extension: OnTop {},
+        })
+    };
+    let signs = Signs {
+        area: tint(Color::srgba(1.0, 0.72, 0.22, 0.16)),
+        fill: tint(Color::srgba(1.0, 0.55, 0.12, 0.42)),
+        live: tint(Color::srgba(1.0, 0.16, 0.18, 0.55)),
+    };
+    // Both shapes lie flat on the floor: built in the XY plane, turned down.
+    let disc = meshes.add(Circle::new(1.0));
+    let strip = meshes.add(Rectangle::new(1.0, 1.0));
+    for (mark, mesh, material) in [
+        (Mark::Area, &disc, &signs.area),
+        (Mark::AreaEnd, &disc, &signs.area),
+        (Mark::Lane, &strip, &signs.area),
+        (Mark::Fill, &disc, &signs.fill),
+        (Mark::FillLane, &strip, &signs.fill),
+    ] {
+        commands.spawn((
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            NotShadowCaster,
+            mark,
+        ));
+    }
+    let spike = meshes.add(Cone::new(SPIKE_RADIUS, 1.0));
+    let bone = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.93, 0.86, 0.70),
+        emissive: LinearRgba::rgb(0.9, 0.45, 0.12),
+        perceptual_roughness: 0.5,
+        ..default()
+    });
+    for i in 0..SPIKES {
+        commands.spawn((
+            Mesh3d(spike.clone()),
+            MeshMaterial3d(bone.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            Spike(i),
+        ));
+    }
+    commands.insert_resource(signs);
+}
+
+/// **What is coming, and where it will land**, always drawn.
+///
+/// Through a windup, the floor under the hit it is winding up: the whole
+/// footprint faintly, and a fill growing out of the middle that reaches the
+/// edge on the frame the hit comes out. A move that travels -- the charge, the
+/// spray -- draws the lane it will cross as well. While the hit is out the
+/// marker turns red, and it is gone once it has caught somebody, because the
+/// simulation has stopped testing it.
+///
+/// Every shape comes from `Monster::telegraph`, which asks the hit test's own
+/// volume where the hit will be; nothing here knows how big a bite is. That is
+/// the overlay's rule applied to what a player sees: a picture of a hit that
+/// is not the hit is worse than no picture. The hits are far bigger than the
+/// parts that throw them -- the bite's is six metres across behind a head one
+/// metre wide -- and before this nothing on the screen said so.
+pub fn signs(
+    sim: Res<crate::Sim>,
+    signs: Res<Signs>,
+    mut marks: Query<
+        (
+            &Mark,
+            &mut Transform,
+            &mut Visibility,
+            &mut MeshMaterial3d<MarkMaterial>,
+        ),
+        Without<Spike>,
+    >,
+    mut spikes: Query<(&Spike, &mut Transform, &mut Visibility), Without<Mark>>,
+) {
+    let beast = sim.cur.monster.filter(|b| b.alive());
+    let coming = beast
+        .and_then(|b| b.telegraph())
+        .filter(|t| !(t.live && beast.is_some_and(|b| b.hit_used)));
+
+    for (mark, mut transform, mut visible, mut material) in marks.iter_mut() {
+        let Some(t) = coming else {
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        let anchor = fx3(t.anchor);
+        let at = Vec3::new(anchor.x, FLOOR, anchor.z);
+        let along = fx3(t.along).with_y(0.0).normalize_or_zero();
+        let r = t.radius.to_f32_for_render();
+        let sweep = t.sweep.to_f32_for_render();
+        let progress = t.progress.to_f32_for_render().clamp(0.0, 1.0);
+        let flat = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+        // The strip's long side along the lane.
+        let lane_turn = Quat::from_rotation_y(-along.z.atan2(along.x)) * flat;
+        let travels = sweep > 0.05;
+        let (show, place) = match mark {
+            Mark::Area => (
+                true,
+                Transform {
+                    translation: at,
+                    rotation: flat,
+                    scale: Vec3::new(r, r, 1.0),
+                },
+            ),
+            Mark::AreaEnd => (
+                travels,
+                Transform {
+                    translation: at + along * sweep,
+                    rotation: flat,
+                    scale: Vec3::new(r, r, 1.0),
+                },
+            ),
+            Mark::Lane => (
+                travels,
+                Transform {
+                    translation: at + along * (sweep * 0.5),
+                    rotation: lane_turn,
+                    scale: Vec3::new(sweep, r * 2.0, 1.0),
+                },
+            ),
+            Mark::Fill => (
+                !t.live,
+                Transform {
+                    translation: at + Vec3::Y * LIFT,
+                    rotation: flat,
+                    scale: Vec3::new(r * progress, r * progress, 1.0),
+                },
+            ),
+            Mark::FillLane => (
+                !t.live && travels,
+                Transform {
+                    translation: at + along * (sweep * progress * 0.5) + Vec3::Y * LIFT,
+                    rotation: lane_turn,
+                    scale: Vec3::new(sweep * progress, r * 2.0, 1.0),
+                },
+            ),
+        };
+        if !show {
+            *visible = Visibility::Hidden;
+            continue;
+        }
+        *transform = place;
+        *visible = Visibility::Inherited;
+        let wanted = match (mark, t.live) {
+            (_, true) => &signs.live,
+            (Mark::Fill | Mark::FillLane, false) => &signs.fill,
+            _ => &signs.area,
+        };
+        if material.0 != *wanted {
+            material.0 = wanted.clone();
+        }
+    }
+
+    // The spikes. Only the spray has any.
+    let spray = beast.zip(coming).filter(|(_, t)| t.kind == monster::SPRAY);
+    for (spike, mut transform, mut visible) in spikes.iter_mut() {
+        let Some((beast, t)) = spray else {
+            *visible = Visibility::Hidden;
+            continue;
+        };
+        let i = spike.0;
+        let u = i as f32 / (SPIKES - 1) as f32;
+        if !t.live {
+            // **Bristling along the tail through the windup**, growing as it
+            // comes over the back -- the tell reads from in front, where the
+            // person it is for is standing, as a row of spikes standing up.
+            let progress = t.progress.to_f32_for_render().clamp(0.0, 1.0);
+            let rig = beast.rig();
+            // Half along the middle of the tail, half along its tip, in two
+            // rows either side of the spine. Worked out in the simulation's
+            // own numbers and only turned into floats to be drawn.
+            let (part, k) = if i < SPIKES / 2 {
+                (monster::TAIL_MID, i)
+            } else {
+                (monster::TAIL_TIP, i - SPIKES / 2)
+            };
+            let shape = monster::shape(part);
+            let size = shape.max.sub(shape.min);
+            let side = if i % 2 == 0 {
+                sim::Fx::ONE
+            } else {
+                sim::Fx::ONE.neg()
+            };
+            let spread = sim::Fx::ratio(15 + 70 * k as i32 / (SPIKES as i32 / 2 - 1), 100);
+            let base = sim::V3::new(
+                shape.min.x.add(size.x.mul(spread)),
+                shape.max.y,
+                shape
+                    .min
+                    .z
+                    .add(size.z.mul(sim::Fx::ratio(1, 2)))
+                    .add(size.z.mul(sim::Fx::ratio(35, 100)).mul(side)),
+            );
+            let out = base.add(sim::V3::new(
+                sim::Fx::ZERO,
+                sim::Fx::ONE,
+                side.mul(sim::Fx::ratio(35, 100)),
+            ));
+            let root = fx3(rig.part_to_world(part, base));
+            let tip = fx3(rig.part_to_world(part, out));
+            let dir = (tip - root).normalize_or(Vec3::Y);
+            let length = BRISTLE * (0.25 + 0.75 * progress);
+            *transform = Transform {
+                translation: root + dir * (length * 0.5),
+                rotation: Quat::from_rotation_arc(Vec3::Y, dir),
+                scale: Vec3::new(1.0, length, 1.0),
+            };
+        } else {
+            // **The volley**, spread across the width of the hit and up its
+            // height, staggered along the flight so it reads as a flight of
+            // spikes rather than a wall, each pointing the way it is going.
+            let along = fx3(t.along).with_y(0.0).normalize_or_zero();
+            let across = Vec3::new(-along.z, 0.0, along.x);
+            let centre = fx3(t.anchor);
+            let r = t.radius.to_f32_for_render();
+            let (lo, hi) = (t.low.to_f32_for_render(), t.high.to_f32_for_render());
+            let side = (u * 2.0 - 1.0) * r * 0.9;
+            let up = lo + (hi - lo) * (0.2 + 0.6 * ((i * 7 % SPIKES) as f32 / SPIKES as f32));
+            let back = ((i * 3 % 5) as f32) * 0.35;
+            let point = Vec3::new(centre.x, up, centre.z) + across * side - along * back;
+            *transform = Transform {
+                translation: point - along * (FLIGHT * 0.5),
+                rotation: Quat::from_rotation_arc(Vec3::Y, along),
+                scale: Vec3::new(1.4, FLIGHT, 1.4),
+            };
+        }
+        *visible = Visibility::Inherited;
+    }
+}
+
+/// Just off the floor, so the marker is not fighting it for the same depth.
+const FLOOR: f32 = 0.03;
+/// The fill sits a hair above the footprint for the same reason.
+const LIFT: f32 = 0.01;
+const SPIKES: usize = 12;
+const SPIKE_RADIUS: f32 = 0.13;
+/// A spike standing on the tail at the top of the windup, and one in flight.
+const BRISTLE: f32 = 1.1;
+const FLIGHT: f32 = 1.5;
 
 const MOUNTABLE: Color = Color::srgb(0.38, 0.85, 0.62);
 const HIT: Color = Color::srgb(1.0, 0.23, 0.31);

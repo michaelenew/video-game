@@ -382,3 +382,60 @@ fn hitting_it_wakes_it() {
         "it was hit and kept on taking the view in"
     );
 }
+
+#[test]
+fn what_is_drawn_through_the_windup_is_where_the_hit_lands() {
+    // **The overlay rule, for the player.** The floor marker under a windup is
+    // built from the hit test's own volume, so on the frame the hit comes out
+    // it has to be the hit: the same place, the same size. A marker that
+    // shows one circle and a hit that lands another is the report that asked
+    // for markers in the first place -- "the hitboxes are much larger than
+    // they look" -- with a picture on top.
+    for kind in 0..monster::MOVES as u8 {
+        let m = monster::attack(kind);
+        if m.damage <= 0 {
+            continue;
+        }
+        let mut beast = Monster::new();
+        let ahead = V3::new(m.ideal_range.max(Fx::from_int(3)), Fx::ZERO, Fx::ZERO);
+        let target = quarry(beast.pos.add(ahead), V3::ZERO);
+        beast.brain.seen = target.pos;
+        beast.doing = Doing::Startup {
+            kind,
+            left: m.startup,
+        };
+        let mut drawn = None;
+        for _ in 0..m.startup as u32 + 2 {
+            if matches!(beast.doing, Doing::Startup { .. }) {
+                drawn = beast.telegraph();
+            }
+            beast.brain.think_left = u16::MAX;
+            beast.step(&[target]);
+            if matches!(beast.doing, Doing::Active { .. }) {
+                break;
+            }
+        }
+        let drawn = drawn.expect("a damaging move draws something through its windup");
+        let (anchor, radius, low, high) = beast
+            .hit_volume()
+            .expect("the move's hit is out on its first active frame");
+        let name = monster::MOVE_NAMES[kind as usize];
+        // A move that travels has moved by a frame's worth by the time it is
+        // asked; everything else is exactly where it was drawn.
+        let slack = m.advance.add(m.travel).mul(sim::DT).add(Fx::ratio(1, 20));
+        let off = anchor.sub(drawn.anchor).flat_len();
+        assert!(
+            off.raw() <= slack.raw(),
+            "the {name} was drawn {off:?} m from where it landed"
+        );
+        assert_eq!(
+            drawn.radius, radius,
+            "the {name} was drawn a different width"
+        );
+        assert_eq!(
+            (drawn.low, drawn.high),
+            (low, high),
+            "the {name} was drawn a different height"
+        );
+    }
+}

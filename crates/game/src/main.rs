@@ -130,7 +130,17 @@ fn main() {
         .insert_resource(settings::Settings::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<Scripted>()
-        .add_systems(Startup, (setup, beast::setup, hud::setup, crosshair::setup))
+        .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
+        .add_systems(
+            Startup,
+            (
+                setup,
+                beast::setup,
+                beast::setup_signs,
+                hud::setup,
+                crosshair::setup,
+            ),
+        )
         .add_systems(
             Update,
             (
@@ -174,7 +184,7 @@ fn main() {
                 crosshair::update,
                 debug::draw,
                 beast::overlay,
-                beast::spikes,
+                beast::signs,
                 palette::toggle,
                 palette::draw,
             )
@@ -349,6 +359,7 @@ impl Default for Sim {
         };
         shot_bars(&mut w);
         shot_weight(&mut w);
+        shot_move(&mut w);
         let seed = w.clone();
         Sim {
             prev: w.clone(),
@@ -389,6 +400,47 @@ fn shot_bars(w: &mut World) {
             *l = sim::Fx::from_int(light);
         }
     }
+}
+
+/// `SHOT_MOVE=<move>` starts a hunt with the Ridgeback winding up that move at
+/// player one, from the distance the move is thrown at, so a capture can look
+/// at a telegraph without waiting for the animal to choose it. The same kind
+/// of hook as `SHOT_BARS`; pair it with `SHOT_FRAME` to land partway through
+/// the windup, and `DEMO=0` so nobody moves. The name is matched loosely
+/// against the move list: `bite`, `slam`, `spray`.
+fn shot_move(w: &mut World) {
+    let Some(name) = platform::env("SHOT_MOVE") else {
+        return;
+    };
+    let name = name.trim().to_lowercase();
+    let Some(kind) = sim::monster::MOVE_NAMES
+        .iter()
+        .position(|n| n.to_lowercase().contains(&name))
+    else {
+        return;
+    };
+    let me = w.players[0].pos;
+    let Some(beast) = w.monster.as_mut() else {
+        return;
+    };
+    let m = sim::monster::attack(kind as u8);
+    // Put it where it would throw this at player one, at the move's own
+    // distance and in front of the camera, which starts looking along +x:
+    // facing them for a move aimed ahead, and turned away for one aimed
+    // behind.
+    beast.yaw = if m.aim_cos.raw() < 0 {
+        sim::Fx::ZERO
+    } else {
+        sim::Fx::ratio(1, 2)
+    };
+    beast.pos = sim::V3::new(me.x.add(m.ideal_range), sim::Fx::ZERO, me.z);
+    beast.brain.seen = me;
+    beast.brain.grace = 0;
+    beast.brain.think_left = u16::MAX;
+    beast.doing = sim::monster::Doing::Startup {
+        kind: kind as u8,
+        left: m.startup,
+    };
 }
 
 /// `SHOT_WEIGHT=n` starts every Bulwark's shield holding `n`, so a capture can

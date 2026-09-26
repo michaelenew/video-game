@@ -221,6 +221,28 @@ impl Attack {
     }
 }
 
+/// A move's hit, as it will be drawn: where it lands, how wide and how tall,
+/// and how far it goes from there. See [`Monster::telegraph`].
+#[derive(Clone, Copy, Debug)]
+pub struct Telegraph {
+    pub kind: u8,
+    /// Where the volume is on the first frame it is out -- or now, if it is.
+    pub anchor: V3,
+    pub radius: Fx,
+    pub low: Fx,
+    pub high: Fx,
+    /// Which way it goes, if it goes anywhere: the animal's facing.
+    pub along: V3,
+    /// How far the volume travels from `anchor` over the frames it has left.
+    /// Zero for everything that lands where it is thrown; the charge and the
+    /// spray have a lane.
+    pub sweep: Fx,
+    /// Through the windup, from nought to one. One while the hit is out.
+    pub progress: Fx,
+    /// The hit is out.
+    pub live: bool,
+}
+
 /// Read a move from the live tuning store.
 pub fn attack(kind: u8) -> Attack {
     use crate::oven::{self, MonsterField as F};
@@ -1228,6 +1250,53 @@ impl Monster {
             base.add(m.hit_low),
             base.add(m.hit_high),
         ))
+    }
+
+    /// **What is coming, and where it will land.** The volume the move in
+    /// progress will have when its hit comes out, for drawing on the floor
+    /// through the windup -- and the volume it has, while it is out.
+    ///
+    /// Built by asking [`Monster::hit_volume`] about this animal posed on its
+    /// first active frame, so it is the hit test's own answer rather than a
+    /// second description of the move: the rule the debug overlay follows,
+    /// applied to what a player sees. It moves with the windup, because the
+    /// windup follows its target; on the first active frame it is exactly the
+    /// hit. See `docs/design/monsters.md` §"Reading it".
+    pub fn telegraph(&self) -> Option<Telegraph> {
+        let (kind, live, progress, frames) = match self.doing {
+            Doing::Startup { kind, left } => {
+                let m = attack(kind);
+                (kind, false, through(left, m.startup), m.active)
+            }
+            Doing::Active { kind, left } => (kind, true, Fx::ONE, left),
+            _ => return None,
+        };
+        let m = attack(kind);
+        let (anchor, radius, low, high) = if live {
+            self.hit_volume()?
+        } else {
+            let mut landing = *self;
+            landing.doing = Doing::Active {
+                kind,
+                left: m.active,
+            };
+            landing.hit_volume()?
+        };
+        Some(Telegraph {
+            kind,
+            anchor,
+            radius,
+            low,
+            high,
+            along: V3::from_turns(self.yaw),
+            sweep: m
+                .travel
+                .add(m.advance)
+                .mul(Fx::from_int(frames as i32))
+                .mul(DT),
+            progress,
+            live,
+        })
     }
 
     /// Does the volume out this frame reach a body standing at `world`?

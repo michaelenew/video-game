@@ -586,6 +586,10 @@ pub const SECTIONS: &[Section] = &[
                 "SHOT_WEIGHT=<n>",
                 "Start every Bulwark's shield holding n weight, so a capture can look at a loaded shield without blocking up to it. It drains, so pair it with an early SHOT_FRAME.",
             ),
+            e(
+                "SHOT_MOVE=<move>",
+                "Start a hunt with the Ridgeback winding up that move at player one (bite, stomp, sweep, charge, slam, kick, spray), so a capture can look at its floor marker. Pair it with SHOT_FRAME and DEMO=0.",
+            ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),
             e(
