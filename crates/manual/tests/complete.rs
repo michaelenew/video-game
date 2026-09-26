@@ -65,6 +65,7 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "Digit2" => vec!["2"],
         "Digit3" => vec!["3"],
         "Digit4" => vec!["4"],
+        "Digit5" | "Digit6" | "Digit7" => vec!["5 6 7"],
         "F1" => vec!["F1"],
         "F2" => vec!["F2"],
         "F3" | "F4" => vec!["F3 and F4"],

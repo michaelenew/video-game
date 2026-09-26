@@ -115,6 +115,7 @@ few enough to balance and to read in third person.
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
+| [sparring.md](sparring.md) | The sparring bot: late eyes, imperfect hands, plans chosen by chance, a personality per match | **Built 2026-09-26**, unplayed |
 | [parked.md](parked.md) | Progression and equipment | **Parked** |
 
 ## 4 · Open
@@ -124,7 +125,7 @@ Nothing here blocks a prototype.
 | Item | Question |
 | --- | --- |
 | **Class names, across the board** | ⚠️ **Newly open.** *Bellator* became **Champion** on 2026-09-11. The old name was accurate — Latin for a combatant, and the class descends from the old cities' duelling champions — but it was the only Latin name on a roster of plain English ones and read as belonging to a different game. That is a reason to look at all six rather than one. Bulwark, Elementalist, Blood mage and Dual mage are *descriptions*; Shadow Reaver and Champion are *titles*. Worth deciding which register the roster is in before any of them reach a player |
-| **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth |
+| **Arena size and shape** | Determines whether a space-denying class can corner anyone, and whether block pushback has teeth. ⚠️ **Since 2026-09-26: the walls are lower than a jump** (1.5 m against a 2.7 m lowest hop), so a fighter can leave the arena — the sparring bot found it. See [sparring.md](sparring.md) |
 | **Frame counts and damage** | Absent everywhere on purpose. Needs a prototype, not a guess |
 | **The repeat lockout's number** | ⚠️ **Newly open.** 30 frames is a first guess. Which abilities want a multiplier and which way is the other half, and both need somebody to play it — the knobs are in the Oven under `Offence` and in each move's `Repeat lockout (%)`. Whether a reactivation wants gating at all (`Move::reactivate`, zero everywhere) is the third |
 | **`M` and `LR` reliability** | `M` carries the Dual mage's Lance since 2026-09-16 — a cast she throws every exchange rather than a finisher, which sharpens the question. `LR` is still unspent. Both are the slowest inputs on most mice |
@@ -174,7 +175,7 @@ crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
 crates/anim   Animation factory: recipes, the solver, contact sheets. See animation.md.
-crates/hunt   A scripted hunter, and the report that judges the fight it plays.
+crates/hunt   A scripted hunter and the report that judges it; the sparring bot.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    The browser: the playable page, and the frame-data tool.
 ```
@@ -190,7 +191,7 @@ key, flag and environment variable, and the browser build's controls panel is ge
 the same tables.
 
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
-overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4. Click to capture the mouse, Escape
+overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4, a sparring bot on 5-7 ([sparring.md](sparring.md)). Click to capture the mouse, Escape
 to release. `DEMO=1` scripts player one and `DEBUG_OVERLAY=1` starts with the overlay on;
 `./scripts/screenshot.sh` renders headlessly.
 

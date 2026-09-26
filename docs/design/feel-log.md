@@ -5876,3 +5876,29 @@ cap changes nothing, so the rim-gap counterplay is untouched.
 **Verdict** kept, unplayed. `only_the_first_blades_of_a_pass_cut_a_fighter` pins
 the fighter side. The lotus is now a much smaller threat to somebody standing on
 the shadow; whether it still reads as the class's big turn is a person's question.
+
+### 2026-09-26 — a sparring bot, and walls lower than a jump
+
+**Changed** Nothing in the Oven. Added a bot that fights a fighter
+(`crates/hunt/src/duel.rs`, keys 5–7) — see [sparring.md](sparring.md). It is a
+player rather than a feel value, so its numbers live in the `hunt` crate like
+the hunter's.
+
+**Why** Most of the open questions in this file are "needs a person", and the
+first thing a person needs is somebody to fight.
+
+**Tried first, changed: a patient bot.** The first cut spent most of each
+fight circling at the edge of the other's longest reach, where only a spear
+could touch anyone: the Champion mirror threw 21 moves in three minutes and won
+no rounds. Pressing forward got more weight and every plan got more appetite
+for swinging when something is in reach; the same mirror now throws 120–140 and
+finishes rounds.
+
+**Found** The arena's walls are 1.5 m and the lowest full hop is 2.7 m, so a
+jump beside a wall can land outside the arena. A bot did it and spent two
+minutes walking round the outside. The bot now does not jump near a wall; the
+arena itself is unchanged, and whether it should let anybody out is open.
+
+**Verdict** built, unplayed. `crates/hunt/tests/duel.rs` holds that it never
+sees the present, is not the same twice, stays in the fight, and that its levels
+are ordered. Whether it is fun to fight is a person's question.

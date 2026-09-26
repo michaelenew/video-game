@@ -40,7 +40,7 @@ every one of them is a function in `aim.rs`:**
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 
-Six more functions live there and are **not** lines of effect. `aim::pointing_at`
+Seven more functions live there and are **not** lines of effect. `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
@@ -61,7 +61,10 @@ next to a move, which is the mistake below in its usual clothes.
 `aim::shadow_faces` and `aim::copied_swing` answer *which way is forward for a
 copy thrown from somewhere else*: the Reaver's shadow out on the field turns her
 swing to the nearest body in reach, keeping her pitch. The copy is still a
-swing; this is only its yaw.
+swing; this is only its yaw. `aim::look_onto` is the raycast run backwards —
+*which pitch puts the crosshair on that point* — for anything that plays the
+game rather than referees it: the sparring bot, and the Elementalist rehearsal.
+A bot that aimed from its chest would be the mistake below, made by a player.
 
 Which one a move is comes from `Move::aim()`, **declared** in the move table so
 every move has an answer, and printed in the `aimed` column of
