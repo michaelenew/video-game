@@ -8,7 +8,7 @@
 //! Controls, per `docs/design/controls.md`:
 //!   WASD move · Space jump · Shift+direction dodge (airdodge once per jump)
 //!   J bash · Shift+J slam · K guard · L shield throw/recall · Shift+L grapple
-//!   1-4 dummy mode · F1 debug overlay · P pause · ] step one frame · R reset
+//!   1-4 dummy mode · 5-7 sparring bot · F1 debug overlay · P pause · ] step one frame · R reset
 //!   H hunt the Ridgeback, or fight the other player
 //!
 //! Player two: arrows, RCtrl, Period, Comma, Slash, RShift.
@@ -131,6 +131,7 @@ fn main() {
         .insert_resource(settings::Settings::load())
         .init_resource::<InsideOwnHead>()
         .init_resource::<Scripted>()
+        .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
         .add_systems(
             Startup,
@@ -351,19 +352,45 @@ struct Fades([Crossfade; MAX_PLAYERS]);
 struct ShadowFades([Crossfade; MAX_PLAYERS]);
 
 /// Training-mode opponent. Player two is a scripted dummy until someone takes
-/// the second set of keys.
+/// the second set of keys -- or until a sparring bot does.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Dummy {
     Idle,
     Block,
     Attack,
     Human,
+    /// `hunt::Duelist`, at one of its three levels. Keys 5, 6 and 7, or
+    /// `--bot <level>` to start with one.
+    Bot(hunt::Level),
 }
+
+/// Which opponent a run starts with: `--bot easy|normal|hard` (`?bot=hard` in
+/// a browser), or the dummy standing still.
+fn starting_dummy() -> Dummy {
+    let Some(name) = platform::value("--bot") else {
+        return Dummy::Idle;
+    };
+    let name = name.trim().to_lowercase();
+    let level = hunt::Level::ALL
+        .into_iter()
+        .find(|l| l.name() == name)
+        .unwrap_or(hunt::Level::Normal);
+    Dummy::Bot(level)
+}
+
+/// The sparring bot, when player two is one.
+///
+/// Renderer-side for the same reason [`Scripted`] is: it produces inputs, and
+/// inputs are what cross the wire. It is rebuilt whenever the level changes,
+/// with a fresh seed, so the personality it plays with is a new one each time
+/// -- the whole point of it is not to be the same opponent twice.
+#[derive(Resource, Default)]
+struct Sparring(Option<hunt::Duelist>);
 
 impl Default for Sim {
     fn default() -> Self {
         let mut w = if hunting() {
-            hunt_with(chosen_classes(), Dummy::Idle)
+            hunt_with(chosen_classes(), starting_dummy())
         } else {
             World::with_classes(chosen_classes())
         };
@@ -377,7 +404,7 @@ impl Default for Sim {
             clock: TickClock::new(),
             paused: false,
             step_once: false,
-            dummy: Dummy::Idle,
+            dummy: starting_dummy(),
             driver: online::start(),
             // `BIND_POSE=1` starts frozen, so the proportions of a build can be
             // captured without a keypress.
@@ -2529,6 +2556,7 @@ fn tick_sim(
     mut sim: ResMut<Sim>,
     mut show: ResMut<debug::ShowDebug>,
     mut scripted: ResMut<Scripted>,
+    mut sparring: ResMut<Sparring>,
 ) {
     // Typing in a text field must not also pause the match or cycle the class.
     // F7 stays live regardless, since it is the way back out.
@@ -2625,6 +2653,9 @@ fn tick_sim(
         (KeyCode::Digit2, Dummy::Block),
         (KeyCode::Digit3, Dummy::Attack),
         (KeyCode::Digit4, Dummy::Human),
+        (KeyCode::Digit5, Dummy::Bot(hunt::Level::Easy)),
+        (KeyCode::Digit6, Dummy::Bot(hunt::Level::Normal)),
+        (KeyCode::Digit7, Dummy::Bot(hunt::Level::Hard)),
     ] {
         if keys.just_pressed(key) {
             sim.dummy = mode;
@@ -2677,9 +2708,20 @@ fn tick_sim(
                         Some(rehearsal(since, &sim.cur))
                     }
                 });
+                let two = match sim.dummy {
+                    // Not in a hunt: the bot fights a fighter, and in a hunt
+                    // player two is out of it (see `hunt_with`).
+                    Dummy::Bot(level) if sim.cur.monster.is_none() => spar(
+                        &mut sparring,
+                        level,
+                        &sim.cur,
+                        time.elapsed().as_nanos() as u32,
+                    ),
+                    mode => dummy_input(mode, sim.cur.frame, held_two),
+                };
                 let pair = [
                     rehearsed.unwrap_or_else(|| scripted_or(scripted, held)),
-                    dummy_input(sim.dummy, sim.cur.frame, held_two),
+                    two,
                 ];
                 // Remembered before the tick, so one press of `[` lands on the
                 // frame you were just looking at. Split out of the field access
@@ -2715,7 +2757,19 @@ fn dummy_input(mode: Dummy, frame: u32, live: SimInput) -> SimInput {
         Dummy::Attack if frame % 70 < 2 => SimInput::new(SimInput::LEFT),
         Dummy::Attack => SimInput::default(),
         Dummy::Human => live,
+        // Driven by `spar`; reaching here means a hunt, where it sits out.
+        Dummy::Bot(_) => SimInput::default(),
     }
+}
+
+/// One frame of the sparring bot, building it first if the level changed.
+fn spar(sparring: &mut Sparring, level: hunt::Level, w: &World, seed: u32) -> SimInput {
+    let bot = match &mut sparring.0 {
+        Some(bot) if bot.level() == level => bot,
+        slot => slot.insert(hunt::Duelist::new(1, level, seed)),
+    };
+    bot.watch(w);
+    bot.act(w)
 }
 
 /// How long the rehearsal drives for, after which the controls come back.
@@ -2761,19 +2815,11 @@ fn rehearsal(since: u32, w: &World) -> SimInput {
 /// rehearsal exists to tell apart from a double.
 ///
 /// Solved by iteration because the eye's own position depends on the pitch: a
-/// few rounds settle it, the rig being smooth. Floating point is safe here for
-/// the reason [`aim_toward`] gives -- this produces an *input*, and inputs are
-/// transmitted rather than recomputed.
+/// few rounds settle it, the rig being smooth -- which is `sim::aim::look_onto`,
+/// the raycast run backwards, and the same function the sparring bot aims with.
 fn looking_at_her_feet(w: &World) -> (u16, i16) {
     let stood = w.players[0].pos;
-    let mut tilt = 0i16;
-    for _ in 0..6 {
-        let eye = sim::camera::eye(stood, SimInput::looking_at(0, 0, tilt), sim::Fx::ZERO);
-        let flat = stood.sub(eye).flat_len().to_f32_for_render();
-        let drop = stood.y.sub(eye.y).to_f32_for_render();
-        tilt = view::pitch_from_radians(drop.atan2(flat));
-    }
-    (0, tilt)
+    (0, sim::aim::look_onto(stood, 0, sim::Fx::ZERO, stood))
 }
 
 /// `DEMO=1` drives player one from a script instead of the keyboard. Used to

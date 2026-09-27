@@ -5996,3 +5996,57 @@ does not work. `impact.rs` stages its fights out on open floor at z = 8 for that
    of anything happening there will start to be noticed.
 5. **Do the Reaver and the Bulwark feel their heavies differently now?** They got the same
    freeze and knockback treatment by formula, not by hand.
+
+### 2026-09-26 — a sparring bot, and walls lower than a jump
+
+**Changed** Nothing in the Oven. Added a bot that fights a fighter
+(`crates/hunt/src/duel.rs`, keys 5–7) — see [sparring.md](sparring.md). It is a
+player rather than a feel value, so its numbers live in the `hunt` crate like
+the hunter's.
+
+**Why** Most of the open questions in this file are "needs a person", and the
+first thing a person needs is somebody to fight.
+
+**Tried first, changed: a patient bot.** The first cut spent most of each
+fight circling at the edge of the other's longest reach, where only a spear
+could touch anyone: the Champion mirror threw 21 moves in three minutes and won
+no rounds. Pressing forward got more weight and every plan got more appetite
+for swinging when something is in reach; the same mirror now throws 120–140 and
+finishes rounds.
+
+**Found** The arena's walls are 1.5 m and the lowest full hop is 2.7 m, so a
+jump beside a wall can land outside the arena. A bot did it and spent two
+minutes walking round the outside. The bot now does not jump near a wall; the
+arena itself is unchanged, and whether it should let anybody out is open.
+
+**Verdict** built, unplayed. `crates/hunt/tests/duel.rs` holds that it never
+sees the present, is not the same twice, stays in the fight, and that its levels
+are ordered. Whether it is fun to fight is a person's question.
+
+### 2026-09-26 — the sparring bot plays its class
+
+**Changed** Every class's bot uses its mechanic: the Champion's Rush and chains,
+the Bulwark's guard, throw, leap, recall and Slam, the Reaver's shadow, lotus
+and dash, the Elementalist's stones, the Blood mage's pool blinks, the Dual
+mage's bars. See [sparring.md](sparring.md) §"Its class".
+
+**Why** From play: "Needs to use class mechanics. I need to see how fighting a
+player feels."
+
+**Found** Three things on the way. The Dual mage's lance takes the colour she
+is carrying, whatever the move table names it; weighed as its table colour it
+was refused every time the dark bar led, and she stood at range throwing
+nothing. The Champion's spear out of a Rush while looking at the floor is the
+Pole vault, and it clears the walls; the bot kept going over them until its
+Rushes looked level. And a bot walking into a platform's side walked into it
+forever; it now jumps anything it has been walking into for a fifth of a
+second.
+
+**Tried, reverted: sending a lopsided Dual mage into the Press plan.** It kept
+her bars level and had her pressing for more than half of every fight, which
+is one plan. Walking in whatever the plan does the same job.
+
+**Verdict** built, unplayed. The uneven pairings came out lopsided — the Reaver
+and the Elementalist win most of theirs — and whether that is the bot or the
+classes is a person's question.
+

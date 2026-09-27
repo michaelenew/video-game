@@ -61,6 +61,14 @@ pub const SECTIONS: &[Section] = &[
                 "Pick classes. Matched loosely: bulwark, champion, reaver, elementalist, blood, dual.",
             ),
             e(
+                "cargo run -p game -- --bot <level>",
+                "Start against the sparring bot: easy, normal or hard. 5, 6 and 7 switch to it in game.",
+            ),
+            e(
+                "cargo run -p hunt --bin duel",
+                "Play the sparring bot against itself, every pairing, and count throws, hits and rounds. --level and --against set the two sides.",
+            ),
+            e(
                 "cargo run -p game -- --hunt",
                 "Start against the Ridgeback instead of each other. H switches either way in game.",
             ),
@@ -94,6 +102,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "?hunt",
                 "Start against the Ridgeback. H switches either way in game.",
+            ),
+            e(
+                "?bot=<level>",
+                "Start against the sparring bot: easy, normal or hard.",
             ),
             e(
                 "?dev",
@@ -349,6 +361,10 @@ pub const SECTIONS: &[Section] = &[
                 "Dummy attacks on a cadence, so the parry window is practisable.",
             ),
             e("4", "Dummy is a second player on the keys above."),
+            e(
+                "5 6 7",
+                "Dummy is a sparring bot -- easy, normal, hard. It sees late, aims imperfectly, and picks a new personality every time you press one.",
+            ),
             e("Tab", "Cycle player one's class. Restarts the match."),
             e(
                 "F8",

@@ -318,6 +318,17 @@ there it would be a facing, a distance and a floor query sitting next to an
 ability — which is the exact shape of the mistake this document exists to
 prevent, three metres of it at a time.
 
+**Where must the mouse be to point at that?** `aim::look_onto` answers that
+one — added 2026-09-26, for the sparring bot ([sparring.md](sparring.md)). It is
+the raycast run backwards: given a body and a yaw, the pitch that puts the
+crosshair on a point. It is not a line of effect and the simulation never calls
+it; it is for whatever *plays* — a bot choosing where to put its mouse, the
+Elementalist rehearsal aiming at her own feet. It lives here because the answer
+depends on where the eye is, and the eye moves round the body as the pitch
+changes, so it is settled by a few rounds of asking the camera. A bot that
+aimed from its chest along the line to its target would be making the mistake
+this document exists to prevent, with a player's hands.
+
 **Which way does a copy thrown from somewhere else face?** `aim::shadow_faces`
 answers that one — added 2026-09-23, for the Reaver's v2. Her shadow out on the
 field copies her swings, and the copy is still a **swing**: it keeps her pitch,

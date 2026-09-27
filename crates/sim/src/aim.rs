@@ -650,6 +650,37 @@ pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) ->
     .is_some()
 }
 
+/// The pitch that puts the crosshair on `at`, for a body at `pos` looking
+/// along the yaw `aim`.
+///
+/// **The raycast run backwards**, for whatever has to *play* the game rather
+/// than referee it: a bot choosing where to put its mouse, a rehearsal aiming
+/// at a fighter's own feet. It asks the same camera the ray starts from, so a
+/// look it returns and a ray [`sight`] casts are the same line -- which is the
+/// whole reason it lives here rather than beside the bot. Aiming from the
+/// chest instead is the parallel-ray mistake this file exists to prevent, made
+/// by the player rather than the ability.
+///
+/// Settled by iteration, because the eye's own position depends on the pitch:
+/// the camera swings round the body as you look up and down. The rig is smooth
+/// and a few rounds agree to within a unit of the wire's angle. The yaw is
+/// taken as given rather than solved for, since the eye sits straight behind
+/// the body along it -- and a point directly underfoot has no yaw of its own.
+pub fn look_onto(pos: V3, aim: u16, aloft: Fx, at: V3) -> i16 {
+    let (down, up) = crate::camera::limits();
+    let mut pitch = Fx::ZERO;
+    for _ in 0..LOOK_ROUNDS {
+        let eye = crate::camera::eye(pos, Input::looking_at(0, aim, pitch.raw() as i16), aloft);
+        let to = at.sub(eye);
+        pitch = crate::math::atan2_turns(to.y, to.flat_len()).clamp(down.neg(), up);
+    }
+    pitch.raw() as i16
+}
+
+/// Rounds of [`look_onto`]. Each one moves the eye by what the last one moved
+/// the pitch, and the camera's sphere shrinks that to nothing within a handful.
+const LOOK_ROUNDS: usize = 6;
+
 /// Is the crosshair on a **disc on the floor** -- an essence pool?
 ///
 /// The same question as [`pointing_at`], asked about the Blood mage's object

@@ -20,8 +20,10 @@
 //! visibly begun -- and nothing about which move the control algorithm is about
 //! to pick.
 
+pub mod duel;
 pub mod report;
 
+pub use duel::{Duelist, Level};
 pub use report::{Outcome, Report};
 
 use sim::fixed::Fx;
