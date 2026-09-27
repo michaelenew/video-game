@@ -7850,10 +7850,12 @@ impl World {
             if dealt > 0 {
                 dual::landed_a_hit(&mut self.players[i]);
             }
-            // Only the fighter freezes: a hammer that sticks in a leg for a
-            // beat reads as having hit thirteen metres of animal, and the
-            // animal stopping for it would read as the opposite.
-            freeze(&mut self.players[i], impact_freeze(m.hitstop, false));
+            // **No freeze here, on either side.** The animal does not stop for
+            // one fighter, and a fighter who stopped for it was held still
+            // inside the reach of something that had not: the scripted hunter
+            // lost every one of eighteen hunts the day this froze the attacker.
+            // The weight of a blow on the creature is its flinch and its
+            // poise to show, not a pause in the fighter.
         }
 
         // Nothing to stand on any more.

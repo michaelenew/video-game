@@ -278,6 +278,21 @@ so there was nothing on screen to read while the opponent was supposed to be
 deciding whether to block. **Weight must read as follow-through, never as
 delay.** Presets: `CRISP`, `MARTIAL`, `STRIDE`, `HEAVY`, `FLOATY`, `LIMP`.
 
+### A big arc is keyed every frame, with the elbows pointed
+
+Added 2026-09-26, for the Champion's hammer. An arm travelling from straight
+overhead to out in front crosses the place where the solver's two readings of a
+shoulder meet (see above), and between sparse keys it picks a different elbow on
+each one: the frames in between swing the elbow round and pull the hands off the
+haft. The hammer's swings are therefore written as a **score** —
+`Score::swing` and `Beat` in `anim/src/clips/champion.rs` — keyed on every
+frame of the arc and described as arm angle, reach from the shoulders, weapon
+angle and grip width, with the elbows pointed explicitly through
+`view::ik::reach` and a fixed pole. The same file carries per-weapon looseness
+(`HAMMER`, `SWORD`, `SPEAR`) that keeps the arms tight while the trunk lags, because
+`HEAVY` on the whole body left a four-frame hammer arc three and a half frames
+behind its own hit volume.
+
 ### Lengths come from the move table
 
 An attack clip's length is `startup + active + recovery`, read live from the

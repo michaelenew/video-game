@@ -444,8 +444,8 @@ fn block_stun() -> Recipe {
     // pointing at them.
     let shoved = planted(
         guard()
-            .hips(0.034, -0.112, -0.130)
-            .root(-16.0, 0.0, 18.0)
+            .hips(0.036, -0.125, -0.160)
+            .root(-20.0, 0.0, 18.0)
             .spine(16.0, -4.0, 14.0)
             .chest(10.0, 0.0, 13.0)
             .head(-6.0, 5.0, -46.0)
@@ -463,8 +463,8 @@ fn block_stun() -> Recipe {
     // about to stop.
     let absorbed = planted(
         guard()
-            .hips(0.028, -0.102, -0.078)
-            .root(-7.0, 0.0, 19.0)
+            .hips(0.030, -0.115, -0.105)
+            .root(-10.0, 0.0, 19.0)
             .spine(13.0, -3.0, 14.0)
             .chest(7.0, 0.0, 13.0)
             .head(-4.0, 4.0, -44.0)

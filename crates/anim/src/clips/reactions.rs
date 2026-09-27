@@ -82,67 +82,70 @@ pub fn clips() -> Vec<Recipe> {
 fn hit_light() -> Recipe {
     // The impact. Everything goes backwards at once -- the head furthest,
     // because it weighs little and sits on the end of the longest lever on the
-    // body -- and the guard is knocked open on the way.
+    // body -- and the guard is knocked open on the way. The lead toe has come
+    // up: the weight left that foot on the frame the blow arrived.
     let snap = stance()
-        .hips(0.0, -0.050, -0.085)
-        .root(-14.0, 3.0, -10.0)
-        .spine(-11.0, 3.0, 13.0)
-        .chest(-9.0, 4.0, 16.0)
-        .head(-34.0, -10.0, 20.0)
-        .shoulder_l(-8.0, 32.0, -10.0)
-        .elbow_l(30.0)
+        .hips(0.0, -0.055, -0.10)
+        .root(-17.0, 3.0, -10.0)
+        .spine(-14.0, 3.0, 13.0)
+        .chest(-11.0, 4.0, 16.0)
+        .head(-40.0, -10.0, 22.0)
+        .shoulder_l(-12.0, 36.0, -10.0)
+        .elbow_l(28.0)
         .wrist_l(-18.0, 0.0, 0.0)
-        .shoulder_r(-22.0, 26.0, 0.0)
-        .elbow_r(52.0)
+        .shoulder_r(-26.0, 30.0, 0.0)
+        .elbow_r(48.0)
         .wrist_r(-14.0, 0.0, 0.0)
         .plant_l([L, GROUND, LEAD_Z])
         .plant_r([R, GROUND, REAR_Z])
-        .toe_l(-10.0)
+        .toe_l(-14.0)
         .toe_r(16.0);
 
-    // Four frames on, and still going: the weight has arrived on the back foot
-    // and the hips are at the end of their travel. This is the frame a short
-    // stun spends most of its time near, so it has to read as hit on its own.
-    let carried = stance()
-        .hips(0.0, -0.085, -0.105)
-        .root(-9.0, 2.0, -12.0)
-        .spine(-2.0, 2.0, 10.0)
-        .chest(-3.0, 3.0, 13.0)
-        .head(-20.0, -8.0, 16.0)
-        .shoulder_l(-2.0, 26.0, -6.0)
-        .elbow_l(44.0)
-        .shoulder_r(-14.0, 24.0, 0.0)
-        .elbow_r(58.0)
+    // **The step back.** The knockback is real now -- the simulation carries
+    // the body the best part of half a metre -- so the rear foot goes back to
+    // catch it rather than letting the body skate. The lead foot is still on
+    // the spot it was hit on, which in the body's own frame means it is being
+    // left *ahead* as the body travels away from it.
+    let stepping = stance()
+        .hips(0.0, -0.075, -0.13)
+        .root(-11.0, 2.0, -12.0)
+        .spine(-5.0, 2.0, 11.0)
+        .chest(-5.0, 3.0, 14.0)
+        .head(-24.0, -8.0, 17.0)
+        .shoulder_l(-4.0, 28.0, -6.0)
+        .elbow_l(40.0)
+        .shoulder_r(-16.0, 26.0, 0.0)
+        .elbow_r(56.0)
         .wrists(-12.0, 0.0, 0.0)
-        .plant_l([L, GROUND, LEAD_Z])
-        .plant_r([R, GROUND, REAR_Z])
-        .toe_l(-6.0)
-        .toe_r(18.0);
+        .plant_l([L, GROUND, LEAD_Z + 0.06])
+        .plant_r([R + 0.01, GROUND + 0.07, REAR_Z - 0.16])
+        .toe_l(-8.0)
+        .toe_r(-10.0);
 
-    // The fold: what the head started, the gut finishes. The recoil turns into
-    // a crumple over the blow, which is the half of a flinch that says it hurt
-    // rather than that it was loud.
+    // The rear foot lands a long way back and the body sits onto it: the fold,
+    // where what the head started the gut finishes -- the half of a flinch that
+    // says it hurt rather than that it was loud.
     let fold = stance()
-        .hips(0.0, -0.105, -0.045)
-        .root(8.0, 1.0, -12.0)
-        .spine(14.0, 2.0, 8.0)
+        .hips(0.0, -0.115, -0.09)
+        .root(9.0, 1.0, -12.0)
+        .spine(15.0, 2.0, 8.0)
         .chest(9.0, 3.0, 10.0)
-        .head(12.0, -5.0, 11.0)
-        .shoulder_l(10.0, 17.0, 0.0)
+        .head(14.0, -5.0, 11.0)
+        .shoulder_l(10.0, 18.0, 0.0)
         .elbow_l(64.0)
-        .shoulder_r(-3.0, 19.0, 0.0)
+        .shoulder_r(-3.0, 20.0, 0.0)
         .elbow_r(58.0)
-        .plant_l([L, GROUND, LEAD_Z - 0.01])
-        .plant_r([R, GROUND, REAR_Z - 0.01])
-        .toe_l(-2.0)
-        .toe_r(16.0)
-        .wrists(-6.0, 0.0, 0.0);
+        .wrists(-6.0, 0.0, 0.0)
+        .plant_l([L, GROUND + 0.02, LEAD_Z + 0.02])
+        .plant_r([R, GROUND, REAR_Z - 0.22])
+        .toe_l(-6.0)
+        .toe_r(6.0);
 
-    // Gathering: hands on their way back up, head last. The guard closing is
-    // the tell that the character is about to be able to act, and it wants to
-    // arrive a beat before they can.
+    // Gathering: the lead foot drawn back under, the rear foot giving the
+    // ground the slide took back, hands on their way up, head last. The guard
+    // closing is the tell that the character is about to be able to act.
     let gather = stance()
-        .hips(0.0, -0.065, -0.012)
+        .hips(0.0, -0.07, -0.03)
         .root(3.0, 0.0, -13.0)
         .spine(8.0, 1.0, 7.0)
         .chest(4.0, 1.0, 8.0)
@@ -151,8 +154,8 @@ fn hit_light() -> Recipe {
         .elbow_l(48.0)
         .shoulder_r(2.0, 16.0, 0.0)
         .elbow_r(40.0)
-        .plant_l([L, GROUND, LEAD_Z])
-        .plant_r([R, GROUND, REAR_Z])
+        .plant_l([L, GROUND, LEAD_Z - 0.02])
+        .plant_r([R, GROUND + 0.02, REAR_Z - 0.08])
         .toe_l(-1.0)
         .toe_r(12.0);
 
@@ -166,19 +169,23 @@ fn hit_light() -> Recipe {
         notes: "A poke landing. Frame zero is the impact because the clip is \
                 indexed from the end, and a short stun starts part way in, so \
                 the recoil has to read immediately rather than build: the head \
-                is already thrown on the first frame. The fold three frames \
-                later is what makes it hurt -- a head snap on its own reads as \
-                a flinch at a noise. The feet never leave the floor, because \
-                sixteen frames of stun is not a knockdown and the character has \
-                to be able to walk out of it."
+                and chest are already thrown back on the first frame and the \
+                lead toe has come up off the floor. Then **a step back**, because \
+                the knockback is real -- the simulation carries the body the \
+                best part of half a metre, and a body carried that far on planted \
+                feet is a body skating. The rear foot goes back to catch it, the \
+                body sits onto that foot and folds over the blow -- the half of \
+                a flinch that says it hurt -- and the lead foot is drawn back \
+                under as the guard comes up. The feet never both leave the floor, \
+                because sixteen frames of stun is not a knockdown."
             .into(),
         keys: vec![
             // An impact is instantaneous; everything after it is the body
             // catching up. OUT leaves the contact fast and arrives slowly,
             // which is a body being carried by a blow rather than leaning over.
             Key::eased(0, snap, Ease::OUT),
-            Key::eased(3, carried, Ease::SMOOTH),
-            Key::eased(7, fold, Ease::SMOOTH),
+            Key::eased(3, stepping, Ease::SMOOTH),
+            Key::eased(6, fold, Ease::SMOOTH),
             Key::eased(10, gather, Ease::OUT),
             // Settled before control returns, so the frame the player can act
             // on is the stance and not a spring still moving.
@@ -195,65 +202,85 @@ fn hit_light() -> Recipe {
 /// frame zero first, so the blast pose has to be worth holding.
 fn hit_heavy() -> Recipe {
     // Everything at once and in the same direction: hips driven back, spine
-    // arched over them, head last and furthest, both arms thrown open. The
-    // guard is not knocked aside here -- it is gone.
+    // arched over them, head last and furthest, both arms flung open and back.
+    // The guard is not knocked aside here -- it is gone -- and the lead foot is
+    // already coming off the floor, because the body is leaving.
     let blast = stance()
-        .hips(-0.02, -0.075, -0.145)
-        .root(-15.0, 5.0, -6.0)
-        .spine(-14.0, 5.0, 16.0)
-        .chest(-12.0, 6.0, 20.0)
-        .head(-40.0, -11.0, 24.0)
-        .shoulder_l(-26.0, 48.0, -18.0)
-        .elbow_l(18.0)
+        .hips(-0.02, -0.07, -0.17)
+        .root(-20.0, 5.0, -6.0)
+        .spine(-18.0, 5.0, 16.0)
+        .chest(-14.0, 6.0, 20.0)
+        .head(-44.0, -12.0, 26.0)
+        .shoulder_l(-36.0, 60.0, -18.0)
+        .elbow_l(16.0)
         .wrist_l(-24.0, 0.0, 0.0)
-        .shoulder_r(-42.0, 30.0, 0.0)
-        .elbow_r(26.0)
+        .shoulder_r(-50.0, 42.0, 0.0)
+        .elbow_r(22.0)
         .wrist_r(-20.0, 0.0, 0.0)
-        .plant_l([L, GROUND + 0.02, LEAD_Z + 0.02])
+        .plant_l([L, GROUND + 0.04, LEAD_Z + 0.04])
         .plant_r([R, GROUND, REAR_Z])
-        .toe_l(-14.0)
+        .toe_l(-20.0)
         .toe_r(18.0);
 
-    // The whip: the hips have stopped going back and the torso has not. The
-    // rear leg is already swinging under to find the floor somewhere behind.
-    let through = stance()
-        .hips(-0.03, -0.105, -0.185)
-        .root(-4.0, 6.0, -4.0)
-        .spine(2.0, 6.0, 14.0)
-        .chest(-2.0, 7.0, 18.0)
-        .head(-24.0, -12.0, 22.0)
-        .shoulder_l(-12.0, 44.0, -14.0)
-        .elbow_l(34.0)
-        .shoulder_r(-30.0, 28.0, 0.0)
-        .elbow_r(44.0)
-        .plant_l([L, GROUND + 0.05, LEAD_Z + 0.03])
-        .plant_r([R + 0.03, GROUND + 0.09, REAR_Z - 0.13])
-        .toe_l(-18.0)
-        .toe_r(24.0);
+    // **The first stumble step.** The rear foot goes a long way back to find
+    // the floor, the hips have stopped going back and the torso has not, and
+    // the lead foot trails on its toe -- the simulation is carrying this body
+    // a metre and more, and a body carried that far has to take steps.
+    let first = stance()
+        .hips(-0.03, -0.11, -0.22)
+        .root(-8.0, 6.0, -4.0)
+        .spine(-2.0, 6.0, 14.0)
+        .chest(-4.0, 7.0, 18.0)
+        .head(-28.0, -12.0, 22.0)
+        .shoulder_l(-20.0, 52.0, -14.0)
+        .elbow_l(30.0)
+        .shoulder_r(-36.0, 36.0, 0.0)
+        .elbow_r(38.0)
+        .plant_l([L, GROUND + 0.03, LEAD_Z + 0.06])
+        .plant_r([R + 0.03, GROUND + 0.10, REAR_Z - 0.26])
+        .toe_l(-22.0)
+        .toe_r(-6.0);
 
-    // The catch: the stumble step lands a long way back and the body folds
-    // over it. Head hanging, arms swinging loose and low -- this is the frame
-    // that says the hit was heavy rather than merely long.
+    // Landed on it, and the lead foot now swinging back past to take the
+    // second step -- the body still travelling, the arms still out for balance.
+    let second = stance()
+        .hips(-0.02, -0.15, -0.20)
+        .root(4.0, 4.0, -6.0)
+        .spine(8.0, 4.0, 11.0)
+        .chest(4.0, 5.0, 14.0)
+        .head(-8.0, -9.0, 16.0)
+        .shoulder_l(-6.0, 40.0, -8.0)
+        .elbow_l(36.0)
+        .shoulder_r(-20.0, 30.0, 0.0)
+        .elbow_r(40.0)
+        .plant_l([L + 0.01, GROUND + 0.09, LEAD_Z - 0.12])
+        .plant_r([R + 0.04, GROUND, REAR_Z - 0.28])
+        .toe_l(-10.0)
+        .toe_r(4.0);
+
+    // The catch: the second step down and the body folding over it. Head
+    // hanging, arms swinging loose and low -- this is the frame that says the
+    // hit was heavy rather than merely long.
     let catch = stance()
-        .hips(-0.015, -0.175, -0.120)
-        .root(20.0, 3.0, -8.0)
-        .spine(24.0, 3.0, 8.0)
-        .chest(13.0, 4.0, 10.0)
-        .head(20.0, -6.0, 12.0)
-        .shoulder_l(6.0, 20.0, 0.0)
+        .hips(-0.015, -0.19, -0.13)
+        .root(22.0, 3.0, -8.0)
+        .spine(26.0, 3.0, 8.0)
+        .chest(14.0, 4.0, 10.0)
+        .head(22.0, -6.0, 12.0)
+        .shoulder_l(8.0, 20.0, 0.0)
         .elbow_l(40.0)
-        .shoulder_r(-10.0, 18.0, 0.0)
+        .shoulder_r(-8.0, 18.0, 0.0)
         .elbow_r(34.0)
         .wrists(-10.0, 0.0, 0.0)
-        .plant_l([L, GROUND + 0.01, LEAD_Z - 0.02])
-        .plant_r([R + 0.04, GROUND, REAR_Z - 0.26])
-        .toe_l(-6.0)
+        .plant_l([L, GROUND, LEAD_Z - 0.06])
+        .plant_r([R + 0.04, GROUND, REAR_Z - 0.20])
+        .toe_l(-4.0)
         .toe_r(4.0);
 
     // Gathering the feet back under: the rear foot comes in light, the head
     // comes up last, and the guard is still not closed.
     let gather = stance()
-        .hips(0.0, -0.105, -0.035)
+        .hips(0.0, -0.11, -0.04)
         .root(8.0, 1.0, -11.0)
         .spine(11.0, 2.0, 8.0)
         .chest(6.0, 2.0, 9.0)
@@ -263,7 +290,7 @@ fn hit_heavy() -> Recipe {
         .shoulder_r(-2.0, 17.0, 0.0)
         .elbow_r(44.0)
         .plant_l([L, GROUND, LEAD_Z])
-        .plant_r([R + 0.01, GROUND + 0.03, REAR_Z - 0.07])
+        .plant_r([R + 0.01, GROUND + 0.04, REAR_Z - 0.08])
         .toe_l(-2.0)
         .toe_r(18.0);
 
@@ -271,20 +298,26 @@ fn hit_heavy() -> Recipe {
         clip: Clip::HitHeavy,
         looseness: Looseness::LIMP,
         notes: "A heavy landing, and a whole-body event: the hips go first, the \
-                torso arches after them and the head arrives last and furthest. \
-                The stumble step is the point of the clip -- a character who \
-                keeps their feet through a thirty-frame stun looks like they \
-                were not hit, and the step is what makes the knockback read as \
-                distance covered rather than as sliding. Nothing is keyed to \
-                arrive anywhere; LIMP's lag does the whipping, which is why the \
-                arms are authored as thrown open and then simply left."
+                torso arches after them, the head arrives last and furthest and \
+                both arms are flung open behind. Then **two stumbling steps \
+                backwards** -- the rear foot a long way back, the lead foot \
+                swinging past it -- because the knockback is real: the heavy \
+                weapons carry a body a metre to three, and the steps are what \
+                make that read as a body being driven back rather than as one \
+                sliding. It lands folded over the second step with the head \
+                hanging, which is the frame that says heavy rather than merely \
+                long, and gathers back to the stance before control returns. \
+                Nothing is keyed to arrive anywhere; LIMP's lag does the \
+                whipping, which is why the arms are authored as thrown open and \
+                then simply left."
             .into(),
         keys: vec![
             Key::eased(0, blast, Ease::STRIKE),
             // The body carrying on past the blow, and losing the floor.
-            Key::eased(5, through, Ease::OUT),
-            // Landing on the stumble step. OUT again: it arrives and sags.
-            Key::eased(11, catch, Ease::OUT),
+            Key::eased(4, first, Ease::OUT),
+            Key::eased(8, second, Ease::SMOOTH),
+            // Landing on the second step. OUT: it arrives and sags.
+            Key::eased(12, catch, Ease::OUT),
             Key::eased(18, gather, Ease::SMOOTH),
             Key::eased(23, stance(), Ease::OUT),
         ],
@@ -309,11 +342,11 @@ fn stagger() -> Recipe {
     // scarecrow poles. Over-rotation is the point of the pose, but it belongs
     // in the hips and the head, which have room for it.
     let deflected = stance()
-        .hips(0.03, -0.065, 0.070)
-        .root(13.0, -5.0, -6.0)
-        .spine(6.0, -4.0, -14.0)
-        .chest(2.0, -5.0, -22.0)
-        .head(-16.0, 11.0, -28.0)
+        .hips(0.04, -0.075, 0.090)
+        .root(16.0, -7.0, -6.0)
+        .spine(7.0, -5.0, -14.0)
+        .chest(2.0, -6.0, -22.0)
+        .head(-20.0, 14.0, -30.0)
         .shoulder_l(20.0, 16.0, 0.0)
         .elbow_l(72.0)
         .shoulder_r(40.0, 10.0, -34.0)
@@ -328,15 +361,15 @@ fn stagger() -> Recipe {
     // sideways off the line of the parry. Both hands have dropped below the
     // chest and the centre line is wide open.
     let tipping = stance()
-        .hips(0.055, -0.100, 0.135)
-        .root(20.0, -7.0, 4.0)
-        .spine(9.0, -5.0, -12.0)
-        .chest(3.0, -5.0, -18.0)
-        .head(-8.0, 14.0, -22.0)
-        .shoulder_l(4.0, 18.0, 0.0)
-        .elbow_l(58.0)
-        .shoulder_r(16.0, 34.0, -14.0)
-        .elbow_r(44.0)
+        .hips(0.075, -0.115, 0.170)
+        .root(26.0, -11.0, 4.0)
+        .spine(11.0, -7.0, -12.0)
+        .chest(4.0, -6.0, -18.0)
+        .head(-14.0, 18.0, -24.0)
+        .shoulder_l(-10.0, 42.0, 0.0)
+        .elbow_l(40.0)
+        .shoulder_r(6.0, 54.0, -14.0)
+        .elbow_r(34.0)
         .wrists(-16.0, 0.0, 0.0)
         .plant_l([L + 0.03, GROUND, LEAD_Z + 0.10])
         .plant_r([R + 0.04, GROUND + 0.14, REAR_Z + 0.12])
@@ -347,15 +380,15 @@ fn stagger() -> Recipe {
     // what stops a fall and is also the most open the body gets -- feet too far
     // apart to move, chest square to the front, both hands at hip height.
     let caught = stance()
-        .hips(0.075, -0.150, 0.090)
-        .root(16.0, -8.0, 8.0)
-        .spine(5.0, -5.0, -10.0)
-        .chest(0.0, -5.0, -14.0)
-        .head(-12.0, 12.0, -14.0)
-        .shoulder_l(-6.0, 24.0, 0.0)
-        .elbow_l(44.0)
-        .shoulder_r(2.0, 44.0, -10.0)
-        .elbow_r(38.0)
+        .hips(0.095, -0.175, 0.110)
+        .root(20.0, -12.0, 8.0)
+        .spine(6.0, -7.0, -10.0)
+        .chest(0.0, -6.0, -14.0)
+        .head(-14.0, 16.0, -14.0)
+        .shoulder_l(-12.0, 36.0, 0.0)
+        .elbow_l(40.0)
+        .shoulder_r(-4.0, 52.0, -10.0)
+        .elbow_r(34.0)
         .plant_l([L + 0.01, GROUND, LEAD_Z + 0.02])
         .plant_r([R + 0.18, GROUND, 0.21])
         .toe_l(-6.0)

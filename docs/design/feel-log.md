@@ -5909,7 +5909,7 @@ positioning is a constant thing.
   is spent after. Both freeze together, so **no frame-advantage number moves**. A blocked
   blow freezes for `Offence → Impact freeze on block` (60%) of it; the creature's blows
   freeze their victim for `Offence → Impact freeze, the creature's blows` (6f) and the
-  creature not at all; a fighter's blow on the creature freezes the fighter. Buttons
+  creature not at all; a fighter's blow on the creature freezes nobody. Buttons
   pressed during a freeze are kept and pressed on the first frame after it. Every move
   outside the Champion started from its damage (2 + damage/22, 3 to 12 frames).
 - **The struck body shudders** through the freeze: `view::interp::shudder_of`, seven
@@ -5921,8 +5921,8 @@ positioning is a constant thing.
 - **Knockback, the whole roster.** Every heavy hit (a hundred damage or more) doubled; the
   lighter ones ×1.4. Slam 11 → 22, Executioner, Cataclysm and Judgement 10 → 20, Fire
   pillar 8 → 16, Fissure 6 → 12, Grapple 6 → 12; Bash, Slash, Air bolt, Landfall and the
-  Reaping sweep ×1.4. The thrown shield 7 → 10, the fire bolt 3 → 4. The creature ×1.35 or
-  so: bite 12, stomp 9, tail 6, charge 22, rear-and-slam 16, back kick 18. The Dual mage's
+  Reaping sweep ×1.4. The thrown shield 7 → 10, the fire bolt 3 → 4. The creature about
+  ×1.15: bite 10, stomp 8, tail 5, charge 18, rear-and-slam 14, back kick 15. The Dual mage's
   two autos went the *other* way, −4.4 → −3.4 and 4.8 → 3.7, so that they move people the
   distance they did before: their spacing was tuned to the centimetre (`the light auto's
   step back lands its tip`) and the slower decay alone had pushed the dark auto's pull into
@@ -5960,6 +5960,17 @@ The freeze's own contract is `crates/sim/tests/impact.rs`: both bodies freeze fo
 length and together, nothing moves during it, the knockback survives it, a block freezes
 for less, and a button pressed inside it does exactly what it does pressed on the frame
 after.
+
+**Reverted in the same pass: the creature, at first.** The first cut gave the creature's
+blows ×1.35 knockback and froze a fighter for their own move's length whenever they hit
+it. `crates/hunt/tests/fight.rs` caught both: the scripted hunter lost all eighteen hunts,
+nobody ever got on the animal's back, and nobody toppled it. Putting the creature's
+knockback back fixed five of the six failing properties — a hunter thrown clear on every
+blow never reaches the leg it is climbing — and the sixth was the freeze: a fighter held
+still for up to thirteen frames inside the reach of a thirteen-metre animal that had not
+stopped. What stayed is a ×1.15 on its knockback, with the whole hunt suite passing, and no
+freeze on either side of a blow on the creature. Its flinch and its poise are what show a
+hit landing on it.
 
 **Found on the way, and worth knowing before anybody writes a knockback test**: the usual
 fixture — walk one fighter into the other — pushes the victim up against the side of a
