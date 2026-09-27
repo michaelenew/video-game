@@ -762,6 +762,7 @@ fn input_at(action: Action, stride: f32, frame: u32) -> PoseInput {
         health: 1000,
         round_left: None,
         sim_frame: frame,
+        shudder: 0.0,
         bind_pose: false,
     }
 }
@@ -1488,4 +1489,35 @@ fn a_floating_body_still_poses_from_state_alone() {
         input.stride = 0.37;
         assert_eq!(pose_for(input), pose_for(input));
     }
+}
+
+#[test]
+fn a_struck_body_shudders_through_the_freeze_and_the_striker_does_not() {
+    // The freeze holds both bodies still; what tells the two apart on screen is
+    // that the one who was hit is seen to take it. Out on open floor, a step
+    // apart, and the hammer, because it freezes longest.
+    let mut w = sim::World::with_classes([sim::Class::Champion, sim::Class::Bulwark]);
+    let y = w.players[0].pos.y;
+    w.players[0].pos = sim::V3::new(sim::Fx::ZERO, y, sim::Fx::from_int(8));
+    w.players[1].pos = sim::V3::new(sim::Fx::ratio(6, 5), y, sim::Fx::from_int(8));
+    let mut shook = Vec::new();
+    for _ in 0..80 {
+        w.advance([
+            sim::Input::aimed(sim::Input::MIDDLE, 0),
+            sim::Input::aimed(0, 1 << 15),
+        ]);
+        let struck = view::interp::shudder_of(&w.players[1]);
+        let striker = view::interp::shudder_of(&w.players[0]);
+        assert_eq!(striker, 0.0, "the body that landed the blow shook");
+        if w.players[1].frozen > 0 {
+            shook.push(struck);
+        } else {
+            assert_eq!(struck, 0.0, "the shudder outlasted the freeze");
+        }
+    }
+    assert!(shook.len() > 2, "the hammer never landed");
+    assert!(
+        shook.windows(2).all(|p| p[0] * p[1] < 0.0),
+        "the shudder does not alternate: {shook:?}"
+    );
 }

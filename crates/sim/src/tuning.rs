@@ -163,6 +163,31 @@ pub fn repeat_lockout() -> u16 {
     oven::scalar(Scalar::RepeatLockout) as u16
 }
 
+/// What share of a move's impact freeze a **blocked** blow gets, as a percentage.
+///
+/// Less than a clean hit, and not nothing. A blow taken on a guard still
+/// arrives -- the shield rings, the arms give -- and a block that registered
+/// with no weight at all would read as the attack passing through. But the
+/// freeze is the headline of a *landed* hit, and a block that felt as heavy as
+/// one would be telling both players the wrong thing about what just happened.
+///
+/// Both bodies pay it equally, so it moves no frame-advantage number: on block
+/// is still exactly what the frame table prints. See [`crate::moves::Move::hitstop`].
+pub fn freeze_on_block() -> u16 {
+    oven::scalar(Scalar::FreezeOnBlock) as u16
+}
+
+/// How long a fighter holds still when the creature's blow lands on them.
+///
+/// One number for every move the animal has rather than a column on its table,
+/// because what it is for is different: the creature does not freeze -- it is
+/// thirteen metres of animal and one fighter being hit does not stop it -- so
+/// this is only the victim's half, the moment of being struck before the
+/// knockback takes them. It is there so a bite reads as a bite.
+pub fn creature_freeze() -> u16 {
+    oven::scalar(Scalar::FreezeCreature) as u16
+}
+
 /// What a successful parry costs the attacker. Must be long enough that the
 /// punish is worth the risk of trying to parry at all.
 pub fn parry_stagger() -> u16 {
@@ -229,12 +254,6 @@ pub fn cast_height() -> Fx {
 /// how her meter is steered.
 pub fn hand_offset() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::HandOffset))
-}
-
-/// Knockback decay per tick while stunned. Below 1.0 or a hit sends you
-/// sliding forever.
-pub fn knockback_decay() -> Fx {
-    Fx::from_raw(oven::scalar(Scalar::KnockbackDecay))
 }
 
 // ---------------------------------------------------------------------------
@@ -1066,6 +1085,16 @@ pub fn dodge_decay() -> Fx {
 
 /// What knockback keeps each frame. Decay rather than a dead stop, so being hit
 /// mid-jump is not immediately steered out of.
+///
+/// **This is the number that decides how far a shove carries**, together with
+/// the move's own knockback speed and how long its stun lasts: the slide is
+/// `speed * dt * (1 + d + d^2 + ...)`, cut off when the stun ends. At 0.86 the
+/// series summed to a sixth of a metre per unit of speed and gave up most of it
+/// in the first six frames, which is why a sword cut moved somebody fifteen
+/// centimetres and nobody could see it. 0.9 keeps the slide going long enough
+/// to read as travel. There used to be a second knob beside this one called
+/// "Knockback decay" that nothing read; it is gone, so the one in the Oven is
+/// the one that moves people.
 pub fn stun_decay() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::StunDecay))
 }

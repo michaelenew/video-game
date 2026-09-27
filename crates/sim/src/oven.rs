@@ -136,7 +136,6 @@ scalars! {
     DodgeSpeed,       "Defence",  "Dodge speed",            Fixed,   fx(1,1),   fx(40,1);
     AirDodgeFrames,   "Defence",  "Airdodge length",        Frames,  1,         60;
     AirDodgeSpeed,    "Defence",  "Airdodge speed",         Fixed,   fx(1,1),   fx(40,1);
-    KnockbackDecay,   "Defence",  "Knockback decay",        Fixed,   0,         fx(1,1);
     BodyRadius,       "Body",     "Body radius",            Fixed,   fx(1,10),  fx(2,1);
     BodyHeight,       "Body",     "Body height",            Fixed,   fx(1,2),   fx(4,1);
     CrouchHeightScale,"Body",     "Crouch height (x)",      Fixed,   fx(1,10),  fx(1,1);
@@ -607,6 +606,12 @@ scalars! {
     MonsterLaunch,    "Ridgeback","Launching into a charge (m/s2)",           Fixed,  fx(10,1), fx(2000,1);
     HuntGrace,        "Ridgeback · mind","Holds off when a hunt begins",   Frames, 0,        600;
     LotusBladesAPass, "Reaver",   "Lotus, blades that cut one body a pass", Int, 1,      12;
+    // **The impact freeze**, 2026-09-26: both bodies hold still for a few
+    // frames when a blow connects, which is most of what makes a hit read as
+    // heavy. Each move's own length is its `Impact freeze` column; these are
+    // the two rules around it. See `moves::Move::hitstop`.
+    FreezeOnBlock,    "Offence",  "Impact freeze on block (%)",           Percent, 0,       100;
+    FreezeCreature,   "Offence",  "Impact freeze, the creature's blows",  Frames,  0,       30;
 }
 
 // ---------------------------------------------------------------------------
@@ -828,6 +833,9 @@ pub enum MoveField {
     // Appended for the Blood mage's rebuild: what share of an essence pool a
     // move drinks when it lands over one. See `moves::Move::drink`.
     Drink,
+    // Appended for the Champion's weight pass: how many frames both bodies
+    // hold still for when this move connects. See `moves::Move::hitstop`.
+    Hitstop,
 }
 
 impl MoveField {
@@ -861,6 +869,7 @@ impl MoveField {
         MoveField::Reactivate,
         MoveField::Step,
         MoveField::Drink,
+        MoveField::Hitstop,
     ];
 
     pub const fn label(self) -> &'static str {
@@ -894,6 +903,7 @@ impl MoveField {
             MoveField::Reactivate => "Reactivate no sooner than",
             MoveField::Step => "Steps forward (m)",
             MoveField::Drink => "Drinks of a pool (%)",
+            MoveField::Hitstop => "Impact freeze",
         }
     }
 
@@ -904,7 +914,8 @@ impl MoveField {
             | MoveField::Recovery
             | MoveField::Hitstun
             | MoveField::Blockstun
-            | MoveField::AirStall => Unit::Frames,
+            | MoveField::AirStall
+            | MoveField::Hitstop => Unit::Frames,
             MoveField::Damage => Unit::Int,
             MoveField::Mobility => Unit::Percent,
             MoveField::Unblockable | MoveField::HitsCrouching | MoveField::NeedsMechanic => {
@@ -1156,7 +1167,7 @@ pub const AIR_COUNT: usize = CLASSES * 4;
 /// else three, and a rectangular table would have meant seven empty rows per
 /// class in the palette and in the baked file.
 pub const MOVE_COUNT: usize = crate::moves::TOTAL_SLOTS * MOVE_FIELDS;
-pub const MOVE_FIELDS: usize = 29;
+pub const MOVE_FIELDS: usize = 30;
 
 // ---------------------------------------------------------------------------
 // The live store

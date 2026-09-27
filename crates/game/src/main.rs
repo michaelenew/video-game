@@ -122,6 +122,7 @@ fn main() {
         .init_resource::<ShadowFades>()
         .init_resource::<ShieldHands>()
         .init_resource::<Hands>()
+        .init_resource::<Torsos>()
         .init_resource::<palette::UiFocus>()
         .init_resource::<hud::ShowClassButtons>()
         .add_plugins(bevy_egui::EguiPlugin {
@@ -173,6 +174,8 @@ fn main() {
                     place_marks,
                     place_scythes,
                     place_essence_swings,
+                    place_champion_arms,
+                    place_champion_trails,
                     place_pips,
                 ),
                 beast::place,
@@ -328,6 +331,13 @@ struct ShieldHands([(Vec3, Quat); MAX_PLAYERS]);
 /// mage's scythe, which rides the hands the clips put on its haft.
 #[derive(Resource, Default)]
 struct Hands([[Vec3; 2]; MAX_PLAYERS]);
+
+/// Where each fighter's chest and hips are drawn, in the arena: a point and a
+/// rotation each. Written by the posing pass and read by the one that hangs the
+/// Champion's stowed weapons on her back and at her hip, so they lean and turn
+/// with the body rather than floating at a fixed height.
+#[derive(Resource, Default)]
+struct Torsos([[(Vec3, Quat); 2]; MAX_PLAYERS]);
 
 /// One cross-fade per fighter. Renderer-local: a rollback rewinds it to
 /// whatever it was, which is wrong by a few frames of blend weight and
@@ -818,6 +828,38 @@ struct ScytheMesh {
 
 /// A weapon is a haft and a blade in two lengths, so its curve can be seen.
 const SCYTHE_PIECES: usize = 3;
+
+/// One piece of one of the Champion's three weapons.
+///
+/// A fixed pool -- every fighter gets all three weapons' worth, hidden unless
+/// they are a Champion -- because the class is picked at runtime and spawning
+/// meshes on Tab would put allocation on the frame. What shape and stuff each
+/// piece is comes from `view::arms::MAKE`, and where it is from
+/// `view::arms::pieces`.
+#[derive(Component)]
+struct ArmsMesh {
+    owner: usize,
+    weapon: u8,
+    piece: usize,
+}
+
+/// One segment of the arc a Champion's cut leaves: the band between two
+/// remembered frames of the hit volume. See `view::arms::trail`.
+#[derive(Component)]
+struct TrailMesh {
+    owner: usize,
+    segment: usize,
+}
+
+/// How many steps of solidity a trail segment is drawn in, per weapon.
+const TRAIL_STEPS: usize = 6;
+
+/// The Champion's materials: one per stuff her weapons are made of, and a
+/// stepped fade per weapon for the trail. Made once.
+#[derive(Resource)]
+struct ArmsLook {
+    trail: [[Handle<StandardMaterial>; TRAIL_STEPS]; 3],
+}
 
 /// The essence around the Blood mage's swing: the hit volume itself, drawn
 /// in the same stuff as her pools, because it is the life force doing the
@@ -1313,6 +1355,117 @@ fn setup(
             ));
         }
     }
+
+    // The Champion's three weapons. Each piece is a unit mesh of its shape,
+    // scaled per frame; see `view::arms`.
+    let block = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
+    let stuff = |stuff: view::arms::Stuff| -> StandardMaterial {
+        use view::arms::Stuff;
+        match stuff {
+            // Polished: light, and shiny enough to catch the key light.
+            Stuff::Steel => StandardMaterial {
+                base_color: Color::srgb(0.82, 0.85, 0.90),
+                metallic: 0.9,
+                perceptual_roughness: 0.28,
+                ..default()
+            },
+            // Forged and heavy: dark, dull, and the one thing on her that
+            // looks like it weighs something.
+            Stuff::Iron => StandardMaterial {
+                base_color: Color::srgb(0.26, 0.27, 0.30),
+                metallic: 0.8,
+                perceptual_roughness: 0.6,
+                ..default()
+            },
+            Stuff::Brass => StandardMaterial {
+                base_color: Color::srgb(0.80, 0.62, 0.28),
+                metallic: 0.85,
+                perceptual_roughness: 0.4,
+                ..default()
+            },
+            Stuff::Wood => StandardMaterial {
+                base_color: Color::srgb(0.40, 0.25, 0.13),
+                perceptual_roughness: 0.85,
+                ..default()
+            },
+            Stuff::Leather => StandardMaterial {
+                base_color: Color::srgb(0.20, 0.12, 0.08),
+                perceptual_roughness: 0.9,
+                ..default()
+            },
+            Stuff::Cloth => StandardMaterial {
+                base_color: Color::srgb(0.75, 0.10, 0.10),
+                perceptual_roughness: 0.95,
+                ..default()
+            },
+        }
+    };
+    use view::arms::Stuff;
+    let stuffs = [
+        Stuff::Steel,
+        Stuff::Iron,
+        Stuff::Brass,
+        Stuff::Wood,
+        Stuff::Leather,
+        Stuff::Cloth,
+    ];
+    let stuff_handles: [Handle<StandardMaterial>; 6] =
+        std::array::from_fn(|i| materials.add(stuff(stuffs[i])));
+    for owner in 0..MAX_PLAYERS {
+        for weapon in 0..view::arms::WEAPONS {
+            for piece in 0..view::arms::PIECES {
+                let (shape, made_of) = view::arms::MAKE[weapon][piece];
+                let mesh = match shape {
+                    view::arms::Shape::Block => block.clone(),
+                    view::arms::Shape::Rod => unit.clone(),
+                    view::arms::Shape::Point => look.spike.clone(),
+                    view::arms::Shape::Knob => look.ball.clone(),
+                };
+                let at = stuffs.iter().position(|s| *s == made_of).unwrap_or(0);
+                commands.spawn((
+                    Mesh3d(mesh),
+                    MeshMaterial3d(stuff_handles[at].clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                    ArmsMesh {
+                        owner,
+                        weapon: weapon as u8,
+                        piece,
+                    },
+                ));
+            }
+        }
+        for segment in 0..view::arms::TRAIL - 1 {
+            commands.spawn((
+                Mesh3d(block.clone()),
+                MeshMaterial3d(look.beam.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+                TrailMesh { owner, segment },
+            ));
+        }
+    }
+    // The trail, one colour per weapon so the three arcs are told apart as
+    // well as the three silhouettes: the sword's cold and white, the hammer's
+    // a hot ember, the spear's a thin blue streak. Unlit, so it reads the same
+    // on either side of the arena.
+    let tints = [(0.88, 0.93, 1.0), (1.0, 0.55, 0.20), (0.45, 0.80, 1.0)];
+    let trail = std::array::from_fn(|weapon| {
+        let (r, g, b) = tints[weapon];
+        std::array::from_fn(|step| {
+            let solid = 0.08 + 0.42 * step as f32 / (TRAIL_STEPS - 1) as f32;
+            materials.add(StandardMaterial {
+                base_color: Color::srgba(r, g, b, solid),
+                emissive: LinearRgba::rgb(r * 1.5 * solid, g * 1.5 * solid, b * 1.5 * solid),
+                alpha_mode: AlphaMode::Blend,
+                unlit: true,
+                double_sided: true,
+                cull_mode: None,
+                ..default()
+            })
+        })
+    });
+    commands.insert_resource(ArmsLook { trail });
     commands.insert_resource(look);
 }
 
@@ -1421,8 +1574,15 @@ fn place_beams(sim: Res<Sim>, mut meshes: Query<(&BeamMesh, &mut Transform, &mut
         // Lines only. A volume that carries a section is a wing, and a straight
         // line through a curve is exactly the drawing this rule exists to
         // avoid -- `place_wings` has it.
-        let shot = sim::state::hitbox(&sim.cur.players[tag.0])
-            .filter(|hb| hb.is_a_beam() && hb.sector.is_none());
+        //
+        // And not the Champion's: her weapons are drawn now, on the volume,
+        // and the arc of the cut is `place_champion_trails`. A glowing rod
+        // the width of the capsule on top of a sword was two drawings of one
+        // thing, and the rod is the one that said nothing about the weapon.
+        // The debug overlay still draws the capsule itself.
+        let p = &sim.cur.players[tag.0];
+        let shot = sim::state::hitbox(p)
+            .filter(|hb| p.class != sim::Class::Champion && hb.is_a_beam() && hb.sector.is_none());
         let Some(hb) = shot else {
             *vis = Visibility::Hidden;
             continue;
@@ -1780,6 +1940,129 @@ fn place_scythes(
         } else {
             Vec3::new(0.025, length, scythe.breadth)
         };
+    }
+}
+
+/// Put the Champion's three weapons where `view::arms` says they are: the one
+/// in her hands on the hit volume, the other two stowed on her body.
+///
+/// Like the scythe, **the renderer decides nothing about the reach**: the tip
+/// of the weapon out comes from the same `state::hitbox` the hit test reads,
+/// and the only things added here are where the hands and torso are drawn.
+fn place_champion_arms(
+    sim: Res<Sim>,
+    hands: Res<Hands>,
+    torsos: Res<Torsos>,
+    inside: Res<InsideOwnHead>,
+    mut meshes: Query<(&ArmsMesh, &mut Transform, &mut Visibility)>,
+) {
+    let mut placed: [Option<view::arms::Arms>; MAX_PLAYERS] = [None; MAX_PLAYERS];
+    for (owner, slot) in placed.iter_mut().enumerate() {
+        let [left, right] = hands.0[owner];
+        let [(chest, chest_turn), (hips, hips_turn)] = torsos.0[owner];
+        let torso = view::arms::Torso {
+            chest: chest.into(),
+            chest_turn: quat(chest_turn),
+            hips: hips.into(),
+            hips_turn: quat(hips_turn),
+        };
+        *slot =
+            view::arms::champion_arms(&sim.cur.players[owner], left.into(), right.into(), &torso);
+    }
+    let me = sim.local_player();
+    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+        let Some(arms) = placed[tag.owner].as_ref() else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        // What is on her back is in the way of a camera that has climbed into
+        // her head, and it says nothing to the player who is her.
+        let stowed = !arms.weapons[tag.weapon as usize].held;
+        if stowed && tag.owner == me && inside.0 > 0.3 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        let piece = view::arms::pieces(arms, tag.weapon)[tag.piece];
+        if !piece.shown {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        *vis = Visibility::Inherited;
+        let y = Vec3::from(piece.along);
+        let z = Vec3::from(piece.across);
+        let x = y.cross(z).try_normalize().unwrap_or(Vec3::X);
+        let z = x.cross(y);
+        tf.translation = Vec3::from(piece.centre);
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
+        tf.scale = Vec3::from(piece.size);
+    }
+}
+
+fn quat(q: Quat) -> view::math::Quat {
+    view::math::Quat([q.x, q.y, q.z, q.w])
+}
+
+/// Draw the arc of a Champion's cut: a band across the outer part of the hit
+/// volume between each two remembered active frames, faint at the old end and
+/// solid at the new one, fading out through the first frames of the recovery.
+fn place_champion_trails(
+    sim: Res<Sim>,
+    look: Res<ArmsLook>,
+    mut meshes: Query<(
+        &TrailMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    let trails: [Option<view::arms::Trail>; MAX_PLAYERS] =
+        std::array::from_fn(|owner| view::arms::trail(&sim.cur.players[owner]));
+    for (tag, mut tf, mut vis, mut mat) in meshes.iter_mut() {
+        let Some(t) = trails[tag.owner].as_ref() else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        let i = tag.segment;
+        if i + 1 >= t.count {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+        let (a0, b0) = (Vec3::from(t.inner[i]), Vec3::from(t.outer[i]));
+        let (a1, b1) = (Vec3::from(t.inner[i + 1]), Vec3::from(t.outer[i + 1]));
+        // Along the band: inner edge to outer, averaged over the two frames.
+        let band = ((b0 - a0) + (b1 - a1)) * 0.5;
+        let Some(y) = band.try_normalize() else {
+            *vis = Visibility::Hidden;
+            continue;
+        };
+        // Along the arc: how the band moved between the two frames, square to
+        // it. A thrust barely moves sideways, and its trail is a thin streak.
+        let moved = ((a1 - a0) + (b1 - b0)) * 0.5;
+        let square = moved - y * moved.dot(y);
+        let (z, breadth) = match square.try_normalize() {
+            Some(z) if square.length() > 0.02 => (z, square.length() + 0.04),
+            _ => (
+                y.cross(Vec3::Y)
+                    .try_normalize()
+                    .map(|side| side.cross(y))
+                    .unwrap_or(Vec3::Z),
+                0.05,
+            ),
+        };
+        let x = y.cross(z).try_normalize().unwrap_or(Vec3::X);
+        let z = x.cross(y);
+        *vis = Visibility::Inherited;
+        tf.translation = (a0 + b0 + a1 + b1) * 0.25;
+        tf.rotation = Quat::from_mat3(&Mat3::from_cols(x, y, z));
+        tf.scale = Vec3::new(0.015, band.length(), breadth);
+        // Older segments fainter, and the whole of it fading with the ghost.
+        let age = (i + 1) as f32 / (t.count - 1) as f32;
+        let solid = (age * t.fade).clamp(0.0, 1.0);
+        let step = (solid * (TRAIL_STEPS - 1) as f32).round() as usize;
+        let want = &look.trail[(t.which as usize).min(2)][step];
+        if mat.0 != *want {
+            mat.0 = want.clone();
+        }
     }
 }
 
@@ -2710,6 +2993,7 @@ fn apply_poses(
     mut shadow_fades: ResMut<ShadowFades>,
     mut hands: ResMut<ShieldHands>,
     mut both: ResMut<Hands>,
+    mut torsos: ResMut<Torsos>,
     hub: Option<Res<crate::hub::Hub>>,
     mut roots: Posed<Fighter, BodyPart, ShadowRoot, ShadowPart>,
     mut parts: Posed<BodyPart, Fighter, ShadowRoot, ShadowPart>,
@@ -2766,6 +3050,14 @@ fn apply_poses(
             let (at, _) = skins[owner].box_of(&skeletons[owner], view::hand_joint(left));
             both.0[owner][side] =
                 Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]);
+        }
+        // And the chest and hips, for whatever is carried on the body.
+        for (slot, joint) in [(0, view::Joint::Chest), (1, view::Joint::Root)] {
+            let (at, rot) = skins[owner].box_of(&skeletons[owner], joint);
+            torsos.0[owner][slot] = (
+                Vec3::new(p.pos[0], p.pos[1], p.pos[2]) + turn * Vec3::new(at[0], at[1], at[2]),
+                turn * Quat::from_xyzw(rot.0[0], rot.0[1], rot.0[2], rot.0[3]),
+            );
         }
     }
 

@@ -1897,7 +1897,7 @@ fn the_combo_the_class_is_built_around_is_playable() {
     // Hammer, and keep the button down: a link that lands cuts its own tail
     // short, so the string walks itself into the second hit.
     let mut second = false;
-    for _ in 0..50 {
+    for _ in 0..90 {
         w.advance([Input::aimed(MMB, LOOK_RIGHT), Input::aimed(0, LOOK_LEFT)]);
         second |= w.players[0].action.attack_kind() == Some(moves::champion::UPROOT);
         if second {
@@ -2486,8 +2486,16 @@ fn rush_cancels_a_recovery() {
     // ends.
     let mut w = engaged(Class::Champion);
     run(&mut w, 2, MMB, 0);
-    // Deep into the hammer's recovery, which is the longest tail it has.
-    run(&mut w, 24, 0, 0);
+    // Into the hammer's recovery, which is the longest tail it has. Waited for
+    // rather than counted: how long it takes to get there is the startup plus
+    // the impact freeze, and both are knobs.
+    for _ in 0..90 {
+        if matches!(w.players[0].action, Action::Recovery { .. }) {
+            break;
+        }
+        run(&mut w, 1, 0, 0);
+    }
+    run(&mut w, 4, 0, 0);
     assert!(
         matches!(w.players[0].action, Action::Recovery { .. }),
         "the fixture is not in a recovery: {:?}",

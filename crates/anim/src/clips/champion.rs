@@ -91,11 +91,12 @@
 //! frame the hitbox appears, and retuning any of these in the Oven moves the
 //! animation with it rather than leaving it teaching the wrong timing.
 
-use crate::bake::{Key, Looseness, Recipe};
+use crate::bake::{Feel, Key, Looseness, Recipe};
 use crate::ease::Ease;
 use view::clips::Clip;
 use view::math::V3;
-use view::pose::{ANKLE_ON_GROUND as GROUND, Pose};
+use view::pose::{ANKLE_ON_GROUND as GROUND, Pose, reference};
+use view::skeleton::Joint;
 
 /// The two spots the fighter stands on: left foot leading, right foot back and
 /// bladed. The same footprint the idle holds, so entering a move and leaving it
@@ -105,6 +106,18 @@ const REAR: V3 = [0.145, GROUND, -0.15];
 
 /// Half the distance between the hands on the haft.
 const GRIP: f32 = 0.12;
+
+/// Half the distance between the hands **slid together** near the butt of
+/// the haft, for a big overhead.
+///
+/// What a two-handed overhead does with a heavy head on the end: the top hand
+/// runs down the handle to meet the bottom one as the weapon goes up, so the
+/// whole length is out beyond the hands and the swing has the longest lever it
+/// can. It is also what keeps both arms inside a shoulder's range when the grip
+/// is above the head -- two hands a full grip apart up there puts the lower one
+/// so close to its own shoulder that the elbow has to fold. Still a hand's
+/// width and more apart, so the weapon's line is never in doubt.
+const CHOKE: f32 = 0.065;
 
 /// Constant speed *at the hands*, which is not the same thing as constant
 /// speed in the joint angles.
@@ -208,9 +221,13 @@ fn ready() -> Pose {
 /// Call it after the torso is posed and before the feet: the arms are solved
 /// against a chest the spine has already moved.
 fn weapon(pose: Pose, at: V3, dir: V3) -> Pose {
+    grip(pose, at, dir, GRIP)
+}
+
+fn grip(pose: Pose, at: V3, dir: V3, half: f32) -> Pose {
     let d = unit(dir);
-    pose.reach_r(along(at, d, GRIP))
-        .reach_l(along(at, d, -GRIP))
+    pose.reach_r(along(at, d, half))
+        .reach_l(along(at, d, -half))
 }
 
 /// Both feet on the guard's footprint. `lead_toe` tips the front foot -- a
@@ -316,6 +333,122 @@ impl Score {
         }
         self.0.push(Key::eased(frame, pose, ease));
     }
+
+    /// A swing keyed **on every frame** from one beat to the next, with the
+    /// arms solved afresh for each.
+    ///
+    /// For the big two-handed arcs. Between two keys the solver interpolates
+    /// joint *angles*, and an arm that goes from straight overhead to straight
+    /// out in front passes near the one direction where a shoulder's three
+    /// numbers stop meaning anything -- the elbow's twist is free up there, the
+    /// solver picks a different one at each end, and the frames in between
+    /// swing the elbow round its whole circle while the hands wander off the
+    /// haft. Interpolating the *grip* instead -- where the hands are and which
+    /// way the weapon points -- and solving the arms for it on each frame keeps
+    /// both hands on one line the whole way round, which is the only thing
+    /// that sells a weapon nothing hangs off.
+    ///
+    /// The body is blended from the two beats; the ease is spent on the grip's
+    /// travel, so `LINEAR` is a hand at one speed.
+    fn swing(&mut self, from: (u16, &Beat), to: (u16, &Beat), ease: Ease) {
+        let (a, b) = (from.0, to.0);
+        for f in a..b {
+            let t = ease.at((f - a) as f32 / (b - a).max(1) as f32);
+            self.key(f, from.1.toward(to.1, t), Ease::LINEAR);
+        }
+    }
+}
+
+/// One point on a swing, in the terms a swing is actually made of: the body,
+/// the angle the arms make coming out of the shoulders, and the angle the
+/// weapon makes in the hands. See `Score::swing`.
+///
+/// Angles are in degrees in the body's own vertical plane: `0` is straight
+/// ahead, `90` straight up, `180` straight back and `-90` straight down. The
+/// grip is placed `reach` metres out from the point between the two shoulders
+/// along `arm`, **measured from wherever this body's shoulders are** -- so a
+/// trunk that folds over a blow takes the hands with it, and a grip that is out
+/// at arm's length on one beat is out at arm's length on every frame between.
+/// That is the other half of keeping the elbows still: a straight arm's twist
+/// does not move its hand, so the arc stays clean however the solver rolls it.
+#[derive(Clone, Copy)]
+struct Beat {
+    body: Pose,
+    arm: f32,
+    reach: f32,
+    face: f32,
+    half: f32,
+    across: f32,
+}
+
+impl Beat {
+    fn new(body: Pose, arm: f32, reach: f32, face: f32, half: f32) -> Beat {
+        Beat {
+            body,
+            arm,
+            reach,
+            face,
+            half,
+            across: 0.0,
+        }
+    }
+
+    /// The grip moved off the centre line, in metres to the right.
+    fn across(self, x: f32) -> Beat {
+        Beat { across: x, ..self }
+    }
+
+    fn pose(&self) -> Pose {
+        self.toward(self, 0.0)
+    }
+
+    /// Part of the way to another beat, every number moved together.
+    fn toward(&self, other: &Beat, t: f32) -> Pose {
+        let lerp = |x: f32, y: f32| x + (y - x) * t;
+        let body = self.body.blend(&other.body, t);
+        let skin = view::skeleton::solve(reference(), &body);
+        let (l, r) = (
+            skin.origin[Joint::ArmL.index()],
+            skin.origin[Joint::ArmR.index()],
+        );
+        let mid = [
+            (l[0] + r[0]) * 0.5,
+            (l[1] + r[1]) * 0.5,
+            (l[2] + r[2]) * 0.5,
+        ];
+        let arm = lerp(self.arm, other.arm).to_radians();
+        let reach = lerp(self.reach, other.reach);
+        let face = lerp(self.face, other.face).to_radians();
+        let at = [
+            mid[0] + lerp(self.across, other.across),
+            mid[1] + reach * arm.sin(),
+            mid[2] + reach * arm.cos(),
+        ];
+        let dir = [0.0, face.sin(), face.cos()];
+        let half = lerp(self.half, other.half);
+        // The elbows are told where to point rather than left to the solver's
+        // taste: out to the side and under the arm, turning with it. What the
+        // solver would pick on its own is right on any one frame and different
+        // on the next, which is the whole problem this type exists to solve.
+        let under = [0.0, -arm.cos(), arm.sin()];
+        let pole = |side: f32| unit([side * 0.8, under[1], under[2]]);
+        let mut pose = body;
+        view::ik::reach(
+            &mut pose,
+            reference(),
+            Joint::ArmR,
+            along(at, dir, half),
+            pole(1.0),
+        );
+        view::ik::reach(
+            &mut pose,
+            reference(),
+            Joint::ArmL,
+            along(at, dir, -half),
+            pole(-1.0),
+        );
+        pose
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -348,16 +481,16 @@ fn sweep() -> Recipe {
     // six-frame startup has room for, so it has to be a big one.
     let cocked = {
         let body = Pose::rest()
-            .hips(0.04, -0.09, -0.02)
-            .root(2.0, -4.0, 26.0)
-            .spine(6.0, -7.0, 18.0)
-            .chest(2.0, -5.0, 18.0)
-            .head(0.0, 3.0, -34.0)
-            .wrists(-6.0, 0.0, 0.0);
+            .hips(0.05, -0.10, -0.04)
+            .root(1.0, -5.0, 30.0)
+            .spine(4.0, -8.0, 21.0)
+            .chest(0.0, -6.0, 21.0)
+            .head(-2.0, 3.0, -38.0)
+            .wrists(0.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.36, 1.46, 0.10], [0.56, 0.74, 0.37]),
-            -8.0,
-            0.05,
+            weapon(body, [0.36, 1.50, 0.08], [0.56, 0.74, 0.37]),
+            -10.0,
+            0.03,
         )
     };
 
@@ -415,6 +548,24 @@ fn sweep() -> Recipe {
         )
     };
 
+    // Past the hip and still going: the follow-through of a cut that was
+    // thrown rather than placed. The hips have turned through square and the
+    // weight is over the front foot.
+    let past = {
+        let body = Pose::rest()
+            .hips(-0.09, -0.18, 0.08)
+            .root(11.0, 5.0, -32.0)
+            .spine(16.0, 7.0, -24.0)
+            .chest(6.0, 5.0, -24.0)
+            .head(3.0, -2.0, 44.0)
+            .wrists(-8.0, 0.0, 0.0);
+        step_stance(
+            weapon(body, [-0.36, 0.86, 0.30], [-0.62, -0.60, 0.50]),
+            0.08,
+            0.0,
+        )
+    };
+
     // The push, two frames before the blade arrives: the rear leg driving, the
     // lead foot off the floor on its way to the spot it will land on. This is
     // the frame the simulation starts carrying the body, so it is the frame the
@@ -461,15 +612,18 @@ fn sweep() -> Recipe {
     // belongs at the far end, coming back to guard.
     score.key(tell(windup), cocked, Ease::LINEAR);
     score.key(part(tell(windup), windup, 0.75), push, Ease::LINEAR);
+    // The arc, and then a little past it: what is on screen when the volume
+    // ends is follow-through rather than a stop.
     score.key(contact, high, Ease::LINEAR);
     score.key(part(contact, through, 0.5), level, Ease::LINEAR);
     score.key(through, low, Ease::LINEAR);
+    score.key(through + 2, past, Ease::OUT);
     score.key(part(through, last, 0.55), settle, Ease::OUT);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
-        looseness: Looseness::CRISP,
+        looseness: SWORD,
         notes: "The opener, and the first stroke of a figure the three sword \
                 hits draw together: down from the right, down from the left, \
                 then up. Authored against the hit volume rather than beside it \
@@ -517,17 +671,17 @@ fn drive() -> Recipe {
     // frames to not be there.
     let set = {
         let body = Pose::rest()
-            .hips(0.03, -0.08, -0.02)
-            .root(2.0, -2.0, 16.0)
-            .spine(5.0, -3.0, 11.0)
-            .chest(2.0, -2.0, 12.0)
-            .head(-2.0, 0.0, -26.0)
+            .hips(0.04, -0.12, -0.05)
+            .root(2.0, -2.0, 22.0)
+            .spine(5.0, -3.0, 15.0)
+            .chest(2.0, -2.0, 16.0)
+            .head(-2.0, 0.0, -34.0)
             .wrists(-6.0, 0.0, 0.0);
         stand(
-            body.reach_r([0.22, 1.24, 0.36])
-                .reach_l([0.16, 1.04, -0.10]),
-            -4.0,
-            0.03,
+            body.reach_r([0.22, 1.24, 0.26])
+                .reach_l([0.16, 1.02, -0.14]),
+            -6.0,
+            0.0,
         )
     };
 
@@ -537,16 +691,16 @@ fn drive() -> Recipe {
     // hand has to be the thing that travels rather than the chest.
     let out = {
         let body = Pose::rest()
-            .hips(0.01, -0.11, 0.10)
-            .root(7.0, -1.0, 6.0)
-            .spine(9.0, -2.0, 2.0)
-            .chest(4.0, -1.0, 2.0)
-            .head(-3.0, 0.0, -10.0)
+            .hips(0.0, -0.15, 0.15)
+            .root(9.0, -1.0, 0.0)
+            .spine(10.0, -2.0, -6.0)
+            .chest(4.0, -1.0, -8.0)
+            .head(-4.0, 0.0, 6.0)
             .wrists(-2.0, 0.0, 0.0);
         stand(
-            body.reach_r([0.26, 1.26, 0.72]).reach_l([0.18, 1.06, 0.06]),
-            -2.0,
-            0.05,
+            body.reach_r([0.24, 1.26, 0.82]).reach_l([0.18, 1.04, 0.10]),
+            0.0,
+            0.08,
         )
     };
 
@@ -556,16 +710,16 @@ fn drive() -> Recipe {
     // one frame to be read.
     let full = {
         let body = Pose::rest()
-            .hips(0.0, -0.13, 0.14)
-            .root(9.0, -1.0, 2.0)
-            .spine(11.0, -1.0, -2.0)
-            .chest(5.0, -1.0, -2.0)
-            .head(-4.0, 0.0, -4.0)
+            .hips(-0.01, -0.17, 0.18)
+            .root(11.0, -1.0, -3.0)
+            .spine(12.0, -1.0, -9.0)
+            .chest(5.0, -1.0, -10.0)
+            .head(-5.0, 0.0, 12.0)
             .wrists(0.0, 0.0, 0.0);
         stand(
-            body.reach_r([0.28, 1.26, 0.84]).reach_l([0.18, 1.06, 0.10]),
+            body.reach_r([0.24, 1.26, 0.94]).reach_l([0.17, 1.04, 0.14]),
             0.0,
-            0.05,
+            0.10,
         )
     };
 
@@ -813,133 +967,303 @@ fn uppercut() -> Recipe {
 // Hammer -- overhead to the floor
 // ---------------------------------------------------------------------------
 
+/// How the hammer's body carries it.
+///
+/// Heavier than anything else in the file through the trunk -- the hips and the
+/// spine arrive late and carry past, which is the weight -- but the **arms are
+/// kept tight**. That is the one thing `Looseness::HEAVY` gets wrong for a
+/// two-handed overhead: it lags the hands three and a half frames behind the
+/// keys, and a downswing four frames long spent three and a half of them
+/// catching up is a hammer still pointing at the sky on the frame the hit test
+/// has it on the floor. Weight is follow-through, never delay: the arms stay
+/// on their keys, and the weight is carried by a trunk that arrives late and
+/// overshoots, and by keys that keep the body sinking after the weapon lands.
+/// Loose arms on a swing this big also do something worse than lag -- they
+/// interpolate a folded elbow the long way round its circle, and the hands
+/// leave the haft. See `Score::swing`.
+const HAMMER: Looseness = Looseness {
+    root: Feel::new(1.8, 0.9),
+    spine: Feel::new(2.0, 0.8),
+    chest: Feel::new(2.2, 0.72),
+    head: Feel::new(2.8, 0.55),
+    arms: Feel::new(0.7, 0.7),
+    legs: Feel::new(1.8, 0.85),
+};
+
+/// How the sword's body carries it: `CRISP` everywhere, and tighter still in
+/// the arms.
+///
+/// The cuts cross the whole front of the body in three frames, and the hands
+/// are what the eye follows. At `CRISP`'s arm lag the far hand is still on
+/// the wrong side of the chest when the blade should be past the hip, so the
+/// weapon the player sees points back the way the cut came from. A quick
+/// weapon is quick at the wrists first -- the wrists lead and the trunk
+/// follows -- so here the arms are the least laggy thing on the body.
+const SWORD: Looseness = Looseness {
+    root: Feel::new(0.8, 1.0),
+    spine: Feel::new(0.9, 1.0),
+    chest: Feel::new(1.0, 0.95),
+    head: Feel::new(1.3, 0.9),
+    arms: Feel::new(0.8, 0.8),
+    legs: Feel::new(1.1, 1.0),
+};
+
 /// Everything above the head, and then everything on the ground.
 ///
 /// The hammer is the one move in the set whose hit volume goes *under* the
-/// fighter: an arc in the vertical plane that finishes at floor level, which is
-/// what lets it reach a crouching opponent and a ridge lying along an animal's
-/// back. So the pose has to end with the head of the weapon genuinely down
-/// there, not merely angled at it -- a slam that stops at knee height is a
-/// slam that stops at knee height in the hit test too, and the two would
-/// disagree about a move whose whole job is the bottom of its arc.
+/// fighter: an arc in the vertical plane that starts overhead on the first
+/// active frame and finishes at floor level on the last, which is what lets it
+/// reach a crouching opponent and a ridge lying along an animal's back. So the
+/// clip is that arc, frame for frame -- the contact key has the weapon up over
+/// the head and already coming, and the key on the last live frame has its head
+/// genuinely on the floor, not merely angled at it.
 ///
 /// It is also the slowest thing the Champion has on the ground, and the
-/// telegraph is the product: fifteen frames of raising a weight over your head
-/// is a sentence the opponent can read from across the arena, and they are
-/// meant to.
+/// telegraph is the product: twenty frames of hauling a weight up over your head
+/// and back until it hangs behind you is a sentence the opponent can read from
+/// across the arena, and they are meant to. The body does it the way a person
+/// splitting a log does -- the weight rocks back onto the rear foot as the
+/// hammer goes up, the spine arches under it at the top, and the whole trunk
+/// then folds forward over the blow with the knees giving under it.
 fn slam() -> Recipe {
     let clip = Clip::ChampionHammer;
     let (windup, contact, through) = clip.phases().expect("slam animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // First read: the weight starts going up, and the body sinks under it.
-    let lift = {
+    // First read, on frame three: the weight rocks back onto the rear foot and
+    // the hammer starts up the right side. The front toe comes off the floor --
+    // the body is already somewhere it cannot attack from.
+    let rock = {
         let body = Pose::rest()
-            .hips(0.0, -0.11, -0.04)
-            .root(4.0, -2.0, 14.0)
-            .spine(6.0, -4.0, 10.0)
-            .chest(2.0, -3.0, 12.0)
-            .head(-8.0, 0.0, -26.0)
-            .wrists(-4.0, 0.0, 0.0);
+            .hips(0.03, -0.11, -0.07)
+            .root(-2.0, -3.0, 20.0)
+            .spine(-2.0, -5.0, 14.0)
+            .chest(-2.0, -4.0, 14.0)
+            .head(-10.0, 2.0, -30.0)
+            .wrists(-2.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.10, 1.34, 0.06], [0.28, 0.90, -0.34]),
+            weapon(body, [0.20, 1.46, 0.06], [0.34, 0.90, -0.26]),
+            -12.0,
+            0.0,
+        )
+    };
+
+    // Going up: the hands pass the face with the head of the weapon tipping back
+    // over the right shoulder. The body starts to rise under it and to square up.
+    let raise = {
+        let body = Pose::rest()
+            .hips(0.02, -0.08, -0.09)
+            .root(-6.0, -2.0, 12.0)
+            .spine(-8.0, -3.0, 8.0)
+            .chest(-6.0, -2.0, 8.0)
+            .head(-18.0, 1.0, -16.0)
+            .wrists(4.0, 0.0, 0.0);
+        Beat::new(stand(body, -14.0, 0.0), 90.0, 0.44, 168.0, CHOKE)
+    };
+
+    // **The top.** Arms straight up over the head and back, the head of the
+    // weapon hanging down behind the shoulders, the spine arched under it and
+    // every kilo on the back foot. This is the silhouette the opponent is
+    // deciding against, so it is the tallest and the most open the opener ever
+    // gets.
+    let top = {
+        let body = Pose::rest()
+            .hips(0.01, -0.07, -0.11)
+            .root(-8.0, -1.0, 4.0)
+            .spine(-13.0, -1.0, 3.0)
+            .chest(-10.0, -1.0, 3.0)
+            .head(-24.0, 0.0, -6.0)
+            .wrists(10.0, 0.0, 0.0);
+        Beat::new(stand(body, -16.0, 0.0), 112.0, 0.46, 240.0, CHOKE)
+    };
+
+    // The gather at the top, a couple of frames on: the arch deepens and the
+    // head of the weapon sinks further behind the back. It is still moving --
+    // a held pose on a twenty-frame startup reads as the game stalling -- but
+    // it is moving *away* from the target, which is what a big swing does last.
+    let loaded = {
+        let body = Pose::rest()
+            .hips(0.01, -0.08, -0.12)
+            .root(-10.0, -1.0, 2.0)
+            .spine(-15.0, -1.0, 1.0)
+            .chest(-12.0, -1.0, 1.0)
+            .head(-26.0, 0.0, -2.0)
+            .wrists(12.0, 0.0, 0.0);
+        Beat::new(stand(body, -18.0, 0.0), 117.0, 0.46, 234.0, CHOKE)
+    };
+
+    // The whip over the top, on the last startup frame: the trunk has started
+    // forward and dragged the hands with it, and the head of the weapon is
+    // swinging up behind them. The front foot comes back down to take it.
+    let whip = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, -0.06)
+            .root(-2.0, 0.0, 0.0)
+            .spine(-6.0, 0.0, -1.0)
+            .chest(-4.0, 0.0, -1.0)
+            .head(-18.0, 0.0, 2.0)
+            .wrists(8.0, 0.0, 0.0);
+        Beat::new(stand(body, -6.0, 0.0), 98.0, 0.42, 150.0, 0.09)
+    };
+
+    // **Contact: the start of the arc.** The weapon standing up over the head
+    // and already tipping forward, the hands out in front of the forehead, and
+    // the body falling in under it -- hips going down, chest coming over.
+    let high = {
+        let body = Pose::rest()
+            .hips(0.0, -0.13, 0.02)
+            .root(6.0, 0.0, -1.0)
+            .spine(4.0, 0.0, -2.0)
+            .chest(2.0, 0.0, -2.0)
+            .head(-12.0, 0.0, 4.0)
+            .wrists(2.0, 0.0, 0.0);
+        Beat::new(stand(body, -2.0, 0.0), 68.0, 0.44, 55.0, GRIP)
+    };
+
+    // Halfway down: level and out in front at chest height, and the trunk
+    // folding hard after it. The knees are going.
+    let level = {
+        let body = Pose::rest()
+            .hips(0.0, -0.21, 0.10)
+            .root(18.0, 0.0, -2.0)
+            .spine(18.0, 0.0, -3.0)
+            .chest(8.0, 0.0, -4.0)
+            .head(-4.0, 0.0, 6.0)
+            .wrists(-6.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.16, GROUND, 0.24])
+                .toe_l(-2.0)
+                .plant_r([REAR[0], REAR[1], REAR[2] - 0.04])
+                .toe_r(0.0),
+            10.0,
+            0.46,
             -4.0,
-            0.03,
+            GRIP,
         )
     };
 
-    // The top of the wind-up: overhead and slightly behind, body open, weight
-    // on the back foot. This is the shape the opponent is deciding against.
-    let over = {
+    // **The end of the arc**: the head of the weapon on the floor in front, arms
+    // driven straight down after it, chest folded over the knees, both heels
+    // down. Everything is committed -- this is the frame that makes the
+    // twenty-six of recovery look earned.
+    let floor = {
         let body = Pose::rest()
-            .hips(0.02, -0.06, -0.08)
-            .root(-8.0, -1.0, 8.0)
-            .spine(-12.0, -2.0, 6.0)
-            .chest(-8.0, -2.0, 8.0)
-            .head(-18.0, 0.0, -14.0)
-            .wrists(6.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.02, 1.66, -0.06], [-0.06, 0.86, -0.51]),
-            -8.0,
-            0.05,
-        )
-    };
-
-    // Contact: the head of the weapon at the floor in front, the whole body
-    // dropped over it, the rear heel driven down. Everything is committed --
-    // this is the frame that makes the twenty-two of recovery look earned.
-    let strike = {
-        let body = Pose::rest()
-            .hips(0.0, -0.26, 0.16)
-            .root(30.0, 0.0, -4.0)
-            .spine(34.0, 0.0, -6.0)
-            .chest(16.0, 0.0, -8.0)
-            .head(6.0, 0.0, 10.0)
+            .hips(0.0, -0.30, 0.16)
+            .root(32.0, 0.0, -3.0)
+            .spine(34.0, 0.0, -5.0)
+            .chest(16.0, 0.0, -6.0)
+            .head(8.0, 0.0, 8.0)
             .wrists(-14.0, 0.0, 0.0);
-        weapon(body, [0.02, 0.58, 0.62], [0.02, -0.72, 0.69])
-            .plant_l([-0.16, GROUND, 0.28])
-            .toe_l(-4.0)
-            .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
-            .toe_r(0.0)
+        Beat::new(
+            body.plant_l([-0.16, GROUND, 0.26])
+                .toe_l(-2.0)
+                .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
+                .toe_r(0.0),
+            -42.0,
+            0.46,
+            -48.0,
+            GRIP,
+        )
     };
 
-    // The floor takes it. Knees bent, weapon flat, nothing moving -- the beat
-    // where a heavy move has arrived and has not yet begun to come back.
-    let settled = {
+    // The floor takes it, and the body keeps going for a beat after the weapon
+    // has stopped: knees sink further, the head of the hammer skids flat. This
+    // is the follow-through that says the weight was real.
+    let sunk = {
         let body = Pose::rest()
-            .hips(0.0, -0.30, 0.12)
-            .root(32.0, 0.0, -2.0)
-            .spine(34.0, 0.0, -4.0)
-            .chest(14.0, 0.0, -4.0)
-            .head(8.0, 0.0, 6.0)
+            .hips(0.0, -0.35, 0.13)
+            .root(36.0, 0.0, -2.0)
+            .spine(36.0, 0.0, -3.0)
+            .chest(15.0, 0.0, -3.0)
+            .head(10.0, 0.0, 6.0)
             .wrists(-10.0, 0.0, 0.0);
-        weapon(body, [0.02, 0.48, 0.66], [0.0, -0.34, 0.94])
-            .plant_l([-0.16, GROUND, 0.28])
-            .toe_l(-2.0)
+        weapon(body, [0.01, 0.44, 0.68], [0.0, -0.30, 0.95])
+            .plant_l([-0.16, GROUND, 0.26])
+            .toe_l(0.0)
             .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
             .toe_r(0.0)
     };
 
-    // Hauling it back up. The recovery is long and it should look like lifting
-    // something heavy rather than like waiting.
+    // Hauling it back up. The legs straighten first and the weapon comes after
+    // them, still low -- lifting something heavy rather than waiting.
     let haul = {
         let body = Pose::rest()
-            .hips(0.0, -0.16, 0.04)
-            .root(16.0, -1.0, 10.0)
-            .spine(18.0, -2.0, 8.0)
+            .hips(0.0, -0.19, 0.05)
+            .root(20.0, -1.0, 10.0)
+            .spine(20.0, -2.0, 8.0)
             .chest(8.0, -1.0, 10.0)
             .head(2.0, 0.0, -16.0)
             .wrists(-8.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.04, 0.94, 0.44], [0.02, 0.46, 0.89]),
-            -4.0,
+            weapon(body, [0.06, 0.86, 0.46], [0.04, 0.36, 0.93]),
+            -2.0,
             0.04,
+        )
+    };
+
+    // The head of the weapon swung up onto the guard, and a little past it,
+    // before it settles.
+    let shoulder = {
+        let body = Pose::rest()
+            .hips(0.0, -0.09, 0.0)
+            .root(5.0, 0.0, 12.0)
+            .spine(8.0, 0.0, 10.0)
+            .chest(4.0, 0.0, 13.0)
+            .head(-3.0, 0.0, -24.0)
+            .wrists(-8.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.02, 1.22, 0.24], [-0.18, 0.95, 0.26]),
+            0.0,
+            0.02,
         )
     };
 
     let mut score = Score::new();
     score.key(0, ready(), Ease::OUT);
-    score.key(tell(windup), lift, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.7), over, Ease::OUT);
-    score.key(contact, strike, Ease::STRIKE);
-    score.key(through, settled, Ease::OUT);
-    score.key(part(through, last, 0.55), haul, CARRY);
+    score.key(tell(windup), rock, Ease::SMOOTH);
+    // From here to the floor the grip is walked round its arc a frame at a
+    // time: see `Score::swing`. Every beat of the downswing is keyed a frame
+    // ahead of the hit volume it matches, because the trunk's springs run a
+    // frame and more behind their keys and the weapon has to be *on* the
+    // volume, not chasing it.
+    let at_raise = part(tell(windup), windup, 0.4);
+    let at_top = part(tell(windup), windup, 0.68);
+    let at_loaded = part(tell(windup), windup, 0.8);
+    let lead = |f: u16| f.saturating_sub(1);
+    let at_whip = contact.saturating_sub(3);
+    score.key(at_raise, raise.pose(), Ease::LINEAR);
+    score.swing((at_raise, &raise), (at_top, &top), Ease::SMOOTH);
+    score.swing((at_top, &top), (at_loaded, &loaded), Ease::SMOOTH);
+    score.swing((at_loaded, &loaded), (at_whip, &whip), Ease::IN);
+    score.swing((at_whip, &whip), (lead(contact), &high), Ease::LINEAR);
+    let mid = part(contact, through, 0.5);
+    score.swing((lead(contact), &high), (lead(mid), &level), Ease::LINEAR);
+    score.swing((lead(mid), &level), (lead(through), &floor), Ease::LINEAR);
+    score.key(lead(through), floor.pose(), Ease::OUT);
+    score.key(part(through, last, 0.22), sunk, Ease::SMOOTH);
+    score.key(part(through, last, 0.6), haul, CARRY);
+    score.key(part(through, last, 0.84), shoulder, Ease::SMOOTH);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
-        looseness: Looseness::HEAVY,
-        notes: "The overhead. Fifteen frames of raising a weight over your head \
-                is the most readable telegraph in the kit and it is meant to be: \
-                this is the button you get hit by when you guessed wrong, not \
-                the one you get surprised by. The contact key puts the head of \
-                the weapon on the floor rather than pointed at it, because the \
-                hit volume goes to floor level and a pose that stopped at the \
-                knee would be telling the opponent a different move happened. \
-                Heavy looseness -- past the top of the arc nothing is driving \
-                it but its own weight -- and a held beat on the floor before \
-                the recovery starts, which is what makes twenty-two frames of \
-                hauling it back up read as the price of the swing."
+        looseness: HAMMER,
+        notes: "The overhead, and the slowest thing the Champion throws on the \
+                ground. Twenty frames of raising a weight is the most readable \
+                telegraph in the kit and it is meant to be: the weight rocks \
+                back onto the rear foot on frame three, the hammer goes up the \
+                right side and over until the arms are straight above the head \
+                and the head of the weapon hangs behind the back, the spine \
+                arched under it -- and it keeps sinking back there rather than \
+                holding still, because the last thing a big swing does is move \
+                away from the target. Then the arc, frame for frame with the hit \
+                volume: standing up over the head on the first active frame, \
+                level at the chest in the middle, on the floor on the last, with \
+                the trunk folding over it and the knees giving. The body carries \
+                on past the weapon for a beat, and twenty-six frames of hauling \
+                it back up are legs first and weapon after. Heavy through the \
+                trunk and tight in the arms -- a hammer that lags its keys is a \
+                hammer late for its own hit."
             .into(),
         keys: score.0,
     }
@@ -1070,6 +1394,8 @@ fn air_hammer() -> Recipe {
     let (windup, contact, through) = clip.phases().expect("air hammer animates a move");
     let last = clip.length().saturating_sub(1);
 
+    // No floor: `tuck` draws the knees up under the body and a negative one
+    // kicks the legs out behind to pay for the arms going the other way.
     let air = |body: Pose, tuck: f32| {
         body.plant_l([-0.15, 0.24 + tuck, 0.08 - tuck * 0.5])
             .toe_l(12.0)
@@ -1077,55 +1403,79 @@ fn air_hammer() -> Recipe {
             .toe_r(12.0)
     };
 
-    // Gathering: the weapon comes up in front and the knees come with it.
+    // Gathering: the weapon comes up the right side and the knees come with it.
     let gather = {
         let body = Pose::rest()
             .hips(0.0, -0.02, -0.02)
-            .root(-4.0, 0.0, 10.0)
-            .spine(-6.0, 0.0, 8.0)
-            .chest(-2.0, 0.0, 10.0)
-            .head(-14.0, 0.0, -18.0)
+            .root(-4.0, -2.0, 16.0)
+            .spine(-6.0, -3.0, 10.0)
+            .chest(-3.0, -2.0, 10.0)
+            .head(-14.0, 0.0, -22.0)
             .wrists(0.0, 0.0, 0.0);
-        air(weapon(body, [0.04, 1.42, 0.16], [0.04, 0.92, 0.39]), 0.12)
+        air(weapon(body, [0.18, 1.48, 0.08], [0.32, 0.90, -0.30]), 0.12)
     };
 
-    // The held shape: straight overhead, arched, knees up. One silhouette for
-    // most of the startup, because a telegraph that keeps changing is not one.
+    // Over the top: arms straight up, the head of the weapon hanging behind,
+    // back arched and knees up. One silhouette for most of the startup.
     let wound = {
         let body = Pose::rest()
             .hips(0.0, 0.02, -0.06)
             .root(-16.0, 0.0, 4.0)
             .spine(-20.0, 0.0, 2.0)
-            .chest(-12.0, 0.0, 4.0)
-            .head(-26.0, 0.0, -6.0)
+            .chest(-13.0, 0.0, 3.0)
+            .head(-28.0, 0.0, -6.0)
             .wrists(10.0, 0.0, 0.0);
-        air(weapon(body, [0.0, 1.78, -0.10], [-0.04, 0.94, -0.34]), 0.26)
+        Beat::new(air(body, 0.24), 116.0, 0.46, 240.0, CHOKE)
     };
 
-    // The smash. Everything above the head goes below it: arms driven down in
-    // front, legs kicked back behind, body folded hard over the blow. The hit
-    // volume goes well under the fighter and the pose has to go with it.
+    // Deeper into the arch, the legs folded right up: the bow drawn.
+    let drawn = {
+        let body = Pose::rest()
+            .hips(0.0, 0.03, -0.08)
+            .root(-20.0, 0.0, 2.0)
+            .spine(-23.0, 0.0, 1.0)
+            .chest(-15.0, 0.0, 1.0)
+            .head(-30.0, 0.0, -2.0)
+            .wrists(12.0, 0.0, 0.0);
+        Beat::new(air(body, 0.30), 122.0, 0.46, 232.0, CHOKE)
+    };
+
+    // The trunk snaps forward first and drags the weapon over the top.
+    let whip = {
+        let body = Pose::rest()
+            .hips(0.0, -0.02, 0.0)
+            .root(4.0, 0.0, 0.0)
+            .spine(2.0, 0.0, -1.0)
+            .chest(0.0, 0.0, -1.0)
+            .head(-18.0, 0.0, 2.0)
+            .wrists(6.0, 0.0, 0.0);
+        Beat::new(air(body, 0.18), 86.0, 0.42, 135.0, 0.09)
+    };
+
+    // **The smash.** Everything above the head goes below it: arms driven
+    // straight down in front, legs kicked back behind, body folded hard over the
+    // blow. The hit volume goes well under the fighter and the pose goes with it.
     let smash = {
         let body = Pose::rest()
             .hips(0.0, -0.12, 0.10)
-            .root(40.0, 0.0, -2.0)
-            .spine(40.0, 0.0, -4.0)
-            .chest(18.0, 0.0, -4.0)
+            .root(34.0, 0.0, -2.0)
+            .spine(34.0, 0.0, -4.0)
+            .chest(16.0, 0.0, -4.0)
             .head(14.0, 0.0, 8.0)
             .wrists(-16.0, 0.0, 0.0);
-        air(weapon(body, [0.02, 0.42, 0.52], [0.02, -0.88, 0.47]), -0.16)
+        Beat::new(air(body, -0.16), -50.0, 0.46, -64.0, GRIP)
     };
 
     // Carried past it, still folded, the legs starting to come back under.
     let through_pose = {
         let body = Pose::rest()
             .hips(0.0, -0.14, 0.06)
-            .root(34.0, 0.0, 0.0)
-            .spine(32.0, 0.0, -2.0)
-            .chest(14.0, 0.0, -2.0)
+            .root(36.0, 0.0, 0.0)
+            .spine(34.0, 0.0, -2.0)
+            .chest(15.0, 0.0, -2.0)
             .head(12.0, 0.0, 4.0)
             .wrists(-12.0, 0.0, 0.0);
-        air(weapon(body, [0.02, 0.52, 0.44], [0.0, -0.62, 0.78]), -0.08)
+        air(weapon(body, [0.0, 0.52, 0.68], [0.0, -0.52, 0.85]), -0.08)
     };
 
     let recover = {
@@ -1139,28 +1489,37 @@ fn air_hammer() -> Recipe {
         air(weapon(body, [0.0, 1.14, 0.26], [-0.14, 0.60, 0.79]), 0.06)
     };
 
+    let at_wound = part(tell(windup), windup, 0.4);
+    let at_drawn = part(tell(windup), windup, 0.55);
+    let at_whip = contact.saturating_sub(6);
+
     let mut score = Score::new();
     score.key(0, ready(), Ease::OUT);
     score.key(tell(windup), gather, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.45), wound, Ease::OUT);
-    score.key(contact, smash, Ease::STRIKE);
+    score.key(at_wound, wound.pose(), Ease::LINEAR);
+    score.swing((at_wound, &wound), (at_drawn, &drawn), Ease::SMOOTH);
+    score.swing((at_drawn, &drawn), (at_whip, &whip), Ease::SMOOTH);
+    score.swing((at_whip, &whip), (contact, &smash), Ease::LINEAR);
+    score.key(contact, smash.pose(), Ease::OUT);
     score.key(through, through_pose, Ease::OUT);
     score.key(part(through, last, 0.6), recover, Ease::SMOOTH);
     score.key(last, recover, Ease::SMOOTH);
 
     Recipe {
         clip,
-        looseness: Looseness::HEAVY,
-        notes: "Twenty-two frames of startup, which is the longest thing the \
-                class has and only fair because it is legible: the wind-up \
-                settles into one held shape -- arms straight overhead, body \
-                arched, knees up -- and stays there, because a telegraph that \
-                keeps changing is not a telegraph. Then everything above the \
-                head goes below it. The smash key drives the weapon under the \
-                fighter's own feet, which is where the hit volume goes, and \
-                kicks the legs back behind to pay for it. This is the move that \
-                puts an airborne opponent into the floor, so the pose has to \
-                look like it is aimed at the floor and not at them."
+        looseness: HAMMER,
+        notes: "The longest startup the class has in the air, and only fair \
+                because it is legible: the weapon goes up the right side and over \
+                until the arms are straight above the head and the head of the \
+                weapon hangs behind the back, the body arched and the knees drawn \
+                up, and it keeps drawing back there -- one silhouette, getting \
+                bigger, which is what a telegraph is. Then the trunk snaps \
+                forward and everything above the head goes below it in two \
+                frames: arms driven straight down, the weapon under the \
+                fighter's own feet where the hit volume goes, the legs kicked \
+                back behind to pay for it. This is the move that puts an \
+                airborne opponent into the floor, so the pose has to look like it \
+                is aimed at the floor and not at them."
             .into(),
         keys: score.0,
     }
@@ -1733,7 +2092,7 @@ fn backcut() -> Recipe {
 
     Recipe {
         clip,
-        looseness: Looseness::CRISP,
+        looseness: SWORD,
         notes: "The second stroke, and the clip that decides whether the chain \
                 reads as a chain at all. It opens exactly where the opener \
                 finished -- blade low past the left hip, hips wound that way, \
@@ -1877,7 +2236,7 @@ fn crescent() -> Recipe {
 
     Recipe {
         clip,
-        looseness: Looseness::MARTIAL,
+        looseness: SWORD,
         notes: "The finisher, and the third stroke of the figure: down from the \
                 right, down from the left, then up the line the second one came \
                 down. It starts where Backcut finished -- blade low past the \
@@ -1918,155 +2277,180 @@ fn uproot() -> Recipe {
     // the weapon on the ground out in front.
     let down = {
         let body = Pose::rest()
-            .hips(0.0, -0.28, 0.12)
-            .root(31.0, 0.0, -2.0)
-            .spine(33.0, 0.0, -4.0)
+            .hips(0.0, -0.30, 0.12)
+            .root(32.0, 0.0, -2.0)
+            .spine(34.0, 0.0, -4.0)
             .chest(14.0, 0.0, -4.0)
             .head(8.0, 0.0, 6.0)
             .wrists(-10.0, 0.0, 0.0);
-        weapon(body, [0.02, 0.50, 0.62], [0.0, -0.36, 0.93])
+        weapon(body, [0.02, 0.48, 0.64], [0.0, -0.36, 0.93])
             .plant_l([-0.16, GROUND, 0.26])
             .toe_l(-2.0)
             .plant_r([REAR[0], REAR[1], REAR[2] - 0.04])
             .toe_r(0.0)
     };
 
-    // Digging under it: the hands drop and the knees take another few
-    // centimetres, which is what a person does to lift something rather than to
-    // swing it. One key, because thirteen frames is not long enough for two.
-    let dig = {
+    // The load, which is a hinge and not a squat: the hips go *back*, the chest
+    // stays over the knees, and the head of the weapon is dragged back along the
+    // floor past the right foot the way a kettlebell is hiked. Everything that
+    // follows is the hips coming forward out of this.
+    let hike = {
         let body = Pose::rest()
-            .hips(0.02, -0.33, 0.06)
-            .root(34.0, -2.0, 4.0)
-            .spine(36.0, -3.0, 2.0)
-            .chest(15.0, -2.0, 2.0)
-            .head(4.0, 0.0, -4.0)
+            .hips(0.03, -0.30, -0.06)
+            .root(40.0, -2.0, 10.0)
+            .spine(30.0, -3.0, 6.0)
+            .chest(12.0, -2.0, 6.0)
+            .head(-12.0, 0.0, -14.0)
             .wrists(-6.0, 0.0, 0.0);
-        weapon(body, [0.06, 0.40, 0.50], [0.10, -0.52, 0.85])
-            .plant_l([-0.16, GROUND, 0.24])
-            .toe_l(-6.0)
-            .plant_r([REAR[0], REAR[1], REAR[2] - 0.02])
-            .toe_r(0.0)
-    };
-
-    // The haul begins: hips driving, the head of the weapon scraping up off the
-    // floor. The legs are doing this, not the arms.
-    let heave = {
-        let body = Pose::rest()
-            .hips(0.0, -0.20, 0.10)
-            .root(22.0, -1.0, 6.0)
-            .spine(24.0, -2.0, 4.0)
-            .chest(10.0, -1.0, 4.0)
-            .head(-2.0, 0.0, -14.0)
-            .wrists(-4.0, 0.0, 0.0);
-        stand(
-            weapon(body, [0.06, 0.74, 0.50], [0.06, 0.04, 1.0]),
-            -8.0,
-            0.03,
+        Beat::new(
+            body.plant_l([-0.16, GROUND, 0.22])
+                .toe_l(-4.0)
+                .plant_r([REAR[0], REAR[1], REAR[2] - 0.02])
+                .toe_r(0.0),
+            -84.0,
+            0.44,
+            -118.0,
+            GRIP,
         )
+        .across(0.10)
     };
 
-    // **The start of the arc**: the head still down by the floor and already
-    // travelling, the body beginning to step in behind it. The simulation carries
-    // you half a metre through this, which is what turns a short swing into
-    // something that arrives -- see `step_stance`.
+    // Deepest, a few frames on: the head of the weapon as far back under the
+    // body as it goes, the eyes up on the target. The spring before the throw.
+    let coil = {
+        let body = Pose::rest()
+            .hips(0.04, -0.33, -0.08)
+            .root(42.0, -2.0, 12.0)
+            .spine(31.0, -3.0, 8.0)
+            .chest(12.0, -2.0, 8.0)
+            .head(-18.0, 0.0, -16.0)
+            .wrists(-6.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.16, GROUND, 0.22])
+                .toe_l(-6.0)
+                .plant_r([REAR[0], REAR[1], REAR[2] - 0.02])
+                .toe_r(0.0),
+            -88.0,
+            0.44,
+            -126.0,
+            GRIP,
+        )
+        .across(0.10)
+    };
+
+    // **The start of the arc**: the hips have fired forward and the head of the
+    // weapon is coming up off the floor in front, still low. The simulation
+    // carries the body most of a metre through this -- see `step_stance`.
     let scrape = {
         let body = Pose::rest()
-            .hips(0.02, -0.26, 0.12)
-            .root(26.0, -1.0, 6.0)
-            .spine(28.0, -2.0, 4.0)
-            .chest(12.0, -1.0, 4.0)
-            .head(0.0, 0.0, -12.0)
+            .hips(0.02, -0.24, 0.12)
+            .root(24.0, -1.0, 6.0)
+            .spine(22.0, -2.0, 4.0)
+            .chest(8.0, -1.0, 4.0)
+            .head(-6.0, 0.0, -12.0)
             .wrists(-4.0, 0.0, 0.0);
-        step_stance(
-            weapon(body, [0.06, 0.66, 0.44], [0.06, -0.52, 0.85]),
-            0.22,
-            0.0,
-        )
+        Beat::new(step_stance(body, 0.24, 0.02), -46.0, 0.46, -50.0, GRIP).across(0.04)
     };
 
-    // Through the middle of it: the head ripped up through the front of them,
-    // body long, weight arriving. Level and driving forward, which is the frame
-    // that says this hit shoves rather than lifts.
+    // Through the middle: level and driving forward, the body coming upright
+    // behind it. This is the frame that says this hit shoves rather than lifts.
     let tear = {
         let body = Pose::rest()
-            .hips(0.0, -0.08, 0.12)
+            .hips(0.0, -0.10, 0.14)
             .root(4.0, 0.0, 2.0)
-            .spine(2.0, 0.0, 0.0)
-            .chest(0.0, 0.0, 0.0)
+            .spine(0.0, 0.0, 0.0)
+            .chest(-2.0, 0.0, 0.0)
             .head(-10.0, 0.0, -6.0)
             .wrists(-2.0, 0.0, 0.0);
-        step_stance(
-            weapon(body, [0.04, 1.14, 0.44], [0.04, 0.24, 0.97]),
-            0.16,
-            0.0,
-        )
+        Beat::new(step_stance(body, 0.18, 0.0), 6.0, 0.48, 8.0, 0.09)
     };
 
-    // **The end of it**: the head up and still out in front, both arms high, the
-    // body long under it. It finishes ahead of the shoulders rather than behind
-    // them, which is the difference between a hammer that throws somebody up and
-    // one that throws them back -- and this is the one that throws them back.
+    // **The end of it**: the hips thrown through, the body long and leaning back
+    // behind the arms, the rear heel off the floor from the drive, and the head
+    // of the weapon up and still ahead of the shoulders -- the difference between
+    // a hammer that throws somebody up and one that throws them back.
     let over = {
         let body = Pose::rest()
-            .hips(0.0, -0.04, 0.06)
-            .root(-8.0, 0.0, 4.0)
-            .spine(-12.0, 0.0, 2.0)
-            .chest(-8.0, 0.0, 2.0)
-            .head(-20.0, 0.0, -4.0)
+            .hips(0.0, -0.03, 0.12)
+            .root(-10.0, 0.0, 2.0)
+            .spine(-14.0, 0.0, 0.0)
+            .chest(-8.0, 0.0, 0.0)
+            .head(-20.0, 0.0, -2.0)
             .wrists(2.0, 0.0, 0.0);
-        step_stance(
-            weapon(body, [0.02, 1.48, 0.34], [0.0, 0.75, 0.66]),
-            0.08,
-            0.0,
-        )
+        Beat::new(step_stance(body, 0.14, 0.0), 58.0, 0.46, 62.0, CHOKE)
+    };
+
+    // Carried past: the weight keeps going up and over after the hit, the arms
+    // straight overhead and the head of the weapon tipping back. Follow-through
+    // is what a heavy thing does after its job is done.
+    let crest = {
+        let body = Pose::rest()
+            .hips(0.0, -0.04, 0.06)
+            .root(-12.0, 0.0, 2.0)
+            .spine(-16.0, 0.0, 0.0)
+            .chest(-10.0, 0.0, 0.0)
+            .head(-22.0, 0.0, -2.0)
+            .wrists(8.0, 0.0, 0.0);
+        Beat::new(stand(body, -8.0, 0.05), 92.0, 0.44, 118.0, CHOKE)
     };
 
     // Bringing it back down in front. Heavy, and it should look like catching
-    // something rather than like lowering it.
+    // something rather than like lowering it: the knees take it.
     let catch = {
         let body = Pose::rest()
-            .hips(0.0, -0.12, 0.02)
-            .root(10.0, 0.0, 8.0)
-            .spine(12.0, 0.0, 6.0)
-            .chest(5.0, 0.0, 8.0)
+            .hips(0.0, -0.15, 0.02)
+            .root(12.0, 0.0, 8.0)
+            .spine(14.0, 0.0, 6.0)
+            .chest(6.0, 0.0, 8.0)
             .head(-4.0, 0.0, -18.0)
             .wrists(-8.0, 0.0, 0.0);
         stand(
-            weapon(body, [0.04, 1.26, 0.28], [-0.04, 0.64, 0.77]),
+            weapon(body, [0.04, 1.20, 0.30], [-0.04, 0.64, 0.77]),
             -4.0,
             0.04,
         )
     };
 
+    let lead = |f: u16| f.saturating_sub(1);
+    let mid = part(contact, through, 0.5);
+    let at_hike = tell(windup);
+    let at_coil = part(tell(windup), windup, 0.55);
+    let at_crest = part(through, last, 0.25);
+
     let mut score = Score::new();
     score.key(0, down, CARRY);
-    score.key(tell(windup), dig, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.65), heave, Ease::IN);
-    score.key(contact, scrape, Ease::LINEAR);
-    score.key(part(contact, through, 0.5), tear, Ease::LINEAR);
-    score.key(through, over, Ease::LINEAR);
-    score.key(part(through, last, 0.5), catch, CARRY);
+    score.key(at_hike, hike.pose(), Ease::SMOOTH);
+    score.swing((at_hike, &hike), (at_coil, &coil), Ease::SMOOTH);
+    // The throw, a frame at a time: see `Score::swing`, and the slam for why
+    // each beat is keyed a frame ahead of the volume it matches.
+    score.swing((at_coil, &coil), (lead(contact), &scrape), Ease::SMOOTH);
+    score.swing((lead(contact), &scrape), (lead(mid), &tear), Ease::LINEAR);
+    score.swing((lead(mid), &tear), (lead(through), &over), Ease::LINEAR);
+    score.swing((lead(through), &over), (at_crest, &crest), Ease::OUT);
+    score.key(at_crest, crest.pose(), Ease::SMOOTH);
+    score.key(part(through, last, 0.6), catch, CARRY);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
-        looseness: Looseness::HEAVY,
+        looseness: HAMMER,
         notes: "The slam played backwards, and the second hit of the hammer \
                 chain. It opens exactly where the overhead left the body -- \
-                folded over a weapon lying on the floor -- so the two of them \
-                crossfade into one continuous piece of work, and it climbs from \
-                there. The startup is a dig rather than a wind-up: the hands drop \
-                and the knees take a few more centimetres, which is what a person \
-                does to lift something rather than to swing it. Legs, not arms, \
-                and it is the one chained hit that is easier than its own opener \
-                -- a weight already at the bottom of its arc wants to come up. \
-                It is the short one: the shortest reach in the chain, and it \
-                steps half a metre so that the reach is still enough to catch \
-                whoever the slam shoved. And it finishes with the head **ahead \
-                of** the shoulders rather than behind them, because this is the \
-                hammer hit that shoves people back rather than up -- the one \
-                that throws them up is the finisher, and it comes down."
+                folded over a weapon lying on the floor -- and the startup is a \
+                hinge, not a wind-up: the hips go back, the chest stays over the \
+                knees, and the head of the weapon is dragged back along the floor \
+                past the right foot the way a kettlebell is hiked. Then the hips \
+                fire forward and everything after is them: the head comes up off \
+                the floor in front, passes level at the chest, and finishes up \
+                and still ahead of the shoulders with the body thrown long and \
+                leaning back behind it and the rear heel off the floor. It steps \
+                most of a metre, so the reach still finds whoever the slam \
+                shoved. Past the hit the weight keeps going up and over before \
+                it is caught and brought down, because a heavy thing carries on \
+                after its job is done. It finishes ahead of the shoulders rather \
+                than behind them because this is the hammer hit that shoves \
+                people back rather than up -- the one that throws them up is the \
+                finisher, and it comes down."
             .into(),
         keys: score.0,
     }
@@ -2091,174 +2475,311 @@ fn earthbreaker() -> Recipe {
     let (windup, contact, through) = clip.phases().expect("earthbreaker animates a move");
     let last = clip.length().saturating_sub(1);
 
-    // The step in. The lead foot goes forward and the weight starts to rise --
-    // the first frame of a silhouette that is about to get very tall.
+    // The step in. The lead foot goes forward, the weight rocks back off it onto
+    // the rear leg, and the hammer is already coming up the right side -- the
+    // first frame of a silhouette that is about to get very tall.
     let step = {
         let body = Pose::rest()
-            .hips(0.0, -0.09, 0.06)
-            .root(4.0, -2.0, 12.0)
-            .spine(6.0, -3.0, 8.0)
-            .chest(2.0, -2.0, 10.0)
-            .head(-8.0, 0.0, -22.0)
-            .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.10, 1.32, 0.10], [0.24, 0.88, -0.41])
+            .hips(0.03, -0.12, -0.02)
+            .root(-2.0, -3.0, 22.0)
+            .spine(-2.0, -5.0, 14.0)
+            .chest(-2.0, -4.0, 14.0)
+            .head(-10.0, 2.0, -32.0)
+            .wrists(-2.0, 0.0, 0.0);
+        weapon(body, [0.22, 1.44, 0.04], [0.36, 0.88, -0.30])
             .plant_l([-0.15, GROUND, 0.30])
-            .toe_l(-4.0)
-            .plant_r([REAR[0], REAR[1] + 0.03, REAR[2]])
-            .toe_floor_r()
-    };
-
-    // All the way back and over, body arched, arms straight overhead and
-    // behind. This is as tall as anything in the game gets.
-    let wind = {
-        let body = Pose::rest()
-            .hips(0.0, -0.02, -0.10)
-            .root(-14.0, -2.0, 6.0)
-            .spine(-18.0, -3.0, 4.0)
-            .chest(-11.0, -2.0, 6.0)
-            .head(-26.0, 0.0, -10.0)
-            .wrists(10.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.78, -0.18], [-0.04, 0.80, -0.60])
-            .plant_l([-0.15, GROUND, 0.30])
-            .toe_l(-8.0)
-            .plant_r([REAR[0], REAR[1] + 0.07, REAR[2]])
-            .toe_floor_r()
-    };
-
-    // Held at the top. **The whole point of the move.** A guard break the
-    // opponent cannot read is a guard break that punishes having a shield
-    // rather than a guard break that beats one.
-    let hang = {
-        let body = Pose::rest()
-            .hips(0.0, -0.04, -0.12)
-            .root(-16.0, -1.0, 4.0)
-            .spine(-19.0, -2.0, 2.0)
-            .chest(-12.0, -1.0, 4.0)
-            .head(-28.0, 0.0, -8.0)
-            .wrists(12.0, 0.0, 0.0);
-        weapon(body, [-0.02, 1.80, -0.22], [-0.06, 0.78, -0.62])
-            .plant_l([-0.15, GROUND, 0.30])
-            .toe_l(-10.0)
-            .plant_r([REAR[0], REAR[1] + 0.08, REAR[2]])
-            .toe_floor_r()
-    };
-
-    // Halfway down, and the fastest frame in the clip: the body passing
-    // through upright with the weapon already ahead of it. A weight this size
-    // does not go from held to landed in one interval -- and a torso that tries
-    // to reads as a pop rather than as a slam.
-    let fall = {
-        let body = Pose::rest()
-            .hips(0.0, -0.16, 0.10)
-            .root(14.0, 0.0, 0.0)
-            .spine(14.0, 0.0, -2.0)
-            .chest(6.0, 0.0, -2.0)
-            .head(-6.0, 0.0, 2.0)
-            .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.0, 1.30, 0.34], [0.0, 0.42, 0.91])
-            // **Both feet off the floor.** The simulation dashes the body a metre
-            // and a half in four frames, ending on the frame the head lands, and
-            // nothing that crosses that much ground that fast is walking.
-            .plant_l([-0.15, GROUND + 0.16, 0.44])
-            .toe_l(-20.0)
-            .plant_r([REAR[0], REAR[1] + 0.20, REAR[2] - 0.22])
-            .toe_r(-30.0)
-    };
-
-    // Everything into the floor. Knees collapsing under it, the head of the
-    // weapon through the ground line in front, both heels driven down.
-    let crack = {
-        let body = Pose::rest()
-            .hips(0.0, -0.34, 0.18)
-            .root(36.0, 0.0, -4.0)
-            .spine(38.0, 0.0, -6.0)
-            .chest(17.0, 0.0, -8.0)
-            .head(10.0, 0.0, 10.0)
-            .wrists(-16.0, 0.0, 0.0);
-        weapon(body, [0.0, 0.46, 0.66], [0.0, -0.80, 0.60])
-            // Landing on the frame the head lands. The dash arrives and the hammer
-            // arrives together, which is the whole of what this move is: the
-            // ground closed is not a separate beat from the hit.
-            .plant_l([-0.16, GROUND, 0.40])
-            .toe_l(-2.0)
-            .plant_r([REAR[0], REAR[1] + 0.04, REAR[2] - 0.30])
-            .toe_floor_r()
-    };
-
-    // The floor has it. Nothing moving -- the beat that says the arena took the
-    // hit as well as whoever was standing there.
-    let crater = {
-        let body = Pose::rest()
-            .hips(0.0, -0.37, 0.14)
-            .root(40.0, 0.0, -2.0)
-            .spine(41.0, 0.0, -4.0)
-            .chest(16.0, 0.0, -4.0)
-            .head(12.0, 0.0, 6.0)
-            .wrists(-12.0, 0.0, 0.0);
-        weapon(body, [0.0, 0.36, 0.70], [0.0, -0.42, 0.91])
-            .plant_l([-0.16, GROUND, 0.36])
-            .toe_l(0.0)
-            .plant_r([REAR[0], REAR[1], REAR[2] - 0.14])
+            .toe_l(-12.0)
+            .plant_r([REAR[0], REAR[1], REAR[2]])
             .toe_r(0.0)
     };
 
-    // Twenty-eight frames of getting back up, and it should look like work.
+    // Going up, and the body rising under it: the legs straightening, the
+    // hands passing over the face.
+    let raise = {
+        let body = Pose::rest()
+            .hips(0.02, -0.05, -0.08)
+            .root(-8.0, -2.0, 12.0)
+            .spine(-10.0, -3.0, 8.0)
+            .chest(-7.0, -2.0, 8.0)
+            .head(-22.0, 1.0, -16.0)
+            .wrists(4.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.15, GROUND, 0.30])
+                .toe_l(-14.0)
+                .plant_r([REAR[0], REAR[1] + 0.03, REAR[2]])
+                .toe_floor_r(),
+            94.0,
+            0.44,
+            172.0,
+            CHOKE,
+        )
+    };
+
+    // **All the way back and over.** Arms straight up and behind the head, the
+    // head of the weapon hanging down the back, the spine arched as far as a
+    // spine goes and the rear heel up off the floor. This is the tallest
+    // silhouette anything in the game makes, and the most open.
+    let top = {
+        let body = Pose::rest()
+            .hips(0.01, -0.02, -0.12)
+            .root(-14.0, -1.0, 4.0)
+            .spine(-20.0, -1.0, 2.0)
+            .chest(-14.0, -1.0, 3.0)
+            .head(-30.0, 0.0, -6.0)
+            .wrists(12.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.15, GROUND, 0.30])
+                .toe_l(-18.0)
+                .plant_r([REAR[0], REAR[1] + 0.07, REAR[2]])
+                .toe_floor_r(),
+            118.0,
+            0.46,
+            244.0,
+            CHOKE,
+        )
+    };
+
+    // Still going back. **The whole point of the move**: the arch deepens and
+    // the weight sinks down the back for most of the startup, so there is one
+    // unmistakable shape to read and it is getting *bigger* rather than holding
+    // still -- a guard break the opponent cannot read is a guard break that
+    // punishes having a shield rather than one that beats it.
+    let loaded = {
+        let body = Pose::rest()
+            .hips(0.01, -0.04, -0.14)
+            .root(-17.0, -1.0, 2.0)
+            .spine(-23.0, -1.0, 1.0)
+            .chest(-16.0, -1.0, 1.0)
+            .head(-32.0, 0.0, -2.0)
+            .wrists(14.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.15, GROUND, 0.30])
+                .toe_l(-20.0)
+                .plant_r([REAR[0], REAR[1] + 0.08, REAR[2]])
+                .toe_floor_r(),
+            122.0,
+            0.46,
+            236.0,
+            CHOKE,
+        )
+    };
+
+    // The launch. The rear leg fires and the lead foot leaves the floor: the
+    // simulation dashes the body a metre and a half over the next few frames,
+    // and nothing that covers that much ground that fast is walking. The trunk
+    // snaps forward first and drags the weapon over the top behind it.
+    let leap = {
+        let body = Pose::rest()
+            .hips(0.0, -0.08, -0.02)
+            .root(-4.0, 0.0, 0.0)
+            .spine(-8.0, 0.0, -1.0)
+            .chest(-6.0, 0.0, -1.0)
+            .head(-22.0, 0.0, 2.0)
+            .wrists(8.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.15, GROUND + 0.14, 0.40])
+                .toe_l(-20.0)
+                .plant_r([REAR[0], REAR[1] + 0.16, REAR[2] - 0.18])
+                .toe_r(-30.0),
+            100.0,
+            0.42,
+            150.0,
+            0.09,
+        )
+    };
+
+    // **Contact: the start of the arc**, in the air. Hands out in front of the
+    // forehead with the weapon standing up over them, knees tucked, the body
+    // coming over the top of the leap and about to land on the blow.
+    let high = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, 0.06)
+            .root(8.0, 0.0, -1.0)
+            .spine(6.0, 0.0, -2.0)
+            .chest(3.0, 0.0, -2.0)
+            .head(-14.0, 0.0, 4.0)
+            .wrists(2.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.15, GROUND + 0.18, 0.44])
+                .toe_l(-16.0)
+                .plant_r([REAR[0], REAR[1] + 0.24, REAR[2] - 0.20])
+                .toe_r(-30.0),
+            70.0,
+            0.44,
+            66.0,
+            GRIP,
+        )
+    };
+
+    // Landing: the lead foot down, the weapon level out in front and the trunk
+    // already folding after it.
+    let level = {
+        let body = Pose::rest()
+            .hips(0.0, -0.22, 0.12)
+            .root(20.0, 0.0, -2.0)
+            .spine(20.0, 0.0, -3.0)
+            .chest(9.0, 0.0, -4.0)
+            .head(-4.0, 0.0, 6.0)
+            .wrists(-6.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.16, GROUND, 0.42])
+                .toe_l(-4.0)
+                .plant_r([REAR[0], REAR[1] + 0.10, REAR[2] - 0.26])
+                .toe_r(-20.0),
+            8.0,
+            0.48,
+            0.0,
+            GRIP,
+        )
+    };
+
+    // **The end of the arc: everything into the floor.** Knees collapsing, the
+    // chest over the lead knee, both arms driven straight down, the head of the
+    // weapon through the ground line in front. Deeper and further out than the
+    // opener in every direction, which is what a finisher is.
+    let crack = {
+        let body = Pose::rest()
+            .hips(0.0, -0.38, 0.18)
+            .root(38.0, 0.0, -4.0)
+            .spine(40.0, 0.0, -6.0)
+            .chest(18.0, 0.0, -8.0)
+            .head(12.0, 0.0, 10.0)
+            .wrists(-16.0, 0.0, 0.0);
+        Beat::new(
+            body.plant_l([-0.16, GROUND, 0.42])
+                .toe_l(-2.0)
+                .plant_r([REAR[0], REAR[1] + 0.04, REAR[2] - 0.30])
+                .toe_floor_r(),
+            -46.0,
+            0.48,
+            -60.0,
+            GRIP,
+        )
+    };
+
+    // The floor has it, and the body keeps going for a beat: the arena took
+    // the hit as well as whoever was standing there.
+    let crater = {
+        let body = Pose::rest()
+            .hips(0.0, -0.41, 0.14)
+            .root(42.0, 0.0, -2.0)
+            .spine(42.0, 0.0, -4.0)
+            .chest(16.0, 0.0, -4.0)
+            .head(14.0, 0.0, 6.0)
+            .wrists(-12.0, 0.0, 0.0);
+        weapon(body, [0.0, 0.34, 0.72], [0.0, -0.36, 0.93])
+            .plant_l([-0.16, GROUND, 0.38])
+            .toe_l(0.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.16])
+            .toe_r(0.0)
+    };
+
+    // Thirty-odd frames of getting back up, and it should look like work: the
+    // legs first, the weapon dragged up after them.
     let haul = {
         let body = Pose::rest()
-            .hips(0.0, -0.18, 0.06)
-            .root(18.0, -1.0, 10.0)
-            .spine(20.0, -2.0, 8.0)
+            .hips(0.0, -0.21, 0.06)
+            .root(22.0, -1.0, 10.0)
+            .spine(22.0, -2.0, 8.0)
             .chest(9.0, -1.0, 10.0)
             .head(2.0, 0.0, -16.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.04, 0.92, 0.46], [0.02, 0.44, 0.90])
+        weapon(body, [0.06, 0.84, 0.48], [0.04, 0.36, 0.93])
             .plant_l([-0.16, GROUND, 0.28])
             .toe_l(-4.0)
             .plant_r([REAR[0], REAR[1] + 0.04, REAR[2]])
             .toe_floor_r()
     };
 
+    // Swung up onto the guard and a little past it.
+    let shoulder = {
+        let body = Pose::rest()
+            .hips(0.0, -0.10, 0.0)
+            .root(5.0, 0.0, 12.0)
+            .spine(8.0, 0.0, 10.0)
+            .chest(4.0, 0.0, 13.0)
+            .head(-3.0, 0.0, -24.0)
+            .wrists(-8.0, 0.0, 0.0);
+        stand(
+            weapon(body, [0.02, 1.22, 0.24], [-0.18, 0.95, 0.26]),
+            0.0,
+            0.03,
+        )
+    };
+
+    let lead = |f: u16| f.saturating_sub(1);
+    let at_raise = part(tell(windup), windup, 0.35);
+    let at_top = part(tell(windup), windup, 0.6);
+    let at_loaded = part(tell(windup), windup, 0.82);
+    let at_leap = contact.saturating_sub(3);
+    let mid = part(contact, through, 0.5);
+
     let mut score = Score::new();
     score.key(0, ready(), Ease::OUT);
     score.key(tell(windup), step, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.45), wind, Ease::OUT);
-    score.key(part(tell(windup), windup, 0.75), hang, Ease::SMOOTH);
-    // Inside the wind-up rather than between it and contact: `part(windup,
-    // contact, 0.5)` rounds up onto the contact frame itself, and a key landing
-    // there drops the contact pose -- which is the one key in a clip that must
-    // not move.
-    score.key(part(tell(windup), windup, 0.95), fall, Ease::IN);
-    score.key(contact, crack, Ease::STRIKE);
-    score.key(through, crater, Ease::OUT);
-    score.key(part(through, last, 0.5), haul, CARRY);
+    score.key(at_raise, raise.pose(), Ease::LINEAR);
+    // From the top of the raise to the floor, the grip is walked round its arc
+    // a frame at a time (`Score::swing`), and every beat of the blow is keyed a
+    // frame ahead of the volume it matches -- see the slam.
+    score.swing((at_raise, &raise), (at_top, &top), Ease::SMOOTH);
+    score.swing((at_top, &top), (at_loaded, &loaded), Ease::SMOOTH);
+    score.swing((at_loaded, &loaded), (at_leap, &leap), Ease::IN);
+    score.swing((at_leap, &leap), (lead(contact), &high), Ease::LINEAR);
+    score.swing((lead(contact), &high), (lead(mid), &level), Ease::LINEAR);
+    score.swing((lead(mid), &level), (lead(through), &crack), Ease::LINEAR);
+    score.key(lead(through), crack.pose(), Ease::OUT);
+    score.key(part(through, last, 0.2), crater, Ease::SMOOTH);
+    score.key(part(through, last, 0.58), haul, CARRY);
+    score.key(part(through, last, 0.84), shoulder, Ease::SMOOTH);
     score.key(last, ready(), Ease::SMOOTH);
 
     Recipe {
         clip,
-        looseness: Looseness::HEAVY,
+        looseness: HAMMER,
         notes: "The guard break, and the longest telegraph in the game. It goes \
                 through a shield, so the only answer to it is not being there, \
                 and not being there is only a decision if you can see it coming \
-                -- which is what the twenty frames buy. The wind-up takes the \
-                weapon all the way back and over until this is the tallest \
-                silhouette anything in the game makes, and then it *holds*, \
-                which is the part that turns a long startup into a readable \
-                one. Contact puts the head through the ground line with the \
-                knees collapsing under it, and there is a beat on the floor \
-                before the recovery begins: the arena took that one too. The \
-                feet leave entirely on the way in -- the simulation dashes the \
-                body a metre and a half in four frames, finishing on the frame the \
-                head lands, so the ground closed is not a separate beat from the \
-                hit -- and they never come back to where they started, because \
-                every finisher in this chain commits them. What it does *after* \
-                contact is the other half of the move and is not in this clip: it \
-                throws whoever it caught into the air, and if the jump button went \
-                down while this was winding up, the Champion goes up with them and \
-                the airborne clips take it from here."
+                -- which is what the twenty-six frames buy. It is the opener made \
+                bigger in every dimension: a step in on frame three with the \
+                weight rocking back, the hammer up and over until the arms are \
+                straight above and behind the head, the spine arched as far as \
+                a spine goes and the rear heel off the floor -- the tallest \
+                silhouette anything in the game makes -- and it keeps sinking \
+                back there for most of the startup rather than holding, so the \
+                one shape to read is getting bigger. Then the rear leg fires and \
+                the body leaves the floor: the simulation dashes it a metre and a \
+                half, so it lands on the blow, the weapon standing up over the \
+                head on the first active frame and through the ground line on \
+                the last, knees collapsing under it, deeper and further out than \
+                the opener. A beat on the floor after -- the arena took that one \
+                too -- and then thirty frames of legs-first hauling. The feet \
+                never come back to where they started, because every finisher \
+                in this chain commits them. What it does *after* contact is not \
+                in this clip: it throws whoever it caught into the air, and if \
+                the jump button went down while this was winding up, the \
+                Champion goes up with them and the airborne clips take it from \
+                here."
             .into(),
         keys: score.0,
     }
 }
+
+/// How the spear's body carries it: `MARTIAL` -- a technique, not a weight --
+/// with the arms held tighter than that preset holds them.
+///
+/// A thrust is the one attack where the hands travel *along* the weapon, and
+/// a hand that trails its key by two frames through a metre of travel is a
+/// hand somewhere off the shaft's line on the frame the point arrives. The
+/// legs and hips drive a spear; the arms only aim it, so they are what stays
+/// crisp.
+const SPEAR: Looseness = Looseness {
+    root: Feel::new(1.0, 1.0),
+    spine: Feel::new(1.2, 1.0),
+    chest: Feel::new(1.4, 0.9),
+    head: Feel::new(1.8, 0.8),
+    arms: Feel::new(1.0, 0.75),
+    legs: Feel::new(1.3, 0.92),
+};
 
 // ---------------------------------------------------------------------------
 // Skewer -- the second thrust, and the heaviest stagger in the kit
@@ -2306,15 +2827,34 @@ fn skewer() -> Recipe {
     // the rear leg, which is the frame that says a dash is coming.
     let coiled = {
         let body = Pose::rest()
-            .hips(0.07, -0.20, -0.14)
-            .root(-2.0, -5.0, 30.0)
-            .spine(2.0, -8.0, 22.0)
-            .chest(0.0, -6.0, 22.0)
-            .head(-4.0, 2.0, -46.0)
+            .hips(0.08, -0.22, -0.17)
+            .root(-4.0, -5.0, 38.0)
+            .spine(0.0, -8.0, 26.0)
+            .chest(-2.0, -6.0, 24.0)
+            .head(-4.0, 2.0, -52.0)
             .wrists(-10.0, 0.0, 0.0);
-        weapon(body, [0.20, 1.10, -0.20], [-0.14, 0.06, 0.99])
+        weapon(body, [0.22, 1.10, -0.28], [-0.14, 0.06, 0.99])
             .plant_l([-0.13, GROUND + 0.02, 0.10])
-            .toe_l(-16.0)
+            .toe_l(-18.0)
+            .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
+            .toe_r(0.0)
+    };
+
+    // Still drawing back, a few frames on: deeper into the rear leg, the
+    // shoulders turned further away and the point *still* on line. The coil
+    // is getting tighter rather than holding still, which is what makes a
+    // sixteen-frame startup read as a spring being loaded and not as a pause.
+    let loaded = {
+        let body = Pose::rest()
+            .hips(0.09, -0.26, -0.20)
+            .root(-5.0, -6.0, 42.0)
+            .spine(-1.0, -9.0, 28.0)
+            .chest(-3.0, -7.0, 26.0)
+            .head(-5.0, 2.0, -56.0)
+            .wrists(-10.0, 0.0, 0.0);
+        weapon(body, [0.23, 1.10, -0.33], [-0.14, 0.06, 0.99])
+            .plant_l([-0.13, GROUND + 0.03, 0.10])
+            .toe_l(-20.0)
             .plant_r([REAR[0], REAR[1], REAR[2] - 0.06])
             .toe_r(0.0)
     };
@@ -2415,7 +2955,8 @@ fn skewer() -> Recipe {
     // A real hold in the coil. Sixteen frames is past a reaction, so the pose is
     // allowed -- and required -- to sit there and be looked at.
     score.key(part(tell(windup), windup, 0.25), coiled, Ease::SMOOTH);
-    score.key(part(tell(windup), windup, 0.67), fired, Ease::SNAP);
+    score.key(part(tell(windup), windup, 0.6), loaded, Ease::SNAP);
+    score.key(part(tell(windup), windup, 0.75), fired, Ease::LINEAR);
     score.key(part(tell(windup), windup, 0.9), flying, Ease::LINEAR);
     score.key(contact, thrust, Ease::LINEAR);
     score.key(through, spent, CARRY);
@@ -2424,7 +2965,7 @@ fn skewer() -> Recipe {
 
     Recipe {
         clip,
-        looseness: Looseness::MARTIAL,
+        looseness: SPEAR,
         notes: "Two halves that cannot be mistaken for each other, which is the \
                 whole design of the move: sixteen frames of startup is past a \
                 human reaction, so the opponent gets to see this coming and has \
@@ -2475,13 +3016,13 @@ fn whirl() -> Recipe {
     // standing height is a spin that misses everybody.
     let wound = {
         let body = Pose::rest()
-            .hips(0.08, -0.26, -0.06)
+            .hips(0.08, -0.31, -0.06)
             .root(10.0, -6.0, 40.0)
             .spine(14.0, -9.0, 26.0)
             .chest(6.0, -6.0, 24.0)
             .head(-2.0, 4.0, -52.0)
             .wrists(-8.0, 0.0, 0.0);
-        weapon(body, [0.22, 0.98, -0.06], [0.70, -0.24, -0.67])
+        weapon(body, [0.22, 0.93, -0.06], [0.70, -0.24, -0.67])
             .plant_l([LEAD[0] + 0.02, GROUND, LEAD[2] - 0.02])
             .toe_l(-6.0)
             .plant_r([REAR[0], REAR[1] + 0.05, REAR[2]])
@@ -2494,13 +3035,13 @@ fn whirl() -> Recipe {
     // standing on.
     let behind = {
         let body = Pose::rest()
-            .hips(0.06, -0.28, 0.0)
+            .hips(0.06, -0.33, 0.00)
             .root(11.0, -5.0, 34.0)
             .spine(15.0, -8.0, 22.0)
             .chest(6.0, -5.0, 20.0)
             .head(0.0, 3.0, -44.0)
             .wrists(-6.0, 0.0, 0.0);
-        weapon(body, [0.20, 0.94, 0.02], [0.78, -0.18, -0.60])
+        weapon(body, [0.20, 0.89, 0.02], [0.78, -0.18, -0.60])
             .plant_l([LEAD[0] + 0.02, GROUND + 0.03, LEAD[2] - 0.02])
             .toe_floor_l()
             .plant_r([REAR[0], REAR[1] + 0.07, REAR[2]])
@@ -2511,13 +3052,13 @@ fn whirl() -> Recipe {
     // across, which is the frame a crouching opponent finds out about.
     let side = {
         let body = Pose::rest()
-            .hips(0.0, -0.30, 0.06)
+            .hips(0.00, -0.35, 0.06)
             .root(13.0, 0.0, 6.0)
             .spine(17.0, 0.0, 0.0)
             .chest(7.0, 0.0, -2.0)
             .head(0.0, 0.0, -6.0)
             .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [0.06, 0.92, 0.16], [0.62, -0.20, 0.76])
+        weapon(body, [0.06, 0.87, 0.16], [0.62, -0.20, 0.76])
             .plant_l([LEAD[0] + 0.02, GROUND + 0.02, LEAD[2] - 0.02])
             .toe_floor_l()
             .plant_r([REAR[0], REAR[1] + 0.08, REAR[2]])
@@ -2529,13 +3070,13 @@ fn whirl() -> Recipe {
     // hands is a sweep thrown with the arms.
     let front = {
         let body = Pose::rest()
-            .hips(-0.06, -0.30, 0.08)
+            .hips(-0.06, -0.35, 0.08)
             .root(13.0, 4.0, -26.0)
             .spine(17.0, 5.0, -20.0)
             .chest(7.0, 3.0, -20.0)
             .head(0.0, -2.0, 30.0)
             .wrists(-4.0, 0.0, 0.0);
-        weapon(body, [-0.10, 0.94, 0.20], [-0.34, -0.18, 0.92])
+        weapon(body, [-0.10, 0.89, 0.20], [-0.34, -0.18, 0.92])
             .plant_l([LEAD[0] + 0.02, GROUND + 0.02, LEAD[2] - 0.02])
             .toe_floor_l()
             .plant_r([REAR[0], REAR[1] + 0.08, REAR[2]])
@@ -2547,13 +3088,13 @@ fn whirl() -> Recipe {
     // circle and the body has turned as far as a body turns.
     let past = {
         let body = Pose::rest()
-            .hips(-0.09, -0.27, 0.0)
+            .hips(-0.09, -0.32, 0.00)
             .root(11.0, 6.0, -40.0)
             .spine(15.0, 8.0, -26.0)
             .chest(6.0, 5.0, -24.0)
             .head(-2.0, -4.0, 50.0)
             .wrists(-6.0, 0.0, 0.0);
-        weapon(body, [-0.20, 0.96, 0.04], [-0.76, -0.16, -0.62])
+        weapon(body, [-0.20, 0.91, 0.04], [-0.76, -0.16, -0.62])
             .plant_l([LEAD[0] + 0.02, GROUND + 0.02, LEAD[2] - 0.04])
             .toe_floor_l()
             .plant_r([REAR[0], REAR[1] + 0.06, REAR[2] - 0.02])
@@ -2564,7 +3105,7 @@ fn whirl() -> Recipe {
     // the frame the turn is over.
     let rise = {
         let body = Pose::rest()
-            .hips(-0.04, -0.16, 0.0)
+            .hips(-0.04, -0.16, 0.00)
             .root(6.0, 3.0, -18.0)
             .spine(9.0, 4.0, -10.0)
             .chest(3.0, 2.0, -8.0)
@@ -2589,7 +3130,7 @@ fn whirl() -> Recipe {
 
     Recipe {
         clip,
-        looseness: Looseness::MARTIAL,
+        looseness: SPEAR,
         notes: "The one move in the class that threatens behind you. Nearly three \
                 quarters of a turn, hung off the low cut height, so it is a leg \
                 sweep with a three-metre pole: the head starts behind the right \
