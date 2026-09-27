@@ -89,6 +89,18 @@ impl Input {
     /// a keyboard stand-in for it either way.
     pub const MIDDLE: u16 = 1 << 11;
 
+    /// Every button that means something on the frame it goes down -- the
+    /// attacks, the mechanic, the jump and the dodge -- as against the stick
+    /// and the crouch, which only mean anything while they are held. What an
+    /// impact freeze keeps for the frame after it; see `state::thaw`.
+    pub const PRESSES: u16 = Input::LEFT
+        | Input::RIGHT
+        | Input::MIDDLE
+        | Input::SPECIAL
+        | Input::MECHANIC
+        | Input::SPACE
+        | Input::SHIFT;
+
     /// Buttons only, looking down the positive X axis, level.
     pub const fn new(bits: u16) -> Input {
         Input {

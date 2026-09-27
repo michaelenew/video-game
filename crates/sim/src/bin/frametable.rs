@@ -292,6 +292,30 @@ fn main() {
             if !vertical.is_empty() {
                 notes.push(&vertical);
             }
+            // What a clean hit does to the space between the two of you, in
+            // metres, and how long both of you hold still when it lands --
+            // the two halves of what makes a blow read as heavy. Only for a
+            // move whose own swing lands the hit: a thing it leaves behind
+            // brings its own numbers.
+            let shove = m.shove();
+            let travel = if m.damage > 0 && shove.raw() > 0 {
+                format!("shoves {} m", tenths(shove))
+            } else if m.damage > 0 && shove.raw() < 0 {
+                format!("pulls {} m", tenths(shove.abs()))
+            } else {
+                String::new()
+            };
+            if !travel.is_empty() {
+                notes.push(&travel);
+            }
+            let freeze = if m.damage > 0 && m.hitstop > 0 {
+                format!("freezes {}f", m.hitstop)
+            } else {
+                String::new()
+            };
+            if !freeze.is_empty() {
+                notes.push(&freeze);
+            }
             if m.startup < t::HUMAN_REACTION_FRAMES {
                 notes.push("unreactable");
             }

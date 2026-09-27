@@ -4,6 +4,7 @@ decided: 2026-09-10
 rebuilt: 2026-09-12
 chained: 2026-09-14
 shaped: 2026-09-15
+weighted: 2026-09-26
 formerly: Bellator, Shifter
 sources: docs/archive/combat-design/shifter-skills.md
 depends: ../champion.md
@@ -92,13 +93,21 @@ Three things fall out of that, and all three are load-bearing:
 
 | | Frames, start to free | Damage | Ground closed | Character |
 | --- | --- | --- | --- | --- |
-| Sword ×3 | 65 | 236 | 2.3 m | The fast one, and the one that walks into them |
-| Spear ×3 | 101 | 244 | 1.8 m, all in one hit | Holds them off, then crosses the gap on its own terms |
-| Hammer ×3 | 128 | 220 | 2.0 m | The slow one, and it ends in the air |
+| Sword ×3 | 77 | 236 | 2.3 m | The fast one, and the one that walks into them |
+| Spear ×3 | 120 | 255 | 2.0 m, most of it in one hit | Holds them off, crosses the gap on its own terms, and ends with them four metres away |
+| Hammer ×3 | 173 | 295 | 3.1 m | The slow one, the heavy one, and it ends in the air |
 
-The hammer being both the slowest and the least damaging is the same deliberate choice it
-always was: it buys stagger, knockback and — on the finisher — an attack that goes through
-a shield and throws them off the floor.
+Frames include the impact freezes, which the string spends as well: twelve of the sword's,
+nineteen of the spear's and thirty of the hammer's.
+
+**The hammer is the slowest string and, since 2026-09-26, the most damaging one.** It used
+to be the least, on the argument that "heavy" meant stagger rather than numbers, and the
+result was a weapon that was slow *and* soft and felt like neither. What makes a weapon
+read as heavy turned out to be three things the sword does not have: a long wind-up you
+can see coming, a blow that **sticks** — both bodies held still for a beat when it lands —
+and a body that goes somewhere when it is hit. The hammer has all three now, and a string
+that costs over two and a half seconds has to pay for them. See
+[feel-log.md](../feel-log.md) for 2026-09-26.
 
 **"Ground closed" is a fourth column now, and it is the one that changed the class.** A
 move may carry the body forward (`Move::step`), and six of the nine do. So the question a
@@ -107,8 +116,8 @@ these am I willing to end up standing in the middle of" — and the two weapons 
 of that are the sword, which closes on every link, and the spear, whose opener and finisher
 close nothing at all.
 
-Live numbers: `cargo run -p sim --bin frametable`, which prints the step and the knock-up
-beside the frames.
+Live numbers: `cargo run -p sim --bin frametable`, which prints the step, the knock-up,
+how far a clean hit shoves somebody in metres and how long it freezes beside the frames.
 
 **A string dies** if you stop swinging for about half a second, if you are hit, if you
 block, if you dodge, or if you leave the floor. It survives a Rush, which is worth knowing:
@@ -123,8 +132,33 @@ is**, and it is the second thing a player learns about each of them after the vo
 | | Hit 1 | Hit 2 | Hit 3 | The shape of it |
 | --- | --- | --- | --- | --- |
 | Sword | 6f, 64 | 5f, 72 | 9f, 100 | fast, faster, fast — nothing here takes long |
-| Hammer | 15f, 50 | 12f, 58 | 20f, 112 | slow, slow, slower, and it ends in the air |
-| Spear | 9f, 56 | 16f, 80 | 12f, 108 | poke, **read me**, clear the ring |
+| Hammer | 20f, 70 | 16f, 85 | 26f, 140 | slow, slow, slower, and it ends in the air |
+| Spear | 10f, 60 | 18f, 80 | 12f, 115 | poke, **read me**, clear the ring |
+
+### Weight: the freeze and the shove — added 2026-09-26
+
+Two more columns decide what a weapon *feels* like, and neither is the damage.
+
+| | Freeze, hit 1 / 2 / 3 | Shove, hit 1 / 2 / 3 |
+| --- | --- | --- |
+| Sword | 3f / 3f / 6f | 0.4 m / 0.4 m / 0.8 m, and a knock-up |
+| Spear | 4f / 7f / 8f | 0.8 m / 1.0 m / **2.5 m** |
+| Hammer | 9f / 8f / **13f** | 1.0 m / 1.2 m / 1.5 m, and a knock-up |
+
+**The freeze** is how long both bodies hold still when a blow connects — the thing fighting
+games call hitstop. It is the difference between a swing that passes through somebody and
+one that *hits* them, and the order is the order of the weapons' mass: the sword's cuts
+barely catch, the spear's point catches, the hammer sticks. Both bodies freeze together,
+so it moves no frame-advantage number, and a button pressed during one is delivered on the
+frame after. Pinned by `the_heavier_the_weapon_the_longer_it_sticks` in
+`crates/sim/tests/feel.rs`.
+
+**The shove** is how far a clean hit carries somebody standing on the floor. The sword's is
+less than its own step, so a sword string walks them backwards and you stay on top of
+them; the spear pushes them out towards its tip, which is where it wants them; the hammer
+moves them furthest of the three openers. Until this pass a sword cut moved somebody
+fifteen centimetres and the heaviest link in the chain under a metre, which is why nobody
+could see knockback at all.
 
 The sword's second hit is faster than its opener because the weapon is already moving. The
 spear's is **slower**, and it is the only hit in the chain that is past a human reaction:
@@ -134,8 +168,8 @@ biggest on-hit advantage in the kit.
 Each finisher also does something the first two do not. **Upcut** rises, and it pops whoever
 it catches off the floor — a cheap way into the air, which is the sword's job. **Earthbreaker**
 is **unblockable**, which is this class's answer to a turtle, and it **throws them up**.
-**Whirl** is the only volume in the game that threatens behind you, and the only link in the
-chain that carries real knockback.
+**Whirl** is the only volume in the game that threatens behind you, and it clears the ring:
+two and a half metres of shove, the furthest of any link in the chain.
 
 ## The takeoffs — a weapon on the way off the floor
 
@@ -182,8 +216,8 @@ The openers, which are what a weapon is before you have committed to a string:
 | | Reach | Steps | Startup | Recovery | Damage | On hit | Character |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Sword** | 1.85 m | 0.55 m | 6f | 9f | middling | +1 | **Move while you hit.** The fastest thing in the class at both ends, it keeps most of your walk, and it takes half a metre of ground whether it lands or not. |
-| **Hammer** | 1.7 m | — | 15f | 22f | least | +11 | The crowd-control tool and the string *starter*. Longest stagger in the chain, and it slows you to a crawl. |
-| **Spear** | 3.4 m | — | 9f | 13f | middling | +1 | **Neutral.** The longest reach in the game, thrown one-handed, and it leaves you standing exactly where you were. Thin, and it goes over a crouching opponent. |
+| **Hammer** | 1.7 m | — | 20f | 26f | most | +11 | The crowd-control tool and the string *starter*. Longest stagger and longest freeze in the chain, a wind-up you can see from across the arena, and it slows you to a crawl. |
+| **Spear** | 3.4 m | — | 10f | 14f | least | +2 | **Neutral.** The longest reach in the game, thrown one-handed, and it leaves you standing exactly where you were. Thin, and it goes over a crouching opponent. |
 
 Read the "steps" column next to the reach: what the sword actually threatens is **3.4 m**
 and what the spear threatens is **4.15 m**, so the spear still owns a band the sword cannot
@@ -191,9 +225,11 @@ touch — but the sword is the weapon that *arrives*, and after one you are half
 deeper than you started. That is the real difference between a spacing weapon and a closing
 one, and it is a difference about where you end up rather than about how far you reach.
 
-The hammer doing the least damage is deliberate and it is what "heavy" means here: it buys
-stagger, not numbers. Its +11 on hit is the whole of its job — it is the move that starts
-the exchange the sword finishes.
+The hammer's +11 on hit is the whole of its job — it is the move that starts the exchange
+the sword finishes. It used to do the least damage of the three, on the argument that heavy
+meant stagger rather than numbers; since 2026-09-26 it does the most, because a hit you
+wind up for a third of a second and then feel land has to be worth it. See
+[What a string costs](#what-a-string-costs-and-what-it-buys).
 
 **The openers and the second hits are the softest things the class throws, on purpose.** A
 hit that shoves somebody out of range of the next one has ended the string whether or not
@@ -278,6 +314,61 @@ the first time it ran.
 Because a capsule has a top and a bottom, **height is now real** for this class: an attack
 thrown from the air can miss somebody standing under it, and one aimed at the floor can
 reach somebody below you. That is what makes the air game below possible at all.
+
+## The weapons you can see
+
+Until 2026-09-26 no weapon was drawn at all. The only thing on the screen during a swing was
+the capsule, as a glowing rod the width of its radius, which made the three weapons the same
+stick at three lengths — and a player who says he cannot feel the difference between the
+hammer, the spear and the sword is reporting exactly that. A silhouette is the cheapest tell
+there is: it is read from across the arena before a single frame of the swing has been. So
+each weapon is now drawn as the thing it is, and drawn to be **unlike the other two at a
+glance** (`crates/view/src/arms.rs`):
+
+- **The sword** is a longsword: a brass pommel, a leather grip long enough for both hands, a
+  crossguard, and a straight bright blade tapering to a point, about 1.2 m from the hand.
+  Middling in every dimension, because it is the middle weapon.
+- **The hammer** is short and top-heavy: a 1.35 m haft and a big square head of dark forged
+  iron set across the end of it, flared at both faces. It is the only weapon with its mass at
+  the end, and the only dark one.
+- **The spear** is nearly twice either of them — 2.9 m of thin shaft, a leaf-shaped head and a
+  red tassel under it. A line, which is what its volume is.
+
+**All three are always on her.** The one in her hands is the running move's weapon, or the
+last one she threw when nothing is running — the same form the HUD names. The spear is slung
+across her back, the hammer hangs head-down at her right hip and the sword sits in a scabbard
+at her left, so a glance at her hands says which weapon is out and a glance at the rest of her
+says which two are not. The hammer hangs low on purpose: the camera sits behind her, and a
+block of iron between her shoulder blades was the thing nearest the crosshair. The empty
+scabbard stays at her hip while the sword is out.
+
+**The weapon in her hands is where the hit test is.** On every active frame its tip is the far
+end of `state::hitbox`, exactly, and it runs back from there through her leading hand — the
+rule the Blood mage's scythe keeps, for the reason the debug overlay keeps it. What gives
+when the volume reaches further than the weapon at rest is the part a hand could slide along:
+the spear's shaft and the hammer's haft run through the leading hand rather than being held at
+one point, and the sword's blade — which nobody slides a hand along — is drawn to the length
+of the cut. The hammer is only drawn so much longer than itself; the one frame at the top of
+an overhead whose volume reaches further than that is pointed at and not reached. Through the
+wind-up and the recovery the weapon lies along the line of her two hands, head beyond the
+right one, which is the convention every grip in `anim::clips::champion` is authored in. Between moves
+she has no idle of her own — she stands and walks on the clips every class shares, whose
+hands are not on anything — so the weapon out is carried the way that weapon is carried, off
+her right hand: the sword up and forward in a low guard, the hammer's head resting on the
+floor at her side with the haft leaning up into her hand, the spear stood upright with its
+butt on the floor and its head well over hers.
+
+**The rod became a trail.** The capsule of each active frame so far is remembered, and a band
+across its outer part is drawn between each two of them — the arc of the cut — faint at the old
+end and solid at the new, lingering and fading through the first seven frames of the
+recovery. Each weapon has its own: a broad cold-white crescent for the sword, a short band at
+the head in a hot ember colour for the hammer, a thin blue streak at the point for the spear.
+The debug overlay (F1) still draws the capsule itself.
+
+`crates/view/tests/arms.rs` holds all of this: the tip on the volume's far end and the leading
+hand on the weapon on every active frame of the chain, the three silhouettes apart (the spear
+far the longest, the hammer's head outweighing everything on the other two), and nothing drawn
+on anybody else.
 
 ## Rush — `E`
 
@@ -371,7 +462,7 @@ The class is three loops, and they share a first beat.
 
 **The string.** Three hits, and the decision is which weapon each one is:
 
-> **Hammer** (fifteen frames of telegraph, the longest stagger in the kit) → **Skewer**,
+> **Hammer** (twenty frames of telegraph, the longest stagger in the kit) → **Skewer**,
 > because they backed off and the spear is the only thing that both reaches them there and
 > crosses the ground on the way → **Upcut**, because it comes up under somebody who is
 > trying to get out and it pops them.
@@ -395,16 +486,16 @@ and there are two doors into it now:
 > landing, off the end of an ordinary string rather than off a takeoff.
 
 The second one is new and it is the cheaper door: it costs no Rush charge and no takeoff
-window, only the twenty frames of telegraph Earthbreaker was always going to cost you, plus
+window, only the twenty-six frames of telegraph Earthbreaker was always going to cost you, plus
 a button pressed while it winds up. Decline the press and the same move is a knock-up and a
 reset — which is the ordinary, safe thing to do with it.
 
-Every step is a decision with a cost. The hammer is fifteen frames of telegraph. The
+Every step is a decision with a cost. The hammer is twenty frames of telegraph. The
 uppercut commits you to the air along with them, and it costs the jump. The air hammer is
-twenty-two frames of startup they can see coming, and missing it leaves you falling with
+twenty-four frames of startup they can see coming, and missing it leaves you falling with
 nothing. And going up with Earthbreaker means that if it *whiffs*, you have thrown the most
 punishable move in the kit — the leap is paid on contact, so a whiff leaves you standing in
-twenty-eight frames of recovery with the jump unspent.
+thirty-two frames of recovery with the jump unspent.
 
 **Arriving first.** The reverse of the same idea: hit them *up*, then get somewhere else
 fast, so they come down into an attack that is already waiting. That is what the pole
@@ -412,7 +503,7 @@ drive, the vault, the fan's on-hit shove and the Rush slash's reposition are for
 not chase them, you arrive first.
 
 Linear play — pick the weapon for the range, hold the button, take the whole string — is
-still meant to be strong, and it is: a held sword chain is 236 damage in sixty-five frames
+still meant to be strong, and it is: a held sword chain is 236 damage in seventy-seven frames
 and needs one button. Nonlinear play is the three loops above, and it is where the ceiling
 is.
 
