@@ -335,9 +335,11 @@ glance** (`crates/view/src/arms.rs`):
   red tassel under it. A line, which is what its volume is.
 
 **All three are always on her.** The one in her hands is the running move's weapon, or the
-last one she threw when nothing is running — the same form the HUD names. The hammer and the
-spear hang crossed on her back and the sword sits in a scabbard at her left hip, so a glance
-at her says which weapon is out and a glance at her back says which two are not. The empty
+last one she threw when nothing is running — the same form the HUD names. The spear is slung
+across her back, the hammer hangs head-down at her right hip and the sword sits in a scabbard
+at her left, so a glance at her hands says which weapon is out and a glance at the rest of her
+says which two are not. The hammer hangs low on purpose: the camera sits behind her, and a
+block of iron between her shoulder blades was the thing nearest the crosshair. The empty
 scabbard stays at her hip while the sword is out.
 
 **The weapon in her hands is where the hit test is.** On every active frame its tip is the far
@@ -349,7 +351,12 @@ one point, and the sword's blade — which nobody slides a hand along — is dra
 of the cut. The hammer is only drawn so much longer than itself; the one frame at the top of
 an overhead whose volume reaches further than that is pointed at and not reached. Through the
 wind-up and the recovery the weapon lies along the line of her two hands, head beyond the
-right one, which is the convention every grip in `anim::clips::champion` is authored in.
+right one, which is the convention every grip in `anim::clips::champion` is authored in. Between moves
+she has no idle of her own — she stands and walks on the clips every class shares, whose
+hands are not on anything — so the weapon out is carried the way that weapon is carried, off
+her right hand: the sword up and forward in a low guard, the hammer's head resting on the
+floor at her side with the haft leaning up into her hand, the spear stood upright with its
+butt on the floor and its head well over hers.
 
 **The rod became a trail.** The capsule of each active frame so far is remembered, and a band
 across its outer part is drawn between each two of them — the arc of the cut — faint at the old
