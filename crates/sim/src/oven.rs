@@ -657,6 +657,10 @@ scalars! {
     QuakeStillSpeed,  "Elementalist", "Quake, still means under (m/s)",       Fixed,   0,        fx(8,1);
     QuakeDamage,      "Elementalist", "Quake, eruption damage",               Int,     0,        400;
     QuakePush,        "Elementalist", "Quake, eruption push (m/s)",           Fixed,   0,        fx(30,1);
+    // The dodge into a stone -- M5. How far a stone may be for the dodge to
+    // break through it, and how far the crosshair may miss its middle.
+    BreakReach,       "Elementalist", "Break-through, reach",                 Fixed,   fx(1,2),  fx(8,1);
+    BreakLock,        "Elementalist", "Break-through, crosshair slack",       Fixed,   0,        fx(4,1);
 }
 
 // ---------------------------------------------------------------------------

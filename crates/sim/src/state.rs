@@ -600,6 +600,14 @@ pub struct Player {
     pub f_held: bool,
     pub r_held: bool,
     pub side_b_held: bool,
+    /// Which of her structure slots the Elementalist's dodge is breaking
+    /// through this frame, or [`NO_STONE`].
+    ///
+    /// The dodge branch has only her body and cannot break a stone or leave
+    /// ground behind, so it marks the slot here for `advance` to spend on the
+    /// same frame -- the shape `blinked` has, for the same reason: a frame
+    /// re-simulated must break the same stone.
+    pub breaking: u8,
     /// Frames left before each of this class's moves may be thrown again.
     ///
     /// **Per move, and only ever the one you just threw** -- which is what
@@ -1042,6 +1050,7 @@ impl Default for Player {
             f_held: false,
             r_held: false,
             side_b_held: false,
+            breaking: NO_STONE,
         }
     }
 }
@@ -1296,6 +1305,16 @@ impl World {
         for i in 0..MAX_PLAYERS {
             if self.players[i].since_landed == 1 && self.players[i].air_frames > 0 {
                 self.land_the_draft(i);
+            }
+        }
+        // A dodge through a stone breaks it. Done here rather than in the
+        // dodge branch because the branch only has her body, and the stone
+        // and the ground it leaves are the world's.
+        for i in 0..MAX_PLAYERS {
+            let slot = self.players[i].breaking;
+            if slot != NO_STONE {
+                self.players[i].breaking = NO_STONE;
+                self.break_through(i, slot as usize);
             }
         }
         // A blink spends its pool. Done here rather than in the dodge branch
@@ -1957,6 +1976,7 @@ impl World {
             h.write_u32(p.f_held as u32);
             h.write_u32(p.r_held as u32);
             h.write_u32(p.side_b_held as u32);
+            h.write_u32(p.breaking as u32);
             for f in &p.repeat_lock {
                 h.write_u32(*f as u32);
             }
@@ -3198,6 +3218,34 @@ fn step_player(
                         p.blinked = pool as u8;
                         Action::Dodge {
                             left: t::dodge_frames(),
+                        }
+                    } else if let Some(slot) = may_commit
+                        .then(|| stone_under_the_crosshair(p, who, input, dir, scene))
+                        .flatten()
+                    {
+                        // **The Elementalist's dodge into a stone breaks
+                        // through it.** An ordinary dodge along the stick --
+                        // same frames, same invulnerability -- and the stone
+                        // is gone as she passes, its slot freed and broken
+                        // ground left where it stood: whoever was chasing her
+                        // has a scar between them and her. `advance` spends
+                        // the mark on this frame. In the air it is the
+                        // airdodge, and costs the airdodge.
+                        p.breaking = slot as u8;
+                        if p.grounded {
+                            p.vel.x = dir.x.mul(t::dodge_speed());
+                            p.vel.z = dir.z.mul(t::dodge_speed());
+                            Action::Dodge {
+                                left: t::dodge_frames(),
+                            }
+                        } else {
+                            p.air_dodged = true;
+                            p.vel.x = dir.x.mul(t::air_dodge_speed());
+                            p.vel.z = dir.z.mul(t::air_dodge_speed());
+                            p.vel.y = Fx::ZERO;
+                            Action::Dodge {
+                                left: t::air_dodge_frames(),
+                            }
                         }
                     } else if may_commit && shadow::dash_is_asked_for(p, who, input, az > 0, scene)
                     {
@@ -7263,6 +7311,51 @@ fn pool_under_the_crosshair(p: &Player, who: usize, input: Input, scene: &Scene)
     best.map(|(slot, _)| slot)
 }
 
+/// Which of the Elementalist's own stones a dodge along `dir` goes into, with
+/// the crosshair on it, if any -- the nearest, when it is on more than one.
+///
+/// The same question the Blood mage's blink asks of her pools, asked of the
+/// class's object: the crosshair on the stone's standing column, with some
+/// slack, and the stone near enough that the dodge carries her into it. The
+/// dodge has to be *toward* the stone as well: the camera sits behind her
+/// shoulder, and turned away from a stone at her back it can be inside the
+/// stone's column with the crosshair reading as on it -- a dodge away from a
+/// stone is a dodge, not a demolition. Hers only -- the Bulwark's planted
+/// wall stands in the same field and is nobody's to break through.
+fn stone_under_the_crosshair(
+    p: &Player,
+    who: usize,
+    input: Input,
+    dir: V3,
+    scene: &Scene,
+) -> Option<usize> {
+    let Mechanic::Structures(slots) = p.mechanic else {
+        return None;
+    };
+    let mut best: Option<(usize, Fx)> = None;
+    for (slot, stone) in slots.iter().enumerate() {
+        let Some(stone) = stone else { continue };
+        let apart = V3::new(stone.at.x.sub(p.pos.x), Fx::ZERO, stone.at.z.sub(p.pos.z));
+        let far = apart.flat_len();
+        if apart.dot(dir).raw() <= 0
+            || far.raw() > t::break_reach().add(t::structure_radius()).raw()
+            || !aim::pointing_at(
+                who,
+                input,
+                stone.at,
+                t::break_lock().add(t::structure_radius()),
+                scene,
+            )
+        {
+            continue;
+        }
+        if best.is_none_or(|(_, seen)| far.raw() < seen.raw()) {
+            best = Some((slot, far));
+        }
+    }
+    best.map(|(slot, _)| slot)
+}
+
 /// The patch of floor under a point in the air: the arena's ground, and the
 /// creature's contact points are always over it. Stones are not consulted --
 /// a pool spilled onto a raised structure is an open question in the design,
@@ -8436,6 +8529,59 @@ impl World {
             let field = stones::gather(&self.players);
             let at = aim::settle(effect.pos, &field);
             stones::raise(&mut self.players[owner], class::Structure::raised(at));
+        }
+    }
+
+    /// The Elementalist's dodge carried her into one of her stones: it breaks
+    /// down as she passes, and where it stood is rough terrain -- burning
+    /// ground, with a cloud of embers, if the stone was lit.
+    ///
+    /// The scar runs across the stone's footprint along the dodge, so the
+    /// pursuer who follows her line crosses the whole of it.
+    fn break_through(&mut self, i: usize, slot: usize) {
+        let p = self.players[i];
+        let index = i * class::MAX_STRUCTURES + slot;
+        let lit = stones::is_lit(&self.players, index);
+        let Some(middle) = stones::destroy(&mut self.players, index) else {
+            return;
+        };
+        let along = V3::new(p.vel.x, Fx::ZERO, p.vel.z);
+        let dir = if along.flat_len().raw() > 0 {
+            along.normalized()
+        } else {
+            p.facing
+        };
+        let across = t::structure_radius().mul(Fx::from_int(2));
+        let from = V3::new(
+            middle.x.sub(dir.x.mul(t::structure_radius())),
+            arena::ground_under(middle),
+            middle.z.sub(dir.z.mul(t::structure_radius())),
+        );
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                EffectKind::Rough,
+                i as u8,
+                p.class,
+                SLOT_COMMITTED,
+                from,
+                dir,
+                across,
+            ),
+        );
+        if lit {
+            spawn_effect(
+                &mut self.effects,
+                Effect::cast(
+                    EffectKind::Embers,
+                    i as u8,
+                    p.class,
+                    moves::elementalist::CINDER,
+                    middle,
+                    V3::ZERO,
+                    t::embers_radius(),
+                ),
+            );
         }
     }
 

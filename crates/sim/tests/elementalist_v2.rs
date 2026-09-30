@@ -24,6 +24,8 @@ const Q: u16 = Input::SPECIAL;
 const F: u16 = Input::KEY_F;
 const RK: u16 = Input::KEY_R;
 const SIDE_B: u16 = Input::SIDE_B;
+const SHIFT: u16 = Input::SHIFT;
+const W: u16 = Input::W;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -1326,4 +1328,134 @@ fn an_unlit_stone_kicked_is_still_only_kicked() {
     assert_eq!(stones_of(&w).len(), 1, "still there");
     assert!(stones_of(&w)[0].launched, "and moving");
     assert!(clouds(&w).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// The dodge into a stone -- M5.
+// ---------------------------------------------------------------------------
+
+/// The pitch that puts the crosshair on a stone standing at `spot`.
+fn crosshair_onto_the_stone_at(w: &World, spot: V3) -> i16 {
+    let field = sim::stones::gather(&w.players);
+    let stone = field
+        .iter()
+        .flatten()
+        .find(|s| s.at.x == spot.x)
+        .expect("a stone there");
+    let middle = V3::new(
+        stone.at.x,
+        stone.top().sub(t::structure_height().div(Fx::from_int(2))),
+        stone.at.z,
+    );
+    (-800..400)
+        .rev()
+        .find_map(|step| {
+            let pitch = (step * 65536 / 3600) as i16;
+            let look = Input::looking_at(0, LOOK_RIGHT, pitch);
+            with_scene(w, |scene| {
+                sim::aim::pointing_at(0, look, middle, t::break_lock(), scene).then_some(pitch)
+            })
+        })
+        .expect("no pitch puts the crosshair on the stone")
+}
+
+#[test]
+fn a_dodge_with_the_crosshair_on_a_stone_breaks_through_it() {
+    let mut w = elementalist();
+    let spot = at(-4.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    let pitch = crosshair_onto_the_stone_at(&w, spot);
+    w.advance([
+        Input::looking_at(SHIFT | W, LOOK_RIGHT, pitch),
+        Input::looking_at(0, LOOK_LEFT, 0),
+    ]);
+    assert!(
+        matches!(w.players[0].action, Action::Dodge { .. }),
+        "she dodged: {:?}",
+        w.players[0].action
+    );
+    assert!(stones_of(&w).is_empty(), "and the stone broke as she went");
+    let scar = scars(&w);
+    assert_eq!(scar.len(), 1, "leaving broken ground where it stood");
+    assert!(
+        scar[0].pos.x.raw() < spot.x.raw() && scar[0].pos.x.add(scar[0].reach).raw() > spot.x.raw()
+    );
+    assert!(clouds(&w).is_empty(), "no fire: it was not lit");
+    assert_eq!(w.players[0].breaking, NO_STONE, "the mark is spent");
+}
+
+#[test]
+fn breaking_through_a_lit_stone_leaves_burning_ground() {
+    let mut w = elementalist();
+    let spot = at(-4.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    sim::stones::light(&mut w.players, 0);
+    let pitch = crosshair_onto_the_stone_at(&w, spot);
+    w.advance([
+        Input::looking_at(SHIFT | W, LOOK_RIGHT, pitch),
+        Input::looking_at(0, LOOK_LEFT, 0),
+    ]);
+    assert!(stones_of(&w).is_empty());
+    assert_eq!(scars(&w).len(), 1);
+    assert_eq!(
+        clouds(&w).len(),
+        1,
+        "and a cloud of embers on the broken ground"
+    );
+}
+
+#[test]
+fn a_dodge_pointed_elsewhere_is_the_ordinary_dodge() {
+    let mut w = elementalist();
+    let spot = at(-4.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    // Looking well away from the stone, and dodging the other way. The
+    // camera behind her shoulder is inside the stone's column here, which is
+    // exactly why the dodge has to be toward the stone as well.
+    w.advance([
+        Input::looking_at(SHIFT | W, LOOK_LEFT, 0),
+        Input::looking_at(0, LOOK_LEFT, 0),
+    ]);
+    assert!(matches!(w.players[0].action, Action::Dodge { .. }));
+    assert_eq!(stones_of(&w).len(), 1, "the stone stands");
+    assert!(scars(&w).is_empty());
+}
+
+#[test]
+fn a_stone_out_of_a_dodges_reach_is_not_broken() {
+    let mut w = elementalist();
+    let spot = at(2.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    let pitch = crosshair_onto_the_stone_at(&w, spot);
+    w.advance([
+        Input::looking_at(SHIFT | W, LOOK_RIGHT, pitch),
+        Input::looking_at(0, LOOK_LEFT, 0),
+    ]);
+    assert!(matches!(w.players[0].action, Action::Dodge { .. }));
+    assert_eq!(
+        stones_of(&w).len(),
+        1,
+        "eight metres away is out of a dodge's reach"
+    );
+}
+
+#[test]
+fn the_airdodge_breaks_through_too_and_costs_the_airdodge() {
+    let mut w = elementalist();
+    let spot = at(-4.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    aloft(&mut w, 1.0);
+    let pitch = crosshair_onto_the_stone_at(&w, spot);
+    w.advance([
+        Input::looking_at(SHIFT | W, LOOK_RIGHT, pitch),
+        Input::looking_at(0, LOOK_LEFT, 0),
+    ]);
+    assert!(matches!(w.players[0].action, Action::Dodge { .. }));
+    assert!(stones_of(&w).is_empty());
+    assert!(w.players[0].air_dodged, "spent");
 }

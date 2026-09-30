@@ -347,6 +347,10 @@ pub const SECTIONS: &[Section] = &[
                 "Tremor: Quake on your own feet. The same shake and the same eruption, and the stone comes up under you and takes you with it -- the structure jump with a telegraph attached, for when somebody has closed on you.",
             ),
             e(
+                "Shift + direction, crosshair on a stone",
+                "The dodge breaks through it: the stone is gone as you pass, its slot is free again, and where it stood is rough ground -- burning ground and a cloud of embers, if it was lit. The one thing in the kit that beats a string rather than a hit: whoever was chasing you has broken ground between you and them. In the air it is the airdodge, and costs the airdodge.",
+            ),
+            e(
                 "Fire on a stone",
                 "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it -- your beam's kick included. Earth builds the field; fire decides who may use it.",
             ),

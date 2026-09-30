@@ -2912,6 +2912,20 @@ pub fn quake_push() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::QuakePush))
 }
 
+// --- The dodge into a stone ------------------------------------------------
+
+/// How far away a stone may stand for a dodge at it to break through it.
+/// About what a dodge covers: the dodge has to carry her into it.
+pub fn break_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreakReach))
+}
+
+/// How far off a stone's middle the crosshair may sit and still count as
+/// on it. The Reaver's dash has the same kind of slack for her shadow.
+pub fn break_lock() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreakLock))
+}
+
 // --- The step, the diagonal, and going up with them ------------------------
 
 /// How many frames before the hitbox a stepping move starts driving the body.
