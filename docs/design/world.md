@@ -1,18 +1,35 @@
 ---
-status: proposed
+status: decided in part
 proposed: 2026-09-30
+decided: 2026-09-30
 ---
 
 # The world — a rudimentary one
 
 The creatures in [bestiary.md](bestiary.md) need somewhere to live and a reason
-to be fought in some order. This is the smallest world that gives them both: a
-valley of places, a town at its mouth, paths between them that open as you get
-better, and rewards that change how you play rather than how strong you are.
+to be fought. This document holds two things: **what is being built now**, which
+is deliberately small, and **the valley** it is heading toward, kept so the
+reasoning does not have to be re-derived.
 
-It un-parks part of [parked.md](parked.md), deliberately, and keeps both of its
-firm conclusions: **character power must not be able to get you past a wall**,
-and **versus must not be affected by anything earned here**.
+## 0 · Decided, 2026-09-30
+
+- **The world is, for now, separate arenas you teleport between from the dev
+  harness.** No valley, no trails, no hub, no gates. Each creature's fight is its
+  own arena (bestiary P2, arenas as data), and the harness has a picker that puts
+  you in one. §2–§3 below are the later picture, not the build.
+- **Rewards are trophies and tempered rematches only.** Beating a creature
+  records its trophy; a beaten creature can be fought again tempered (§4).
+  **Sidegrades stay parked** in [parked.md](parked.md). Every creature document
+  proposes one in its §11; those are notes toward the parked system, not work.
+- **Defence fights stay.** The Hornback's escort variant and the Siegeshell's
+  wall are in the design (bestiary P7).
+- **The cast in [bestiary.md](bestiary.md) is the first mix.**
+
+What that means to build is in §6.
+
+It keeps both of [parked.md](parked.md)'s firm conclusions: **character power
+must not be able to get you past a wall**, and **versus must not be affected by
+anything earned here**. Trophies and tempers change neither.
 
 ---
 
@@ -32,7 +49,7 @@ is where it has to be made true. So:
 - **What you earn is a sidegrade or a key.** Sidegrades change playstyle; keys
   open the world. Neither changes whether you can beat the next thing.
 
-## 2 · The shape: a valley of places
+## 2 · Later: a valley of places
 
 **A world made of arenas.** The world is a small graph of **places**. Each place
 is one arena (made possible by bestiary P2, arenas as data), with a creature or
@@ -70,7 +87,7 @@ the sparring bot and versus live here, and so does the armoury where sidegrades
 are chosen. Its wall is the one the Siegeshell walks toward, so the last fight in
 the world is defending the place the world started from.
 
-## 3 · The tiers and their gates
+## 3 · Later: the tiers and their gates
 
 | Tier | Places | To leave this tier, beat |
 | --- | --- | --- |
@@ -108,7 +125,10 @@ the Siegeshell's anchor). Trophies are the gate count and nothing else. They are
 also the one reward that costs almost nothing to build and that every player
 understands at once.
 
-### Sidegrades — the parked proposal, made concrete
+### Sidegrades — ⚠️ parked, 2026-09-30
+
+*Not being built. Kept as the shape the parked system would take if it is
+un-parked; the per-creature proposals are in each document's §11.*
 
 [parked.md](parked.md)'s leading proposal was **auto modifiers**: items that
 change what your auto attack does, as playstyle rather than power, with the
@@ -177,31 +197,30 @@ place is locked to the lone player, not to the pair. The creature's coop tuning
 
 ## 6 · What it needs built
 
-Beyond the bestiary's P1–P8:
+**Now:**
 
-- **W1 · Places.** A place is an arena id plus exits. The snapshot holds the
-  current place; moving through an exit is a simulation event, so both peers
-  change place on the same frame. Loading is the renderer's problem, and it has
-  one frame's warning.
-- **W2 · Progress.** Trophies, unlocked sidegrades, tempers beaten and notes seen.
-  Stored the way a player's settings are stored — a file on the desktop, local
-  storage in the browser — so it lives in `crates/game/src/platform.rs` and
-  nowhere else ([CLAUDE.md](../../CLAUDE.md), "the browser build is the same
-  program"). It is **not** in the snapshot: nothing in a fight depends on it
-  except which sidegrades are equipped, and those go in at the start of a hunt
-  as part of each fighter's setup, the same way the class does.
-- **W3 · Sidegrades.** A sidegrade is a set of Oven overrides applied to one
-  fighter for one hunt. That is the cheapest possible implementation, and it
-  keeps "every magnitude is a knob in the Oven" true: a sidegrade is a named
-  bundle of knob changes plus, where needed, a flag that a kit reads.
-- **W4 · Trails.** Traversal places with no creature. Built out of the same solids
-  the arenas use.
-- **W5 · Hearth.** The hub: the armoury (choose two sidegrades), the trophy wall,
-  the notes, the dummy and the sparring bot, the way out to versus.
+- **W0 · The arena picker.** The dev harness gets a list of arenas, one per
+  creature, and puts both players into the chosen one with its creature. It is a
+  dev-harness command and a `--hunt <creature>` flag (and `?hunt=<creature>` in
+  the browser, since the query string does what the flags do). Which arena is
+  loaded is in the snapshot, so both peers change on the same frame.
+- **W1 · Trophies.** A record of which creatures a player has beaten, and at
+  which temper. Stored the way a player's settings are stored — a file on the
+  desktop, local storage in the browser — so it lives in
+  `crates/game/src/platform.rs` and nowhere else ([CLAUDE.md](../../CLAUDE.md),
+  "the browser build is the same program"). It is **not** in the snapshot:
+  nothing in a fight depends on it. Shown in the picker beside each creature.
+- **W2 · Tempers.** A temper is a set of Oven overrides on a creature's brain
+  knobs (glance, lead, decisiveness, how far its strain thresholds fall), applied
+  when the hunt starts. That keeps "every magnitude is a knob in the Oven" true.
+  The picker offers the tempers a player has earned.
 
-Order: W1 and W4 as soon as arenas are data (after the Hornback); W2 and W5 once
-three creatures exist, because a hub with one trophy on its wall is a menu; W3
-once the first sidegrade family is written.
+**Later**, if the valley is built: places with exits, trails, Hearth, waystones,
+the hunter's notes (§4), and — if progression is un-parked — sidegrades as named
+bundles of Oven overrides.
+
+W0 comes with P2 (after the Hornback in the bestiary's build order); W1 and W2
+are small and can follow any time after.
 
 ## 7 · Deliberately not yet
 
@@ -217,16 +236,13 @@ once the first sidegrade family is written.
   to avoid.
 - **Economy.** No currency, no crafting. A trophy is not spent.
 
-## 8 · Questions for you
+## 8 · Questions still open
 
-1. **Is "sidegrades plus keys" the right reward shape**, or do you want the
-   world's first version to reward only trophies and tempers, leaving progression
-   parked a while longer?
-2. **Two slots** — one auto modifier, one mechanic modifier. Enough, or too few?
-3. **Tempering** — three tempers per creature on the glance/lead/decisiveness
-   knobs. Is "the same creature, cleverer" the ceiling you want?
-4. **The Siegeshell as the ending**, arriving on its own and walking at your
-   town. Keep, or keep it as a place like the others?
-5. **Hearth's wall can be breached.** If the Siegeshell reaches the wall, does
-   the hunt simply fail, or does the town carry the scar (a district in ruins
-   until you win)? The second is more memorable and costs more.
+1. **Tempering** — three tempers per creature on the glance / lead /
+   decisiveness knobs. Is "the same creature, cleverer" the ceiling you want?
+2. **The Siegeshell's breach.** Settled for now by the Siegeshell document: the
+   first beam takes the gate and the second loses the hunt. Whether a town
+   carries the scar only matters once there is a town.
+
+*Answered 2026-09-30:* rewards are trophies and tempers only; sidegrades stay
+parked; defence fights stay; the world is separate arenas for now.

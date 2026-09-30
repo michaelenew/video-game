@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: proposed; cast accepted 2026-09-30
 proposed: 2026-09-30
 ---
 
@@ -284,30 +284,27 @@ reuse plus one new idea. Each is a few hours of AI time, as expected.
 11. **Siegeshell.** Everything, at scale, plus P7. Last because it is the one
     that will find every assumption the others did not.
 
-The [world](world.md) can start after the Hornback, when arenas are data.
+The [world](world.md) is, for now, an arena picker in the dev harness (its W0),
+and it arrives with P2, after the Hornback.
 
 ## 6 · Questions for you
 
-Things I would like your word on before the first of these is built. The
-creature documents each end with their own questions; these are the ones that
-cut across the cast.
+**Answered 2026-09-30:** the cast is a good first mix; defence fights stay;
+rewards are trophies and tempered rematches only, so the sidegrade in each
+creature's §11 is a note for [parked.md](parked.md) rather than work; and the
+world is separate arenas reached from the dev harness. See
+[world.md](world.md) §0.
 
-1. **Is eleven the right count**, and is the mix right — two packs, one pair,
-   one spawner, one flyer, one duellist, one colossus, and four single animals of
-   different kinds?
-2. **Tier 5 is built for two.** The Siegeshell and the Mantis are tuned so that
+Still open, and cutting across the cast (each creature document ends with its
+own):
+
+1. **Tier 5 is built for two.** The Siegeshell and the Mantis are tuned so that
    a decent player alone mostly loses. Is that the right ceiling, or should every
    creature be soloable by a decent player?
-3. **The Mantis reads habits.** It remembers what you hit its guard with and
+2. **The Mantis reads habits.** It remembers what you hit its guard with and
    counters a repeat sooner. That is not reading inputs — it reacts to what it
    saw land — but it is the nearest thing in the cast to it, and the contract
    (§1.5) is load-bearing. Keep it or cut it?
-4. **Riding the herd, riding the Galewing into the sky, climbing the
+3. **Riding the herd, riding the Galewing into the sky, climbing the
    Siegeshell** — three new rides. Is the ride the Ridgeback's thing, or the
    game's?
-5. **Defend fights** — the herd's cart variant and the Siegeshell's wall. Is
-   "protect something" a mode you want at all?
-6. **Rewards.** [world.md](world.md) proposes that creatures pay out in
-   sidegrades (the auto modifiers and mechanic modifiers from
-   [parked.md](parked.md)) and in keys to the world. That un-parks progression
-   deliberately. Is now the time?
