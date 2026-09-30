@@ -250,7 +250,7 @@ A glance that fails keeps the old sample, and the old sample keeps being led.
 cannot ambush you, even if its partner is looking straight at you — which is
 what makes splitting them a real thing to do rather than a flavour line.
 
-### It does not read your look, your buttons, or your dodge
+### It does not read your buttons, your look, or your dodge
 
 The seed's hardest rule, and it is made airtight structurally rather than by
 promise:
@@ -280,19 +280,14 @@ promise:
   rare, and it is the reason the blinks (§7) beat the ambush: a blink has no
   frames of motion to see.
 
-### It does not read your look
-
-"Behind you" is `target + unit(target − holder) · strike_distance`: the far
-side from its partner. The Striker orbits toward that point the long way round
-if the short way passes in front of you, so that it does not walk through your
-view to get there. Nothing reads your camera, and nothing needs to: a person
-looks at the thing in front of them.
-
 ### Movement
 
 - **Holder:** goes to `seen + seen_vel · prowl_lead`, held at `hold_distance`
   (5.5 m) — where you are going, not where you are.
-- **Striker:** goes to the behind-you point at `strike_distance` (6 m).
+- **Striker:** goes to `target + unit(target − holder) · strike_distance`
+  (6 m), the far side from its partner — "behind you" by position, never by
+  your camera (§1). It orbits the long way round if the short way crosses in
+  front of you.
 - **The swap:** every `swap_frames` (420–600, drawn), the cat nearer the line
   of your travel becomes the Holder. Both move for `swap_frames_crossing` (40)
   without attacking.
