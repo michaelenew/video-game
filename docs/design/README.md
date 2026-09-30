@@ -113,6 +113,9 @@ few enough to balance and to read in third person.
 | [elementalist-v2.md](elementalist-v2.md) | v2: four new inputs, hold-to-charge on both placement buttons, Updraft and Downdraft on her body, Cinder spray, Quake and Tremor, lit stones, the dodge through a stone | **Built 2026-09-30**, unplayed; `cargo run -p sim --bin elemental` prints its numbers |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt; **hunts since 2026-09-25**: eight moves, a threat at every range, unplayed |
+| [bestiary.md](bestiary.md) | The cast after the Ridgeback: the contract every creature is held to, eleven creatures on five tiers, the shared machinery (P1–P8) and the aiming changes (A1–A5) they need, and the build order | **Proposed 2026-09-30; the cast accepted as the first mix** |
+| [creatures/](creatures/) | One design per creature: [Gnawers](creatures/gnawers.md), [Hornback herd](creatures/hornback.md), [Sandmaw](creatures/sandmaw.md), [Mireback](creatures/mireback.md), [The Pair](creatures/the-pair.md), [Broodmother](creatures/broodmother.md), [Galewing](creatures/galewing.md), [Veilstalker](creatures/veilstalker.md), [Mantis](creatures/mantis.md), [Siegeshell](creatures/siegeshell.md) | Proposed, unbuilt |
+| [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30** |
 | [architecture.md](architecture.md) | Rust workspace, determinism, rollback | Decided |
 | [web.md](web.md) | The browser build: what a page cannot do, and what it does instead | Decided |
 | [animation.md](animation.md) | The skeleton, authoring clips, the hub | Decided |
