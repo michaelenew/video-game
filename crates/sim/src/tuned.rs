@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 359] = [
+pub const SCALARS: [i32; 375] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -367,6 +367,22 @@ pub const SCALARS: [i32; 359] = [
            36045, // elementalist.rough_terrain,_speed_kept_(x) = 0.55
            65536, // elementalist.rough_terrain,_half-width = 1
            65536, // elementalist.strike,_worth_(x_the_burn_it_replaces) = 1
+          131072, // elementalist.draft,_radius = 2
+          229376, // elementalist.draft,_height = 3.5
+              24, // elementalist.draft,_blows_for = 24
+          917504, // elementalist.updraft,_lift_(m/s) = 14
+          589824, // elementalist.updraft,_lifts_a_stone_at_(m/s) = 9
+         1179648, // elementalist.downdraft,_drive_(m/s) = 18
+          196608, // elementalist.air_ring,_radius = 3
+          589824, // elementalist.air_ring,_push_(m/s) = 9
+               8, // elementalist.air_ring,_stagger = 8
+              10, // elementalist.air_ring,_shown_for = 10
+         1179648, // elementalist.fire_ring,_speed_(m/s) = 18
+          393216, // elementalist.fire_ring,_reach = 6
+           52429, // elementalist.fire_ring,_width = 0.8
+              60, // elementalist.fire_ring,_damage = 60
+          458752, // elementalist.fire_ring,_push_(m/s) = 7
+              14, // elementalist.fire_ring,_stagger = 14
 ];
 
 #[rustfmt::skip]
@@ -398,7 +414,7 @@ pub const AIR: [i32; 24] = [
 ];
 
 #[rustfmt::skip]
-pub const MOVES: [i32; 1350] = [
+pub const MOVES: [i32; 1410] = [
                4, // move.bulwark.bash.startup = 4
                3, // move.bulwark.bash.active = 3
               10, // move.bulwark.bash.recovery = 10
@@ -1419,6 +1435,66 @@ pub const MOVES: [i32; 1350] = [
                0, // move.elementalist.cinder_spray.steps_forward_(m) = 0
                0, // move.elementalist.cinder_spray.drinks_of_a_pool_(%) = 0
                3, // move.elementalist.cinder_spray.impact_freeze = 3
+              14, // move.elementalist.updraft.startup = 14
+               2, // move.elementalist.updraft.active = 2
+              14, // move.elementalist.updraft.recovery = 14
+               0, // move.elementalist.updraft.damage = 0
+               0, // move.elementalist.updraft.reach = 0
+          131072, // move.elementalist.updraft.radius = 2
+              18, // move.elementalist.updraft.hitstun = 18
+               0, // move.elementalist.updraft.blockstun = 0
+               0, // move.elementalist.updraft.knockback = 0
+              20, // move.elementalist.updraft.mobility_(%) = 20
+               0, // move.elementalist.updraft.aerial_hang = 0
+               1, // move.elementalist.updraft.unblockable = on
+               1, // move.elementalist.updraft.hits_crouching = on
+               0, // move.elementalist.updraft.needs_mechanic = off
+          917504, // move.elementalist.updraft.launch = 14
+          917504, // move.elementalist.updraft.self_lift = 14
+               0, // move.elementalist.updraft.grab_hold = 0
+               0, // move.elementalist.updraft.leaves_behind = 0
+               0, // move.elementalist.updraft.health_cost = 0
+               0, // move.elementalist.updraft.leech_(%) = 0
+               0, // move.elementalist.updraft.line_of_effect_(0-4) = 0
+               0, // move.elementalist.updraft.swing_arc_(turns) = 0
+               0, // move.elementalist.updraft.hits_again_every = 0
+               0, // move.elementalist.updraft.channel,_longest_hold = 0
+               0, // move.elementalist.updraft.channel,_reach_at_no_hold = 0
+             100, // move.elementalist.updraft.repeat_lockout_(%) = 100
+               0, // move.elementalist.updraft.reactivate_no_sooner_than = 0
+               0, // move.elementalist.updraft.steps_forward_(m) = 0
+               0, // move.elementalist.updraft.drinks_of_a_pool_(%) = 0
+               0, // move.elementalist.updraft.impact_freeze = 0
+               8, // move.elementalist.downdraft.startup = 8
+               2, // move.elementalist.downdraft.active = 2
+              10, // move.elementalist.downdraft.recovery = 10
+               0, // move.elementalist.downdraft.damage = 0
+               0, // move.elementalist.downdraft.reach = 0
+          131072, // move.elementalist.downdraft.radius = 2
+              14, // move.elementalist.downdraft.hitstun = 14
+               0, // move.elementalist.downdraft.blockstun = 0
+               0, // move.elementalist.downdraft.knockback = 0
+              20, // move.elementalist.downdraft.mobility_(%) = 20
+               0, // move.elementalist.downdraft.aerial_hang = 0
+               1, // move.elementalist.downdraft.unblockable = on
+               1, // move.elementalist.downdraft.hits_crouching = on
+               0, // move.elementalist.downdraft.needs_mechanic = off
+        -1179648, // move.elementalist.downdraft.launch = -18
+               0, // move.elementalist.downdraft.self_lift = 0
+               0, // move.elementalist.downdraft.grab_hold = 0
+               0, // move.elementalist.downdraft.leaves_behind = 0
+               0, // move.elementalist.downdraft.health_cost = 0
+               0, // move.elementalist.downdraft.leech_(%) = 0
+               0, // move.elementalist.downdraft.line_of_effect_(0-4) = 0
+               0, // move.elementalist.downdraft.swing_arc_(turns) = 0
+               0, // move.elementalist.downdraft.hits_again_every = 0
+               0, // move.elementalist.downdraft.channel,_longest_hold = 0
+               0, // move.elementalist.downdraft.channel,_reach_at_no_hold = 0
+             100, // move.elementalist.downdraft.repeat_lockout_(%) = 100
+               0, // move.elementalist.downdraft.reactivate_no_sooner_than = 0
+               0, // move.elementalist.downdraft.steps_forward_(m) = 0
+               0, // move.elementalist.downdraft.drinks_of_a_pool_(%) = 0
+               0, // move.elementalist.downdraft.impact_freeze = 0
                7, // move.blood_mage.bloodletter.startup = 7
                3, // move.blood_mage.bloodletter.active = 3
               14, // move.blood_mage.bloodletter.recovery = 14

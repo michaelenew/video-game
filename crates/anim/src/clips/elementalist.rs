@@ -80,7 +80,15 @@ use view::skeleton::Joint;
 const THROUGH: Ease = Ease::new(0.10, 0.34, 0.90, 0.66);
 
 pub fn clips() -> Vec<Recipe> {
-    vec![bolt(), fissure(), fire_pillar(), heavy(), cinder()]
+    vec![
+        bolt(),
+        fissure(),
+        fire_pillar(),
+        heavy(),
+        cinder(),
+        updraft(),
+        downdraft(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -922,4 +930,230 @@ fn easing() -> Pose {
         0.0,
         0.0,
     )
+}
+
+// ---------------------------------------------------------------------------
+// Updraft and Downdraft
+// ---------------------------------------------------------------------------
+
+/// The column of air on her own body, standing: both arms spread wide and
+/// low, palms up, swept up to shoulder height as the body rises on to its
+/// toes -- lifting the whole room.
+///
+/// **Nothing goes over the head.** The pillar's haul finishes with the hands
+/// overhead and the body sunk on to the load; this finishes with the arms
+/// level and the body tall, which is the opposite silhouette: wide against
+/// narrow, up against down. The spread is the tell, from the second frame.
+fn updraft() -> Recipe {
+    let clip = Clip::ElementalistUpdraft;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let spread = (contact / 3).max(2);
+    let gathered_low = (contact * 3 / 4).max(spread + 1);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A lift with the whole width of her: the arms open wide and low \
+                first, palms turned up, then come up level as the heels leave \
+                the floor. The chest opens and the head comes up with it. It \
+                is built to read against the pillar -- that haul narrows and \
+                sinks, this widens and rises -- and against Cataclysm, which \
+                puts both hands out in front. MARTIAL so the arms ring at the \
+                top and the body settles back on to its heels over the \
+                recovery rather than dropping."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(spread, opening_wide(), Ease::SMOOTH),
+            Key::eased(gathered_low, cupped_low(), Ease::ANTICIPATE),
+            Key::eased(contact, lifted_wide(), Ease::STRIKE),
+            Key::eased(recover, held_wide(), Ease::OUT),
+            Key::eased(settle, easing_down(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: arms opening out to the sides, low, palms turning up.
+fn opening_wide() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.05, 0.0)
+            .spine(4.0, 0.0, 0.0)
+            .chest(2.0, 0.0, 0.0)
+            .head(4.0, 0.0, 0.0)
+            .shoulders(14.0, 58.0, 30.0)
+            .elbows(40.0)
+            .wrists(-30.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Loaded: as low and wide as the hands get, cupped, knees soft.
+fn cupped_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.09, -0.01)
+            .spine(8.0, 0.0, 0.0)
+            .chest(4.0, 0.0, 0.0)
+            .head(6.0, 0.0, 0.0)
+            .shoulders(6.0, 72.0, 40.0)
+            .elbows(48.0)
+            .wrists(-40.0, 0.0, 0.0),
+        0.0,
+        0.02,
+    )
+}
+
+/// The gust, on the frame the column goes: arms level and wide, palms up,
+/// chest open, up on the toes.
+fn lifted_wide() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, 0.03, 0.01)
+            .spine(-8.0, 0.0, 0.0)
+            .chest(-10.0, 0.0, 0.0)
+            .head(-8.0, 0.0, 0.0)
+            .shoulders(88.0, 84.0, 30.0)
+            .elbows(12.0)
+            .wrists(-24.0, 0.0, 0.0),
+        0.05,
+        0.05,
+    )
+}
+
+/// The end of the active window: a shade higher still, arms ringing.
+fn held_wide() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, 0.035, 0.01)
+            .spine(-9.0, 0.0, 0.0)
+            .chest(-11.0, 0.0, 0.0)
+            .head(-9.0, 0.0, 0.0)
+            .shoulders(96.0, 86.0, 26.0)
+            .elbows(8.0)
+            .wrists(-20.0, 0.0, 0.0),
+        0.05,
+        0.05,
+    )
+}
+
+/// Recovery: back on to the heels, the arms falling from level.
+fn easing_down() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.04, 0.0)
+            .spine(-2.0, 0.0, 0.0)
+            .chest(-3.0, 0.0, 0.0)
+            .head(-2.0, 0.0, 0.0)
+            .shoulders(48.0, 50.0, 10.0)
+            .elbows(40.0)
+            .wrists(-16.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The column drawn falling, in the air: both palms turned down and driven
+/// from the chest to full reach below the hips, the knees drawn up as the
+/// arms come down -- pressing the air under her.
+///
+/// **The torso stays upright.** Landfall is Fissure's fold, a body bent
+/// double over its hands; this keeps the spine tall and moves the arms and
+/// the knees instead. Same direction, opposite body.
+fn downdraft() -> Recipe {
+    let clip = Clip::ElementalistDowndraft;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let raise = (contact / 2).max(2);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "A press, not a slam: the hands come up to the chest, palms \
+                down, and drive straight down past the hips while the knees \
+                come up to meet them. The spine stays tall all the way through \
+                -- the one thing the clip must not do is fold, because folding \
+                is Landfall. CRISP because it is thrown falling and has eight \
+                frames of startup; anything looser arrives late."
+            .into(),
+        keys: vec![
+            Key::eased(0, in_flight(), Ease::OUT),
+            Key::eased(raise, palms_up_at_the_chest(), Ease::ANTICIPATE),
+            Key::eased(contact, pressed_down(), Ease::STRIKE),
+            Key::eased(recover, pressed_through(), Ease::OUT),
+            Key::eased(settle, in_flight(), Ease::SMOOTH),
+            Key::eased(home, in_flight(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// Where the arms and legs are in the air, as a base to press from: legs
+/// slightly split, arms loose.
+fn in_flight() -> Pose {
+    ready()
+        .hips(0.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .chest(0.0, 0.0, 0.0)
+        .head(-2.0, 0.0, 0.0)
+        .hip_l(14.0, 4.0, 0.0)
+        .knee_l(22.0)
+        .hip_r(-8.0, 4.0, 0.0)
+        .knee_r(16.0)
+        .ankles(10.0, 0.0, 0.0)
+}
+
+/// Hands drawn up to the chest, palms turned to the floor, knees starting up.
+fn palms_up_at_the_chest() -> Pose {
+    in_flight()
+        .spine(-2.0, 0.0, 0.0)
+        .chest(-4.0, 0.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+        .shoulders(52.0, 26.0, -20.0)
+        .elbows(110.0)
+        .wrists(36.0, 0.0, 0.0)
+        .hip_l(30.0, 8.0, 0.0)
+        .knee_l(50.0)
+        .hip_r(24.0, 8.0, 0.0)
+        .knee_r(44.0)
+}
+
+/// The press, on the frame the column goes: arms straight down past the
+/// hips, palms flat to the floor, knees drawn well up.
+fn pressed_down() -> Pose {
+    in_flight()
+        .spine(4.0, 0.0, 0.0)
+        .chest(2.0, 0.0, 0.0)
+        .head(10.0, 0.0, 0.0)
+        .shoulders(-18.0, 22.0, -30.0)
+        .elbows(6.0)
+        .wrists(58.0, 0.0, 0.0)
+        .hip_l(62.0, 10.0, 0.0)
+        .knee_l(92.0)
+        .hip_r(58.0, 10.0, 0.0)
+        .knee_r(88.0)
+        .ankles(20.0, 0.0, 0.0)
+}
+
+/// The end of the active window: the arms carried a little behind the hips,
+/// the knees at their highest.
+fn pressed_through() -> Pose {
+    in_flight()
+        .spine(5.0, 0.0, 0.0)
+        .chest(3.0, 0.0, 0.0)
+        .head(11.0, 0.0, 0.0)
+        .shoulders(-26.0, 20.0, -34.0)
+        .elbows(4.0)
+        .wrists(62.0, 0.0, 0.0)
+        .hip_l(66.0, 10.0, 0.0)
+        .knee_l(96.0)
+        .hip_r(62.0, 10.0, 0.0)
+        .knee_r(92.0)
+        .ankles(22.0, 0.0, 0.0)
 }

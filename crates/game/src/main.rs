@@ -667,9 +667,11 @@ const EFFECT_PARTS: usize = {
     let arms = sim::effects::GRASP_ARMS;
     let beads = sim::effects::TETHER_BEADS;
     let rough = sim::effects::ROUGH_BEADS;
+    let ring = sim::effects::RING_PIECES;
     let most = if blades > arms { blades } else { arms };
     let most = if beads > most { beads } else { most };
-    if rough > most { rough } else { most }
+    let most = if rough > most { rough } else { most };
+    if ring > most { ring } else { most }
 };
 
 /// One of the Elementalist's structures.
@@ -2281,6 +2283,9 @@ enum Skin {
     /// Broken ground: the stones' own material, so rough terrain reads as
     /// earth rather than as an effect.
     Stone,
+    /// Moving air: the beam's pale, barely-there material, so a draft or a
+    /// ring of air is seen without hiding what is in it.
+    Air,
 }
 
 impl EffectLook {
@@ -2301,6 +2306,7 @@ impl EffectLook {
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
             Skin::Stone => self.stone.clone(),
+            Skin::Air => self.beam.clone(),
         }
     }
 }
@@ -2428,6 +2434,35 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // visibly is not there the frame the leash breaks. The bead size is
         // presentation, unlike the burst above: nothing is hit by the line
         // after its one pass, so there is no volume here to be honest about.
+        // A draft: the column the bodies are tested in, drawn as air.
+        EffectKind::Updraft | EffectKind::Downdraft if part == 0 => {
+            let slab = effect.draft_volume();
+            Some(standing(
+                Shape::Column,
+                Skin::Air,
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
+        // The air ring: a flat disc at the radius the shove reached.
+        EffectKind::AirRing if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Air,
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT,
+        )),
+        // The fire ring: pieces of fire around its live radius, each the
+        // ring's own width.
+        EffectKind::FireRing if part < sim::effects::RING_PIECES => Some(floating_in(
+            Skin::Fire,
+            fx3(effect.ring_piece(part))
+                + Vec3::Y * sim::tuning::fire_ring_width().to_f32_for_render(),
+            sim::tuning::fire_ring_width().to_f32_for_render(),
+        )),
         // Rough terrain: a row of low slabs along the line the crack ran, at
         // the half-width the slow reads. See `Effect::rough_bead`.
         EffectKind::Rough if part < sim::effects::ROUGH_BEADS => Some(standing(

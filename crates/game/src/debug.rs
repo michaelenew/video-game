@@ -208,6 +208,37 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
+            // The drafts: the column a body is tested in.
+            EffectKind::Updraft | EffectKind::Downdraft => {
+                let slab = effect.draft_volume();
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    slab.radius.to_f32_for_render(),
+                    slab.top.to_f32_for_render().max(0.01),
+                    PILLAR,
+                );
+            }
+            // The two rings: the radius the shove reached, and the radius the
+            // fire is at this frame.
+            EffectKind::AirRing => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    0.05,
+                    PILLAR,
+                );
+            }
+            EffectKind::FireRing => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.ring_radius().to_f32_for_render(),
+                    0.05,
+                    PILLAR,
+                );
+            }
             // Rough terrain: the line the slow reads, as its two edges.
             EffectKind::Rough => {
                 let end = v3(effect.pos.add(effect.dir.scale(effect.reach)));

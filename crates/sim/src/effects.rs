@@ -161,7 +161,36 @@ pub enum EffectKind {
     /// either side. No damage: it is the setup the Strike wants, somebody who
     /// cannot leave the footprint in time.
     Rough,
+    /// Elementalist. **Updraft**: a column of air standing where she cast it,
+    /// `reach` wide, that blows for its life. Everything in it goes up -- a
+    /// body once, a stone once -- each by its own weight. Her own lift is the
+    /// move's `self_lift`; the column is what catches everybody else and what
+    /// is drawn.
+    Updraft,
+    /// Elementalist. **Downdraft**: the same column drawn falling, and it
+    /// **follows her**: `pos` is her feet, live, for as long as it blows.
+    /// Airborne bodies and lofted stones in it are driven down; a standing
+    /// stone is pressed into the floor and leaves rough terrain. Landing while
+    /// it blows is the burst -- see `state::World::land_the_draft`.
+    Downdraft,
+    /// Elementalist. The air breaking outward from her feet when she lands a
+    /// Downdraft over plain ground: everyone nearby shoved away, no damage.
+    /// The shove is on its first frame; the rest of its short life is what is
+    /// drawn.
+    AirRing,
+    /// Elementalist. A ring of fire racing outward from where she landed a
+    /// Downdraft into fire, at `tuning::fire_ring_speed` out to `reach`. It
+    /// consumed the fire it came from. Each body it passes takes one hit and
+    /// a small shove outward: a lingering area concentrated into an instant,
+    /// which is the Strike's idea done with her body.
+    FireRing,
 }
+
+/// How many pieces a ring of fire is drawn as.
+///
+/// Presentation, like [`ROUGH_BEADS`]: the hit test is a distance from the
+/// centre, and the renderer draws pieces around it.
+pub const RING_PIECES: usize = 12;
 
 /// How many pieces a stretch of rough terrain is drawn as.
 ///
@@ -240,6 +269,10 @@ impl EffectKind {
             EffectKind::Pool => "essence pool",
             EffectKind::Embers => "embers",
             EffectKind::Rough => "rough terrain",
+            EffectKind::Updraft => "updraft",
+            EffectKind::Downdraft => "downdraft",
+            EffectKind::AirRing => "air ring",
+            EffectKind::FireRing => "fire ring",
         }
     }
 
@@ -275,6 +308,11 @@ impl EffectKind {
             // a shot, and the shot decided where.
             EffectKind::Embers => false,
             EffectKind::Rough => true,
+            // On her, not at a place: nothing aims these.
+            EffectKind::Updraft
+            | EffectKind::Downdraft
+            | EffectKind::AirRing
+            | EffectKind::FireRing => true,
         }
     }
 
@@ -334,6 +372,14 @@ impl EffectKind {
         matches!(self, EffectKind::GuillotineLotus)
     }
 
+    /// Does its centre stay under its **caster's feet**?
+    ///
+    /// One does. The Downdraft is a column she carries down with her: it is
+    /// under her while she falls, and where she lands is where it bursts.
+    pub const fn follows_the_caster(self) -> bool {
+        matches!(self, EffectKind::Downdraft)
+    }
+
     /// Does it come back to whoever threw it, rather than to where it was
     /// thrown from?
     ///
@@ -365,6 +411,10 @@ impl EffectKind {
             // cloud is what a burst leaves, not what a cast places.
             11 => Some(EffectKind::Embers),
             12 => Some(EffectKind::Rough),
+            13 => Some(EffectKind::Updraft),
+            14 => Some(EffectKind::Downdraft),
+            15 => Some(EffectKind::AirRing),
+            16 => Some(EffectKind::FireRing),
             _ => None,
         }
     }
@@ -401,6 +451,18 @@ impl EffectKind {
             EffectKind::Pool => u16::MAX,
             EffectKind::Embers => t::embers_life(),
             EffectKind::Rough => t::rough_life(),
+            EffectKind::Updraft | EffectKind::Downdraft => t::draft_life(),
+            EffectKind::AirRing => t::air_ring_life(),
+            // Out to its reach at its speed, and gone: a ring that stood
+            // still at full size would be a second pillar.
+            EffectKind::FireRing => {
+                let speed = t::fire_ring_speed().max(Fx::ONE);
+                t::fire_ring_reach()
+                    .div(speed)
+                    .div(crate::DT)
+                    .to_int()
+                    .max(1) as u16
+            }
         }
     }
 
@@ -439,6 +501,9 @@ impl EffectKind {
             // Slows, and nothing else. Broken ground is a place you would
             // rather not be standing, not a place that hurts.
             EffectKind::Rough => 0,
+            // Air moves things and hurts nobody.
+            EffectKind::Updraft | EffectKind::Downdraft | EffectKind::AirRing => 0,
+            EffectKind::FireRing => t::fire_ring_damage(),
         }
     }
 }
@@ -746,6 +811,8 @@ impl Effect {
             EffectKind::Pool => self.pool_radius(),
             EffectKind::Embers => self.reach,
             EffectKind::Rough => t::rough_width(),
+            EffectKind::Updraft | EffectKind::Downdraft | EffectKind::FireRing => self.reach,
+            EffectKind::AirRing => t::air_ring_radius(),
         }
     }
 
@@ -1027,6 +1094,35 @@ impl Effect {
     pub fn tether_bead(&self, i: usize) -> V3 {
         let last = TETHER_BEADS.saturating_sub(1).max(1);
         crate::math::lerp3(self.pos, self.home, Fx::ratio(i as i32, last as i32))
+    }
+
+    /// The column a draft occupies: `reach` wide, from the floor up to
+    /// `tuning::draft_height`. A body is in it by its feet.
+    pub fn draft_volume(&self) -> Pillar {
+        Pillar {
+            radius: self.reach,
+            bottom: Fx::ZERO,
+            top: t::draft_height(),
+        }
+    }
+
+    /// How far out a ring of fire has raced: its speed times its age.
+    pub fn ring_radius(&self) -> Fx {
+        t::fire_ring_speed()
+            .mul(Fx::from_int(self.age as i32))
+            .mul(crate::DT)
+            .min(self.reach)
+    }
+
+    /// Where the `i`th of the ring's drawn pieces sits, on its live radius.
+    pub fn ring_piece(&self, i: usize) -> V3 {
+        let turn = Fx::ratio(i as i32, RING_PIECES as i32);
+        let r = self.ring_radius();
+        V3::new(
+            self.pos.x.add(crate::fixed::cos_turns(turn).mul(r)),
+            self.pos.y,
+            self.pos.z.add(crate::fixed::sin_turns(turn).mul(r)),
+        )
     }
 
     /// Where the `i`th piece of a stretch of rough terrain lies: evenly along

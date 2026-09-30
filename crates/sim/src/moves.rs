@@ -641,6 +641,8 @@ const NAMES: [&[&str]; 6] = [
         "Gale",
         "Landfall",
         "Cinder spray",
+        "Updraft",
+        "Downdraft",
     ],
     // Blood mage -- her blood goes out, and theirs comes back. Everything
     // costs health, every hit she lands spills the target onto the floor, and
@@ -1040,8 +1042,18 @@ pub mod elementalist {
     /// low burning patch when it pops on the floor. An Air bolt or a Gale
     /// flown through it comes out **lit**. See `docs/design/elementalist-v2.md`.
     pub const CINDER: u8 = 7;
+    /// `F`, standing. A column of air on her own body: everything in it goes
+    /// up, her included, each by their own gravity. Not aimed -- a column on
+    /// her needs no crosshair. See `crate::effects::EffectKind::Updraft`.
+    pub const UPDRAFT: u8 = 8;
+    /// `F`, airborne. The same column drawn falling, under her: she and
+    /// everything in it are driven down, and if she lands while it is still
+    /// blowing the air breaks outward from her feet -- or, into fire, the fire
+    /// goes out and a ring of it races outward. See
+    /// `crate::effects::EffectKind::Downdraft`.
+    pub const DOWNDRAFT: u8 = 9;
 
-    pub const COUNT: usize = 8;
+    pub const COUNT: usize = 10;
 
     // **No `is_airborne` here, deliberately.** "Which move is this button" is
     // answered once, in `state::elementalist_move` and `state::keyed_move`, and
@@ -1228,7 +1240,9 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             5 => "RMB air",
             6 => "E air",
             // Both rows: the one move on the class the floor does not change.
-            _ => "MMB",
+            7 => "MMB",
+            8 => "F",
+            _ => "F air",
         },
         // Three clicks, three moves, and the auto on the last row: see
         // [`blood`] for why the button order and the storage order differ.

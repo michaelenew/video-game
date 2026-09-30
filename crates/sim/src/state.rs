@@ -593,6 +593,12 @@ pub struct Player {
     /// the frame anything else takes the action -- a hit, or a different move.
     /// See [`hold_the_churn`] and `moves::Charge::Crack`.
     pub charging_stone: u8,
+    /// Were `F` and `R` down last frame? The press edges for the two keys,
+    /// in the snapshot for the reason `mechanic_held` is: rollback re-runs
+    /// these frames, and an edge remembered outside it disappears the first
+    /// time one is replayed.
+    pub f_held: bool,
+    pub r_held: bool,
     /// Frames left before each of this class's moves may be thrown again.
     ///
     /// **Per move, and only ever the one you just threw** -- which is what
@@ -1032,6 +1038,8 @@ impl Default for Player {
             aim_path: Path::default(),
             channelled: Fx::ZERO,
             charging_stone: NO_STONE,
+            f_held: false,
+            r_held: false,
         }
     }
 }
@@ -1280,6 +1288,14 @@ impl World {
             step_aloft(p, &field);
             fade_grey(p, frame);
         }
+        // Landing with a Downdraft still blowing: the burst. Read here, after
+        // the step that put her feet down and before anything else moves,
+        // because the column is an effect and the body's step cannot see it.
+        for i in 0..MAX_PLAYERS {
+            if self.players[i].since_landed == 1 && self.players[i].air_frames > 0 {
+                self.land_the_draft(i);
+            }
+        }
         // A blink spends its pool. Done here rather than in the dodge branch
         // because the branch only has her body, and the pool is an effect.
         for i in 0..MAX_PLAYERS {
@@ -1350,6 +1366,20 @@ impl World {
             // `race_the_crack`.
             if p.class == Class::Elementalist && kind == SLOT_COMMITTED {
                 self.race_the_crack(i, input);
+            }
+            // The two drafts: a column of air on her own feet. Her own lift
+            // is the move's `self_lift`, applied above like any leaping
+            // move's; the column is what catches everybody and everything
+            // else, and is what is drawn. The Downdraft drives her down as
+            // well, which no row field says because none goes that way.
+            if p.class == Class::Elementalist && kind == moves::elementalist::UPDRAFT {
+                self.raise_the_draft(i, EffectKind::Updraft);
+            }
+            if p.class == Class::Elementalist && kind == moves::elementalist::DOWNDRAFT {
+                self.raise_the_draft(i, EffectKind::Downdraft);
+                let drive = Fx::ZERO.sub(t::downdraft_drive());
+                self.players[i].vel.y = self.players[i].vel.y.min(drive);
+                self.players[i].grounded = false;
             }
             if let Some(leaves) = EffectKind::from_code(m.effect) {
                 // Where the move was aimed when it was thrown, already solved
@@ -1905,6 +1935,8 @@ impl World {
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
             h.write_u32(p.charging_stone as u32);
+            h.write_u32(p.f_held as u32);
+            h.write_u32(p.r_held as u32);
             for f in &p.repeat_lock {
                 h.write_u32(*f as u32);
             }
@@ -2960,6 +2992,13 @@ fn step_player(
     // than on the frame the player chose.
     let pressed_space = input.has(Input::SPACE) && !p.space_held;
     p.space_held = input.has(Input::SPACE);
+    // The two keys the v2 grammar added, read on the press like the mechanic.
+    let pressed_f = input.has(Input::KEY_F) && !p.f_held;
+    p.f_held = input.has(Input::KEY_F);
+    let pressed_r = input.has(Input::KEY_R) && !p.r_held;
+    p.r_held = input.has(Input::KEY_R);
+    // `R` carries nothing yet; the edge is read so the snapshot has it.
+    let _ = pressed_r;
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -3047,6 +3086,15 @@ fn step_player(
                             Action::Free
                         }
                     }
+                }
+                // `F`: a move about her own body, and which one is where her
+                // feet are. See `keyed_f`.
+                else if let Some(kind) = pressed_f
+                    .then(|| keyed_f(p))
+                    .flatten()
+                    .filter(|k| p.can_throw(*k, &out))
+                {
+                    begin_move(p, who, kind, input, scene, true)
                 }
                 // Which move a click asks for. After the mechanic, so that Rush
                 // can be started while a click is held down, and before the dodge,
@@ -3682,6 +3730,20 @@ fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
     // along with the other two committed moves in the roster. See
     // `clicked_move`.
     input.has(Input::LEFT).then_some(SLOT_POKE)
+}
+
+/// Which move `F` throws, here and now.
+///
+/// Unaimed things live on the key the hand that does not aim can reach, and
+/// the Elementalist's are the two drafts: a column of air on her own body,
+/// blowing up with her feet on the floor and down with them off it. Nobody
+/// else reads the key yet. See `moves::elementalist::UPDRAFT`.
+fn keyed_f(p: &Player) -> Option<u8> {
+    match p.class {
+        Class::Elementalist if p.grounded => Some(moves::elementalist::UPDRAFT),
+        Class::Elementalist => Some(moves::elementalist::DOWNDRAFT),
+        _ => None,
+    }
 }
 
 /// Which move the mechanic key throws, here and now.
@@ -5855,6 +5917,13 @@ impl World {
                     effect.pos = at;
                 }
             }
+            // And the one that stays under its caster's feet: the Downdraft
+            // is a column she carries down with her.
+            if effect.kind.follows_the_caster() {
+                if let Some(owner) = self.players.get(effect.owner as usize) {
+                    effect.pos = owner.pos;
+                }
+            }
             // And the one that comes back to a *person*. The blade's way home
             // is drawn to wherever its caster is standing this frame, so
             // walking while it is in the air bends its return rather than
@@ -6497,6 +6566,182 @@ impl World {
             // A pool does nothing to anybody on its own. It is read by the
             // moves put through it -- see `drink_over` -- and by the dodge.
             EffectKind::Pool => {}
+
+            // A column of rising air. Everybody in it goes up once -- no
+            // stun; the move's own disc gave the first ones theirs -- and on
+            // its first frame every stone in it is lofted.
+            EffectKind::Updraft => {
+                let slab = effect.draft_volume();
+                let (radius, height) = (t::body_radius(), t::body_height());
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    if self.effects_reach(i, effect.owner)
+                        && !effect.already_hit(0, i)
+                        && slab.contains(effect.pos, p.pos, radius, height)
+                    {
+                        effect.take_hit(0, i);
+                        self.players[i].vel.y = self.players[i].vel.y.max(t::updraft_lift());
+                        self.players[i].grounded = false;
+                    }
+                }
+                if effect.age == 1 {
+                    let inside = stones::within(&self.players, effect.pos, effect.reach);
+                    for (index, hit) in inside.into_iter().enumerate() {
+                        if hit {
+                            stones::loft(&mut self.players, index, t::updraft_stone_lift());
+                        }
+                    }
+                }
+            }
+
+            // A column of falling air, under her. Airborne bodies in it are
+            // held at the drive -- the disc spiked them on the first frame,
+            // this keeps them coming -- and stones in it come down: a lofted
+            // one driven to the floor, a standing one pressed into it, leaving
+            // broken ground where it stood. Once per stone, on the bits
+            // `banked` lends for it.
+            EffectKind::Downdraft => {
+                let slab = effect.draft_volume();
+                let (radius, height) = (t::body_radius(), t::body_height());
+                let drive = Fx::ZERO.sub(t::downdraft_drive());
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    if self.effects_reach(i, effect.owner)
+                        && !p.grounded
+                        && slab.contains(effect.pos, p.pos, radius, height)
+                    {
+                        self.players[i].vel.y = self.players[i].vel.y.min(drive);
+                    }
+                }
+                let inside = stones::within(&self.players, effect.pos, effect.reach);
+                for (index, hit) in inside.into_iter().enumerate() {
+                    let bit = 1i32 << index;
+                    if !hit || effect.banked & bit != 0 {
+                        continue;
+                    }
+                    if stones::resting(&self.players, index) {
+                        effect.banked |= bit;
+                        if let Some(middle) = stones::destroy(&mut self.players, index) {
+                            let across = t::structure_radius().mul(Fx::from_int(2));
+                            let owner = self.players[effect.owner as usize];
+                            let from = V3::new(
+                                middle.x.sub(owner.facing.x.mul(t::structure_radius())),
+                                arena::ground_under(middle),
+                                middle.z.sub(owner.facing.z.mul(t::structure_radius())),
+                            );
+                            spawn_effect(
+                                &mut self.effects,
+                                Effect::cast(
+                                    EffectKind::Rough,
+                                    effect.owner,
+                                    effect.class,
+                                    SLOT_COMMITTED,
+                                    from,
+                                    owner.facing,
+                                    across,
+                                ),
+                            );
+                        }
+                    } else {
+                        stones::press(&mut self.players, index, t::downdraft_drive());
+                    }
+                }
+            }
+
+            // The air breaking outward from her feet: one shove, on the first
+            // frame, and then only the picture. A brief stagger goes with it,
+            // because a fighter free to act sets his own velocity from the
+            // stick and would erase the shove before it moved him.
+            EffectKind::AirRing => {
+                if effect.age != 1 {
+                    return;
+                }
+                let radius = t::air_ring_radius();
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    let apart = V3::new(
+                        p.pos.x.sub(effect.pos.x),
+                        Fx::ZERO,
+                        p.pos.z.sub(effect.pos.z),
+                    );
+                    if !self.effects_reach(i, effect.owner)
+                        || apart.flat_len().raw() > radius.add(t::body_radius()).raw()
+                    {
+                        continue;
+                    }
+                    let away = if apart.flat_len().raw() > 0 {
+                        apart.normalized()
+                    } else {
+                        self.players[effect.owner as usize].facing
+                    };
+                    let (guarding, parried) = guard_against(&p, effect.pos, true);
+                    apply_hit(
+                        &mut self.players[i],
+                        Hit {
+                            damage: 0,
+                            hitstun: t::air_ring_stagger(),
+                            blockstun: t::air_ring_stagger(),
+                            knockback: t::air_ring_push(),
+                            launch: Fx::ZERO,
+                            grabs: 0,
+                            by: effect.owner,
+                            dir: away,
+                            blocked: guarding,
+                            parried,
+                            interrupts: true,
+                        },
+                    );
+                }
+            }
+
+            // A ring of fire racing outward: each body it passes takes one
+            // hit and is shoved along with it.
+            EffectKind::FireRing => {
+                let r = effect.ring_radius();
+                let band = t::fire_ring_width().add(t::body_radius());
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    let apart = V3::new(
+                        p.pos.x.sub(effect.pos.x),
+                        Fx::ZERO,
+                        p.pos.z.sub(effect.pos.z),
+                    );
+                    let dist = apart.flat_len();
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || dist.sub(r).abs().raw() > band.raw()
+                        || !p.grounded && p.pos.y.raw() > effect.pos.y.add(t::body_height()).raw()
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    let away = if dist.raw() > 0 {
+                        apart.normalized()
+                    } else {
+                        self.players[effect.owner as usize].facing
+                    };
+                    let (guarding, parried) = guard_against(&p, effect.pos, false);
+                    apply_hit(
+                        &mut self.players[i],
+                        Hit {
+                            damage: effect.damage(),
+                            hitstun: t::fire_ring_stagger(),
+                            blockstun: t::fire_ring_stagger(),
+                            knockback: t::fire_ring_push(),
+                            launch: Fx::ZERO,
+                            grabs: 0,
+                            by: effect.owner,
+                            dir: away,
+                            blocked: guarding,
+                            parried,
+                            interrupts: true,
+                        },
+                    );
+                    if parried {
+                        self.players[i].parried = PARRY_FLOURISH;
+                    }
+                }
+            }
 
             // Broken ground: felt through the feet, every frame, by anybody
             // crossing it. Never the one who broke it -- her own scar slowing
@@ -8039,6 +8284,98 @@ impl World {
         // other first-active-frame hand-off receives, and the signature says
         // so for the day the crack wants the stick.
         let _ = input;
+    }
+
+    /// Put a draft's column under the Elementalist's feet.
+    fn raise_the_draft(&mut self, i: usize, kind: EffectKind) {
+        let p = self.players[i];
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                kind,
+                i as u8,
+                p.class,
+                match kind {
+                    EffectKind::Updraft => moves::elementalist::UPDRAFT,
+                    _ => moves::elementalist::DOWNDRAFT,
+                },
+                p.pos,
+                V3::ZERO,
+                t::draft_radius(),
+            ),
+        );
+    }
+
+    /// The Elementalist has just landed. If a Downdraft of hers is still
+    /// blowing, it bursts: over plain ground the air breaks outward as a ring
+    /// that shoves everyone nearby; into fire -- a pillar, a tornado or a
+    /// cloud of embers she landed in -- the fire goes out and a ring of fire
+    /// races outward instead. Either way the column is spent.
+    ///
+    /// The fire it consumes is whatever she is standing in, by the same
+    /// tests those effects use on a body. One ring per landing, whatever
+    /// burned there; what it is worth does not stack.
+    fn land_the_draft(&mut self, i: usize) {
+        let p = self.players[i];
+        if p.class != Class::Elementalist {
+            return;
+        }
+        let Some(draft) = self
+            .effects
+            .iter()
+            .position(|e| e.is_some_and(|e| e.kind == EffectKind::Downdraft && e.owner == i as u8))
+        else {
+            return;
+        };
+        self.effects[draft] = None;
+        let (radius, height) = (t::body_radius(), t::body_height());
+        let mut burned = false;
+        for slot in 0..MAX_EFFECTS {
+            let Some(e) = self.effects[slot] else {
+                continue;
+            };
+            let in_fire = match e.kind {
+                EffectKind::FirePillar => {
+                    let (base, column) = e.pillar_volumes();
+                    base.contains(e.pos, p.pos, radius, height)
+                        || column.contains(e.pos, p.pos, radius, height)
+                }
+                EffectKind::FireTornado => {
+                    let at = e.tornado_pos();
+                    let (base, column) = e.pillar_volumes();
+                    base.contains(at, p.pos, radius, height)
+                        || column.contains(at, p.pos, radius, height)
+                }
+                EffectKind::Embers => e.ember_volume().contains(e.pos, p.pos, radius, height),
+                _ => false,
+            };
+            if in_fire {
+                self.effects[slot] = None;
+                burned = true;
+            }
+        }
+        let kind = if burned {
+            EffectKind::FireRing
+        } else {
+            EffectKind::AirRing
+        };
+        let reach = if burned {
+            t::fire_ring_reach()
+        } else {
+            t::air_ring_radius()
+        };
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                kind,
+                i as u8,
+                p.class,
+                moves::elementalist::DOWNDRAFT,
+                p.pos,
+                V3::ZERO,
+                reach,
+            ),
+        );
     }
 }
 

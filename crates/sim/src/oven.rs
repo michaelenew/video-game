@@ -630,6 +630,24 @@ scalars! {
     RoughSlow,        "Elementalist", "Rough terrain, speed kept (x)",        Fixed,   fx(1,10), fx(1,1);
     RoughWidth,       "Elementalist", "Rough terrain, half-width",            Fixed,   fx(1,4),  fx(4,1);
     StrikeWorth,      "Elementalist", "Strike, worth (x the burn it replaces)", Fixed, 0,        fx(3,1);
+    // Air on her body -- M3. The two drafts share a column; what each does to
+    // what is in it, and the two bursts a landed Downdraft can end in.
+    DraftRadius,      "Elementalist", "Draft, radius",                        Fixed,   fx(1,2),  fx(6,1);
+    DraftHeight,      "Elementalist", "Draft, height",                        Fixed,   fx(1,1),  fx(12,1);
+    DraftLife,        "Elementalist", "Draft, blows for",                     Frames,  1,        180;
+    UpdraftLift,      "Elementalist", "Updraft, lift (m/s)",                  Fixed,   0,        fx(40,1);
+    UpdraftStoneLift, "Elementalist", "Updraft, lifts a stone at (m/s)",      Fixed,   0,        fx(40,1);
+    DowndraftDrive,   "Elementalist", "Downdraft, drive (m/s)",               Fixed,   0,        fx(60,1);
+    AirRingRadius,    "Elementalist", "Air ring, radius",                     Fixed,   fx(1,2),  fx(8,1);
+    AirRingPush,      "Elementalist", "Air ring, push (m/s)",                 Fixed,   0,        fx(30,1);
+    AirRingStagger,   "Elementalist", "Air ring, stagger",                    Frames,  0,        60;
+    AirRingLife,      "Elementalist", "Air ring, shown for",                  Frames,  1,        60;
+    FireRingSpeed,    "Elementalist", "Fire ring, speed (m/s)",               Fixed,   fx(1,1),  fx(60,1);
+    FireRingReach,    "Elementalist", "Fire ring, reach",                     Fixed,   fx(1,1),  fx(14,1);
+    FireRingWidth,    "Elementalist", "Fire ring, width",                     Fixed,   fx(1,10), fx(3,1);
+    FireRingDamage,   "Elementalist", "Fire ring, damage",                    Int,     0,        400;
+    FireRingPush,     "Elementalist", "Fire ring, push (m/s)",                Fixed,   0,        fx(30,1);
+    FireRingStagger,  "Elementalist", "Fire ring, stagger",                   Frames,  0,        60;
 }
 
 // ---------------------------------------------------------------------------

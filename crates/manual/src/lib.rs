@@ -334,6 +334,10 @@ pub const SECTIONS: &[Section] = &[
                 "E",
                 "Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning under the floor while you crawl; let go and Fissure races from it along your look, as far as you held for, staggering the first body it meets, and the stone erupts at the crack's end. Where it ran is rough ground for a while. In the air E is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
             ),
+            e(
+                "F",
+                "Updraft, standing: a column of air on your own body, and everything in it goes up -- you included, each by their own weight; a stone in it is lofted. In the air it is Downdraft: the same column under you, driving you and everything in it down. Land while it is still blowing and the air breaks outward from your feet, shoving everyone near you away. Land it into fire -- a pillar, a cloud of embers -- and the fire goes out and a ring of it races outward instead.",
+            ),
         ],
     },
     Section {

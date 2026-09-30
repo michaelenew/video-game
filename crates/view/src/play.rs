@@ -636,9 +636,11 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         (Class::Elementalist, 4) => Clip::ElementalistPoke,
         (Class::Elementalist, 5) => Clip::ElementalistHeavy,
         (Class::Elementalist, 6) => Clip::ElementalistCommitted,
-        // v2, and the first of her moves with a clip of its own since the
-        // original four: a one-armed scatter, unlike anything above.
-        (Class::Elementalist, _) => Clip::ElementalistCinder,
+        // v2: a one-armed scatter, and the two drafts, none of them like
+        // anything above.
+        (Class::Elementalist, 7) => Clip::ElementalistCinder,
+        (Class::Elementalist, 8) => Clip::ElementalistUpdraft,
+        (Class::Elementalist, _) => Clip::ElementalistDowndraft,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,

@@ -2782,6 +2782,93 @@ pub fn pillar_burn_total() -> i32 {
     pillar_damage() * ticks
 }
 
+// --- Air on her body: the two drafts and the two bursts --------------------
+//
+// See `moves::elementalist::UPDRAFT` and `DOWNDRAFT`, and
+// `docs/design/elementalist-v2.md` §"Updraft and Downdraft".
+
+/// How wide the column is, from her centre.
+pub fn draft_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DraftRadius))
+}
+
+/// How tall the column is: a body is in it by its feet, up to here.
+pub fn draft_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DraftHeight))
+}
+
+/// How long either column blows after the cast. What "landing while it is
+/// still blowing" means, for the Downdraft.
+pub fn draft_life() -> u16 {
+    oven::scalar(Scalar::DraftLife).max(1) as u16
+}
+
+/// The vertical speed an Updraft hands everybody in it, her included. Each
+/// class's own gravity then decides how high that goes.
+pub fn updraft_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftLift))
+}
+
+/// The vertical speed an Updraft hands a stone in it.
+pub fn updraft_stone_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftStoneLift))
+}
+
+/// The downward speed a Downdraft drives her and everything airborne in it at.
+pub fn downdraft_drive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DowndraftDrive))
+}
+
+/// How far the air ring reaches from her feet.
+pub fn air_ring_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirRingRadius))
+}
+
+/// How hard it shoves everybody inside it, outward.
+pub fn air_ring_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirRingPush))
+}
+
+/// The brief stagger the shove needs. A fighter free to act sets his own
+/// velocity from the stick every frame, which would erase the shove before
+/// it moved him; a few frames of not being free is what lets it land.
+pub fn air_ring_stagger() -> u16 {
+    oven::scalar(Scalar::AirRingStagger) as u16
+}
+
+/// How long the ring is drawn after its one shove.
+pub fn air_ring_life() -> u16 {
+    oven::scalar(Scalar::AirRingLife).max(1) as u16
+}
+
+/// How fast the ring of fire races outward.
+pub fn fire_ring_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingSpeed))
+}
+
+/// How far it gets before it is spent.
+pub fn fire_ring_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingReach))
+}
+
+/// How thick the ring is, from its live radius: a body inside this band of it
+/// is in the fire.
+pub fn fire_ring_width() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingWidth))
+}
+
+pub fn fire_ring_damage() -> i32 {
+    oven::scalar(Scalar::FireRingDamage)
+}
+
+pub fn fire_ring_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingPush))
+}
+
+pub fn fire_ring_stagger() -> u16 {
+    oven::scalar(Scalar::FireRingStagger) as u16
+}
+
 // --- The step, the diagonal, and going up with them ------------------------
 
 /// How many frames before the hitbox a stepping move starts driving the body.

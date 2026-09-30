@@ -21,6 +21,7 @@ const R: u16 = Input::RIGHT;
 const M: u16 = Input::MIDDLE;
 const E: u16 = Input::MECHANIC;
 const Q: u16 = Input::SPECIAL;
+const F: u16 = Input::KEY_F;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -893,4 +894,267 @@ fn anything_else_ends_the_hold_and_the_stone_erupts_where_it_stands() {
         "the stone erupted where it was held"
     );
     assert!(scars(&w).is_empty(), "no crack ran");
+}
+
+// ---------------------------------------------------------------------------
+// Air on her body -- M3. See `moves::elementalist::UPDRAFT`.
+// ---------------------------------------------------------------------------
+
+fn effects_of(w: &World, kind: EffectKind) -> Vec<Effect> {
+    w.effects
+        .iter()
+        .flatten()
+        .filter(|e| e.kind == kind)
+        .copied()
+        .collect()
+}
+
+/// A lifter of `class` standing beside her, and how high the Updraft takes
+/// them at the top of what it gave.
+fn lifted_apex(class: Class) -> Fx {
+    let mut w = World::with_classes([Class::Elementalist, class]);
+    w.players[0].pos = at(-6.0, 0.0, 8.0);
+    w.players[1].pos = at(-5.0, 0.0, 8.0);
+    throw(&mut w, F);
+    let mut apex = Fx::ZERO;
+    for _ in 0..90 {
+        run(&mut w, 1, 0, 0);
+        apex = apex.max(w.players[1].pos.y);
+    }
+    apex
+}
+
+#[test]
+fn f_is_the_updraft_standing_and_the_downdraft_in_the_air() {
+    let mut w = elementalist();
+    run(&mut w, 1, F, 0);
+    assert_eq!(doing(&w), Some(e::UPDRAFT));
+    let mut w = elementalist();
+    aloft(&mut w, 3.0);
+    run(&mut w, 1, F, 0);
+    assert_eq!(doing(&w), Some(e::DOWNDRAFT));
+}
+
+#[test]
+fn the_updraft_lifts_her_and_whoever_is_in_the_column() {
+    let mut w = elementalist();
+    w.players[1].pos = at(-5.0, 0.0, 8.0);
+    throw(&mut w, F);
+    assert!(
+        !w.players[0].grounded && w.players[0].vel.y.raw() > 0,
+        "she goes up"
+    );
+    assert!(
+        !w.players[1].grounded && w.players[1].vel.y.raw() > 0,
+        "and so does the body beside her: {:?}",
+        w.players[1].vel
+    );
+    let column = effects_of(&w, EffectKind::Updraft);
+    assert_eq!(column.len(), 1, "the column stands where she cast it");
+    assert_eq!(column[0].reach, t::draft_radius());
+    // Somebody outside it is untouched.
+    let mut w = elementalist();
+    w.players[1].pos = at(0.0, 0.0, 8.0);
+    throw(&mut w, F);
+    assert!(
+        w.players[1].grounded,
+        "six metres away is out of the column"
+    );
+}
+
+#[test]
+fn everybody_rises_by_their_own_weight() {
+    let heavy = lifted_apex(Class::Bulwark);
+    let light = lifted_apex(Class::DualMage);
+    assert!(heavy.raw() > 0 && light.raw() > 0, "both are lifted");
+    assert!(
+        light.raw() > heavy.raw(),
+        "the Dual mage goes higher than the Bulwark: {} against {}",
+        light.to_int(),
+        heavy.to_int()
+    );
+}
+
+#[test]
+fn the_updraft_lofts_a_stone_in_it_and_not_one_outside() {
+    let mut w = elementalist();
+    // Two metres out: inside the column, and clear of her own feet -- a stone
+    // raised under her would carry her up and turn the press into a Downdraft.
+    sim::stones::raise(&mut w.players[0], Structure::raised(at(-4.0, 0.0, 8.0)));
+    sim::stones::raise(&mut w.players[0], Structure::raised(at(2.0, 0.0, 8.0)));
+    run(&mut w, 30, 0, 0);
+    assert!(w.players[0].grounded);
+    throw(&mut w, F);
+    run(&mut w, 2, 0, 0);
+    let s = stones_of(&w);
+    assert!(
+        s[0].at.y.raw() > 0 || s[0].vel.y.raw() > 0,
+        "the near stone is lofted"
+    );
+    assert_eq!(s[1].at.y.raw(), 0, "the far one stays put");
+    assert_eq!(s[1].vel.y.raw(), 0);
+}
+
+#[test]
+fn the_downdraft_drives_her_down_and_the_column_follows_her() {
+    let mut w = elementalist();
+    aloft(&mut w, 6.0);
+    // Against a plain fall over the same frames: the drive is a speed the
+    // fall cap then argues with, so what is asserted is that she is falling
+    // faster than she would have been.
+    let mut plain = w.clone();
+    throw(&mut w, F);
+    let (startup, active, _) = sim::moves::frames(Class::Elementalist, e::DOWNDRAFT);
+    run(&mut plain, (startup + active + 2) as u32, 0, 0);
+    assert!(
+        w.players[0].vel.y.raw() < plain.players[0].vel.y.raw(),
+        "driven down harder than a fall: {:?} against {:?}",
+        w.players[0].vel,
+        plain.players[0].vel
+    );
+    let before = effects_of(&w, EffectKind::Downdraft);
+    assert_eq!(before.len(), 1);
+    run(&mut w, 3, 0, 0);
+    let after = effects_of(&w, EffectKind::Downdraft);
+    assert_eq!(after.len(), 1);
+    assert!(
+        after[0].pos.y.raw() < before[0].pos.y.raw(),
+        "under her feet, live"
+    );
+}
+
+#[test]
+fn the_downdraft_spikes_an_airborne_body_in_it() {
+    let mut w = elementalist();
+    aloft(&mut w, 6.0);
+    w.players[1].pos = at(-5.0, 4.0, 8.0);
+    w.players[1].grounded = false;
+    throw(&mut w, F);
+    assert!(
+        w.players[1].vel.y.raw() < 0,
+        "driven down: {:?}",
+        w.players[1].vel
+    );
+    assert!(
+        w.players[1].slam.raw() > 0,
+        "and it is a spike, so the landing collects"
+    );
+}
+
+#[test]
+fn landing_while_it_blows_breaks_the_air_outward() {
+    let mut w = elementalist();
+    aloft(&mut w, 1.5);
+    // Somebody standing two metres from where she will land.
+    w.players[1].pos = at(-4.0, 0.0, 8.0);
+    let before = w.players[1].pos;
+    throw(&mut w, F);
+    for _ in 0..60 {
+        run(&mut w, 1, 0, 0);
+        if w.players[0].grounded {
+            break;
+        }
+    }
+    assert!(w.players[0].grounded, "she came down");
+    run(&mut w, 1, 0, 0);
+    assert!(
+        effects_of(&w, EffectKind::Downdraft).is_empty(),
+        "the column is spent"
+    );
+    assert_eq!(
+        effects_of(&w, EffectKind::AirRing).len(),
+        1,
+        "and the air broke outward"
+    );
+    run(&mut w, 12, 0, 0);
+    assert!(
+        w.players[1].pos.x.raw() > before.x.add(Fx::ratio(1, 2)).raw(),
+        "shoved away from her: {} from {}",
+        w.players[1].pos.x.to_int(),
+        before.x.to_int()
+    );
+    let full = w.players[1].full_health();
+    assert_eq!(w.players[1].health, full, "no damage in the air ring");
+}
+
+#[test]
+fn landing_into_fire_puts_it_out_and_sends_a_ring_of_fire_outward() {
+    let mut w = elementalist();
+    // A grown pillar under where she will land.
+    let mut pillar = Effect::cast(
+        EffectKind::FirePillar,
+        1,
+        Class::Elementalist,
+        SLOT_SPECIAL,
+        at(-6.0, 0.0, 8.0),
+        V3::ZERO,
+        Fx::ZERO,
+    );
+    pillar.age = pillar.life / 2;
+    w.effects[0] = Some(pillar);
+    w.players[1].pos = at(-2.5, 0.0, 8.0);
+    let full = w.players[1].health;
+    aloft(&mut w, 2.0);
+    throw(&mut w, F);
+    for _ in 0..60 {
+        run(&mut w, 1, 0, 0);
+        if w.players[0].grounded {
+            break;
+        }
+    }
+    run(&mut w, 1, 0, 0);
+    assert!(pillars(&w).is_empty(), "the pillar went out");
+    let ring = effects_of(&w, EffectKind::FireRing);
+    assert_eq!(ring.len(), 1, "and a ring of fire left her feet");
+    // It races out: the body three and a half metres off is reached within
+    // its reach, hit once, and shoved outward.
+    let before = w.players[1].pos.x;
+    run(&mut w, ring[0].life as u32 + 2, 0, 0);
+    assert!(w.players[1].health < full, "the ring burns what it passes");
+    assert_eq!(full - w.players[1].health, t::fire_ring_damage(), "once");
+    assert!(
+        w.players[1].pos.x.raw() > before.raw(),
+        "and shoves outward"
+    );
+    assert!(
+        effects_of(&w, EffectKind::FireRing).is_empty(),
+        "then it is gone"
+    );
+}
+
+#[test]
+fn a_landing_after_the_column_has_died_bursts_nothing() {
+    let mut w = elementalist();
+    aloft(&mut w, 12.0);
+    throw(&mut w, F);
+    // Hang her up there until the column is spent, then let her fall.
+    for _ in 0..(t::draft_life() as u32 + 2) {
+        w.players[0].pos.y = metres(12.0);
+        w.players[0].vel.y = Fx::ZERO;
+        run(&mut w, 1, 0, 0);
+    }
+    assert!(effects_of(&w, EffectKind::Downdraft).is_empty());
+    for _ in 0..120 {
+        run(&mut w, 1, 0, 0);
+        if w.players[0].grounded {
+            break;
+        }
+    }
+    run(&mut w, 1, 0, 0);
+    assert!(effects_of(&w, EffectKind::AirRing).is_empty());
+    assert!(effects_of(&w, EffectKind::FireRing).is_empty());
+}
+
+#[test]
+fn a_standing_stone_under_the_downdraft_is_pressed_into_the_floor() {
+    let mut w = elementalist();
+    sim::stones::raise(&mut w.players[0], Structure::raised(at(-6.0, 0.0, 8.0)));
+    run(&mut w, 30, 0, 0);
+    // Directly above it, so it stands in the column.
+    aloft(&mut w, 5.0);
+    w.players[0].pos.x = metres(-6.0);
+    throw(&mut w, F);
+    run(&mut w, 2, 0, 0);
+    assert!(stones_of(&w).is_empty(), "pressed into the floor");
+    assert_eq!(scars(&w).len(), 1, "and broken ground where it stood");
 }

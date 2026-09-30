@@ -620,6 +620,46 @@ pub fn raise(p: &mut Player, stone: Structure) -> Option<usize> {
     Some(slot)
 }
 
+/// Send the stone at `index` straight up at `speed`, as an Updraft does. Not
+/// a launch: it goes up and comes down where it was, and a stone coming down
+/// hurts nobody -- what it is for is being earth in the air, where the beam
+/// can kick it down on to somebody.
+pub fn loft(players: &mut [Player; MAX_PLAYERS], index: usize, speed: Fx) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.vel.y = stone.vel.y.max(speed);
+    }
+    scatter(players, &field);
+}
+
+/// Drive the stone at `index` down at `speed`, as a Downdraft does to one
+/// that is off the floor.
+pub fn press(players: &mut [Player; MAX_PLAYERS], index: usize, speed: Fx) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.vel.y = stone.vel.y.min(Fx::ZERO.sub(speed));
+    }
+    scatter(players, &field);
+}
+
+/// Is the stone at `index` resting on something, rather than in the air?
+pub fn resting(players: &[Player; MAX_PLAYERS], index: usize) -> bool {
+    let field = gather(players);
+    field[index].is_some_and(|s| s.vel.y.raw() == 0)
+}
+
+/// Every stone whose base is within `radius` of `at`, flat, as `aim` counts
+/// them.
+pub fn within(players: &[Player; MAX_PLAYERS], at: V3, radius: Fx) -> [bool; MAX_STONES] {
+    let field = gather(players);
+    std::array::from_fn(|i| {
+        field[i].is_some_and(|s| {
+            let apart = V3::new(s.at.x.sub(at.x), Fx::ZERO, s.at.z.sub(at.z));
+            apart.flat_len().raw() <= radius.add(s.radius()).raw()
+        })
+    })
+}
+
 /// Move the stone at `index` (as `aim::Contact::Stone` counts them) to `to`,
 /// settled on whatever is under that spot, and let it erupt there.
 ///
