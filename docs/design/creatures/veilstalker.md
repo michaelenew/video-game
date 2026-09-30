@@ -104,11 +104,8 @@ is a little lighter per hit, because an invisible animal lands more of them.
 | **Mimic** | 6–10 m, in view | A decloak shimmer and a rear with nothing in it; the real animal stands still elsewhere | **20 frames** of a decloak that is exactly a decloak — except that **it leaves no footprints** | **Do nothing.** Look at the floor under it. A real decloak stamps four fresh prints on its first frame; a mimic stamps none. Dodge it and you have spent your dodge at nothing |
 | **Retreat** | — | After two hits in one engagement: a recoil, a bound twelve metres away at 17 m/s, and a 20-frame re-cloak | **12-frame recoil**, visible; the bound shimmers | **Follow the prints** — or **break it**: a burst past `interrupt_strain` during the recoil cancels it (§4). Not an attack; its answer is a chase |
 
-Eight answers: a timed dodge, a walk out of a lane, a jump, leaving a circle,
-getting behind a solid, leaving or burning a cloud, holding still, and a chase.
-No two rows share one, which is contract item 2, and three of them — the lane,
-the circle, the solid — are answered by where you stand rather than by
-reaction.
+No two rows share an answer (contract item 2), and three — the lane, the
+circle, the solid — are answered by where you stand rather than by reaction.
 
 ### The subtle parts
 
@@ -256,9 +253,8 @@ engagements), throws the lunge and the spear, and leaves after two hits. Below
 - the strain thresholds fall by `strain_desperation`, as on the Ridgeback;
 - the panic lockout halves.
 
-The first half is patient and frightening; the last is a visible, frayed,
-mottled animal fighting harder and hiding worse, which is what winning looks
-like.
+The first half is patient; the last is a frayed, mottled animal fighting
+harder and hiding worse, which is what winning looks like.
 
 ## 5 · The brain
 
@@ -385,9 +381,6 @@ goes to the middle of a body standing there (`aim::standing_middle`, about
 0.9 m) and `aim::first_along` meets the leg or the belly on the way if it is
 there. Swinging at a patch of snow where prints are appearing is a real
 attack.
-
-**The F1 overlay** draws it fully, with its veil state written over it, so a
-developer is never debugging an invisible animal.
 
 ## 7 · The classes
 
@@ -554,9 +547,8 @@ report lines). Not P3, P6 or P7.
 | Hazards: 4 × 8 | 32 |
 | Braziers | 1 |
 
-The ring is what grew. Sixteen prints at four footfalls a second is four
-seconds of trail, and the read wants eight: a trail you have to catch within
-four seconds of it being laid is a trail you only see by luck.
+The ring is what grew: sixteen prints at four footfalls a second is four
+seconds of trail, and the read wants eight.
 
 **Per-frame cost** is dominated by the hazard overlap (twelve parts against
 four hazards for outlines and fire) and, at decision points only, one
