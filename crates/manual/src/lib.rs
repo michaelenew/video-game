@@ -312,7 +312,7 @@ pub const SECTIONS: &[Section] = &[
     Section {
         title: "The Elementalist",
         in_browser: true,
-        blurb: "Terrain author. She raises stones, plants fire, and then combos through what she built -- and off the floor the same buttons throw air. See docs/design/elementalist-v2.md for the rest of what is coming.",
+        blurb: "Terrain author. She raises stones, plants fire, and then combos through what she built -- and off the floor the same buttons throw air. The v2 kit is built and unplayed; docs/design/elementalist-v2.md is the decision.",
         entries: &[
             e(
                 "Left click",
@@ -584,6 +584,10 @@ pub const SECTIONS: &[Section] = &[
                 "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the scythe's reach at each level of grey. The first thing to run after touching the class.",
             ),
             e(
+                "cargo run -p sim --bin elemental",
+                "What the Elementalist's v2 measures: what a hold of Q or E is worth and costs in ground, how high the Updraft lifts each class, what the two rings do at each distance, what fire does to an air shot, where Quake and Tremor put their stone, and what a dodge into a stone leaves. Six scripts, each also runnable alone: charge, lift, ring, spray, quake, break.",
+            ),
+            e(
                 "cargo run -p sim --bin beastcheck",
                 "What the creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry.",
             ),
@@ -633,6 +637,14 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "./crates/web/build-game.sh",
                 "The whole game as a web page, ready to publish.",
+            ),
+            e(
+                "./scripts/web-smoke.sh [out.png]",
+                "Load the built web page in headless Chromium: fails on any console error, failed request or missing controls entry, and leaves a screenshot.",
+            ),
+            e(
+                "./scripts/setup-tools.sh web|shot|browser|all",
+                "Install, once, the tools a fresh machine lacks: wasm-bindgen for the web build, Xvfb and a software GPU for screenshots, Playwright for the smoke test. The one place those steps are written; start it in the background.",
             ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),
