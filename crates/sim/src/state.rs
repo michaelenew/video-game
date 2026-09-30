@@ -1844,8 +1844,21 @@ impl World {
     /// turns that into a desync on the first frame, which is a error message
     /// rather than a mystery.
     pub fn checksum(&self) -> u64 {
+        self.digest(crate::oven::hash())
+    }
+
+    /// The snapshot hash alone, with the tuning left out.
+    ///
+    /// What pins a fight bit for bit across a change that moves knobs around
+    /// without changing any of their values: the Oven's own hash follows its
+    /// storage layout, and the state does not care where a number is kept.
+    pub fn state_checksum(&self) -> u64 {
+        self.digest(0)
+    }
+
+    fn digest(&self, tuning: u64) -> u64 {
         let mut h = Fnv::new();
-        h.write_u64(crate::oven::hash());
+        h.write_u64(tuning);
         h.write_u32(self.frame);
         for b in &self.bolts {
             match b {

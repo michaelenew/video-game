@@ -992,6 +992,18 @@ fn jump_apex(class: sim::Class) -> Fx {
 /// you nothing about the spread, and the spread is most of what you want to
 /// know about a creature that chooses.
 pub fn play(classes: [sim::Class; MAX_PLAYERS], partners: usize, limit: u32, seed: u32) -> Report {
+    play_watched(classes, partners, limit, seed, |_| {})
+}
+
+/// [`play`], showing every frame of the world to `watch` as it goes. What the
+/// bit-identity pin hashes (`tests/pin.rs`).
+pub fn play_watched(
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
+    mut watch: impl FnMut(&World),
+) -> Report {
     let mut w = World::hunt(classes);
     if let Some(beast) = w.monster.as_mut() {
         beast.brain.rng = seed | 1;
@@ -1022,6 +1034,7 @@ pub fn play(classes: [sim::Class; MAX_PLAYERS], partners: usize, limit: u32, see
         }
         let before = w.clone();
         w.advance(inputs);
+        watch(&w);
         report.observe(&before, &w, &bots);
     }
     report.finish(&w);
