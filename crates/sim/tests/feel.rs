@@ -361,7 +361,11 @@ fn best_case(m: &Move) -> i32 {
         // complete.
         // A cloud of embers is what a burst leaves, not what a cast places,
         // and its burn is the cloud's own row rather than the shot's.
-        Some(EffectKind::Pool) | Some(EffectKind::Embers) | None => m.damage * swings,
+        // Rough terrain slows and deals nothing; the crack that left it is
+        // the move's own hit.
+        Some(EffectKind::Pool) | Some(EffectKind::Embers) | Some(EffectKind::Rough) | None => {
+            m.damage * swings
+        }
     }
 }
 

@@ -666,8 +666,10 @@ const EFFECT_PARTS: usize = {
     let blades = sim::effects::LOTUS_BLADES;
     let arms = sim::effects::GRASP_ARMS;
     let beads = sim::effects::TETHER_BEADS;
+    let rough = sim::effects::ROUGH_BEADS;
     let most = if blades > arms { blades } else { arms };
-    if beads > most { beads } else { most }
+    let most = if beads > most { beads } else { most };
+    if rough > most { rough } else { most }
 };
 
 /// One of the Elementalist's structures.
@@ -2276,6 +2278,9 @@ enum Skin {
     /// standing in the arena says it where they are.
     Light,
     Dark,
+    /// Broken ground: the stones' own material, so rough terrain reads as
+    /// earth rather than as an effect.
+    Stone,
 }
 
 impl EffectLook {
@@ -2295,6 +2300,7 @@ impl EffectLook {
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
+            Skin::Stone => self.stone.clone(),
         }
     }
 }
@@ -2422,6 +2428,16 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // visibly is not there the frame the leash breaks. The bead size is
         // presentation, unlike the burst above: nothing is hit by the line
         // after its one pass, so there is no volume here to be honest about.
+        // Rough terrain: a row of low slabs along the line the crack ran, at
+        // the half-width the slow reads. See `Effect::rough_bead`.
+        EffectKind::Rough if part < sim::effects::ROUGH_BEADS => Some(standing(
+            Shape::Column,
+            Skin::Stone,
+            fx3(effect.rough_bead(part)),
+            sim::tuning::rough_width().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT,
+        )),
         // A cloud of embers: the ball the hit test reads, in the fire skin,
         // hanging where the shot burst -- or half-sunk into the floor where it
         // burst on the ground, which is what a burning patch looks like.
@@ -2476,6 +2492,10 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         _ => None,
     }
 }
+
+/// How tall broken ground is drawn. Presentation, not a rule: the slow reads
+/// a body on the floor, and a slab this low is a texture rather than a wall.
+const ROUGH_HEIGHT: f32 = 0.12;
 
 /// How big one bead of a tether is against a body.
 ///

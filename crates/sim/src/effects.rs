@@ -154,7 +154,21 @@ pub enum EffectKind {
     /// lit shot leaves where it lands, at a smaller radius -- the small
     /// explosion. See `crate::gust` and `docs/design/elementalist-v2.md`.
     Embers,
+    /// Elementalist. **Rough terrain**: the scar a Fissure's crack leaves,
+    /// and the broken ground where a stone was broken through. A line on the
+    /// floor -- `pos` is one end, `dir` the way it runs and `reach` its
+    /// length -- that slows whoever crosses it, at `tuning::rough_width`
+    /// either side. No damage: it is the setup the Strike wants, somebody who
+    /// cannot leave the footprint in time.
+    Rough,
 }
+
+/// How many pieces a stretch of rough terrain is drawn as.
+///
+/// Presentation, like [`TETHER_BEADS`]: the hit test is a segment, and the
+/// renderer draws pieces that have a place and a size but no direction, so a
+/// line on the floor is a row of them.
+pub const ROUGH_BEADS: usize = 8;
 
 /// How many arms a Grasp has, and which corner each one leaves by.
 ///
@@ -225,6 +239,7 @@ impl EffectKind {
             EffectKind::JudgementField => "judgement field",
             EffectKind::Pool => "essence pool",
             EffectKind::Embers => "embers",
+            EffectKind::Rough => "rough terrain",
         }
     }
 
@@ -259,6 +274,7 @@ impl EffectKind {
             // Wherever it burst. Nothing casts one at a place: it is left by
             // a shot, and the shot decided where.
             EffectKind::Embers => false,
+            EffectKind::Rough => true,
         }
     }
 
@@ -348,6 +364,7 @@ impl EffectKind {
             // Listed so the numbering is complete; no move's row says it. A
             // cloud is what a burst leaves, not what a cast places.
             11 => Some(EffectKind::Embers),
+            12 => Some(EffectKind::Rough),
             _ => None,
         }
     }
@@ -383,6 +400,7 @@ impl EffectKind {
             // volume, not frames -- see `state::World::step_effects`.
             EffectKind::Pool => u16::MAX,
             EffectKind::Embers => t::embers_life(),
+            EffectKind::Rough => t::rough_life(),
         }
     }
 
@@ -418,6 +436,9 @@ impl EffectKind {
             // A number of its own, for the pillar's reason: the burst that
             // left it hit on its own, and the burn is a different event.
             EffectKind::Embers => t::embers_damage(),
+            // Slows, and nothing else. Broken ground is a place you would
+            // rather not be standing, not a place that hurts.
+            EffectKind::Rough => 0,
         }
     }
 }
@@ -724,6 +745,7 @@ impl Effect {
             EffectKind::JudgementField => t::judgement_field_radius(),
             EffectKind::Pool => self.pool_radius(),
             EffectKind::Embers => self.reach,
+            EffectKind::Rough => t::rough_width(),
         }
     }
 
@@ -1005,6 +1027,30 @@ impl Effect {
     pub fn tether_bead(&self, i: usize) -> V3 {
         let last = TETHER_BEADS.saturating_sub(1).max(1);
         crate::math::lerp3(self.pos, self.home, Fx::ratio(i as i32, last as i32))
+    }
+
+    /// Where the `i`th piece of a stretch of rough terrain lies: evenly along
+    /// the line from its start to its end.
+    pub fn rough_bead(&self, i: usize) -> V3 {
+        let last = ROUGH_BEADS.saturating_sub(1).max(1);
+        let end = self.pos.add(self.dir.scale(self.reach));
+        crate::math::lerp3(self.pos, end, Fx::ratio(i as i32, last as i32))
+    }
+
+    /// Is a body standing at `pos` on this stretch of rough terrain?
+    ///
+    /// Flat distance from the line, against the ground's width plus the body's
+    /// own -- the same measure every other hit on the floor uses. Only a body
+    /// on the floor: broken ground is felt through the feet, and jumping
+    /// clears it the way it clears a churning stone.
+    pub fn roughens(&self, pos: V3, grounded: bool, body_radius: Fx) -> bool {
+        if !grounded {
+            return false;
+        }
+        let end = self.pos.add(self.dir.scale(self.reach));
+        let foot = V3::new(pos.x, self.pos.y, pos.z);
+        crate::math::segment_gap(self.pos, end, foot, foot).raw()
+            <= t::rough_width().add(body_radius).raw()
     }
 
     /// Forget everyone hit so far, so the next pass starts clean.

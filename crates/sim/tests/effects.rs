@@ -409,12 +409,27 @@ fn the_mechanic_fires_on_the_press_not_while_the_button_is_down() {
     // happened to hold it, the Reaver's shadow toggled itself back off, the
     // Bulwark's shield was pinned mid-throw and never planted, and the
     // Elementalist spent all three structures on one spot in three frames.
+    //
+    // **The Elementalist is the one class where holding now means
+    // something**, since v2: the key held past the stone's churn keeps it
+    // churning and becomes Fissure's charge, by design rather than by
+    // re-firing -- see `tests/elementalist_v2.rs`. What this test still
+    // pins for her is the half that was the bug: one press, one stone.
     for class in sim::class::ALL_CLASSES {
         let mut w = World::with_classes([class, Class::Bulwark]);
         let mut held = w.clone();
         run(&mut held, 40, E, 0);
         run(&mut w, 2, E, 0);
         run(&mut w, 38, 0, 0);
+        if class == Class::Elementalist {
+            let count = |w: &World| match w.players[0].mechanic {
+                Mechanic::Structures(slots) => slots.iter().flatten().count(),
+                _ => 0,
+            };
+            assert_eq!(count(&held), 1, "holding raised more than one stone");
+            assert_eq!(count(&w), 1);
+            continue;
+        }
         assert_eq!(
             held.players[0].mechanic,
             w.players[0].mechanic,

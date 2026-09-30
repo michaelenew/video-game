@@ -208,6 +208,14 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
+            // Rough terrain: the line the slow reads, as its two edges.
+            EffectKind::Rough => {
+                let end = v3(effect.pos.add(effect.dir.scale(effect.reach)));
+                let side = Vec3::Y.cross(end - at).normalize_or_zero()
+                    * sim::tuning::rough_width().to_f32_for_render();
+                gizmos.line(at + side, end + side, PILLAR);
+                gizmos.line(at - side, end - side, PILLAR);
+            }
             // A cloud of embers: the slab the shot test traces and the body
             // test reads, about its centre -- see `Effect::ember_volume`.
             EffectKind::Embers => {

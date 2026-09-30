@@ -489,6 +489,18 @@ fn attack(input: PoseInput, kind: u8) -> Pose {
             let (_, _, recovery) = sim::moves::frames(input.class, kind);
             startup + active + recovery.saturating_sub(left)
         }
+        // A channel holds one frame of the clip for as long as it is held,
+        // and which frame is which charge it is. A Grasp is wound up before
+        // the move and coils on its first frame. A Strike is held *after*
+        // the startup, with the fire gathered in her hands, so it holds the
+        // last frame of the wind-up. The crack's hold is the stone kept
+        // churning under the floor: hands raised and waiting, which is the
+        // Fissure clip's own tell a quarter of the way into its startup.
+        Action::Channel { .. } => match sim::moves::charge(input.class, kind) {
+            Some(sim::moves::Charge::Strike) => startup.saturating_sub(1),
+            Some(sim::moves::Charge::Crack) => startup / 4,
+            _ => 0,
+        },
         _ => 0,
     };
     let clip = move_clip(input.class, kind);

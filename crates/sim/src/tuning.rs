@@ -2747,6 +2747,41 @@ pub fn gale_stone_push() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::GaleStonePush))
 }
 
+// --- The charges: the Strike, Fissure's crack, and the ground it leaves -----
+//
+// See `moves::Charge` and `docs/design/elementalist-v2.md` §"The charges".
+
+/// How long rough terrain stays broken.
+pub fn rough_life() -> u16 {
+    oven::scalar(Scalar::RoughLife).max(1) as u16
+}
+
+/// What share of their speed a fighter keeps while crossing rough terrain.
+pub fn rough_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoughSlow))
+}
+
+/// How far either side of the crack's line the ground is broken.
+pub fn rough_width() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoughWidth))
+}
+
+/// What a full Strike is worth against the burn it replaces.
+///
+/// One is the honest number: a full hold concentrates the pillar's whole burn
+/// into one hit and nothing more. Above it a full hold is a free upgrade;
+/// below it a trap. The harness pins the ratio; a person picks the value.
+pub fn strike_worth() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StrikeWorth))
+}
+
+/// The whole burn a fire pillar would deal to somebody who stood in it for
+/// its whole life -- what a full Strike concentrates into one hit.
+pub fn pillar_burn_total() -> i32 {
+    let ticks = (pillar_life() / effect_tick_frames().max(1)) as i32;
+    pillar_damage() * ticks
+}
+
 // --- The step, the diagonal, and going up with them ------------------------
 
 /// How many frames before the hitbox a stepping move starts driving the body.

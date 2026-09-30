@@ -1217,7 +1217,9 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // same argument the Reaver makes -- Cataclysm takes it instead.
         Class::Elementalist => match slot {
             0 => "LMB",
-            1 => "Shift+LMB",
+            // Since v2: the mechanic key held past the stone's rise, and let
+            // go. See [`Charge::Crack`].
+            1 => "E held",
             2 => "Q",
             3 => "RMB",
             // The air row. The button is the same; the situation is what
@@ -1333,6 +1335,10 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // on the floor at her own feet.
         Class::Elementalist => match kind {
             elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
+            // Fissure, since v2: the crack does the hitting, racing from the
+            // stone she held churning to the first body it meets -- see
+            // `state::World::advance`. Her own body puts out nothing.
+            crate::state::SLOT_COMMITTED => Shape::None,
             _ => Shape::Cylinder,
         },
         // The Dual mage's two autos are punches with a wing behind them, and
@@ -1396,6 +1402,42 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
         // poke rather than as a short version of the lunge it replaced.
         Class::Champion if kind == champion::SPEAR_GROUND => Hand::Right,
         _ => Hand::Centre,
+    }
+}
+
+/// What holding a move's button buys, for the three moves that charge.
+///
+/// **Declared, not inferred**, like [`shape`] and [`lingers`]: the move
+/// table's `channel` column says *how long* a button may be held, and this
+/// says *what the hold is*. Three answers, and they are three different
+/// shapes of the same rule -- a hold deforms a move along one axis and never
+/// selects a different one. See `docs/design/elementalist-v2.md`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Charge {
+    /// The Blood mage's Grasp: the hold is **before** the move and buys
+    /// reach, from [`Move::channel_from`] out to [`Move::reach`]. The press
+    /// opens the wind-up and the release throws the move.
+    Reach,
+    /// The Elementalist's fire pillar, held: the hold comes **after** the
+    /// startup and buys **concentration**. A tap is the pillar as built; a
+    /// full hold is the pillar's whole burn arriving as one Strike and
+    /// nothing left standing; in between, a flash and a shorter pillar. The
+    /// startup is the tap window, so a tap costs nothing it did not already.
+    Strike,
+    /// The Elementalist's Raise, held: the stone she raised is held
+    /// **churning** rather than erupting, and the hold buys **distance** --
+    /// how far the crack of Fissure races from that stone along her look
+    /// before the stone erupts at its end. The rise is the tap window.
+    Crack,
+}
+
+/// Which charge a move has, if any.
+pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
+    match class {
+        Class::BloodMage if kind == crate::state::SLOT_SPECIAL => Some(Charge::Reach),
+        Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
+        Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
+        _ => None,
     }
 }
 

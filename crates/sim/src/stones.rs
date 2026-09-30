@@ -169,6 +169,30 @@ impl Structure {
     fn already_struck(&self, player: usize) -> bool {
         self.struck & (1 << player) != 0
     }
+
+    /// Would this stone leave the churn on its next frame?
+    ///
+    /// The last frame of the rise's first half is where Raise's hold takes
+    /// over: released before it, the press was a tap and the stone erupts as
+    /// it always did; still held on it, the stone is kept churning and the
+    /// hold becomes Fissure's. See `state::hold_the_churn`.
+    pub fn about_to_erupt(&self) -> bool {
+        let mut next = *self;
+        next.age = next.age.saturating_add(1);
+        self.phase() == Phase::Churning && next.phase() != Phase::Churning
+    }
+
+    /// Keep this stone on the last frame of its churn.
+    ///
+    /// `step` ages every stone at the top of the frame; this winds the one
+    /// being held back to the last age that is still churning, so it stays a
+    /// warning under the floor for as long as the button is down and erupts
+    /// the frame it is let go.
+    pub fn hold_churning(&mut self) {
+        while self.phase() != Phase::Churning && self.age > 0 {
+            self.age -= 1;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -577,17 +601,47 @@ pub fn destroy(players: &mut [Player; MAX_PLAYERS], index: usize) -> Option<V3> 
 /// beside either of the two things that raise one — the mechanic key, and
 /// Landfall — because a second copy of "and if there are already three" is how
 /// one of them ends up quietly not spending it.
-pub fn raise(p: &mut Player, stone: Structure) {
+pub fn raise(p: &mut Player, stone: Structure) -> Option<usize> {
     let Mechanic::Structures(mut slots) = p.mechanic else {
-        return;
+        return None;
     };
-    if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
-        *free = Some(stone);
-    } else {
-        slots.rotate_left(1);
-        slots[MAX_STRUCTURES - 1] = Some(stone);
-    }
+    let slot = match slots.iter().position(|s| s.is_none()) {
+        Some(free) => {
+            slots[free] = Some(stone);
+            free
+        }
+        None => {
+            slots.rotate_left(1);
+            slots[MAX_STRUCTURES - 1] = Some(stone);
+            MAX_STRUCTURES - 1
+        }
+    };
     p.mechanic = Mechanic::Structures(slots);
+    Some(slot)
+}
+
+/// Move the stone at `index` (as `aim::Contact::Stone` counts them) to `to`,
+/// settled on whatever is under that spot, and let it erupt there.
+///
+/// Fissure's end: the stone she held churning at one place comes up at the
+/// far end of the crack instead. It is the same stone -- same slot, same
+/// rise curve -- so the cap is not spent twice and the eruption's damage and
+/// stagger are the ordinary ones. Its own eruption record is reset, because
+/// arriving somewhere new is a new chance to catch somebody.
+pub fn relocate_and_erupt(players: &mut [Player; MAX_PLAYERS], index: usize, to: V3) {
+    let mut field = gather(players);
+    let settled = crate::aim::settle(to, &field);
+    if let Some(stone) = field[index].as_mut() {
+        stone.at = settled;
+        stone.vel = V3::ZERO;
+        stone.struck = 0;
+        // Off the churn's last frame and into the eruption: the next `step`
+        // carries it out of the ground.
+        while stone.phase() == Phase::Churning && stone.age < stone.rise {
+            stone.age += 1;
+        }
+    }
+    scatter(players, &field);
 }
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 //! need to be findable. See `docs/design/feel-log.md`.
 
 use crate::DT;
-use crate::aim::{self, Contact, Path, Scene};
+use crate::aim::{self, Contact, Path, Scene, Targets};
 use crate::arena;
 use crate::bolt::{self, Flight, MAX_BOLTS};
 use crate::bulwark;
@@ -45,6 +45,8 @@ pub const NOBODY: u8 = u8::MAX;
 
 /// `Player::blinked` when she did not blink this frame.
 pub const NO_POOL: u8 = u8::MAX;
+/// `Player::charging_stone` when the Elementalist is holding no stone.
+pub const NO_STONE: u8 = u8::MAX;
 
 /// `Phase::RoundOver::winner` when the creature is the one still standing.
 /// Player indices and `u8::MAX` for a double knockout are already spoken for.
@@ -580,6 +582,17 @@ pub struct Player {
     /// the telegraph worth nothing. You commit to a place when you commit to
     /// the move.
     pub aim_path: Path,
+    /// Which of the Elementalist's structure slots holds the stone she raised
+    /// with the mechanic key still down, or [`NO_STONE`].
+    ///
+    /// Set on the press. While the key stays down it is an ordinary raise
+    /// until the stone's churn is about to end; on that frame the hold takes
+    /// over (`Action::Channel` on Fissure's slot) and the stone is kept
+    /// churning until the key comes up, when the crack races from it. Cleared
+    /// the frame the crack comes out, the frame the key is released early, and
+    /// the frame anything else takes the action -- a hit, or a different move.
+    /// See [`hold_the_churn`] and `moves::Charge::Crack`.
+    pub charging_stone: u8,
     /// Frames left before each of this class's moves may be thrown again.
     ///
     /// **Per move, and only ever the one you just threw** -- which is what
@@ -1018,6 +1031,7 @@ impl Default for Player {
             beam_reach: Fx::ZERO,
             aim_path: Path::default(),
             channelled: Fx::ZERO,
+            charging_stone: NO_STONE,
         }
     }
 }
@@ -1332,6 +1346,11 @@ impl World {
                     class::Structure::slammed(at, p.facing),
                 );
             }
+            // Fissure: the crack races from the stone she held churning. See
+            // `race_the_crack`.
+            if p.class == Class::Elementalist && kind == SLOT_COMMITTED {
+                self.race_the_crack(i, input);
+            }
             if let Some(leaves) = EffectKind::from_code(m.effect) {
                 // Where the move was aimed when it was thrown, already solved
                 // against the terrain and the move's reach. It used to be a
@@ -1353,10 +1372,29 @@ impl World {
                     (p.aim_at(), V3::ZERO)
                 };
                 // A channelled move goes as far as it was wound to, not as far
-                // as its row says it could -- see `step_channel`.
-                let reach = if m.channels() { p.channelled } else { m.reach };
+                // as its row says it could -- see `step_channel`. Only the
+                // charge that buys reach: the Strike's `channelled` is a share
+                // of a hold, not a distance.
+                let reach = if moves::charge(p.class, kind) == Some(moves::Charge::Reach) {
+                    p.channelled
+                } else {
+                    m.reach
+                };
                 let mut born = Effect::cast(leaves, i as u8, p.class, kind, from, along, reach);
                 born.power = depth(&p);
+                // **The Strike spends the pillar.** What the hold concentrated
+                // into the hit is taken off the burn: a full hold leaves
+                // nothing standing, a tap leaves the pillar as built, and in
+                // between a shorter one. See `strike_bonus`.
+                if moves::charge(p.class, kind) == Some(moves::Charge::Strike) {
+                    born.life = Fx::from_int(born.life as i32)
+                        .mul(Fx::ONE.sub(p.channelled))
+                        .to_int()
+                        .max(0) as u16;
+                    if born.life < t::effect_tick_frames() {
+                        continue;
+                    }
+                }
                 // **How long a thing she leaves behind lasts is where she was
                 // standing when she threw it.** The one place the depth curve
                 // is allowed to move a frame count -- a move's own startup,
@@ -1866,6 +1904,7 @@ impl World {
             h.write_u32(p.ride_clip as u32);
             h.write_i32(p.beam_reach.raw());
             h.write_i32(p.channelled.raw());
+            h.write_u32(p.charging_stone as u32);
             for f in &p.repeat_lock {
                 h.write_u32(*f as u32);
             }
@@ -2059,6 +2098,13 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
     // the one description of an attack's volume, so the overlay draws the
     // shake at the radius it is tested at. See `crate::bulwark`.
     m.radius = bulwark::slam_radius(p, kind, m.radius);
+    // **And a held Strike is the pillar's exact shape.** The column of flame
+    // that lands where a held pillar would have stood is as wide as the
+    // pillar's grown base, whatever the move's own disc says. See
+    // `strike_bonus`.
+    if moves::charge(p.class, kind) == Some(moves::Charge::Strike) && p.channelled.raw() > 0 {
+        m.radius = m.radius.max(t::pillar_base_radius());
+    }
     // Two ways to have no volume, and both answer `None` here.
     //
     // A move with no radius is a gesture that puts something into the world,
@@ -2110,6 +2156,11 @@ pub fn hitbox(p: &Player) -> Option<Hitbox> {
         // Where the thing was planted. The burst that comes with it has to be
         // there too, or the ability is two abilities pointing different ways.
         aim::Kind::Grounded => return Some(disc(p.aim_at())),
+        // The crack's line, from the held stone to wherever the hold bought.
+        // Fissure puts out no volume of its own (`moves::shape`), so this arm
+        // is never reached today; it says what the volume *would* be so the
+        // answer is total rather than a wildcard.
+        aim::Kind::Racing => (p.aim_path.from, p.aim_path.to, true),
         // Not aimed at a point -- a body moving. Live rather than locked,
         // because a move that can be thrown on the move has to travel with the
         // body.
@@ -2357,6 +2408,24 @@ fn fade_grey(p: &mut Player, frame: u32) {
     p.grey = (p.grey - faded).max(0);
 }
 
+/// What a held Strike is worth over the pillar's own hit: the share of the
+/// pillar's whole burn the hold concentrated, at `tuning::strike_worth`.
+///
+/// Nothing on a tap (`channelled` is zero), and nothing on any other move or
+/// class. The burn it is worth is exactly the burn `advance` takes off the
+/// pillar's life, so a full Strike is the pillar's total arriving at once and
+/// nothing left to stand in.
+fn strike_bonus(p: &Player, kind: u8) -> i32 {
+    if moves::charge(p.class, kind) != Some(moves::Charge::Strike) || p.channelled.raw() <= 0 {
+        return 0;
+    }
+    Fx::from_int(t::pillar_burn_total())
+        .mul(p.channelled)
+        .mul(t::strike_worth())
+        .to_int()
+        .max(0)
+}
+
 fn preying(class: Class, victim_disabled: bool) -> Fx {
     if victim_disabled && class.preys_on_the_disabled() {
         t::disabled_damage_mul()
@@ -2513,6 +2582,9 @@ fn resolve_hit(attacker: &Player, defender: &Player, by: u8) -> Option<Hit> {
     // The Bulwark's Slam spends his weight and his fall. The base for
     // everybody else and every other move.
     let damage = bulwark::slam_damage(attacker, kind, m.damage);
+    // And the Elementalist's held Strike adds the burn it took off the
+    // pillar, on top of the pillar's own hit.
+    let damage = damage + strike_bonus(attacker, kind);
     Some(Hit {
         damage: Fx::from_int(damage).mul(damage_mul).to_int(),
         hitstun: m.hitstun,
@@ -2728,7 +2800,7 @@ const QUARTER_TURN: Fx = Fx::from_raw(1 << 14);
 /// between standing on the floor and standing on a creature -- the countdowns
 /// do not. Splitting it here is what stops the ride being a second, drifting
 /// copy of the action machine.
-fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
+fn countdown(p: &mut Player, want_guard: bool, input: Input) -> Option<Action> {
     Some(match p.action {
         Action::Free => return None,
         Action::Dodge { left } if left > 0 => Action::Dodge { left: left - 1 },
@@ -2744,6 +2816,19 @@ fn countdown(p: &mut Player, want_guard: bool) -> Option<Action> {
         // `step_player`, on the frame her feet do.
         Action::Startup { kind, .. } if waits_for_the_floor(p, kind) => {
             Action::Startup { kind, left: 0 }
+        }
+        // **The startup is the tap window.** A Strike's button still down on
+        // the last frame of the startup is a hold, and the hold sits between
+        // the startup and the active frames: she has finished winding up and
+        // is now gathering, at the crawl, with the aim live. Released inside
+        // the startup, this arm is never reached and the pillar is the pillar
+        // as built. See `moves::Charge::Strike` and `step_channel`.
+        Action::Startup { kind, .. }
+            if moves::charge(p.class, kind) == Some(moves::Charge::Strike)
+                && moves::get(p.class, kind).channel > 0
+                && input.has(channel_button(p.class, kind)) =>
+        {
+            Action::Channel { kind, held: 0 }
         }
         Action::Startup { kind, .. } => Action::Active {
             kind,
@@ -2890,6 +2975,7 @@ fn step_player(
 
     let mob = p.class.mobility();
     step_mechanic(p);
+    hold_the_churn(p, input);
 
     let want_guard = input.has(Input::RIGHT) && p.shield().is_some_and(|sh| sh.in_hand());
     let (ax, az) = input.move_axis();
@@ -2930,7 +3016,7 @@ fn step_player(
     if let Some((kind, held)) = p.action.channelling() {
         p.action = step_channel(p, who, kind, held, input, scene);
     } else {
-        p.action = match countdown(p, want_guard) {
+        p.action = match countdown(p, want_guard, input) {
             Some(next) => next,
             None => {
                 // Clicks are checked before the dodge, which is what disambiguates
@@ -4447,10 +4533,11 @@ fn begin_move(
     // because the press is still the press: there is no way to cancel out of a
     // wind-up, so an ability you started is an ability you bought.
     p.spend_health(moves::get(p.class, kind).cost);
-    // A channelled move does not start here. Pressing the button opens the
-    // wind-up instead, and the move begins when the button comes back up --
-    // see `step_channel`.
-    if moves::get(p.class, kind).channels() {
+    // A move that charges **before** it starts does not start here. Pressing
+    // the button opens the wind-up instead, and the move begins when the
+    // button comes back up -- see `step_channel`. The other two charges come
+    // after the startup and the press starts the move like any other.
+    if moves::charge(p.class, kind) == Some(moves::Charge::Reach) {
         aim_channel(p, who, kind, 0, input, scene);
         return Action::Channel { kind, held: 0 };
     }
@@ -4472,6 +4559,11 @@ fn throw_move(p: &mut Player, kind: u8, input: Input, aerial: bool) -> Action {
     // the wind-up has already been paid for in frames of its own; charging from
     // the press would bill the hold twice.
     p.lock_repeat(kind);
+    // A Strike not yet held is worth nothing over the pillar: the hold, if it
+    // comes, sets this on release. A tap has to be the pillar as built.
+    if moves::charge(p.class, kind) == Some(moves::Charge::Strike) {
+        p.channelled = Fx::ZERO;
+    }
     // The second body throws the same thing a few frames later. A no-op for
     // every class but one, and for the two of the Reaver's four moves that are
     // already the shadow's own -- see `shadow::begin_echo`.
@@ -4507,11 +4599,13 @@ fn step_channel(
     input: Input,
     scene: &Scene,
 ) -> Action {
-    let cap = moves::get(p.class, kind).channel;
+    let m = moves::get(p.class, kind);
+    let cap = m.channel;
+    let charge = moves::charge(p.class, kind);
     // Held, and there is still room: wind on. At the cap it releases itself,
     // so a player holding the button through a fight is not quietly storing an
     // ability they have already paid for.
-    if input.has(channel_button(kind)) && held < cap {
+    if input.has(channel_button(p.class, kind)) && held < cap {
         let held = held + 1;
         aim_channel(p, who, kind, held, input, scene);
         return Action::Channel { kind, held };
@@ -4519,21 +4613,42 @@ fn step_channel(
     // Released. The aim locks now, on the frame the wind-up becomes a move,
     // which is where every other move locks it too.
     aim_channel(p, who, kind, held, input, scene);
-    // Read back off the path rather than recomputed from the hold. The two are
-    // the same number -- `aim_channel` has just put the marker there -- and
-    // taking it from the path is what makes the arms land on the marker rather
-    // than on a second calculation that agrees with it today.
-    p.channelled = p.aim_path.length();
-    // `aerial` is always true here and always harmless: `arm_aerial` returns on
-    // the spot for anybody whose feet are on something, and aboard the creature
-    // they always are.
-    throw_move(p, kind, input, true)
+    match charge {
+        // The Strike: the startup already ran, and the hold was the pause
+        // between it and the active frames. What it bought is how much of
+        // the pillar's burn arrives at once, as a share of the longest hold.
+        // Straight to the active frames -- the lockout, the echo and the
+        // meter were all settled on the press.
+        Some(moves::Charge::Strike) => {
+            p.channelled = Fx::ratio(held.min(cap) as i32, cap.max(1) as i32);
+            Action::Active {
+                kind,
+                left: m.active,
+            }
+        }
+        // The crack, and the Grasp: what was bought is a distance, read back
+        // off the path rather than recomputed from the hold. The two are the
+        // same number -- `aim_channel` has just put the marker there -- and
+        // taking it from the path is what makes the arms land on the marker
+        // rather than on a second calculation that agrees with it today.
+        //
+        // `aerial` is always true here and always harmless: `arm_aerial`
+        // returns on the spot for anybody whose feet are on something, and
+        // aboard the creature they always are.
+        _ => {
+            p.channelled = p.aim_path.length();
+            throw_move(p, kind, input, true)
+        }
+    }
 }
 
 /// Which button holds a channel open. The slot's own, since a channel is the
 /// front of a move rather than a thing of its own.
-const fn channel_button(kind: u8) -> u16 {
+const fn channel_button(class: Class, kind: u8) -> u16 {
     match kind {
+        // The Elementalist's Fissure is the mechanic key held: the stone was
+        // raised on the press and the crack is what letting go throws.
+        SLOT_COMMITTED if matches!(class, Class::Elementalist) => Input::MECHANIC,
         // Shift picks *which* click; the click is what holds the wind-up open,
         // so letting go of shift halfway through does not throw the move.
         SLOT_POKE | SLOT_COMMITTED => Input::LEFT,
@@ -4566,7 +4681,12 @@ const fn channel_button(kind: u8) -> u16 {
 fn aim_channel(p: &mut Player, who: usize, kind: u8, held: u16, input: Input, scene: &Scene) {
     let m = moves::get(p.class, kind);
     aim_at(p, who, kind, m.reach, input, scene);
-    p.aim_path.to = p.aim_path.at(m.reach_after(held));
+    // The Strike is aimed at the point the crosshair is on, exactly as the
+    // untouched pillar is: live through the hold, and the hold buys nothing
+    // about *where*. The other two buy a distance along the solved line.
+    if moves::charge(p.class, kind) != Some(moves::Charge::Strike) {
+        p.aim_path.to = p.aim_path.at(m.reach_after(held));
+    }
 }
 
 /// Work out where this move goes, and hold it there for the move's duration.
@@ -4601,7 +4721,76 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
         // follows the camera the whole way.
         aim::Kind::Swing => aim::swing_path(p.pos, p.facing, input, p.grounded, reach, m.hand),
         aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
+        // From the stone she is holding churning, flat along her look. Her
+        // own feet when there is none, which the crack's slot cannot reach
+        // without one -- see `hold_the_churn`.
+        aim::Kind::Racing => aim::racing_path(held_stone_at(p).unwrap_or(p.pos), input, reach),
     };
+}
+
+/// Where the stone the Elementalist is holding churning stands, if she is.
+fn held_stone_at(p: &Player) -> Option<V3> {
+    let Mechanic::Structures(slots) = p.mechanic else {
+        return None;
+    };
+    slots
+        .get(p.charging_stone as usize)
+        .copied()
+        .flatten()
+        .map(|s| s.at)
+}
+
+/// The mechanic key held past the rise: the Elementalist's stone stays
+/// churning and the hold becomes Fissure's.
+///
+/// Three cases, read every frame she is holding a stone:
+///
+/// - **Free, key down, and the stone is about to erupt.** The rise was the
+///   tap window and the tap has become a hold: she goes into the crack's
+///   channel and the stone stays on the churn's last frame.
+/// - **Free, key up.** A tap. The stone erupts as it always did and there is
+///   nothing to hold.
+/// - **In the channel, or in Fissure's startup after letting go.** The stone
+///   is held churning until the crack comes out -- `advance` clears the hold
+///   on the crack's first active frame. Anything else -- a hit, a different
+///   move, a dodge -- ends the hold, and the stone erupts where it stands.
+///
+/// Runs after `step_mechanic` and before the countdown, on a frame the
+/// stones have already aged, so the wind-back is what the rest of the frame
+/// sees.
+fn hold_the_churn(p: &mut Player, input: Input) {
+    if p.class != Class::Elementalist || p.charging_stone == NO_STONE {
+        return;
+    }
+    let Mechanic::Structures(mut slots) = p.mechanic else {
+        p.charging_stone = NO_STONE;
+        return;
+    };
+    let slot = p.charging_stone as usize;
+    let Some(stone) = slots.get_mut(slot).and_then(|s| s.as_mut()) else {
+        p.charging_stone = NO_STONE;
+        return;
+    };
+    let holding = input.has(Input::MECHANIC);
+    match p.action {
+        Action::Free if holding && p.grounded => {
+            if stone.about_to_erupt() {
+                stone.hold_churning();
+                p.action = Action::Channel {
+                    kind: SLOT_COMMITTED,
+                    held: 0,
+                };
+            }
+        }
+        Action::Channel { kind, .. } | Action::Startup { kind, .. } if kind == SLOT_COMMITTED => {
+            stone.hold_churning();
+        }
+        _ => {
+            p.charging_stone = NO_STONE;
+            return;
+        }
+    }
+    p.mechanic = Mechanic::Structures(slots);
 }
 
 /// Start an aerial's hang, and its shove, if this one is thrown in the air.
@@ -4799,7 +4988,10 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
         // frames somebody can punish rather than an instant, which is why it
         // is picked in `keyed_move` before this is ever reached.
         Mechanic::Structures(_) => {
-            stones::raise(p, class::Structure::raised(placed(t::raise_reach())));
+            // Remembered for the hold: the key still down past this stone's
+            // rise is Fissure's charge. See `hold_the_churn`.
+            let raised = stones::raise(p, class::Structure::raised(placed(t::raise_reach())));
+            p.charging_stone = raised.map_or(NO_STONE, |slot| slot as u8);
         }
 
         // Health is the resource; there is no separate button.
@@ -6306,6 +6498,21 @@ impl World {
             // moves put through it -- see `drink_over` -- and by the dodge.
             EffectKind::Pool => {}
 
+            // Broken ground: felt through the feet, every frame, by anybody
+            // crossing it. Never the one who broke it -- her own scar slowing
+            // her would make the crack a thing thrown at herself.
+            EffectKind::Rough => {
+                let radius = t::body_radius();
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    if self.effects_reach(i, effect.owner)
+                        && effect.roughens(p.pos, p.grounded, radius)
+                    {
+                        self.players[i].slow(t::slow_frames(), t::rough_slow());
+                    }
+                }
+            }
+
             // A cloud of embers burns like a pillar does, on the same tick,
             // inside the ball it occupies -- gently, because what it is for is
             // lighting the shots that fly through it, and the burn is only
@@ -7219,7 +7426,7 @@ fn step_rider(
     if let Some((kind, held)) = p.action.channelling() {
         p.action = step_channel(p, who, kind, held, input, scene);
     } else {
-        p.action = match countdown(p, want_guard) {
+        p.action = match countdown(p, want_guard, input) {
             Some(next) => next,
             None => {
                 if input.has(Input::SPECIAL)
@@ -7725,6 +7932,116 @@ impl World {
 
 /// Is this the Elementalist's heavy?
 ///
+impl World {
+    /// Fissure's crack, on the move's first active frame: from the stone the
+    /// Elementalist held churning, along the line the hold bought, to the
+    /// first body it meets or the end.
+    ///
+    /// Three things happen where it stops, and they are one event. The body
+    /// it met takes the move's own hit -- the crack is the hitbox, and her own
+    /// body puts out none (`moves::shape`). The stone she held is moved to
+    /// that spot and let go, so it erupts there: Fissure is a Raise that went
+    /// somewhere. And the line it ran is left as rough terrain for a while,
+    /// which is the setup the Strike wants.
+    ///
+    /// Without a held stone -- the slot thrown some other way, or the stone
+    /// evicted mid-hold -- the crack still runs from her feet and still hits;
+    /// only the eruption at the end is missing, because there is nothing to
+    /// erupt.
+    fn race_the_crack(&mut self, i: usize, input: Input) {
+        let p = self.players[i];
+        let m = moves::get(p.class, SLOT_COMMITTED);
+        let path = p.aim_path;
+        let field = stones::gather(&self.players);
+        let seen = self.players;
+        let effects = self.effects;
+        let beast = self.monster;
+        let versus = beast.is_none();
+        let scene = Scene {
+            stones: &field,
+            players: &seen,
+            effects: &effects,
+            quarry: beast.as_ref(),
+        };
+        let met = aim::first_along(
+            path,
+            m.radius,
+            i as u8,
+            &scene,
+            Targets::none().fighters(versus).quarry(!versus),
+        );
+        let end = met.map_or(path.to, |c| path.at(c.dist()));
+        let dir = V3::new(path.dir().x, Fx::ZERO, path.dir().z).normalized();
+        match met {
+            Some(Contact::Fighter { index, .. }) => {
+                let victim = self.players[index];
+                let (guarding, parried) = guard_against(&victim, p.pos, m.unblockable);
+                apply_hit(
+                    &mut self.players[index],
+                    Hit {
+                        damage: m.damage,
+                        hitstun: m.hitstun,
+                        blockstun: m.blockstun,
+                        knockback: m.knockback,
+                        launch: Fx::ZERO,
+                        grabs: 0,
+                        by: i as u8,
+                        dir,
+                        blocked: guarding,
+                        parried,
+                        interrupts: true,
+                    },
+                );
+                if parried {
+                    self.players[i].action = Action::Stagger {
+                        left: t::parry_stagger(),
+                    };
+                    self.players[i].stun_total = t::parry_stagger();
+                    self.players[index].parried = PARRY_FLOURISH;
+                }
+                self.players[i].hit_used = true;
+            }
+            Some(Contact::Quarry { part, .. }) => {
+                if let Some(mut beast) = self.monster {
+                    beast.take_hit(part, m.damage);
+                    self.monster = Some(beast);
+                }
+                self.players[i].hit_used = true;
+            }
+            _ => {}
+        }
+        // The stone arrives where the crack stopped, and erupts there.
+        let held = self.players[i].charging_stone;
+        if held != NO_STONE {
+            let index = i * class::MAX_STRUCTURES + held as usize;
+            stones::relocate_and_erupt(&mut self.players, index, end);
+            self.players[i].charging_stone = NO_STONE;
+        }
+        // And the scar: the whole line, however far the crack got.
+        let length = end.sub(path.from).flat_len();
+        if length.raw() > 0 {
+            let from = V3::new(path.from.x, arena::ground_under(path.from), path.from.z);
+            spawn_effect(
+                &mut self.effects,
+                Effect::cast(
+                    EffectKind::Rough,
+                    i as u8,
+                    p.class,
+                    SLOT_COMMITTED,
+                    from,
+                    dir,
+                    length,
+                ),
+            );
+        }
+        // `input` is what the crack was aimed with; the path was locked on
+        // release and this only reads it, but the frame's input is what every
+        // other first-active-frame hand-off receives, and the signature says
+        // so for the day the crack wants the stick.
+        let _ = input;
+    }
+}
+
 /// The same shape of question `bolt::throws_a_beam` asks, and for the same
 /// reason: being a skillshot decides how the move is aimed, not what it does
 /// when it lands, so the slot has to be checked too. See `moves::SLOT_HEAVY`.

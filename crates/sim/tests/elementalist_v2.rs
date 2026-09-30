@@ -11,7 +11,8 @@ use sim::class::{Mechanic, Structure};
 use sim::effects::{Effect, EffectKind};
 use sim::gust::Gale;
 use sim::moves::elementalist as e;
-use sim::state::Action;
+use sim::state::{Action, NO_STONE, SLOT_COMMITTED, SLOT_SPECIAL};
+use sim::stones::Phase;
 use sim::tuning as t;
 use sim::{Class, Fx, Input, V3, World};
 
@@ -19,6 +20,7 @@ const L: u16 = Input::LEFT;
 const R: u16 = Input::RIGHT;
 const M: u16 = Input::MIDDLE;
 const E: u16 = Input::MECHANIC;
+const Q: u16 = Input::SPECIAL;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -530,4 +532,365 @@ fn the_mechanic_key_still_raises_a_stone_with_the_new_bits_held() {
     let mut w = elementalist();
     run(&mut w, 1, E | Input::SIDE_A | Input::KEY_R, 0);
     assert_eq!(stones_of(&w).len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// The charges -- M2. See `moves::Charge`.
+// ---------------------------------------------------------------------------
+
+fn pillars(w: &World) -> Vec<Effect> {
+    w.effects
+        .iter()
+        .flatten()
+        .filter(|e| e.kind == EffectKind::FirePillar)
+        .copied()
+        .collect()
+}
+
+fn scars(w: &World) -> Vec<Effect> {
+    w.effects
+        .iter()
+        .flatten()
+        .filter(|e| e.kind == EffectKind::Rough)
+        .copied()
+        .collect()
+}
+
+/// Hold `Q` for `frames` past the pillar's startup, at a pitch, then let go
+/// and run the active frames. `frames` of zero is a tap.
+fn strike(w: &mut World, pitch: i16, hold: u16) {
+    let (startup, active, _) = sim::moves::frames(Class::Elementalist, SLOT_SPECIAL);
+    let step = |w: &mut World, bits: u16| {
+        w.advance([
+            Input::looking_at(bits, LOOK_RIGHT, pitch),
+            Input::looking_at(0, LOOK_LEFT, 0),
+        ]);
+    };
+    if hold == 0 {
+        step(w, Q);
+        for _ in 0..(startup + active) {
+            step(w, 0);
+        }
+        return;
+    }
+    // Hold until the channel has counted `hold` frames, then let go. Counted
+    // off the action rather than off the frames pressed, because the hold
+    // begins on the frame after the startup ends and a test that guessed
+    // that frame would be asserting the countdown's arithmetic.
+    for _ in 0..(startup + hold + 4) {
+        if matches!(w.players[0].action, Action::Channel { held, .. } if held >= hold) {
+            break;
+        }
+        step(w, Q);
+    }
+    for _ in 0..(active + 1) {
+        step(w, 0);
+    }
+}
+
+#[test]
+fn a_tap_of_q_is_the_pillar_as_built() {
+    let mut w = elementalist();
+    let pitch = crosshair_onto_the_floor_at(&w, at(-2.0, 0.0, 8.0), t::raise_reach());
+    strike(&mut w, pitch, 0);
+    let out = pillars(&w);
+    assert_eq!(out.len(), 1, "the pillar stands");
+    assert_eq!(
+        out[0].life,
+        t::pillar_life(),
+        "with its whole burn ahead of it"
+    );
+    assert!(
+        !matches!(w.players[0].action, Action::Channel { .. }),
+        "and nothing was held"
+    );
+}
+
+#[test]
+fn q_held_past_the_startup_is_a_hold_with_the_aim_live() {
+    let mut w = elementalist();
+    let (startup, _, _) = sim::moves::frames(Class::Elementalist, SLOT_SPECIAL);
+    run(&mut w, (startup + 5) as u32, Q, 0);
+    assert!(
+        matches!(w.players[0].action, Action::Channel { kind: SLOT_SPECIAL, held } if held >= 2),
+        "still holding: {:?}",
+        w.players[0].action
+    );
+    assert!(pillars(&w).is_empty(), "nothing has been placed yet");
+    // The aim is live: turn, and the marker turns with it.
+    let before = w.players[0].aim_path.to;
+    for _ in 0..3 {
+        w.advance([
+            Input::looking_at(Q, 1 << 14, 0),
+            Input::looking_at(0, LOOK_LEFT, 0),
+        ]);
+    }
+    let after = w.players[0].aim_path.to;
+    assert!(before != after, "a held Strike is still being aimed");
+}
+
+#[test]
+fn the_strike_is_worth_exactly_the_burn_it_takes_off_the_pillar() {
+    let m = sim::moves::get(Class::Elementalist, SLOT_SPECIAL);
+    let cap = m.channel;
+    assert!(cap > 0, "the pillar charges");
+    let burn = t::pillar_burn_total();
+    let mut last_hit = 0;
+    let mut last_life = u16::MAX;
+    for hold in [0u16, cap / 4, cap / 2, cap] {
+        let mut w = elementalist();
+        // The other fighter standing exactly where the pillar lands.
+        let spot = at(-2.0, 0.0, 8.0);
+        w.players[1].pos = spot;
+        let full = w.players[1].health;
+        let pitch = crosshair_onto_the_floor_at(&w, spot, m.reach);
+        strike(&mut w, pitch, hold);
+        let hit = full - w.players[1].health;
+        let want = m.damage
+            + Fx::from_int(burn)
+                .mul(Fx::ratio(hold as i32, cap as i32))
+                .mul(t::strike_worth())
+                .to_int();
+        assert!(
+            (hit - want).abs() <= 1,
+            "held {hold} of {cap}: hit for {hit}, expected {want}"
+        );
+        assert!(hit >= last_hit, "the Strike grows with the hold");
+        last_hit = hit;
+        let life = pillars(&w).first().map_or(0, |p| p.life);
+        assert!(
+            life <= last_life,
+            "and the pillar left behind shrinks: {life} after {last_life}"
+        );
+        last_life = life;
+        if hold == cap {
+            assert!(
+                pillars(&w).is_empty(),
+                "a full hold leaves nothing standing"
+            );
+        }
+        if hold == 0 {
+            assert_eq!(life, t::pillar_life(), "a tap leaves the whole pillar");
+        }
+    }
+    assert!(
+        last_hit > m.damage,
+        "a full Strike is worth more than the pillar's own hit"
+    );
+}
+
+#[test]
+fn a_hit_during_the_hold_ends_it_and_nothing_is_placed() {
+    let mut w = elementalist();
+    // A Bulwark standing in her face, ready to bash.
+    w.players[1].pos = at(-4.6, 0.0, 8.0);
+    let (startup, _, _) = sim::moves::frames(Class::Elementalist, SLOT_SPECIAL);
+    run(&mut w, (startup + 3) as u32, Q, 0);
+    assert!(matches!(w.players[0].action, Action::Channel { .. }));
+    // He bashes; she keeps holding.
+    run(&mut w, 1, Q, L);
+    for _ in 0..20 {
+        if w.players[0].action.stunned() {
+            break;
+        }
+        run(&mut w, 1, Q, L);
+    }
+    assert!(
+        w.players[0].action.stunned(),
+        "hit out of the hold: {:?}",
+        w.players[0].action
+    );
+    run(&mut w, 30, 0, 0);
+    assert!(
+        pillars(&w).is_empty(),
+        "a Strike that was interrupted lands nothing"
+    );
+}
+
+#[test]
+fn a_tap_of_e_raises_a_stone_that_erupts_where_it_was_raised() {
+    let mut w = elementalist();
+    run(&mut w, 1, E, 0);
+    let raised = stones_of(&w)[0].at;
+    run(&mut w, 40, 0, 0);
+    let s = stones_of(&w);
+    assert_eq!(s.len(), 1);
+    assert_eq!(s[0].phase(), Phase::Standing, "an ordinary raise");
+    assert_eq!(s[0].at.x, raised.x, "where it was raised");
+    assert_eq!(w.players[0].charging_stone, NO_STONE);
+    assert!(scars(&w).is_empty(), "and no crack ran");
+}
+
+#[test]
+fn e_held_past_the_churn_keeps_the_stone_churning_and_becomes_the_crack_hold() {
+    let mut w = elementalist();
+    run(&mut w, 30, E, 0);
+    let s = stones_of(&w);
+    assert_eq!(s.len(), 1);
+    assert_eq!(s[0].phase(), Phase::Churning, "held under the floor");
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Channel {
+                kind: SLOT_COMMITTED,
+                ..
+            }
+        ),
+        "and the hold is Fissure's: {:?}",
+        w.players[0].action
+    );
+    assert_ne!(w.players[0].charging_stone, NO_STONE);
+}
+
+#[test]
+fn letting_go_races_the_crack_and_the_stone_erupts_at_its_end() {
+    let mut w = elementalist();
+    run(&mut w, 40, E, 0);
+    let held_at = stones_of(&w)[0].at;
+    let Action::Channel { held, .. } = w.players[0].action else {
+        panic!("not holding");
+    };
+    let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
+    let want = m.reach_after(held);
+    // Let go: the move starts, and the crack comes out on its first active frame.
+    run(&mut w, 1, 0, 0);
+    assert!(
+        matches!(
+            w.players[0].action,
+            Action::Startup {
+                kind: SLOT_COMMITTED,
+                ..
+            }
+        ),
+        "released into Fissure: {:?}",
+        w.players[0].action
+    );
+    run(&mut w, (m.startup + 1) as u32, 0, 0);
+    let s = stones_of(&w);
+    assert_eq!(s.len(), 1, "the same stone");
+    let ran = s[0].at.x.sub(held_at.x);
+    assert!(
+        (ran.sub(want)).abs().raw() < Fx::ONE.raw(),
+        "the stone is at the crack's end: {} m out of {}",
+        ran.to_int(),
+        want.to_int()
+    );
+    assert_eq!(w.players[0].charging_stone, NO_STONE, "let go");
+    let scar = scars(&w);
+    assert_eq!(scar.len(), 1, "the crack's line is rough terrain");
+    assert!((scar[0].reach.sub(want)).abs().raw() < Fx::ONE.raw());
+    run(&mut w, 30, 0, 0);
+    assert_eq!(
+        stones_of(&w)[0].phase(),
+        Phase::Standing,
+        "and it erupted there"
+    );
+}
+
+#[test]
+fn the_crack_stops_at_the_first_body_and_hits_it() {
+    let mut w = elementalist();
+    run(&mut w, 1, E, 0);
+    let raised = stones_of(&w)[0].at;
+    // Somebody standing four metres past the stone, on the crack's line.
+    let body = V3::new(raised.x.add(Fx::from_int(4)), Fx::ZERO, raised.z);
+    w.players[1].pos = body;
+    let full = w.players[1].health;
+    let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
+    // Nearly the longest hold: at the cap it lets itself go, so stop short.
+    for _ in 0..(m.channel as u32 + 40) {
+        if matches!(w.players[0].action, Action::Channel { held, .. } if held + 2 >= m.channel) {
+            break;
+        }
+        run(&mut w, 1, E, 0);
+    }
+    assert!(matches!(w.players[0].action, Action::Channel { .. }));
+    run(&mut w, 1, 0, 0);
+    run(&mut w, (m.startup + 1) as u32, 0, 0);
+    assert_eq!(full - w.players[1].health, m.damage, "the crack is the hit");
+    assert!(w.players[1].action.stunned(), "and it staggers");
+    let s = stones_of(&w)[0];
+    assert!(
+        s.at.x.sub(body.x).abs().raw() < Fx::from_int(2).raw(),
+        "the stone came up at them, not past them: {} against {}",
+        s.at.x.to_int(),
+        body.x.to_int()
+    );
+    let scar = scars(&w)[0];
+    assert!(
+        scar.reach.raw() < m.reach.raw(),
+        "the scar stops where the crack did"
+    );
+}
+
+#[test]
+fn the_crack_runs_further_the_longer_the_hold() {
+    let mut lengths = Vec::new();
+    for extra in [2u32, 25, 50] {
+        let mut w = elementalist();
+        run(&mut w, 1, E, 0);
+        // Past the churn, then `extra` more.
+        while !matches!(w.players[0].action, Action::Channel { .. }) {
+            run(&mut w, 1, E, 0);
+        }
+        run(&mut w, extra, E, 0);
+        run(&mut w, 1, 0, 0);
+        let m = sim::moves::get(Class::Elementalist, SLOT_COMMITTED);
+        run(&mut w, (m.startup + 1) as u32, 0, 0);
+        lengths.push(scars(&w)[0].reach);
+    }
+    assert!(lengths[0].raw() < lengths[1].raw() && lengths[1].raw() < lengths[2].raw());
+}
+
+#[test]
+fn rough_terrain_slows_whoever_crosses_it_and_never_her() {
+    let mut w = elementalist();
+    // A scar from her feet out along +X, ten metres.
+    let from = V3::new(w.players[0].pos.x, Fx::ZERO, w.players[0].pos.z);
+    w.effects[0] = Some(Effect::cast(
+        EffectKind::Rough,
+        0,
+        Class::Elementalist,
+        SLOT_COMMITTED,
+        from,
+        V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO),
+        Fx::from_int(10),
+    ));
+    w.players[1].pos = at(-2.0, 0.0, 8.0);
+    run(&mut w, 2, 0, 0);
+    assert!(w.players[1].slowed > 0, "the other fighter is slowed on it");
+    assert_eq!(w.players[1].slow_mul, t::rough_slow());
+    assert_eq!(w.players[0].slowed, 0, "she is not");
+    // Off the line, nothing.
+    w.players[1].pos = at(-2.0, 0.0, 12.0);
+    run(&mut w, t::slow_frames() as u32 + 2, 0, 0);
+    assert_eq!(w.players[1].slowed, 0);
+    // And it wears off.
+    run(&mut w, t::rough_life() as u32 + 2, 0, 0);
+    assert!(scars(&w).is_empty());
+}
+
+#[test]
+fn anything_else_ends_the_hold_and_the_stone_erupts_where_it_stands() {
+    let mut w = elementalist();
+    run(&mut w, 30, E, 0);
+    assert!(matches!(w.players[0].action, Action::Channel { .. }));
+    let held_at = stones_of(&w)[0].at;
+    // She is hit out of it: the Bulwark walks in and bashes.
+    w.players[1].pos = at(-4.6, 0.0, 8.0);
+    for _ in 0..25 {
+        run(&mut w, 1, E, L);
+        if w.players[0].action.stunned() {
+            break;
+        }
+    }
+    assert!(w.players[0].action.stunned());
+    run(&mut w, 40, 0, 0);
+    assert_eq!(w.players[0].charging_stone, NO_STONE);
+    assert_eq!(
+        stones_of(&w)[0].at.x,
+        held_at.x,
+        "the stone erupted where it was held"
+    );
+    assert!(scars(&w).is_empty(), "no crack ran");
 }

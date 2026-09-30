@@ -623,6 +623,13 @@ scalars! {
     LitBurstRadius,   "Elementalist", "Lit shot, burst radius",               Fixed,   fx(1,4),  fx(6,1);
     LitBonus,         "Elementalist", "Lit shot, damage bonus (%)",           Percent, 0,        100;
     GaleStonePush,    "Elementalist", "Gale pushes a stone at (x the kick)",  Fixed,   0,        fx(3,1);
+    // The charges -- M2. Rough terrain is the scar a Fissure leaves and the
+    // ground a broken-through stone leaves; the Strike's worth is the one
+    // ratio the feel harness pins. See `moves::Charge`.
+    RoughLife,        "Elementalist", "Rough terrain, lasts",                 Frames,  1,        900;
+    RoughSlow,        "Elementalist", "Rough terrain, speed kept (x)",        Fixed,   fx(1,10), fx(1,1);
+    RoughWidth,       "Elementalist", "Rough terrain, half-width",            Fixed,   fx(1,4),  fx(4,1);
+    StrikeWorth,      "Elementalist", "Strike, worth (x the burn it replaces)", Fixed, 0,        fx(3,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -905,7 +912,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Aim => "Line of effect (0-3)",
+            MoveField::Aim => "Line of effect (0-4)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
             MoveField::Channel => "Channel, longest hold",
@@ -947,7 +954,8 @@ impl MoveField {
         match self {
             // Four lines of effect, and the numbering is `aim::Kind`'s. A
             // slider that ran to six hundred would let somebody pick a fifth.
-            MoveField::Aim => (0, 3),
+            // Five since v2: the crack racing from a held stone. See `aim::Kind`.
+            MoveField::Aim => (0, 4),
             // Signed, because a spike is a launch pointed the other way: the
             // Champion's aerial hammer drives an airborne target into the
             // floor with the same number that an uppercut lifts them with.
