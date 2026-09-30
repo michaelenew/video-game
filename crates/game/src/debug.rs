@@ -208,6 +208,16 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
+            // The Quake's patch: the disc the shake and the eruption read.
+            EffectKind::Quake => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    0.05,
+                    PILLAR,
+                );
+            }
             // The drafts: the column a body is tested in.
             EffectKind::Updraft | EffectKind::Downdraft => {
                 let slab = effect.draft_volume();

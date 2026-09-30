@@ -2869,6 +2869,49 @@ pub fn fire_ring_stagger() -> u16 {
     oven::scalar(Scalar::FireRingStagger) as u16
 }
 
+// --- Fire on earth, and the two Quakes --------------------------------------
+
+/// How long a stone burns once lit.
+pub fn lit_stone_life() -> u16 {
+    oven::scalar(Scalar::LitStoneLife).max(1) as u16
+}
+
+/// What standing on a lit stone costs per tick.
+pub fn lit_stone_burn() -> i32 {
+    oven::scalar(Scalar::LitStoneBurn)
+}
+
+/// How wide the shaking patch is.
+pub fn quake_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::QuakeRadius))
+}
+
+/// How long it shakes before it erupts. All telegraph, which is the point.
+pub fn quake_shake() -> u16 {
+    oven::scalar(Scalar::QuakeShake).max(1) as u16
+}
+
+/// The stagger a mover in it takes, once.
+pub fn quake_stagger() -> u16 {
+    oven::scalar(Scalar::QuakeStagger) as u16
+}
+
+/// Below this flat speed a body counts as standing still, and the shake
+/// leaves it alone.
+pub fn quake_still_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::QuakeStillSpeed))
+}
+
+/// What the eruption deals to everyone in the patch when the shake ends.
+pub fn quake_damage() -> i32 {
+    oven::scalar(Scalar::QuakeDamage)
+}
+
+/// How hard the eruption shoves them outward.
+pub fn quake_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::QuakePush))
+}
+
 // --- The step, the diagonal, and going up with them ------------------------
 
 /// How many frames before the hitbox a stepping move starts driving the body.

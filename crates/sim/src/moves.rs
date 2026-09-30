@@ -643,6 +643,8 @@ const NAMES: [&[&str]; 6] = [
         "Cinder spray",
         "Updraft",
         "Downdraft",
+        "Quake",
+        "Tremor",
     ],
     // Blood mage -- her blood goes out, and theirs comes back. Everything
     // costs health, every hit she lands spills the target onto the floor, and
@@ -1052,8 +1054,17 @@ pub mod elementalist {
     /// goes out and a ring of it races outward. See
     /// `crate::effects::EffectKind::Downdraft`.
     pub const DOWNDRAFT: u8 = 9;
+    /// The second side button, aimed at the floor. A patch shakes through a
+    /// slow wind-up -- anyone *moving* through it staggers, anyone standing
+    /// still is fine -- then erupts, and leaves a stone at its centre. See
+    /// `crate::effects::EffectKind::Quake`.
+    pub const QUAKE: u8 = 10;
+    /// `R`, standing: Quake centred on her own feet. The same effect; the
+    /// stone comes up **under her** and takes her with it -- the structure
+    /// jump with a telegraph attached.
+    pub const TREMOR: u8 = 11;
 
-    pub const COUNT: usize = 10;
+    pub const COUNT: usize = 12;
 
     // **No `is_airborne` here, deliberately.** "Which move is this button" is
     // answered once, in `state::elementalist_move` and `state::keyed_move`, and
@@ -1242,7 +1253,9 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             // Both rows: the one move on the class the floor does not change.
             7 => "MMB",
             8 => "F",
-            _ => "F air",
+            9 => "F air",
+            10 => "Side B",
+            _ => "R",
         },
         // Three clicks, three moves, and the auto on the last row: see
         // [`blood`] for why the button order and the storage order differ.
@@ -1351,8 +1364,11 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
             elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
             // Fissure, since v2: the crack does the hitting, racing from the
             // stone she held churning to the first body it meets -- see
-            // `state::World::advance`. Her own body puts out nothing.
-            crate::state::SLOT_COMMITTED => Shape::None,
+            // `state::World::advance`. Her own body puts out nothing. Nor
+            // does it for the two Quakes, whose patch is the whole move.
+            crate::state::SLOT_COMMITTED | elementalist::QUAKE | elementalist::TREMOR => {
+                Shape::None
+            }
             _ => Shape::Cylinder,
         },
         // The Dual mage's two autos are punches with a wing behind them, and

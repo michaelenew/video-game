@@ -184,6 +184,14 @@ pub enum EffectKind {
     /// a small shove outward: a lingering area concentrated into an instant,
     /// which is the Strike's idea done with her body.
     FireRing,
+    /// Elementalist. **Quake**: a patch of floor that shakes for its life --
+    /// anyone moving through it staggers, once; anyone standing still is fine,
+    /// which is what makes it a read -- and then **erupts** as it expires:
+    /// damage to everyone in it, and a stone raised at its centre for the
+    /// caster. Placed at the crosshair by Quake and on her own feet by Tremor,
+    /// where the stone comes up under her and takes her with it. See
+    /// `state::World::pay_out`.
+    Quake,
 }
 
 /// How many pieces a ring of fire is drawn as.
@@ -273,6 +281,7 @@ impl EffectKind {
             EffectKind::Downdraft => "downdraft",
             EffectKind::AirRing => "air ring",
             EffectKind::FireRing => "fire ring",
+            EffectKind::Quake => "quake",
         }
     }
 
@@ -313,6 +322,7 @@ impl EffectKind {
             | EffectKind::Downdraft
             | EffectKind::AirRing
             | EffectKind::FireRing => true,
+            EffectKind::Quake => true,
         }
     }
 
@@ -415,6 +425,7 @@ impl EffectKind {
             14 => Some(EffectKind::Downdraft),
             15 => Some(EffectKind::AirRing),
             16 => Some(EffectKind::FireRing),
+            17 => Some(EffectKind::Quake),
             _ => None,
         }
     }
@@ -453,6 +464,7 @@ impl EffectKind {
             EffectKind::Rough => t::rough_life(),
             EffectKind::Updraft | EffectKind::Downdraft => t::draft_life(),
             EffectKind::AirRing => t::air_ring_life(),
+            EffectKind::Quake => t::quake_shake(),
             // Out to its reach at its speed, and gone: a ring that stood
             // still at full size would be a second pillar.
             EffectKind::FireRing => {
@@ -504,6 +516,8 @@ impl EffectKind {
             // Air moves things and hurts nobody.
             EffectKind::Updraft | EffectKind::Downdraft | EffectKind::AirRing => 0,
             EffectKind::FireRing => t::fire_ring_damage(),
+            // The eruption's number; the shake itself only staggers.
+            EffectKind::Quake => t::quake_damage(),
         }
     }
 }
@@ -813,6 +827,7 @@ impl Effect {
             EffectKind::Rough => t::rough_width(),
             EffectKind::Updraft | EffectKind::Downdraft | EffectKind::FireRing => self.reach,
             EffectKind::AirRing => t::air_ring_radius(),
+            EffectKind::Quake => t::quake_radius(),
         }
     }
 

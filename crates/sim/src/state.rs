@@ -599,6 +599,7 @@ pub struct Player {
     /// time one is replayed.
     pub f_held: bool,
     pub r_held: bool,
+    pub side_b_held: bool,
     /// Frames left before each of this class's moves may be thrown again.
     ///
     /// **Per move, and only ever the one you just threw** -- which is what
@@ -1040,6 +1041,7 @@ impl Default for Player {
             charging_stone: NO_STONE,
             f_held: false,
             r_held: false,
+            side_b_held: false,
         }
     }
 }
@@ -1398,9 +1400,20 @@ impl World {
                 // and a look angle is how the two came to disagree.
                 let (from, along) = if leaves.travels() {
                     (p.aim_path.from, p.aim_path.dir())
+                } else if p.class == Class::Elementalist && kind == moves::elementalist::TREMOR {
+                    // On her own feet: Tremor is Quake with its centre set
+                    // to where she is standing, so the stone it leaves comes
+                    // up under her.
+                    (p.pos, V3::ZERO)
                 } else {
                     (p.aim_at(), V3::ZERO)
                 };
+                // **Fire on a stone lights it.** A pillar -- tapped or held --
+                // cast on a stone's top sets fire to the stone. See
+                // `class::Structure::lit`.
+                if leaves == EffectKind::FirePillar {
+                    stones::light_within(&mut self.players, from, m.radius);
+                }
                 // A channelled move goes as far as it was wound to, not as far
                 // as its row says it could -- see `step_channel`. Only the
                 // charge that buys reach: the Strike's `channelled` is a share
@@ -1750,6 +1763,12 @@ impl World {
                     burst.radius,
                 ),
             );
+            // Fire beside a stone lights it; a stone that burst throws its
+            // pieces along the shove that burst it.
+            stones::light_within(&mut self.players, at, burst.radius);
+            if let Some(dir) = burst.debris {
+                debris::blast(&mut self.debris, burst.owner, burst.at, dir);
+            }
         }
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
@@ -1937,6 +1956,7 @@ impl World {
             h.write_u32(p.charging_stone as u32);
             h.write_u32(p.f_held as u32);
             h.write_u32(p.r_held as u32);
+            h.write_u32(p.side_b_held as u32);
             for f in &p.repeat_lock {
                 h.write_u32(*f as u32);
             }
@@ -2997,8 +3017,8 @@ fn step_player(
     p.f_held = input.has(Input::KEY_F);
     let pressed_r = input.has(Input::KEY_R) && !p.r_held;
     p.r_held = input.has(Input::KEY_R);
-    // `R` carries nothing yet; the edge is read so the snapshot has it.
-    let _ = pressed_r;
+    let pressed_side_b = input.has(Input::SIDE_B) && !p.side_b_held;
+    p.side_b_held = input.has(Input::SIDE_B);
 
     let look = V3::from_turns(input.aim_turns());
     // A channel is the aiming, so the body keeps turning through it. Every
@@ -3091,6 +3111,21 @@ fn step_player(
                 // feet are. See `keyed_f`.
                 else if let Some(kind) = pressed_f
                     .then(|| keyed_f(p))
+                    .flatten()
+                    .filter(|k| p.can_throw(*k, &out))
+                {
+                    begin_move(p, who, kind, input, scene, true)
+                }
+                // `R`: Quake on her own feet. The second side button: Quake
+                // where the crosshair is. See `keyed_r` and `keyed_side_b`.
+                else if let Some(kind) = pressed_r
+                    .then(|| keyed_r(p))
+                    .flatten()
+                    .filter(|k| p.can_throw(*k, &out))
+                {
+                    begin_move(p, who, kind, input, scene, true)
+                } else if let Some(kind) = pressed_side_b
+                    .then(|| keyed_side_b(p))
                     .flatten()
                     .filter(|k| p.can_throw(*k, &out))
                 {
@@ -3742,6 +3777,24 @@ fn keyed_f(p: &Player) -> Option<u8> {
     match p.class {
         Class::Elementalist if p.grounded => Some(moves::elementalist::UPDRAFT),
         Class::Elementalist => Some(moves::elementalist::DOWNDRAFT),
+        _ => None,
+    }
+}
+
+/// Which move `R` throws: Tremor, the Quake on her own feet, with them on
+/// the floor. Off it the key carries nothing yet.
+fn keyed_r(p: &Player) -> Option<u8> {
+    match p.class {
+        Class::Elementalist if p.grounded => Some(moves::elementalist::TREMOR),
+        _ => None,
+    }
+}
+
+/// Which move the second side button throws: Quake, wherever the crosshair
+/// is on the floor, from the ground or the air alike.
+fn keyed_side_b(p: &Player) -> Option<u8> {
+    match p.class {
+        Class::Elementalist => Some(moves::elementalist::QUAKE),
         _ => None,
     }
 }
@@ -5385,6 +5438,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
                         h.write_u32(s.rise as u32);
                         hash_v3(h, &s.erupt);
                         h.write_i32(s.scale.raw());
+                        h.write_u32(s.lit as u32);
                     }
                     None => h.write_u32(0),
                 }
@@ -6072,6 +6126,10 @@ impl World {
             self.haul_to_the_grasp(effect);
             return;
         }
+        if effect.kind == EffectKind::Quake {
+            self.erupt_the_quake(effect);
+            return;
+        }
         if effect.kind != EffectKind::Bloodletter || effect.banked <= 0 {
             return;
         }
@@ -6740,6 +6798,46 @@ impl World {
                     if parried {
                         self.players[i].parried = PARRY_FLOURISH;
                     }
+                }
+            }
+
+            // The shake: anybody **moving** through it, on the floor, is
+            // staggered once. Standing still is the answer, and it is the
+            // whole read. The eruption is `pay_out`'s, when the shake ends.
+            EffectKind::Quake => {
+                let radius = effect.field_radius().add(t::body_radius());
+                for i in 0..MAX_PLAYERS {
+                    let p = self.players[i];
+                    let apart = V3::new(
+                        p.pos.x.sub(effect.pos.x),
+                        Fx::ZERO,
+                        p.pos.z.sub(effect.pos.z),
+                    );
+                    if !self.effects_reach(i, effect.owner)
+                        || effect.already_hit(0, i)
+                        || !p.grounded
+                        || apart.flat_len().raw() > radius.raw()
+                        || p.vel.flat_len().raw() <= t::quake_still_speed().raw()
+                    {
+                        continue;
+                    }
+                    effect.take_hit(0, i);
+                    apply_hit(
+                        &mut self.players[i],
+                        Hit {
+                            damage: 0,
+                            hitstun: t::quake_stagger(),
+                            blockstun: t::quake_stagger(),
+                            knockback: Fx::ZERO,
+                            launch: Fx::ZERO,
+                            grabs: 0,
+                            by: effect.owner,
+                            dir: V3::ZERO,
+                            blocked: false,
+                            parried: false,
+                            interrupts: true,
+                        },
+                    );
                 }
             }
 
@@ -8020,7 +8118,11 @@ impl World {
             // The stone goes along the line, pitch included: through the
             // ground aimed down it, up into the air aimed above it.
             Some(Contact::Stone { index, .. }) => {
-                stones::kick(&mut self.players, index, beam.dir());
+                if stones::is_lit(&self.players, index) {
+                    self.burst_the_stone(i, index, beam.dir());
+                } else {
+                    stones::kick(&mut self.players, index, beam.dir());
+                }
                 self.players[i].hit_used = true;
             }
             // A hazard is not a wall. The beam does not stop at the fire, it
@@ -8117,7 +8219,9 @@ impl World {
             // Broken outright, and thrown outward as debris rather than
             // detonated on the spot -- see `crate::debris`.
             Some(Contact::Stone { index, .. }) => {
-                if let Some(at) = stones::destroy(&mut self.players, index) {
+                if stones::is_lit(&self.players, index) {
+                    self.burst_the_stone(i, index, beam.dir());
+                } else if let Some(at) = stones::destroy(&mut self.players, index) {
                     debris::blast(&mut self.debris, i as u8, at, beam.dir());
                 }
                 self.players[i].hit_used = true;
@@ -8284,6 +8388,77 @@ impl World {
         // other first-active-frame hand-off receives, and the signature says
         // so for the day the crack wants the stick.
         let _ = input;
+    }
+
+    /// The shake is over: everyone still in the patch takes the eruption and
+    /// is shoved outward, and a stone comes up at its centre for the caster
+    /// -- under her own feet, for a Tremor, which is what lifts her.
+    fn erupt_the_quake(&mut self, effect: &Effect) {
+        let radius = effect.field_radius().add(t::body_radius());
+        for i in 0..MAX_PLAYERS {
+            let p = self.players[i];
+            let apart = V3::new(
+                p.pos.x.sub(effect.pos.x),
+                Fx::ZERO,
+                p.pos.z.sub(effect.pos.z),
+            );
+            if !self.effects_reach(i, effect.owner) || apart.flat_len().raw() > radius.raw() {
+                continue;
+            }
+            let away = if apart.flat_len().raw() > 0 {
+                apart.normalized()
+            } else {
+                self.players[effect.owner as usize].facing
+            };
+            let (guarding, parried) = guard_against(&p, effect.pos, false);
+            apply_hit(
+                &mut self.players[i],
+                Hit {
+                    damage: effect.damage(),
+                    hitstun: t::stone_erupt_stagger(),
+                    blockstun: t::stone_erupt_stagger(),
+                    knockback: t::quake_push(),
+                    launch: Fx::ZERO,
+                    grabs: 0,
+                    by: effect.owner,
+                    dir: away,
+                    blocked: guarding,
+                    parried,
+                    interrupts: true,
+                },
+            );
+            if parried {
+                self.players[i].parried = PARRY_FLOURISH;
+            }
+        }
+        let owner = effect.owner as usize;
+        if owner < MAX_PLAYERS {
+            let field = stones::gather(&self.players);
+            let at = aim::settle(effect.pos, &field);
+            stones::raise(&mut self.players[owner], class::Structure::raised(at));
+        }
+    }
+
+    /// A lit stone, shoved or broken: it goes, its pieces fly along `dir` as
+    /// burning debris, and a cloud of embers is left where it stood.
+    fn burst_the_stone(&mut self, owner: usize, index: usize, dir: V3) {
+        let Some(middle) = stones::destroy(&mut self.players, index) else {
+            return;
+        };
+        debris::blast(&mut self.debris, owner as u8, middle, dir);
+        let class = self.players[owner].class;
+        spawn_effect(
+            &mut self.effects,
+            Effect::cast(
+                EffectKind::Embers,
+                owner as u8,
+                class,
+                moves::elementalist::CINDER,
+                middle,
+                V3::ZERO,
+                t::embers_radius(),
+            ),
+        );
     }
 
     /// Put a draft's column under the Elementalist's feet.

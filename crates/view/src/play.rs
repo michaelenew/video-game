@@ -640,7 +640,9 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // anything above.
         (Class::Elementalist, 7) => Clip::ElementalistCinder,
         (Class::Elementalist, 8) => Clip::ElementalistUpdraft,
-        (Class::Elementalist, _) => Clip::ElementalistDowndraft,
+        (Class::Elementalist, 9) => Clip::ElementalistDowndraft,
+        (Class::Elementalist, 10) => Clip::ElementalistQuake,
+        (Class::Elementalist, _) => Clip::ElementalistTremor,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,

@@ -22,6 +22,8 @@ const M: u16 = Input::MIDDLE;
 const E: u16 = Input::MECHANIC;
 const Q: u16 = Input::SPECIAL;
 const F: u16 = Input::KEY_F;
+const RK: u16 = Input::KEY_R;
+const SIDE_B: u16 = Input::SIDE_B;
 const LOOK_RIGHT: u16 = 0;
 const LOOK_LEFT: u16 = 1 << 15;
 
@@ -1157,4 +1159,171 @@ fn a_standing_stone_under_the_downdraft_is_pressed_into_the_floor() {
     run(&mut w, 2, 0, 0);
     assert!(stones_of(&w).is_empty(), "pressed into the floor");
     assert_eq!(scars(&w).len(), 1, "and broken ground where it stood");
+}
+
+// ---------------------------------------------------------------------------
+// Fire on earth, and the two Quakes -- M4.
+// ---------------------------------------------------------------------------
+
+fn quakes(w: &World) -> Vec<Effect> {
+    effects_of(w, EffectKind::Quake)
+}
+
+#[test]
+fn the_second_side_button_is_quake_and_r_is_tremor() {
+    let mut w = elementalist();
+    run(&mut w, 1, SIDE_B, 0);
+    assert_eq!(doing(&w), Some(e::QUAKE));
+    let mut w = elementalist();
+    run(&mut w, 1, RK, 0);
+    assert_eq!(doing(&w), Some(e::TREMOR));
+    // Off the floor, R carries nothing yet; the side button still quakes.
+    let mut w = elementalist();
+    aloft(&mut w, 3.0);
+    run(&mut w, 1, RK, 0);
+    assert_eq!(doing(&w), None);
+    run(&mut w, 1, SIDE_B, 0);
+    assert_eq!(doing(&w), Some(e::QUAKE));
+}
+
+#[test]
+fn a_quake_shakes_where_the_crosshair_is_and_staggers_only_what_moves() {
+    let mut w = elementalist();
+    let spot = at(-1.0, 0.0, 8.0);
+    let pitch = crosshair_onto_the_floor_at(
+        &w,
+        spot,
+        sim::moves::get(Class::Elementalist, e::QUAKE).reach,
+    );
+    throw_looking(&mut w, SIDE_B, pitch);
+    let q = quakes(&w);
+    assert_eq!(q.len(), 1, "the patch is down");
+    assert!(
+        q[0].pos.x.sub(spot.x).abs().raw() < Fx::ONE.raw(),
+        "where the crosshair was: {} against {}",
+        q[0].pos.x.to_int(),
+        spot.x.to_int()
+    );
+    // A body standing still in it is fine.
+    w.players[1].pos = spot;
+    run(&mut w, 6, 0, 0);
+    assert!(
+        !w.players[1].action.stunned(),
+        "standing still is the answer"
+    );
+    // Walking through it is not.
+    run(&mut w, 6, 0, Input::W);
+    assert!(w.players[1].action.stunned(), "a mover is staggered");
+}
+
+#[test]
+fn a_quake_erupts_when_the_shake_ends_and_leaves_a_stone() {
+    let mut w = elementalist();
+    let spot = at(-1.0, 0.0, 8.0);
+    let pitch = crosshair_onto_the_floor_at(
+        &w,
+        spot,
+        sim::moves::get(Class::Elementalist, e::QUAKE).reach,
+    );
+    throw_looking(&mut w, SIDE_B, pitch);
+    w.players[1].pos = spot;
+    let full = w.players[1].health;
+    run(&mut w, t::quake_shake() as u32 + 2, 0, 0);
+    assert!(quakes(&w).is_empty(), "the shake is over");
+    assert_eq!(
+        full - w.players[1].health,
+        t::quake_damage(),
+        "and it erupted on them"
+    );
+    let s = stones_of(&w);
+    assert_eq!(s.len(), 1, "leaving a stone");
+    assert!(
+        s[0].at.x.sub(spot.x).abs().raw() < Fx::ONE.raw(),
+        "at its centre"
+    );
+}
+
+#[test]
+fn a_tremor_is_a_quake_on_her_own_feet_and_the_stone_lifts_her() {
+    let mut w = elementalist();
+    let feet = w.players[0].pos;
+    throw(&mut w, RK);
+    let q = quakes(&w);
+    assert_eq!(q.len(), 1);
+    assert!(
+        q[0].pos.x.sub(feet.x).abs().raw() < Fx::ratio(1, 2).raw(),
+        "centred on her"
+    );
+    run(&mut w, t::quake_shake() as u32 + 30, 0, 0);
+    let s = stones_of(&w);
+    assert_eq!(s.len(), 1, "the stone came up");
+    assert!(
+        w.players[0].pos.y.raw() > Fx::ONE.raw(),
+        "under her, and took her with it: {} m up",
+        w.players[0].pos.y.to_int()
+    );
+}
+
+#[test]
+fn a_pillar_cast_on_a_stone_lights_it_and_a_lit_stone_burns_its_stander() {
+    let mut w = elementalist();
+    let spot = at(-2.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    assert_eq!(stones_of(&w)[0].lit, 0);
+    let pitch = crosshair_onto_the_floor_at(&w, spot, t::raise_reach());
+    strike(&mut w, pitch, 0);
+    assert!(stones_of(&w)[0].lit > 0, "lit by the pillar cast on it");
+    // Somebody standing on top of it.
+    let top = stones_of(&w)[0].top();
+    w.players[1].pos = V3::new(spot.x, top, spot.z);
+    let full = w.players[1].health;
+    run(&mut w, 40, 0, 0);
+    assert!(w.players[1].health < full, "a lit stone is a stove");
+    // And it goes out on its own clock.
+    run(&mut w, t::lit_stone_life() as u32, 0, 0);
+    assert_eq!(stones_of(&w)[0].lit, 0);
+}
+
+#[test]
+fn a_cinder_bursting_beside_a_stone_lights_it() {
+    let mut w = elementalist();
+    let spot = at(-1.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    // Thrown at the stone: the ember bursts on its near face, beside it.
+    throw(&mut w, M);
+    fly_out(&mut w, 0, 120);
+    assert!(stones_of(&w)[0].lit > 0);
+}
+
+#[test]
+fn kicking_a_lit_stone_bursts_it_into_burning_debris() {
+    let mut w = elementalist();
+    let spot = at(-2.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    sim::stones::light(&mut w.players, 0);
+    assert!(stones_of(&w)[0].lit > 0);
+    // The beam, aimed at the stone.
+    let pitch =
+        crosshair_onto_the_floor_at(&w, spot, sim::moves::get(Class::Elementalist, 0).reach);
+    throw_looking(&mut w, L, pitch);
+    assert!(stones_of(&w).is_empty(), "the stone burst");
+    assert!(w.debris.iter().flatten().count() > 0, "into debris");
+    assert_eq!(clouds(&w).len(), 1, "and a cloud of embers where it stood");
+}
+
+#[test]
+fn an_unlit_stone_kicked_is_still_only_kicked() {
+    let mut w = elementalist();
+    let spot = at(-2.0, 0.0, 8.0);
+    sim::stones::raise(&mut w.players[0], Structure::raised(spot));
+    run(&mut w, 30, 0, 0);
+    let pitch =
+        crosshair_onto_the_floor_at(&w, spot, sim::moves::get(Class::Elementalist, 0).reach);
+    throw_looking(&mut w, L, pitch);
+    assert_eq!(stones_of(&w).len(), 1, "still there");
+    assert!(stones_of(&w)[0].launched, "and moving");
+    assert!(clouds(&w).is_empty());
 }

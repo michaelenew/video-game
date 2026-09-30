@@ -93,6 +93,9 @@ pub struct Burst {
     pub slot: u8,
     /// How big a cloud: the Cinder spray's own, or a lit shot's smaller one.
     pub radius: Fx,
+    /// A lit stone burst here: the direction its debris flies, for the world
+    /// to throw. `None` for every ordinary burst.
+    pub debris: Option<V3>,
 }
 
 /// Every burst one frame of flight can produce: at most one per shot.
@@ -360,12 +363,17 @@ pub fn step(
             _ if shot.lit => Some(t::lit_burst_radius()),
             _ => None,
         };
-        let mut burst_at = |at: V3| {
+        let mut burst_at = |at: V3, debris: Option<V3>| {
             bursts[n] = Some(Burst {
                 at,
                 owner: shot.owner,
                 slot: shot.gale.slot(),
-                radius: burst_radius.unwrap_or(Fx::ZERO),
+                radius: if debris.is_some() {
+                    t::embers_radius()
+                } else {
+                    burst_radius.unwrap_or(Fx::ZERO)
+                },
+                debris,
             });
         };
 
@@ -396,7 +404,7 @@ pub fn step(
                     },
                 );
                 if burst_radius.is_some() {
-                    burst_at(leg.at(dist));
+                    burst_at(leg.at(dist), None);
                 }
                 *slot = None;
                 continue;
@@ -406,7 +414,7 @@ pub fn step(
                     beast.take_hit(part, shot.worth(m.damage));
                 }
                 if burst_radius.is_some() {
-                    burst_at(leg.at(dist));
+                    burst_at(leg.at(dist), None);
                 }
                 *slot = None;
                 continue;
@@ -416,21 +424,33 @@ pub fn step(
                     // Kicked along the disc's travel, the beam's shove made
                     // wide, and worth what the disc has become. Once per
                     // stone: the disc is wider than a stone and overlaps it
-                    // for several frames on the way past.
+                    // for several frames on the way past. **A lit stone
+                    // shoved bursts instead**, into burning debris along the
+                    // disc's travel; and a burning disc lights what it
+                    // passes, so the next shove is the burst.
                     let bit = 1u8 << (index as u8 & 7);
-                    if shot.pushed & bit == 0 && t::gale_stone_push().raw() > 0 {
+                    if shot.pushed & bit == 0 {
                         shot.pushed |= bit;
-                        stones::shove(
-                            players,
-                            index,
-                            shot.dir,
-                            t::bolt_knock_speed().mul(t::gale_stone_push()).mul(swell),
-                        );
+                        if stones::is_lit(players, index) {
+                            if let Some(middle) = stones::destroy(players, index) {
+                                burst_at(middle, Some(shot.dir));
+                            }
+                        } else if t::gale_stone_push().raw() > 0 {
+                            stones::shove(
+                                players,
+                                index,
+                                shot.dir,
+                                t::bolt_knock_speed().mul(t::gale_stone_push()).mul(swell),
+                            );
+                            if shot.lit {
+                                stones::light(players, index);
+                            }
+                        }
                     }
                     // And on it goes: a wall of air is not stopped by a rock.
                 } else {
                     if burst_radius.is_some() {
-                        burst_at(leg.at(dist));
+                        burst_at(leg.at(dist), None);
                     }
                     *slot = None;
                     continue;
@@ -452,7 +472,7 @@ pub fn step(
         // aim stopped at is where it bursts.
         let flying = shot.travelled.raw() < m.reach.raw() && crate::arena::inside(shot.pos);
         if !flying && burst_radius.is_some() && crate::arena::inside(shot.pos) {
-            burst_at(shot.pos);
+            burst_at(shot.pos, None);
         }
         *slot = flying.then_some(shot);
     }

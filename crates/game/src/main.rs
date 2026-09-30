@@ -924,6 +924,8 @@ struct EffectLook {
     wing_light: Handle<StandardMaterial>,
     wing_dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
+    /// A stone with fire on it. See `sim::class::Structure::lit`.
+    stone_lit: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
     /// frames, so it has to read instantly or not at all.
@@ -1173,6 +1175,14 @@ fn setup(
         stone: materials.add(StandardMaterial {
             base_color: Color::srgb(0.52, 0.50, 0.47),
             perceptual_roughness: 0.95,
+            ..default()
+        }),
+        // A lit stone: the same rock, glowing at the seams. Bright enough to
+        // read as a stove from across the arena, which is what it is.
+        stone_lit: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.62, 0.40, 0.28),
+            emissive: LinearRgba::rgb(2.6, 0.9, 0.2),
+            perceptual_roughness: 0.9,
             ..default()
         }),
         beam: materials.add(StandardMaterial {
@@ -1526,14 +1536,30 @@ fn fade_own_body(
 /// exactly the size bodies and shots are stopped at. Each at its own size.
 fn place_structures(
     sim: Res<Sim>,
-    mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &StructureMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
     let field = sim::stones::gather(&sim.cur.players);
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
         let Some(raised) = field[tag.owner * sim::class::MAX_STRUCTURES + tag.index] else {
             *vis = Visibility::Hidden;
             continue;
         };
+        // Lit, it glows: what a stone is worth to stand on or hide behind
+        // is a thing the other player has to be able to read.
+        let want = if raised.lit > 0 {
+            &look.stone_lit
+        } else {
+            &look.stone
+        };
+        if skin.0 != *want {
+            skin.0 = want.clone();
+        }
         let radius = raised.radius().to_f32_for_render();
         // It is earth: it climbs out of the floor rather than appearing in the
         // air. The whole column slides up from fully buried, so the visible
@@ -2434,6 +2460,16 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // visibly is not there the frame the leash breaks. The bead size is
         // presentation, unlike the burst above: nothing is hit by the line
         // after its one pass, so there is no volume here to be honest about.
+        // The Quake's patch: a low disc of broken ground at the radius the
+        // shake reads, shivering while it shakes.
+        EffectKind::Quake if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Stone,
+            at + Vec3::X * ((effect.age % 3) as f32 - 1.0) * QUAKE_SHIVER,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT,
+        )),
         // A draft: the column the bodies are tested in, drawn as air.
         EffectKind::Updraft | EffectKind::Downdraft if part == 0 => {
             let slab = effect.draft_volume();
@@ -2527,6 +2563,10 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         _ => None,
     }
 }
+
+/// How far the Quake's patch shivers from side to side while it shakes.
+/// Presentation, not a rule: the hit test does not move.
+const QUAKE_SHIVER: f32 = 0.04;
 
 /// How tall broken ground is drawn. Presentation, not a rule: the slow reads
 /// a body on the floor, and a slab this low is a texture rather than a wall.

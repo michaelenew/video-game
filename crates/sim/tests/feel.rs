@@ -361,8 +361,10 @@ fn best_case(m: &Move) -> i32 {
         }
         // The burst is a single detonation at the far end of the line, so it
         // is the line's own hit plus one of it rather than a number per tick.
-        Some(EffectKind::LanceBurst) => {
-            m.damage * swings + EffectKind::LanceBurst.damage(m)
+        // A Quake is the same shape: a shake that only staggers, and then one
+        // eruption.
+        Some(kind @ (EffectKind::LanceBurst | EffectKind::Quake)) => {
+            m.damage * swings + kind.damage(m)
         }
         // A pool is what a hit leaves, not what a cast places, and it deals
         // nothing on its own. No move's row says it; listed so the match is
@@ -547,9 +549,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 19,
-            // Ten: the seven, the Cinder spray on middle click in both rows,
-            // and the two drafts on `F`. See `docs/design/elementalist-v2.md`.
-            Class::Elementalist => 10,
+            // Twelve: the seven, the Cinder spray on middle click in both
+            // rows, the two drafts on `F`, and Quake on the second side
+            // button with Tremor on `R`. See `docs/design/elementalist-v2.md`.
+            Class::Elementalist => 12,
             Class::ShadowReaver => 4,
             // Five: the auto was appended when the scythe arrived, so the
             // four rows that came before it kept their knobs. See

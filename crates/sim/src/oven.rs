@@ -648,6 +648,15 @@ scalars! {
     FireRingDamage,   "Elementalist", "Fire ring, damage",                    Int,     0,        400;
     FireRingPush,     "Elementalist", "Fire ring, push (m/s)",                Fixed,   0,        fx(30,1);
     FireRingStagger,  "Elementalist", "Fire ring, stagger",                   Frames,  0,        60;
+    // Fire on earth, and the two Quakes -- M4.
+    LitStoneLife,     "Elementalist", "Lit stone, burns for",                 Frames,  1,        1800;
+    LitStoneBurn,     "Elementalist", "Lit stone, burn per tick",             Int,     0,        200;
+    QuakeRadius,      "Elementalist", "Quake, radius",                        Fixed,   fx(1,2),  fx(8,1);
+    QuakeShake,       "Elementalist", "Quake, shakes for",                    Frames,  1,        180;
+    QuakeStagger,     "Elementalist", "Quake, stagger on a mover",            Frames,  0,        60;
+    QuakeStillSpeed,  "Elementalist", "Quake, still means under (m/s)",       Fixed,   0,        fx(8,1);
+    QuakeDamage,      "Elementalist", "Quake, eruption damage",               Int,     0,        400;
+    QuakePush,        "Elementalist", "Quake, eruption push (m/s)",           Fixed,   0,        fx(30,1);
 }
 
 // ---------------------------------------------------------------------------

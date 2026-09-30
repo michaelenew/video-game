@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 375] = [
+pub const SCALARS: [i32; 383] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -383,6 +383,14 @@ pub const SCALARS: [i32; 375] = [
               60, // elementalist.fire_ring,_damage = 60
           458752, // elementalist.fire_ring,_push_(m/s) = 7
               14, // elementalist.fire_ring,_stagger = 14
+             300, // elementalist.lit_stone,_burns_for = 300
+               8, // elementalist.lit_stone,_burn_per_tick = 8
+          163840, // elementalist.quake,_radius = 2.5
+              40, // elementalist.quake,_shakes_for = 40
+              18, // elementalist.quake,_stagger_on_a_mover = 18
+           65536, // elementalist.quake,_still_means_under_(m/s) = 1
+              90, // elementalist.quake,_eruption_damage = 90
+          393216, // elementalist.quake,_eruption_push_(m/s) = 6
 ];
 
 #[rustfmt::skip]
@@ -414,7 +422,7 @@ pub const AIR: [i32; 24] = [
 ];
 
 #[rustfmt::skip]
-pub const MOVES: [i32; 1410] = [
+pub const MOVES: [i32; 1470] = [
                4, // move.bulwark.bash.startup = 4
                3, // move.bulwark.bash.active = 3
               10, // move.bulwark.bash.recovery = 10
@@ -1495,6 +1503,66 @@ pub const MOVES: [i32; 1410] = [
                0, // move.elementalist.downdraft.steps_forward_(m) = 0
                0, // move.elementalist.downdraft.drinks_of_a_pool_(%) = 0
                0, // move.elementalist.downdraft.impact_freeze = 0
+              18, // move.elementalist.quake.startup = 18
+               2, // move.elementalist.quake.active = 2
+              20, // move.elementalist.quake.recovery = 20
+               0, // move.elementalist.quake.damage = 0
+          589824, // move.elementalist.quake.reach = 9
+               0, // move.elementalist.quake.radius = 0
+              18, // move.elementalist.quake.hitstun = 18
+               8, // move.elementalist.quake.blockstun = 8
+               0, // move.elementalist.quake.knockback = 0
+              20, // move.elementalist.quake.mobility_(%) = 20
+               0, // move.elementalist.quake.aerial_hang = 0
+               0, // move.elementalist.quake.unblockable = off
+               1, // move.elementalist.quake.hits_crouching = on
+               0, // move.elementalist.quake.needs_mechanic = off
+               0, // move.elementalist.quake.launch = 0
+               0, // move.elementalist.quake.self_lift = 0
+               0, // move.elementalist.quake.grab_hold = 0
+              17, // move.elementalist.quake.leaves_behind = 17
+               0, // move.elementalist.quake.health_cost = 0
+               0, // move.elementalist.quake.leech_(%) = 0
+               1, // move.elementalist.quake.line_of_effect_(0-4) = 1
+               0, // move.elementalist.quake.swing_arc_(turns) = 0
+               0, // move.elementalist.quake.hits_again_every = 0
+               0, // move.elementalist.quake.channel,_longest_hold = 0
+               0, // move.elementalist.quake.channel,_reach_at_no_hold = 0
+             100, // move.elementalist.quake.repeat_lockout_(%) = 100
+               0, // move.elementalist.quake.reactivate_no_sooner_than = 0
+               0, // move.elementalist.quake.steps_forward_(m) = 0
+               0, // move.elementalist.quake.drinks_of_a_pool_(%) = 0
+               0, // move.elementalist.quake.impact_freeze = 0
+              14, // move.elementalist.tremor.startup = 14
+               2, // move.elementalist.tremor.active = 2
+              18, // move.elementalist.tremor.recovery = 18
+               0, // move.elementalist.tremor.damage = 0
+               0, // move.elementalist.tremor.reach = 0
+               0, // move.elementalist.tremor.radius = 0
+              18, // move.elementalist.tremor.hitstun = 18
+               8, // move.elementalist.tremor.blockstun = 8
+               0, // move.elementalist.tremor.knockback = 0
+              20, // move.elementalist.tremor.mobility_(%) = 20
+               0, // move.elementalist.tremor.aerial_hang = 0
+               0, // move.elementalist.tremor.unblockable = off
+               1, // move.elementalist.tremor.hits_crouching = on
+               0, // move.elementalist.tremor.needs_mechanic = off
+               0, // move.elementalist.tremor.launch = 0
+               0, // move.elementalist.tremor.self_lift = 0
+               0, // move.elementalist.tremor.grab_hold = 0
+              17, // move.elementalist.tremor.leaves_behind = 17
+               0, // move.elementalist.tremor.health_cost = 0
+               0, // move.elementalist.tremor.leech_(%) = 0
+               0, // move.elementalist.tremor.line_of_effect_(0-4) = 0
+               0, // move.elementalist.tremor.swing_arc_(turns) = 0
+               0, // move.elementalist.tremor.hits_again_every = 0
+               0, // move.elementalist.tremor.channel,_longest_hold = 0
+               0, // move.elementalist.tremor.channel,_reach_at_no_hold = 0
+             100, // move.elementalist.tremor.repeat_lockout_(%) = 100
+               0, // move.elementalist.tremor.reactivate_no_sooner_than = 0
+               0, // move.elementalist.tremor.steps_forward_(m) = 0
+               0, // move.elementalist.tremor.drinks_of_a_pool_(%) = 0
+               0, // move.elementalist.tremor.impact_freeze = 0
                7, // move.blood_mage.bloodletter.startup = 7
                3, // move.blood_mage.bloodletter.active = 3
               14, // move.blood_mage.bloodletter.recovery = 14

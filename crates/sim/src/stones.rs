@@ -72,6 +72,7 @@ impl Structure {
             // field but one.
             erupt: V3::ZERO,
             scale: Fx::ONE,
+            lit: 0,
         }
     }
 
@@ -260,6 +261,8 @@ pub fn step(players: &mut [Player; MAX_PLAYERS]) {
         // Saturating, because this is not a lifetime: once a stone is out of
         // the ground the number stops mattering and the stone stays.
         stone.age = stone.age.saturating_add(1);
+        // Fire on it burns down.
+        stone.lit = stone.lit.saturating_sub(1);
         // Gravity always. A stone at rest has its fall zeroed by the floor
         // every frame, which costs nothing and means resting needs no flag.
         stone.vel.y = stone.vel.y.add(t::gravity().mul(DT));
@@ -620,6 +623,30 @@ pub fn raise(p: &mut Player, stone: Structure) -> Option<usize> {
     Some(slot)
 }
 
+/// Set fire to the stone at `index`, for `tuning::lit_stone_life`.
+pub fn light(players: &mut [Player; MAX_PLAYERS], index: usize) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.lit = t::lit_stone_life();
+    }
+    scatter(players, &field);
+}
+
+/// Set fire to every stone whose base is within `radius` of `at`.
+pub fn light_within(players: &mut [Player; MAX_PLAYERS], at: V3, radius: Fx) {
+    let inside = within(players, at, radius);
+    for (index, hit) in inside.into_iter().enumerate() {
+        if hit {
+            light(players, index);
+        }
+    }
+}
+
+/// Is the stone at `index` on fire?
+pub fn is_lit(players: &[Player; MAX_PLAYERS], index: usize) -> bool {
+    gather(players)[index].is_some_and(|s| s.lit > 0)
+}
+
 /// Send the stone at `index` straight up at `speed`, as an Updraft does. Not
 /// a launch: it goes up and comes down where it was, and a stone coming down
 /// hurts nobody -- what it is for is being earth in the air, where the beam
@@ -831,6 +858,14 @@ pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
             let apart = V3::new(p.pos.x.sub(stone.at.x), Fx::ZERO, p.pos.z.sub(stone.at.z));
             if apart.flat_len().raw() >= reach.raw() {
                 continue;
+            }
+            // A lit stone is a stove: standing on it burns, on the effects'
+            // own tick. Never its owner, like everything else a stone does.
+            if stone.lit > 0
+                && stone.lit % t::effect_tick_frames().max(1) == 0
+                && p.pos.y.sub(stone.top()).abs().raw() <= arena::SKIN.raw()
+            {
+                p.wound(t::lit_stone_burn());
             }
             match stone.phase() {
                 // The churn is felt through the floor, so jumping clears it.

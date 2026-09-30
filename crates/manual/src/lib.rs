@@ -338,6 +338,18 @@ pub const SECTIONS: &[Section] = &[
                 "F",
                 "Updraft, standing: a column of air on your own body, and everything in it goes up -- you included, each by their own weight; a stone in it is lofted. In the air it is Downdraft: the same column under you, driving you and everything in it down. Land while it is still blowing and the air breaks outward from your feet, shoving everyone near you away. Land it into fire -- a pillar, a cloud of embers -- and the fire goes out and a ring of it races outward instead.",
             ),
+            e(
+                "Mouse side button B (or O)",
+                "Quake, where the crosshair is on the floor. The patch shakes through a slow wind-up: anyone moving through it staggers, anyone standing still is fine. Then it erupts -- damage to everyone in it -- and leaves a stone at its centre.",
+            ),
+            e(
+                "R",
+                "Tremor: Quake on your own feet. The same shake and the same eruption, and the stone comes up under you and takes you with it -- the structure jump with a telegraph attached, for when somebody has closed on you.",
+            ),
+            e(
+                "Fire on a stone",
+                "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it -- your beam's kick included. Earth builds the field; fire decides who may use it.",
+            ),
         ],
     },
     Section {

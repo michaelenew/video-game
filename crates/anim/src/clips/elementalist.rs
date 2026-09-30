@@ -88,6 +88,8 @@ pub fn clips() -> Vec<Recipe> {
         cinder(),
         updraft(),
         downdraft(),
+        quake(),
+        tremor(),
     ]
 }
 
@@ -1156,4 +1158,233 @@ fn pressed_through() -> Pose {
         .hip_r(62.0, 10.0, 0.0)
         .knee_r(92.0)
         .ankles(22.0, 0.0, 0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Quake and Tremor
+// ---------------------------------------------------------------------------
+
+/// The stamp: the left foot lifted and driven down, and both hands pushed out
+/// low toward the patch, palms down -- pressing the shake into the floor over
+/// there.
+///
+/// The stamp is the tell, and it is the one thing nothing else in the file
+/// does: every other move keeps both feet planted. A foot in the air for a
+/// third of a second is readable from anywhere.
+fn quake() -> Recipe {
+    let clip = Clip::ElementalistQuake;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let lift = (contact / 3).max(2);
+    let high = (contact * 2 / 3).max(lift + 1);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A stamp and a push. The left knee comes up high through the \
+                first two thirds of the startup while the hands draw back to \
+                the hips, then the foot is driven down on contact as both \
+                hands push out low and forward, palms to the floor. The push \
+                is what says *over there*; Tremor keeps the stamp and drops \
+                the hands straight down instead."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(lift, knee_lifting(), Ease::SMOOTH),
+            Key::eased(high, knee_high(), Ease::ANTICIPATE),
+            Key::eased(contact, stamped_forward(), Ease::STRIKE),
+            Key::eased(recover, pushed_low(), Ease::OUT),
+            Key::eased(settle, standing_back(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// Weight on to the right leg, the left knee starting up, hands drawing back.
+fn knee_lifting() -> Pose {
+    let (_, r) = ankles();
+    ready()
+        .hips(0.0, -0.03, 0.0)
+        .spine(4.0, 3.0, 0.0)
+        .chest(2.0, 2.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+        .shoulders(-6.0, 22.0, 0.0)
+        .elbows(60.0)
+        .wrists(-20.0, 0.0, 0.0)
+        .hip_l(40.0, 6.0, 0.0)
+        .knee_l(70.0)
+        .ankle_l(20.0, 0.0, 0.0)
+        .plant_r(r)
+        .toe_r(10.0)
+}
+
+/// The top of the stamp: the left knee at hip height, the hands back at the
+/// hips, the body a shade taller on the standing leg.
+fn knee_high() -> Pose {
+    let (_, r) = ankles();
+    ready()
+        .hips(0.0, -0.01, 0.0)
+        .spine(0.0, 4.0, 0.0)
+        .chest(-2.0, 3.0, 0.0)
+        .head(6.0, 0.0, 0.0)
+        .shoulders(-14.0, 24.0, 4.0)
+        .elbows(70.0)
+        .wrists(-26.0, 0.0, 0.0)
+        .hip_l(78.0, 8.0, 0.0)
+        .knee_l(100.0)
+        .ankle_l(26.0, 0.0, 0.0)
+        .plant_r(r)
+        .toe_r(10.0)
+}
+
+/// Contact: the foot driven down and planted, both hands pushed out low and
+/// forward, palms down, the body dropping into the stamp.
+fn stamped_forward() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.12, 0.03)
+            .spine(16.0, 0.0, 0.0)
+            .chest(10.0, 0.0, 0.0)
+            .head(0.0, 0.0, 0.0)
+            .shoulders(52.0, 12.0, -10.0)
+            .elbows(14.0)
+            .wrists(48.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The end of the active window: the push carried a little further and lower.
+fn pushed_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.13, 0.035)
+            .spine(18.0, 0.0, 0.0)
+            .chest(12.0, 0.0, 0.0)
+            .head(-2.0, 0.0, 0.0)
+            .shoulders(46.0, 12.0, -12.0)
+            .elbows(8.0)
+            .wrists(54.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Recovery: coming back up out of the stamp.
+fn standing_back() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.06, 0.01)
+            .spine(6.0, 0.0, 0.0)
+            .chest(3.0, 0.0, 0.0)
+            .head(-2.0, 0.0, 0.0)
+            .shoulders(28.0, 18.0, -8.0)
+            .elbows(50.0)
+            .wrists(0.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The same stamp, and both arms driven straight down at her sides as the body
+/// drops into a deep crouch -- the shake pressed into the floor under her own
+/// feet. Down and narrow, where Quake is forward.
+fn tremor() -> Recipe {
+    let clip = Clip::ElementalistTremor;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let lift = (contact / 3).max(2);
+    let high = (contact * 2 / 3).max(lift + 1);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "Quake's stamp with the hands going the other way: instead of \
+                pushing out toward a patch over there they are driven straight \
+                down past the hips, and the whole body drops with them into \
+                the deepest crouch in the file. Everything about it points at \
+                the floor she is standing on, which is where the patch is."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(lift, knee_lifting(), Ease::SMOOTH),
+            Key::eased(high, knee_high_arms_up(), Ease::ANTICIPATE),
+            Key::eased(contact, stamped_down(), Ease::STRIKE),
+            Key::eased(recover, pressed_low(), Ease::OUT),
+            Key::eased(settle, rising_back(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The top of Tremor's stamp: the knee high, and the arms raised to the
+/// shoulders ready to come down.
+fn knee_high_arms_up() -> Pose {
+    let (_, r) = ankles();
+    ready()
+        .hips(0.0, -0.01, 0.0)
+        .spine(-2.0, 4.0, 0.0)
+        .chest(-4.0, 3.0, 0.0)
+        .head(6.0, 0.0, 0.0)
+        .shoulders(70.0, 30.0, -10.0)
+        .elbows(80.0)
+        .wrists(20.0, 0.0, 0.0)
+        .hip_l(78.0, 8.0, 0.0)
+        .knee_l(100.0)
+        .ankle_l(26.0, 0.0, 0.0)
+        .plant_r(r)
+        .toe_r(10.0)
+}
+
+/// Contact: the foot driven down, both arms straight down at her sides, palms
+/// flat, the body dropped into a deep crouch.
+fn stamped_down() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.28, 0.0)
+            .spine(10.0, 0.0, 0.0)
+            .chest(6.0, 0.0, 0.0)
+            .head(8.0, 0.0, 0.0)
+            .shoulders(-8.0, 14.0, -20.0)
+            .elbows(6.0)
+            .wrists(56.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The end of the active window: lower still, the arms pressed a shade back.
+fn pressed_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.30, 0.0)
+            .spine(12.0, 0.0, 0.0)
+            .chest(7.0, 0.0, 0.0)
+            .head(9.0, 0.0, 0.0)
+            .shoulders(-14.0, 14.0, -22.0)
+            .elbows(4.0)
+            .wrists(60.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Recovery: standing back up out of the crouch.
+fn rising_back() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.12, 0.0)
+            .spine(5.0, 0.0, 0.0)
+            .chest(2.0, 0.0, 0.0)
+            .head(3.0, 0.0, 0.0)
+            .shoulders(8.0, 18.0, -10.0)
+            .elbows(50.0)
+            .wrists(-4.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
 }
