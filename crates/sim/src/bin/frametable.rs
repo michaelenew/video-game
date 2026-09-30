@@ -448,9 +448,15 @@ fn walking_at(percent: u8) -> Fx {
 
 /// One decimal place, without touching floating point.
 fn tenths(v: Fx) -> String {
-    // Rounded, not truncated: 4.199 should read as 4.2, not 4.1.
-    let t = (v.raw() as i64 * 10 + (1 << 15)) >> 16;
-    format!("{}.{}", t / 10, (t % 10).abs())
+    // Rounded, not truncated: 4.199 should read as 4.2, not 4.1. The sign is
+    // printed on its own so a value between minus one and zero keeps it.
+    let t = ((v.raw() as i64).abs() * 10 + (1 << 15)) >> 16;
+    format!(
+        "{}{}.{}",
+        if v.raw() < 0 { "-" } else { "" },
+        t / 10,
+        t % 10
+    )
 }
 
 fn percent(v: Fx) -> i64 {
@@ -458,8 +464,13 @@ fn percent(v: Fx) -> i64 {
 }
 
 fn hundredths(v: Fx) -> String {
-    let t = (v.raw() as i64 * 100 + (1 << 15)) >> 16;
-    format!("{}.{:02}", t / 100, (t % 100).abs())
+    let t = ((v.raw() as i64).abs() * 100 + (1 << 15)) >> 16;
+    format!(
+        "{}{}.{:02}",
+        if v.raw() < 0 { "-" } else { "" },
+        t / 100,
+        t % 100
+    )
 }
 
 /// Apex and airtime for a jump held `hold` frames.

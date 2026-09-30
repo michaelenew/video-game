@@ -1,5 +1,5 @@
 ---
-status: proposed 2026-09-30 — decided in design review, nothing built
+status: built 2026-09-30 — every decided item is in the game and unplayed; Blast, Hover and the Trail wait on a word
 decided: 2026-09-30
 supersedes: the input map, the air row and the "Fissure has no button" state of kits/elementalist.md, once built
 sources: kits/elementalist.md, controls.md, exploration/0001–0004, docs/archive/combat-design/elementalist-skills.md

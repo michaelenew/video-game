@@ -1,5 +1,5 @@
 ---
-status: action plan — opened 2026-09-30, nothing carried out
+status: action plan — opened 2026-09-30, M1–M6 carried out the same day; the human checkpoints C1–C5 are still to be played
 opened: 2026-09-30
 implements: ../elementalist-v2.md
 ---

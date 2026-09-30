@@ -6,10 +6,11 @@ sources: docs/archive/combat-design/elementalist-skills.md, docs/archive/combat-
 
 # Elementalist — kit
 
-> **v2 is proposed, 2026-09-30, and nothing of it is built** — [../elementalist-v2.md](../elementalist-v2.md).
-> It adds four inputs, a hold-to-charge on `Q` and `E`, Updraft and Downdraft, Cinder spray,
-> Quake and Tremor, lit stones and a dodge that breaks through a stone. Everything below is what
-> the game does today; the plan is [../plans/elementalist-v2.md](../plans/elementalist-v2.md).
+> **v2 is built, 2026-09-30, and unplayed** — [../elementalist-v2.md](../elementalist-v2.md) is
+> the decision, [../plans/elementalist-v2.md](../plans/elementalist-v2.md) the brief it was built
+> to. Four inputs, a hold-to-charge on `Q` and `E`, Updraft and Downdraft, Cinder spray, Quake and
+> Tremor, lit stones and a dodge that breaks through a stone: §"v2 — space into damage" below
+> is what each does as built, and `cargo run -p sim --bin elemental` prints the numbers.
 
 **Identity.** Terrain author. You build the battlefield, then combo through what you built.
 Ranged control that creates its own targets.
@@ -231,20 +232,32 @@ existing uncaptured structure to kick it forward through the ground for low dama
 > first thing the crosshair's line meets, out to Raise's reach. "Beneath yourself" is looking
 > down, and the eruption carries you with it.
 
-### Fissure
+### Fissure — `E` held
 **Startup** medium · **Recovery** medium · **Range** long · **Mechanic** spawns a structure
 at the point of impact
 
 A skillshot that races forward through the ground and stops at the first enemy hit,
 staggering them. Leaves a slowing field along its path for several seconds.
 
-### Quake
+> **Built 2026-09-30, on a hold.** `E` tapped is Raise; `E` held past the stone's churn keeps
+> it churning and becomes the crack's hold, and letting go races the crack out from the stone
+> along her facing — two metres for a tap of a hold, ten for the full second — and the stone
+> erupts at its end. It stops at the first body and hits it, and its line is **rough terrain**
+> for four seconds, which slows whoever crosses it and never her. See §"v2".
+
+### Quake — second mouse side button; Tremor — `R`
 **Startup** slow, telegraphed · **Recovery** medium · **Range** medium · **Mechanic** spawns
 a structure at the centre
 
 A small area shakes immediately, staggering anything moving through it, then erupts after a
 delay for moderate damage. The telegraph is the point — it is an area denial tool that
 punishes movement, not a damage spell.
+
+> **Built 2026-09-30, as one effect placed two ways.** Quake puts the patch where the crosshair
+> is, out to nine metres; Tremor puts the same patch on her own feet, so the stone comes up under
+> her and takes her with it — a jump she does not have to aim, out of a string she does not want
+> to be in. Standing still in the patch is the answer; anything moving faster than a metre a
+> second is staggered once. See §"v2".
 
 ### Fire pillar
 **Startup** medium · **Recovery** medium · **Range** medium
@@ -339,11 +352,16 @@ structure is the guard breaker.
 is where her feet are:
 
 ```text
-                left click      right click     E
-  standing      Bolt            Cataclysm       Raise — the mechanic, an instant
-                (shift: Fissure, Q: Fire pillar)
-  in the air    Air bolt        Gale            Landfall
+                left click      right click     E                middle click    F            R / side B
+  standing      Bolt            Cataclysm       Raise (held:     Cinder spray    Updraft      Tremor / Quake
+                                                Fissure)
+  in the air    Air bolt        Gale            Landfall         Cinder spray    Downdraft    -- / Quake
+                (Q: Fire pillar, held: Strike -- the same pillar, standing or not)
 ```
+
+The three new columns are v2, built 2026-09-30, and are read the same way: the button is the
+element and the row is where her feet are. Middle click is the one that does not change with
+the row, on purpose — fire in the air is what the air shots fly through.
 
 That shape is the Champion's grid read one class further, and it is deliberately the
 [README's](../README.md) open **Aerials** question answered rather than dodged: *airborne
@@ -486,6 +504,97 @@ be in — that is a reset she can take from above rather than a trade she has to
 floor. The two shots are the other half: the Air bolt is how she pokes at range she cannot
 reach standing up, and the Gale is what she throws at somebody who has to come *through* it.
 
+## v2 — space into damage — built 2026-09-30
+
+**What it is.** The payoff for authoring the field well: she converts distance into damage.
+[../elementalist-v2.md](../elementalist-v2.md) is the decision and the reasons; this is what is
+built. Every number below is one `cargo run -p sim --bin elemental` prints, and every one of
+them is a knob.
+
+### The four inputs
+
+Both mouse side buttons, `F` and `R` (`I` and `O` stand in for the side buttons on a keyboard
+without them). They are pressed buttons, not modifiers: each does one thing on its own and the
+edge of the press is what counts, so a held side button throws one Quake and not a stream.
+The design is [../exploration/0001_control_budget.md](../exploration/0001_control_budget.md).
+
+### The charges — `Q` held and `E` held
+
+**`Q` held is the Strike.** A tap is the pillar as built. Held past the startup, the pillar
+waits in her hands with the aim live, at the crawl (a fifth of walking speed, the same as any
+committed move), for up to a second. Letting go plants the pillar with its remaining burn *taken
+off it and paid as one hit*: a full hold is worth the pillar's whole 390 of burn on top of its
+175, and leaves nothing standing; a half hold is worth half, and leaves half a pillar. Getting hit
+during the hold ends it with nothing placed. What a hold costs is ground: an opponent walking at
+full speed closes about seven metres in the second she stands there, so a full Strike is only
+safe from nine metres, and the frame table prints that beside the row.
+
+**`E` held is Fissure.** Above, under its own heading. The same crawl, the same second, and the
+same price in ground; what it buys is a crack from two to ten metres with a stone at its end
+and rough ground along it.
+
+### Cinder spray — middle click, both rows
+
+A skillshot: an ember out of her hand at twenty-two metres a second that bursts at the first
+thing it meets or at twelve metres, into a **cloud of embers** three metres across that hangs
+for two and a half seconds and burns everyone but her on a tick. On the floor the cloud stands
+on it; in the air it hangs where it burst. It is the same move in both rows because its job is
+the same in both: **fire for the air shots to fly through.**
+
+### Fire in the air
+
+An Air bolt or a Gale whose line crosses fire — a pillar, a burning patch, a cloud — comes out
+**lit**: half again the damage, and a burst into a small cloud where it lands. The Gale also
+**shoves each stone it passes** once, by the beam's kick rule at four fifths of its speed, and
+keeps flying. Both shots got a knockback pass at the same time; the air row has teeth now.
+
+### Updraft and Downdraft — `F`
+
+**Standing, `F` is the Updraft:** a column of air two metres across and three and a half tall
+on her own body, for four tenths of a second. Everyone in it — her included — is lifted once by
+their own weight, so a Bulwark rises less than a Dual mage (1.9 m against 2.8; she rises 2.6),
+and a stone in it is lofted. The column is on her because a column at range cannot be aimed at
+somebody who can walk out of it; on her it is a jump she shares, and the shared floor is what
+she then does something with.
+
+**Airborne, `F` is the Downdraft:** the same column, following her down. It drives her at the
+floor, spikes any airborne body in it, presses a lofted stone into the ground and breaks a
+resting one. When she lands while it blows the air **breaks outward** as a ring three metres
+across that shoves and staggers; when she lands *in fire* — her own pillar, a patch, a cloud —
+the fire goes out and a **ring of fire** races out from her feet at eighteen metres a second to
+six metres, hitting once for sixty and shoving. Landing after the column has died bursts
+nothing: the timing is the move.
+
+### Quake and Tremor — second side button, `R`
+
+Above, under Quake. One effect, two placements: five metres across, forty frames of shake in
+which anything moving faster than a metre a second is staggered, then an eruption for ninety on
+everyone still inside and a stone at the centre. Tremor's stone comes up under her and carries
+her three metres. `R` in the air is nothing yet; Hover is the candidate and waits on a word.
+
+### Fire on a stone
+
+A stone is lit by a pillar cast on it, by an ember bursting beside it, or by a lit shot passing
+it, and burns for five seconds. A **lit stone burns whoever stands on it** — her terrain denied
+to the opponent as cover, which is the one ruling in [../elementalist.md](../elementalist.md)
+answered — and anything that shoves or breaks it while lit (the beam's kick, a Gale's shove,
+Cataclysm) **bursts it** into burning debris and a cloud of embers where it stood. An unlit stone
+kicked is still only kicked.
+
+### The dodge into a stone
+
+A dodge thrown *toward* one of her own stones, with the crosshair on it, within a dodge's reach:
+the stone breaks down as she passes, its slot is freed, and its footprint is rough ground along
+her line — burning ground and a cloud of embers if it was lit. In the air it is the airdodge and
+costs it. The dodge has to be toward the stone, because the camera behind her shoulder can sit
+inside a stone at her back with the crosshair reading as on it, and a dodge away from a stone is
+a dodge. It is the one thing in the kit that beats a string rather than a hit.
+
+### Not built, waiting on a word
+
+Blast on the first side button, Hover on `R` in the air, and the fire Trail on a dodge through
+fire — all carried in [../elementalist-v2.md](../elementalist-v2.md) §"Inputs" and §"Open questions".
+
 ## Playing it
 
 Raise or Fissure to seed the field, then read the opponent's position and detonate the
@@ -507,14 +616,19 @@ their cover — the skill is placing them where they serve you more than the opp
   the air. Clips are a contract (`view::clips`) and the bake refuses to run with one missing,
   so four new ones is a real piece of work rather than a line; it is the obvious next step and
   is logged in [../feel-log.md](../feel-log.md).
-- **Do the air shots interact with fire?** A bolt of air through a fire pillar is the
-  interaction the loadout is asking for, and nothing has been built: they are stopped by a
-  structure like everything else and pass through a pillar without noticing it. The dispatch
-  in `crate::gust` is one more branch away from having an answer, which is exactly the shape
-  the beam's own fire branch has.
-- **Should the Gale kick a stone the way the beam does?** It is the heaviest push she has and
-  a wall of moving air arriving at a boulder plainly ought to move it. Today it is stopped by
-  one, which is the same answer the fire bolt gives and has the same open question against it.
+- **Answered, 2026-09-30: the air shots interact with fire, and the Gale moves a stone.** A
+  bolt or a Gale flown through a pillar, a burning patch or a cloud of embers comes out lit —
+  half again the damage, and a small cloud where it lands — and the Gale shoves each stone it
+  passes once, by the beam's kick rule, and keeps flying. Both are in §"v2".
+- **The v2 numbers want playing before any of them are believed.** Five in particular, from
+  `elemental`. Whether a full Strike at 565 off a pillar's own 175 is *earned* at the nine
+  metres of gap it costs, or whether the crawl makes the hold read as a trap she set for herself.
+  Whether the crack's two-to-ten metres is the right span for a hold of a second. Whether the
+  Updraft's two and a half metres is a jump she wanted or a jump she is stuck at the top of.
+  Whether the fire ring at sixty is a punishment for chasing her into her own fire or free
+  damage on a landing. And whether the break-through's scar, one stone's width, is enough to
+  matter to a pursuer. The plan's stop condition still stands: if a full Strike does not feel
+  earned, that is a new document, not a knob.
 - **Raising a stone mid-air is gone, and nobody has missed it yet.** `E` off the floor used to
   be Raise, which made a stone under your own feet a sort of second jump. It is Landfall now.
   Whether that pseudo-double-jump was load-bearing for her mobility is a thing to find out by

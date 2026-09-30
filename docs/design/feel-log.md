@@ -6050,3 +6050,165 @@ is one plan. Walking in whatever the plan does the same job.
 and the Elementalist win most of theirs — and whether that is the bot or the
 classes is a person's question.
 
+### 2026-09-30 — Elementalist v2, M1: four inputs, the Cinder spray, fire in the air
+
+**Changed** Four input bits — both mouse side buttons (`I` and `O` stand in),
+`F` and `R` — read on the desk and in the browser, as pressed buttons rather
+than modifiers. **Cinder spray** on middle click in both rows: an ember that
+bursts on the first thing it meets or at its range into a cloud of embers that
+hangs and burns on a tick. **Ignition**: an Air bolt or Gale whose line crosses
+a pillar, a patch or a cloud comes out lit — half again the damage, a small
+cloud where it lands. The Gale **shoves each stone it passes** once, by the
+beam's kick rule at four fifths, and keeps flying. Knockback on both air shots.
+See [elementalist-v2.md](elementalist-v2.md).
+
+**Why** "The aerials are actually quite weak in this regard right now because
+they're just dumb projectiles." The air row composed with nothing she built;
+now it composes with fire, and fire is a button.
+
+**Found** `elemental`'s `spray`: the ember bursts at 12.1 m with nothing in
+the way and at 3.9 m against a stone five metres off, which it lights. The
+bolt is 55 plain and 82 lit, the Gale 69 and 103. The Gale moves a stone four
+metres.
+
+**Tried, reverted: the Cinder at 30 damage.** It sat under the Air bolt's 45
+and `feel.rs` rightly called the no-stun move the softest hit; the spray is
+not the soft option, it is the *set-up*, so it went to 45 and the softest-hit
+rule now reads over moves that do damage at all.
+
+**Verdict** built, unplayed. C1's questions stand: does the air row have
+teeth, does the cloud read as hers, is the flare a decision.
+
+### 2026-09-30 — Elementalist v2, M2: the charges
+
+**Changed** `Q` held past the pillar's startup is the **Strike**: the pillar
+waits in her hands at the crawl with the aim live for up to a second, and
+letting go plants it with its remaining burn taken off and paid as one hit — a
+full hold is 565 against the pillar's 175 and leaves nothing standing. `E`
+held past the churn is **Fissure**: the stone keeps churning, and letting go
+races a crack out from it, two to ten metres by the hold, with the stone at
+its end and rough terrain along the line. A hit during either hold ends it
+with nothing placed. `moves::Charge` names the three kinds of hold the game
+now has (the Grasp's reach, the Strike's fraction, the crack's length).
+
+**Why** "The thing that feels so good about the elementalist is that feeling
+of freedom from composing basic elements." The charges are the kit's reward
+for spacing: a hold is paid for in ground, about seven metres of it a second
+against a walk, and a player who built the space gets a strike nobody else
+has.
+
+**Found** `elemental`'s `charge`: 0/25/50/75/100% holds hit for
+175/272/370/467/565 and leave 180/135/90/45/0 frames of pillar; the crack runs
+2.1/4.1/6.1/8.1/9.4 m; she drifts 0.8–1.9 m at the crawl; the safe gap is
+2.0/3.7/5.5/7.2/9.0 m. The frame table prints that gap beside both rows.
+
+**Tried, reverted: Fissure's startup at 8.** The clip's hands could not get
+into the floor in eight frames without breaking the continuity ceiling; it
+went back to twelve, which is what the crack's telegraph wanted anyway.
+
+**Verdict** built, unplayed. **C2 is the plan's stop condition**: if a full
+Strike does not feel earned, that is a new document rather than a knob.
+
+### 2026-09-30 — Elementalist v2, M3: Updraft and Downdraft, the two rings
+
+**Changed** `F` standing is the **Updraft**, a column on her own body that
+lifts everyone in it by their own weight, her included, and lofts a stone. `F`
+airborne is the **Downdraft**, the column following her down: it drives her at
+the floor, spikes an airborne body, presses a lofted stone and breaks a
+resting one. Landing while it blows breaks the air outward as a **ring** that
+shoves and staggers; landing in fire puts the fire out and sends a **ring of
+fire** racing out from her feet. Landing after the column has died bursts
+nothing.
+
+**Why** From review: an Updraft at range "can't be aimed" at somebody who can
+walk out of it, so it went on to her body; "downdraft brings her down and, on
+landing during the effect, gusts air outward"; "downdraft into any fire area
+should extinguish the flames and cause a rapidly expanding ring of fire."
+
+**Found** `elemental`'s `lift` and `ring`: the apexes run Bulwark 1.86,
+Champion 2.22, Reaver 2.42, Elementalist 2.63, Blood mage 2.27, Dual mage
+2.80 m; a stone two metres out lofts to 0.89 m, and one a metre out — under
+her feet — does not, which is the press turning into her own ride. The
+Downdraft off a full hop lands in 50 frames against 54 on its own, which is
+less than it sounds; the drive is a knob. The air ring shoves 0.77 m at 1.5
+and 3 m and nothing at 5 (its radius is 3); the fire ring hits 60 and shoves
+0.8 m at all three, grows 0.3 m a frame to 6 m, and the pillar she landed in
+is gone.
+
+**Tried, reverted: Updraft and Downdraft with the pillar's recovery.** Both
+came out negative on hit and `feel.rs` refused them; hitstun went to 18 and 14
+and recovery to 14 and 10, which reads right for a column of air.
+
+**Verdict** built, unplayed. The four frames the Downdraft saves off a hop is
+the number to look at first: if it does not read as *coming down*, the drive
+goes up.
+
+### 2026-09-30 — Elementalist v2, M4: Quake and Tremor, fire on earth
+
+**Changed** One effect placed two ways. **Quake** on the second side button
+shakes a patch where the crosshair is, out to nine metres: anything moving
+through it faster than a metre a second is staggered once, standing still is
+fine, and when the shake ends it erupts on everyone inside and leaves a stone
+at its centre. **Tremor** on `R` is the same patch on her own feet, so the
+stone comes up under her and takes her with it. **Fire on a stone lights it**
+— a pillar cast on it, an ember bursting beside it, a lit shot passing — and a
+lit stone burns whoever stands on it for five seconds and bursts into burning
+debris and a cloud of embers when anything shoves or breaks it. An unlit
+stone kicked is still only kicked.
+
+**Why** "Tremor is cool", and fire plus earth needed a niche: a lit stone is
+her terrain denied to the opponent as cover, which is the one ruling in
+[elementalist.md](elementalist.md) answered.
+
+**Found** `elemental`'s `quake`: the patch lands where the crosshair's sight
+does, to the half metre; standing still is fine and walking is staggered; the
+eruption hits 90 and the stone is at the centre; Tremor's patch and stone are
+on her feet and carry her 3.2 m. A stone placed a metre from her erupted under
+her in the first draft of the test — the stone's radius plus hers — and the
+fixtures stand stones two metres out.
+
+**Verdict** built, unplayed. Whether ninety at the end of a forty-frame
+telegraph is a threat or a dare is a play question.
+
+### 2026-09-30 — Elementalist v2, M5: the dodge into a stone
+
+**Changed** A dodge thrown toward one of her own stones, crosshair on it,
+within a dodge's reach, **breaks through**: the stone is gone as she passes,
+its slot is free, and its footprint is rough ground along her line — burning
+ground and a cloud of embers if it was lit. In the air it is the airdodge and
+costs it. The Reaver's dash and the Blood mage's blink, pointed at the class's
+object.
+
+**Why** "Dodge through the structure breaks it down and leaves rough terrain."
+It is the one thing in the kit that beats a string rather than a hit.
+
+**Found** The first cut broke a stone she dodged *away* from: the camera
+behind her shoulder was inside the stone's column and the crosshair read as on
+it. The dodge now has to be toward the stone, which is what "into" meant.
+`elemental`'s `break`: one stone before and none after, a 1.4 m scar that
+slows a crosser to ×0.55, and a cloud left when the stone was lit.
+
+**Verdict** built, unplayed. The scar is one stone wide; whether that is
+enough to matter to a pursuer is the number to play.
+
+### 2026-09-30 — Elementalist v2, M6: the instrument, the clips, the docs
+
+**Changed** `cargo run -p sim --bin elemental` runs the six scripts the plan
+asked for — charge, lift, ring, spray, quake, break — and prints every
+criterion as a number. Seven Elementalist clips, each authored for its move
+and checked distinct on the contact sheets: the Cinder's overhand flick, the
+Updraft's palms rising and held, the Downdraft's tucked drop, Quake's stamp
+and low push, Tremor's stamp and arms driven down into the deepest crouch in
+the file, the pillar's rise overhead and Fissure's hands into the floor. The
+kit document, the controls table, the README, the manual and the two status
+headers say what is built. Every new magnitude is a knob and the bake is
+current. The instruments' decimal formatter lost the sign on values between
+minus one and zero; `elemental` and the frame table print it now.
+
+**Not done** The sparring bot does not press the four new buttons; the hunt
+report cannot reach them yet. The web build script needs `wasm-bindgen` on
+the path, which this machine did not have; the browser target type-checks
+with the four inputs in.
+
+**Verdict** built, unplayed. C1–C5 are a person's, in order, and C2 first.
+
