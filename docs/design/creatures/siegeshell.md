@@ -523,7 +523,7 @@ wrong fights. **Unanswerable hits: zero.**
 
 The clock is the length lever and the budget checks it: untouched it arrives in five
 minutes; a pair that stumbles it five times, breaks two anchors on the way and limps it
-on three broken ankles arrives in about seven and a half; the siege's two beams give
+on three broken ankles arrives in about eight; the siege's two beams give
 roughly two more. A won fight lands at nine to thirteen minutes, inside the band.
 
 ---
