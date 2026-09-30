@@ -36,7 +36,7 @@ full hop apexes at 2.7 m (Bulwark) to 6.0 m (Dual mage), and one of the arena's
 
 | Where it is | Lowest part of it | Who can reach it |
 | --- | --- | --- |
-| **Circling** | 10–20 m, cruising at 16 | nobody from the floor; the Dual mage from the tower top (12 + 6.0); skillshots that reach, which from the floor means the Elementalist's air row only |
+| **Circling** | 10–20 m, cruising at 16 | nobody from the floor; the Dual mage from the tower top (12 + 6.0); of the skillshots, only the Elementalist's air row, thrown from a hop |
 | **Hovering** (Downwash) | its feet, 6.8 m | nobody from the floor; the Dual mage, Reaver and Elementalist from a stone |
 | **Low pass** (Talon pass) | talons 1.2 m, wing undersides 3.0 m | wings: every class with a hop and a swing, the Bulwark included (2.7 m + Bash's 1.5 m reach) |
 | **After a Stoop** | wings spread at 0.4–1.6 m | walk up and swing |
@@ -313,7 +313,7 @@ shadow, the markers and the cries are doing their job.
 
 ### The camera, looking up
 
-Three things the follow camera has to do, and one aim change.
+Four things the follow camera has to do.
 
 - **A creature overhead must not lift the camera.** `view::camera` settles the
   drawn eye onto whatever is under it, and it asks `Monster::top_under`, which
@@ -322,17 +322,15 @@ Three things the follow camera has to do, and one aim change.
   highest surface below the fighter's own feet, not the highest there is.
   `a_creature_overhead_does_not_lift_the_camera`.
 - **The drawn eye and the aiming eye must stay one point when looking up.**
-  Looking up is the handover zone, where the sphere shrinks from 9.2 m to the
-  head between 10° and 85°. At 40° up it is still about 5.7 m, which puts the
-  simulation's eye about 1.7 m **below the floor**. The drawn camera rides the
-  floor 0.3 m up, looking the same way: two parallel rays two metres apart, which
-  is the mistake aiming.md exists to prevent, arriving through the camera. The
-  aim itself still works (the near clip skips everything between the eye and
-  the fighter, floor included). The fix proposed is to move the floor clamp from
-  `view::camera` into `sim::camera::eye`, where the floor is a plane both
-  machines agree on — the occlusion pull-in stays in the view, since it is
-  walls. That changes where the eye is at steep upward pitch in every fight,
-  which is the point; `the_drawn_eye_is_the_aiming_eye_looking_up` holds it.
+  This fight is spent looking up, so it leans on that harder than any other.
+  ⚠️ *Checked 2026-09-30, and a first draft of this section was wrong.* It
+  claimed the simulation's eye sinks about 1.7 m below the floor at 40° up
+  while the drawn camera rides the floor, which would be two parallel rays.
+  Measured with `sim::camera::eye` on the floor, the aiming eye sits 1.77 m up
+  at 10°, 1.67 m at 40° and 1.60 m at 80°: above the floor at every upward
+  pitch, so the view's floor clamp never fires against it and the two eyes
+  agree. No change is needed. The test stays, as a guard for this fight:
+  `the_drawn_eye_is_the_aiming_eye_looking_up`, on the floor and aboard.
 - **The camera never follows the bird.** A camera that turned itself toward the
   target would turn the aim with it, and that is the creature reading the mouse
   from the other side. The shadow and the cries are the answer to "where is it".
@@ -350,9 +348,10 @@ The model holds, and one function in `aim.rs` changes.
 but the ability's range sphere, and `skillshot_path` goes from the caster to the
 sphere's far crossing — a line that converges with the crosshair's at that
 point. Bodies are not on the ray, so the bird does not stop it; the path's own
-`first_along` meets the bird on the way. At 40° up the eye is within a metre or
-so of the fighter, so where the two lines pass the bird they are well under a
-metre apart, and the bird is eight metres long. What stops the shot is the
+`first_along` meets the bird on the way. Looking up, the eye sits almost on the
+line through the fighter's head (the handover's tilt is small), so short of
+where they meet the two lines are under a metre apart, against a bird eight
+metres long. What stops the shot is the
 honest thing: range. From the floor the Bolt (9 m), Cataclysm (12), the
 thrown shield (9), Bloodletter (7), Grasp (12) and the lances (7) reach it on a
 pass or a hover and not in its circle; the Elementalist's Air bolt (22) and
@@ -522,7 +521,7 @@ ride), P8 (its plan and report lines). Not P3, P4, P5 or P7.
   `aim::clear_between` rather than beside the move.
 - **Wind** and the perch as a scheduled behaviour.
 - **The aim change** (`swing_path` and `origin` take the surface's up) and **the
-  camera changes** (floor clamp into `sim::camera`, `top_under` below the feet).
+  camera changes** (`top_under` below the feet).
 
 **Snapshot.** About 260 B, as the bestiary estimates: the Ridgeback's ~200 for
 the monster, plus 3D velocity (12), pitch and bank (4), the circle's phase and
@@ -575,7 +574,7 @@ thing to watch, not the thing that dominates.
   The wing tests pass; a scripted crash is walkable by the Bulwark.
 - **M6 · The sky ride.** Take-off with riders, the ride cycle, the roll, the
   swoop, riding a broken wing down. The ride tests pass.
-- **M7 · Aim and camera.** The `swing_path` change, the floor clamp, `top_under`.
+- **M7 · Aim and camera.** The `swing_path` change and `top_under`.
   `one_aim.rs`, `determinism.rs` and the Ridgeback's twelve seeds unchanged
   except where the camera moves at steep upward pitch, which is written down.
 - **M8 · The hunt.** Plans A and B, the report lines, one tuning pass toward

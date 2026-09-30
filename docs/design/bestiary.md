@@ -239,19 +239,19 @@ says the unmeasured bugs are the ones a person reports as "it feels random".
 The snapshot is capped at 4 KiB and is about 1.8 KiB today. Estimates, to be
 replaced by `size_of` once each is built:
 
-| Fight | What is in the snapshot | Estimate |
+| Fight | What is in the snapshot | Estimate, from its document |
 | --- | --- | --- |
 | Ridgeback | one monster | ~200 B |
-| Gnawers | pack brain + 8 critters | ~300 B |
-| Hornback | pack brain + 9 critters (the bull is a critter with extra state) | ~350 B |
-| Sandmaw | one monster + noise ring (8 recent noises) + 2 hazards | ~280 B |
-| Mireback | one monster + 16 hazards | ~330 B |
-| The Pair | two monsters | ~400 B |
-| Broodmother | one monster + pack brain + 8 critters + 6 hazards | ~550 B |
-| Galewing | one monster + flight state | ~260 B |
-| Veilstalker | one monster + footfall ring + 4 hazards | ~290 B |
-| Mantis | one monster + habit memory | ~240 B |
-| Siegeshell | one monster with a bigger rig + a pack of parasites + 8 hazards + the wall | ~700 B |
+| Gnawers | pack brain + 7 critters | ~330 B (~390 B in coop) |
+| Hornback | pack brain + 9 critters (the bull is a critter with extra state) | ~365 B |
+| Sandmaw | one monster + noise ring + hazards | ~300 B |
+| Mireback | one monster + 16 hazards | ~350 B |
+| The Pair | two monsters + the pair's shared brain | ~430 B |
+| Broodmother | one monster + pack brain + 8 critters + hazards and web strands | ~610 B |
+| Galewing | one monster + flight state + a fall height per fighter | ~260 B |
+| Veilstalker | one monster + 32 footfalls + hazards | ~390 B |
+| Mantis | one monster + habit memory | ~280 B |
+| Siegeshell | one monster with a 40-part rig + a pack of parasites + hazards + the wall | ~680 B |
 
 Only one fight is loaded at a time, so the worst case is the Siegeshell at
 about 2.5 KiB total. It fits, and it is the fight to watch.
@@ -287,7 +287,67 @@ reuse plus one new idea. Each is a few hours of AI time, as expected.
 The [world](world.md) is, for now, an arena picker in the dev harness (its W0),
 and it arrives with P2, after the Hornback.
 
-## 6 · Questions for you
+## 6 · What the ten documents found together
+
+The creature documents were written in parallel, so some of what they decided
+touches the others. Collected here, because each of these is one rule for the
+whole cast rather than a detail of one fight.
+
+### Changes the cast asks of `aim.rs`
+
+[CLAUDE.md](../../CLAUDE.md) says a creature that breaks the aiming model changes
+`aim.rs` rather than working around it. Five do. Each is a change true of every
+ability at once, so each lands as **its own milestone**, after P1's
+bit-identical step and never inside it, with the Ridgeback's twelve seeds and
+`one_aim.rs` as the check.
+
+| # | Asked by | The change | What it touches today |
+| --- | --- | --- | --- |
+| A1 | [Gnawers](creatures/gnawers.md) §1a | `aim::stands_at`: the height of the last body the crosshair's ray passed through. A ground-aimed skillshot goes to *that* body's middle, and the standing swing's dead zone reads it. Bodies still do not stop the ray. | Nothing where only fighters stand: bit-identical |
+| A2 | [Hornback](creatures/hornback.md) §10 | Critters join what `aim::first_along` can run into | Nothing until critters exist |
+| A3 | [Siegeshell](creatures/siegeshell.md) §6 | Seen from above, the top face of a mountable part counts as a place, so aiming at your feet on a shell does not land on the floor below | **Shots at the Ridgeback's back change** |
+| A4 | [Galewing](creatures/galewing.md) §6 | `swing_path` and `origin` measure the dead zone against the surface underfoot, so a swing on a banked back is level with the back | Nothing on the floor: bit-identical. The Ridgeback's shake gets it too |
+| A5 | [Veilstalker](creatures/veilstalker.md) §6 | `aim::in_view`: whether a point is inside a fighter's view, so it can never reveal itself off-screen | Nothing: a new question, not a changed answer |
+
+One more is open rather than proposed: the [Broodmother](creatures/broodmother.md)'s
+sacs are part of her body, so they are not on the crosshair's ray, and whether a
+ranged shot at a sac lands depends on `first_along`. Her document leaves it to a
+test.
+
+### One fall-damage rule, not two
+
+The Galewing and the Siegeshell each wrote a fall-damage rule, and they
+disagree: the Galewing's is free below 7.5 m and 30 per metre above, and the
+Siegeshell's is free below 6 m and 18 per metre. Both key it to **height
+fallen** rather than landing speed, which is right: a fighter reaches terminal
+velocity after about four metres, so every fall above that lands at the same
+speed. It is one rule for the whole game (P6), so it gets one pair of knobs,
+settled when P6 is built. The Ridgeback's back (5.5 m) must stay free.
+
+### The game has no sound
+
+Three documents ran into it. The Pair add a glint at the screen edge while an
+unseen cat winds up, standing in for a snarl. The Veilstalker never reveals
+itself off-screen, because a strike from behind with no sound would be a hit
+from nowhere. The Sandmaw is built on noise and draws it instead. Each is a
+stand-in that should become a sound when there is audio, and until then
+"unanswerable" counts a tell that was never on the victim's screen.
+
+### Smaller things
+
+- **Critter hit shape.** P3 planned a capsule; the Hornback wants a box that
+  reaches the floor, so a level shot does not pass over a cow's back. Pick one
+  shape when P3 is built. The Gnawers' aiming problem (A1) is the same question
+  from the other side.
+- **Fight length at tier 5.** The Mantis is written for five to eight minutes
+  solo, below the tier table's eight to twenty. A duel that long is a slog; the
+  tier table was written with the Siegeshell in mind. Probably the table is what
+  moves.
+- **Every document is longer than asked** — 570 to 680 lines against 250 to
+  400. They are complete rather than padded. Each ends with its own open
+  questions.
+
+## 7 · Questions for you
 
 **Answered 2026-09-30:** the cast is a good first mix; defence fights stay;
 rewards are trophies and tempered rematches only, so the sidegrade in each
