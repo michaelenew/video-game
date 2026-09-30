@@ -6,6 +6,11 @@ sources: docs/archive/combat-design/elementalist-skills.md, docs/archive/combat-
 
 # Elementalist — kit
 
+> **v2 is proposed, 2026-09-30, and nothing of it is built** — [../elementalist-v2.md](../elementalist-v2.md).
+> It adds four inputs, a hold-to-charge on `Q` and `E`, Updraft and Downdraft, Cinder spray,
+> Quake and Tremor, lit stones and a dodge that breaks through a stone. Everything below is what
+> the game does today; the plan is [../plans/elementalist-v2.md](../plans/elementalist-v2.md).
+
 **Identity.** Terrain author. You build the battlefield, then combo through what you built.
 Ranged control that creates its own targets.
 

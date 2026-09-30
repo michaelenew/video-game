@@ -966,6 +966,10 @@ differentiation.
 
 ### Elementalist
 
+> **v2 proposed 2026-09-30**, unbuilt: middle click, both mouse side buttons, `F` and `R` all
+> bound, and `Q`/`E` charge when held. The table below is what is built; the proposal is
+> [elementalist-v2.md](elementalist-v2.md).
+
 Current as of 2026-09-14. **The row is where her feet are** — the same three buttons mean one
 thing standing up and another off the floor, which is the Champion's grid read one class
 further. See [kits/elementalist.md](kits/elementalist.md) §"In the air".
