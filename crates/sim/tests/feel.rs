@@ -146,7 +146,15 @@ fn a_move_that_never_stuns_is_the_cheapest_thing_its_class_throws() {
     // See `Hit::interrupts`.
     for class in ALL_CLASSES {
         let table = moves::table(class);
-        let softest = table.iter().map(|m| m.damage).min().unwrap();
+        // The cheapest *hit*. A move that deals nothing at all -- the
+        // Elementalist's drafts move things and hurt nobody -- is not a hit
+        // an interrupt could be cheaper than.
+        let softest = table
+            .iter()
+            .filter(|m| m.damage > 0)
+            .map(|m| m.damage)
+            .min()
+            .unwrap();
         for m in table.iter().filter(|m| m.hitstun == 0 && m.strikes()) {
             assert!(
                 m.on_hit() < 0,
@@ -353,13 +361,30 @@ fn best_case(m: &Move) -> i32 {
         }
         // The burst is a single detonation at the far end of the line, so it
         // is the line's own hit plus one of it rather than a number per tick.
-        Some(EffectKind::LanceBurst) => {
-            m.damage * swings + EffectKind::LanceBurst.damage(m)
+        // A Quake is the same shape: a shake that only staggers, and then one
+        // eruption.
+        Some(kind @ (EffectKind::LanceBurst | EffectKind::Quake)) => {
+            m.damage * swings + kind.damage(m)
         }
         // A pool is what a hit leaves, not what a cast places, and it deals
         // nothing on its own. No move's row says it; listed so the match is
         // complete.
-        Some(EffectKind::Pool) | None => m.damage * swings,
+        // A cloud of embers is what a burst leaves, not what a cast places,
+        // and its burn is the cloud's own row rather than the shot's.
+        // Rough terrain slows and deals nothing; the crack that left it is
+        // the move's own hit.
+        // The drafts and the air ring move things and deal nothing; a ring
+        // of fire is what a landing leaves, not what a cast places.
+        Some(
+            EffectKind::Pool
+            | EffectKind::Embers
+            | EffectKind::Rough
+            | EffectKind::Updraft
+            | EffectKind::Downdraft
+            | EffectKind::AirRing
+            | EffectKind::FireRing,
+        )
+        | None => m.damage * swings,
     }
 }
 
@@ -524,7 +549,10 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 19,
-            Class::Elementalist => 7,
+            // Twelve: the seven, the Cinder spray on middle click in both
+            // rows, the two drafts on `F`, and Quake on the second side
+            // button with Tremor on `R`. See `docs/design/elementalist-v2.md`.
+            Class::Elementalist => 12,
             Class::ShadowReaver => 4,
             // Five: the auto was appended when the scythe arrived, so the
             // four rows that came before it kept their knobs. See

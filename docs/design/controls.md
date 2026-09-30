@@ -966,26 +966,32 @@ differentiation.
 
 ### Elementalist
 
-Current as of 2026-09-14. **The row is where her feet are** — the same three buttons mean one
-thing standing up and another off the floor, which is the Champion's grid read one class
-further. See [kits/elementalist.md](kits/elementalist.md) §"In the air".
+Current as of 2026-09-30, the v2 build: middle click, both mouse side buttons, `F` and `R` are
+all bound, and `Q`/`E` charge when held. **The row is where her feet are** — the same buttons
+mean one thing standing up and another off the floor, which is the Champion's grid read one
+class further. See [kits/elementalist.md](kits/elementalist.md) §"In the air" and §"v2"; the
+decision is [elementalist-v2.md](elementalist-v2.md).
 
 | Input | Result |
 | --- | --- |
 | `L` | **Bolt** — the auto. A beam along the crosshair, and whatever it meets first. **Bound** |
-| `shift` + `L` | **Fissure** — the committed ground skillshot. **Bound** |
-| `Q` | **Fire pillar**, planted where the crosshair is. **Bound** |
+| `Q` | **Fire pillar**, planted where the crosshair is. **Held: the Strike** — the pillar waits in her hands at the crawl with the aim live, and letting go pays its remaining burn as one hit. **Bound** |
 | right click | **Cataclysm.** A slow, long-range heavy along the same beam: breaks a structure into thrown debris, turns a fire pillar into a travelling tornado, or lands a real hit on a fighter. **Bound** |
-| `E` | **Raise.** Spawn a structure at the crosshair — the mechanic, and an instant with no frames at all. **Bound** |
-| `L` in the air | **Air bolt** — a small, fast, long-range shot of air. The air row's poke. **Bound** |
-| right click in the air | **Gale** — a disc of air that grows as it travels and is worth what it has become. **Bound** |
+| `M` | **Cinder spray** — an ember that bursts into a hanging cloud of fire, for the air shots to fly through. The same in both rows. **Bound** |
+| `E` | **Raise.** Spawn a structure at the crosshair — the mechanic, and an instant with no frames at all. **Held: Fissure** — the stone keeps churning, and letting go races a crack out from it with the stone at its end and rough ground along it. **Bound** |
+| `F` | **Updraft** — a column of air on her own body that lifts everyone in it, her included, and lofts a stone. **Bound** |
+| mouse side button B (or `O`) | **Quake** — a patch where the crosshair is that staggers whatever moves through it, then erupts and leaves a stone. **Bound** |
+| `R` | **Tremor** — the same patch on her own feet, so the stone comes up under her. **Bound** |
+| `shift` + direction, crosshair on a stone | **Break-through** — the dodge into one of her stones breaks it and leaves rough ground. The Reaver's dash and the Blood mage's blink, pointed at the class's object. **Bound** |
+| `L` in the air | **Air bolt** — a small, fast, long-range shot of air. The air row's poke; lit if it flew through fire. **Bound** |
+| right click in the air | **Gale** — a disc of air that grows as it travels and is worth what it has become; shoves stones it passes, lit through fire. **Bound** |
 | `E` in the air | **Landfall** — the descending slam, and a slab of rock levered out of the floor in front of her. **Bound** |
-| direction + click | Quake, Ice blast |
-| the rest | Flame spitter, and the heavier elemental work |
+| `F` in the air | **Downdraft** — the column following her down; landing breaks the air outward, landing in fire sends a ring of fire out. **Bound** |
+| mouse side button A (or `I`) | Blast, a candidate; nothing yet |
+| `R` in the air | Hover, a candidate; nothing yet |
+| the rest | Flame spitter, Ice blast, and the heavier elemental work |
 
-`shift` is spent on the ground and **ignored in the air**: shift plus left click is Fissure, a
-crack that races along the *ground*, and there is no airborne version of it to reach for. Up
-there left click means what left click means.
+`shift` is one verb: the dodge. Fissure, which it used to modify, lives on a held `E` now.
 
 `E` was listed as `R` here until 2026-09-14, which was the table remembering an older scheme —
 Raise was on right click before Cataclysm took the button, and the mechanic key is where it

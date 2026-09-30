@@ -143,7 +143,69 @@ pub enum EffectKind {
     /// collides with it, and standing in one is the point.
     /// See `docs/design/blood-mage.md` §"Essence pools".
     Pool,
+    /// Elementalist. A cloud of sparks hanging where a Cinder spray burst --
+    /// or a low burning patch, when it burst on the floor.
+    ///
+    /// **Fire in the air.** The one effect in the game with no foot on the
+    /// ground: `pos` is its centre and `reach` is its radius, and it is tested
+    /// and drawn as that ball. It burns on a tick like a pillar, far more
+    /// gently; what it is *for* is that an Air bolt or a Gale flown through it
+    /// comes out lit, and a stone standing in it catches. It is also what a
+    /// lit shot leaves where it lands, at a smaller radius -- the small
+    /// explosion. See `crate::gust` and `docs/design/elementalist-v2.md`.
+    Embers,
+    /// Elementalist. **Rough terrain**: the scar a Fissure's crack leaves,
+    /// and the broken ground where a stone was broken through. A line on the
+    /// floor -- `pos` is one end, `dir` the way it runs and `reach` its
+    /// length -- that slows whoever crosses it, at `tuning::rough_width`
+    /// either side. No damage: it is the setup the Strike wants, somebody who
+    /// cannot leave the footprint in time.
+    Rough,
+    /// Elementalist. **Updraft**: a column of air standing where she cast it,
+    /// `reach` wide, that blows for its life. Everything in it goes up -- a
+    /// body once, a stone once -- each by its own weight. Her own lift is the
+    /// move's `self_lift`; the column is what catches everybody else and what
+    /// is drawn.
+    Updraft,
+    /// Elementalist. **Downdraft**: the same column drawn falling, and it
+    /// **follows her**: `pos` is her feet, live, for as long as it blows.
+    /// Airborne bodies and lofted stones in it are driven down; a standing
+    /// stone is pressed into the floor and leaves rough terrain. Landing while
+    /// it blows is the burst -- see `state::World::land_the_draft`.
+    Downdraft,
+    /// Elementalist. The air breaking outward from her feet when she lands a
+    /// Downdraft over plain ground: everyone nearby shoved away, no damage.
+    /// The shove is on its first frame; the rest of its short life is what is
+    /// drawn.
+    AirRing,
+    /// Elementalist. A ring of fire racing outward from where she landed a
+    /// Downdraft into fire, at `tuning::fire_ring_speed` out to `reach`. It
+    /// consumed the fire it came from. Each body it passes takes one hit and
+    /// a small shove outward: a lingering area concentrated into an instant,
+    /// which is the Strike's idea done with her body.
+    FireRing,
+    /// Elementalist. **Quake**: a patch of floor that shakes for its life --
+    /// anyone moving through it staggers, once; anyone standing still is fine,
+    /// which is what makes it a read -- and then **erupts** as it expires:
+    /// damage to everyone in it, and a stone raised at its centre for the
+    /// caster. Placed at the crosshair by Quake and on her own feet by Tremor,
+    /// where the stone comes up under her and takes her with it. See
+    /// `state::World::pay_out`.
+    Quake,
 }
+
+/// How many pieces a ring of fire is drawn as.
+///
+/// Presentation, like [`ROUGH_BEADS`]: the hit test is a distance from the
+/// centre, and the renderer draws pieces around it.
+pub const RING_PIECES: usize = 12;
+
+/// How many pieces a stretch of rough terrain is drawn as.
+///
+/// Presentation, like [`TETHER_BEADS`]: the hit test is a segment, and the
+/// renderer draws pieces that have a place and a size but no direction, so a
+/// line on the floor is a row of them.
+pub const ROUGH_BEADS: usize = 8;
 
 /// How many arms a Grasp has, and which corner each one leaves by.
 ///
@@ -213,6 +275,13 @@ impl EffectKind {
             EffectKind::Tether => "tether",
             EffectKind::JudgementField => "judgement field",
             EffectKind::Pool => "essence pool",
+            EffectKind::Embers => "embers",
+            EffectKind::Rough => "rough terrain",
+            EffectKind::Updraft => "updraft",
+            EffectKind::Downdraft => "downdraft",
+            EffectKind::AirRing => "air ring",
+            EffectKind::FireRing => "fire ring",
+            EffectKind::Quake => "quake",
         }
     }
 
@@ -244,6 +313,16 @@ impl EffectKind {
             EffectKind::LanceBurst | EffectKind::Tether => false,
             EffectKind::JudgementField => true,
             EffectKind::Pool => true,
+            // Wherever it burst. Nothing casts one at a place: it is left by
+            // a shot, and the shot decided where.
+            EffectKind::Embers => false,
+            EffectKind::Rough => true,
+            // On her, not at a place: nothing aims these.
+            EffectKind::Updraft
+            | EffectKind::Downdraft
+            | EffectKind::AirRing
+            | EffectKind::FireRing => true,
+            EffectKind::Quake => true,
         }
     }
 
@@ -303,6 +382,14 @@ impl EffectKind {
         matches!(self, EffectKind::GuillotineLotus)
     }
 
+    /// Does its centre stay under its **caster's feet**?
+    ///
+    /// One does. The Downdraft is a column she carries down with her: it is
+    /// under her while she falls, and where she lands is where it bursts.
+    pub const fn follows_the_caster(self) -> bool {
+        matches!(self, EffectKind::Downdraft)
+    }
+
     /// Does it come back to whoever threw it, rather than to where it was
     /// thrown from?
     ///
@@ -330,6 +417,15 @@ impl EffectKind {
             // pool is what a hit leaves, not what a cast places.
             9 => Some(EffectKind::Pool),
             10 => Some(EffectKind::Haemorrhage),
+            // Listed so the numbering is complete; no move's row says it. A
+            // cloud is what a burst leaves, not what a cast places.
+            11 => Some(EffectKind::Embers),
+            12 => Some(EffectKind::Rough),
+            13 => Some(EffectKind::Updraft),
+            14 => Some(EffectKind::Downdraft),
+            15 => Some(EffectKind::AirRing),
+            16 => Some(EffectKind::FireRing),
+            17 => Some(EffectKind::Quake),
             _ => None,
         }
     }
@@ -364,6 +460,21 @@ impl EffectKind {
             // A pool has no clock. It is gone when it has drained, which is
             // volume, not frames -- see `state::World::step_effects`.
             EffectKind::Pool => u16::MAX,
+            EffectKind::Embers => t::embers_life(),
+            EffectKind::Rough => t::rough_life(),
+            EffectKind::Updraft | EffectKind::Downdraft => t::draft_life(),
+            EffectKind::AirRing => t::air_ring_life(),
+            EffectKind::Quake => t::quake_shake(),
+            // Out to its reach at its speed, and gone: a ring that stood
+            // still at full size would be a second pillar.
+            EffectKind::FireRing => {
+                let speed = t::fire_ring_speed().max(Fx::ONE);
+                t::fire_ring_reach()
+                    .div(speed)
+                    .div(crate::DT)
+                    .to_int()
+                    .max(1) as u16
+            }
         }
     }
 
@@ -396,6 +507,17 @@ impl EffectKind {
             EffectKind::Tether => t::tether_drain(),
             EffectKind::JudgementField => t::judgement_field_damage(),
             EffectKind::Pool => 0,
+            // A number of its own, for the pillar's reason: the burst that
+            // left it hit on its own, and the burn is a different event.
+            EffectKind::Embers => t::embers_damage(),
+            // Slows, and nothing else. Broken ground is a place you would
+            // rather not be standing, not a place that hurts.
+            EffectKind::Rough => 0,
+            // Air moves things and hurts nobody.
+            EffectKind::Updraft | EffectKind::Downdraft | EffectKind::AirRing => 0,
+            EffectKind::FireRing => t::fire_ring_damage(),
+            // The eruption's number; the shake itself only staggers.
+            EffectKind::Quake => t::quake_damage(),
         }
     }
 }
@@ -624,6 +746,23 @@ impl Effect {
     /// point every time it asks, rather than integrating toward it one frame
     /// at a time and landing somewhere near. Meaningless -- and never called
     /// -- on anything but a [`EffectKind::FireTornado`].
+    /// The ball of sparks an ember cloud occupies, as the slab the pillar
+    /// test already understands: `reach` is its radius, and it reaches that
+    /// far above and below its centre.
+    ///
+    /// **Not a sphere**, deliberately: a cylinder is what `aim::first_along`
+    /// traces and what `Pillar::contains` tests, and a cloud that was a
+    /// sphere to the shot and a cylinder to the body would light a Gale that
+    /// then flew past somebody standing in exactly the same fire. One shape,
+    /// both questions.
+    pub fn ember_volume(&self) -> Pillar {
+        Pillar {
+            radius: self.reach,
+            bottom: Fx::ZERO.sub(self.reach),
+            top: self.reach,
+        }
+    }
+
     pub fn tornado_pos(&self) -> V3 {
         let flying = self.age.saturating_sub(self.banked as u16);
         let travelled = t::tornado_speed().mul(Fx::from_int(flying as i32)).mul(DT);
@@ -684,6 +823,11 @@ impl Effect {
             EffectKind::Tether => self.source().radius,
             EffectKind::JudgementField => t::judgement_field_radius(),
             EffectKind::Pool => self.pool_radius(),
+            EffectKind::Embers => self.reach,
+            EffectKind::Rough => t::rough_width(),
+            EffectKind::Updraft | EffectKind::Downdraft | EffectKind::FireRing => self.reach,
+            EffectKind::AirRing => t::air_ring_radius(),
+            EffectKind::Quake => t::quake_radius(),
         }
     }
 
@@ -965,6 +1109,59 @@ impl Effect {
     pub fn tether_bead(&self, i: usize) -> V3 {
         let last = TETHER_BEADS.saturating_sub(1).max(1);
         crate::math::lerp3(self.pos, self.home, Fx::ratio(i as i32, last as i32))
+    }
+
+    /// The column a draft occupies: `reach` wide, from the floor up to
+    /// `tuning::draft_height`. A body is in it by its feet.
+    pub fn draft_volume(&self) -> Pillar {
+        Pillar {
+            radius: self.reach,
+            bottom: Fx::ZERO,
+            top: t::draft_height(),
+        }
+    }
+
+    /// How far out a ring of fire has raced: its speed times its age.
+    pub fn ring_radius(&self) -> Fx {
+        t::fire_ring_speed()
+            .mul(Fx::from_int(self.age as i32))
+            .mul(crate::DT)
+            .min(self.reach)
+    }
+
+    /// Where the `i`th of the ring's drawn pieces sits, on its live radius.
+    pub fn ring_piece(&self, i: usize) -> V3 {
+        let turn = Fx::ratio(i as i32, RING_PIECES as i32);
+        let r = self.ring_radius();
+        V3::new(
+            self.pos.x.add(crate::fixed::cos_turns(turn).mul(r)),
+            self.pos.y,
+            self.pos.z.add(crate::fixed::sin_turns(turn).mul(r)),
+        )
+    }
+
+    /// Where the `i`th piece of a stretch of rough terrain lies: evenly along
+    /// the line from its start to its end.
+    pub fn rough_bead(&self, i: usize) -> V3 {
+        let last = ROUGH_BEADS.saturating_sub(1).max(1);
+        let end = self.pos.add(self.dir.scale(self.reach));
+        crate::math::lerp3(self.pos, end, Fx::ratio(i as i32, last as i32))
+    }
+
+    /// Is a body standing at `pos` on this stretch of rough terrain?
+    ///
+    /// Flat distance from the line, against the ground's width plus the body's
+    /// own -- the same measure every other hit on the floor uses. Only a body
+    /// on the floor: broken ground is felt through the feet, and jumping
+    /// clears it the way it clears a churning stone.
+    pub fn roughens(&self, pos: V3, grounded: bool, body_radius: Fx) -> bool {
+        if !grounded {
+            return false;
+        }
+        let end = self.pos.add(self.dir.scale(self.reach));
+        let foot = V3::new(pos.x, self.pos.y, pos.z);
+        crate::math::segment_gap(self.pos, end, foot, foot).raw()
+            <= t::rough_width().add(body_radius).raw()
     }
 
     /// Forget everyone hit so far, so the next pass starts clean.

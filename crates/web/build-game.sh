@@ -28,7 +28,7 @@ want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[",]/, "", $3); print $3;
 have=$(wasm-bindgen --version 2>/dev/null | awk '{print $2}' || true)
 if [ "$have" != "$want" ]; then
   echo "wasm-bindgen ${have:-(not installed)} but the lock file wants $want." >&2
-  echo "  cargo install wasm-bindgen-cli --version $want --locked" >&2
+  echo "  ./scripts/setup-tools.sh web" >&2
   exit 1
 fi
 

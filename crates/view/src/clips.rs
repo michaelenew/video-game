@@ -292,6 +292,16 @@ clips! {
         "Fire pillar: a rising two-handed gesture that pulls a column up out of the floor.";
     ElementalistHeavy,    "elementalist_heavy",     Moves, "elementalist", Length::Move(Class::Elementalist, 3), false,
         "Cataclysm: both hands wound up wide and thrown forward together, then let fall.";
+    ElementalistCinder,   "elementalist_cinder",    Moves, "elementalist", Length::Move(Class::Elementalist, 7), false,
+        "Cinder spray: one hand scoops low across the body and flings up and out, scattering coals; the off arm swings back to balance it. The only one-armed throw she has.";
+    ElementalistUpdraft,  "elementalist_updraft",   Moves, "elementalist", Length::Move(Class::Elementalist, 8), false,
+        "Updraft: both arms spread wide and low, palms up, then swept up to the shoulders as the body rises on to its toes -- a conductor lifting the whole room. Nothing goes over the head, which is what tells it from the pillar's haul.";
+    ElementalistDowndraft,"elementalist_downdraft", Moves, "elementalist", Length::Move(Class::Elementalist, 9), false,
+        "Downdraft, in the air: both palms turned down and driven from the chest to full reach below the hips, knees drawn up as the arms come down -- pressing the air under her. The torso stays upright, which is what tells it from Landfall's fold.";
+    ElementalistQuake,    "elementalist_quake",     Moves, "elementalist", Length::Move(Class::Elementalist, 10), false,
+        "Quake: the left foot lifted and stamped down, and both hands pushed out low toward the patch, palms down, as if pressing the shake into the floor over there. The stamp is the tell.";
+    ElementalistTremor,   "elementalist_tremor",    Moves, "elementalist", Length::Move(Class::Elementalist, 11), false,
+        "Tremor: the same stamp, and both arms driven straight down at her sides as the body drops into a deep crouch -- the shake pressed into the floor under her own feet. Down and narrow, where Quake is forward.";
 
     // -- The Blood mage: Bloodletter, Reap, Grasp, Black spike, Reaping sweep
     //

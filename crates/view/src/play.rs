@@ -489,6 +489,18 @@ fn attack(input: PoseInput, kind: u8) -> Pose {
             let (_, _, recovery) = sim::moves::frames(input.class, kind);
             startup + active + recovery.saturating_sub(left)
         }
+        // A channel holds one frame of the clip for as long as it is held,
+        // and which frame is which charge it is. A Grasp is wound up before
+        // the move and coils on its first frame. A Strike is held *after*
+        // the startup, with the fire gathered in her hands, so it holds the
+        // last frame of the wind-up. The crack's hold is the stone kept
+        // churning under the floor: hands raised and waiting, which is the
+        // Fissure clip's own tell a quarter of the way into its startup.
+        Action::Channel { .. } => match sim::moves::charge(input.class, kind) {
+            Some(sim::moves::Charge::Strike) => startup.saturating_sub(1),
+            Some(sim::moves::Charge::Crack) => startup / 4,
+            _ => 0,
+        },
         _ => 0,
     };
     let clip = move_clip(input.class, kind);
@@ -623,7 +635,14 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // in `docs/design/feel-log.md`.
         (Class::Elementalist, 4) => Clip::ElementalistPoke,
         (Class::Elementalist, 5) => Clip::ElementalistHeavy,
-        (Class::Elementalist, _) => Clip::ElementalistCommitted,
+        (Class::Elementalist, 6) => Clip::ElementalistCommitted,
+        // v2: a one-armed scatter, and the two drafts, none of them like
+        // anything above.
+        (Class::Elementalist, 7) => Clip::ElementalistCinder,
+        (Class::Elementalist, 8) => Clip::ElementalistUpdraft,
+        (Class::Elementalist, 9) => Clip::ElementalistDowndraft,
+        (Class::Elementalist, 10) => Clip::ElementalistQuake,
+        (Class::Elementalist, _) => Clip::ElementalistTremor,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,

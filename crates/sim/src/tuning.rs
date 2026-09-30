@@ -2695,6 +2695,237 @@ pub fn landfall_erupt() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LandfallErupt))
 }
 
+// --- Fire in the air: the Cinder spray, and what a lit shot is worth -------
+//
+// v2 of the class, 2026-09-30. The air row was three projectiles that met
+// nothing she built; this is what they fly through. See
+// `docs/design/elementalist-v2.md` and `crate::gust::Gale::Ember`.
+
+/// How fast the Cinder spray's ember flies before it bursts.
+///
+/// Slower than the Air bolt: it is not a shot, it is a thing thrown to a
+/// place, and the place is where the crosshair's range sphere puts it.
+pub fn cinder_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CinderSpeed))
+}
+
+/// The radius of the cloud a Cinder spray bursts into -- the ball a shot has
+/// to fly through to come out lit, and the patch it burns on the floor.
+pub fn embers_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EmbersRadius))
+}
+
+/// How long a cloud of embers hangs. A couple of seconds: long enough to fly
+/// a shot through on purpose, short enough that the air is not on fire for
+/// the rest of the round.
+pub fn embers_life() -> u16 {
+    oven::scalar(Scalar::EmbersLife).max(1) as u16
+}
+
+/// What standing in a cloud costs per tick. Gentle: the cloud is for lighting
+/// things, and the burn is what makes standing in it a mistake rather than
+/// what kills anybody.
+pub fn embers_damage() -> i32 {
+    oven::scalar(Scalar::EmbersDamage)
+}
+
+/// The radius of the burst a **lit** shot leaves where it lands -- the small
+/// explosion, as a smaller cloud of the same kind.
+pub fn lit_burst_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LitBurstRadius))
+}
+
+/// How much more a shot that flew through fire deals, as a share of its own
+/// row's damage.
+pub fn lit_bonus() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::LitBonus).clamp(0, 100), 100)
+}
+
+/// How hard the Gale shoves a stone it passes, as a multiple of the beam's own
+/// kick speed, before the disc's swell is applied. Zero switches the shove off.
+pub fn gale_stone_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleStonePush))
+}
+
+// --- The charges: the Strike, Fissure's crack, and the ground it leaves -----
+//
+// See `moves::Charge` and `docs/design/elementalist-v2.md` §"The charges".
+
+/// How long rough terrain stays broken.
+pub fn rough_life() -> u16 {
+    oven::scalar(Scalar::RoughLife).max(1) as u16
+}
+
+/// What share of their speed a fighter keeps while crossing rough terrain.
+pub fn rough_slow() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoughSlow))
+}
+
+/// How far either side of the crack's line the ground is broken.
+pub fn rough_width() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::RoughWidth))
+}
+
+/// What a full Strike is worth against the burn it replaces.
+///
+/// One is the honest number: a full hold concentrates the pillar's whole burn
+/// into one hit and nothing more. Above it a full hold is a free upgrade;
+/// below it a trap. The harness pins the ratio; a person picks the value.
+pub fn strike_worth() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::StrikeWorth))
+}
+
+/// The whole burn a fire pillar would deal to somebody who stood in it for
+/// its whole life -- what a full Strike concentrates into one hit.
+pub fn pillar_burn_total() -> i32 {
+    let ticks = (pillar_life() / effect_tick_frames().max(1)) as i32;
+    pillar_damage() * ticks
+}
+
+// --- Air on her body: the two drafts and the two bursts --------------------
+//
+// See `moves::elementalist::UPDRAFT` and `DOWNDRAFT`, and
+// `docs/design/elementalist-v2.md` §"Updraft and Downdraft".
+
+/// How wide the column is, from her centre.
+pub fn draft_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DraftRadius))
+}
+
+/// How tall the column is: a body is in it by its feet, up to here.
+pub fn draft_height() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DraftHeight))
+}
+
+/// How long either column blows after the cast. What "landing while it is
+/// still blowing" means, for the Downdraft.
+pub fn draft_life() -> u16 {
+    oven::scalar(Scalar::DraftLife).max(1) as u16
+}
+
+/// The vertical speed an Updraft hands everybody in it, her included. Each
+/// class's own gravity then decides how high that goes.
+pub fn updraft_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftLift))
+}
+
+/// The vertical speed an Updraft hands a stone in it.
+pub fn updraft_stone_lift() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::UpdraftStoneLift))
+}
+
+/// The downward speed a Downdraft drives her and everything airborne in it at.
+pub fn downdraft_drive() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::DowndraftDrive))
+}
+
+/// How far the air ring reaches from her feet.
+pub fn air_ring_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirRingRadius))
+}
+
+/// How hard it shoves everybody inside it, outward.
+pub fn air_ring_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::AirRingPush))
+}
+
+/// The brief stagger the shove needs. A fighter free to act sets his own
+/// velocity from the stick every frame, which would erase the shove before
+/// it moved him; a few frames of not being free is what lets it land.
+pub fn air_ring_stagger() -> u16 {
+    oven::scalar(Scalar::AirRingStagger) as u16
+}
+
+/// How long the ring is drawn after its one shove.
+pub fn air_ring_life() -> u16 {
+    oven::scalar(Scalar::AirRingLife).max(1) as u16
+}
+
+/// How fast the ring of fire races outward.
+pub fn fire_ring_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingSpeed))
+}
+
+/// How far it gets before it is spent.
+pub fn fire_ring_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingReach))
+}
+
+/// How thick the ring is, from its live radius: a body inside this band of it
+/// is in the fire.
+pub fn fire_ring_width() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingWidth))
+}
+
+pub fn fire_ring_damage() -> i32 {
+    oven::scalar(Scalar::FireRingDamage)
+}
+
+pub fn fire_ring_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FireRingPush))
+}
+
+pub fn fire_ring_stagger() -> u16 {
+    oven::scalar(Scalar::FireRingStagger) as u16
+}
+
+// --- Fire on earth, and the two Quakes --------------------------------------
+
+/// How long a stone burns once lit.
+pub fn lit_stone_life() -> u16 {
+    oven::scalar(Scalar::LitStoneLife).max(1) as u16
+}
+
+/// What standing on a lit stone costs per tick.
+pub fn lit_stone_burn() -> i32 {
+    oven::scalar(Scalar::LitStoneBurn)
+}
+
+/// How wide the shaking patch is.
+pub fn quake_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::QuakeRadius))
+}
+
+/// How long it shakes before it erupts. All telegraph, which is the point.
+pub fn quake_shake() -> u16 {
+    oven::scalar(Scalar::QuakeShake).max(1) as u16
+}
+
+/// The stagger a mover in it takes, once.
+pub fn quake_stagger() -> u16 {
+    oven::scalar(Scalar::QuakeStagger) as u16
+}
+
+/// Below this flat speed a body counts as standing still, and the shake
+/// leaves it alone.
+pub fn quake_still_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::QuakeStillSpeed))
+}
+
+/// What the eruption deals to everyone in the patch when the shake ends.
+pub fn quake_damage() -> i32 {
+    oven::scalar(Scalar::QuakeDamage)
+}
+
+/// How hard the eruption shoves them outward.
+pub fn quake_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::QuakePush))
+}
+
+// --- The dodge into a stone ------------------------------------------------
+
+/// How far away a stone may stand for a dodge at it to break through it.
+/// About what a dodge covers: the dodge has to carry her into it.
+pub fn break_reach() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreakReach))
+}
+
+/// How far off a stone's middle the crosshair may sit and still count as
+/// on it. The Reaver's dash has the same kind of slack for her shadow.
+pub fn break_lock() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::BreakLock))
+}
+
 // --- The step, the diagonal, and going up with them ------------------------
 
 /// How many frames before the hitbox a stepping move starts driving the body.

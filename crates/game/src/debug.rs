@@ -208,6 +208,69 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
+            // The Quake's patch: the disc the shake and the eruption read.
+            EffectKind::Quake => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    0.05,
+                    PILLAR,
+                );
+            }
+            // The drafts: the column a body is tested in.
+            EffectKind::Updraft | EffectKind::Downdraft => {
+                let slab = effect.draft_volume();
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    slab.radius.to_f32_for_render(),
+                    slab.top.to_f32_for_render().max(0.01),
+                    PILLAR,
+                );
+            }
+            // The two rings: the radius the shove reached, and the radius the
+            // fire is at this frame.
+            EffectKind::AirRing => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.field_radius().to_f32_for_render(),
+                    0.05,
+                    PILLAR,
+                );
+            }
+            EffectKind::FireRing => {
+                cylinder(
+                    &mut gizmos,
+                    at,
+                    effect.ring_radius().to_f32_for_render(),
+                    0.05,
+                    PILLAR,
+                );
+            }
+            // Rough terrain: the line the slow reads, as its two edges.
+            EffectKind::Rough => {
+                let end = v3(effect.pos.add(effect.dir.scale(effect.reach)));
+                let side = Vec3::Y.cross(end - at).normalize_or_zero()
+                    * sim::tuning::rough_width().to_f32_for_render();
+                gizmos.line(at + side, end + side, PILLAR);
+                gizmos.line(at - side, end - side, PILLAR);
+            }
+            // A cloud of embers: the slab the shot test traces and the body
+            // test reads, about its centre -- see `Effect::ember_volume`.
+            EffectKind::Embers => {
+                let slab = effect.ember_volume();
+                let bottom = slab.bottom.to_f32_for_render();
+                let top = slab.top.to_f32_for_render();
+                cylinder(
+                    &mut gizmos,
+                    at + Vec3::Y * bottom,
+                    slab.radius.to_f32_for_render(),
+                    (top - bottom).max(0.01),
+                    PILLAR,
+                );
+            }
             EffectKind::BlackSpike => {
                 let volume = effect.spike_volume();
                 cylinder(

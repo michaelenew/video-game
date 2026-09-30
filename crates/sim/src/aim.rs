@@ -136,6 +136,11 @@ pub enum Kind {
     /// Wherever the class mechanic is standing. The player aimed when they put
     /// it there. [`mechanic_path`].
     AtTheMechanic,
+    /// From the stone the Elementalist is holding churning, **flat along her
+    /// look**, as far as the hold bought. Fissure, and nothing else: a crack
+    /// that races through the ground from a place she already chose, in a
+    /// direction she is choosing now. [`racing_path`].
+    Racing,
 }
 
 impl Kind {
@@ -154,6 +159,7 @@ impl Kind {
             Kind::Skillshot => "skillshot",
             Kind::Swing => "swing",
             Kind::AtTheMechanic => "mechanic",
+            Kind::Racing => "racing",
         }
     }
 
@@ -165,6 +171,7 @@ impl Kind {
             1 => Kind::Grounded,
             2 => Kind::Skillshot,
             3 => Kind::AtTheMechanic,
+            4 => Kind::Racing,
             _ => Kind::Swing,
         }
     }
@@ -175,6 +182,7 @@ impl Kind {
             Kind::Grounded => 1,
             Kind::Skillshot => 2,
             Kind::AtTheMechanic => 3,
+            Kind::Racing => 4,
         }
     }
 }
@@ -874,6 +882,26 @@ pub fn mechanic_path(from: V3, mechanic: &Mechanic) -> Path {
     }
 }
 
+/// A crack racing through the ground: from `from` -- the stone the
+/// Elementalist held churning, or her own feet if there is none -- **flat
+/// along the yaw of her look**, for `reach`.
+///
+/// The fifth line of effect, and the argument for it being one is the same as
+/// for the fourth. The place it starts was aimed already, with the crosshair,
+/// when the stone was raised; what is being chosen now is a direction and a
+/// distance, and the distance is the hold's. The look is read for its yaw
+/// only: a crack through the ground has no pitch to be given, and one that
+/// went shorter because she happened to be looking down would be aiming
+/// twice. What it meets along the way is `first_along`'s question, asked by
+/// the move when the crack comes out.
+pub fn racing_path(from: V3, look: Input, reach: Fx) -> Path {
+    let dir = V3::from_turns(look.aim_turns());
+    Path {
+        from,
+        to: from.add(dir.scale(reach)),
+    }
+}
+
 /// Where a move plants something **in front of the body**, on the floor.
 ///
 /// Not a fifth line of effect, and it is worth being exact about why. The four
@@ -1160,6 +1188,23 @@ pub fn first_along(
     if targets.fire {
         for slot in scene.effects.iter() {
             let Some(e) = slot else { continue };
+            // A cloud of embers is fire too -- the one fire with no foot on
+            // the floor, so its slab is measured about its centre. What
+            // lights at a pillar lights at a cloud.
+            if e.kind == EffectKind::Embers {
+                let slab = e.ember_volume();
+                let foot = V3::new(e.pos.x, e.pos.y.add(slab.bottom), e.pos.z);
+                if let Some(dist) = crate::math::ray_hits_cylinder(
+                    from,
+                    dir,
+                    foot,
+                    slab.radius.add(girth),
+                    slab.top.sub(slab.bottom),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+                continue;
+            }
             if e.kind != EffectKind::FirePillar {
                 continue;
             }

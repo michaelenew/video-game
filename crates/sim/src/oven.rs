@@ -612,6 +612,55 @@ scalars! {
     // the two rules around it. See `moves::Move::hitstop`.
     FreezeOnBlock,    "Offence",  "Impact freeze on block (%)",           Percent, 0,       100;
     FreezeCreature,   "Offence",  "Impact freeze, the creature's blows",  Frames,  0,       30;
+    // **The Elementalist's v2**, 2026-09-30, appended for the reason everything
+    // above is. Fire in the air first: the Cinder spray and the cloud it
+    // leaves, what a shot flown through fire is worth, and the Gale's shove on
+    // a stone. See `docs/design/elementalist-v2.md` and `crate::gust`.
+    CinderSpeed,      "Elementalist", "Cinder spray, speed",                  Fixed,   fx(5,1),  fx(80,1);
+    EmbersRadius,     "Elementalist", "Cinder cloud, radius",                 Fixed,   fx(1,4),  fx(6,1);
+    EmbersLife,       "Elementalist", "Cinder cloud, lasts",                  Frames,  1,        600;
+    EmbersDamage,     "Elementalist", "Cinder cloud, damage per tick",        Int,     0,        200;
+    LitBurstRadius,   "Elementalist", "Lit shot, burst radius",               Fixed,   fx(1,4),  fx(6,1);
+    LitBonus,         "Elementalist", "Lit shot, damage bonus (%)",           Percent, 0,        100;
+    GaleStonePush,    "Elementalist", "Gale pushes a stone at (x the kick)",  Fixed,   0,        fx(3,1);
+    // The charges -- M2. Rough terrain is the scar a Fissure leaves and the
+    // ground a broken-through stone leaves; the Strike's worth is the one
+    // ratio the feel harness pins. See `moves::Charge`.
+    RoughLife,        "Elementalist", "Rough terrain, lasts",                 Frames,  1,        900;
+    RoughSlow,        "Elementalist", "Rough terrain, speed kept (x)",        Fixed,   fx(1,10), fx(1,1);
+    RoughWidth,       "Elementalist", "Rough terrain, half-width",            Fixed,   fx(1,4),  fx(4,1);
+    StrikeWorth,      "Elementalist", "Strike, worth (x the burn it replaces)", Fixed, 0,        fx(3,1);
+    // Air on her body -- M3. The two drafts share a column; what each does to
+    // what is in it, and the two bursts a landed Downdraft can end in.
+    DraftRadius,      "Elementalist", "Draft, radius",                        Fixed,   fx(1,2),  fx(6,1);
+    DraftHeight,      "Elementalist", "Draft, height",                        Fixed,   fx(1,1),  fx(12,1);
+    DraftLife,        "Elementalist", "Draft, blows for",                     Frames,  1,        180;
+    UpdraftLift,      "Elementalist", "Updraft, lift (m/s)",                  Fixed,   0,        fx(40,1);
+    UpdraftStoneLift, "Elementalist", "Updraft, lifts a stone at (m/s)",      Fixed,   0,        fx(40,1);
+    DowndraftDrive,   "Elementalist", "Downdraft, drive (m/s)",               Fixed,   0,        fx(60,1);
+    AirRingRadius,    "Elementalist", "Air ring, radius",                     Fixed,   fx(1,2),  fx(8,1);
+    AirRingPush,      "Elementalist", "Air ring, push (m/s)",                 Fixed,   0,        fx(30,1);
+    AirRingStagger,   "Elementalist", "Air ring, stagger",                    Frames,  0,        60;
+    AirRingLife,      "Elementalist", "Air ring, shown for",                  Frames,  1,        60;
+    FireRingSpeed,    "Elementalist", "Fire ring, speed (m/s)",               Fixed,   fx(1,1),  fx(60,1);
+    FireRingReach,    "Elementalist", "Fire ring, reach",                     Fixed,   fx(1,1),  fx(14,1);
+    FireRingWidth,    "Elementalist", "Fire ring, width",                     Fixed,   fx(1,10), fx(3,1);
+    FireRingDamage,   "Elementalist", "Fire ring, damage",                    Int,     0,        400;
+    FireRingPush,     "Elementalist", "Fire ring, push (m/s)",                Fixed,   0,        fx(30,1);
+    FireRingStagger,  "Elementalist", "Fire ring, stagger",                   Frames,  0,        60;
+    // Fire on earth, and the two Quakes -- M4.
+    LitStoneLife,     "Elementalist", "Lit stone, burns for",                 Frames,  1,        1800;
+    LitStoneBurn,     "Elementalist", "Lit stone, burn per tick",             Int,     0,        200;
+    QuakeRadius,      "Elementalist", "Quake, radius",                        Fixed,   fx(1,2),  fx(8,1);
+    QuakeShake,       "Elementalist", "Quake, shakes for",                    Frames,  1,        180;
+    QuakeStagger,     "Elementalist", "Quake, stagger on a mover",            Frames,  0,        60;
+    QuakeStillSpeed,  "Elementalist", "Quake, still means under (m/s)",       Fixed,   0,        fx(8,1);
+    QuakeDamage,      "Elementalist", "Quake, eruption damage",               Int,     0,        400;
+    QuakePush,        "Elementalist", "Quake, eruption push (m/s)",           Fixed,   0,        fx(30,1);
+    // The dodge into a stone -- M5. How far a stone may be for the dodge to
+    // break through it, and how far the crosshair may miss its middle.
+    BreakReach,       "Elementalist", "Break-through, reach",                 Fixed,   fx(1,2),  fx(8,1);
+    BreakLock,        "Elementalist", "Break-through, crosshair slack",       Fixed,   0,        fx(4,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -894,7 +943,7 @@ impl MoveField {
             MoveField::Effect => "Leaves behind",
             MoveField::Cost => "Health cost",
             MoveField::Leech => "Leech (%)",
-            MoveField::Aim => "Line of effect (0-3)",
+            MoveField::Aim => "Line of effect (0-4)",
             MoveField::Arc => "Swing arc (turns)",
             MoveField::Rehit => "Hits again every",
             MoveField::Channel => "Channel, longest hold",
@@ -936,7 +985,8 @@ impl MoveField {
         match self {
             // Four lines of effect, and the numbering is `aim::Kind`'s. A
             // slider that ran to six hundred would let somebody pick a fifth.
-            MoveField::Aim => (0, 3),
+            // Five since v2: the crack racing from a held stone. See `aim::Kind`.
+            MoveField::Aim => (0, 4),
             // Signed, because a spike is a launch pointed the other way: the
             // Champion's aerial hammer drives an airborne target into the
             // floor with the same number that an uppercut lifts them with.

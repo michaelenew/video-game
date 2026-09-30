@@ -769,14 +769,20 @@ fn describe(p: &sim::state::Player) -> String {
         // the reach it has bought is the number beside it.
         Action::Channel { kind, held } => {
             let m = sim::moves::get(p.class, kind);
-            format!(
-                "{} channel {held}/{}f   {} m",
-                m.name,
-                m.channel,
-                // The solved line, cut back to the hold -- which is the marker,
-                // and is what the arms will actually converge on.
-                p.aim_path.length().to_f32_for_render()
-            )
+            match sim::moves::charge(p.class, kind) {
+                // The Strike buys a share of the burn, not a distance.
+                Some(sim::moves::Charge::Strike) => {
+                    format!("{} gathering {held}/{}f", m.name, m.channel)
+                }
+                _ => format!(
+                    "{} channel {held}/{}f   {} m",
+                    m.name,
+                    m.channel,
+                    // The solved line, cut back to the hold -- which is the
+                    // marker, and is what the arms will actually converge on.
+                    p.aim_path.length().to_f32_for_render()
+                ),
+            }
         }
     }
 }

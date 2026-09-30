@@ -8,12 +8,10 @@
 # ones. DEBUG_OVERLAY=1 draws the frame-data readout.
 #
 # Useful in a container with no display, and as a way to see what a change did
-# without launching the game. Needs Xvfb, ImageMagick and a Vulkan driver:
-#
-#   apt-get install -y xvfb imagemagick mesa-vulkan-drivers libxkbcommon-x11-0
-#
-# lavapipe (mesa-vulkan-drivers) is a software rasteriser -- slow, but it draws
-# exactly what a real GPU would.
+# without launching the game. Needs Xvfb, ImageMagick and a Vulkan driver,
+# which `./scripts/setup-tools.sh shot` installs. lavapipe
+# (mesa-vulkan-drivers) is a software rasteriser -- slow, but it draws exactly
+# what a real GPU would.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

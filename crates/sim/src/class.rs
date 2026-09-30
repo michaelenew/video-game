@@ -495,6 +495,12 @@ pub struct Structure {
     /// one is the Bulwark's planted shield, which joins the field as a stone
     /// sized by the weight it landed with -- see `stones::gather`.
     pub scale: Fx,
+    /// Frames of **fire** left on it, or zero. Fire on a stone lights it -- a
+    /// pillar cast on it, a Cinder spray bursting beside it, a burning Gale
+    /// passing -- and a lit stone burns whoever stands on it and **bursts**
+    /// into burning debris when anything shoves or breaks it. Earth builds
+    /// the field; fire decides who may use it. See `crate::stones`.
+    pub lit: u16,
 }
 
 // ---------------------------------------------------------------------------

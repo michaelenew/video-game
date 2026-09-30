@@ -72,6 +72,7 @@ impl Structure {
             // field but one.
             erupt: V3::ZERO,
             scale: Fx::ONE,
+            lit: 0,
         }
     }
 
@@ -169,6 +170,30 @@ impl Structure {
     fn already_struck(&self, player: usize) -> bool {
         self.struck & (1 << player) != 0
     }
+
+    /// Would this stone leave the churn on its next frame?
+    ///
+    /// The last frame of the rise's first half is where Raise's hold takes
+    /// over: released before it, the press was a tap and the stone erupts as
+    /// it always did; still held on it, the stone is kept churning and the
+    /// hold becomes Fissure's. See `state::hold_the_churn`.
+    pub fn about_to_erupt(&self) -> bool {
+        let mut next = *self;
+        next.age = next.age.saturating_add(1);
+        self.phase() == Phase::Churning && next.phase() != Phase::Churning
+    }
+
+    /// Keep this stone on the last frame of its churn.
+    ///
+    /// `step` ages every stone at the top of the frame; this winds the one
+    /// being held back to the last age that is still churning, so it stays a
+    /// warning under the floor for as long as the button is down and erupts
+    /// the frame it is let go.
+    pub fn hold_churning(&mut self) {
+        while self.phase() != Phase::Churning && self.age > 0 {
+            self.age -= 1;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +261,8 @@ pub fn step(players: &mut [Player; MAX_PLAYERS]) {
         // Saturating, because this is not a lifetime: once a stone is out of
         // the ground the number stops mattering and the stone stays.
         stone.age = stone.age.saturating_add(1);
+        // Fire on it burns down.
+        stone.lit = stone.lit.saturating_sub(1);
         // Gravity always. A stone at rest has its fall zeroed by the floor
         // every frame, which costs nothing and means resting needs no flag.
         stone.vel.y = stone.vel.y.add(t::gravity().mul(DT));
@@ -507,15 +534,25 @@ fn launch_decel(stone: &mut Structure) {
 /// already erupted once is still fair game to hurt someone when it is kicked,
 /// because the kick is a different event.
 pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
+    shove(players, index, dir, t::bolt_knock_speed());
+}
+
+/// The same kick at a speed of the caller's choosing.
+///
+/// The beam's kick is the reference speed; the Gale's push is a share of it
+/// scaled by how much of itself the disc has become (`tuning::gale_stone_push`).
+/// One launch path for both, so a stone pushed by the disc dies off, hits and
+/// hands over speed exactly the way a kicked one does.
+pub fn shove(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3, speed: Fx) {
     let mut field = gather(players);
     if let Some(stone) = field[index].as_mut() {
         stone.launched = true;
         stone.launch_from = stone.at;
         stone.knock_struck = 0;
-        stone.vel.x = dir.x.mul(t::bolt_knock_speed());
-        stone.vel.z = dir.z.mul(t::bolt_knock_speed());
+        stone.vel.x = dir.x.mul(speed);
+        stone.vel.z = dir.z.mul(speed);
         if dir.y.raw() > 0 {
-            stone.vel.y = dir.y.mul(t::bolt_knock_speed());
+            stone.vel.y = dir.y.mul(speed);
         }
     }
     scatter(players, &field);
@@ -567,17 +604,111 @@ pub fn destroy(players: &mut [Player; MAX_PLAYERS], index: usize) -> Option<V3> 
 /// beside either of the two things that raise one — the mechanic key, and
 /// Landfall — because a second copy of "and if there are already three" is how
 /// one of them ends up quietly not spending it.
-pub fn raise(p: &mut Player, stone: Structure) {
+pub fn raise(p: &mut Player, stone: Structure) -> Option<usize> {
     let Mechanic::Structures(mut slots) = p.mechanic else {
-        return;
+        return None;
     };
-    if let Some(free) = slots.iter_mut().find(|s| s.is_none()) {
-        *free = Some(stone);
-    } else {
-        slots.rotate_left(1);
-        slots[MAX_STRUCTURES - 1] = Some(stone);
-    }
+    let slot = match slots.iter().position(|s| s.is_none()) {
+        Some(free) => {
+            slots[free] = Some(stone);
+            free
+        }
+        None => {
+            slots.rotate_left(1);
+            slots[MAX_STRUCTURES - 1] = Some(stone);
+            MAX_STRUCTURES - 1
+        }
+    };
     p.mechanic = Mechanic::Structures(slots);
+    Some(slot)
+}
+
+/// Set fire to the stone at `index`, for `tuning::lit_stone_life`.
+pub fn light(players: &mut [Player; MAX_PLAYERS], index: usize) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.lit = t::lit_stone_life();
+    }
+    scatter(players, &field);
+}
+
+/// Set fire to every stone whose base is within `radius` of `at`.
+pub fn light_within(players: &mut [Player; MAX_PLAYERS], at: V3, radius: Fx) {
+    let inside = within(players, at, radius);
+    for (index, hit) in inside.into_iter().enumerate() {
+        if hit {
+            light(players, index);
+        }
+    }
+}
+
+/// Is the stone at `index` on fire?
+pub fn is_lit(players: &[Player; MAX_PLAYERS], index: usize) -> bool {
+    gather(players)[index].is_some_and(|s| s.lit > 0)
+}
+
+/// Send the stone at `index` straight up at `speed`, as an Updraft does. Not
+/// a launch: it goes up and comes down where it was, and a stone coming down
+/// hurts nobody -- what it is for is being earth in the air, where the beam
+/// can kick it down on to somebody.
+pub fn loft(players: &mut [Player; MAX_PLAYERS], index: usize, speed: Fx) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.vel.y = stone.vel.y.max(speed);
+    }
+    scatter(players, &field);
+}
+
+/// Drive the stone at `index` down at `speed`, as a Downdraft does to one
+/// that is off the floor.
+pub fn press(players: &mut [Player; MAX_PLAYERS], index: usize, speed: Fx) {
+    let mut field = gather(players);
+    if let Some(stone) = field[index].as_mut() {
+        stone.vel.y = stone.vel.y.min(Fx::ZERO.sub(speed));
+    }
+    scatter(players, &field);
+}
+
+/// Is the stone at `index` resting on something, rather than in the air?
+pub fn resting(players: &[Player; MAX_PLAYERS], index: usize) -> bool {
+    let field = gather(players);
+    field[index].is_some_and(|s| s.vel.y.raw() == 0)
+}
+
+/// Every stone whose base is within `radius` of `at`, flat, as `aim` counts
+/// them.
+pub fn within(players: &[Player; MAX_PLAYERS], at: V3, radius: Fx) -> [bool; MAX_STONES] {
+    let field = gather(players);
+    std::array::from_fn(|i| {
+        field[i].is_some_and(|s| {
+            let apart = V3::new(s.at.x.sub(at.x), Fx::ZERO, s.at.z.sub(at.z));
+            apart.flat_len().raw() <= radius.add(s.radius()).raw()
+        })
+    })
+}
+
+/// Move the stone at `index` (as `aim::Contact::Stone` counts them) to `to`,
+/// settled on whatever is under that spot, and let it erupt there.
+///
+/// Fissure's end: the stone she held churning at one place comes up at the
+/// far end of the crack instead. It is the same stone -- same slot, same
+/// rise curve -- so the cap is not spent twice and the eruption's damage and
+/// stagger are the ordinary ones. Its own eruption record is reset, because
+/// arriving somewhere new is a new chance to catch somebody.
+pub fn relocate_and_erupt(players: &mut [Player; MAX_PLAYERS], index: usize, to: V3) {
+    let mut field = gather(players);
+    let settled = crate::aim::settle(to, &field);
+    if let Some(stone) = field[index].as_mut() {
+        stone.at = settled;
+        stone.vel = V3::ZERO;
+        stone.struck = 0;
+        // Off the churn's last frame and into the eruption: the next `step`
+        // carries it out of the ground.
+        while stone.phase() == Phase::Churning && stone.age < stone.rise {
+            stone.age += 1;
+        }
+    }
+    scatter(players, &field);
 }
 
 // ---------------------------------------------------------------------------
@@ -727,6 +858,14 @@ pub fn touch(players: &mut [Player; MAX_PLAYERS]) {
             let apart = V3::new(p.pos.x.sub(stone.at.x), Fx::ZERO, p.pos.z.sub(stone.at.z));
             if apart.flat_len().raw() >= reach.raw() {
                 continue;
+            }
+            // A lit stone is a stove: standing on it burns, on the effects'
+            // own tick. Never its owner, like everything else a stone does.
+            if stone.lit > 0
+                && stone.lit % t::effect_tick_frames().max(1) == 0
+                && p.pos.y.sub(stone.top()).abs().raw() <= arena::SKIN.raw()
+            {
+                p.wound(t::lit_stone_burn());
             }
             match stone.phase() {
                 // The churn is felt through the floor, so jumping clears it.

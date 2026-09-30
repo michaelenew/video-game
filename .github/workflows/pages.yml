@@ -56,15 +56,10 @@ jobs:
           restore-keys: pages-${{ runner.os }}-
 
       # The version has to match the `wasm-bindgen` crate in the lock file, and
-      # the build script refuses to run if it does not -- so read it from there
-      # rather than writing it down twice.
-      - name: Install wasm-bindgen-cli
-        run: |
-          want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[",]/, "", $3); print $3; exit }' Cargo.lock)
-          have=$(wasm-bindgen --version 2>/dev/null | awk '{print $2}' || true)
-          if [ "$have" != "$want" ]; then
-            cargo install wasm-bindgen-cli --version "$want" --locked --force
-          fi
+      # the build script refuses to run if it does not. The install lives in
+      # one script that this, a cloud session's setup and a new machine all
+      # run, so it is written down once.
+      - run: ./scripts/setup-tools.sh web
 
       - run: ./crates/web/build-game.sh
 

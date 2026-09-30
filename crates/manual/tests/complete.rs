@@ -49,7 +49,10 @@ fn spoken(key: &str) -> Vec<&'static str> {
         "KeyM" => vec!["M"],
         "KeyP" => vec!["P"],
         "KeyQ" => vec!["Q"],
-        "KeyR" => vec!["R"],
+        "KeyR" => vec!["R", "F and R"],
+        "KeyF" => vec!["F", "F and R"],
+        "KeyI" | "KeyO" => vec!["Mouse side buttons (or I and O)"],
+        "Backspace" => vec!["Backspace"],
         // The stand-in for middle click, the way J and K stand in for the other
         // two. It exists for the Champion's third weapon.
         "KeyU" => vec!["U or middle click", "Middle click (or U)"],

@@ -88,6 +88,18 @@ impl Input {
     /// `controls.md` has always counted `M` among the attack buttons. There is
     /// a keyboard stand-in for it either way.
     pub const MIDDLE: u16 = 1 << 11;
+    /// The two mouse **side buttons** -- the right thumb's, and the only two
+    /// buttons in the scheme that cost no finger anything. Aimed abilities
+    /// want the hand that aims, and this is the hand that aims. See
+    /// `docs/design/exploration/0001_control_budget.md`.
+    pub const SIDE_A: u16 = 1 << 12;
+    pub const SIDE_B: u16 = 1 << 13;
+    /// `F` and `R`: the left index finger's two keys, one row up from `D`,
+    /// which is exactly the price `Q` and `E` pay for being one row up from
+    /// `A` and `W`. Unaimed things live here -- state, stance, self-casts --
+    /// because this is the hand that does not aim.
+    pub const KEY_F: u16 = 1 << 14;
+    pub const KEY_R: u16 = 1 << 15;
 
     /// Every button that means something on the frame it goes down -- the
     /// attacks, the mechanic, the jump and the dodge -- as against the stick
@@ -99,7 +111,11 @@ impl Input {
         | Input::SPECIAL
         | Input::MECHANIC
         | Input::SPACE
-        | Input::SHIFT;
+        | Input::SHIFT
+        | Input::SIDE_A
+        | Input::SIDE_B
+        | Input::KEY_F
+        | Input::KEY_R;
 
     /// Buttons only, looking down the positive X axis, level.
     pub const fn new(bits: u16) -> Input {

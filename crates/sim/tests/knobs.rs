@@ -37,6 +37,11 @@ const NOT_GAMEPLAY: &[&str] = &[
 /// entry without one is just a way to silence the test.
 const EXEMPT: &[(&str, &str)] = &[
     (
+        "let across = t::structure_radius().mul(Fx::from_int(2))",
+        "A stone's diameter, for the broken ground a pressed stone leaves: twice its \
+         radius, because that is what a diameter is. The radius is the knob.",
+    ),
+    (
         "let knee = |u: Fx| ease.mul(u.mul(u).mul(Fx::from_int(2).sub(u)))",
         "The cubic that leaves flat and arrives at the gradient of the line it \
          joins. Solving for those two conditions is what produces the 2; it is \

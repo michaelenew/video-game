@@ -18,6 +18,11 @@
 //!   Pillar    both hands sweep down, the body sinks           -- down, then up
 //! ```
 //!
+//! The Cinder spray, since v2, is the one **one-armed throw** in the file and
+//! the only move whose hand crosses the body: it scoops low across to the
+//! far hip and flings up and out to the near side, scattering coals. Nothing
+//! else here ever puts a hand across the midline, so the scoop is the tell.
+//!
 //! Cataclysm is not a fourth direction in that read: it is on its own button,
 //! so there is nothing to disambiguate it from. What it needs instead is the
 //! one silhouette none of the three above ever makes -- **forward**. Fissure
@@ -75,7 +80,17 @@ use view::skeleton::Joint;
 const THROUGH: Ease = Ease::new(0.10, 0.34, 0.90, 0.66);
 
 pub fn clips() -> Vec<Recipe> {
-    vec![bolt(), fissure(), fire_pillar(), heavy()]
+    vec![
+        bolt(),
+        fissure(),
+        fire_pillar(),
+        heavy(),
+        cinder(),
+        updraft(),
+        downdraft(),
+        quake(),
+        tremor(),
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -756,6 +771,619 @@ fn gathering() -> Pose {
             .shoulders(32.0, 20.0, -6.0)
             .elbows(48.0)
             .wrists(-6.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Cinder spray
+// ---------------------------------------------------------------------------
+
+/// A handful of coals scooped and flung: one arm, low across the body and up
+/// and out, the off arm swinging back to balance it.
+///
+/// The one-armed throw is what makes it legible against the rest of the file.
+/// Bolt is one arm too, but from the *ear* and in a straight line; this hand
+/// starts at the far hip, which is a place no other move of hers ever visits,
+/// and travels a diagonal across the whole front. The body helps: the hips dip
+/// into the scoop and rise out of it, and the chest turns *with* the arm rather
+/// than winding against it -- a scatter is not a wound-up throw, it is a
+/// sweep, and the coals leave the hand at the top of the arc.
+fn cinder() -> Recipe {
+    let clip = Clip::ElementalistCinder;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    // Down to the hip inside the first two fifths of the startup, loaded by
+    // three quarters, and the arc itself is the last quarter: a scatter is
+    // fast at the release and slow at the gather.
+    let scoop = (contact * 2 / 5).max(2);
+    let loaded = (contact * 3 / 4).max(scoop + 1);
+    let settle = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A scatter, not a shot and not a throw with weight behind it: \
+                the right hand scoops low across to the left hip, palm up, and \
+                flings up and out to her own right. The chest turns with the \
+                hand both ways so the whole front sweeps, and the left arm \
+                swings back and down as the counterweight. The release is at \
+                the top of the arc rather than out in front, because coals are \
+                scattered rather than thrown at somebody -- what leaves is a \
+                spray, and the spray's shape is the arc the hand drew. MARTIAL \
+                so the arm rings a little at the top: the fingers open and \
+                the hand keeps going after the coals have left it."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(scoop, scooping(), Ease::SMOOTH),
+            Key::eased(loaded, scooped(), Ease::ANTICIPATE),
+            Key::eased(contact, flung(), Ease::STRIKE),
+            Key::eased(recover, scattered(), Ease::OUT),
+            Key::eased(settle, easing(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: the right hand dropping and crossing toward the left hip, the
+/// chest turning left with it, the knees taking the dip.
+fn scooping() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.07, -0.01)
+            .root(4.0, 0.0, -6.0)
+            .spine(8.0, -3.0, -8.0)
+            .chest(6.0, -2.0, -10.0)
+            // Eyes on the target while the shoulders turn away from it.
+            .head(2.0, 0.0, 18.0)
+            .shoulder_r(14.0, -16.0, 24.0)
+            .elbow_r(84.0)
+            .wrist_r(-34.0, 0.0, 0.0)
+            .shoulder_l(30.0, 26.0, -10.0)
+            .elbow_l(60.0)
+            .wrist_l(-16.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Loaded: as low and as far across as the hand gets, cupped at the far hip.
+/// The lowest frame of the clip.
+fn scooped() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.12, -0.02)
+            .root(6.0, 0.0, -10.0)
+            .spine(12.0, -4.0, -12.0)
+            .chest(8.0, -3.0, -14.0)
+            .head(0.0, 0.0, 26.0)
+            .shoulder_r(8.0, -26.0, 30.0)
+            .elbow_r(96.0)
+            .wrist_r(-42.0, 0.0, 0.0)
+            .shoulder_l(28.0, 28.0, -12.0)
+            .elbow_l(52.0)
+            .wrist_l(-14.0, 0.0, 0.0),
+        0.0,
+        0.02,
+    )
+}
+
+/// The release, on the frame the coal leaves: the arm swept up and out to her
+/// own right, elbow open, fingers spread; the chest turned with it, the body
+/// risen out of the dip, and the off arm back and down.
+fn flung() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.02, 0.02)
+            .root(-3.0, 0.0, 6.0)
+            .spine(-6.0, 4.0, 8.0)
+            .chest(-8.0, 4.0, 10.0)
+            .head(-6.0, 0.0, -14.0)
+            .shoulder_r(128.0, 44.0, -10.0)
+            .elbow_r(14.0)
+            .wrist_r(30.0, 8.0, 0.0)
+            .shoulder_l(8.0, 22.0, -6.0)
+            .elbow_l(30.0)
+            .wrist_l(10.0, 0.0, 0.0),
+        0.02,
+        0.0,
+    )
+}
+
+/// The end of the active window: the hand carried on past the release, high
+/// and wide, fingers open, nothing held.
+fn scattered() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.02, 0.025)
+            .root(-4.0, 0.0, 8.0)
+            .spine(-7.0, 5.0, 9.0)
+            .chest(-9.0, 5.0, 11.0)
+            .head(-7.0, 0.0, -15.0)
+            .shoulder_r(140.0, 52.0, -16.0)
+            .elbow_r(8.0)
+            .wrist_r(38.0, 12.0, 0.0)
+            .shoulder_l(2.0, 20.0, -4.0)
+            .elbow_l(24.0)
+            .wrist_l(12.0, 0.0, 0.0),
+        0.02,
+        0.0,
+    )
+}
+
+/// Recovery: the arm falling out of the arc, the chest coming back square.
+fn easing() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.045, 0.0)
+            .root(0.0, 0.0, 4.0)
+            .spine(0.0, 2.0, 4.0)
+            .chest(-2.0, 2.0, 6.0)
+            .head(-3.0, 0.0, -5.0)
+            .shoulder_r(60.0, 30.0, -8.0)
+            .elbow_r(40.0)
+            .wrist_r(4.0, 4.0, 0.0)
+            .shoulder_l(14.0, 20.0, -8.0)
+            .elbow_l(56.0)
+            .wrist_l(-10.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Updraft and Downdraft
+// ---------------------------------------------------------------------------
+
+/// The column of air on her own body, standing: both arms spread wide and
+/// low, palms up, swept up to shoulder height as the body rises on to its
+/// toes -- lifting the whole room.
+///
+/// **Nothing goes over the head.** The pillar's haul finishes with the hands
+/// overhead and the body sunk on to the load; this finishes with the arms
+/// level and the body tall, which is the opposite silhouette: wide against
+/// narrow, up against down. The spread is the tell, from the second frame.
+fn updraft() -> Recipe {
+    let clip = Clip::ElementalistUpdraft;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let spread = (contact / 3).max(2);
+    let gathered_low = (contact * 3 / 4).max(spread + 1);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A lift with the whole width of her: the arms open wide and low \
+                first, palms turned up, then come up level as the heels leave \
+                the floor. The chest opens and the head comes up with it. It \
+                is built to read against the pillar -- that haul narrows and \
+                sinks, this widens and rises -- and against Cataclysm, which \
+                puts both hands out in front. MARTIAL so the arms ring at the \
+                top and the body settles back on to its heels over the \
+                recovery rather than dropping."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(spread, opening_wide(), Ease::SMOOTH),
+            Key::eased(gathered_low, cupped_low(), Ease::ANTICIPATE),
+            Key::eased(contact, lifted_wide(), Ease::STRIKE),
+            Key::eased(recover, held_wide(), Ease::OUT),
+            Key::eased(settle, easing_down(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: arms opening out to the sides, low, palms turning up.
+fn opening_wide() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.05, 0.0)
+            .spine(4.0, 0.0, 0.0)
+            .chest(2.0, 0.0, 0.0)
+            .head(4.0, 0.0, 0.0)
+            .shoulders(14.0, 58.0, 30.0)
+            .elbows(40.0)
+            .wrists(-30.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Loaded: as low and wide as the hands get, cupped, knees soft.
+fn cupped_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.09, -0.01)
+            .spine(8.0, 0.0, 0.0)
+            .chest(4.0, 0.0, 0.0)
+            .head(6.0, 0.0, 0.0)
+            .shoulders(6.0, 72.0, 40.0)
+            .elbows(48.0)
+            .wrists(-40.0, 0.0, 0.0),
+        0.0,
+        0.02,
+    )
+}
+
+/// The gust, on the frame the column goes: arms level and wide, palms up,
+/// chest open, up on the toes.
+fn lifted_wide() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, 0.03, 0.01)
+            .spine(-8.0, 0.0, 0.0)
+            .chest(-10.0, 0.0, 0.0)
+            .head(-8.0, 0.0, 0.0)
+            .shoulders(88.0, 84.0, 30.0)
+            .elbows(12.0)
+            .wrists(-24.0, 0.0, 0.0),
+        0.05,
+        0.05,
+    )
+}
+
+/// The end of the active window: a shade higher still, arms ringing.
+fn held_wide() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, 0.035, 0.01)
+            .spine(-9.0, 0.0, 0.0)
+            .chest(-11.0, 0.0, 0.0)
+            .head(-9.0, 0.0, 0.0)
+            .shoulders(96.0, 86.0, 26.0)
+            .elbows(8.0)
+            .wrists(-20.0, 0.0, 0.0),
+        0.05,
+        0.05,
+    )
+}
+
+/// Recovery: back on to the heels, the arms falling from level.
+fn easing_down() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.04, 0.0)
+            .spine(-2.0, 0.0, 0.0)
+            .chest(-3.0, 0.0, 0.0)
+            .head(-2.0, 0.0, 0.0)
+            .shoulders(48.0, 50.0, 10.0)
+            .elbows(40.0)
+            .wrists(-16.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The column drawn falling, in the air: both palms turned down and driven
+/// from the chest to full reach below the hips, the knees drawn up as the
+/// arms come down -- pressing the air under her.
+///
+/// **The torso stays upright.** Landfall is Fissure's fold, a body bent
+/// double over its hands; this keeps the spine tall and moves the arms and
+/// the knees instead. Same direction, opposite body.
+fn downdraft() -> Recipe {
+    let clip = Clip::ElementalistDowndraft;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let raise = (contact / 2).max(2);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::CRISP,
+        notes: "A press, not a slam: the hands come up to the chest, palms \
+                down, and drive straight down past the hips while the knees \
+                come up to meet them. The spine stays tall all the way through \
+                -- the one thing the clip must not do is fold, because folding \
+                is Landfall. CRISP because it is thrown falling and has eight \
+                frames of startup; anything looser arrives late."
+            .into(),
+        keys: vec![
+            Key::eased(0, in_flight(), Ease::OUT),
+            Key::eased(raise, palms_up_at_the_chest(), Ease::ANTICIPATE),
+            Key::eased(contact, pressed_down(), Ease::STRIKE),
+            Key::eased(recover, pressed_through(), Ease::OUT),
+            Key::eased(settle, in_flight(), Ease::SMOOTH),
+            Key::eased(home, in_flight(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// Where the arms and legs are in the air, as a base to press from: legs
+/// slightly split, arms loose.
+fn in_flight() -> Pose {
+    ready()
+        .hips(0.0, 0.0, 0.0)
+        .spine(2.0, 0.0, 0.0)
+        .chest(0.0, 0.0, 0.0)
+        .head(-2.0, 0.0, 0.0)
+        .hip_l(14.0, 4.0, 0.0)
+        .knee_l(22.0)
+        .hip_r(-8.0, 4.0, 0.0)
+        .knee_r(16.0)
+        .ankles(10.0, 0.0, 0.0)
+}
+
+/// Hands drawn up to the chest, palms turned to the floor, knees starting up.
+fn palms_up_at_the_chest() -> Pose {
+    in_flight()
+        .spine(-2.0, 0.0, 0.0)
+        .chest(-4.0, 0.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+        .shoulders(52.0, 26.0, -20.0)
+        .elbows(110.0)
+        .wrists(36.0, 0.0, 0.0)
+        .hip_l(30.0, 8.0, 0.0)
+        .knee_l(50.0)
+        .hip_r(24.0, 8.0, 0.0)
+        .knee_r(44.0)
+}
+
+/// The press, on the frame the column goes: arms straight down past the
+/// hips, palms flat to the floor, knees drawn well up.
+fn pressed_down() -> Pose {
+    in_flight()
+        .spine(4.0, 0.0, 0.0)
+        .chest(2.0, 0.0, 0.0)
+        .head(10.0, 0.0, 0.0)
+        .shoulders(-18.0, 22.0, -30.0)
+        .elbows(6.0)
+        .wrists(58.0, 0.0, 0.0)
+        .hip_l(62.0, 10.0, 0.0)
+        .knee_l(92.0)
+        .hip_r(58.0, 10.0, 0.0)
+        .knee_r(88.0)
+        .ankles(20.0, 0.0, 0.0)
+}
+
+/// The end of the active window: the arms carried a little behind the hips,
+/// the knees at their highest.
+fn pressed_through() -> Pose {
+    in_flight()
+        .spine(5.0, 0.0, 0.0)
+        .chest(3.0, 0.0, 0.0)
+        .head(11.0, 0.0, 0.0)
+        .shoulders(-26.0, 20.0, -34.0)
+        .elbows(4.0)
+        .wrists(62.0, 0.0, 0.0)
+        .hip_l(66.0, 10.0, 0.0)
+        .knee_l(96.0)
+        .hip_r(62.0, 10.0, 0.0)
+        .knee_r(92.0)
+        .ankles(22.0, 0.0, 0.0)
+}
+
+// ---------------------------------------------------------------------------
+// Quake and Tremor
+// ---------------------------------------------------------------------------
+
+/// The stamp: the left foot lifted and driven down, and both hands pushed out
+/// low toward the patch, palms down -- pressing the shake into the floor over
+/// there.
+///
+/// The stamp is the tell, and it is the one thing nothing else in the file
+/// does: every other move keeps both feet planted. A foot in the air for a
+/// third of a second is readable from anywhere.
+fn quake() -> Recipe {
+    let clip = Clip::ElementalistQuake;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let lift = (contact / 3).max(2);
+    let high = (contact * 2 / 3).max(lift + 1);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A stamp and a push. The left knee comes up high through the \
+                first two thirds of the startup while the hands draw back to \
+                the hips, then the foot is driven down on contact as both \
+                hands push out low and forward, palms to the floor. The push \
+                is what says *over there*; Tremor keeps the stamp and drops \
+                the hands straight down instead."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(lift, knee_lifting(), Ease::SMOOTH),
+            Key::eased(high, knee_high(), Ease::ANTICIPATE),
+            Key::eased(contact, stamped_forward(), Ease::STRIKE),
+            Key::eased(recover, pushed_low(), Ease::OUT),
+            Key::eased(settle, standing_back(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// Weight on to the right leg, the left knee starting up, hands drawing back.
+fn knee_lifting() -> Pose {
+    let (_, r) = ankles();
+    ready()
+        .hips(0.0, -0.03, 0.0)
+        .spine(4.0, 3.0, 0.0)
+        .chest(2.0, 2.0, 0.0)
+        .head(4.0, 0.0, 0.0)
+        .shoulders(-6.0, 22.0, 0.0)
+        .elbows(60.0)
+        .wrists(-20.0, 0.0, 0.0)
+        .hip_l(40.0, 6.0, 0.0)
+        .knee_l(70.0)
+        .ankle_l(20.0, 0.0, 0.0)
+        .plant_r(r)
+        .toe_r(10.0)
+}
+
+/// The top of the stamp: the left knee at hip height, the hands back at the
+/// hips, the body a shade taller on the standing leg.
+fn knee_high() -> Pose {
+    let (_, r) = ankles();
+    ready()
+        .hips(0.0, -0.01, 0.0)
+        .spine(0.0, 4.0, 0.0)
+        .chest(-2.0, 3.0, 0.0)
+        .head(6.0, 0.0, 0.0)
+        .shoulders(-14.0, 24.0, 4.0)
+        .elbows(70.0)
+        .wrists(-26.0, 0.0, 0.0)
+        .hip_l(78.0, 8.0, 0.0)
+        .knee_l(100.0)
+        .ankle_l(26.0, 0.0, 0.0)
+        .plant_r(r)
+        .toe_r(10.0)
+}
+
+/// Contact: the foot driven down and planted, both hands pushed out low and
+/// forward, palms down, the body dropping into the stamp.
+fn stamped_forward() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.12, 0.03)
+            .spine(16.0, 0.0, 0.0)
+            .chest(10.0, 0.0, 0.0)
+            .head(0.0, 0.0, 0.0)
+            .shoulders(52.0, 12.0, -10.0)
+            .elbows(14.0)
+            .wrists(48.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The end of the active window: the push carried a little further and lower.
+fn pushed_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.13, 0.035)
+            .spine(18.0, 0.0, 0.0)
+            .chest(12.0, 0.0, 0.0)
+            .head(-2.0, 0.0, 0.0)
+            .shoulders(46.0, 12.0, -12.0)
+            .elbows(8.0)
+            .wrists(54.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Recovery: coming back up out of the stamp.
+fn standing_back() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.06, 0.01)
+            .spine(6.0, 0.0, 0.0)
+            .chest(3.0, 0.0, 0.0)
+            .head(-2.0, 0.0, 0.0)
+            .shoulders(28.0, 18.0, -8.0)
+            .elbows(50.0)
+            .wrists(0.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The same stamp, and both arms driven straight down at her sides as the body
+/// drops into a deep crouch -- the shake pressed into the floor under her own
+/// feet. Down and narrow, where Quake is forward.
+fn tremor() -> Recipe {
+    let clip = Clip::ElementalistTremor;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    let lift = (contact / 3).max(2);
+    let high = (contact * 2 / 3).max(lift + 1);
+    let settle = recover + (end - recover) / 2;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "Quake's stamp with the hands going the other way: instead of \
+                pushing out toward a patch over there they are driven straight \
+                down past the hips, and the whole body drops with them into \
+                the deepest crouch in the file. Everything about it points at \
+                the floor she is standing on, which is where the patch is."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(lift, knee_lifting(), Ease::SMOOTH),
+            Key::eased(high, knee_high_arms_up(), Ease::ANTICIPATE),
+            Key::eased(contact, stamped_down(), Ease::STRIKE),
+            Key::eased(recover, pressed_low(), Ease::OUT),
+            Key::eased(settle, rising_back(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The top of Tremor's stamp: the knee high, and the arms raised to the
+/// shoulders ready to come down.
+fn knee_high_arms_up() -> Pose {
+    let (_, r) = ankles();
+    ready()
+        .hips(0.0, -0.01, 0.0)
+        .spine(-2.0, 4.0, 0.0)
+        .chest(-4.0, 3.0, 0.0)
+        .head(6.0, 0.0, 0.0)
+        .shoulders(70.0, 30.0, -10.0)
+        .elbows(80.0)
+        .wrists(20.0, 0.0, 0.0)
+        .hip_l(78.0, 8.0, 0.0)
+        .knee_l(100.0)
+        .ankle_l(26.0, 0.0, 0.0)
+        .plant_r(r)
+        .toe_r(10.0)
+}
+
+/// Contact: the foot driven down, both arms straight down at her sides, palms
+/// flat, the body dropped into a deep crouch.
+fn stamped_down() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.28, 0.0)
+            .spine(10.0, 0.0, 0.0)
+            .chest(6.0, 0.0, 0.0)
+            .head(8.0, 0.0, 0.0)
+            .shoulders(-8.0, 14.0, -20.0)
+            .elbows(6.0)
+            .wrists(56.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// The end of the active window: lower still, the arms pressed a shade back.
+fn pressed_low() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.30, 0.0)
+            .spine(12.0, 0.0, 0.0)
+            .chest(7.0, 0.0, 0.0)
+            .head(9.0, 0.0, 0.0)
+            .shoulders(-14.0, 14.0, -22.0)
+            .elbows(4.0)
+            .wrists(60.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Recovery: standing back up out of the crouch.
+fn rising_back() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.12, 0.0)
+            .spine(5.0, 0.0, 0.0)
+            .chest(2.0, 0.0, 0.0)
+            .head(3.0, 0.0, 0.0)
+            .shoulders(8.0, 18.0, -10.0)
+            .elbows(50.0)
+            .wrists(-4.0, 0.0, 0.0),
         0.0,
         0.0,
     )

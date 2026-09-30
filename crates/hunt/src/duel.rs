@@ -296,7 +296,10 @@ fn reach(m: &sim::Move, who: Option<&Player>) -> Fx {
     };
     match m.aim() {
         Kind::Swing => own.add(m.step).add(sim::tuning::body_radius()),
-        Kind::Grounded | Kind::Skillshot => own,
+        // The crack runs from a stone the bot raised rather than from the
+        // body, and the bot does not track where that is: its own length is
+        // the honest guess.
+        Kind::Grounded | Kind::Skillshot | Kind::Racing => own,
         // Pointed by where the mechanic stands, which the bot does not track.
         Kind::AtTheMechanic => Fx::ZERO,
     }

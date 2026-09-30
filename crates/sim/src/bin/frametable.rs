@@ -11,6 +11,39 @@ use sim::class::ALL_CLASSES;
 use sim::moves;
 use sim::tuning as t;
 
+/// The safe charge distance, for a move that charges: how much of the gap a
+/// walk closes over the longest hold, with a note on what the hold buys.
+fn charge_note(class: sim::class::Class, slot: u8, m: &moves::Move) -> Option<String> {
+    let charge = moves::charge(class, slot)?;
+    if m.channel == 0 {
+        return None;
+    }
+    let held = Fx::ratio(m.channel as i32, sim::TICK_HZ as i32);
+    let gap = t::move_speed().mul(held);
+    let buys = match charge {
+        moves::Charge::Reach => {
+            format!("{}-{} m of reach", tenths(m.channel_from), tenths(m.reach))
+        }
+        moves::Charge::Strike => format!(
+            "up to {} of burn as one hit",
+            Fx::from_int(t::pillar_burn_total())
+                .mul(t::strike_worth())
+                .to_int()
+        ),
+        moves::Charge::Crack => format!(
+            "a crack of {}-{} m",
+            tenths(m.channel_from),
+            tenths(m.reach)
+        ),
+    };
+    Some(format!(
+        "holds {}f for {}; a walk closes {} m in that -- the safe charge distance",
+        m.channel,
+        buys,
+        tenths(gap)
+    ))
+}
+
 fn main() {
     // Movement speeds, because how much a move takes your feet away is part of
     // the same tuning surface as its frame data.
@@ -187,16 +220,17 @@ fn main() {
                     (true, _) => "; grab ignored -- the effect delivers the hit",
                 };
                 // The one column the startup does not answer for a channelled
-                // move: how long the button buys, and what it buys.
-                let wound = if m.channels() {
-                    format!(
+                // move: how long the button buys, and what it buys -- and
+                // what the hold costs in space, for a move that charges.
+                let wound = match charge_note(class, slot as u8, &m) {
+                    Some(safe) => format!("; {safe}"),
+                    None if m.channels() => format!(
                         "; channel up to {}f for {}-{} m",
                         m.channel,
                         tenths(m.channel_from),
                         tenths(m.reach)
-                    )
-                } else {
-                    String::new()
+                    ),
+                    None => String::new(),
                 };
                 // **Does it leave something behind**, rather than what shape
                 // its own body puts out. The two used to be the same question,
@@ -254,6 +288,15 @@ fn main() {
             }
             if m.air_stall > 0 {
                 notes.push("hangs");
+            }
+            // **What a charge costs in space.** A hold is time at the crawl in
+            // full view, and the opponent walks: every frame of the longest
+            // hold is a walk's worth of the gap gone. The distance that hold
+            // needs is the class's whole sentence in a number -- see
+            // `docs/design/elementalist-v2.md`.
+            let safe = charge_note(class, slot as u8, &m);
+            if let Some(safe) = safe.as_deref() {
+                notes.push(safe);
             }
             // What the move costs your feet, and only when it is worth
             // saying: every move hinders you, and the committed ones hinder
@@ -405,9 +448,15 @@ fn walking_at(percent: u8) -> Fx {
 
 /// One decimal place, without touching floating point.
 fn tenths(v: Fx) -> String {
-    // Rounded, not truncated: 4.199 should read as 4.2, not 4.1.
-    let t = (v.raw() as i64 * 10 + (1 << 15)) >> 16;
-    format!("{}.{}", t / 10, (t % 10).abs())
+    // Rounded, not truncated: 4.199 should read as 4.2, not 4.1. The sign is
+    // printed on its own so a value between minus one and zero keeps it.
+    let t = ((v.raw() as i64).abs() * 10 + (1 << 15)) >> 16;
+    format!(
+        "{}{}.{}",
+        if v.raw() < 0 { "-" } else { "" },
+        t / 10,
+        t % 10
+    )
 }
 
 fn percent(v: Fx) -> i64 {
@@ -415,8 +464,13 @@ fn percent(v: Fx) -> i64 {
 }
 
 fn hundredths(v: Fx) -> String {
-    let t = (v.raw() as i64 * 100 + (1 << 15)) >> 16;
-    format!("{}.{:02}", t / 100, (t % 100).abs())
+    let t = ((v.raw() as i64).abs() * 100 + (1 << 15)) >> 16;
+    format!(
+        "{}{}.{:02}",
+        if v.raw() < 0 { "-" } else { "" },
+        t / 100,
+        t % 100
+    )
 }
 
 /// Apex and airtime for a jump held `hold` frames.

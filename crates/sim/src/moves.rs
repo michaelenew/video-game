@@ -628,6 +628,10 @@ const NAMES: [&[&str]; 6] = [
     //   see `crate::gust` -- and neither has a hitbox of its own, which is
     //   what `Shape::None` in [`shape`] says. Landfall does: a disc on the
     //   floor where she arrives.
+    //   Cinder spray: middle click, **both rows**. A thrown ember that bursts
+    //   at its range sphere or on the first thing it meets into a hanging
+    //   cloud of sparks -- fire in the air for her own shots to fly through.
+    //   See `crate::gust::Gale::Ember` and `crate::effects::EffectKind::Embers`.
     &[
         "Bolt",
         "Fissure",
@@ -636,6 +640,11 @@ const NAMES: [&[&str]; 6] = [
         "Air bolt",
         "Gale",
         "Landfall",
+        "Cinder spray",
+        "Updraft",
+        "Downdraft",
+        "Quake",
+        "Tremor",
     ],
     // Blood mage -- her blood goes out, and theirs comes back. Everything
     // costs health, every hit she lands spills the target onto the floor, and
@@ -1027,8 +1036,35 @@ pub mod elementalist {
     /// see `moves::on_e`, which answers for the key without knowing where her
     /// feet are, and `state::keyed_move`, which is what does know.
     pub const LANDFALL: u8 = 6;
+    /// Middle click, on the floor and off it alike. A thrown ember with a
+    /// speed, like the two air shots, that **bursts** where its range runs out
+    /// or on the first thing it meets -- a firework rather than a shot, so it
+    /// needs nothing for the crosshair to rest on. What it leaves is a cloud
+    /// of embers (`crate::effects::EffectKind::Embers`): fire in the air, or a
+    /// low burning patch when it pops on the floor. An Air bolt or a Gale
+    /// flown through it comes out **lit**. See `docs/design/elementalist-v2.md`.
+    pub const CINDER: u8 = 7;
+    /// `F`, standing. A column of air on her own body: everything in it goes
+    /// up, her included, each by their own gravity. Not aimed -- a column on
+    /// her needs no crosshair. See `crate::effects::EffectKind::Updraft`.
+    pub const UPDRAFT: u8 = 8;
+    /// `F`, airborne. The same column drawn falling, under her: she and
+    /// everything in it are driven down, and if she lands while it is still
+    /// blowing the air breaks outward from her feet -- or, into fire, the fire
+    /// goes out and a ring of it races outward. See
+    /// `crate::effects::EffectKind::Downdraft`.
+    pub const DOWNDRAFT: u8 = 9;
+    /// The second side button, aimed at the floor. A patch shakes through a
+    /// slow wind-up -- anyone *moving* through it staggers, anyone standing
+    /// still is fine -- then erupts, and leaves a stone at its centre. See
+    /// `crate::effects::EffectKind::Quake`.
+    pub const QUAKE: u8 = 10;
+    /// `R`, standing: Quake centred on her own feet. The same effect; the
+    /// stone comes up **under her** and takes her with it -- the structure
+    /// jump with a telegraph attached.
+    pub const TREMOR: u8 = 11;
 
-    pub const COUNT: usize = 7;
+    pub const COUNT: usize = 12;
 
     // **No `is_airborne` here, deliberately.** "Which move is this button" is
     // answered once, in `state::elementalist_move` and `state::keyed_move`, and
@@ -1204,14 +1240,22 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
         // same argument the Reaver makes -- Cataclysm takes it instead.
         Class::Elementalist => match slot {
             0 => "LMB",
-            1 => "Shift+LMB",
+            // Since v2: the mechanic key held past the stone's rise, and let
+            // go. See [`Charge::Crack`].
+            1 => "E held",
             2 => "Q",
             3 => "RMB",
             // The air row. The button is the same; the situation is what
             // changes what it throws. See [`elementalist`].
             4 => "LMB air",
             5 => "RMB air",
-            _ => "E air",
+            6 => "E air",
+            // Both rows: the one move on the class the floor does not change.
+            7 => "MMB",
+            8 => "F",
+            9 => "F air",
+            10 => "Side B",
+            _ => "R",
         },
         // Three clicks, three moves, and the auto on the last row: see
         // [`blood`] for why the button order and the storage order differ.
@@ -1317,7 +1361,14 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // fourth is a beam drawn from the line it flew, and Landfall is a disc
         // on the floor at her own feet.
         Class::Elementalist => match kind {
-            elementalist::AIR_BOLT | elementalist::GALE => Shape::None,
+            elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
+            // Fissure, since v2: the crack does the hitting, racing from the
+            // stone she held churning to the first body it meets -- see
+            // `state::World::advance`. Her own body puts out nothing. Nor
+            // does it for the two Quakes, whose patch is the whole move.
+            crate::state::SLOT_COMMITTED | elementalist::QUAKE | elementalist::TREMOR => {
+                Shape::None
+            }
             _ => Shape::Cylinder,
         },
         // The Dual mage's two autos are punches with a wing behind them, and
@@ -1381,6 +1432,42 @@ pub const fn hand(class: Class, kind: u8) -> crate::aim::Hand {
         // poke rather than as a short version of the lunge it replaced.
         Class::Champion if kind == champion::SPEAR_GROUND => Hand::Right,
         _ => Hand::Centre,
+    }
+}
+
+/// What holding a move's button buys, for the three moves that charge.
+///
+/// **Declared, not inferred**, like [`shape`] and [`lingers`]: the move
+/// table's `channel` column says *how long* a button may be held, and this
+/// says *what the hold is*. Three answers, and they are three different
+/// shapes of the same rule -- a hold deforms a move along one axis and never
+/// selects a different one. See `docs/design/elementalist-v2.md`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Charge {
+    /// The Blood mage's Grasp: the hold is **before** the move and buys
+    /// reach, from [`Move::channel_from`] out to [`Move::reach`]. The press
+    /// opens the wind-up and the release throws the move.
+    Reach,
+    /// The Elementalist's fire pillar, held: the hold comes **after** the
+    /// startup and buys **concentration**. A tap is the pillar as built; a
+    /// full hold is the pillar's whole burn arriving as one Strike and
+    /// nothing left standing; in between, a flash and a shorter pillar. The
+    /// startup is the tap window, so a tap costs nothing it did not already.
+    Strike,
+    /// The Elementalist's Raise, held: the stone she raised is held
+    /// **churning** rather than erupting, and the hold buys **distance** --
+    /// how far the crack of Fissure races from that stone along her look
+    /// before the stone erupts at its end. The rise is the tap window.
+    Crack,
+}
+
+/// Which charge a move has, if any.
+pub const fn charge(class: Class, kind: u8) -> Option<Charge> {
+    match class {
+        Class::BloodMage if kind == crate::state::SLOT_SPECIAL => Some(Charge::Reach),
+        Class::Elementalist if kind == crate::state::SLOT_SPECIAL => Some(Charge::Strike),
+        Class::Elementalist if kind == crate::state::SLOT_COMMITTED => Some(Charge::Crack),
+        _ => None,
     }
 }
 

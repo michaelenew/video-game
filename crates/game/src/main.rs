@@ -666,8 +666,12 @@ const EFFECT_PARTS: usize = {
     let blades = sim::effects::LOTUS_BLADES;
     let arms = sim::effects::GRASP_ARMS;
     let beads = sim::effects::TETHER_BEADS;
+    let rough = sim::effects::ROUGH_BEADS;
+    let ring = sim::effects::RING_PIECES;
     let most = if blades > arms { blades } else { arms };
-    if beads > most { beads } else { most }
+    let most = if beads > most { beads } else { most };
+    let most = if rough > most { rough } else { most };
+    if ring > most { ring } else { most }
 };
 
 /// One of the Elementalist's structures.
@@ -920,6 +924,8 @@ struct EffectLook {
     wing_light: Handle<StandardMaterial>,
     wing_dark: Handle<StandardMaterial>,
     stone: Handle<StandardMaterial>,
+    /// A stone with fire on it. See `sim::class::Structure::lit`.
+    stone_lit: Handle<StandardMaterial>,
     /// The beam and the bolt it lights. Brighter than the pillar and barely
     /// opaque: it is light rather than matter, and it is on screen for two
     /// frames, so it has to read instantly or not at all.
@@ -1169,6 +1175,14 @@ fn setup(
         stone: materials.add(StandardMaterial {
             base_color: Color::srgb(0.52, 0.50, 0.47),
             perceptual_roughness: 0.95,
+            ..default()
+        }),
+        // A lit stone: the same rock, glowing at the seams. Bright enough to
+        // read as a stove from across the arena, which is what it is.
+        stone_lit: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.62, 0.40, 0.28),
+            emissive: LinearRgba::rgb(2.6, 0.9, 0.2),
+            perceptual_roughness: 0.9,
             ..default()
         }),
         beam: materials.add(StandardMaterial {
@@ -1522,14 +1536,30 @@ fn fade_own_body(
 /// exactly the size bodies and shots are stopped at. Each at its own size.
 fn place_structures(
     sim: Res<Sim>,
-    mut meshes: Query<(&StructureMesh, &mut Transform, &mut Visibility)>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &StructureMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
     let field = sim::stones::gather(&sim.cur.players);
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
         let Some(raised) = field[tag.owner * sim::class::MAX_STRUCTURES + tag.index] else {
             *vis = Visibility::Hidden;
             continue;
         };
+        // Lit, it glows: what a stone is worth to stand on or hide behind
+        // is a thing the other player has to be able to read.
+        let want = if raised.lit > 0 {
+            &look.stone_lit
+        } else {
+            &look.stone
+        };
+        if skin.0 != *want {
+            skin.0 = want.clone();
+        }
         let radius = raised.radius().to_f32_for_render();
         // It is earth: it climbs out of the floor rather than appearing in the
         // air. The whole column slides up from fully buried, so the visible
@@ -1653,23 +1683,48 @@ fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &
 /// technically an overlay. A shot drawn one size and tested at another is a lie
 /// you cannot see through, and the Gale is where that mattered: see
 /// [`place_discs`].
-fn place_gusts(sim: Res<Sim>, mut meshes: Query<(&GustMesh, &mut Transform, &mut Visibility)>) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+fn place_gusts(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &GustMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
         };
-        if !matches!(shot.gale, sim::gust::Gale::Bolt) {
+        use sim::gust::Gale;
+        if matches!(shot.gale, Gale::Disc) {
             *vis = Visibility::Hidden;
             continue;
         }
         *vis = Visibility::Inherited;
-        // Stretched along its flight, so a bolt reads as travelling rather than
-        // as a bead hanging in the air.
+        // A shot carrying fire is drawn as fire, and the ember always is: what
+        // a shot is worth on arrival is a thing the other player has to be
+        // able to read in flight.
+        let want = if shot.lit || matches!(shot.gale, Gale::Ember) {
+            &look.fire
+        } else {
+            &look.beam
+        };
+        if skin.0 != *want {
+            skin.0 = want.clone();
+        }
         let radius = shot.girth().to_f32_for_render();
         tf.translation = fx3(shot.pos);
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
-        tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+        tf.scale = match shot.gale {
+            // Stretched along its flight, so a bolt reads as travelling rather
+            // than as a bead hanging in the air.
+            Gale::Bolt => Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0),
+            // A thrown coal: round, and drawn at the size it bursts from.
+            _ => Vec3::splat(radius * 2.0),
+        };
     }
 }
 
@@ -2251,6 +2306,12 @@ enum Skin {
     /// standing in the arena says it where they are.
     Light,
     Dark,
+    /// Broken ground: the stones' own material, so rough terrain reads as
+    /// earth rather than as an effect.
+    Stone,
+    /// Moving air: the beam's pale, barely-there material, so a draft or a
+    /// ring of air is seen without hiding what is in it.
+    Air,
 }
 
 impl EffectLook {
@@ -2270,6 +2331,8 @@ impl EffectLook {
             Skin::Essence(step) => self.essence[(step as usize).min(ESSENCE_STEPS - 1)].clone(),
             Skin::Light => self.light.clone(),
             Skin::Dark => self.dark.clone(),
+            Skin::Stone => self.stone.clone(),
+            Skin::Air => self.beam.clone(),
         }
     }
 }
@@ -2397,6 +2460,63 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // visibly is not there the frame the leash breaks. The bead size is
         // presentation, unlike the burst above: nothing is hit by the line
         // after its one pass, so there is no volume here to be honest about.
+        // The Quake's patch: a low disc of broken ground at the radius the
+        // shake reads, shivering while it shakes.
+        EffectKind::Quake if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Stone,
+            at + Vec3::X * ((effect.age % 3) as f32 - 1.0) * QUAKE_SHIVER,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT,
+        )),
+        // A draft: the column the bodies are tested in, drawn as air.
+        EffectKind::Updraft | EffectKind::Downdraft if part == 0 => {
+            let slab = effect.draft_volume();
+            Some(standing(
+                Shape::Column,
+                Skin::Air,
+                at,
+                slab.radius.to_f32_for_render(),
+                slab.bottom.to_f32_for_render(),
+                slab.top.to_f32_for_render(),
+            ))
+        }
+        // The air ring: a flat disc at the radius the shove reached.
+        EffectKind::AirRing if part == 0 => Some(standing(
+            Shape::Column,
+            Skin::Air,
+            at,
+            effect.field_radius().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT,
+        )),
+        // The fire ring: pieces of fire around its live radius, each the
+        // ring's own width.
+        EffectKind::FireRing if part < sim::effects::RING_PIECES => Some(floating_in(
+            Skin::Fire,
+            fx3(effect.ring_piece(part))
+                + Vec3::Y * sim::tuning::fire_ring_width().to_f32_for_render(),
+            sim::tuning::fire_ring_width().to_f32_for_render(),
+        )),
+        // Rough terrain: a row of low slabs along the line the crack ran, at
+        // the half-width the slow reads. See `Effect::rough_bead`.
+        EffectKind::Rough if part < sim::effects::ROUGH_BEADS => Some(standing(
+            Shape::Column,
+            Skin::Stone,
+            fx3(effect.rough_bead(part)),
+            sim::tuning::rough_width().to_f32_for_render(),
+            0.0,
+            ROUGH_HEIGHT,
+        )),
+        // A cloud of embers: the ball the hit test reads, in the fire skin,
+        // hanging where the shot burst -- or half-sunk into the floor where it
+        // burst on the ground, which is what a burning patch looks like.
+        EffectKind::Embers if part == 0 => Some(floating_in(
+            Skin::Fire,
+            at,
+            effect.ember_volume().radius.to_f32_for_render(),
+        )),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
@@ -2443,6 +2563,14 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         _ => None,
     }
 }
+
+/// How far the Quake's patch shivers from side to side while it shakes.
+/// Presentation, not a rule: the hit test does not move.
+const QUAKE_SHIVER: f32 = 0.04;
+
+/// How tall broken ground is drawn. Presentation, not a rule: the slow reads
+/// a body on the floor, and a slab this low is a texture rather than a wall.
+const ROUGH_HEIGHT: f32 = 0.12;
 
 /// How big one bead of a tether is against a body.
 ///
@@ -2625,7 +2753,7 @@ fn tick_sim(
         sim.prev = w.clone();
         sim.cur = w;
     }
-    if keys.just_pressed(KeyCode::KeyR) {
+    if keys.just_pressed(KeyCode::Backspace) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
         let w = if sim.cur.monster.is_some() {
             hunt_with(classes, sim.dummy)
@@ -2931,6 +3059,25 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     // is most of them.
     if keys.pressed(KeyCode::KeyU) || mouse.pressed(MouseButton::Middle) {
         v |= SimInput::MIDDLE;
+    }
+    // The two mouse side buttons -- the right thumb's, and the only buttons in
+    // the scheme that cost no finger anything. `I` and `O` stand in for them
+    // beside `U`, for a trackpad or a two-button mouse. See
+    // `docs/design/exploration/0001_control_budget.md`.
+    if keys.pressed(KeyCode::KeyI) || mouse.pressed(MouseButton::Back) {
+        v |= SimInput::SIDE_A;
+    }
+    if keys.pressed(KeyCode::KeyO) || mouse.pressed(MouseButton::Forward) {
+        v |= SimInput::SIDE_B;
+    }
+    // `F` and `R`: the index finger's two keys, one row up from `D` -- the
+    // same price `Q` and `E` pay. The match reset that used to be on `R` is
+    // on Backspace now.
+    if keys.pressed(KeyCode::KeyF) {
+        v |= SimInput::KEY_F;
+    }
+    if keys.pressed(KeyCode::KeyR) {
+        v |= SimInput::KEY_R;
     }
     // Q and E, not a chord on a click. The special and the mechanic are the
     // two things a class does that nothing else does; burying them under a

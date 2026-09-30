@@ -152,7 +152,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "U or middle click",
-                "The third attack button. Two classes use it: the Champion's is the hammer, and the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying.",
+                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying -- and the Elementalist's is the Cinder spray.",
+            ),
+            e(
+                "Mouse side buttons (or I and O)",
+                "Two more ability buttons, under the thumb of the hand that aims -- so they carry aimed things. Only the Elementalist reads them so far.",
+            ),
+            e(
+                "F and R",
+                "Two more ability buttons, under the index finger of the hand that moves -- one row up from D, the way Q and E sit one row up from A and W. They carry things about your own body rather than a place. Only the Elementalist reads them so far.",
             ),
             e(
                 "Q",
@@ -302,6 +310,53 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "The Elementalist",
+        in_browser: true,
+        blurb: "Terrain author. She raises stones, plants fire, and then combos through what she built -- and off the floor the same buttons throw air. The v2 kit is built and unplayed; docs/design/elementalist-v2.md is the decision.",
+        entries: &[
+            e(
+                "Left click",
+                "Bolt: an instant line to whatever the crosshair is on. A fighter loses the move they were winding up; a stone is kicked along the line; a fire pillar lights a fire bolt. In the air it is the Air bolt, a long slow shot with a real flight -- and one that comes out lit, worth more and bursting where it lands, if it flew through fire.",
+            ),
+            e(
+                "Right click",
+                "Cataclysm: a slow heavy along the same line that breaks a stone into debris or tears a pillar loose as a tornado. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones it passes, and through fire it comes out burning.",
+            ),
+            e(
+                "Middle click (or U)",
+                "Cinder spray, on the floor and off it. A thrown coal that bursts where its range runs out or on the first thing in the way, into a cloud of embers that hangs a couple of seconds -- or a low burning patch, on the floor. Fly a shot through it and the shot is fire. It is also the fire you have when the pillar is too far away.",
+            ),
+            e(
+                "Q",
+                "Fire pillar, planted where the crosshair is. One at a time. **Hold it past the wind-up** and the fire gathers in your hands instead: you crawl, the aim stays live, and letting go lands the pillar's whole burn as one Strike in the pillar's shape -- all of it at a full hold, and nothing left standing. Every frame you hold is a walk's worth of the gap gone, so the hold is only safe with the space to spend.",
+            ),
+            e(
+                "E",
+                "Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Three on the field; a fourth collapses the oldest. **Hold it past the rise** and the stone stays churning under the floor while you crawl; let go and Fissure races from it along your look, as far as you held for, staggering the first body it meets, and the stone erupts at the crack's end. Where it ran is rough ground for a while. In the air E is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
+            ),
+            e(
+                "F",
+                "Updraft, standing: a column of air on your own body, and everything in it goes up -- you included, each by their own weight; a stone in it is lofted. In the air it is Downdraft: the same column under you, driving you and everything in it down. Land while it is still blowing and the air breaks outward from your feet, shoving everyone near you away. Land it into fire -- a pillar, a cloud of embers -- and the fire goes out and a ring of it races outward instead.",
+            ),
+            e(
+                "Mouse side button B (or O)",
+                "Quake, where the crosshair is on the floor. The patch shakes through a slow wind-up: anyone moving through it staggers, anyone standing still is fine. Then it erupts -- damage to everyone in it -- and leaves a stone at its centre.",
+            ),
+            e(
+                "R",
+                "Tremor: Quake on your own feet. The same shake and the same eruption, and the stone comes up under you and takes you with it -- the structure jump with a telegraph attached, for when somebody has closed on you.",
+            ),
+            e(
+                "Shift + direction, crosshair on a stone",
+                "The dodge breaks through it: the stone is gone as you pass, its slot is free again, and where it stood is rough ground -- burning ground and a cloud of embers, if it was lit. The one thing in the kit that beats a string rather than a hit: whoever was chasing you has broken ground between you and them. In the air it is the airdodge, and costs the airdodge.",
+            ),
+            e(
+                "Fire on a stone",
+                "A pillar cast on a stone, a Cinder spray bursting beside one, or a burning Gale passing one sets it alight for a while. A lit stone burns whoever stands on it, and bursts into burning debris and a cloud of embers when anything shoves or breaks it -- your beam's kick included. Earth builds the field; fire decides who may use it.",
+            ),
+        ],
+    },
+    Section {
         title: "Hunting the Ridgeback",
         in_browser: true,
         blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",
@@ -370,7 +425,10 @@ pub const SECTIONS: &[Section] = &[
                 "F8",
                 "Hide or show the class pickers beside each health bar. On by default. Clicking one cycles that player's class, and it needs a free cursor -- press Esc, or open the Oven.",
             ),
-            e("R", "Reset the match."),
+            e(
+                "Backspace",
+                "Reset the match. It was R, until R became an ability key.",
+            ),
             e("P", "Pause."),
             e("]", "Step one frame. Pauses if it was running."),
             e(
@@ -526,6 +584,10 @@ pub const SECTIONS: &[Section] = &[
                 "What the Blood mage measures: the pool each move leaves and how long it lives, what each move drinks when it lands over a pool, the grey bar over a scripted exchange, and the scythe's reach at each level of grey. The first thing to run after touching the class.",
             ),
             e(
+                "cargo run -p sim --bin elemental",
+                "What the Elementalist's v2 measures: what a hold of Q or E is worth and costs in ground, how high the Updraft lifts each class, what the two rings do at each distance, what fire does to an air shot, where Quake and Tremor put their stone, and what a dodge into a stone leaves. Six scripts, each also runnable alone: charge, lift, ring, spray, quake, break.",
+            ),
+            e(
                 "cargo run -p sim --bin beastcheck",
                 "What the creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry.",
             ),
@@ -575,6 +637,14 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "./crates/web/build-game.sh",
                 "The whole game as a web page, ready to publish.",
+            ),
+            e(
+                "./scripts/web-smoke.sh [out.png]",
+                "Load the built web page in headless Chromium: fails on any console error, failed request or missing controls entry, and leaves a screenshot.",
+            ),
+            e(
+                "./scripts/setup-tools.sh web|shot|browser|all",
+                "Install, once, the tools a fresh machine lacks: wasm-bindgen for the web build, Xvfb and a software GPU for screenshots, Playwright for the smoke test. The one place those steps are written; start it in the background.",
             ),
             e("./scripts/dev.sh", "The game in full development mode."),
             e("./scripts/help.sh", "This text."),
