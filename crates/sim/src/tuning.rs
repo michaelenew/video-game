@@ -2695,6 +2695,58 @@ pub fn landfall_erupt() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::LandfallErupt))
 }
 
+// --- Fire in the air: the Cinder spray, and what a lit shot is worth -------
+//
+// v2 of the class, 2026-09-30. The air row was three projectiles that met
+// nothing she built; this is what they fly through. See
+// `docs/design/elementalist-v2.md` and `crate::gust::Gale::Ember`.
+
+/// How fast the Cinder spray's ember flies before it bursts.
+///
+/// Slower than the Air bolt: it is not a shot, it is a thing thrown to a
+/// place, and the place is where the crosshair's range sphere puts it.
+pub fn cinder_speed() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::CinderSpeed))
+}
+
+/// The radius of the cloud a Cinder spray bursts into -- the ball a shot has
+/// to fly through to come out lit, and the patch it burns on the floor.
+pub fn embers_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EmbersRadius))
+}
+
+/// How long a cloud of embers hangs. A couple of seconds: long enough to fly
+/// a shot through on purpose, short enough that the air is not on fire for
+/// the rest of the round.
+pub fn embers_life() -> u16 {
+    oven::scalar(Scalar::EmbersLife).max(1) as u16
+}
+
+/// What standing in a cloud costs per tick. Gentle: the cloud is for lighting
+/// things, and the burn is what makes standing in it a mistake rather than
+/// what kills anybody.
+pub fn embers_damage() -> i32 {
+    oven::scalar(Scalar::EmbersDamage)
+}
+
+/// The radius of the burst a **lit** shot leaves where it lands -- the small
+/// explosion, as a smaller cloud of the same kind.
+pub fn lit_burst_radius() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::LitBurstRadius))
+}
+
+/// How much more a shot that flew through fire deals, as a share of its own
+/// row's damage.
+pub fn lit_bonus() -> Fx {
+    Fx::ratio(oven::scalar(Scalar::LitBonus).clamp(0, 100), 100)
+}
+
+/// How hard the Gale shoves a stone it passes, as a multiple of the beam's own
+/// kick speed, before the disc's swell is applied. Zero switches the shove off.
+pub fn gale_stone_push() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::GaleStonePush))
+}
+
 // --- The step, the diagonal, and going up with them ------------------------
 
 /// How many frames before the hitbox a stepping move starts driving the body.

@@ -359,7 +359,9 @@ fn best_case(m: &Move) -> i32 {
         // A pool is what a hit leaves, not what a cast places, and it deals
         // nothing on its own. No move's row says it; listed so the match is
         // complete.
-        Some(EffectKind::Pool) | None => m.damage * swings,
+        // A cloud of embers is what a burst leaves, not what a cast places,
+        // and its burn is the cloud's own row rather than the shot's.
+        Some(EffectKind::Pool) | Some(EffectKind::Embers) | None => m.damage * swings,
     }
 }
 
@@ -524,7 +526,9 @@ fn every_class_has_the_three_shared_slots_and_no_more_than_it_means_to() {
         let n = moves::table(class).len();
         let expected = match class {
             Class::Champion => 19,
-            Class::Elementalist => 7,
+            // Eight: the seven, and the Cinder spray on middle click in both
+            // rows. See `docs/design/elementalist-v2.md`.
+            Class::Elementalist => 8,
             Class::ShadowReaver => 4,
             // Five: the auto was appended when the scythe arrived, so the
             // four rows that came before it kept their knobs. See

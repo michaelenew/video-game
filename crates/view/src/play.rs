@@ -623,7 +623,10 @@ pub fn move_clip(class: Class, slot: u8) -> Clip {
         // in `docs/design/feel-log.md`.
         (Class::Elementalist, 4) => Clip::ElementalistPoke,
         (Class::Elementalist, 5) => Clip::ElementalistHeavy,
-        (Class::Elementalist, _) => Clip::ElementalistCommitted,
+        (Class::Elementalist, 6) => Clip::ElementalistCommitted,
+        // v2, and the first of her moves with a clip of its own since the
+        // original four: a one-armed scatter, unlike anything above.
+        (Class::Elementalist, _) => Clip::ElementalistCinder,
         (Class::BloodMage, 0) => Clip::BloodPoke,
         (Class::BloodMage, 1) => Clip::BloodCommitted,
         (Class::BloodMage, 2) => Clip::BloodSpecial,

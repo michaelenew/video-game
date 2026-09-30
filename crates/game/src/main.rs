@@ -1653,23 +1653,48 @@ fn place_debris(sim: Res<Sim>, mut meshes: Query<(&DebrisMesh, &mut Transform, &
 /// technically an overlay. A shot drawn one size and tested at another is a lie
 /// you cannot see through, and the Gale is where that mattered: see
 /// [`place_discs`].
-fn place_gusts(sim: Res<Sim>, mut meshes: Query<(&GustMesh, &mut Transform, &mut Visibility)>) {
-    for (tag, mut tf, mut vis) in meshes.iter_mut() {
+fn place_gusts(
+    sim: Res<Sim>,
+    look: Res<EffectLook>,
+    mut meshes: Query<(
+        &GustMesh,
+        &mut Transform,
+        &mut Visibility,
+        &mut MeshMaterial3d<StandardMaterial>,
+    )>,
+) {
+    for (tag, mut tf, mut vis, mut skin) in meshes.iter_mut() {
         let Some(shot) = sim.cur.gusts[tag.0] else {
             *vis = Visibility::Hidden;
             continue;
         };
-        if !matches!(shot.gale, sim::gust::Gale::Bolt) {
+        use sim::gust::Gale;
+        if matches!(shot.gale, Gale::Disc) {
             *vis = Visibility::Hidden;
             continue;
         }
         *vis = Visibility::Inherited;
-        // Stretched along its flight, so a bolt reads as travelling rather than
-        // as a bead hanging in the air.
+        // A shot carrying fire is drawn as fire, and the ember always is: what
+        // a shot is worth on arrival is a thing the other player has to be
+        // able to read in flight.
+        let want = if shot.lit || matches!(shot.gale, Gale::Ember) {
+            &look.fire
+        } else {
+            &look.beam
+        };
+        if skin.0 != *want {
+            skin.0 = want.clone();
+        }
         let radius = shot.girth().to_f32_for_render();
         tf.translation = fx3(shot.pos);
         tf.rotation = Quat::from_rotation_arc(Vec3::Y, fx3(shot.dir).normalize_or_zero());
-        tf.scale = Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0);
+        tf.scale = match shot.gale {
+            // Stretched along its flight, so a bolt reads as travelling rather
+            // than as a bead hanging in the air.
+            Gale::Bolt => Vec3::new(radius * 2.0, radius * 5.0, radius * 2.0),
+            // A thrown coal: round, and drawn at the size it bursts from.
+            _ => Vec3::splat(radius * 2.0),
+        };
     }
 }
 
@@ -2397,6 +2422,14 @@ fn effect_piece(effect: &sim::effects::Effect, part: usize) -> Option<Piece> {
         // visibly is not there the frame the leash breaks. The bead size is
         // presentation, unlike the burst above: nothing is hit by the line
         // after its one pass, so there is no volume here to be honest about.
+        // A cloud of embers: the ball the hit test reads, in the fire skin,
+        // hanging where the shot burst -- or half-sunk into the floor where it
+        // burst on the ground, which is what a burning patch looks like.
+        EffectKind::Embers if part == 0 => Some(floating_in(
+            Skin::Fire,
+            at,
+            effect.ember_volume().radius.to_f32_for_render(),
+        )),
         EffectKind::Tether if part < sim::effects::TETHER_BEADS => Some(floating_in(
             Skin::Dark,
             fx3(effect.tether_bead(part)),
@@ -2625,7 +2658,7 @@ fn tick_sim(
         sim.prev = w.clone();
         sim.cur = w;
     }
-    if keys.just_pressed(KeyCode::KeyR) {
+    if keys.just_pressed(KeyCode::Backspace) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
         let w = if sim.cur.monster.is_some() {
             hunt_with(classes, sim.dummy)
@@ -2931,6 +2964,25 @@ fn read_input(keys: &ButtonInput<KeyCode>, mouse: &ButtonInput<MouseButton>) -> 
     // is most of them.
     if keys.pressed(KeyCode::KeyU) || mouse.pressed(MouseButton::Middle) {
         v |= SimInput::MIDDLE;
+    }
+    // The two mouse side buttons -- the right thumb's, and the only buttons in
+    // the scheme that cost no finger anything. `I` and `O` stand in for them
+    // beside `U`, for a trackpad or a two-button mouse. See
+    // `docs/design/exploration/0001_control_budget.md`.
+    if keys.pressed(KeyCode::KeyI) || mouse.pressed(MouseButton::Back) {
+        v |= SimInput::SIDE_A;
+    }
+    if keys.pressed(KeyCode::KeyO) || mouse.pressed(MouseButton::Forward) {
+        v |= SimInput::SIDE_B;
+    }
+    // `F` and `R`: the index finger's two keys, one row up from `D` -- the
+    // same price `Q` and `E` pay. The match reset that used to be on `R` is
+    // on Backspace now.
+    if keys.pressed(KeyCode::KeyF) {
+        v |= SimInput::KEY_F;
+    }
+    if keys.pressed(KeyCode::KeyR) {
+        v |= SimInput::KEY_R;
     }
     // Q and E, not a chord on a click. The special and the mechanic are the
     // two things a class does that nothing else does; burying them under a

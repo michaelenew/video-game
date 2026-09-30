@@ -208,6 +208,20 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
                     );
                 }
             }
+            // A cloud of embers: the slab the shot test traces and the body
+            // test reads, about its centre -- see `Effect::ember_volume`.
+            EffectKind::Embers => {
+                let slab = effect.ember_volume();
+                let bottom = slab.bottom.to_f32_for_render();
+                let top = slab.top.to_f32_for_render();
+                cylinder(
+                    &mut gizmos,
+                    at + Vec3::Y * bottom,
+                    slab.radius.to_f32_for_render(),
+                    (top - bottom).max(0.01),
+                    PILLAR,
+                );
+            }
             EffectKind::BlackSpike => {
                 let volume = effect.spike_volume();
                 cylinder(

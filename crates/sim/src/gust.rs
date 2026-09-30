@@ -82,6 +82,22 @@ use crate::state::{Hit, MAX_PLAYERS, Player, apply_hit, guard_against};
 use crate::stones;
 use crate::tuning as t;
 
+/// Where a shot burst, for `state::World::advance` to turn into a cloud of
+/// embers. Handed out rather than spawned here because the effects array is
+/// the world's, and this module only has the shots.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Burst {
+    pub at: V3,
+    pub owner: u8,
+    /// The move that threw the shot, so the cloud knows its row.
+    pub slot: u8,
+    /// How big a cloud: the Cinder spray's own, or a lit shot's smaller one.
+    pub radius: Fx,
+}
+
+/// Every burst one frame of flight can produce: at most one per shot.
+pub type Bursts = [Option<Burst>; MAX_GUSTS];
+
 /// How many air shots can be in flight at once.
 ///
 /// A count, not a feel number — the same reasoning `bolt::MAX_BOLTS` and the
@@ -111,6 +127,12 @@ pub enum Gale {
     Bolt,
     /// Right click, airborne. Large, slow, and growing.
     Disc,
+    /// Middle click, on the floor and off it. The Cinder spray's ember: it
+    /// does not hit so much as **arrive** -- where its range runs out, or on
+    /// the first thing in the way, it bursts into a cloud of embers
+    /// (`crate::effects::EffectKind::Embers`). The range sphere is the burst
+    /// point, which is what lets it be aimed at a patch of empty air.
+    Ember,
 }
 
 impl Gale {
@@ -119,7 +141,16 @@ impl Gale {
         match self {
             Gale::Bolt => elementalist::AIR_BOLT,
             Gale::Disc => elementalist::GALE,
+            Gale::Ember => elementalist::CINDER,
         }
+    }
+
+    /// Does this shot come out **lit** when it flies through fire?
+    ///
+    /// The two air shots do; the ember is already fire, and a cloud lighting
+    /// the thing that makes clouds would be a loop with nothing at the end.
+    pub const fn ignites(self) -> bool {
+        matches!(self, Gale::Bolt | Gale::Disc)
     }
 
     /// Which shot a move throws, if it throws one at all.
@@ -133,6 +164,7 @@ impl Gale {
         match kind {
             elementalist::AIR_BOLT => Some(Gale::Bolt),
             elementalist::GALE => Some(Gale::Disc),
+            elementalist::CINDER => Some(Gale::Ember),
             _ => None,
         }
     }
@@ -146,6 +178,7 @@ impl Gale {
         match self {
             Gale::Bolt => t::air_bolt_speed(),
             Gale::Disc => t::gale_speed(),
+            Gale::Ember => t::cinder_speed(),
         }
     }
 
@@ -162,7 +195,7 @@ impl Gale {
     /// [`tuning::gale_start`]: crate::tuning::gale_start
     pub fn swell(self, through: Fx) -> Fx {
         match self {
-            Gale::Bolt => Fx::ONE,
+            Gale::Bolt | Gale::Ember => Fx::ONE,
             Gale::Disc => {
                 let start = t::gale_start().min(Fx::ONE);
                 start.add(Fx::ONE.sub(start).mul(through))
@@ -185,6 +218,14 @@ pub struct Gust {
     /// of how long it has been alive.
     pub travelled: Fx,
     pub gale: Gale,
+    /// It flew through fire -- a pillar, or a cloud of embers -- and is
+    /// carrying it. Worth more on arrival (`tuning::lit_bonus`), and it bursts
+    /// where it lands. Once lit, lit: a shot does not go out.
+    pub lit: bool,
+    /// One bit per stone this shot has already shoved, so a disc overlapping
+    /// a stone for several frames shoves it once rather than once a frame.
+    /// `stones::MAX_STONES` is six, so a byte is room enough.
+    pub pushed: u8,
 }
 
 impl Gust {
@@ -228,6 +269,8 @@ pub fn throw(flight: &mut Flight, owner: u8, gale: Gale, path: Path) {
         owner,
         travelled: Fx::ZERO,
         gale,
+        lit: false,
+        pushed: 0,
     };
     if let Some(slot) = flight.iter_mut().find(|s| s.is_none()) {
         *slot = Some(fresh);
@@ -249,15 +292,28 @@ pub fn throw(flight: &mut Flight, owner: u8, gale: Gale, path: Path) {
 /// fast it is retuned to go. The segment is a [`Path`] and the test is
 /// [`aim::first_along`] — the same pair the beam, the fire bolt and Cataclysm's
 /// debris all use.
+///
+/// **Fire is asked about first, and separately.** A shot that can be lit asks
+/// whether this leg crossed a pillar or a cloud of embers, and if it did it
+/// carries the fire on rather than stopping -- fire is not a wall to a shot of
+/// air, it is what the shot was thrown through on purpose. Then it asks what
+/// it *hit*. Two questions rather than one, because `first_along` reports the
+/// nearest thing and a pillar standing in front of somebody would otherwise
+/// have hidden them from the shot for a frame.
+///
+/// Every burst -- an ember arriving, a lit shot landing -- is written into
+/// `bursts` for `state::World::advance` to turn into a cloud: this module has
+/// the shots and not the effects array.
 pub fn step(
     flight: &mut Flight,
     players: &mut [Player; MAX_PLAYERS],
     effects: &Effects,
     versus: bool,
     quarry: &mut Option<Monster>,
+    bursts: &mut Bursts,
 ) {
     let stones = stones::gather(players);
-    for slot in flight.iter_mut() {
+    for (n, slot) in flight.iter_mut().enumerate() {
         let Some(mut shot) = *slot else { continue };
         let m = shot.gale.source();
         let step = shot.gale.speed().mul(DT);
@@ -270,37 +326,57 @@ pub fn step(
         // the answer to it.
         let girth = shot.girth();
         let swell = shot.swell();
-        let met = {
-            let seen = *players;
-            let scene = Scene {
-                stones: &stones,
-                players: &seen,
-                effects,
-                quarry: quarry.as_ref(),
-            };
-            aim::first_along(
-                leg,
-                girth,
-                shot.owner,
-                &scene,
-                // A structure stops it, the same way a structure stops
-                // everything else she throws, and the self-obstruction is the
-                // real cost the kit says it is. Fire is off the list: an air
-                // shot passing through a pillar is an interaction worth having
-                // and is not one anybody has played yet -- see the kit's open
-                // questions.
-                Targets::none().fighters(versus).stones().quarry(!versus),
+        let seen = *players;
+        let scene = Scene {
+            stones: &stones,
+            players: &seen,
+            effects,
+            quarry: quarry.as_ref(),
+        };
+        if shot.gale.ignites()
+            && !shot.lit
+            && matches!(
+                aim::first_along(leg, girth, shot.owner, &scene, Targets::none().fire()),
+                Some(Contact::Fire { .. })
             )
+        {
+            shot.lit = true;
+        }
+        // A structure stops it, the same way a structure stops everything
+        // else she throws, and the self-obstruction is the real cost the kit
+        // says it is -- except for the disc, which is a wall of air arriving
+        // at a boulder, and shoves it along instead.
+        let met = aim::first_along(
+            leg,
+            girth,
+            shot.owner,
+            &scene,
+            Targets::none().fighters(versus).stones().quarry(!versus),
+        );
+        // What this shot leaves where it lands, if anything: an ember always
+        // bursts into its cloud, and a lit shot bursts into the small one.
+        let burst_radius = match shot.gale {
+            Gale::Ember => Some(t::embers_radius()),
+            _ if shot.lit => Some(t::lit_burst_radius()),
+            _ => None,
+        };
+        let mut burst_at = |at: V3| {
+            bursts[n] = Some(Burst {
+                at,
+                owner: shot.owner,
+                slot: shot.gale.slot(),
+                radius: burst_radius.unwrap_or(Fx::ZERO),
+            });
         };
 
         match met {
-            Some(Contact::Fighter { index, .. }) => {
+            Some(Contact::Fighter { index, dist }) => {
                 let victim = players[index];
                 let (guarding, parried) = guard_against(&victim, shot.pos, m.unblockable);
                 apply_hit(
                     &mut players[index],
                     Hit {
-                        damage: force(m.damage, swell),
+                        damage: shot.worth(m.damage),
                         // Frame data, not force: how long a hit holds you is
                         // the thing a player learns, and a stun that changed
                         // with distance could not be learnt.
@@ -319,33 +395,79 @@ pub fn step(
                         interrupts: true,
                     },
                 );
-                *slot = None;
-                continue;
-            }
-            Some(Contact::Quarry { part, .. }) => {
-                if let Some(beast) = quarry.as_mut() {
-                    beast.take_hit(part, force(m.damage, swell));
+                if burst_radius.is_some() {
+                    burst_at(leg.at(dist));
                 }
                 *slot = None;
                 continue;
             }
-            Some(Contact::Stone { .. }) => {
+            Some(Contact::Quarry { part, dist }) => {
+                if let Some(beast) = quarry.as_mut() {
+                    beast.take_hit(part, shot.worth(m.damage));
+                }
+                if burst_radius.is_some() {
+                    burst_at(leg.at(dist));
+                }
                 *slot = None;
                 continue;
             }
+            Some(Contact::Stone { index, dist }) => {
+                if shot.gale == Gale::Disc {
+                    // Kicked along the disc's travel, the beam's shove made
+                    // wide, and worth what the disc has become. Once per
+                    // stone: the disc is wider than a stone and overlaps it
+                    // for several frames on the way past.
+                    let bit = 1u8 << (index as u8 & 7);
+                    if shot.pushed & bit == 0 && t::gale_stone_push().raw() > 0 {
+                        shot.pushed |= bit;
+                        stones::shove(
+                            players,
+                            index,
+                            shot.dir,
+                            t::bolt_knock_speed().mul(t::gale_stone_push()).mul(swell),
+                        );
+                    }
+                    // And on it goes: a wall of air is not stopped by a rock.
+                } else {
+                    if burst_radius.is_some() {
+                        burst_at(leg.at(dist));
+                    }
+                    *slot = None;
+                    continue;
+                }
+            }
             // `Terrain` cannot arrive: this does not ask for it, and the
-            // arena is what stops the thing rather than what it hits. The arm
-            // is here because the enum is exhaustive and the alternative is a
-            // wildcard that would also swallow whatever is added next.
+            // arena is what stops the thing rather than what it hits. `Fire`
+            // cannot either: it was asked about separately above. The arms
+            // are here because the enum is exhaustive and the alternative is
+            // a wildcard that would also swallow whatever is added next.
             Some(Contact::Fire { .. }) | Some(Contact::Terrain { .. }) | None => {}
         }
 
         shot.pos = leg.to;
         shot.travelled = shot.travelled.add(step);
         // Spent, or gone off the end of the world. A shot aimed at the sky has
-        // to expire on something, and its range is the honest answer.
-        *slot = (shot.travelled.raw() < m.reach.raw() && crate::arena::inside(shot.pos))
-            .then_some(shot);
+        // to expire on something, and its range is the honest answer -- and
+        // for the ember, the range *is* the destination: the range sphere the
+        // aim stopped at is where it bursts.
+        let flying = shot.travelled.raw() < m.reach.raw() && crate::arena::inside(shot.pos);
+        if !flying && burst_radius.is_some() && crate::arena::inside(shot.pos) {
+            burst_at(shot.pos);
+        }
+        *slot = flying.then_some(shot);
+    }
+}
+
+impl Gust {
+    /// What this shot deals out of a listed `damage`: its swell, and the fire
+    /// it is carrying if it flew through any.
+    fn worth(&self, damage: i32) -> i32 {
+        let base = force(damage, self.swell());
+        if self.lit {
+            base + Fx::from_int(base).mul(t::lit_bonus()).to_int()
+        } else {
+            base
+        }
     }
 }
 

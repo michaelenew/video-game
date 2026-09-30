@@ -317,6 +317,8 @@ fn the_gale_is_full_size_well_before_it_is_out_of_range() {
             owner: 0,
             travelled: metres(travelled),
             gale: Gale::Disc,
+            lit: false,
+            pushed: 0,
         };
         shot.travelled = metres(travelled);
         shot.swell()

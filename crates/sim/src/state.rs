@@ -1649,13 +1649,40 @@ impl World {
             self.monster.is_none(),
             &mut self.monster,
         );
+        let mut bursts: gust::Bursts = [None; gust::MAX_GUSTS];
         gust::step(
             &mut self.gusts,
             &mut self.players,
             &standing,
             self.monster.is_none(),
             &mut self.monster,
+            &mut bursts,
         );
+        // What the shots left where they landed: a cloud of embers per
+        // burst. **On the floor it is a patch**: a burst that would hang below
+        // the ground is stood on it instead, so the same ball reads as a low
+        // burning patch rather than a half-buried one, and its top still
+        // reaches a standing body. See `effects::EffectKind::Embers`.
+        for burst in bursts.into_iter().flatten() {
+            let floor = arena::ground_under(burst.at);
+            let mut at = burst.at;
+            if at.y.sub(burst.radius).raw() < floor.raw() {
+                at.y = floor;
+            }
+            let class = self.players[burst.owner as usize].class;
+            spawn_effect(
+                &mut self.effects,
+                Effect::cast(
+                    EffectKind::Embers,
+                    burst.owner,
+                    class,
+                    burst.slot,
+                    at,
+                    V3::ZERO,
+                    burst.radius,
+                ),
+            );
+        }
         stones::touch(&mut self.players);
         separate_bodies(&mut self.players);
         drag_the_held(&mut self.players);
@@ -1748,6 +1775,8 @@ impl World {
                     hash_v3(&mut h, &g.pos);
                     hash_v3(&mut h, &g.dir);
                     h.write_i32(g.travelled.raw());
+                    h.write_u32(g.lit as u32);
+                    h.write_u32(g.pushed as u32);
                 }
                 None => h.write_u32(0),
             }
@@ -3549,10 +3578,19 @@ fn elementalist_move(p: &Player, input: Input) -> Option<u8> {
         if input.has(Input::LEFT) {
             return Some(e::AIR_BOLT);
         }
+        // The third click is the one button on the class the floor does not
+        // change: the Cinder spray is thrown to a place, and a place is the
+        // same place from the air. See `moves::elementalist::CINDER`.
+        if input.has(Input::MIDDLE) {
+            return Some(e::CINDER);
+        }
         return input.has(Input::RIGHT).then_some(e::GALE);
     }
     if input.has(Input::RIGHT) {
         return Some(SLOT_HEAVY);
+    }
+    if input.has(Input::MIDDLE) {
+        return Some(e::CINDER);
     }
     // Fissure is stranded by the retirement of shift as an attack modifier,
     // along with the other two committed moves in the roster. See
@@ -6267,6 +6305,27 @@ impl World {
             // A pool does nothing to anybody on its own. It is read by the
             // moves put through it -- see `drink_over` -- and by the dodge.
             EffectKind::Pool => {}
+
+            // A cloud of embers burns like a pillar does, on the same tick,
+            // inside the ball it occupies -- gently, because what it is for is
+            // lighting the shots that fly through it, and the burn is only
+            // what makes standing in one a mistake.
+            EffectKind::Embers => {
+                if effect.ticks_now() {
+                    let slab = effect.ember_volume();
+                    let radius = t::body_radius();
+                    let height = t::body_height();
+                    for i in 0..MAX_PLAYERS {
+                        let p = self.players[i];
+                        if self.effects_reach(i, effect.owner)
+                            && slab.contains(effect.pos, p.pos, radius, height)
+                        {
+                            self.drain(i, effect);
+                        }
+                    }
+                    self.feed_the_caster(effect, 0, effect.pos, slab.radius);
+                }
+            }
 
             // The bolt. Straight out along the line and spent on the first
             // body it reaches: the cut lands and the bleed opens, and from

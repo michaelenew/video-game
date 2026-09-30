@@ -507,15 +507,25 @@ fn launch_decel(stone: &mut Structure) {
 /// already erupted once is still fair game to hurt someone when it is kicked,
 /// because the kick is a different event.
 pub fn kick(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3) {
+    shove(players, index, dir, t::bolt_knock_speed());
+}
+
+/// The same kick at a speed of the caller's choosing.
+///
+/// The beam's kick is the reference speed; the Gale's push is a share of it
+/// scaled by how much of itself the disc has become (`tuning::gale_stone_push`).
+/// One launch path for both, so a stone pushed by the disc dies off, hits and
+/// hands over speed exactly the way a kicked one does.
+pub fn shove(players: &mut [Player; MAX_PLAYERS], index: usize, dir: V3, speed: Fx) {
     let mut field = gather(players);
     if let Some(stone) = field[index].as_mut() {
         stone.launched = true;
         stone.launch_from = stone.at;
         stone.knock_struck = 0;
-        stone.vel.x = dir.x.mul(t::bolt_knock_speed());
-        stone.vel.z = dir.z.mul(t::bolt_knock_speed());
+        stone.vel.x = dir.x.mul(speed);
+        stone.vel.z = dir.z.mul(speed);
         if dir.y.raw() > 0 {
-            stone.vel.y = dir.y.mul(t::bolt_knock_speed());
+            stone.vel.y = dir.y.mul(speed);
         }
     }
     scatter(players, &field);

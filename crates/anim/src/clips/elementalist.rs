@@ -18,6 +18,11 @@
 //!   Pillar    both hands sweep down, the body sinks           -- down, then up
 //! ```
 //!
+//! The Cinder spray, since v2, is the one **one-armed throw** in the file and
+//! the only move whose hand crosses the body: it scoops low across to the
+//! far hip and flings up and out to the near side, scattering coals. Nothing
+//! else here ever puts a hand across the midline, so the scoop is the tell.
+//!
 //! Cataclysm is not a fourth direction in that read: it is on its own button,
 //! so there is nothing to disambiguate it from. What it needs instead is the
 //! one silhouette none of the three above ever makes -- **forward**. Fissure
@@ -75,7 +80,7 @@ use view::skeleton::Joint;
 const THROUGH: Ease = Ease::new(0.10, 0.34, 0.90, 0.66);
 
 pub fn clips() -> Vec<Recipe> {
-    vec![bolt(), fissure(), fire_pillar(), heavy()]
+    vec![bolt(), fissure(), fire_pillar(), heavy(), cinder()]
 }
 
 // ---------------------------------------------------------------------------
@@ -756,6 +761,164 @@ fn gathering() -> Pose {
             .shoulders(32.0, 20.0, -6.0)
             .elbows(48.0)
             .wrists(-6.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Cinder spray
+// ---------------------------------------------------------------------------
+
+/// A handful of coals scooped and flung: one arm, low across the body and up
+/// and out, the off arm swinging back to balance it.
+///
+/// The one-armed throw is what makes it legible against the rest of the file.
+/// Bolt is one arm too, but from the *ear* and in a straight line; this hand
+/// starts at the far hip, which is a place no other move of hers ever visits,
+/// and travels a diagonal across the whole front. The body helps: the hips dip
+/// into the scoop and rise out of it, and the chest turns *with* the arm rather
+/// than winding against it -- a scatter is not a wound-up throw, it is a
+/// sweep, and the coals leave the hand at the top of the arc.
+fn cinder() -> Recipe {
+    let clip = Clip::ElementalistCinder;
+    let (_, contact, recover) = clip.phases().expect("an attack clip has phases");
+    let end = clip.length() - 1;
+    // Down to the hip inside the first two fifths of the startup, loaded by
+    // three quarters, and the arc itself is the last quarter: a scatter is
+    // fast at the release and slow at the gather.
+    let scoop = (contact * 2 / 5).max(2);
+    let loaded = (contact * 3 / 4).max(scoop + 1);
+    let settle = recover + (end - recover) * 2 / 5;
+    let home = end.saturating_sub(2);
+
+    Recipe {
+        clip,
+        looseness: Looseness::MARTIAL,
+        notes: "A scatter, not a shot and not a throw with weight behind it: \
+                the right hand scoops low across to the left hip, palm up, and \
+                flings up and out to her own right. The chest turns with the \
+                hand both ways so the whole front sweeps, and the left arm \
+                swings back and down as the counterweight. The release is at \
+                the top of the arc rather than out in front, because coals are \
+                scattered rather than thrown at somebody -- what leaves is a \
+                spray, and the spray's shape is the arc the hand drew. MARTIAL \
+                so the arm rings a little at the top: the fingers open and \
+                the hand keeps going after the coals have left it."
+            .into(),
+        keys: vec![
+            Key::eased(0, ready(), Ease::OUT),
+            Key::eased(scoop, scooping(), Ease::SMOOTH),
+            Key::eased(loaded, scooped(), Ease::ANTICIPATE),
+            Key::eased(contact, flung(), Ease::STRIKE),
+            Key::eased(recover, scattered(), Ease::OUT),
+            Key::eased(settle, easing(), Ease::SMOOTH),
+            Key::eased(home, ready(), Ease::SMOOTH),
+        ],
+    }
+}
+
+/// The tell: the right hand dropping and crossing toward the left hip, the
+/// chest turning left with it, the knees taking the dip.
+fn scooping() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.07, -0.01)
+            .root(4.0, 0.0, -6.0)
+            .spine(8.0, -3.0, -8.0)
+            .chest(6.0, -2.0, -10.0)
+            // Eyes on the target while the shoulders turn away from it.
+            .head(2.0, 0.0, 18.0)
+            .shoulder_r(14.0, -16.0, 24.0)
+            .elbow_r(84.0)
+            .wrist_r(-34.0, 0.0, 0.0)
+            .shoulder_l(30.0, 26.0, -10.0)
+            .elbow_l(60.0)
+            .wrist_l(-16.0, 0.0, 0.0),
+        0.0,
+        0.0,
+    )
+}
+
+/// Loaded: as low and as far across as the hand gets, cupped at the far hip.
+/// The lowest frame of the clip.
+fn scooped() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.12, -0.02)
+            .root(6.0, 0.0, -10.0)
+            .spine(12.0, -4.0, -12.0)
+            .chest(8.0, -3.0, -14.0)
+            .head(0.0, 0.0, 26.0)
+            .shoulder_r(8.0, -26.0, 30.0)
+            .elbow_r(96.0)
+            .wrist_r(-42.0, 0.0, 0.0)
+            .shoulder_l(28.0, 28.0, -12.0)
+            .elbow_l(52.0)
+            .wrist_l(-14.0, 0.0, 0.0),
+        0.0,
+        0.02,
+    )
+}
+
+/// The release, on the frame the coal leaves: the arm swept up and out to her
+/// own right, elbow open, fingers spread; the chest turned with it, the body
+/// risen out of the dip, and the off arm back and down.
+fn flung() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.02, 0.02)
+            .root(-3.0, 0.0, 6.0)
+            .spine(-6.0, 4.0, 8.0)
+            .chest(-8.0, 4.0, 10.0)
+            .head(-6.0, 0.0, -14.0)
+            .shoulder_r(128.0, 44.0, -10.0)
+            .elbow_r(14.0)
+            .wrist_r(30.0, 8.0, 0.0)
+            .shoulder_l(8.0, 22.0, -6.0)
+            .elbow_l(30.0)
+            .wrist_l(10.0, 0.0, 0.0),
+        0.02,
+        0.0,
+    )
+}
+
+/// The end of the active window: the hand carried on past the release, high
+/// and wide, fingers open, nothing held.
+fn scattered() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.02, 0.025)
+            .root(-4.0, 0.0, 8.0)
+            .spine(-7.0, 5.0, 9.0)
+            .chest(-9.0, 5.0, 11.0)
+            .head(-7.0, 0.0, -15.0)
+            .shoulder_r(140.0, 52.0, -16.0)
+            .elbow_r(8.0)
+            .wrist_r(38.0, 12.0, 0.0)
+            .shoulder_l(2.0, 20.0, -4.0)
+            .elbow_l(24.0)
+            .wrist_l(12.0, 0.0, 0.0),
+        0.02,
+        0.0,
+    )
+}
+
+/// Recovery: the arm falling out of the arc, the chest coming back square.
+fn easing() -> Pose {
+    footing(
+        ready()
+            .hips(0.0, -0.045, 0.0)
+            .root(0.0, 0.0, 4.0)
+            .spine(0.0, 2.0, 4.0)
+            .chest(-2.0, 2.0, 6.0)
+            .head(-3.0, 0.0, -5.0)
+            .shoulder_r(60.0, 30.0, -8.0)
+            .elbow_r(40.0)
+            .wrist_r(4.0, 4.0, 0.0)
+            .shoulder_l(14.0, 20.0, -8.0)
+            .elbow_l(56.0)
+            .wrist_l(-10.0, 0.0, 0.0),
         0.0,
         0.0,
     )

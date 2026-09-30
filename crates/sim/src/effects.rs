@@ -143,6 +143,17 @@ pub enum EffectKind {
     /// collides with it, and standing in one is the point.
     /// See `docs/design/blood-mage.md` §"Essence pools".
     Pool,
+    /// Elementalist. A cloud of sparks hanging where a Cinder spray burst --
+    /// or a low burning patch, when it burst on the floor.
+    ///
+    /// **Fire in the air.** The one effect in the game with no foot on the
+    /// ground: `pos` is its centre and `reach` is its radius, and it is tested
+    /// and drawn as that ball. It burns on a tick like a pillar, far more
+    /// gently; what it is *for* is that an Air bolt or a Gale flown through it
+    /// comes out lit, and a stone standing in it catches. It is also what a
+    /// lit shot leaves where it lands, at a smaller radius -- the small
+    /// explosion. See `crate::gust` and `docs/design/elementalist-v2.md`.
+    Embers,
 }
 
 /// How many arms a Grasp has, and which corner each one leaves by.
@@ -213,6 +224,7 @@ impl EffectKind {
             EffectKind::Tether => "tether",
             EffectKind::JudgementField => "judgement field",
             EffectKind::Pool => "essence pool",
+            EffectKind::Embers => "embers",
         }
     }
 
@@ -244,6 +256,9 @@ impl EffectKind {
             EffectKind::LanceBurst | EffectKind::Tether => false,
             EffectKind::JudgementField => true,
             EffectKind::Pool => true,
+            // Wherever it burst. Nothing casts one at a place: it is left by
+            // a shot, and the shot decided where.
+            EffectKind::Embers => false,
         }
     }
 
@@ -330,6 +345,9 @@ impl EffectKind {
             // pool is what a hit leaves, not what a cast places.
             9 => Some(EffectKind::Pool),
             10 => Some(EffectKind::Haemorrhage),
+            // Listed so the numbering is complete; no move's row says it. A
+            // cloud is what a burst leaves, not what a cast places.
+            11 => Some(EffectKind::Embers),
             _ => None,
         }
     }
@@ -364,6 +382,7 @@ impl EffectKind {
             // A pool has no clock. It is gone when it has drained, which is
             // volume, not frames -- see `state::World::step_effects`.
             EffectKind::Pool => u16::MAX,
+            EffectKind::Embers => t::embers_life(),
         }
     }
 
@@ -396,6 +415,9 @@ impl EffectKind {
             EffectKind::Tether => t::tether_drain(),
             EffectKind::JudgementField => t::judgement_field_damage(),
             EffectKind::Pool => 0,
+            // A number of its own, for the pillar's reason: the burst that
+            // left it hit on its own, and the burn is a different event.
+            EffectKind::Embers => t::embers_damage(),
         }
     }
 }
@@ -624,6 +646,23 @@ impl Effect {
     /// point every time it asks, rather than integrating toward it one frame
     /// at a time and landing somewhere near. Meaningless -- and never called
     /// -- on anything but a [`EffectKind::FireTornado`].
+    /// The ball of sparks an ember cloud occupies, as the slab the pillar
+    /// test already understands: `reach` is its radius, and it reaches that
+    /// far above and below its centre.
+    ///
+    /// **Not a sphere**, deliberately: a cylinder is what `aim::first_along`
+    /// traces and what `Pillar::contains` tests, and a cloud that was a
+    /// sphere to the shot and a cylinder to the body would light a Gale that
+    /// then flew past somebody standing in exactly the same fire. One shape,
+    /// both questions.
+    pub fn ember_volume(&self) -> Pillar {
+        Pillar {
+            radius: self.reach,
+            bottom: Fx::ZERO.sub(self.reach),
+            top: self.reach,
+        }
+    }
+
     pub fn tornado_pos(&self) -> V3 {
         let flying = self.age.saturating_sub(self.banked as u16);
         let travelled = t::tornado_speed().mul(Fx::from_int(flying as i32)).mul(DT);
@@ -684,6 +723,7 @@ impl Effect {
             EffectKind::Tether => self.source().radius,
             EffectKind::JudgementField => t::judgement_field_radius(),
             EffectKind::Pool => self.pool_radius(),
+            EffectKind::Embers => self.reach,
         }
     }
 

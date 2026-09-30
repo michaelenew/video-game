@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 348] = [
+pub const SCALARS: [i32; 355] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -356,6 +356,13 @@ pub const SCALARS: [i32; 348] = [
                2, // reaver.lotus,_blades_that_cut_one_body_a_pass = 2
               60, // offence.impact_freeze_on_block_(%) = 60
                6, // offence.impact_freeze,_the_creature's_blows = 6
+         1441792, // elementalist.cinder_spray,_speed = 22
+          104858, // elementalist.cinder_cloud,_radius = 1.6
+             150, // elementalist.cinder_cloud,_lasts = 150
+              10, // elementalist.cinder_cloud,_damage_per_tick = 10
+           65536, // elementalist.lit_shot,_burst_radius = 1
+              50, // elementalist.lit_shot,_damage_bonus_(%) = 50
+           52429, // elementalist.gale_pushes_a_stone_at_(x_the_kick) = 0.8
 ];
 
 #[rustfmt::skip]
@@ -387,7 +394,7 @@ pub const AIR: [i32; 24] = [
 ];
 
 #[rustfmt::skip]
-pub const MOVES: [i32; 1320] = [
+pub const MOVES: [i32; 1350] = [
                4, // move.bulwark.bash.startup = 4
                3, // move.bulwark.bash.active = 3
               10, // move.bulwark.bash.recovery = 10
@@ -1296,7 +1303,7 @@ pub const MOVES: [i32; 1320] = [
            19661, // move.elementalist.air_bolt.radius = 0.3
                8, // move.elementalist.air_bolt.hitstun = 8
                5, // move.elementalist.air_bolt.blockstun = 5
-          367002, // move.elementalist.air_bolt.knockback = 5.6
+          589824, // move.elementalist.air_bolt.knockback = 9
               60, // move.elementalist.air_bolt.mobility_(%) = 60
                8, // move.elementalist.air_bolt.aerial_hang = 8
                0, // move.elementalist.air_bolt.unblockable = off
@@ -1326,7 +1333,7 @@ pub const MOVES: [i32; 1320] = [
           117964, // move.elementalist.gale.radius = 1.8
               22, // move.elementalist.gale.hitstun = 22
               12, // move.elementalist.gale.blockstun = 12
-         1048576, // move.elementalist.gale.knockback = 16
+         1441792, // move.elementalist.gale.knockback = 22
               20, // move.elementalist.gale.mobility_(%) = 20
               10, // move.elementalist.gale.aerial_hang = 10
                0, // move.elementalist.gale.unblockable = off
@@ -1378,6 +1385,36 @@ pub const MOVES: [i32; 1320] = [
                0, // move.elementalist.landfall.steps_forward_(m) = 0
                0, // move.elementalist.landfall.drinks_of_a_pool_(%) = 0
                4, // move.elementalist.landfall.impact_freeze = 4
+              10, // move.elementalist.cinder_spray.startup = 10
+               2, // move.elementalist.cinder_spray.active = 2
+              14, // move.elementalist.cinder_spray.recovery = 14
+              30, // move.elementalist.cinder_spray.damage = 30
+          786432, // move.elementalist.cinder_spray.reach = 12
+           22938, // move.elementalist.cinder_spray.radius = 0.35
+              10, // move.elementalist.cinder_spray.hitstun = 10
+               4, // move.elementalist.cinder_spray.blockstun = 4
+          262144, // move.elementalist.cinder_spray.knockback = 4
+              60, // move.elementalist.cinder_spray.mobility_(%) = 60
+               6, // move.elementalist.cinder_spray.aerial_hang = 6
+               0, // move.elementalist.cinder_spray.unblockable = off
+               1, // move.elementalist.cinder_spray.hits_crouching = on
+               0, // move.elementalist.cinder_spray.needs_mechanic = off
+               0, // move.elementalist.cinder_spray.launch = 0
+               0, // move.elementalist.cinder_spray.self_lift = 0
+               0, // move.elementalist.cinder_spray.grab_hold = 0
+               0, // move.elementalist.cinder_spray.leaves_behind = 0
+               0, // move.elementalist.cinder_spray.health_cost = 0
+               0, // move.elementalist.cinder_spray.leech_(%) = 0
+               2, // move.elementalist.cinder_spray.line_of_effect_(0-3) = 2
+               0, // move.elementalist.cinder_spray.swing_arc_(turns) = 0
+               0, // move.elementalist.cinder_spray.hits_again_every = 0
+               0, // move.elementalist.cinder_spray.channel,_longest_hold = 0
+               0, // move.elementalist.cinder_spray.channel,_reach_at_no_hold = 0
+             100, // move.elementalist.cinder_spray.repeat_lockout_(%) = 100
+               0, // move.elementalist.cinder_spray.reactivate_no_sooner_than = 0
+               0, // move.elementalist.cinder_spray.steps_forward_(m) = 0
+               0, // move.elementalist.cinder_spray.drinks_of_a_pool_(%) = 0
+               3, // move.elementalist.cinder_spray.impact_freeze = 3
                7, // move.blood_mage.bloodletter.startup = 7
                3, // move.blood_mage.bloodletter.active = 3
               14, // move.blood_mage.bloodletter.recovery = 14

@@ -292,6 +292,8 @@ clips! {
         "Fire pillar: a rising two-handed gesture that pulls a column up out of the floor.";
     ElementalistHeavy,    "elementalist_heavy",     Moves, "elementalist", Length::Move(Class::Elementalist, 3), false,
         "Cataclysm: both hands wound up wide and thrown forward together, then let fall.";
+    ElementalistCinder,   "elementalist_cinder",    Moves, "elementalist", Length::Move(Class::Elementalist, 7), false,
+        "Cinder spray: one hand scoops low across the body and flings up and out, scattering coals; the off arm swings back to balance it. The only one-armed throw she has.";
 
     // -- The Blood mage: Bloodletter, Reap, Grasp, Black spike, Reaping sweep
     //

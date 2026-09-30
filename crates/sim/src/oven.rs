@@ -612,6 +612,17 @@ scalars! {
     // the two rules around it. See `moves::Move::hitstop`.
     FreezeOnBlock,    "Offence",  "Impact freeze on block (%)",           Percent, 0,       100;
     FreezeCreature,   "Offence",  "Impact freeze, the creature's blows",  Frames,  0,       30;
+    // **The Elementalist's v2**, 2026-09-30, appended for the reason everything
+    // above is. Fire in the air first: the Cinder spray and the cloud it
+    // leaves, what a shot flown through fire is worth, and the Gale's shove on
+    // a stone. See `docs/design/elementalist-v2.md` and `crate::gust`.
+    CinderSpeed,      "Elementalist", "Cinder spray, speed",                  Fixed,   fx(5,1),  fx(80,1);
+    EmbersRadius,     "Elementalist", "Cinder cloud, radius",                 Fixed,   fx(1,4),  fx(6,1);
+    EmbersLife,       "Elementalist", "Cinder cloud, lasts",                  Frames,  1,        600;
+    EmbersDamage,     "Elementalist", "Cinder cloud, damage per tick",        Int,     0,        200;
+    LitBurstRadius,   "Elementalist", "Lit shot, burst radius",               Fixed,   fx(1,4),  fx(6,1);
+    LitBonus,         "Elementalist", "Lit shot, damage bonus (%)",           Percent, 0,        100;
+    GaleStonePush,    "Elementalist", "Gale pushes a stone at (x the kick)",  Fixed,   0,        fx(3,1);
 }
 
 // ---------------------------------------------------------------------------

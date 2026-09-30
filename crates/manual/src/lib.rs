@@ -152,7 +152,15 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "U or middle click",
-                "The third attack button. Two classes use it: the Champion's is the hammer, and the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying.",
+                "The third attack button. Three classes use it: the Champion's is the hammer, the Dual mage's is Lance -- one button that throws either form of the cast, depending on which force she is carrying -- and the Elementalist's is the Cinder spray.",
+            ),
+            e(
+                "Mouse side buttons (or I and O)",
+                "Two more ability buttons, under the thumb of the hand that aims -- so they carry aimed things. Only the Elementalist reads them so far.",
+            ),
+            e(
+                "F and R",
+                "Two more ability buttons, under the index finger of the hand that moves -- one row up from D, the way Q and E sit one row up from A and W. They carry things about your own body rather than a place. Only the Elementalist reads them so far.",
             ),
             e(
                 "Q",
@@ -302,6 +310,33 @@ pub const SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        title: "The Elementalist",
+        in_browser: true,
+        blurb: "Terrain author. She raises stones, plants fire, and then combos through what she built -- and off the floor the same buttons throw air. See docs/design/elementalist-v2.md for the rest of what is coming.",
+        entries: &[
+            e(
+                "Left click",
+                "Bolt: an instant line to whatever the crosshair is on. A fighter loses the move they were winding up; a stone is kicked along the line; a fire pillar lights a fire bolt. In the air it is the Air bolt, a long slow shot with a real flight -- and one that comes out lit, worth more and bursting where it lands, if it flew through fire.",
+            ),
+            e(
+                "Right click",
+                "Cataclysm: a slow heavy along the same line that breaks a stone into debris or tears a pillar loose as a tornado. In the air it is the Gale, a disc that opens as it flies and hits hardest wide; it shoves stones it passes, and through fire it comes out burning.",
+            ),
+            e(
+                "Middle click (or U)",
+                "Cinder spray, on the floor and off it. A thrown coal that bursts where its range runs out or on the first thing in the way, into a cloud of embers that hangs a couple of seconds -- or a low burning patch, on the floor. Fly a shot through it and the shot is fire. It is also the fire you have when the pillar is too far away.",
+            ),
+            e(
+                "Q",
+                "Fire pillar, planted where the crosshair is. One at a time.",
+            ),
+            e(
+                "E",
+                "Raise a stone where the crosshair is -- under your own feet included, and jump as it erupts to ride it up. Three on the field; a fourth collapses the oldest. In the air E is Landfall: a plunge that levers a leaning slab out of the floor in front of you.",
+            ),
+        ],
+    },
+    Section {
         title: "Hunting the Ridgeback",
         in_browser: true,
         blurb: "H starts a hunt. Its back is the only part worth hitting, so the fight is about getting up there.",
@@ -370,7 +405,10 @@ pub const SECTIONS: &[Section] = &[
                 "F8",
                 "Hide or show the class pickers beside each health bar. On by default. Clicking one cycles that player's class, and it needs a free cursor -- press Esc, or open the Oven.",
             ),
-            e("R", "Reset the match."),
+            e(
+                "Backspace",
+                "Reset the match. It was R, until R became an ability key.",
+            ),
             e("P", "Pause."),
             e("]", "Step one frame. Pauses if it was running."),
             e(

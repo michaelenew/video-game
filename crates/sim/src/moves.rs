@@ -628,6 +628,10 @@ const NAMES: [&[&str]; 6] = [
     //   see `crate::gust` -- and neither has a hitbox of its own, which is
     //   what `Shape::None` in [`shape`] says. Landfall does: a disc on the
     //   floor where she arrives.
+    //   Cinder spray: middle click, **both rows**. A thrown ember that bursts
+    //   at its range sphere or on the first thing it meets into a hanging
+    //   cloud of sparks -- fire in the air for her own shots to fly through.
+    //   See `crate::gust::Gale::Ember` and `crate::effects::EffectKind::Embers`.
     &[
         "Bolt",
         "Fissure",
@@ -636,6 +640,7 @@ const NAMES: [&[&str]; 6] = [
         "Air bolt",
         "Gale",
         "Landfall",
+        "Cinder spray",
     ],
     // Blood mage -- her blood goes out, and theirs comes back. Everything
     // costs health, every hit she lands spills the target onto the floor, and
@@ -1027,8 +1032,16 @@ pub mod elementalist {
     /// see `moves::on_e`, which answers for the key without knowing where her
     /// feet are, and `state::keyed_move`, which is what does know.
     pub const LANDFALL: u8 = 6;
+    /// Middle click, on the floor and off it alike. A thrown ember with a
+    /// speed, like the two air shots, that **bursts** where its range runs out
+    /// or on the first thing it meets -- a firework rather than a shot, so it
+    /// needs nothing for the crosshair to rest on. What it leaves is a cloud
+    /// of embers (`crate::effects::EffectKind::Embers`): fire in the air, or a
+    /// low burning patch when it pops on the floor. An Air bolt or a Gale
+    /// flown through it comes out **lit**. See `docs/design/elementalist-v2.md`.
+    pub const CINDER: u8 = 7;
 
-    pub const COUNT: usize = 7;
+    pub const COUNT: usize = 8;
 
     // **No `is_airborne` here, deliberately.** "Which move is this button" is
     // answered once, in `state::elementalist_move` and `state::keyed_move`, and
@@ -1211,7 +1224,9 @@ pub const fn binding(class: Class, slot: usize) -> &'static str {
             // changes what it throws. See [`elementalist`].
             4 => "LMB air",
             5 => "RMB air",
-            _ => "E air",
+            6 => "E air",
+            // Both rows: the one move on the class the floor does not change.
+            _ => "MMB",
         },
         // Three clicks, three moves, and the auto on the last row: see
         // [`blood`] for why the button order and the storage order differ.
@@ -1317,7 +1332,7 @@ pub const fn shape(class: Class, kind: u8) -> Shape {
         // fourth is a beam drawn from the line it flew, and Landfall is a disc
         // on the floor at her own feet.
         Class::Elementalist => match kind {
-            elementalist::AIR_BOLT | elementalist::GALE => Shape::None,
+            elementalist::AIR_BOLT | elementalist::GALE | elementalist::CINDER => Shape::None,
             _ => Shape::Cylinder,
         },
         // The Dual mage's two autos are punches with a wing behind them, and

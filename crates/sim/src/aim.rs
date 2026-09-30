@@ -1160,6 +1160,23 @@ pub fn first_along(
     if targets.fire {
         for slot in scene.effects.iter() {
             let Some(e) = slot else { continue };
+            // A cloud of embers is fire too -- the one fire with no foot on
+            // the floor, so its slab is measured about its centre. What
+            // lights at a pillar lights at a cloud.
+            if e.kind == EffectKind::Embers {
+                let slab = e.ember_volume();
+                let foot = V3::new(e.pos.x, e.pos.y.add(slab.bottom), e.pos.z);
+                if let Some(dist) = crate::math::ray_hits_cylinder(
+                    from,
+                    dir,
+                    foot,
+                    slab.radius.add(girth),
+                    slab.top.sub(slab.bottom),
+                ) {
+                    keep(Contact::Fire { dist });
+                }
+                continue;
+            }
             if e.kind != EffectKind::FirePillar {
                 continue;
             }
