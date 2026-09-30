@@ -195,7 +195,7 @@ the same tables.
 **Run it:** `cargo run -p game` — 3D arena, standins, HUD with live frame data, debug
 overlay on F1 (hitbox and hurtbox wireframes, guard arcs), local two-player, training dummy on 1-4, a sparring bot on 5-7 ([sparring.md](sparring.md)). Click to capture the mouse, Escape
 to release. `DEMO=1` scripts player one and `DEBUG_OVERLAY=1` starts with the overlay on;
-`./scripts/screenshot.sh` renders headlessly.
+`./scripts/screenshot.sh` renders headlessly (`./scripts/setup-tools.sh shot` installs what it needs; `web` does the same for the browser build).
 
 **Controls are camera-relative.** The mouse aims; `W` is away from the camera, not along a
 world axis; attacks go where you look. Facing locks the moment a move starts, so you commit

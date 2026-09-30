@@ -163,6 +163,48 @@ Build it with `./crates/web/build-game.sh`; the reasoning is
 overlay, the browser sandbox and the creature's exchange all read it. An overlay
 that can drift from the rule it illustrates is worse than no overlay.
 
+## Tools that are not on every machine
+
+Three things this repository does need tools a fresh machine does not have: the
+**browser build** needs `wasm-bindgen` at the lock file's exact version, a
+**headless screenshot** needs Xvfb, a software Vulkan driver and ImageMagick,
+and **loading the built page** (`./scripts/web-smoke.sh`, which is how a change
+to the browser build is checked) needs Playwright and its Chromium.
+`./scripts/setup-tools.sh web`, `shot`, `browser` or `all` installs them, once,
+and is the only place the steps are written. The Pages workflow runs it; a
+cloud environment's setup script should run it too, so a session starts with
+them.
+
+**Decide up front, install in the background, check before the step.** The
+install is a cargo build of about ninety seconds and an apt run, so it is never
+worth waiting on and never worth discovering late:
+
+1. Before starting work, read the task for whether it will end in a browser
+   build (anything touching `crates/web`, `platform.rs`, the manual's HTML, or a
+   "check it in the browser") or a headless screenshot (anything that has to be
+   *seen*: a clip, a material, a HUD change). If it will, start the install
+   **now**, in the background, logging to a file:
+
+   ```
+   ./scripts/setup-tools.sh web browser > target/setup-tools.log 2>&1 &
+   ```
+
+2. Do everything that does not need it.
+3. Before the build or the screenshot, read the log. The script's last lines say
+   `installed`, `already installed`, or `FAILED:` with the exact command, and it
+   exits non-zero if anything is still missing.
+4. If it failed, run the build's own type-check instead
+   (`cargo check -p game --target wasm32-unknown-unknown`), say in the report
+   which command failed and with what, and say plainly that the browser build,
+   the page load or the screenshot was **not** run. "This machine does not have
+   it" is a report of a failed install, never a reason to skip the step
+   silently.
+
+A browser-build change is checked by `./scripts/web-smoke.sh`: it builds, serves
+and loads the page in headless Chromium, fails on any console error, failed
+request or missing controls entry, and leaves a screenshot. Look at the
+screenshot; a page that loads clean and draws nothing has still failed.
+
 ## Checks before you push
 
 ```

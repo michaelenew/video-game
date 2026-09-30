@@ -6206,9 +6206,18 @@ current. The instruments' decimal formatter lost the sign on values between
 minus one and zero; `elemental` and the frame table print it now.
 
 **Not done** The sparring bot does not press the four new buttons; the hunt
-report cannot reach them yet. The web build script needs `wasm-bindgen` on
-the path, which this machine did not have; the browser target type-checks
-with the four inputs in.
+report cannot reach them yet.
+
+**And the tools.** The web build script needs `wasm-bindgen` on the path and
+this machine did not have it, which is the third time a check has been
+skipped for that reason. So the install steps now live in one script,
+`scripts/setup-tools.sh` (`web`, `shot`, `browser`), that the Pages workflow,
+a cloud session's setup and a new machine all run; CLAUDE.md says to decide
+up front whether a task ends in a browser build or a screenshot and to start
+the install in the background before doing anything else. With it run: the
+browser build validates, `scripts/web-smoke.sh` loads the page in headless
+Chromium with no console error and the controls panel naming the four inputs,
+and `scripts/screenshot.sh` renders the Elementalist standing beside a stone.
 
 **Verdict** built, unplayed. C1–C5 are a person's, in order, and C2 first.
 
