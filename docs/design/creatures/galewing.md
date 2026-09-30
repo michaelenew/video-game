@@ -123,13 +123,6 @@ margin is twenty centimetres, from 1.0 m to 1.2 m, and it wants to be exactly
 that small: a talon that passed over somebody standing half-crouched would make
 the crouch a suggestion.
 
-**The Downwash's answers are two because its threat is two.** Near an edge or on
-the tower top, the push is the damage: sixteen metres of slide in two seconds
-for somebody standing still. In the middle of the arena it is a set-up for the
-volley, which it scores highly after a Downwash (see §5). The lee answers both;
-the eye answers the push and leaves you standing directly under the bird that is
-about to throw feathers at you, which is its own read.
-
 ## 3 · A threat at every range
 
 **Close, and only on the ground.** The Wing buffet and the Screech, which cover
@@ -303,16 +296,12 @@ query that zeroes the push; the volley's lane; the Screech's cone. The lee
 patch is the one new thing to draw, and it has to be the push's own answer or
 it is an overlay that lies.
 
-**The silhouettes are chosen to be different from below:** an eighteen-metre
-cross circling; a dart eight metres long (wings folded — the Stoop); a flat
-line coming at you at head height (the pass); wings vertical and a body hanging
-still (the Downwash); the bird on its side (the volley). Each change happens on
-the first frame of the startup and is the largest the body can make.
-
-**Sound carries the half of the fight the screen does not.** A cry on the
-decision frame of every air move, a different one per move and panned to where
-it is, so a player looking at the floor hears what is coming before the marker
-appears. The Stoop has a rising whistle over its 45 frames.
+**The silhouettes differ from below**, and each changes on the first frame of
+its startup: an eighteen-metre cross circling; an eight-metre dart (the Stoop);
+a flat line at head height (the pass); wings vertical over a still body (the
+Downwash); the bird on its side (the volley). **Sound carries what the screen
+does not**: a different cry on the decision frame of every air move, panned to
+where it is, and a rising whistle through the Stoop.
 
 **Unanswerable, for this creature,** gains a second clause. Monsters.md counts a
 hit whose tell is under reaction with no positional warning. Here a tell can be
@@ -389,70 +378,55 @@ the Ridgeback's shake, fifty degrees over at its peak, gets it for free.
 
 ## 7 · The classes
 
-**Dual mage — it is her fight.** Her 6.0 m hop does nothing to a bird at 16 m,
-but both bars full is six seconds of wings, and every press of space is a beat:
-she can climb to it, land on it, and board it in the air, which no other class
-can. Mounting is landing, so that needs nothing new. The same wings let her
-survive the ride: a wing beat is an upward impulse, which resets the height a
-fall is measured from, and her slow fall lands under `soft_landing_speed` for
-half damage. Her cost is the burn that wings are paid for and a back she reached
-alone, with nobody below to hit the legs if the talons take her. **Identity** —
-she is the class whose whole kit is not touching the floor, and this is the one
-creature that makes that the fight rather than a shortcut through one. Whether
-boarding in the air makes the crash pointless for her is §12.
+**Dual mage — her fight.** Her 6.0 m hop does nothing to a bird at 16 m, but both
+bars full is six seconds of wings, a beat on every press of space: she can climb
+to it and land on it, and mounting is landing, so she boards in the air as
+nobody else can. The wings also make the ride survivable — a beat is an upward
+impulse and resets the height a fall is measured from, and her slow fall lands
+soft for half damage. The cost is the burn wings are paid for and a back reached
+alone, with nobody below to hit the legs. **Identity**: the one creature that
+makes not touching the floor the fight rather than a shortcut through it. Whether
+it makes the crash pointless for her is §12.
 
-**Elementalist — the one who can hit it up there.** Her Air bolt and Gale are
-the only things in the game that reach the circle, and they are airborne moves:
-a stone (1.8 m) and an Updraft (2.6 m for her) put her four metres up with the
-bird in range. Hits aloft break wings but never crash it, so she is the
-wing-breaker and not the grounder. Updraft on a stone is also the launch pad to
-the Downwash's feet. The **Downdraft** is her crash: over a low pass, Updraft
-above the lane and come down on its back — a spike on a susceptible bird below
-six metres crashes it. A fire pillar in the Talon lane burns the talons and the
-belly as they pass. **Identity**, and the Ridgeback's "the Elementalist cannot
-win" answered on this creature. She has the hardest ride: her stones do not go
-up with her.
+**Elementalist — the one who reaches it up there.** Air bolt (22 m) and Gale
+(32 m) are the only things in the game that reach the circle, and they are
+airborne: a stone and an Updraft put her four metres up with the bird in range.
+Hits aloft break wings and never crash it, so she is the wing-breaker. Her
+**Downdraft** is her crash: Updraft over the Talon lane and come down on the
+bird — a spike on a susceptible bird below 6 m grounds it. A fire pillar in the
+lane burns the talons as they pass. **Identity**, and the Ridgeback's "the
+Elementalist cannot win" answered here. The ride is hardest for her: her stones
+stay on the floor.
 
-**Champion — the wing-striker.** The low pass and the Stoop's recovery are his:
-the spear's 3.4 m reach, pitched up with the camera, hits a wing at three metres
-from the floor, and Rush cancels a recovery into the 60-frame walk-up. Aloft he
-has nothing, and that is most of a fight's idle for him; his job then is
-standing beside where the lane will be. Aboard he does the most damage per
-second of anyone to the wing roots. **Hard in the waiting, easy in the
-windows.** That is identity for a melee class in a flying fight, not a hole,
-provided the openings come often enough — which is what the out-of-reach share
-in §9 measures.
+**Champion — the wing-striker.** The pass and the Stoop's recovery are his: the
+spear's 3.4 m, pitched up with the camera, hits a wing three metres up, and Rush
+cancels a recovery into the walk-up. Aboard he out-damages everyone on the wing
+roots. Aloft he has nothing and stands where the lane will be. **Hard in the
+waiting, easy in the windows** — identity if the openings come often enough,
+which is what the out-of-reach share measures.
 
-**Bulwark — the lowest jump, and the only portable wall.** She cannot reach the
-circle, the hover or the perch without the tower's stairs, and the crash's wing
-ramps are what make the big window hers too. What she brings: the **planted
-wall is a lee**, so the Downwash — the move that shoves everyone else off the
-edge — is answered for the whole team by where she stands; the **thrown shield**
-(9 m, a skillshot) hits a wing on a low pass or the legs of a bird carrying
-someone, which frees them; and the creature's blows load her weight, so a
-blocked Stoop pays for a Slam into the recovery. The talons are a grab and
-unblockable. **Hard, and the wall is the identity.** Whether her guard covers a
-volley coming down at sixty degrees is §12.
+**Bulwark — the lowest jump and the only portable wall.** The crash's wing ramps
+are what make the big window hers. Her **planted wall is a lee**, so the move
+that shoves everyone off the edge is answered for the team by where she stands.
+Her **thrown shield** (9 m) hits a wing on a pass or the legs of a bird carrying
+somebody. The creature's blows load her weight, so a blocked Stoop pays for a
+Slam into its recovery; the talons are a grab and unblockable. **Hard, and the
+wall is the identity.**
 
-**Shadow Reaver — the tower is hers.** Send shadow is a grounded cast with 9 m of
-reach, so from the floor it reaches the tower's gallery at six metres, not its top
-at twelve; she dashes up in two steps, which is faster than any climb. A shadow
-on the tower copies her swings at the perched bird and at a pass near the tower,
-and Guillotine lotus erupts there. The shadow is also **her parachute**: on a
-sky ride, a dash to a shadow left on the floor is a way down that ends standing.
-But the leash is 18 m, and a ride climbing past it pulls the shadow up after her,
-so she has to dash before the climb does. At 750 health a thrown ride costs her
-half her life; she has the most to lose aboard, and the best way off.
-**Identity.**
+**Shadow Reaver — the tower is hers.** Send shadow reaches 9 m, so from the floor
+it makes the gallery at six metres but not the top at twelve; two dashes beat any
+climb. A shadow on the tower copies her swings at the perched bird and at a pass
+nearby, and Guillotine lotus erupts there. It is also **her parachute**: from a
+ride, a dash to a shadow on the floor ends standing — until the climb passes the
+18 m leash and pulls the shadow up after her. At 750 health a thrown ride is half
+her life. **Identity**: the most to lose aboard, and the best way off.
 
 **Blood mage — her own way up.** Grasp (12 m) meets the bird as an anchor and
-hauls her to it; aimed at the back of a low pass, the haul lands her on top of
-it, which is mounting. Aimed at the belly it drops her from wherever she met it.
-Her cuts bleed onto the floor whatever the bird was over, so a crash leaves pools
-around it, and a pool is a blink of 9 m — enough to leave a sky ride at the
-swoop from further out than a jump would carry. Aloft she has nothing but
-Bloodletter's seven metres at a hover. **Middle**: the best mid-fight route
-aboard after the Dual mage's, and a hard aloft phase.
+hauls her to it; aimed at the back of a low pass the haul lands her on top, which
+is mounting, and aimed at the belly it drops her from wherever she met it. Her
+cuts bleed onto the floor whatever the bird was over, so a crash leaves pools, and
+a 9 m blink to one is a way off the swoop from further out than a jump carries.
+Aloft she has Bloodletter's seven metres at a hover and nothing else. **Middle.**
 
 ## 8 · Coop
 
@@ -564,27 +538,26 @@ wings are the widest parts in the cast, so `first_along` against them is the
 thing to watch, not the thing that dominates.
 
 **Tests** that pin the rules:
-
-- `nothing_on_the_circling_galewing_is_inside_any_standing_jump`
-- `the_stoop_is_dodged_not_walked_out_of`
-- `a_crouched_fighter_passes_under_the_talons_and_a_standing_one_does_not`
-- `hitting_the_legs_drops_the_carried_fighter`
-- `the_downwash_does_not_move_a_fighter_behind_a_solid`
-- `the_eye_of_the_downwash_is_still`
-- `the_feather_rake_outlasts_a_dodge_at_every_point_of_its_lane`
-- `wing_hits_aloft_break_wings_and_never_crash_it`
-- `both_wings_broken_it_never_leaves_the_ground_again`
-- `the_roll_throws_riders_off_the_wing_roots_and_not_braced_riders_off_the_spine`
-- `the_swoop_is_low_enough_to_step_off_for_free`
-- `fall_damage_reads_the_height_fallen_not_the_speed_landed_at`
-- `a_fall_from_a_full_hop_off_a_platform_costs_nothing`
-- `a_hit_on_the_perched_galewing_shortens_its_rest`
-- `the_perch_is_announced_long_enough_to_climb_the_tower`
-- `a_skillshot_aimed_at_the_circling_galewing_hits_it_inside_its_reach`
-- `a_swing_on_a_banked_back_is_level_with_the_back`
-- `a_creature_overhead_does_not_lift_the_camera`
-- `the_drawn_eye_is_the_aiming_eye_looking_up`
-- `what_is_drawn_through_the_windup_is_where_the_hit_lands`, extended to the lee
+`nothing_on_the_circling_galewing_is_inside_any_standing_jump`,
+`the_stoop_is_dodged_not_walked_out_of`,
+`a_crouched_fighter_passes_under_the_talons_and_a_standing_one_does_not`,
+`hitting_the_legs_drops_the_carried_fighter`,
+`the_downwash_does_not_move_a_fighter_behind_a_solid`,
+`the_eye_of_the_downwash_is_still`,
+`the_feather_rake_outlasts_a_dodge_at_every_point_of_its_lane`,
+`wing_hits_aloft_break_wings_and_never_crash_it`,
+`both_wings_broken_it_never_leaves_the_ground_again`,
+`the_roll_throws_riders_off_the_wing_roots_and_not_braced_riders_off_the_spine`,
+`the_swoop_is_low_enough_to_step_off_for_free`,
+`fall_damage_reads_the_height_fallen_not_the_speed_landed_at`,
+`a_fall_from_a_full_hop_off_a_platform_costs_nothing`,
+`a_hit_on_the_perched_galewing_shortens_its_rest`,
+`the_perch_is_announced_long_enough_to_climb_the_tower`,
+`a_skillshot_aimed_at_the_circling_galewing_hits_it_inside_its_reach`,
+`a_swing_on_a_banked_back_is_level_with_the_back`,
+`a_creature_overhead_does_not_lift_the_camera`,
+`the_drawn_eye_is_the_aiming_eye_looking_up`, and
+`what_is_drawn_through_the_windup_is_where_the_hit_lands`, extended to the lee.
 
 **Milestones**, each ending in something checkable:
 
@@ -658,12 +631,10 @@ is worth more than the hang. Neither side of it beats the next creature.
 6. **Is 375 for a throw at twenty metres the right price?** It has to be enough
    that stepping off at the swoop is a decision, and not so much that nobody
    rides. The knob is `fall_damage_per_metre`, and it is shared with every fall
-   in the game, which is its own question.
-7. **Fall damage everywhere.** It changes the Ridgeback's back (thrown from 5.5 m
-   is still free) and the Dual mage's highest jumps (free). Nothing existing
-   should change, but a person should confirm that a global rule is wanted
-   rather than a Galewing one.
-8. **Gravity and the grip test.** The ride keeps the Ridgeback's rule — the
+   in the game — fall damage is a global rule (the Ridgeback's 5.5 m back and
+   every class's own jumps stay free), and whether it should be global rather
+   than the Galewing's is a decision.
+7. **Gravity and the grip test.** The ride keeps the Ridgeback's rule — the
    surface's acceleration, with the rider held in the part's frame so a bank
    does not slide anyone. Upside down in the roll, gravity pulls a rider off at
    42 m/s², under a tenth of grip, so leaving it out changes little; putting it
