@@ -7,7 +7,7 @@
 //! the Galewing's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 447] = [
+pub const KNOBS: [i32; 450] = [
            65536, // galewing.size_(x) = 1
             9000, // galewing.health = 9000
              500, // galewing.breakable_part_health = 500
@@ -96,6 +96,9 @@ pub const KNOBS: [i32; 447] = [
           655360, // galewing_·_flight.taking_off_or_carrying,_climbs_at_(m/s) = 10
           393216, // galewing_·_perch.comes_in_over_the_perch_this_high_(m) = 6
           786432, // galewing_·_perch.drops_onto_the_perch_from_within_(m) = 12
+          720896, // galewing_·_flight.within_this_of_the_perch_(m)... = 11
+          196608, // galewing_·_flight....flies_no_lower_than_its_top_and_(m) = 3
+           98304, // galewing_·_flight....looking_this_far_ahead_(s) = 1.5
           393216, // galewing_·_perch.its_ring_on_the_tower_top,_across_(m) = 6
           196608, // galewing_·_downwash.each_lee_drawn_this_wide_(m) = 3
            10945, // galewing_·_mind.decides_only_with_the_target_this_near_its_heading_(turns) = 0.167

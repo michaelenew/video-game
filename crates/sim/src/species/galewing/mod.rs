@@ -548,6 +548,9 @@ crate::species_knobs! {
     LiftClimb,       "flight",  "Taking off or carrying, climbs at (m/s)", Fixed, 0, fx(30,1);
     PerchOver,       "perch",   "Comes in over the perch this high (m)",  Fixed, 0, fx(20,1);
     PerchNear,       "perch",   "Drops onto the perch from within (m)",   Fixed, 0, fx(30,1);
+    TowerClear,      "flight",  "Within this of the perch (m)...",         Fixed, 0, fx(30,1);
+    TowerOver,       "flight",  "...flies no lower than its top and (m)",  Fixed, 0, fx(10,1);
+    TowerLook,       "flight",  "...looking this far ahead (s)",           Fixed, 0, fx(6,1);
     PerchRing,       "perch",   "Its ring on the tower top, across (m)",  Fixed, 0, fx(20,1);
     LeeDisc,         "downwash","Each lee drawn this wide (m)",           Fixed, 0, fx(10,1);
     // the brain

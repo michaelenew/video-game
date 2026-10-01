@@ -222,6 +222,52 @@ pub fn circle_point(centre: V3, at: V3, height: Fx) -> V3 {
     )
 }
 
+/// **Round its circle** at a height and a speed -- never lower, within
+/// `TowerClear` of the perch, than `TowerOver` above its top: a bird
+/// swooping or gliding low does not fly through the tower.
+fn round(w: &World, f: &mut Flight, centre: V3, h: Fx, speed: Fx, lim: &Limits) {
+    // Looking ahead round its circle as far as it flies in `TowerLook`
+    // seconds -- it cannot climb out of the way in a frame.
+    let r = Knob::CircleRadius.fx();
+    let out = V3::new(f.pos.x.sub(centre.x), Fx::ZERO, f.pos.z.sub(centre.z));
+    let now = if math::wide_flat_len(out).raw() > 0 {
+        math::atan2_turns(out.z, out.x)
+    } else {
+        Fx::ZERO
+    };
+    let arc = f.speed.mul(Knob::TowerLook.fx());
+    let round_turns = math::turns_to_radians(r);
+    let reach = if round_turns.raw() > 0 {
+        arc.div(round_turns)
+    } else {
+        Fx::ZERO
+    };
+    let near = |top: V3| {
+        math::wide_flat_dist(f.pos, top).raw() < Knob::TowerClear.fx().raw()
+            || (1..=LOOKS).any(|k| {
+                let at = now.add(reach.mul(Fx::from_int(k)).div(Fx::from_int(LOOKS)));
+                let p = centre.add(V3::from_turns(at).scale(r));
+                math::wide_flat_dist(p, top).raw() < Knob::TowerClear.fx().raw()
+            })
+    };
+    match fight::perch_top(w) {
+        // Beating hard to clear it.
+        Some(top) if near(top) => {
+            let h = h.max(top.y.add(Knob::TowerOver.fx()));
+            let up = Limits {
+                climb: lim.climb.max(Knob::LiftClimb.fx()),
+                ..*lim
+            };
+            f.steer(circle_point(centre, f.pos, h), speed, &up);
+        }
+        _ => f.steer(circle_point(centre, f.pos, h), speed, lim),
+    }
+}
+
+/// How many points round the circle ahead it looks at for the tower: a
+/// count, not a distance.
+const LOOKS: i32 = 4;
+
 /// Turns a frame a body arriving somewhere swings its heading by, at most.
 fn arrive_turn() -> Fx {
     Knob::ArriveTurn.fx().mul(DT)
@@ -349,7 +395,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                         }
                         _ => {
                             let h = cruise(m, base);
-                            f.steer(circle_point(centre, f.pos, h), Knob::CruiseSpeed.fx(), &lim);
+                            round(w, &mut f, centre, h, Knob::CruiseSpeed.fx(), &lim);
                             aloft = true;
                         }
                     }
@@ -357,12 +403,11 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                 CARRY => {
                     // Climbing with somebody in its talons, on round its circle.
                     let h = ceiling(m, base, base.add(Knob::CarryHeight.fx()));
-                    let to = circle_point(centre, f.pos, h);
                     let climb = Limits {
                         climb: Knob::LiftClimb.fx(),
                         ..lim
                     };
-                    f.steer(to, Knob::PassSpeed.fx(), &climb);
+                    round(w, &mut f, centre, h, Knob::PassSpeed.fx(), &climb);
                     aloft = true;
                     beating = true;
                 }
@@ -377,7 +422,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                         }
                         _ => {
                             let h = cruise(m, base);
-                            f.steer(circle_point(centre, f.pos, h), Knob::CruiseSpeed.fx(), &lim);
+                            round(w, &mut f, centre, h, Knob::CruiseSpeed.fx(), &lim);
                         }
                     }
                     aloft = true;
@@ -404,7 +449,7 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                         }
                         _ => {
                             let h = cruise(m, base);
-                            f.steer(circle_point(centre, f.pos, h), Knob::CruiseSpeed.fx(), &lim);
+                            round(w, &mut f, centre, h, Knob::CruiseSpeed.fx(), &lim);
                         }
                     }
                     aloft = true;
@@ -470,12 +515,11 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                     } else {
                         // Up: steeply, on round its circle.
                         let h = cruise(m, base);
-                        let to = circle_point(centre, f.pos, h);
                         let up = Limits {
                             climb: Knob::LiftClimb.fx(),
                             ..lim
                         };
-                        f.steer(to, Knob::CruiseSpeed.fx(), &up);
+                        round(w, &mut f, centre, h, Knob::CruiseSpeed.fx(), &up);
                         aloft = true;
                         beating = true;
                     }
@@ -503,10 +547,10 @@ pub fn step(w: &mut World, m: &mut Monster, slot: usize) {
                     // **Clipped**: a low glide along its circle.
                     w.lore.set_word(word::GLIDE, glide - 1);
                     let h = base.add(Knob::GlideHeight.fx());
-                    f.steer(circle_point(centre, f.pos, h), Knob::PassSpeed.fx(), &lim);
+                    round(w, &mut f, centre, h, Knob::PassSpeed.fx(), &lim);
                 } else {
                     let h = cruise(m, base);
-                    f.steer(circle_point(centre, f.pos, h), Knob::CruiseSpeed.fx(), &lim);
+                    round(w, &mut f, centre, h, Knob::CruiseSpeed.fx(), &lim);
                 }
             }
         }
@@ -548,13 +592,21 @@ fn finish(w: &mut World, m: &mut Monster, f: Flight, aloft: bool, beating: bool,
     m.yaw_rate = Fx::ZERO;
     m.speed = if aloft { Fx::ZERO } else { m.speed };
     fight::set_flag(m, flag::ALOFT, aloft);
-    fight::set_flag(m, BEATING, beating);
+    // **A beat starts and stops at the bottom of its stroke**, where the
+    // heave is nothing: turned on or off mid-beat, the back would jump.
+    if beating != (fight::flags(m) & BEATING != 0) && beat_phase(m) == 0 {
+        fight::set_flag(m, BEATING, beating);
+    }
     let ground = fight::ground_at(w, f.pos);
     let low = f.pos.y.sub(ground).raw() < Knob::LowBelow.fx().raw();
     fight::set_flag(m, flag::LOW, low);
     // The bank is the turn it is making, as a share of its fullest.
-    let turn = Knob::AirTurn.fx().max(Fx::ratio(1, 100));
-    let share = f.yaw_rate.div(turn).clamp(Fx::ONE.neg(), Fx::ONE);
+    let turn = Knob::AirTurn.fx();
+    let share = if turn.raw() > 0 {
+        f.yaw_rate.div(turn).clamp(Fx::ONE.neg(), Fx::ONE)
+    } else {
+        Fx::ZERO
+    };
     let bank = if aloft {
         share.mul(Knob::BankMax.fx()).add(list)
     } else {
@@ -616,7 +668,7 @@ fn ride_flight(
                 base.add(Knob::RideClimb.fx())
                     .add(Knob::RideStep.fx().mul(Fx::from_int(lap as i32))),
             );
-            f.steer(circle_point(centre, f.pos, h), speed, lim);
+            round(w, f, centre, h, speed, lim);
             beating = true;
             let there = f.pos.y.sub(h).abs().raw() < Fx::ONE.raw();
             if frames as i32 >= Knob::RideLap.raw() && there && m.doing.free() {
@@ -626,7 +678,7 @@ fn ride_flight(
             }
         }
         ride::ROLL => {
-            f.steer(circle_point(centre, f.pos, f.pos.y), speed, lim);
+            round(w, f, centre, f.pos.y, speed, lim);
             if !matches!(m.doing.attacking(), Some(ROLL)) {
                 phase = ride::SWOOP;
                 frames = 0;
@@ -638,7 +690,7 @@ fn ride_flight(
                 sink: Knob::SinkRate.fx(),
                 ..*lim
             };
-            f.steer(circle_point(centre, f.pos, h), speed, &swoop);
+            round(w, f, centre, h, speed, &swoop);
             let low = f.pos.y.sub(h).raw() < Fx::ratio(1, 2).raw();
             if !low {
                 frames = 0;
@@ -715,12 +767,11 @@ pub fn rolled(m: &Monster) -> Fx {
 /// sink back over the rest of the beat. A beat is one breath of its clock
 /// (`BreathRate`), so this is a function of the body.
 pub fn heave(m: &Monster) -> Fx {
-    if fight::flags(m) & BEATING == 0 || !fight::riding(m) {
+    if fight::flags(m) & BEATING == 0 {
         return Fx::ZERO;
     }
-    let rate = m.sp().breath_rate().max(1) as i32;
-    let period = (65536 / rate).max(2);
-    let k = (m.beat as i32 / rate).rem_euclid(period);
+    let period = beat_period(m);
+    let k = beat_phase(m);
     let down = Knob::BeatDown.raw().clamp(1, period - 1);
     // Kicked up at `BeatKick`, slowing evenly to nothing over the
     // downstroke: half the kick times its time.
@@ -731,6 +782,18 @@ pub fn heave(m: &Monster) -> Fx {
     } else {
         top.mul(Fx::ONE.sub(Fx::ratio(k - down, period - down)))
     }
+}
+
+/// Frames in one wingbeat: one breath of its clock.
+pub fn beat_period(m: &Monster) -> i32 {
+    let rate = m.sp().breath_rate().max(1) as i32;
+    (65536 / rate).max(2)
+}
+
+/// How many frames into its wingbeat it is.
+pub fn beat_phase(m: &Monster) -> i32 {
+    let rate = m.sp().breath_rate().max(1) as i32;
+    (m.beat as i32 / rate).rem_euclid(beat_period(m))
 }
 
 /// **The last word on the pose**: its bank and the roll on the root bone's

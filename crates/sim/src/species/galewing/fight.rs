@@ -407,6 +407,27 @@ pub fn perch_top(w: &World) -> Option<V3> {
     Some(V3::new(at.x, ground_at(w, at), at.z))
 }
 
+/// [`base`], from the ground alone: what the brain may read.
+pub fn base_of(ground: &crate::arena::Terrain) -> Fx {
+    let a: &crate::arena::Arena = ground;
+    let c = match a.sites.iter().find(|s| s.name == "circle") {
+        Some(s) => V3::new(
+            crate::arena::cm(s.route[0].0),
+            Fx::ZERO,
+            crate::arena::cm(s.route[0].1),
+        ),
+        None => {
+            let b = a.bounds;
+            V3::new(
+                math::half(b.lo_x.add(b.hi_x)),
+                Fx::ZERO,
+                math::half(b.lo_z.add(b.hi_z)),
+            )
+        }
+    };
+    ground.ground_under(c)
+}
+
 /// The level it measures its heights from: the floor under its circle's
 /// middle -- the plateau, in the Cliffs.
 pub fn base(w: &World) -> Fx {
