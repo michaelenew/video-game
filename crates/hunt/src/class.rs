@@ -1216,9 +1216,6 @@ impl Hands {
     /// player sees where the marker would go and moves the mouse; this asks
     /// the same ray (`aim::sight`).
     fn on_top(&self, w: &World, me: &Player, at: V3) -> bool {
-        if me.aboard() {
-            return false;
-        }
         let stones = sim::stones::gather(&w.players);
         let ground = w.terrain();
         let scene = sim::aim::Scene {
@@ -1241,6 +1238,30 @@ impl Hands {
     /// the ground behind it as it always did.
     fn spot(&self, w: &World, me: &Player, at: V3, grounded: bool) -> V3 {
         if !self.on_top(w, me, at) {
+            return at;
+        }
+        if me.aboard() {
+            // **Riding it**, the part under her feet is where she stands: a
+            // shot at it goes to a body's height above it and over it. A
+            // rider shooting down into her mount aims past its edge, at the
+            // floor beyond, and the line down to there goes through it.
+            // Planting something there is planting it on the back, which is
+            // what she meant.
+            if grounded {
+                return at;
+            }
+            let out = flat(at.sub(me.pos)).normalized();
+            let out = if out.flat_len().raw() == 0 {
+                V3::from_turns(me.carry_yaw.add(yaw_of(me.facing)))
+            } else {
+                out
+            };
+            for k in 1..=12 {
+                let p = V3::new(at.x, Fx::ZERO.min(at.y), at.z).add(out.scale(Fx::from_int(k)));
+                if !self.on_top(w, me, p) {
+                    return p;
+                }
+            }
             return at;
         }
 
