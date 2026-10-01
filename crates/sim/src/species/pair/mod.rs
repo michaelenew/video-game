@@ -560,6 +560,7 @@ crate::species_knobs! {
     // seen_fast_speed, fast_appetite
     SeenFastSpeed,   "mind",  "A sample this fast was a dodge",          Fixed, 0, fx(30,1);
     AmbushPast,      "mind",  "Ambush, its lane runs past you by",       Fixed, 0, fx(10,1);
+    StuckFar,        "mind",  "Getting nowhere: a goal further off than", Fixed, 0, fx(10,1);
     StuckAfter,      "mind",  "Getting nowhere this long, it goes round", Frames, 0, 240;
     StuckRound,      "mind",  "Goes round for",                          Frames, 0, 240;
     FastAppetite,    "mind",  "Ambush, at a fast sample",                Int, 0, 8000;

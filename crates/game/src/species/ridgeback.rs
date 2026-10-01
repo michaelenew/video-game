@@ -42,4 +42,6 @@ pub const LOOK: Look = Look {
         },
     }),
     critters: &[],
+    horns: None,
+    stance: None,
 };

@@ -23,6 +23,7 @@ pub const LOOK: Look = Look {
                 glow: [0.9, 0.5, 0.1],
                 roughness: 0.4,
             },
+            horns: None,
         },
         CritterPaint {
             body: Paint {
@@ -35,6 +36,9 @@ pub const LOOK: Look = Look {
                 glow: [1.0, 0.6, 0.15],
                 roughness: 0.4,
             },
+            horns: None,
         },
     ],
+    horns: None,
+    stance: None,
 };

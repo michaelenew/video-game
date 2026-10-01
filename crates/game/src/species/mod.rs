@@ -18,7 +18,7 @@ pub mod gnats;
 
 pub mod gnawers;
 
-// pub mod hornback;
+pub mod hornback;
 
 pub mod mireback;
 
@@ -81,6 +81,31 @@ pub struct Look {
     /// its own knobs -- length, width, height -- by `crate::critters`, so what
     /// you see is the box the hit test uses.
     pub critters: &'static [CritterPaint],
+    /// **Which of a critter's horns are whole**, for a species whose small
+    /// bodies have them: the world, and the critter's slot. `None` for every
+    /// creature without horns. The Hornback's bull: a broken horn is gone
+    /// from its head, and that is a consequence the player did.
+    pub horns: Option<HornsFn>,
+    /// **A stance of a critter's own**, beyond the stock poses: the stunned
+    /// bull, head in the dirt. `None`: the stock poses only.
+    pub stance: Option<Stance>,
+}
+
+/// [`Look::horns`]: the world and a critter's slot, to which of its two horns
+/// are whole, or `None` for a body with none.
+pub type HornsFn = fn(&sim::World, usize) -> Option<[bool; 2]>;
+
+/// A species' own stance for a critter, if it has one this frame.
+pub type Stance = fn(&sim::critter::Critter) -> Option<StanceHint>;
+
+/// How a critter is held, in the renderer's own terms (radians, and a share
+/// of its length for how far it sinks).
+#[derive(Clone, Copy, Debug)]
+pub struct StanceHint {
+    pub pitch: f32,
+    pub roll: f32,
+    pub head_dip: f32,
+    pub drop: f32,
 }
 
 /// How one kind of critter is painted.
@@ -91,6 +116,8 @@ pub struct CritterPaint {
     /// Its eyes, and the tail of one holding an attack token -- the thing
     /// the Gnawers' document says is the most important on the screen.
     pub mark: Paint,
+    /// Its horns, if it has any (`Look::horns` says which are whole).
+    pub horns: Option<Paint>,
 }
 
 /// A body with nothing to draw but its small bodies, for a creature that is
@@ -111,7 +138,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
 
         SpeciesId::GNAWERS => &gnawers::LOOK,
 
-        // SpeciesId::HORNBACK => &hornback::LOOK,
+        SpeciesId::HORNBACK => &hornback::LOOK,
         SpeciesId::MIREBACK => &mireback::LOOK,
 
         SpeciesId::SANDMAW => &sandmaw::LOOK,

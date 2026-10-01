@@ -153,7 +153,7 @@ pub static DRESSING: Dressing = Dressing {
             shape: Shape::Box,
             at: [-12.60, 0.00, 0.00],
             size: [0.80, 0.25, 0.50],
-            yaw: 3.14,
+            yaw: 3.1,
             rgb: DRY,
         },
         Prop {

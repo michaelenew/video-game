@@ -206,6 +206,9 @@ pub struct Report {
     /// For a pack: whether each body's windup began on its target's screen,
     /// and each fighter's swing so far (passed over a body, struck one).
     seen_commit: [bool; critter::MAX_CRITTERS],
+    /// Frames each fighter's spot has been under a floor sign the fight drew
+    /// for something coming (`World::signs`).
+    marked_for: [u32; MAX_PLAYERS],
     swing_over: [bool; MAX_PLAYERS],
     swing_struck: [bool; MAX_PLAYERS],
 }
@@ -378,6 +381,7 @@ impl Report {
             ground: GroundTally::default(),
             extra: card.tally.map(|make| make()),
             seen_commit: [true; critter::MAX_CRITTERS],
+            marked_for: [0; MAX_PLAYERS],
             swing_over: [false; MAX_PLAYERS],
             swing_struck: [false; MAX_PLAYERS],
         }
@@ -528,10 +532,42 @@ impl Report {
             let landed = a.state == critter::is::ACTIVE
                 && a.has(critter::flag::HIT_USED)
                 && !(b.state == critter::is::ACTIVE && b.has(critter::flag::HIT_USED));
-            if landed && !self.seen_commit[i] {
+            // **Or a marker under them.** The definition the creature
+            // documents give (Hornback §6): a hit is unanswerable when its
+            // tell was not seen *and* no marker had been on the fighter's spot
+            // for `REACTION` frames when it landed. A stampede's cows wind up
+            // behind the camera as often as not; the lane drawn under your
+            // feet through the bellow is the tell.
+            let who = (a.target as usize).min(MAX_PLAYERS - 1);
+            if landed && !self.seen_commit[i] && self.marked_for[who] < REACTION as u32 {
                 self.pack.hidden += 1;
                 self.unanswerable += 1;
             }
+        }
+        // How long each fighter's spot has been under a fight's own floor
+        // sign that warns of something (`World::signs`).
+        // And under a body's own telegraph: the area or the lane its windup
+        // draws (`pack::telegraph`), which is a marker too.
+        let signs = after.signs();
+        let lanes: Vec<sim::monster::Telegraph> = (0..critter::MAX_CRITTERS)
+            .filter(|i| after.critters[*i].alive())
+            .filter_map(|i| sim::pack::telegraph(after.pack.as_ref(), &after.critters, i))
+            .collect();
+        for (i, p) in after.players.iter().enumerate() {
+            let under_lane = lanes.iter().any(|t| {
+                let a = V3::new(t.anchor.x, Fx::ZERO, t.anchor.z);
+                let b = a.add(t.along.scale(t.sweep));
+                sim::math::flat_segment_gap(p.pos, a, b).raw()
+                    <= t.radius.add(sim::tuning::body_radius()).raw()
+            });
+            let marked = under_lane
+                || signs.iter().any(|s| {
+                    matches!(
+                        s.says,
+                        sim::sign::Says::Coming | sim::sign::Says::Live | sim::sign::Says::Faint
+                    ) && s.covers(p.pos)
+                });
+            self.marked_for[i] = if marked { self.marked_for[i] + 1 } else { 0 };
         }
         // Swings over a crown, once per swing; and bodies behind.
         for i in 0..MAX_PLAYERS {
@@ -1043,7 +1079,7 @@ impl Report {
         if slot == 0 {
             (self.commit_kind, self.commit_range, self.commit_at)
         } else {
-            self.commit_more[(slot - 1).min(MAX_SLOTS - 2)]
+            self.commit_more[slot - 1]
         }
     }
 
@@ -1053,7 +1089,7 @@ impl Report {
             self.commit_range = range;
             self.commit_at = at;
         } else {
-            self.commit_more[(slot - 1).min(MAX_SLOTS - 2)] = (kind, range, at);
+            self.commit_more[slot - 1] = (kind, range, at);
         }
     }
 
@@ -1182,6 +1218,16 @@ impl Report {
         h / (self.species.moves.len() as f32).log2()
     }
 
+    /// A defended thing that ended the hunt, if one did: its name, whether it
+    /// broke, and whether it arrived (P7).
+    pub fn objective_ended(&self) -> Option<(&str, bool, bool)> {
+        self.ground
+            .objectives
+            .iter()
+            .find(|o| o.3 || o.4)
+            .map(|o| (o.0.as_str(), o.3, o.4))
+    }
+
     /// The whole thing, as text.
     pub fn render(&self) -> String {
         let mut out = String::new();
@@ -1189,10 +1235,14 @@ impl Report {
         let seconds = self.frames as f32 / 60.0;
         out.push_str(&format!(
             "  {}  --  {} frames, {:.1} s\n",
-            match self.outcome {
-                Outcome::Killed(f) => format!("killed at frame {f}"),
-                Outcome::Died => "the hunters went down".to_string(),
-                Outcome::Unresolved => "nobody won inside the budget".to_string(),
+            match (self.outcome, self.objective_ended()) {
+                (Outcome::Killed(f), Some((name, _, true))) => {
+                    format!("{name} arrived at frame {f}")
+                }
+                (Outcome::Killed(f), _) => format!("killed at frame {f}"),
+                (Outcome::Died, Some((name, true, _))) => format!("{name} broke"),
+                (Outcome::Died, _) => "the hunters went down".to_string(),
+                (Outcome::Unresolved, _) => "nobody won inside the budget".to_string(),
             },
             self.frames,
             seconds

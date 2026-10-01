@@ -37,12 +37,14 @@ pub const KINDS: [CritterKind; 2] = [
         moves: &[CritterMove::token(BITE), CritterMove::free(LEAP)],
         role: 0,
         yields: false,
+        mountable: false,
     },
     CritterKind {
         name: "Queen",
         moves: &[CritterMove::token(BITE)],
         role: 1,
         yields: true,
+        mountable: false,
     },
 ];
 

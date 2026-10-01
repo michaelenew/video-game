@@ -284,6 +284,23 @@ pub fn play_tempered(
     play_card(card, temper, classes, partners, limit, seed, watch)
 }
 
+/// [`play_tempered`] in an arena other than the creature's own: what
+/// `fight --arena` runs -- the Hornback's crossing, mostly.
+#[allow(clippy::too_many_arguments)]
+pub fn play_in(
+    species: SpeciesId,
+    arena: Option<sim::arena::ArenaId>,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
+    watch: impl FnMut(&World),
+) -> Report {
+    let card = plans::card(species).expect("no hunter plan is registered for that species");
+    play_card_in(card, arena, temper, classes, partners, limit, seed, watch)
+}
+
 /// The whole loop, with a card in hand rather than a species: what
 /// `fight --gamble` runs, with the card's second plan in its first's place.
 pub fn play_card(
@@ -293,10 +310,29 @@ pub fn play_card(
     partners: usize,
     limit: u32,
     seed: u32,
+    watch: impl FnMut(&World),
+) -> Report {
+    play_card_in(card, None, temper, classes, partners, limit, seed, watch)
+}
+
+/// [`play_card`] in a chosen arena, or the creature's own for `None`.
+#[allow(clippy::too_many_arguments)]
+pub fn play_card_in(
+    card: &'static plans::Card,
+    arena: Option<sim::arena::ArenaId>,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
     mut watch: impl FnMut(&World),
 ) -> Report {
     let species = card.species;
-    let mut w = World::hunt_of(classes, species).tempered(temper);
+    let w = match arena {
+        Some(place) => World::hunt_in(classes, [Some(species), None], place),
+        None => World::hunt_of(classes, species),
+    };
+    let mut w = w.tempered(temper);
     for beast in w.monsters.iter_mut().flatten() {
         beast.brain.rng = seed | 1;
     }

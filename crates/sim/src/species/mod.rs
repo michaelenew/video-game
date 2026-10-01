@@ -61,7 +61,7 @@ pub mod sentinel;
 
 pub mod gnawers;
 
-// pub mod hornback;
+pub mod hornback;
 
 pub mod mireback;
 
@@ -124,7 +124,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
 
-        // SpeciesId::HORNBACK => Some(&hornback::SPECIES),
+        SpeciesId::HORNBACK => Some(&hornback::SPECIES),
         SpeciesId::MIREBACK => Some(&mireback::SPECIES),
 
         SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
@@ -358,6 +358,10 @@ pub struct FightDecl {
     /// renderer draws it at, and what the report and the scripted hunter call
     /// visible. `None` is always fully. The Veilstalker's veil.
     pub shown: Option<fn(&crate::state::World, usize, usize) -> Fx>,
+    /// **What it draws on the floor besides its bodies' telegraphs**: a
+    /// stampede's lane and its lees, the solid a charge will stop at, a
+    /// guard. See [`crate::sign`]. `None` draws nothing more.
+    pub signs: Option<fn(&crate::state::World, &mut crate::sign::Signs)>,
 
     // ---- the brain's seams: see `monster::Mind` ----
     /// **Its own terms in the scoring**, after the shared ones: handed a move,
@@ -551,6 +555,7 @@ impl FightDecl {
         bumped: None,
         frame: None,
         shown: None,
+        signs: None,
         appetite: None,
         prowl_to: None,
         commit: None,

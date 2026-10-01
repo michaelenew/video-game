@@ -6603,6 +6603,100 @@ Reaver, a long fight for the Elementalist. For a person: is a stand
 long tell) -- the threat and walk-up bands turn on it; is a stone beach every
 rise her identity; and the document's own §12.
 
+### 2026-10-01 — The Hornback herd: rocks, lanes and a bull, tuned by harness
+
+**Changed** A creature: eight cows and a bull in the low meadow (`--hunt
+hornback`), on the critter machinery, with floor signs, a ride on a cow, a
+hunter plan and report lines of its own ([creatures/hornback.md](creatures/hornback.md)
+§13). Against the document's first guesses: the bull's health 2000 (from 3500);
+it interposes ten metres out (`Standoff`) and charges from nine to fifteen; the
+charge pulls up short of the arena's edge and stuns on the bank's face; the guard
+turns swings only. Generic: six `PackMind` hooks (`mirrored`, `guarded`,
+`telegraph`, `surface`, `frames_until_free`, `spares`), riding a critter, species
+floor signs (`sim::sign`), and `feel_the_floor` no longer holding a body in the
+air over a solid hazard with no lift.
+
+**Why** The harness, pass by pass. At 3500, and at 2500, no class finished inside
+two minutes (the Champion took 149 s at 2500). A stampede landed hits outside its
+drawn lane -- through a cow's slant, past the lane's end, across the band -- until
+the lane became the hit test's own answer. Every cow behind the first trampled a
+fallen hunter; one does now. A hunter could not land on a cow's back because the
+herd pushed airborne bodies out of their boxes too. The bank read as the edge and
+charges into it pulled up. A cow held out of a lee could end inside the rock
+behind it. The Blood mage poked a stunned bull with a 22-point sweep; she spends
+the stun on Black spikes now, while her health holds a third.
+
+**Found** 24 hunts per class: the Champion wins 22 in 109 s, the Elementalist 23
+in 89 s, the Bulwark 19 in 191 s, the Reaver 16 in 159 s; the Blood mage 5 and the
+Dual mage 1. Zero unanswerable hits and zero hidden commits for every class. One
+charge in three goes into a solid for the Champion, two in three for the
+Elementalist, and four fifths of the Champion's damage goes in during stuns. The
+windows 33–38 / 7–8 / 18–28 / 29–42 % against ~30 / the rest / ~30. Two Champions
+win 12 of 12 in 122 s; temper 3, 10 of 12 in 95 s.
+
+**Reverted** Bull health 3500, then 2500. A "leaving" hysteresis in the hunter's
+plan, tried while tuning its posts and taken back.
+
+**Verdict** built; long for the Bulwark and the Reaver, and lost by the two mages,
+one for a known harness gap and one for a plan that does not use her pools. The
+first questions for a person are hornback.md §12's, and whether 2000 is a bull or
+a cow with horns.
+
+### 2026-10-01 — The Hornback's crossing: escorting a cart through the migration
+
+**Changed** The defend variant (`--hunt hornback-escort`): a cart (1500, 2 m/s,
+escorted within 6 m) on an 80 × 36 m road. The herd walks beside the road 12 m
+ahead of the cart and crosses it every 15 s, each wave drawn on the road 5 s ahead
+and run as a bellow's stampede that goes into the cart and round every rock; the
+bull charges the cart when it is nearer the herd than any hunter and no blow is on
+its mind (its strain), 300 and a stun. The plan escorts it off the bull's line,
+ahead; leaves it while a drawn lane is within four metres of its front; and walks
+across the bull's line while a charge winds up with the cart behind.
+
+**Why** First runs lost the cart to charges: the hunter escorted on the line from
+the bull through the cart, and a charge at the hunter ran on into it. Stepping
+across the line only after the head dropped was too late, and only inside the
+lane missed the windups that had not turned to it yet. Stopping two metres short
+of a lane let a knockdown beside the cart roll it in.
+
+**Found** 12 crossings per class: 7 to 11 won (the Champion 11, the Dual mage 11,
+the Elementalist 7), 55–68 s; two Champions win 1 of 12 -- a bellow at two escorts
+lays its lane over the cart and their way out of it keeps the cart rolling.
+
+**Reverted** The stop post on the far side of the cart when the near one was in a
+lane: the hunter was then further from the herd than the cart, and the bull went
+for the cart (the Champion 4 of 12, the Bulwark 3). It steps back along the road
+now.
+
+**Verdict** built; the two-hunter crossing is a plan question first, and perhaps
+a rule's (should a hunter standing in a lane count as escorting?).
+
+### 2026-10-01 — The floor's lift held every falling fighter up; the Sandmaw's undertow retuned
+
+**Changed** `World::feel_the_floor` lifts a fighter only where something lifts
+(`u.lift > 0`). The first version compared the lift underfoot -- zero, with no
+lift anywhere -- against the fighter's fall, found zero above every fall, and set
+the fall to nothing each frame, in every fight with a hazard on the floor: a
+falling body came down at one frame's gravity a frame. Found by the Hornback,
+whose boulders are hazards (a hook's launch drifted down; nobody could land on a
+cow). The Sandmaw's undertow 2.4 m in radius, from 3.
+
+**Why** The Sandmaw's rule that a hop from the undertow's middle clears its edge
+on every class held only because of the float. With real falls a hop leaves the
+sand at the half-speed walk it took off from, and the Bulwark's carries 2.5 m. Its
+"jump from it" knob is a slow capped at one, so 1.6 did nothing; the document
+names the radius as the Bulwark's lever.
+
+**Found** Sandmaw, 12 hunts each at 2.4: the Champion 9/12 in 190 s, the Bulwark
+12/12 in 215 s, zero unanswerable (its §13 has 19/24 in 202 s and 23/24 in 229
+s). Mireback, 12 Champion hunts: 11/12 in 138 s, one unanswerable (its §13: 15/24
+in 121 s, one). The Hornback was tuned with the fix throughout.
+
+**Reverted** The sinkhole's jump at 1.2, 1.4 and 1.6: clamped to one, no change.
+
+**Verdict** fixed; the undertow is a fifth narrower, and whether the Bulwark's
+hole should be closed this way is still sandmaw.md §12 question 4.
+
 ### 2026-10-01 — The Pair: two cats, one of them always behind you, tuned by harness
 
 **Changed** A creature with two bodies: the Pair, in the Den (`--hunt pair`),

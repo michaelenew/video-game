@@ -76,6 +76,17 @@ ground, so a fight there hashes as it always did.
   notch in it, low walls and a six-metre hedge round the rest, a fallen trunk
   the pack scrambles and two boulders too tall to climb. See
   [creatures/gnawers.md](creatures/gnawers.md) §11.
+- **The low meadow** (`arena/hornback.rs`, 2026-10-01): the Hornback herd's.
+  48 × 40 m of grass, a 1.5 m bank with steps along the north, thicket and slope
+  as the edge (outside the bounds, so a charge pulls up short of them rather
+  than meeting them), the ford in the east the herd leaves by. Its four boulders
+  are not arena solids: they are the herd's hazard cells, laid on the first
+  frame, which crack and shatter. See [creatures/hornback.md](creatures/hornback.md) §11.
+- **The crossing** (`arena/hornback.rs`, 2026-10-01): the Hornback's defend
+  variant, and **the first creature with two arenas**. 80 × 36 m, a road along
+  its middle with a site for the cart (bestiary P7), three boulders beside it.
+  `arena::for_species` still answers the first arena that names the creature
+  (the meadow); the crossing is reached by name.
 
 ## 3 · The picker (W0)
 
@@ -84,6 +95,10 @@ ground, so a fight there hashes as it always did.
   yet says so and hunts the Ridgeback.
 - `--arena <name>`, `?arena=<name>`: another arena, for versus or (with
   `--hunt`) for the hunt.
+- `--hunt <creature>-<mode>`, `?hunt=<creature>-<mode>`: a creature's other
+  arena, by that arena's name or by `escort` for the one with something to
+  defend (`picker::mode`): `hornback-escort` is the Hornback's crossing, the
+  same as `--hunt hornback --arena crossing`.
 - `H` swaps between hunting the Ridgeback and fighting each other; `Shift+H`
   steps to the next registered creature, in its own arena
   (`species::after`, which skips ids nobody has built).

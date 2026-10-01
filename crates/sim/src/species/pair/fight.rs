@@ -79,32 +79,40 @@ pub mod body {
 
 /// The bits of [`body::FLAGS`].
 pub mod flag {
+    /// A bit, or a field's place in the word: a tag, not a quantity.
+    pub type Bits = i32;
+
     /// Its role: none, Holder, or Striker.
-    pub const ROLE: i32 = 0b11;
-    pub const HOLDER: i32 = 1;
-    pub const STRIKER: i32 = 2;
+    pub const ROLE: Bits = 0b11;
+    pub const HOLDER: Bits = 1;
+    pub const STRIKER: Bits = 2;
     /// The survivor, enraged.
-    pub const ENRAGED: i32 = 1 << 2;
+    pub const ENRAGED: Bits = 1 << 2;
     /// Up on a top: rooted, and its only move is the dive.
-    pub const PERCHED: i32 = 1 << 3;
+    pub const PERCHED: Bits = 1 << 3;
     /// The eye scarred on its left, or its right.
-    pub const SCAR_LEFT: i32 = 1 << 4;
-    pub const SCAR_RIGHT: i32 = 1 << 5;
+    pub const SCAR_LEFT: Bits = 1 << 4;
+    pub const SCAR_RIGHT: Bits = 1 << 5;
     /// The head has taken enough; which eye is read next frame.
-    pub const SCAR_PENDING: i32 = 1 << 6;
+    pub const SCAR_PENDING: Bits = 1 << 6;
     /// An enraged pounce that has already chained once.
-    pub const CHAINED: i32 = 1 << 7;
+    pub const CHAINED: Bits = 1 << 7;
     /// Which creature slot it is, two bits from here.
-    pub const SLOT_SHIFT: i32 = 12;
+    pub const SLOT_SHIFT: Bits = 12;
     /// Two hunters: it glances quicker.
-    pub const COOP: i32 = 1 << 14;
+    pub const COOP: Bits = 1 << 14;
     /// How high its mark is, in units of [`MARK_STEP`], eight bits from here.
-    pub const MARK_SHIFT: i32 = 16;
+    pub const MARK_SHIFT: Bits = 16;
 }
 
 /// The height of a mark, in centimetres a step: eight bits of five
-/// centimetres is twelve and three quarter metres, any top a cat reaches.
-const MARK_STEP: i32 = 5;
+/// centimetres is twelve and three quarter metres, any top a cat reaches. The
+/// word's encoding, not a height.
+const MARK_STEP: flag::Bits = 5;
+
+/// The smallest number 16.16 can hold, guarding a division by a knob
+/// retuned to zero.
+const SMALLEST: Fx = Fx::from_raw(1);
 
 /// How high the mark of the leap in progress is: the top under its aim.
 pub fn lob_height(m: &Monster) -> Fx {
@@ -1040,7 +1048,7 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
         if let Doing::Recovery { kind, left } = m.doing {
             // Quicker by `EnrageRecovery`: an extra frame off whenever the
             // running share of `1/x - 1` ticks over.
-            let r = Knob::EnrageRecovery.fx().max(Fx::from_raw(1));
+            let r = Knob::EnrageRecovery.fx().max(SMALLEST);
             let extra = Fx::ONE.div(r).sub(Fx::ONE).max(Fx::ZERO);
             let tick = |n: u32| Fx::from_int((n & 0x7FFF) as i32).mul(extra).to_int();
             if left > 1 && kind != HOWL && tick(now) != tick(now.wrapping_sub(1)) {
@@ -1283,10 +1291,8 @@ fn stuck(
             } else {
                 None
             };
-            let far = goal.is_some_and(|g| {
-                math::wide_flat_dist(g, m.pos).raw()
-                    > Knob::LandShort.fx().mul(Fx::from_int(2)).raw()
-            });
+            let far = goal
+                .is_some_and(|g| math::wide_flat_dist(g, m.pos).raw() > Knob::StuckFar.fx().raw());
             // Getting nowhere is measured by where it got, not by how hard
             // it is walking: a cat leaning on a wall walks at a full run.
             let moved = math::wide_flat_dist(m.pos, pos_of(lore, s));

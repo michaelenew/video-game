@@ -422,6 +422,127 @@ pub trait PackMind {
     fn bumped(&self, c: &mut Critter, push: V3) {
         let _ = (c, push);
     }
+
+    /// **Is critter `c`'s move thrown to the other side?** Its move's volume
+    /// is authored with a sideways offset (`HitZ`), and a body that throws it
+    /// at whichever flank its target is on -- the Hornback bull's shoulder,
+    /// the hook toward the side its head is cocked -- says so here, and the
+    /// offset is mirrored. Decided by the species when the move commits and
+    /// kept on the body, because a swing that changed sides mid-windup would
+    /// be a telegraph that lied. Must be a pure function of the critter.
+    fn mirrored(&self, c: &Critter) -> bool {
+        let _ = c;
+        false
+    }
+
+    /// **How a mountable critter's back is moving under a rider**: its pitch
+    /// about its middle, in turns (nose up is positive), and how far it is
+    /// lifted. The default is level and still. The Hornback's cow bucks: the
+    /// rump kicks up, and a rider's grip is tested against that
+    /// acceleration (`state::step_critter_rider`), as a rider's is on a
+    /// monster. Must be a pure function of the critter -- it is posed from
+    /// its state and clock, which are in the snapshot.
+    fn surface(&self, c: &Critter) -> (Fx, Fx) {
+        let _ = c;
+        (Fx::ZERO, Fx::ZERO)
+    }
+
+    /// **Frames until the soonest hit the pack could land**, if the species
+    /// knows better than the generic count ([`frames_until_free`]), which
+    /// is a pack's of tokens. The Hornback's bull takes no token: what it
+    /// could land next is its own windup, or the quickest move its target's
+    /// range allows. `None` is the generic answer.
+    fn frames_until_free(&self, pack: &Pack, critters: &Critters) -> Option<u16> {
+        let _ = (pack, critters);
+        None
+    }
+
+    /// **Does critter `i`'s hit pass over fighter `who`** this frame, though
+    /// its volume reaches them? The default is that it does not. The
+    /// Hornback's stampede: the first cow to reach you knocks you down, and
+    /// the rest step over or round a body on the floor -- so a second cow
+    /// whose volume touches you on the same frame as the first spares you.
+    fn spares(&self, pack: &Pack, critters: &Critters, i: usize, who: usize) -> bool {
+        let _ = (pack, critters, i, who);
+        false
+    }
+
+    /// **A fighter's swing is about to land on critter `i`**: does it? The
+    /// default is that it does. A body that guards -- the Hornback bull,
+    /// braced -- answers [`Guarded::Bounces`] for a blow it turns, and the
+    /// swing does nothing to it and recoils; or [`Guarded::Breaks`] for a
+    /// guard breaker, which lands and is the species' to make something of.
+    /// Asked once per body per swing, before the damage, with the swing's own
+    /// volume -- the overlay's -- so a species can ask which part of it was
+    /// struck (a head, a horn).
+    fn guarded(&self, pack: &mut Pack, critters: &mut Critters, i: usize, blow: &Blow) -> Guarded {
+        let _ = (pack, critters, i, blow);
+        Guarded::Lands
+    }
+
+    /// **What critter `i`'s windup will do, drawn on the floor**, given what
+    /// its move's own volume says ([`Critter::telegraph`]). The default is
+    /// that. A move whose reach is decided by more than its row -- the
+    /// Hornback's charge, cut short where a solid will stop it -- says so
+    /// here, from what the species keeps in [`Pack::memo`]. Read by the
+    /// renderer and the overlay through [`telegraph`].
+    fn telegraph(
+        &self,
+        pack: &Pack,
+        critters: &Critters,
+        i: usize,
+        plain: crate::monster::Telegraph,
+    ) -> Option<crate::monster::Telegraph> {
+        let _ = (pack, critters, i);
+        Some(plain)
+    }
+}
+
+/// A fighter's swing, as a critter that might guard against it sees it: see
+/// [`PackMind::guarded`].
+pub struct Blow<'a> {
+    /// The fighter swinging.
+    pub who: usize,
+    /// Where they stand.
+    pub from: V3,
+    /// The swing's volume this frame: `state::hitbox`, the overlay's.
+    pub hitbox: &'a crate::state::Hitbox,
+    /// What it would deal.
+    pub damage: i32,
+    /// **A guard breaker**: the versus rule's own flag (`unblockable`), or a
+    /// Bulwark Slam carrying weight.
+    pub breaks: bool,
+}
+
+/// What a guard made of a blow: see [`PackMind::guarded`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Guarded {
+    /// No guard, or not against this: it lands as it would have.
+    Lands,
+    /// Turned. Nothing reaches the body; the attacker recoils for `recoil`
+    /// frames and is pushed `push` metres back along the line from it.
+    Bounces { recoil: u16, push: Fx },
+    /// A guard breaker through the guard: it lands, and the species makes of
+    /// the break what it will (a stagger, a lockout).
+    Breaks,
+}
+
+/// **What critter `i`'s windup or hit will do, as drawn**: its own
+/// [`Critter::telegraph`], as its species' mind says it really is
+/// ([`PackMind::telegraph`]). The renderer's markers and the overlay read
+/// this.
+pub fn telegraph(
+    pack: Option<&Pack>,
+    critters: &Critters,
+    i: usize,
+) -> Option<crate::monster::Telegraph> {
+    let c = critters.get(i)?;
+    let sp = critters.sp();
+    let plain = c.telegraph(sp)?;
+    match (pack, sp.pack) {
+        (Some(pack), Some(decl)) => decl.mind.telegraph(pack, critters, i, plain),
+        _ => Some(plain),
+    }
 }
 
 /// The pack's own appetite for a move: see [`PackMind::appetite`].
@@ -692,6 +813,12 @@ pub fn hurt(
 /// coming, so they count only once they are winding up.
 pub fn frames_until_free(pack: &Pack, critters: &Critters, herd: &Herd) -> u16 {
     let sp = pack.sp();
+    if let Some(own) = sp
+        .pack
+        .and_then(|decl| decl.mind.frames_until_free(pack, critters))
+    {
+        return own;
+    }
     let hurts = |act: u8| sp.attack(act).damage > 0;
     let mut soonest = u32::MAX;
     for c in critters.iter().filter(|c| c.alive()) {

@@ -160,10 +160,46 @@ pub mod pose {
     pub const DIG: usize = 5;
     /// Forepaws up on an edge, hauling.
     pub const CLIMB: usize = 6;
+    /// The forequarter rising and coming down, twice; then the head drops
+    /// level and it runs. The Hornback bull's charge.
+    pub const PAW: usize = 7;
+    /// Head low and cocked to one side; then the horns sweep up through.
+    pub const HOOK: usize = 8;
+    /// Leaning away from the side it will throw; then the flank comes across.
+    pub const LEAN: usize = 9;
+    /// Head low and square, braced: a guard.
+    pub const BRACE: usize = 10;
+    /// Head thrown back, neck swelling: a call.
+    pub const BELLOW: usize = 11;
+    /// Head down, tail up; then both hind legs straight back.
+    pub const KICK: usize = 12;
+    /// Head down; then the rump kicks up under whoever is riding.
+    pub const BUCK: usize = 13;
+    /// Flat out: the legs going, the head forward. A stampede.
+    pub const GALLOP: usize = 14;
 }
 
 /// Not in a ring slot.
 pub const NO_SLOT: u8 = u8::MAX;
+
+/// **A fighter's mount byte for riding critter `i`**: the creature slot
+/// bits read two, past either creature (`monster::mount_of`), so nothing
+/// that reads a monster's mount mistakes it for one.
+pub const fn mount_of(i: usize) -> u8 {
+    crate::monster::mount_of(RIDDEN_SLOT, i)
+}
+
+/// The critter a fighter's mount byte names, if it names one.
+pub const fn ridden(mount: u8) -> Option<usize> {
+    if mount != NO_PART && crate::monster::mount_slot(mount) == RIDDEN_SLOT {
+        Some(crate::monster::mount_part(mount))
+    } else {
+        None
+    }
+}
+
+/// The creature-slot value a mount byte carries for a critter.
+const RIDDEN_SLOT: usize = 2;
 
 /// One small body. Forty-eight bytes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -315,6 +351,27 @@ impl Critter {
         }
     }
 
+    /// **Where a rider standing at `local` on its back is, in the world**:
+    /// `local` in the body's own frame (`x` forward, `z` across), on the top
+    /// of the box, carried through the pitch and lift its species says the
+    /// back has this frame (`PackMind::surface`). The one description of a
+    /// critter's back, read by the ride and by the renderer.
+    pub fn back_point(&self, sp: &Species, local: V3) -> V3 {
+        let body = self.body(sp);
+        let (pitch, heave) = match sp.pack {
+            Some(decl) => decl.mind.surface(self),
+            None => (Fx::ZERO, Fx::ZERO),
+        };
+        let x = local.x.mul(cos_turns(pitch));
+        let y = body.height.add(local.x.mul(sin_turns(pitch))).add(heave);
+        body.to_world(V3::new(x, y, local.z))
+    }
+
+    /// Is a kind of critter one a fighter can stand on?
+    pub fn rideable(&self, sp: &Species) -> bool {
+        self.alive() && sp.kind(self.kind).mountable
+    }
+
     /// The perch as fixed point, in the part's frame.
     pub fn perch_local(&self) -> V3 {
         let cm = |v: i16| Fx::ratio(v as i32, 100);
@@ -367,10 +424,15 @@ impl Critter {
             .mul(crate::DT);
         let fwd = self.facing();
         let side = V3::new(fwd.z.neg(), Fx::ZERO, fwd.x);
+        // Thrown to the other side, if its species says this one is.
+        let across = match sp.pack {
+            Some(decl) if decl.mind.mirrored(self) => m.hit_z.neg(),
+            _ => m.hit_z,
+        };
         let anchor = self
             .pos
             .add(fwd.scale(m.hit_x.add(flown)))
-            .add(side.scale(m.hit_z));
+            .add(side.scale(across));
         Some((
             V3::new(anchor.x, self.pos.y, anchor.z),
             m.hit_radius,
@@ -456,6 +518,15 @@ impl Body {
             d.x.mul(self.cos).add(d.z.mul(self.sin)),
             d.y,
             d.z.mul(self.cos).sub(d.x.mul(self.sin)),
+        )
+    }
+
+    /// A direction in the body's frame, in the world.
+    pub fn dir_to_world(&self, local: V3) -> V3 {
+        V3::new(
+            local.x.mul(self.cos).sub(local.z.mul(self.sin)),
+            local.y,
+            local.x.mul(self.sin).add(local.z.mul(self.cos)),
         )
     }
 
@@ -636,6 +707,11 @@ pub struct CritterKind {
     /// wall somebody in would be an unanswerable trap -- and on for a cow.
     /// Either way a fighter is never moved by one.
     pub yields: bool,
+    /// **A fighter can stand on it, and ride it**: its box's top is a
+    /// surface, as a monster's mountable part is (`state::step_critter_rider`).
+    /// The Hornback's cow. Off for everything a person is not meant to stand
+    /// on -- a gnawer, the bull.
+    pub mountable: bool,
 }
 
 /// One tuned number of one kind of critter. Every kind has a row of these in
@@ -717,7 +793,7 @@ impl CritterField {
             Fx::ratio(n, d).raw()
         }
         match self {
-            CritterField::Health => (1, 3000),
+            CritterField::Health => (1, 8000),
             CritterField::Length | CritterField::Width | CritterField::Height => {
                 (fx(1, 10), fx(8, 1))
             }

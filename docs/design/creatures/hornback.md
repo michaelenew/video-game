@@ -1,10 +1,22 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 1
 ---
 
 # Hornback herd — the herd is the terrain, the bull is the fight
+
+> **Built 2026-10-01.** `--hunt hornback` (`?hunt=hornback`), in the low meadow;
+> the crossing is `--hunt hornback-escort` (`?hunt=hornback-escort`, or
+> `--hunt hornback --arena crossing`). The species is
+> `crates/sim/src/species/hornback/` -- its table, its mind (`mind.rs`), its
+> rules over the world (`rules.rs`), the ride (`ride.rs`) and its floor signs
+> (`signs.rs`) -- on the critter machinery of [critters.md](../critters.md),
+> with the hooks it added listed there. The arenas are
+> `crates/sim/src/arena/hornback.rs`, the hunter's plan
+> `crates/hunt/src/plans/hornback.rs`, the tests `crates/sim/tests/hornback.rs`.
+> §13 is where it landed and what differs from the text below.
 
 Eight grazing cows and one bull on an open meadow with rocks in it. Walk past at a
 distance and nothing happens: the herd grazes, the bull lifts its head and watches you
@@ -660,3 +672,122 @@ lane, and bait charges away from the road.
 8. **Two seconds of ride.** `ride_patience` 120 frames carries you about 20 m, which
    is home from most of the arena. Whether that is a trick or a toy is a person's
    question.
+
+## 13 · Where it landed
+
+Numbers from `cargo run -p hunt --bin fight -- --species hornback --class <c>
+--repeats 24` (the crossing: `--arena crossing --repeats 12`), after the passes
+in [feel-log.md](../feel-log.md) of 2026-10-01. The scripted hunter plays §9
+with a fifteen-frame reaction; the herd's own report lines are §9's
+(`plans::Card::tally`).
+
+```text
+                won    mean    health left   threat / poke / way in / walk up   unanswerable
+  Champion     22/24   109 s    678 of 1000      38 /  8 / 20 / 34 %                  0
+  Reaver       16/24   159 s    325 of  750      37 /  7 / 24 / 32 %                  0
+  Elementalist 23/24    89 s    752 of 1000      33 /  7 / 18 / 42 %                  0
+  Blood mage    5/24   292 s     46 of 1000      35 /  7 / 30 / 29 %                  0
+  Bulwark      19/24   191 s    584 of 1250      36 /  7 / 28 / 29 %                  0
+  Dual mage     1/24   589 s     81 of 1000      29 /  6 / 46 / 20 %                  0
+
+  coop, two Champions 12/12 in 122 s; two Bulwarks 11/12 in 249 s
+  temper 3, Champion  10/12 in 95 s, 698 left, threatening 38 %
+
+  landed / thrown, 24 Champion hunts
+    Charge 23/527   Hook 23/148   Trample 2/11   Shoulder 3/96   Guard 0/4
+    Bellow 164 (stampede: 8 of 1281 cow-runs)   Cow kick 0/129   Buck 0/16
+
+  12 hunts each       charges into a solid   stun frames / damage in them   horns   boulders cracked / shattered   cows off   rides
+    Champion          98 of 305  (32 %)       11187 / 19604                  19      47 / 33                         11        14
+    Elementalist     114 of 178  (64 %)       13075 / 10350                   0      43 / 24                         50         2
+    Bulwark          144 of 329  (44 %)       16761 / 19680                  22      48 / 48                         12        28
+
+  the crossing, 12 runs   won (arrived / bull down)   mean
+    Champion             11 / 12                          56 s
+    Reaver                9 / 12                          56 s
+    Elementalist          7 / 12                          68 s
+    Blood mage            8 / 12                          60 s
+    Bulwark               9 / 12                          58 s
+    Dual mage            11 / 12                          55 s
+    two Champions         1 / 12                          54 s
+
+  herd cost: its rules 1.5-2.7 us a frame, the whole frame 21-26 us mean, in release
+```
+
+**Against the targets.** Zero unanswerable hits and zero hidden commits for every
+class. **At least one charge in three goes into a solid** for every class the
+plan plays well -- the Champion on the line, the Elementalist (who raises a stone
+into a lane with nothing at its end) at two in three -- and the stun is where
+the fight's damage goes: four fifths of the Champion's. The charge lands under
+one in twenty, the Hook one in six, the Trample one in five, the kick never:
+all under the §9 ceilings. **Nine in ten** for the Champion and the
+Elementalist; the Bulwark and the Reaver four in five and two in three; won
+fights a little long for the Champion (109 s, inside 60–120) and long for the
+Bulwark and the Reaver (160–190 s). The windows: threatening 33–38 % against
+~30, walk up 29–42 % against ~30, and the poke window small (7–8 %) because a
+bull that can act is a charge or a hook, never a poke's worth of nothing.
+
+**The Blood mage and the Dual mage do not win it.** The Dual mage's is the known
+harness gap (the plan cannot play her two bars; see the Gnawers' §13). The Blood
+mage's is the plan: her damage is a 22-point sweep, and against a 2000-health bull
+whose openings are the stuns, she spends them on Black spikes while her health
+holds a third, and the rest of the fight she cannot afford. A person playing her
+would bring pools under a stunned bull; the plan does not.
+
+**What differs from the text above**, each a decision to review:
+
+- **Bull health 2000**, not 3500. At 3500 no class finished inside two minutes; at
+  2500 the Champion took 149 s. The horns stay 500.
+- **The bull interposes ten metres out** (`Standoff`) and charges from nine to
+  fifteen, so where it rests is a charge's range, and inside its hook's reach it
+  stands its ground rather than walking in.
+- **The bank stops a charge** (a stun, the face of a long solid) and the arena's
+  edge does not -- a charge pulls up `EdgeMargin` short of it, the §12 question
+  answered as the text proposed. The bull does not climb the bank's ramp; a hunter
+  on the bank is not charged.
+- **The guard turns swings, not projectiles.** A bolt is not a blow the bull can
+  brace against in the fiction, and the guard's lesson is "go round".
+- **`cc_strain` is unused**: the bull has no crowd-control state for strain to
+  feed; strain feeds the shoulder's interrupt, and on the crossing it is the
+  bull's "interest" in the hunter that hit it.
+- **Cows push only fighters on the floor**, so a hunter in the air can land on a
+  back; a cow's back is a mountable surface (`CritterKind::mountable`), and the
+  buck's fall is the generic forty-five-degree throw.
+- **The crossing**: a cart of 1500 rolling at 2 m/s within 6 m of a hunter, on an
+  80 × 36 m road. The herd walks beside the road `WaveAhead` (12 m) ahead of the
+  cart and crosses it every `CartLanePeriod` (15 s), the lane drawn
+  `CartLaneWarn` (5 s) ahead and run as a bellow's stampede, whether the herd is
+  roused or not; it runs *into* the cart (a cow's blow is 117 to it) and round
+  every boulder and stone. The bull goes after the cart when the cart is nearer
+  the herd than any hunter and its strain is spent; a charge into it is 300 and a
+  stun. **Killing the bull wins the crossing** too, since the herd then leaves by
+  the ford: allowed, as the text says, and it ends the waves with it. Winning it
+  writes the Hornback's trophy at its temper -- **the carter's key is not built**;
+  trophies are one per creature and temper today.
+- **Two hunters on the crossing lose it.** A bellow called at two escorts lays its
+  lane over the cart, and the hunters' way out of a lane keeps them within the
+  cart's escort reach while it rolls on into it. A plan question first, then
+  perhaps a rule (should a hunter in a lane count as escorting?).
+
+**What the harness caught**, in the order it was found:
+
+- **Unset knobs read the bottom of their range**, so a hook thrown sideways at -10
+  until every row was set.
+- **Any fight with a solid hazard froze a falling fighter** (`feel_the_floor`
+  lifted anyone over a hazard with no lift): fixed for every creature.
+- **Stampede hits outside the drawn lane**: the slant of a cow's hit, the lane's end
+  and the band each let a hit land past the edge. The lane is now the hit test's
+  own answer: a running cow is held `keep` inside it, its slant capped, and its run
+  ended at the reach of the lane's end.
+- **Several cows trampled one fallen fighter** in a row: `PackMind::spares` lets the
+  rest pass over.
+- **The bank counted as the edge**, so charges into it pulled up. The edge is a solid
+  entirely outside the bounds.
+- **A cow in a lee could end inside the rock**: the constraints are applied fallen,
+  clamp, then lee, and a lane a solid fills is ended there.
+- **A rider could not land on a back**: the herd's bodies pushed anyone, airborne
+  included, out of their boxes.
+- **The crossing's charges into the cart** came from a hunter escorting on the line
+  from the bull through the cart; the escort post is now off that line, ahead of
+  the cart, and the hunter walks across the bull's line while a charge winds up.
+

@@ -7,7 +7,7 @@
 //! the Pair's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 495] = [
+pub const KNOBS: [i32; 496] = [
            65536, // pair.size_(x) = 1
             2400, // pair.health = 2400
              500, // pair.breakable_part_health = 500
@@ -92,6 +92,7 @@ pub const KNOBS: [i32; 495] = [
           196608, // pair_·_pair.twin_pounce_crashes_cats_this_close = 3
           655360, // pair_·_mind.a_sample_this_fast_was_a_dodge = 10
           163840, // pair_·_mind.ambush,_its_lane_runs_past_you_by = 2.5
+          117965, // pair_·_mind.getting_nowhere:_a_goal_further_off_than = 1.8
               30, // pair_·_mind.getting_nowhere_this_long,_it_goes_round = 30
               60, // pair_·_mind.goes_round_for = 60
             1500, // pair_·_mind.ambush,_at_a_fast_sample = 1500

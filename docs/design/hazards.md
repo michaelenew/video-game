@@ -94,7 +94,9 @@ it is tuned rather than rooting everyone in it.
 
 **What it does to a body.** `World::feel_the_floor`, once a frame before the
 fighters step: the walk through the ordinary slow; damage ticking; a grounded
-body dragged toward the pull point; anybody in a lift's column pushed up. The
+body dragged toward the pull point; anybody in a lift's column pushed up --
+only a kind whose lift is above nothing: a solid hazard with no lift (the
+Hornback's boulder) once held every body over it in the air. The
 dodge and the jump read the same floor where they are thrown
 (`step_player`): a dodge from inside tar carries half as far and keeps its
 frames and its invulnerability. A slow, a pull and a root are things the floor

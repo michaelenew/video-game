@@ -37,4 +37,6 @@ pub const LOOK: Look = Look {
     head: pair::HEAD,
     spikes: None,
     critters: &[],
+    horns: None,
+    stance: None,
 };
