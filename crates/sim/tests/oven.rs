@@ -55,12 +55,22 @@ fn the_registry_covers_every_stored_value() {
         let pack = s.pack.map_or(0, |p| {
             sim::pack::PackKnob::ALL.len() + p.kinds.len() * sim::critter::CritterField::ALL.len()
         });
+        // And what it brings to the fight, after that: the senses row if it
+        // has one, a row per hazard kind, a row per defended thing
+        // (`docs/design/hazards.md`).
+        let fight = if s.fight.row {
+            sim::species::FightField::ALL.len()
+        } else {
+            0
+        } + s.fight.hazards.len() * sim::hazard::HazardField::ALL.len()
+            + s.fight.objectives.len() * sim::objective::ObjectiveField::ALL.len();
         assert_eq!(
             s.knob_count(),
             sim::species::Common::ALL.len()
                 + s.own.len()
                 + s.moves.len() * MonsterField::ALL.len()
-                + pack,
+                + pack
+                + fight,
         );
         assert_eq!(
             s.tuned.len(),

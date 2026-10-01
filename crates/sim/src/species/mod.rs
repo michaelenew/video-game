@@ -57,6 +57,8 @@ pub mod ridgeback;
 /// `critcheck`. It is to packs what the range is to arenas.
 pub mod gnats;
 
+pub mod sentinel;
+
 // pub mod gnawers;
 
 // pub mod hornback;
@@ -96,6 +98,9 @@ impl SpeciesId {
     pub const SIEGESHELL: SpeciesId = SpeciesId(10);
     /// The dev pack: see [`gnats`].
     pub const GNATS: SpeciesId = SpeciesId(11);
+    /// The dev creature for the senses, the floor and the defended things:
+    /// see [`sentinel`].
+    pub const SENTINEL: SpeciesId = SpeciesId(12);
 
     /// The table. Every registered id has one; asking for an unregistered one
     /// is a bug in whoever built the monster, and gets the Ridgeback rather
@@ -106,7 +111,7 @@ impl SpeciesId {
 }
 
 /// How many ids there are, registered or not.
-pub const COUNT: usize = 12;
+pub const COUNT: usize = 13;
 
 /// The species registered under an id, if one is.
 pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
@@ -114,6 +119,8 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::RIDGEBACK => Some(&ridgeback::SPECIES),
 
         SpeciesId::GNATS => Some(&gnats::SPECIES),
+
+        SpeciesId::SENTINEL => Some(&sentinel::SPECIES),
 
         // SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
 

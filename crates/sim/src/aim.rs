@@ -1077,17 +1077,14 @@ pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
     }
     // A cloud is a column: a line through it is blocked when it passes within
     // the cloud's radius of its axis, between its floor and its top.
-    !scene.arena.floor.sight_blockers().any(|h| {
-        let base = h.a;
-        let top = V3::new(base.x, base.y.add(h.height), base.z);
-        let inside = |p: V3| {
-            crate::math::wide_flat_dist(p, base).raw() < h.radius.raw()
-                && p.y.raw() >= base.y.raw()
-                && p.y.raw() <= top.y.raw()
-        };
-        // A watcher standing inside the cloud is blinded by it as well.
-        inside(a) || inside(b) || crate::math::segment_gap(a, b, base, top).raw() < h.radius.raw()
-    })
+    //
+    // A watcher standing inside the cloud is blinded by it as well, which
+    // the same test says: the line starts inside the column.
+    !scene
+        .arena
+        .floor
+        .sight_blockers()
+        .any(|h| crate::math::segment_meets_column(a, b, h.a, h.radius, h.height))
 }
 
 /// **Is that point on this fighter's screen, and not behind anything?** (A5.)

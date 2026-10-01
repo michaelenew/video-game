@@ -179,6 +179,15 @@ impl ObjectiveField {
         }
     }
 
+    /// What it starts at before it has ever been baked: the bottom of the
+    /// range, except that it takes a creature's blow as it lands.
+    pub const fn neutral(self) -> i32 {
+        match self {
+            ObjectiveField::Takes => Fx::ONE.raw(),
+            _ => self.range().0,
+        }
+    }
+
     pub const fn range(self) -> (i32, i32) {
         const fn fx(n: i32, d: i32) -> i32 {
             Fx::ratio(n, d).raw()
@@ -211,7 +220,8 @@ pub struct Objective {
     /// Which creature slots' current moves have already struck it, a bit each;
     /// cleared for a slot when its creature is not mid-move.
     pub struck: u8,
-    /// Centimetres along its route.
+    /// How far along its route, in metres: a fixed-point value's raw bits,
+    /// never negative.
     pub along: u32,
     pub health: i32,
     /// Everything it has taken, for the report.
@@ -226,9 +236,16 @@ mod flag {
 
 impl Objective {
     fn to_cell(self) -> Cell {
-        let flags = (self.present as u8) * flag::PRESENT
-            | (self.broken as u8) * flag::BROKEN
-            | (self.arrived as u8) * flag::ARRIVED;
+        let mut flags = 0;
+        if self.present {
+            flags |= flag::PRESENT;
+        }
+        if self.broken {
+            flags |= flag::BROKEN;
+        }
+        if self.arrived {
+            flags |= flag::ARRIVED;
+        }
         [
             u32::from_le_bytes([flags, self.struck, 0, 0]),
             self.along,
@@ -252,7 +269,7 @@ impl Objective {
 
     /// Metres along its route.
     pub fn along(&self) -> Fx {
-        Fx::ratio(self.along.min(i32::MAX as u32 / 2) as i32, 100)
+        Fx::from_raw(self.along.min(i32::MAX as u32) as i32)
     }
 }
 
@@ -373,11 +390,10 @@ pub fn step(lore: &mut Lore, arena: &'static Arena, hunters: &[V3]) {
             continue;
         }
         let step = stat_fx(sp, i, ObjectiveField::Speed).mul(crate::DT);
-        let cm = (step.raw() as i64 * 100) >> 16;
-        o.along = o.along.saturating_add(cm.max(0) as u32);
         let end = site.length();
-        if o.along().raw() >= end.raw() {
-            o.along = (end.raw() as i64 * 100 >> 16).max(0) as u32;
+        let next = o.along().add(step.max(Fx::ZERO)).min(end);
+        o.along = next.raw().max(0) as u32;
+        if next.raw() >= end.raw() {
             o.arrived = decl.wins;
         }
         set(lore, i, o);
@@ -397,8 +413,8 @@ pub fn strike(lore: &mut Lore, i: usize, damage: i32) -> i32 {
     let dealt = Fx::from_int(damage)
         .mul(stat_fx(sp, i, ObjectiveField::Takes))
         .to_int()
-        .max(0);
-    o.health = (o.health - dealt).max(0);
+        .clamp(0, o.health);
+    o.health -= dealt;
     o.taken = o.taken.saturating_add(dealt);
     o.broken = o.health <= 0;
     set(lore, i, o);

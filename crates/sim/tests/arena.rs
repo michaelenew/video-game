@@ -410,3 +410,109 @@ fn the_cycle_skips_creatures_that_are_not_registered() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// The ground as it stands, ceilings, and long distances (F3b)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn bare_ground_answers_exactly_as_the_arena_does() {
+    for a in arena::all() {
+        let ground = arena::Terrain::bare(a);
+        for x in (-120..=120).step_by(7) {
+            for z in (-25..=25).step_by(5) {
+                for y in [0, 1, 3, 8, 13] {
+                    let p = at(x, y, z);
+                    assert_eq!(ground.ground_under(p), a.ground_under(p));
+                    assert_eq!(ground.material_under(p), a.material_under(p));
+                    let v = at(3, -2, -1);
+                    let (r1, r2) = (ground.resolve(p, v, true), a.resolve(p, v, true));
+                    assert_eq!(
+                        (r1.pos, r1.vel, r1.grounded, r1.wall),
+                        (r2.pos, r2.vel, r2.grounded, r2.wall)
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_eye_is_held_under_the_cave_vault_and_nowhere_else() {
+    use sim::camera::{eye, eye_under};
+    use sim::tuning as t;
+    // Under the cave's vault (12 m), and under its 8 m lintel by the wall.
+    for (x, z) in [(60, 0), (60, 21)] {
+        let pos = at(x, 0, z);
+        let ceiling = range()
+            .ceiling_over(m(x), m(z), t::body_height())
+            .expect("a vault");
+        for pitch in (-90..=60).step_by(10) {
+            for aim in [0u16, 16384, 32768, 49152] {
+                let look = Input::looking_at(0, aim, (pitch * 182) as i16);
+                for aloft in [Fx::ZERO, Fx::ONE] {
+                    let held = eye_under(pos, look, aloft, range());
+                    let free = eye(pos, look, aloft);
+                    let cap = ceiling.sub(t::eye_under_ceiling());
+                    assert!(
+                        held.y.raw() <= cap.raw() || held.y == pos.y.add(t::body_height()),
+                        "the eye at {held:?} is in the vault at {ceiling:?}"
+                    );
+                    assert!(held.y.raw() <= free.y.raw());
+                    assert_eq!((held.x, held.z), (free.x, free.z));
+                }
+            }
+        }
+    }
+    // Anywhere without a ceiling over it -- all of the proving ground -- it
+    // is the eye exactly.
+    let pg = ArenaId::PROVING_GROUND.get();
+    for x in (-13..=13).step_by(3) {
+        for pitch in (-90..=60).step_by(15) {
+            let look = Input::looking_at(0, 12345, (pitch * 182) as i16);
+            let pos = at(x, 0, x / 2);
+            assert_eq!(eye_under(pos, look, Fx::ZERO, pg), eye(pos, look, Fx::ZERO));
+        }
+    }
+    // And the aiming ray out of it starts under the rock: a shot straight up
+    // from the cave floor meets the vault's underside, not its top.
+    let mut w = World::versus_in([Class::Champion; MAX_PLAYERS], ArenaId::RANGE);
+    w.players[0].pos = at(60, 0, 0);
+    let ground = w.terrain();
+    let fighters = w.players;
+    let field = sim::stones::gather(&fighters);
+    let scene = sim::aim::Scene {
+        stones: &field,
+        players: &fighters,
+        effects: &w.effects,
+        quarry: &w.monsters,
+        critters: &w.critters,
+        arena: &ground,
+    };
+    let up = Input::looking_at(0, 0, 60 * 182);
+    let seen = sim::aim::sight(0, up, m(60), &scene);
+    assert!(seen.at.y.raw() <= m(12).raw(), "the ray met {:?}", seen.at);
+}
+
+#[test]
+fn lengths_across_the_range_do_not_saturate() {
+    use sim::math::{wide_flat_dist, wide_len, wide_normalized};
+    let (a, b) = (at(-118, 0, -20), at(118, 0, 20));
+    let far = wide_flat_dist(a, b);
+    assert!(
+        far.sub(m(239)).abs().raw() < Fx::ratio(5, 10).raw(),
+        "{far:?}"
+    );
+    assert!(
+        b.sub(a).flat_len().raw() < m(182).raw(),
+        "16.16 alone saturates"
+    );
+    let dir = wide_normalized(b.sub(a));
+    assert!(dir.len().sub(Fx::ONE).abs().raw() < Fx::ratio(1, 100).raw());
+    // Under a hundred metres a component, exactly the short helpers.
+    for (x, y, z) in [(3, 1, -4), (99, 0, 99), (-60, 12, 70), (0, 0, 0)] {
+        let v = at(x, y, z);
+        assert_eq!(wide_len(v), v.len());
+        assert_eq!(wide_normalized(v), v.normalized());
+    }
+}

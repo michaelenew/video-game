@@ -631,6 +631,38 @@ pub fn flat_segment_gap(p: V3, a: V3, b: V3) -> Fx {
     big_len(p.sub(at))
 }
 
+/// Does the segment from `a` to `b` pass through an upright cylinder standing
+/// on `base`, `radius` wide and `height` tall? The part of the segment inside
+/// the cylinder's height, measured in the floor plane against its axis: a
+/// cloud is a column, and a line over its top or under its floor misses it.
+pub fn segment_meets_column(a: V3, b: V3, base: V3, radius: Fx, height: Fx) -> bool {
+    let (lo, hi) = (base.y, base.y.add(height));
+    let dy = b.y.sub(a.y);
+    let (mut t0, mut t1) = (Fx::ZERO, Fx::ONE);
+    if dy.raw() == 0 {
+        if a.y.raw() < lo.raw() || a.y.raw() > hi.raw() {
+            return false;
+        }
+    } else {
+        let ta = lo.sub(a.y).div(dy);
+        let tb = hi.sub(a.y).div(dy);
+        let (enter, leave) = if ta.raw() <= tb.raw() {
+            (ta, tb)
+        } else {
+            (tb, ta)
+        };
+        t0 = t0.max(enter);
+        t1 = t1.min(leave);
+        if t0.raw() > t1.raw() {
+            return false;
+        }
+    }
+    let d = b.sub(a);
+    let p0 = a.add(d.scale(t0));
+    let p1 = a.add(d.scale(t1));
+    flat_segment_gap(base, p0, p1).raw() < radius.raw()
+}
+
 /// Integer square root of a 64-bit value, saturating into `i32`.
 ///
 /// A fixed iteration count rather than "until it converges": a value that

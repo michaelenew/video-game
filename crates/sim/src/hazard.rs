@@ -246,6 +246,17 @@ impl HazardField {
         }
     }
 
+    /// What a kind starts at before it has ever been baked: nothing at all.
+    /// The bottom of every range, except the three multipliers, whose
+    /// nothing is one -- an unbaked kind that rooted everybody in it would be
+    /// a trap a new creature set without meaning to.
+    pub const fn neutral(self) -> i32 {
+        match self {
+            HazardField::Walk | HazardField::Dodge | HazardField::Jump => Fx::ONE.raw(),
+            _ => self.range().0,
+        }
+    }
+
     pub const fn range(self) -> (i32, i32) {
         const fn fx(n: i32, d: i32) -> i32 {
             Fx::ratio(n, d).raw()
@@ -409,9 +420,7 @@ pub fn room(lore: &Lore) -> usize {
 /// if there is no room and nothing of its kind to replace. What a species
 /// does instead (merge a pool into the nearest, say) is its own to write.
 pub fn place(lore: &mut Lore, h: Hazard) -> Option<usize> {
-    let Some(sp) = lore.owner.map(|s| s.get()) else {
-        return None;
-    };
+    let sp = lore.owner.map(|s| s.get())?;
     if h.index() as usize >= sp.fight.hazards.len() {
         return None;
     }
@@ -749,7 +758,7 @@ pub fn step(lore: &mut Lore, herd: &Herd, fires: &[Fire]) {
         }
     }
 
-    for i in 0..room(lore).min(MAX_HAZARDS) {
+    for (i, &lit) in lit.iter().enumerate().take(room(lore)) {
         let mut h = get(lore, i);
         if !h.present() {
             continue;
@@ -758,7 +767,7 @@ pub fn step(lore: &mut Lore, herd: &Herd, fires: &[Fire]) {
             clear(lore, i);
             continue;
         };
-        if lit[i] {
+        if lit {
             if let Some(into) = decl.ignites {
                 h = changed(sp, h, into);
                 set(lore, i, h);

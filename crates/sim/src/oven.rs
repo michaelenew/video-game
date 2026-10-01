@@ -1372,12 +1372,12 @@ fn species_baked(id: SpeciesId, index: usize) -> i32 {
         let field = (index - hazards) % crate::hazard::HAZARD_FIELDS;
         return crate::hazard::HazardField::ALL
             .get(field)
-            .map_or(0, |f| f.range().0);
+            .map_or(0, |f| f.neutral());
     }
     let field = (index - objectives) % crate::objective::OBJECTIVE_FIELDS;
     crate::objective::ObjectiveField::ALL
         .get(field)
-        .map_or(0, |f| f.range().0)
+        .map_or(0, |f| f.neutral())
 }
 
 pub fn scalar(s: Scalar) -> i32 {

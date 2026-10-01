@@ -40,6 +40,7 @@ mod mechanics;
 
 use mechanics::{ClassOut, Cues};
 use sim::aim::{self, Kind};
+use sim::arena::Bounds;
 use sim::bolt::Flight;
 use sim::fixed::Fx;
 use sim::math::{atan2_turns, wrap_turns};
@@ -540,6 +541,11 @@ pub struct Duelist {
     stuck: u16,
     /// The Dual mage's gap between her bars last frame, to count a mend.
     gap_was: Fx,
+    /// The playable rectangle of the arena it is fighting in, read off the
+    /// world each frame: where its walls are. It used to be the proving
+    /// ground's, written in, which put the walls in the wrong place in any
+    /// other arena.
+    bounds: Bounds,
 }
 
 impl Duelist {
@@ -613,6 +619,7 @@ impl Duelist {
             last_bits: 0,
             stuck: 0,
             gap_was: Fx::ZERO,
+            bounds: sim::arena::proving_ground::ARENA.bounds,
         }
     }
 
@@ -700,6 +707,7 @@ impl Duelist {
 
     /// One frame of play. [`Duelist::watch`] must have been called first.
     pub fn act(&mut self, w: &World) -> Input {
+        self.bounds = w.arena().bounds;
         let me = w.players[self.who];
         if me.class != self.mine.class {
             self.mine = Kit::learn(me.class);
@@ -1272,7 +1280,8 @@ impl Duelist {
             }
             Plan::JumpIn => {
                 let hop = theirs.add(Fx::from_int(3));
-                let walled = by_the_wall(me.pos, JUMP_CLEAR) || by_the_wall(them.pos, JUMP_CLEAR);
+                let walled = by_the_wall(me.pos, JUMP_CLEAR, &self.bounds)
+                    || by_the_wall(them.pos, JUMP_CLEAR, &self.bounds);
                 if walled {
                     self.plan_left = 0;
                 }
@@ -1309,13 +1318,13 @@ impl Duelist {
         };
         // Backed up to a wall, it goes round rather than into it.
         let next = me.pos.add(want.scale(Fx::ONE));
-        if by_the_wall(next, EDGE) && !by_the_wall(them.pos, Fx::ZERO) {
+        if by_the_wall(next, EDGE, &self.bounds) && !by_the_wall(them.pos, Fx::ZERO, &self.bounds) {
             want = side;
         }
         // On the wrong side of a wall from the fight -- it went over, or they
         // did -- it heads for the wall and hops it.
-        let out_me = by_the_wall(me.pos, Fx::ZERO);
-        let out_them = by_the_wall(them.pos, Fx::ZERO);
+        let out_me = by_the_wall(me.pos, Fx::ZERO, &self.bounds);
+        let out_them = by_the_wall(them.pos, Fx::ZERO, &self.bounds);
         if out_me != out_them {
             let head = if out_me {
                 flat(back(me.pos)).normalized()
@@ -1323,14 +1332,7 @@ impl Duelist {
                 toward
             };
             want = head;
-            let wall = sim::arena::proving_ground::half();
-            let gap = me
-                .pos
-                .x
-                .abs()
-                .sub(wall)
-                .abs()
-                .min(me.pos.z.abs().sub(wall).abs());
+            let gap = to_the_wall(me.pos, &self.bounds);
             if gap.raw() < HOP_THE_WALL.raw() && me.grounded && me.action.actionable() {
                 self.jump_left = 24;
             }
@@ -1350,7 +1352,7 @@ impl Duelist {
         }
         if self.stuck > STUCK {
             self.stuck = 0;
-            if by_the_wall(me.pos, JUMP_CLEAR) && out_me == out_them {
+            if by_the_wall(me.pos, JUMP_CLEAR, &self.bounds) && out_me == out_them {
                 self.strafe = -self.strafe;
                 self.plan_left = self.plan_left.min(10);
             } else {
@@ -1373,7 +1375,7 @@ impl Duelist {
                         self.dodge_left = p.hold;
                         self.dodge_dir = dir;
                     }
-                    Answer::Jump if by_the_wall(me.pos, JUMP_CLEAR) => {
+                    Answer::Jump if by_the_wall(me.pos, JUMP_CLEAR, &self.bounds) => {
                         self.dodge_left = DODGE_HOLD;
                         self.dodge_dir = side;
                     }
@@ -1568,9 +1570,25 @@ fn flat(v: V3) -> V3 {
 /// spent two minutes of a three-minute fight walking round the outside. That
 /// is the arena's question to answer, not this bot's; what the bot does is
 /// what a person who wants to fight does, and does not jump there.
-fn by_the_wall(pos: V3, margin: Fx) -> bool {
-    let half = sim::arena::proving_ground::half().sub(margin);
-    pos.x.abs().raw() > half.raw() || pos.z.abs().raw() > half.raw()
+///
+/// The arena's own bounds, whichever arena it is: in the proving ground,
+/// whose bounds are the inside faces of its walls, this is the test it always
+/// was.
+pub fn by_the_wall(pos: V3, margin: Fx, bounds: &Bounds) -> bool {
+    pos.x.raw() > bounds.hi_x.sub(margin).raw()
+        || pos.x.raw() < bounds.lo_x.add(margin).raw()
+        || pos.z.raw() > bounds.hi_z.sub(margin).raw()
+        || pos.z.raw() < bounds.lo_z.add(margin).raw()
+}
+
+/// How far a point is from the nearest edge of the arena, either side of it.
+pub fn to_the_wall(pos: V3, bounds: &Bounds) -> Fx {
+    pos.x
+        .sub(bounds.hi_x)
+        .abs()
+        .min(pos.x.sub(bounds.lo_x).abs())
+        .min(pos.z.sub(bounds.hi_z).abs())
+        .min(pos.z.sub(bounds.lo_z).abs())
 }
 
 /// The other way.
