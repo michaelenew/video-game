@@ -739,8 +739,14 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
         }
         running += 1;
         let (along, mut across) = lane_frame(at, dir, c.pos);
-        // Off the end of its lane: the run is over for this one.
-        if along.add(half_l).raw() >= len.raw() || half(pack, memo::CLOCKS, 0) == 0 {
+        // At the end of its lane -- its hit's reach at the end, not its body
+        // -- the run is over for this one: the lane drawn is where it hits.
+        let reach = sp
+            .attack(STAMPEDE)
+            .hit_x
+            .add(sp.attack(STAMPEDE).hit_radius)
+            .add(t::body_radius());
+        if along.add(reach).raw() >= len.raw() || half(pack, memo::CLOCKS, 0) == 0 {
             let body = &mut w.critters[i];
             body.state = is::RECOVERY;
             body.timer = sp.attack(STAMPEDE).recovery.max(1);
@@ -824,10 +830,11 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
             }
         }
         across = across.clamp(room.neg(), room);
+        let mut blocked: Option<Fx> = None;
         for (min, max) in blocks[..n].iter().flatten() {
             let probe = rules_point(at, dir, along, across);
             if mind::in_lee(at, dir, *min, *max, probe, keep) {
-                let (_, _, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
+                let (lo_a, _, lo_c, hi_c) = mind::shadow(at, dir, *min, *max);
                 let left = hi_c.add(keep).add(crate::arena::SKIN);
                 let right = lo_c.sub(keep).sub(crate::arena::SKIN);
                 // The nearer side that is still in the lane; either, if
@@ -840,13 +847,22 @@ fn stampede(w: &mut World, ground: &Terrain, pack: &mut Pack) {
                     (true, true) => left,
                     (true, false) => left,
                     (false, true) => right,
-                    (false, false) if nearer_right => right,
-                    (false, false) => left,
+                    // Neither side of it is in the lane: it fills the lane
+                    // here, and the run ends at its face.
+                    (false, false) => {
+                        blocked = Some(lo_a.sub(keep).sub(half_l));
+                        across
+                    }
                 };
             }
         }
         let (along_now, across_now) = lane_frame(at, dir, body.pos);
-        let _ = along_now;
+        if let Some(stop) = blocked {
+            let back = stop.min(along_now).sub(along_now);
+            body.pos = body.pos.add(dir.scale(back));
+            body.state = is::RECOVERY;
+            body.timer = sp.attack(STAMPEDE).recovery.max(1);
+        }
         let shift = across.sub(across_now);
         if shift.raw() != 0 {
             body.pos = body.pos.add(side.scale(shift));

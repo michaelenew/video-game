@@ -72,9 +72,8 @@ const SWING_GAP: u32 = 8;
 const SPARE: u32 = 20;
 /// It walks this long after getting up (§9 step 7).
 const WALK_AFTER: u32 = 24;
-/// A recovery with fewer frames than this left past the reaction is not
-/// worth starting a swing into.
-const OPEN_FOR: usize = 14;
+/// Nearer than this, a hook is dodged through toward the flank.
+const HOOK_THROUGH: Fx = Fx::ratio(32, 10);
 /// A hook seen winding up this near, in front: dodge it.
 const HOOK_NEAR: Fx = Fx::from_raw(5 << 16);
 /// A post nearer the bull than this, or a way there passing nearer, costs.
@@ -218,10 +217,10 @@ fn rocks(w: &World) -> Vec<Rock> {
     // them first.
     let b = ground.bounds;
     for s in ground.arena.solids() {
-        let edge = s.min.x.raw() <= b.lo_x.raw()
-            || s.max.x.raw() >= b.hi_x.raw()
-            || s.min.z.raw() <= b.lo_z.raw()
-            || s.max.z.raw() >= b.hi_z.raw();
+        let edge = s.max.x.raw() <= b.lo_x.raw()
+            || s.min.x.raw() >= b.hi_x.raw()
+            || s.max.z.raw() <= b.lo_z.raw()
+            || s.min.z.raw() >= b.hi_z.raw();
         if !edge && s.max.y.raw() > Fx::ONE.raw() {
             out.push(Rock::Box(s.min, s.max, BANK_COST));
         }
@@ -462,7 +461,10 @@ impl Plan for Hornback {
                 .get_or_insert(w.frame.saturating_sub(REACTION as u32));
             self.stunned_at = Some(from);
             let stun = h::knob(h::Knob::StunFrames).max(0) as u32;
-            if w.frame < from + stun.saturating_sub(SPARE + REACTION as u32) {
+            // Its last swing ends with `SPARE` frames to go: it knows how long
+            // its own swing is.
+            let swing = (poke.startup + poke.active + poke.recovery) as u32;
+            if w.frame + swing < from + stun.saturating_sub(SPARE) {
                 self.intent = HEAD;
                 // Where it was stood when the bull met the rock: the post it
                 // will not use again while the bull remembers.
@@ -605,13 +607,27 @@ impl Plan for Hornback {
             {
                 self.intent = DODGE;
                 self.dodge_left = sim::tuning::dodge_frames() as u32 + 8;
-                let away = if bull.right {
-                    side.scale(Fx::ONE.neg())
+                // Close in, through it toward the flank its head is not
+                // cocked to; at the edge of its reach, out sideways on the
+                // side it already stands, which leaves the volume soonest.
+                let way = if gap.raw() < HOOK_THROUGH.raw() {
+                    let away = if bull.right {
+                        side.scale(Fx::ONE.neg())
+                    } else {
+                        side
+                    };
+                    away.add(away)
+                        .add(bull.facing.scale(Fx::ONE.neg()))
+                        .normalized()
                 } else {
-                    side
+                    let out = if across.raw() >= 0 {
+                        side
+                    } else {
+                        side.scale(Fx::ONE.neg())
+                    };
+                    out.add(out).add(bull.facing).normalized()
                 };
-                let through = away.add(bull.facing.scale(Fx::ONE.neg())).normalized();
-                return Input::aimed(steer(bull_yaw, through) | Input::SHIFT, bull_aim);
+                return Input::aimed(steer(bull_yaw, way) | Input::SHIFT, bull_aim);
             }
             // The shoulder's lean, at its flank: a swing already in flight
             // meets it; failing one, the dodge, away from the flank it will
@@ -634,7 +650,8 @@ impl Plan for Hornback {
             // visible, and a person who has seen it twice knows roughly where
             // its end is.
             let open = matches!(bull.state, is::RECOVERY | is::FLINCH)
-                && bull.timer as usize > REACTION + OPEN_FOR;
+                && bull.timer as usize
+                    > REACTION + (poke.startup + poke.active + poke.recovery) as usize;
             // Near a bull that can act, the close game is its: back to a
             // post, round its front rather than through it. Near one that
             // cannot, punish.
@@ -650,9 +667,10 @@ impl Plan for Hornback {
                     } else {
                         side.scale(Fx::ONE.neg())
                     };
-                    let way = if gap.raw() >= HOOK_NEAR.raw() {
+                    let front = nose_cos.raw() > Fx::ratio(3, 10).raw();
+                    let way = if gap.raw() >= HOOK_NEAR.raw() && !front {
                         to
-                    } else if nose_cos.raw() > Fx::ratio(3, 10).raw() {
+                    } else if front {
                         out.add(out).add(bull.facing).normalized()
                     } else if rel.flat_len().raw() > 0 {
                         rel.normalized()

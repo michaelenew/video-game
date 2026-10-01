@@ -482,14 +482,15 @@ fn near_cover(look: &Look, at: V3) -> bool {
 }
 
 /// Is a solid the arena's edge -- the slope and thicket a charge pulls up
-/// short of rather than meets (§10, item 3)? Anything reaching outside the
-/// playable bounds.
+/// short of rather than meets (§10, item 3)? One standing outside the
+/// playable bounds. (The bank runs up to the north bound and is not one: a
+/// charge into its face is a stun.)
 pub fn edge(arena: &crate::arena::Terrain, s: &crate::arena::Solid) -> bool {
     let b = &arena.bounds;
-    s.min.x.raw() <= b.lo_x.raw()
-        || s.max.x.raw() >= b.hi_x.raw()
-        || s.min.z.raw() <= b.lo_z.raw()
-        || s.max.z.raw() >= b.hi_z.raw()
+    s.max.x.raw() <= b.lo_x.raw()
+        || s.min.x.raw() >= b.hi_x.raw()
+        || s.max.z.raw() <= b.lo_z.raw()
+        || s.min.z.raw() >= b.hi_z.raw()
 }
 
 impl Mind {
