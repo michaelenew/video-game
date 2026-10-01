@@ -1150,7 +1150,8 @@ impl MonsterField {
         match self {
             // To four seconds: the Mireback's wallow grinds for two and a half.
             MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 240),
-            MonsterField::Cooldown => (0, 600),
+            // The Mantis prays at most once in fifteen seconds.
+            MonsterField::Cooldown => (0, 900),
             MonsterField::Root => (0, 300),
             // The Mantis's lunge crosses nine metres in eight frames.
             MonsterField::Travel | MonsterField::Advance => (0, fx(90, 1)),
