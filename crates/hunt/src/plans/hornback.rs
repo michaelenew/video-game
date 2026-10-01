@@ -605,6 +605,21 @@ impl Plan for Hornback {
                         );
                     }
                 }
+                // The Blood mage spends health on the Black spike while the
+                // window holds one: a stunned bull is a held one, and the
+                // spike is five sweeps' worth.
+                if me.class == Class::BloodMage && self.cooldown == 0 && free {
+                    let spike = sim::moves::get(me.class, sim::moves::blood::BLACK_SPIKE);
+                    let long = (spike.startup + spike.active + spike.recovery) as u32;
+                    let healthy = me.health > me.full_health() / 3;
+                    if healthy && w.frame + long < from + stun.saturating_sub(SPARE) {
+                        self.cooldown = SWING_GAP;
+                        let floor = V3::new(head.x, Fx::ZERO, head.z);
+                        let (_, aim, _) = look_at(floor, floor);
+                        let pitch = sim::aim::look_onto_closely(me.pos, aim, me.aloft, floor);
+                        return Input::looking_at(Input::MECHANIC, aim, pitch);
+                    }
+                }
                 if self.cooldown == 0 && free {
                     self.cooldown = SWING_GAP + self.roll() % 4;
                     let button = if me.class == Class::DualMage {
@@ -1036,6 +1051,14 @@ pub struct Lines {
     cart_by_herd: i32,
     held_short: u32,
     crossing: bool,
+    /// The herd's own rules a frame (`hornback::rules::frame`: the lanes, the
+    /// sweeps, the stampede's steering, the bodies, the ride), timed on a
+    /// copy of the frame before -- and the whole frame the same way.
+    rules_ns: u128,
+    rules_worst: u128,
+    frame_ns: u128,
+    frame_worst: u128,
+    timed: u32,
 }
 
 impl crate::report::Tally for Lines {
@@ -1043,6 +1066,22 @@ impl crate::report::Tally for Lines {
         let (Some(was), Some(now)) = (before.pack, after.pack) else {
             return;
         };
+        // The herd cost (§9): its rules, and the whole frame, on copies.
+        {
+            let mut copy = before.clone();
+            let t = std::time::Instant::now();
+            h::rules::frame(&mut copy);
+            let rules = t.elapsed().as_nanos();
+            let mut copy = before.clone();
+            let t = std::time::Instant::now();
+            copy.advance([sim::Input::default(); MAX_PLAYERS]);
+            let frame = t.elapsed().as_nanos();
+            self.rules_ns += rules;
+            self.rules_worst = self.rules_worst.max(rules);
+            self.frame_ns += frame;
+            self.frame_worst = self.frame_worst.max(frame);
+            self.timed += 1;
+        }
         // The crossing: what struck the cart this frame, and the waves.
         let taken = |w: &World| {
             sim::objective::standing(&w.lore, w.arena())
@@ -1263,6 +1302,18 @@ impl crate::report::Tally for Lines {
                 "plan v2: a ride home",
             ),
         ];
+        let n = self.timed.max(1) as f64;
+        out.push(row(
+            "herd cost",
+            format!(
+                "rules {:.1} / {:.1} us, whole frame {:.1} / {:.1} us",
+                self.rules_ns as f64 / n / 1000.0,
+                self.rules_worst as f64 / 1000.0,
+                self.frame_ns as f64 / n / 1000.0,
+                self.frame_worst as f64 / 1000.0
+            ),
+            "mean / worst a frame, against 520 for a frame",
+        ));
         if self.crossing {
             out.push(row(
                 "crossing",
