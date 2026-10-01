@@ -320,7 +320,16 @@ and say so here.
   walled by the platforms -- a new fight, and new pins. A person's call.
 - **Hazards affect creatures by their position, not their footprint**: a
   burning pool under the toad's middle burns it, one under its flank does not.
-  The Mireback should decide whether that is right for a 12 m animal.
+  The Mireback decided for itself, in its own `frame` hook: it burns by its
+  **footprint**, up to three pools at once (`burn_self_pools`), because a
+  12 m animal whose flank stood in fire and felt nothing read as a bug. The
+  shared rule is unchanged.
+- **Fire spreads after `Spread` frames, not on the first** (the Mireback,
+  2026-10-01): a pool that had just caught lit its neighbours the same frame,
+  so a fuse ran the arena in a second. Spread is measured shape to shape
+  (`Placed::nearest_to`), so a burning strand (the coals) lights what touches
+  its line and not only its ends. `hazard::ignite` lights one hazard by hand
+  (the belch, a backfire).
 - **A slow from the floor lingers one frame** after the feet leave it, because
   it rides the ordinary slow, which counts down at the end of the frame.
 - **Noises are made by diffing** the fighters across the frame; a hit's noise
