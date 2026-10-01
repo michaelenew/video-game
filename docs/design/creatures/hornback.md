@@ -729,15 +729,21 @@ health: a pillar under a bull that stands in it (86), bolts from her post.
 **The Bulwark** takes the hook and the shoulder on his shield now (133 guards)
 and wins one more, twenty seconds sooner. **The Reaver** sends her shadow to
 the bull (137) and is where she was; the herd's bodies take no marks, so she
-never cashes. **Four classes take one unanswerable hit in 24** where none did:
+never cashes. **Four classes took one unanswerable hit in 24** where none did:
 the one traced, the Blood mage's, was the bull's windup begun out of her sight
 as she walked to her post -- a course of the fight the Champion's hunts never
-take. **On the crossing** the Elementalist arrives more often and the Blood mage
+take. **Fixed the same day for every pack** ([critters.md](../critters.md)
+§2, [plans/polish-fights.md](../plans/polish-fights.md)): a windup begun off a
+hunter's screen lands on them only through a marker under them for a
+reaction -- the charge's lane, the bellow's -- so the bull's bite from out of
+sight goes through. Zero since, six classes, alone and in pairs; the wins
+did not move (22 / 20 / 16 / 24 / 22 / 14 of 24). **On the crossing** the Elementalist arrives more often and the Blood mage
 and the Dual mage less: a hunter fighting the bull harder is a hunter further
 from the cart.
 
 **Against the targets.** Zero unanswerable hits and zero hidden commits for every
-class, as first measured (one each for four classes since, above). **At least one charge in three goes into a solid** for every class the
+class, as first measured and again since 2026-10-01 (one each for four
+classes in between, above). **At least one charge in three goes into a solid** for every class the
 plan plays well -- the Champion on the line, the Elementalist (who raises a stone
 into a lane with nothing at its end) at two in three -- and the stun is where
 the fight's damage goes: four fifths of the Champion's. The charge lands under

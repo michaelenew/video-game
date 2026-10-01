@@ -626,7 +626,9 @@ the rim, she climbs onto it, and her punch passes over the warts from the
 crown (one burst in a fourteen-minute hunt, 1058 swings to 48 connecting).
 **The Blood mage** wins 5, the same as before, spiking the pools her Grasps
 leave under it (19 spikes, 21 Grasps in the 24) and losing her red to the
-price; her unanswerable hits rose from one to three. **The Reaver** wins
+price; her unanswerable hits rose from one to three -- every one of them, and
+the Champion's one and the Reaver's two, the old measure of a flop from fresh
+tar (below): with it fixed, zero for every class. **The Reaver** wins
 22 in 89 s, her shadow at the flank (95 sent, 37 lotuses). **The
 Elementalist** is where she was: every hunt, in 41 s.
 

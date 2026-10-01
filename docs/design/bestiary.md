@@ -632,7 +632,59 @@ before this change as after it.
   were.
 - **The Champion** did not move on any creature.
 
+### The fire pillar, looked into
+
+*2026-10-01, [plans/polish-fights.md](plans/polish-fights.md).* Asked of the
+five creatures she beats 24 of 24: does any of them fail to answer the pillar
+the way its own document says it should -- walk into it, ignore the burn, or
+have no move for it? Measured over eight Elementalist hunts each, every frame
+a pillar burned within reach of a creature.
+
+**How the pillar lands.** Almost always on a creature already flinching from
+her bolts: of the pillars that came up under the Mantis, the Pair, the
+Veilstalker, two thirds or more found it in a flinch on their first frame. So
+the first part of the burn is a window she earned, as the class layer means
+it to be.
+
+**What it does once it can move** is where the creatures differ, and only two
+of the eleven documents give a creature anything to do about fire:
+
+- **The Mireback** flees burning ground next to its tar (§5, `flee`), and
+  does: a pillar under it lights its tar, and it flops away (its pillar
+  frames are a flop's recovery and startup, 51 %, and a topple). Its fight is
+  short because a pillar is a fuse in a floor of tar, which its §7 calls her
+  identity. **As designed.**
+- **The Veilstalker** sees fire and will not walk into it, and twenty frames
+  in fire panic it (§4). A pillar under a flinching animal panics it: it
+  retreats inside the base and is down by the thirtieth frame. §7 already
+  names the lever -- "a slinking animal has walked out of the base by then"
+  assumes it was slinking, not flinched by a bolt -- and leaves it to a person.
+- **The Mantis, the Pair, the Hornback's bull and the Gnawers** have no rule
+  about fire, and stand in it. Once its flinch is over the Mantis is still
+  inside the base 85 % of the pillar's frames (prowling 31 %, its guard up
+  against her bolts 29 %); a cat 57 % (prowling, through its pause between
+  moves); the bull winds up its charge in it. Nothing in their documents says
+  they should leave -- the Mantis's even says the pillar "comes from below the
+  cone and lands" -- so **none of this is a creature failing its design**,
+  and nothing was changed.
+
+**So the pillar is simply strong against anything that does not know fire.**
+The creature-side answer would be one rule for the cast -- *a creature that
+can move does not stand in fire it has seen*, as the Veilstalker's already
+does -- which would cut a pillar on a flinched body to the flinch and the
+frames it takes to walk out; the class-side one is the pillar's burn on a
+creature. Either is a decision about the Elementalist across every fight, and
+it is the owner's.
+
 ### Unanswerable
+
+**Zero for every creature since 2026-10-01** ([plans/polish-fights.md](plans/polish-fights.md)),
+six classes, solo and coop: the Hornback's four were its bull's windups begun
+off the hunter's screen, which every pack now lands only through a marker
+under you for a reaction ([critters.md](critters.md) §2); the Mireback's were
+its own measure counting tar that was not laid after the commit -- the crash's
+own ring, or old tar a hunter stepped or floated into -- and it asks for tar
+laid after the commit now. What follows is how it stood before.
 
 Zero, as before, for every class on the Ridgeback, the Gnawers, the Sandmaw,
 the Pair, the Veilstalker, the Mantis and the Galewing. **The Mireback's

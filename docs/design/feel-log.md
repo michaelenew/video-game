@@ -7148,3 +7148,29 @@ ends at its first standing move or its Sound long before either.
 **Verdict** kept. For a person: whether a Pair at a quarter walk-up per cat
 feels like a fight with openings, and whether the Sandmaw's stand reads as
 the window §4 promises or as the worm's most dangerous moment.
+
+### 2026-10-01 — Every class played: the last unanswerable hits, and the fire pillar
+
+**Changed** Nothing new in the creatures: the merge of the class-playing
+hunter (`hunt::class`) brought the Hornback's first unanswerable hits (one in
+24 for the Bulwark, the Reaver, the Blood mage and the Dual mage) and the
+Mireback's 1/0/2/0/3/0 by class. Re-measured on this branch, both are zero for
+every class, solo and in pairs: the bull's were windups begun off the
+hunter's screen, which the pack's referee already sends through her; the
+Mireback's were every one its old fresh-tar measure (with only that measure
+put back, they return: Blood mage 3, Reaver 2, Champion 1). The Gnawers, the
+Broodmother and the Siegeshell, every class, solo and coop: zero.
+
+**Found** Asked whether any creature fails its own design against the
+Elementalist's fire pillar (she wins 24 of 24 against five): none does. The
+pillar lands on a creature her bolts have already flinched; once free, the
+Mireback flees the burning tar it lights, as its §5 says, and the Veilstalker
+panics as its §4 says (a flinched animal cannot walk out of the base as a
+slinking one would, which its §7 names as the lever). The Mantis, the Pair,
+the bull and the Gnawers have no rule about fire and stand in it -- the
+Mantis 85 % of a pillar's frames, a cat 57 % -- and nothing in their
+documents says they should not. Recorded in [bestiary.md](bestiary.md) §8 as
+the owner's call: one rule for the cast (a creature that can move does not
+stand in fire it has seen), or the pillar's burn on a creature.
+
+**Verdict** kept; nothing changed for the pillar.
