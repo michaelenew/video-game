@@ -140,6 +140,28 @@ pub mod flag {
     pub const DETOUR_LEFT: u8 = 1 << 7;
 }
 
+/// **The critter renderer's stock poses**, by number. A critter has no
+/// skeleton and no baked clips; for a species that is only a pack, a move's
+/// `MoveDecl::clip` names which of these its windup and its hit are drawn
+/// with instead (`game/src/critters.rs`). Presentation only: nothing in the
+/// simulation reads them.
+pub mod pose {
+    /// Belly down, rump up, a wiggle; then a lunge. Every move's default.
+    pub const CROUCH: usize = 0;
+    /// Low and quick at the heels: the legs going, the body flat.
+    pub const SCUTTLE: usize = 1;
+    /// Gathered deep on the haunches; then up and through the air.
+    pub const LEAP: usize = 2;
+    /// Up on the hind legs, head back: a howl.
+    pub const REAR: usize = 3;
+    /// Low and wide, the head turned sideways: a bite at the legs.
+    pub const MAUL: usize = 4;
+    /// Nose down at the foot of something, forepaws going.
+    pub const DIG: usize = 5;
+    /// Forepaws up on an edge, hauling.
+    pub const CLIMB: usize = 6;
+}
+
 /// Not in a ring slot.
 pub const NO_SLOT: u8 = u8::MAX;
 
@@ -275,13 +297,21 @@ impl Critter {
     /// read. See the module docs for why it is a box.
     pub fn body(&self, sp: &Species) -> Body {
         let half = Fx::ratio(1, 2);
-        Body {
+        let plain = Body {
             foot: self.pos,
             cos: cos_turns(self.yaw_turns()),
             sin: sin_turns(self.yaw_turns()),
             half_len: stat_fx(sp, self.kind, CritterField::Length).mul(half),
             half_wid: stat_fx(sp, self.kind, CritterField::Width).mul(half),
             height: stat_fx(sp, self.kind, CritterField::Height),
+        };
+        // A species may change the shape with what the body is doing -- the
+        // Gnawers' Big One rears to a fighter's height to howl -- and since
+        // this is the one description, the change is true of the hit test,
+        // the aiming ray, the overlay and the renderer at once.
+        match sp.pack {
+            Some(decl) => decl.mind.body(self, plain),
+            None => plain,
         }
     }
 
@@ -561,15 +591,34 @@ pub struct CritterMove {
     /// inferred, as a fighter's line of effect is: the gnawers' bite does, its
     /// pile-on does not.
     pub token: bool,
+    /// **A death does not stop its windup.** Every other windup is dropped
+    /// when the pack takes fright (`pack::killed`); a frenzy is not. The
+    /// Gnawers' pile-on: a sweep that kills one leaper in the heap does not
+    /// call the rest off, which is what makes the heap a sweep target.
+    pub committed: bool,
 }
 
 impl CritterMove {
     pub const fn token(kind: u8) -> CritterMove {
-        CritterMove { kind, token: true }
+        CritterMove {
+            kind,
+            token: true,
+            committed: false,
+        }
     }
 
     pub const fn free(kind: u8) -> CritterMove {
-        CritterMove { kind, token: false }
+        CritterMove {
+            kind,
+            token: false,
+            committed: false,
+        }
+    }
+
+    /// The same move, kept through a fright. See [`CritterMove::committed`].
+    pub const fn committed(mut self) -> CritterMove {
+        self.committed = true;
+        self
     }
 }
 

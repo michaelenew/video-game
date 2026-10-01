@@ -6452,3 +6452,51 @@ hashed while it is zero, and both pins are unchanged). For a person: is temper
 III fair or only long (one win in forty for the scripted hunter); does the
 desperation share read in play; and world.md §8's open question, whether "the
 same creature, cleverer" is the ceiling wanted.
+
+### 2026-10-01 — The Gnawers: the first pack creature, tuned by harness
+
+**Changed** A creature: six knee-high gnawers and the Big One in the Commons
+(`--hunt gnawers`), on the critter machinery, with a hunter plan and report
+lines of its own ([creatures/gnawers.md](creatures/gnawers.md) §13). Against
+the document's first guesses, after the passes below: bodies 160 and 500
+(from 120 and 360); the dart's crouch 28 frames (from 24), from 2.1 m and only
+from inside ±37° of the fighter's facing; tokens handed out before a bite, the
+body closing to its windup; the hamstring launched from 2.5 m behind; the
+pile-on locked to one spot and kept through a death in the heap; the maul
+needing no token; the token rest 60 frames (from 30). Generic: a critter's
+lunge at its speed from the first frame, `aim::in_view`'s line of sight from
+the character's chest.
+
+**Why** The harness, pass by pass. A ring at five metres with a dart that
+reached four never bit a fighter who stood still. A crouch at 2.8 m was out
+of a sword's reach, and one that slid the last metre in on its momentum was
+not where the hunter saw it. At 24 frames the Champion stopped none of a
+hunt's crouches: its sword is at knee height on its second active frame. Half
+of all bites began off the hunter's screen -- some from the flanks, most
+because `in_view` looked through the wall at the hunter's back. A pile-on was
+either always dodged (the hunter dodged on the slow, before it was called) or
+always landed (the leapers followed the dodge); one locked lane made the dodge
+at the crouches the answer. The Big One scattered toward the hunter and
+howled at its feet, and the leader-dead rout ended hunts at twenty seconds. A
+routed pack did not fight, so a hunter who followed it home won for free: a
+rout cornered at the den turns now. A hunter jumping a maul at the south wall
+went over it: a hedge rings the meadow.
+
+**Found** 24 hunts per class: Champion, Reaver, Elementalist, Blood mage and
+Bulwark win all of them in 33 to 57 s, with 31 to 87 per cent of their health
+left; zero unanswerable hits and zero hidden commits for every class; the
+windows 26–29 / 37–49 / 9–13 / 15–24 % against 30/25/20/25. The Dual mage
+wins 2 of 24, as against the Ridgeback, because the scripted hunter does not
+play her bars. Coop (nine and the Big One, three tokens) is won in 22 s.
+
+**Reverted** Gnawers at 200 and the Big One at 600: the fights did not get
+longer (they end at the Big One) and the bolt classes lost. Three tokens with
+a ninety-frame rest: the windows moved toward §9's, no hunt got harder, and
+open question 2 is a person's. Choosing the Dual mage's hand by range (her
+dark auto runs through a gnawer inside two metres): she burned to death; the
+lower bar decides. The crouch at 2.8 m. A pile-on whose leapers tracked.
+
+**Verdict** built; short and easy for the scripted hunter, which reads two
+raised tails better than a person will. The first questions for a person are
+in gnawers.md §13: is it too easy, is 28 frames too readable, does the tail
+coming in read, and is a cornered rout fighting at the den right.

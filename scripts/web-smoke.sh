@@ -4,7 +4,8 @@
 #
 #   ./scripts/web-smoke.sh [screenshot.png]
 #
-# WEB_REBUILD=1 rebuilds even when target/web exists. The build needs
+# WEB_REBUILD=1 rebuilds even when target/web exists. WEB_QUERY=hunt=gnawers
+# loads the page asking for something, so a creature can be checked reachable. The build needs
 # `./scripts/setup-tools.sh web` and the browser needs `... browser`; both are
 # idempotent and a session that knows it will end here starts them first, in
 # the background (see CLAUDE.md, "Tools that are not on every machine").
@@ -23,4 +24,4 @@ SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true' EXIT
 sleep 1
 
-node crates/web/smoke.mjs "http://127.0.0.1:$PORT/" "$OUT"
+node crates/web/smoke.mjs "http://127.0.0.1:$PORT/${WEB_QUERY:+?$WEB_QUERY}" "$OUT"

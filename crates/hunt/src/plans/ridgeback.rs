@@ -890,4 +890,5 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
         ride_for: "long enough to reach the ridge?",
         toppled_pool: "off the pool under a Ridgeback on its side",
     },
+    tally: None,
 };

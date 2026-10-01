@@ -395,11 +395,18 @@ pillar, the dev sentinel not through smoke.
 **Is that point on this fighter's screen?** `aim::in_view(who, look, at,
 half_angle, scene)` -- **A5**, asked by the [Veilstalker](creatures/veilstalker.md)
 so that it never reveals itself off-screen. Inside a cone of `half_angle` round
-the look, from the eye, and `sight_clear` from the eye to the point. Built from
-the eye and the look, so it lives beside `pointing_at`; `aim::in_view_of` takes
-an eye and a look direction already known -- the look a creature glanced some
-frames ago. A new question rather than a changed answer: nothing that aimed
-before aims differently.
+the look, from the eye, and `sight_clear` **from the character's chest** to the
+point. Built from the eye and the look, so it lives beside `pointing_at`;
+`aim::in_view_of` takes an eye and a look direction already known -- the look a
+creature glanced some frames ago. A new question rather than a changed answer:
+nothing that aimed before aims differently.
+
+*Changed 2026-10-01, by the Gnawers' report.* The line of sight ran from the
+eye, which this module places nine metres behind and above a standing fighter
+-- through any wall at their back. Every bite on a hunter backed against a
+wall counted as begun off screen. The renderer's camera is pulled in off that
+wall, so what can hide a point is what stands between the character and it:
+the cone stays the eye's, the line is the character's.
 
 ### The eye under a ceiling (2026-10-01)
 

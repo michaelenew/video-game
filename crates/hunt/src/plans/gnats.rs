@@ -143,4 +143,5 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
         ride_for: "nothing to ride",
         toppled_pool: "off a pool under a fallen body",
     },
+    tally: None,
 };

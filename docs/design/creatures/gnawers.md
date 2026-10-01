@@ -1,10 +1,22 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 1
 ---
 
 # Gnawers — a pack that takes turns
+
+> **Built 2026-10-01.** `--hunt gnawers` (`?hunt=gnawers`), in the Commons.
+> The species is `crates/sim/src/species/gnawers/` -- its table, its mind
+> (`mind.rs`) and its rules over the world (`rules.rs`) -- on the critter
+> machinery of [critters.md](../critters.md); its hunter is
+> `crates/hunt/src/plans/gnawers.rs`; its rules are pinned in
+> `crates/sim/tests/gnawers.rs`. What the harness says, what the build
+> changed in this document, and what only a person can answer are §13. The
+> numbers in the tables below are the ones built; where the build moved one,
+> §13 says from what and why. The plan it was built by is
+> [plans/gnawers.md](../plans/gnawers.md).
 
 Six knee-high biters and the one they follow. The first fight that is not one
 body, the first that needs the small-body form and the pack brain from
@@ -20,8 +32,9 @@ vocabulary are the Ridgeback's; read [monsters.md](../monsters.md) first.
 **Nothing in the pack can hurt you much; the pack can.**
 
 A gnawer is a badger-shaped rat-dog **0.6 m at the crown and 1.2 m nose to
-tail**, with 120 health. The pack is **six of them and the Big One**, the
-leader: 1.1 m at the shoulder, 2 m long, 360 health. (Five to seven is the
+tail**, with 160 health (120 proposed; §13). The pack is **six of them and the
+Big One**, the leader: 1.1 m at the shoulder, 2 m long, 500 health (360
+proposed). (Five to seven is the
 range a tempered hunt or a region varies; six is the number everything below
 is tuned for.)
 
@@ -151,16 +164,17 @@ report. Every tell is at or above twenty frames.
 
 | Move | Who, range | What it is | Tell (f) | The answer |
 | --- | --- | --- | --- | --- |
-| **Dart-bite** | any gnawer with a token, 4 m | Belly to the floor, rump up, a wiggle; then a lunge along a locked line. 24 / 12 / 30, **45** | 24 | **Hit it in the crouch.** Any hit knocks it out of the lunge |
-| **Hamstring** | a gnawer in your rear third, 2.5 m | A low scuttle at your heels and a latch on the calf. 20 / 6 / 24, **25** and a **40% slow for 120 f**; latched, 5 every 10 f until shaken | 20, behind you | **Keep your back to something solid.** Caught, any dodge sheds the latch |
-| **Pile-on** | every gnawer within 8 m of a slowed or staggered fighter | Tokens suspended. The ring tightens to 3 m and they leap in sequence, one every 4 f. 30(+4 each) / 8 / 50, **40** each, and three landed is a knockdown | 30 | **Dodge out of the ring.** The slow does not slow a dodge |
-| **Scatter** | every gnawer within 8 m of one that dies | Not an attack. A yelp, and they flinch 8 m away for **60 f**; the Big One only 3 m | — | **Take the window.** Go for the leader while the ring is open |
-| **Gnaw** | two or more gnawers, at a stone you stand on | They dig at its foot. 3 diggers bring it down in 120 f, 2 in 180. The stone falls, you land among them staggered for 40 f | 120+ | **Come down on the diggers.** They have their backs to you |
-| **Maul** | the Big One, 3 m | A heavier lunge at the legs; the volume stops at 1.0 m. 30 / 5 / 60, **110** | 30 | **Jump it.** Every class's hop clears a metre |
-| **Howl** | the Big One, from behind the ring | Rears to 1.8 m and howls. Rally: **three tokens for 300 f**, and the scatter ends. 40 / 1 / 20; lockout 900 f | 40 | **Hit the leader.** Anything that lands cancels it and flinches it 30 f |
+| **Dart-bite** | any gnawer with a token, 5 m out | The pack hands it a token: tail up, it comes in -- round into the front arc if it was at a flank -- and at 2.1 m it goes belly to the floor, rump up, a wiggle; then a lunge along a locked line. 28 / 12 / 30, **45** | 28 | **Hit it in the crouch.** Any hit knocks it out of the lunge |
+| **Hamstring** | a gnawer in your rear third | Handed a token from behind: it comes in to 2.5 m behind your heels, then a low scuttle and a latch on the calf. 20 / 6 / 24, **25** and a **40% slow for 120 f**; latched, 5 every 10 f until shaken. Turn to face it before it begins and it gives up | 20, behind you | **Keep your back to something solid.** Caught, any dodge sheds the latch |
+| **Pile-on** | every gnawer within 8 m of a slowed or staggered fighter | Tokens suspended. Called on the glance, every leaper locks to that one spot; the ring tightens to 2.5 m and they leap in sequence, one every 4 f. 30(+4 each) / 8 / 50, **40** each, and three landed is a knockdown. A death in the heap does not call it off | 30 | **Dodge out of the ring** when the crouches come. The slow does not slow a dodge |
+| **Scatter** | every gnawer within 8 m of one that dies | Not an attack. A yelp, and they flinch 8 m away for **60 f**; the Big One steps back only 3 m over it | — | **Take the window.** Go for the leader while the ring is open |
+| **Gnaw** | up to three gnawers, at a stone you stand on | They dig at its foot. 3 diggers bring it down in 120 f, 2 in 180. The stone falls, you land among them staggered for 40 f | 20, then 120+ | **Come down on the diggers.** They have their backs to you |
+| **Scramble** | a gnawer with a token, beside a platform you stand on | 30 f with its forepaws on the edge, then up | 30 | **Hit it while it clings.** Any hit knocks it off |
+| **Maul** | the Big One, 2.2 m, from in front | A heavier lunge at the legs; the volume stops at 1.0 m. 30 / 5 / 60, **110**. No token: it is the Big One's answer to somebody who has come to it | 30 | **Jump it.** Every class's hop clears a metre |
+| **Howl** | the Big One, from behind the ring (5–13 m) | Rears to 1.8 m and howls. Rally: **three tokens for 300 f**, and the scatter ends. 40 / 1 / 20; lockout 900 f | 40 | **Hit the leader.** Anything that lands cancels it and flinches it 30 f |
 
-Seven rows, seven answers: hit first, cover your back, dodge out, press,
-punish the diggers, jump, and target priority.
+Eight rows, eight answers: hit first, cover your back, dodge out, press,
+punish the diggers, knock off the climber, jump, and target priority.
 
 **Why the dart-bite's tell is 24 and not the seed's 18.** The answer is a hit
 during the crouch, and the crouch has to be reacted to and then swung into:
@@ -435,7 +449,9 @@ allowed to work. So coop does not add tokens per fighter; it adds bodies.
    drift more than 60° from it.
 3. Swing at any gnawer that raises its tail within reach, before it crouches if
    the class is slow, in the crouch if it is fast.
-4. Slowed: dodge at once, away from the centroid.
+4. Slowed: dodge out of the ring, away from the centroid -- when the pile-on's
+   crouches come, or at once if one is on your heels (§13: thrown at the slow
+   itself, the dodge is spent before the pile-on is called).
 5. A gnawer dies: dash, Rush, blink or cross to the Big One and unload for the
    rest of the scatter; then go back to a wall.
 6. Howl: hit the Big One with whatever reaches it.
@@ -586,10 +602,23 @@ that answer it: the bank itself, a fallen trunk 1.5 m high they can scramble,
 and two standing boulders. From the trail you see the pack's idle life: gnawers
 worrying at a carcass, the Big One on the bank watching.
 
-**Trophy:** the Big One's skull, as [world.md](../world.md) already lists.
+*Built 2026-10-01* (`crates/sim/src/arena/gnawers.rs`, dressed in
+`crates/game/src/arenas/gnawers.rs`): 36 by 30 metres of grass; the bank 3 m
+high along the north, the den a notch in its middle three metres wide; low
+walls round the other three sides and a six-metre hedge behind them and the
+bank; the trunk (1.5 m, scrambled) west of the middle, two boulders (3.5 m)
+east; the carcass and the den's dark drawn as dressing. The hunters walk in
+from the south, the pack musters at the den. The Big One on the bank and the
+pack at the carcass before the hunt (the idle life) is not built: the pack
+hunts from the first frame.
 
-**Sidegrade family: crowds — hits that spread.** One, for the class it is most
-obvious on:
+**Trophy:** the Big One's skull, as [world.md](../world.md) already lists.
+Recorded on a win like any creature's (`World::hunt_won` names the pack), and
+its tempers are the pack's glance, lead and cadence
+(`a_won_hunt_is_the_gnawers_trophy_at_its_temper`).
+
+**Sidegrade family: crowds — hits that spread.** *Parked with every sidegrade
+(world.md §0); not built.* One, for the class it is most obvious on:
 
 - **Blood mage, auto modifier — "Splash".** A Reaping sweep that lands on two
   or more bodies spills **one** pool between them, pooling all the essence,
@@ -620,6 +649,134 @@ obvious on:
    through a gnawer rather than a pass-through is the alternative.
 7. **Corpses.** They stay until their slot is needed. Whether the count of
    bodies on the floor is the pack count a person reads, or clutter, is visual.
+
+## 13 · Where it landed
+
+Numbers from `cargo run -p hunt --bin fight -- --species gnawers --class <c>
+--repeats 24`, after the passes in [feel-log.md](../feel-log.md) of
+2026-10-01. The scripted hunter plays §9 with a fifteen-frame reaction; the
+report's pack lines are [critters.md](../critters.md) §5's and its own are
+§9's (`plans::Card::tally`).
+
+```text
+                won    mean    health left   threat / poke / way in / walk up   unanswerable
+  Champion     24/24    35 s    812 of 1000      27 / 43 / 13 / 17 %                  0
+  Reaver       24/24    33 s    627 of  750      27 / 43 / 11 / 19 %                  0
+  Elementalist 24/24    45 s    585 of 1000      26 / 49 /  9 / 15 %                  0
+  Blood mage   24/24    57 s    308 of 1000      29 / 37 /  9 / 24 %                  0
+  Bulwark      24/24    35 s   1084 of 1250      26 / 45 / 11 / 18 %                  0
+  Dual mage     2/24   111 s     24 of 1000      24 / 54 / 12 / 10 %                  0
+
+  coop, two Champions 12/12 in 22 s; two Bulwarks 12/12 in 23 s
+  temper 3, Champion  12/12 in 33 s, 755 left, threatening 39 %
+
+  landed / thrown, 24 Champion hunts
+    Dart-bite 47/275   Hamstring 15/29   Pile-on 5/29   Maul 15/198   Howl 43
+    (Blood mage: Dart-bite 41/525, Hamstring 43/65, Pile-on 43/132, Maul 97/373)
+```
+
+**Against the targets.** Zero unanswerable hits of both kinds, and zero hidden
+commits, for every class. The windows are near what §9 asks (30/25/20/25):
+threatening on the mark, poke high and the two long windows short, because a
+free token reads as a poke's window. Won nine in ten or better for five
+classes. **Short and easy**: 33 to 57 seconds against one to two minutes, and
+the Champion and the Bulwark keep four fifths of their health against a third
+to a half. The scripted hunter is good at the one thing the fight asks --
+it sees a crouch fifteen frames late and has a six-frame answer in reach --
+and a person reading two raised tails and a Big One at once will be slower;
+whether the fight is too easy for a person is the first question below.
+
+**What the harness caught**, in the order it was found:
+
+- **A ring at five metres bites nobody.** The generic pack throws a token move
+  at its range from where a body stands; a dart's reach was under the ring's
+  radius, and a fighter who stood still was never bitten. The pack now hands
+  out a token first and the body **closes** to its windup (`mind::close_in`):
+  the tail goes up and it comes in, which is also the warning a slow class
+  answers by swinging before the crouch.
+- **A crouch out of reach is no answer.** Crouching at 2.8 m, outside a
+  sword's reach, the crouch could not be hit; at 2.1 m the Champion's sword
+  reaches it. And it slid the last metre in on its momentum, so the body the
+  hunter saw crouch fifteen frames before was not where its swing went: the
+  crouch stops dead now.
+- **Twenty-four frames was a coin toss.** The tell's arithmetic (§2) is fifteen
+  of reaction and a six-frame sword; the Champion's sword starts high and is at
+  knee height on its *second* active frame, and a person (or the bot) does not
+  press on the first frame they could. At 24 the Champion stopped none of
+  twenty-four crouches in a hunt; at 28 it stops about half (six of fifteen in
+  the default hunt).
+- **A lunge crawled.** A critter's `Advance` was reached through its walking
+  acceleration, so a twelve-frame dart covered a third of its distance and an
+  eight-frame leap almost none (`pack::drive`; every pack's lunge is at speed
+  from its first frame now).
+- **Darts from the side were off the screen.** The report's hidden commits
+  (A5) were half of all bites: the dart is thrown only from the front arc now
+  (`FrontArc`, ±37°), a body at a flank comes round into it to crouch, and a
+  crouch is measured to where the glance saw the fighter rather than its lead
+  (a dodge projects the lead three metres ahead). The maul is front-only too.
+- **`aim::in_view` was blind with your back to a wall**: the eye it places is
+  nine metres behind, through the wall. It asks the cone of the eye and the
+  line of sight of the character now.
+- **A hunter jumping a maul against the south wall went over it** and fought
+  from outside the arena. A six-metre hedge rings the Commons.
+- **A rout was a free win.** Routed gnawers do not fight, so a hunter who
+  followed them to the den killed them there. A rout cornered at the den
+  (`CorneredAt`, 4 m) turns and fights; one watched from further off stays
+  out, as §4 says.
+- **The pile-on was always dodged and never landed**, and then always landed.
+  It leaps at one spot now -- where the glance put the fighter when it was
+  called (`mind::pile_on`) -- so the answer is a dodge when the crouches come,
+  and the heap lands where you were. The hunter's plan dodges then (§9 step 4).
+  A death in the heap no longer calls it off (`CritterMove::committed`): that
+  is what makes the heap a sweep target.
+- **The Big One walked into the hunter and died**: it scattered *toward* the
+  fighter and howled at their feet. It steps back three metres over a scatter
+  now, howls only from behind the ring, and comes in only for somebody set up
+  or when the pack is too few to hide behind.
+- **The leader-dead rout ended most hunts at twenty seconds**, so the bodies
+  are tougher than proposed (160 and 500); the token rest is 60 frames, so the
+  walk-up window exists.
+
+**Changed from this document while building**, beyond the numbers: the dart
+and the hamstring are handed out by the pack and close in before their
+windups (above); the scramble is a move with a token (at most two cling at
+once); the maul needs no token and is thrown from in front; the den's mouth is
+a notch open to the sky (a lintel hid the fight there from the camera); a rout
+cornered at the den turns. Nothing in `aim.rs` changed for this creature but
+`in_view`; §1a is what the foundation built.
+
+**What the scripted hunter does not exercise.** It never stands on a stone or a
+platform, so the gnaw and the scramble are pinned by tests
+(`a_stone_you_stand_on_falls_to_three_diggers`,
+`a_gnawer_scrambles_up_to_a_fighter_on_the_trunk_and_a_hit_knocks_it_off`)
+and not by the report. It rarely reaches the Big One in a scatter (windows used
+0 of 3 in a typical hunt) and never in a howl, so the stumble -- the big window
+-- is pinned by `a_burst_past_its_strain_knocks_the_big_one_down` and is
+otherwise unmeasured. It does not use the Champion's Rush, the Reaver's
+shadow crossing or the Blood mage's blink, which are what §4 says reach the
+leader in a window. **It does not play the Dual mage's bars** -- it loses the
+Ridgeback with her too -- so her two wins in twenty-four say nothing about the
+fight.
+
+### Still open -- for a person
+
+- **Is it too easy?** The scripted hunter keeps most of its health. The
+  levers, cheapest first: `FrontArc` (wider means more darts, and more of them
+  from the edge of the screen), the token count (open question 2: three with a
+  ninety-frame rest was tried and moved the windows toward §9's but made no
+  hunt harder), and the crouch's 28 frames.
+- **Is 28 frames too readable for a pack?** (Question 5.) It was 24 and the
+  answer was a coin toss for the class the document wrote it for.
+- **Does the tail coming in read?** The dart now has a visible approach before
+  its crouch. That is a warning §2 did not have.
+- **The rout cornered at the den** is a decision the build made; a person
+  should say whether being fought at the mouth reads as cornered animals or as
+  the rout not working.
+- **The hedge** makes the Commons a box from some angles; arenas.md says tall
+  walls read badly. Six metres is what nobody hops.
+- **The Dual mage** is unmeasured; her dark auto also runs through a gnawer
+  inside two metres (`critcheck`), the lunge-through question critters.md §7
+  leaves to a person.
 
 *Changed from the seed:* the dart-bite's tell is 24 f rather than 18 (so it is
 answerable on sight); the pile-on leaps in sequence rather than at once (so the

@@ -70,7 +70,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --hunt [creature]",
-                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature. --hunt gnats is the dev pack: six small bodies and a queen, the critter machinery with nothing of its own. --hunt sentinel is the dev creature for the floor, the senses and the defended things: one of each hazard on the floor, a cone it sees in, a ring of noises it hears (F1 draws them), and in --arena range a gate and a cart.",
+                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature. --hunt gnawers is the first pack creature: six knee-high biters and the Big One, in the Commons. --hunt gnats is the dev pack: six small bodies and a queen, the critter machinery with nothing of its own. --hunt sentinel is the dev creature for the floor, the senses and the defended things: one of each hazard on the floor, a cone it sees in, a ring of noises it hears (F1 draws them), and in --arena range a gate and a cart.",
             ),
             e(
                 "cargo run -p game -- --arena <name>",
@@ -706,7 +706,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "SHOT_MOVE=<move>",
-                "Start a hunt with the Ridgeback winding up that move at player one (bite, stomp, sweep, charge, slam, kick, spray), so a capture can look at its floor marker. Pair it with SHOT_FRAME and DEMO=0.",
+                "Start a hunt with the creature winding up that move at player one (the Ridgeback's bite, stomp, sweep, charge, slam, kick, spray), so a capture can look at its floor marker. A pack puts one body of a kind that throws it there instead, and --hunt gnawers with SHOT_MOVE=pile calls a pile-on on a ring of them. Pair it with SHOT_FRAME and DEMO=0.",
             ),
             e("SHOT_PITCH=<radians>", "Start the camera at a known pitch."),
             e("SHOT_YAW=<radians>", "Start the camera at a known bearing."),

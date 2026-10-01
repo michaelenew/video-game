@@ -62,6 +62,15 @@ fn main() {
 
     let mut killed = 0;
     let mut total = 0u32;
+    // Across the runs: the four windows, what the hunters kept, what was
+    // unanswerable, and every move's thrown and landed.
+    let mut windows = [0f32; 4];
+    let mut kept = 0i32;
+    let mut kept_won = 0i32;
+    let mut unanswerable = 0u32;
+    let mut thrown = [0u32; sim::species::MAX_MOVES];
+    let mut landed = [0u32; sim::species::MAX_MOVES];
+    let mut names: Vec<&'static str> = Vec::new();
     for run in 0..repeats.max(1) {
         let report = play_tempered(
             species,
@@ -79,18 +88,38 @@ fn main() {
             }
         } else {
             println!(
-                "  run {run}: {:?} in {:.0}s, {} rides, {} topples, {} unanswerable",
+                "  run {run}: {:?} in {:.0}s, {} rides, {} topples, {} unanswerable, {} health left",
                 report.outcome,
                 report.frames as f32 / 60.0,
                 report.rides,
                 report.topples,
-                report.unanswerable
+                report.unanswerable,
+                report.health_left
             );
         }
         if let Outcome::Killed(f) = report.outcome {
             killed += 1;
             total += f;
+            kept_won += report.health_left;
         }
+        for (t, w) in [
+            hunt::report::Threat::Threatening,
+            hunt::report::Threat::PokeOnly,
+            hunt::report::Threat::Skilled,
+            hunt::report::Threat::WalkUp,
+        ]
+        .iter()
+        .zip(windows.iter_mut())
+        {
+            *w += report.threat_share(*t);
+        }
+        kept += report.health_left;
+        unanswerable += report.unanswerable;
+        for k in 0..report.species.moves.len() {
+            thrown[k] += report.starts[k];
+            landed[k] += report.landed[k];
+        }
+        names = report.species.moves.iter().map(|m| m.name).collect();
     }
     if repeats > 1 {
         println!(
@@ -101,5 +130,28 @@ fn main() {
                 String::new()
             }
         );
+        let n = repeats.max(1) as f32;
+        println!(
+            "  windows: threatening {:.0}%  poke {:.0}%  way in {:.0}%  walk up {:.0}%",
+            windows[0] / n * 100.0,
+            windows[1] / n * 100.0,
+            windows[2] / n * 100.0,
+            windows[3] / n * 100.0
+        );
+        println!(
+            "  health left: {:.0} a hunt, {:.0} a win;  unanswerable: {unanswerable}",
+            kept as f32 / n,
+            if killed > 0 {
+                kept_won as f32 / killed as f32
+            } else {
+                0.0
+            }
+        );
+        let moves: Vec<String> = names
+            .iter()
+            .enumerate()
+            .map(|(k, name)| format!("{name} {}/{}", landed[k], thrown[k]))
+            .collect();
+        println!("  landed/thrown: {}", moves.join(", "));
     }
 }

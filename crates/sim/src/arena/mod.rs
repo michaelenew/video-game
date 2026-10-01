@@ -52,7 +52,7 @@ pub mod proving_ground;
 
 pub mod range;
 
-// pub mod gnawers;
+pub mod gnawers;
 
 // pub mod hornback;
 
@@ -123,7 +123,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::RANGE => Some(&range::ARENA),
 
-        // ArenaId::GNAWERS => Some(&gnawers::ARENA),
+        ArenaId::GNAWERS => Some(&gnawers::ARENA),
 
         // ArenaId::HORNBACK => Some(&hornback::ARENA),
 
