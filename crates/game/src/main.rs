@@ -150,6 +150,7 @@ fn main() {
         .insert_resource(settings::Settings::load())
         .insert_resource(trophies::Trophies::load())
         .init_resource::<InsideOwnHead>()
+        .init_resource::<beast::Boom>()
         .init_resource::<Scripted>()
         .init_resource::<Sparring>()
         .add_plugins(MaterialPlugin::<beast::MarkMaterial>::default())
@@ -548,6 +549,84 @@ fn shot_move(w: &mut World) {
     }
     if species == sim::species::SpeciesId::VEILSTALKER {
         shot_veil_move(w, kind as u8);
+    }
+    if species == sim::species::SpeciesId::SIEGESHELL {
+        shot_siege_move(w, kind as u8);
+    }
+}
+
+/// [`shot_move`] for the Siegeshell, which is forty metres long and throws
+/// half its moves with a leg: a leg move is that leg's foot eight metres in
+/// front of the camera, the body walking at it; the Shed has player one on
+/// its flank; the Plough comes down the valley behind them; the beam is at
+/// the siege line with player one watching the wall.
+fn shot_siege_move(w: &mut World, kind: u8) {
+    use sim::species::siegeshell::{self as ss, fight, gait};
+    use sim::{Fx, V3};
+    let me = w.players[0].pos;
+    let mut stand = None;
+    let Some(beast) = w.monster_mut() else {
+        return;
+    };
+    beast.brain.mirror = false;
+    match kind {
+        ss::FOOTFALL | ss::STAMP | ss::DRAG => {
+            // Coming at the camera, its fore left leg in front of it.
+            beast.yaw = Fx::ratio(1, 2);
+            beast.pos = me;
+            let foot = gait::foot_in_gait(beast, 0);
+            let want = me.add(V3::new(Fx::from_int(8), Fx::ZERO, Fx::ZERO));
+            beast.pos = beast
+                .pos
+                .add(V3::new(want.x.sub(foot.x), Fx::ZERO, want.z.sub(foot.z)));
+            beast.doing = sim::monster::Doing::Prowl;
+            if kind != ss::FOOTFALL {
+                let a = ss::SPECIES.attack(kind);
+                fight::leg::set(
+                    beast,
+                    fight::leg::Channel {
+                        kind: if kind == ss::STAMP {
+                            fight::leg::STAMP
+                        } else {
+                            fight::leg::DRAG
+                        },
+                        leg: 0,
+                        phase: fight::leg::STARTUP,
+                        left: a.startup,
+                        struck: 0,
+                    },
+                );
+                fight::leg::aim_at(beast, me);
+            }
+        }
+        ss::SHED => {
+            // Abreast of player one, them out on its left flank.
+            beast.yaw = Fx::ratio(1, 4);
+            beast.pos = me.add(V3::new(Fx::from_int(22), Fx::ZERO, Fx::ZERO));
+            beast.aim_at(me);
+        }
+        ss::PLOUGH => {
+            // Behind them, coming down the valley the way they look.
+            beast.yaw = Fx::ZERO;
+            beast.pos = me.sub(V3::new(Fx::from_int(30), Fx::ZERO, Fx::ZERO));
+            beast.aim_at(me.add(V3::new(Fx::from_int(20), Fx::ZERO, Fx::ZERO)));
+        }
+        ss::BEAM => {
+            // At the siege line, and player one off its flank, looking at
+            // the wall.
+            beast.yaw = Fx::ZERO;
+            beast.pos = V3::new(Fx::from_int(105), Fx::ZERO, Fx::ZERO);
+            fight::body::set(beast, fight::body::SIEGE, true);
+            stand = Some(V3::new(Fx::from_int(100), Fx::ZERO, Fx::from_int(-18)));
+        }
+        _ => {
+            // The shell's own moves: thirty metres out, side on.
+            beast.yaw = Fx::ratio(1, 4);
+            beast.pos = me.add(V3::new(Fx::from_int(40), Fx::ZERO, Fx::ZERO));
+        }
+    }
+    if let Some(at) = stand {
+        w.players[0].pos = at;
     }
 }
 
@@ -3782,6 +3861,7 @@ fn drive_camera(
     settings: Res<settings::Settings>,
     mut rig: ResMut<Rig>,
     mut inside: ResMut<InsideOwnHead>,
+    mut boom: ResMut<beast::Boom>,
     mut cam: Query<(&mut Transform, &mut Projection), With<MainCamera>>,
 ) {
     if settings.is_changed() {
@@ -3813,6 +3893,15 @@ fn drive_camera(
         },
     );
     inside.0 = framing.hidden;
+    let feet = frame.players[me].pos;
+    *boom = beast::Boom {
+        eye: Vec3::from_array(framing.eye),
+        to: Vec3::new(
+            feet[0],
+            feet[1] + sim::tuning::body_height().to_f32_for_render() * 0.5,
+            feet[2],
+        ),
+    };
     if let Ok((mut tf, mut projection)) = cam.single_mut() {
         tf.translation = Vec3::from_array(framing.eye);
         tf.look_at(Vec3::from_array(framing.look_at), Vec3::Y);

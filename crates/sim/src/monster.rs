@@ -1652,7 +1652,19 @@ impl Monster {
     /// point has hit the weak point. Rewarding the aim rather than the array
     /// order is the only version of this a player could predict.
     pub fn part_struck(&self, centre: V3, radius: Fx, body_height: Fx) -> Option<usize> {
-        let rig = self.rig();
+        self.part_struck_on(&self.rig(), centre, radius, body_height)
+    }
+
+    /// [`Monster::part_struck`] on a rig already posed this frame: a swing
+    /// asked down its length asks it half a dozen times, and posing the body
+    /// for each is most of the cost.
+    pub fn part_struck_on(
+        &self,
+        rig: &Rig,
+        centre: V3,
+        radius: Fx,
+        body_height: Fx,
+    ) -> Option<usize> {
         let sp = self.sp();
         let mut best: Option<(usize, Fx)> = None;
         for index in 0..sp.parts.len() {

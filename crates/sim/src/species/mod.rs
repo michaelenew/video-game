@@ -374,6 +374,12 @@ pub struct FightDecl {
     /// column, six metres of worm leaning out of the sand. `None`, every top
     /// face is a surface whichever way it tilts, as it always was.
     pub steepest: Option<u16>,
+    /// **The drawn camera passes through it**: its parts never pull the arm
+    /// in, and the renderer cuts away a part the arm runs through instead.
+    /// For a body whose legs are towers swinging through the arm on every
+    /// beat (the Siegeshell, §6). Off, it pulls the arm in like a wall, as
+    /// it always did. Nothing in the simulation reads it.
+    pub camera_passes: bool,
     /// Called when it walks into a solid, with the push that got it out: the
     /// Hornback's charge into a rock is a stun.
     pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
@@ -630,6 +636,7 @@ impl FightDecl {
         lands_on_bodies: false,
         rolls_over: false,
         steepest: None,
+        camera_passes: false,
         bumped: None,
         frame: None,
         shown: None,

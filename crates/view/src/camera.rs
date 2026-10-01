@@ -441,9 +441,15 @@ impl CameraRig {
         };
         let mut blockers: [Option<&sim::Monster>; sim::monster::MAX_MONSTERS] =
             [None; sim::monster::MAX_MONSTERS];
+        // And a creature the camera passes through (`FightDecl::camera_passes`)
+        // never is: a leg the size of a tower swinging through the arm on
+        // every beat would yank the view in time with it. It is drawn cut
+        // away instead.
         if !around.aboard {
             for (slot, b) in beasts.iter().enumerate().take(blockers.len()) {
-                blockers[slot] = b.as_ref().filter(|b| !inside_it(b));
+                blockers[slot] = b
+                    .as_ref()
+                    .filter(|b| !b.sp().fight.camera_passes && !inside_it(b));
             }
         }
         let clear = lerp(

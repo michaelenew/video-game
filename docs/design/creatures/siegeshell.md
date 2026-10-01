@@ -552,9 +552,10 @@ falling lands on any mountable top; see [critters.md](../critters.md)), P4 (vent
   proposed: the Bulwark's planted shield, the Blood mage's pools, the Reaver's waiting
   shadow. One mechanism, used five times: a part index and a local position, converted
   to the world through the pose every frame.
-- **Fall damage.** None below 6 m (the Ridgeback's back stays free); 18 per metre above
-  that, measured from the highest point since leaving footing, reset by a wing beat or a
-  blink. The rim is 144, the crown 324. This belongs to every creature, and is P6's.
+- **Fall damage.** As decided for the whole cast ([hazards.md](../hazards.md) §4): free
+  up to 9 m (the Ridgeback's back stays free), 25 a metre past it, measured from the last
+  thing stood on, halved for a slow landing. The rim is 125, the crown 325. This belongs
+  to every creature, and is P6's.
 - **The top-face aim rule** in `aim.rs` (§6), landed on its own.
 - **The objective**: the siege line, the beam's charge, `wall_breaches`.
 

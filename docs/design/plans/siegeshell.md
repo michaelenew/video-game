@@ -6,8 +6,12 @@ implements: ../creatures/siegeshell.md
 
 # Siegeshell — action plan
 
-> **State, 2026-10-01.** Planning done; M1 under way. Branch
-> `claude/creature-siegeshell`, worktree `/home/user/wt/siegeshell`.
+> **State, 2026-10-01.** M1-M5 built and tested (`crates/sim/tests/siegeshell.rs`,
+> 24 tests); the plan and the report lines exist (M7 first pass). Numbers so
+> far: coop 2 Champions 4/8 at ~374 s mean (short of 8-20 min), solo 0/8;
+> 3-4 unanswerable hits across runs not yet investigated. Next: budget
+> scenario, M6 (A3), tuning, docs, web. Branch `claude/creature-siegeshell`,
+> worktree `/home/user/wt/siegeshell`.
 
 The specification is [`../creatures/siegeshell.md`](../creatures/siegeshell.md);
 the recipes are [`../species.md`](../species.md), [`../critters.md`](../critters.md)
@@ -75,13 +79,13 @@ bar: [`../monsters.md`](../monsters.md), contract [`../bestiary.md`](../bestiary
       13 moves, clips, knobs), bootstrap files, registry lines, the Last
       Valley, the walk and the procedural legs, `beastcheck --species
       siegeshell` heights, geometry tests, a screenshot.
-- [ ] **M2 · The beat.** Footfall rings and pads from the gait, the marks,
+- [x] **M2 · The beat.** Footfall rings and pads from the gait, the marks,
       the beat tests, a hunt where jumping the beat takes nothing.
-- [ ] **M3 · The legs.** Ankles, breaks, limps, buckles, the stumble and its
+- [x] **M3 · The legs.** Ankles, breaks, limps, buckles, the stumble and its
       stair; Stamp and Drag. Stumble tests; the legs plan breaking a side.
-- [ ] **M4 · The shell.** Vents, gnawers roosting and dropping, Shrug and
+- [x] **M4 · The shell.** Vents, gnawers roosting and dropping, Shrug and
       Shiver, falls. Vent and fall tests; the crown plan reaching an anchor.
-- [ ] **M5 · The crown and the clock.** Anchors, halts, phases, the Opening,
+- [x] **M5 · The crown and the clock.** Anchors, halts, phases, the Opening,
       Shed, Plough, the Siege beam, the wall. A full solo hunt runs to an end.
 - [ ] **M6 · The aim rule (A3).** Top face of a mountable part is a place;
       Ridgeback pins and report before/after; own commit.

@@ -592,6 +592,10 @@ impl Floor {
             items: [None; MAX_HAZARDS],
             species: Some(sp),
         };
+        // A creature's rig, posed once for every hazard it carries: a shell
+        // with half a dozen vents on its plates is one forward pass, not six.
+        let mut rigs: [Option<crate::beast::Rig>; monster::MAX_MONSTERS] =
+            [None; monster::MAX_MONSTERS];
         for (slot, h) in all(lore) {
             let Some(decl) = sp.fight.hazards.get(h.index() as usize) else {
                 continue;
@@ -617,9 +621,10 @@ impl Floor {
                 if part >= beast.sp().parts.len() {
                     continue;
                 }
-                let a = beast.world_of(part, h.centre());
+                let rig = rigs[at].get_or_insert_with(|| beast.rig());
+                let a = rig.part_to_world(part, h.centre());
                 let b = if decl.shape == Shape::Strand {
-                    beast.world_of(part, flat_end)
+                    rig.part_to_world(part, flat_end)
                 } else {
                     a
                 };

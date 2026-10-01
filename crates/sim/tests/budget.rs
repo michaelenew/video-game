@@ -269,7 +269,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 14] {
+fn scenarios() -> [Scenario; 15] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -356,7 +356,85 @@ fn scenarios() -> [Scenario; 14] {
         ("the shrine, guarded", |c| {
             guarded_shrine(World::hunt_of([c; MAX_PLAYERS], SpeciesId::MANTIS))
         }),
+        // The Siegeshell at the siege line: forty-four parts, six legs posed
+        // procedurally, its parasites all down, its vents on the plates, a
+        // stamp on the legs' channel while the beam winds up, and a hunter
+        // on the crown -- every floor and wall query walks its shell.
+        ("the valley, at the wall", |c| {
+            siege_full(World::hunt_of([c; MAX_PLAYERS], SpeciesId::SIEGESHELL))
+        }),
     ]
+}
+
+/// The Siegeshell at the siege line with everything in it: [`scenarios`]'.
+fn siege_full(mut w: World) -> World {
+    use sim::species::siegeshell::{self as ss, fight as f};
+    let idle = [Input::default(); MAX_PLAYERS];
+    w.advance(idle);
+    if let Some(m) = w.monsters[0].as_mut() {
+        // Its head twenty metres short of the wall.
+        m.pos.x = sim::Fx::from_int(105);
+        m.brain.grace = 0;
+        m.doing = sim::monster::Doing::Startup {
+            kind: ss::BEAM,
+            left: ss::SPECIES.attack(ss::BEAM).startup,
+        };
+        f::leg::set(
+            m,
+            f::leg::Channel {
+                kind: f::leg::STAMP,
+                leg: 0,
+                phase: f::leg::STARTUP,
+                left: 60,
+                struck: 0,
+            },
+        );
+    }
+    let crown = w.monsters[0]
+        .as_ref()
+        .map(|m| {
+            let top = m.sp().shape(ss::CROWN_PART).max;
+            m.rig().part_to_world(
+                ss::CROWN_PART,
+                sim::V3::new(sim::Fx::ZERO, top.y, sim::Fx::ZERO),
+            )
+        })
+        .unwrap_or_default();
+    w.players[0].pos = crown;
+    w.advance(idle);
+    let at = w.monsters[0].as_ref().map(|m| m.pos).unwrap_or_default();
+    if let Some(pack) = w.pack.as_mut() {
+        while sim::pack::spawn(pack, &mut w.critters, sim::species::gnawers::GNAWER, at, 0)
+            .is_some()
+        {}
+    }
+    w
+}
+
+/// **The Siegeshell's whole fight in the snapshot, run without the heap**:
+/// its two channels, its anchors and ankles, its vents and its parasites are
+/// cells of the `World`, so a copy is flat, it fits, and a minute of it never
+/// allocates.
+#[test]
+fn the_siegeshell_fight_fits_the_snapshot_and_does_not_allocate() {
+    let script = input_script(FRAMES);
+    for class in ALL_CLASSES {
+        let mut world = siege_full(World::hunt_of([class; MAX_PLAYERS], SpeciesId::SIEGESHELL));
+        assert!(std::mem::size_of_val(&world) <= SNAPSHOT_CAP);
+        let allocations = allocations_during(|| {
+            for inputs in &script {
+                world.advance(*inputs);
+                let copy = world.clone();
+                std::hint::black_box(&copy);
+                std::hint::black_box(world.marks());
+                std::hint::black_box(world.signs());
+            }
+        });
+        assert_eq!(
+            allocations, 0,
+            "{class:?} in the Last Valley went to the heap {allocations} times"
+        );
+    }
 }
 
 /// The Mantis with its guard up, its prayer over.

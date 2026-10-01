@@ -106,7 +106,6 @@ pub struct Siegeshell {
     /// What it was pressing when it jumped: held, with the jump, through the
     /// rise, so a hop up a tread carries on toward it.
     held: Input,
-    rng: u32,
     /// The side it is breaking: `-1` the creature's left, `+1` its right.
     side: i32,
     last: V3,
@@ -127,11 +126,9 @@ impl Siegeshell {
             dodge_left: 0,
             hold_jump: 0,
             held: Input::default(),
-            rng: (0x9E37_79B9
-                ^ (who as u32).wrapping_mul(0x85EB_CA6B)
-                ^ seed.wrapping_mul(0x27D4_EB2F))
-                | 1,
-            side: -1,
+            // The side it breaks first, from the seed: a pair of
+            // hunters starts on whichever, as people would.
+            side: if (seed ^ (seed >> 7)) & 1 == 0 { -1 } else { 1 },
             last: V3::ZERO,
             stuck: 0,
             detour_left: 0,
@@ -142,13 +139,6 @@ impl Siegeshell {
         let back = REACTION.min(self.filled.saturating_sub(1));
         let idx = (self.at + self.memory.len() - 1 - back) % self.memory.len();
         self.memory[idx].as_ref().map(|s| s.world.clone())
-    }
-
-    fn roll(&mut self) -> u32 {
-        self.rng ^= self.rng << 13;
-        self.rng ^= self.rng >> 17;
-        self.rng ^= self.rng << 5;
-        self.rng
     }
 
     /// A walk that has not moved it bears off to one side for a moment.
@@ -627,13 +617,18 @@ impl Siegeshell {
         self.intent = if holding { WAIT } else { ANKLE };
         // Within its reach of the ankle's face, not its middle.
         let face = Fx::ratio(12, 10);
-        let near = wide_flat_dist(at, me.pos).sub(face).raw() <= reach_of(me).add(Fx::ratio(5, 10)).raw();
+        let near =
+            wide_flat_dist(at, me.pos).sub(face).raw() <= reach_of(me).add(Fx::ratio(5, 10)).raw();
         // Swing between beats: never one that will still be going when a
         // ring arrives.
         let busy = sim::moves::get(me.class, 0);
         let busy = (busy.startup + busy.active + busy.recovery) as i32 + 6;
         let clear = ring_due(m, me.pos).is_none_or(|due| due > busy || due < -12);
-        let swing = if near && !holding && clear { self.swing(me) } else { 0 };
+        let swing = if near && !holding && clear {
+            self.swing(me)
+        } else {
+            0
+        };
         go(me, post, at, swing)
     }
 

@@ -296,6 +296,7 @@ pub static FIGHT: FightDecl = FightDecl {
     commit: Some(super::mind::commit),
     clip: Some(super::mind::posture),
     repose: Some(gait::repose),
+    camera_passes: true,
     ..FightDecl::PLAIN
 };
 
@@ -717,6 +718,12 @@ pub fn shed_plates(m: &Monster) -> ([(V3, u16); 12], usize) {
     (out, n as usize)
 }
 
+/// The middle of the Plough's strip `j` of five, across the lane from its
+/// centre line: the lane is `half` either side, cut into five equal strips.
+fn strip_offset(half: Fx, j: usize) -> Fx {
+    Fx::from_raw(half.raw() * (j as i32 * 2 - 4) / 5)
+}
+
 /// **The plough's lane** (§2): from under the head out along the facing, the
 /// rubble's front this frame, and where each of five strips of it stops -- at
 /// the first solid on its line, a boulder or a stone or a planted shield.
@@ -759,9 +766,7 @@ pub fn plough_lane(w: &World, m: &Monster) -> Option<(V3, V3, Fx, [Fx; 5])> {
     };
     let mut stops = [length; 5];
     for (j, stop) in stops.iter_mut().enumerate() {
-        let off = half
-            .mul(Fx::from_int(j as i32 * 2 - 4))
-            .div(Fx::from_int(4));
+        let off = strip_offset(half, j);
         let start = from
             .add(across.scale(off))
             .add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
@@ -925,8 +930,8 @@ fn hatch(w: &mut World, slot: usize) {
         let keep = crate::tuning::body_radius();
         let w = hi.sub(lo).sub(keep.add(keep)).max(Fx::ZERO);
         lo.add(keep).add(
-            w.mul(Fx::from_int((r % 1000) as i32))
-                .div(Fx::from_int(1000)),
+            // A fraction of the span from the roll's low sixteen bits.
+            w.mul(Fx::from_raw((r & 0xFFFF) as i32)),
         )
     };
     let local = V3::new(
@@ -1241,9 +1246,7 @@ fn body_signs(w: &World, m: &Monster, out: &mut Signs) {
             // A fifth of the lane's width, for each of its five strips.
             let strip = Fx::from_raw(half.raw() * 2 / 5);
             for (j, stop) in stops.iter().enumerate() {
-                let off = half
-                    .mul(Fx::from_int(j as i32 * 2 - 4))
-                    .div(Fx::from_int(5));
+                let off = strip_offset(half, j);
                 let at = from.add(across.scale(off));
                 if live {
                     out.push(Sign::strip(Says::Live, at, along, flown.min(*stop), strip));
