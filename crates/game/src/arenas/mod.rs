@@ -37,7 +37,7 @@ pub mod broodmother;
 
 // pub mod veilstalker;
 
-// pub mod mantis;
+pub mod mantis;
 
 // pub mod galewing;
 
@@ -93,8 +93,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::BROODMOTHER => &broodmother::DRESSING,
 
         // ArenaId::VEILSTALKER => &veilstalker::DRESSING,
-
-        // ArenaId::MANTIS => &mantis::DRESSING,
+        ArenaId::MANTIS => &mantis::DRESSING,
 
         // ArenaId::GALEWING => &galewing::DRESSING,
 

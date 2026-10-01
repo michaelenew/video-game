@@ -55,6 +55,8 @@ pub struct Looks {
     fin: Handle<StandardMaterial>,
     heard: Handle<StandardMaterial>,
     feel: Handle<StandardMaterial>,
+    /// The Mantis's notches: one per class, dim, then lit (`MarkLook::Notch`).
+    notches: Vec<Handle<StandardMaterial>>,
     disc: Handle<Mesh>,
     cube: Handle<Mesh>,
 }
@@ -161,6 +163,22 @@ pub fn setup(
     });
     let heard = materials.add(see_through([1.0, 0.95, 0.8], 0.35, 0.9));
     let feel = materials.add(see_through([0.55, 0.45, 0.3], 0.12, 0.2));
+    // A notch in its thrower's class colour: dim while it is only
+    // remembered, burning while a Ready waits for it.
+    let notches = [false, true]
+        .into_iter()
+        .flat_map(|lit| {
+            NOTCH_COLOURS.map(|rgb| {
+                let glow = if lit { 2.0 } else { 0.35 };
+                StandardMaterial {
+                    base_color: Color::srgb(rgb[0], rgb[1], rgb[2]),
+                    emissive: LinearRgba::rgb(rgb[0] * glow, rgb[1] * glow, rgb[2] * glow),
+                    ..default()
+                }
+            })
+        })
+        .map(|m| materials.add(m))
+        .collect();
     let disc = meshes.add(Cylinder::new(1.0, 1.0));
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let pieces = (0..MAX_HAZARDS)
@@ -193,6 +211,7 @@ pub fn setup(
         fin,
         heard,
         feel,
+        notches,
         disc,
         cube,
     });
@@ -333,6 +352,18 @@ pub fn place(
     }
 }
 
+/// The classes' colours, in `sim::class::ALL_CLASSES` order, for the
+/// Mantis's notches: Bulwark, Champion, Shadow Reaver, Elementalist, Blood
+/// mage, Dual mage.
+const NOTCH_COLOURS: [[f32; 3]; 6] = [
+    [0.35, 0.55, 0.95],
+    [0.95, 0.75, 0.20],
+    [0.55, 0.30, 0.85],
+    [0.25, 0.85, 0.55],
+    [0.90, 0.15, 0.20],
+    [0.95, 0.95, 0.95],
+];
+
 /// How high a ring on the floor is drawn: over any hazard's skin, so a
 /// warning on tar still reads.
 const RING_LIFT: f32 = 0.07;
@@ -378,6 +409,11 @@ fn mark(
         (MarkLook::Embers, true) => (height * progress, r * 1.05, looks.embers.clone()),
         (MarkLook::Sand, _) => (height, r, looks.sand.clone()),
         (MarkLook::Fin, _) => (height, r, looks.fin.clone()),
+        (MarkLook::Notch { class, lit }, _) => {
+            let i = (class as usize).min(NOTCH_COLOURS.len() - 1)
+                + if lit { NOTCH_COLOURS.len() } else { 0 };
+            (height, r, looks.notches[i].clone())
+        }
         (_, _) => (height, r, looks.warning.clone()),
     };
     (
