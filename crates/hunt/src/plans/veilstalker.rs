@@ -158,6 +158,7 @@ pub struct Veilstalker {
     hands: Hands,
     aimed: Option<(V3, Option<i32>)>,
     out: Option<V3>,
+    waiting: Option<(V3, V3, i32)>,
 }
 
 impl Veilstalker {
@@ -187,6 +188,7 @@ impl Veilstalker {
             hands: Hands::new(who, seed),
             aimed: None,
             out: None,
+            waiting: None,
         };
         p.roll_slop();
         p
@@ -429,6 +431,7 @@ impl Plan for Veilstalker {
     fn act(&mut self, w: &World) -> Input {
         self.aimed = None;
         self.out = None;
+        self.waiting = None;
         let input = self.decide(w);
         let me = w.players[self.who];
         // The class's turn: what the choice was for, in its own hands.
@@ -449,6 +452,11 @@ impl Plan for Veilstalker {
             && let Some(go) = self.hands.close_in(w, &me, at, window)
         {
             return go;
+        }
+        if let Some((beast, at, safe)) = self.waiting
+            && let Some(own) = self.hands.idle(w, &me, beast, at, safe)
+        {
+            return own;
         }
         input
     }
@@ -970,6 +978,9 @@ impl Veilstalker {
             0
         };
         self.aimed = Some((target, Some(window - walk_frames)));
+        if d.raw() > reach.raw() {
+            self.waiting = Some((m.pos, target, window - walk_frames));
+        }
         Some(self.turn_and(me, Some(target), dir, swing))
     }
 

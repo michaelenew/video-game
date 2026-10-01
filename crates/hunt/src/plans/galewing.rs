@@ -730,11 +730,14 @@ impl Galewing {
             return Some(walk(me, wing, Some(wing), 0));
         }
         let close = sim::math::wide_len(at.sub(me.pos));
-        let poke = sim::moves::get(me.class, sim::state::SLOT_POKE).reach;
+        let poke = self.hands.reach(me);
         if close.raw() <= poke.add(Fx::ONE).raw() {
             return Some(self.swing(me, at, 0));
         }
         let _ = part;
+        // On the way to it: the class's own business with the window.
+        let window = s.frames_until_free() as i32 - REACTION as i32;
+        self.waiting = Some((s.pos, at, window));
         Some(walk(me, at, Some(at), 0))
     }
 

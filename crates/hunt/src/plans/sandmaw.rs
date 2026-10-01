@@ -691,6 +691,13 @@ impl Sandmaw {
         if !near && let Some(go) = self.hands.close_in(w, me, target, window) {
             return go;
         }
+        // On the way to it: the class's own business with the stand's time
+        // -- the shadow out to the throat, a shot from where it is.
+        if walk.is_some()
+            && let Some(own) = self.hands.idle(w, me, beast.pos, target, window)
+        {
+            return own;
+        }
         input
     }
 
