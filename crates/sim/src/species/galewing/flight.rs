@@ -244,8 +244,8 @@ fn round(w: &World, f: &mut Flight, centre: V3, h: Fx, speed: Fx, lim: &Limits) 
     };
     let near = |top: V3| {
         math::wide_flat_dist(f.pos, top).raw() < Knob::TowerClear.fx().raw()
-            || (1..=LOOKS).any(|k| {
-                let at = now.add(reach.mul(Fx::from_int(k)).div(Fx::from_int(LOOKS)));
+            || (1..=LOOKS as i32).any(|k| {
+                let at = now.add(reach.mul(Fx::from_int(k)).div(Fx::from_int(LOOKS as i32)));
                 let p = centre.add(V3::from_turns(at).scale(r));
                 math::wide_flat_dist(p, top).raw() < Knob::TowerClear.fx().raw()
             })
@@ -266,7 +266,7 @@ fn round(w: &World, f: &mut Flight, centre: V3, h: Fx, speed: Fx, lim: &Limits) 
 
 /// How many points round the circle ahead it looks at for the tower: a
 /// count, not a distance.
-const LOOKS: i32 = 4;
+const LOOKS: usize = 4;
 
 /// Turns a frame a body arriving somewhere swings its heading by, at most.
 fn arrive_turn() -> Fx {
