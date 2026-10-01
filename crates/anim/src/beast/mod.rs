@@ -67,7 +67,7 @@ pub mod broodmother;
 
 // pub mod veilstalker;
 
-// pub mod mantis;
+pub mod mantis;
 
 // pub mod galewing;
 
@@ -119,8 +119,7 @@ pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
         SpeciesId::BROODMOTHER => Some(&broodmother::BROODMOTHER),
 
         // SpeciesId::VEILSTALKER => Some(&veilstalker::VEILSTALKER),
-
-        // SpeciesId::MANTIS => Some(&mantis::MANTIS),
+        SpeciesId::MANTIS => Some(&mantis::MANTIS),
 
         // SpeciesId::GALEWING => Some(&galewing::GALEWING),
 
