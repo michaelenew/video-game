@@ -1099,10 +1099,10 @@ pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
 /// **Nothing between the camera and the character hides anything**, as
 /// nothing there is on the crosshair's ray ([`sight`]): the eye sits behind
 /// the shoulder, and a fighter with their back to a wall has the camera
-/// looking through it. So the line of sight starts at the front of the
-/// character along it -- the same near clip the crosshair's ray has. Found
-/// by the Gnawers' report, whose every bite on a hunter backed against a
-/// wall counted as begun off screen.
+/// looking through it. So the line of sight starts where it passes the
+/// character, as the crosshair's ray does. Found by the Gnawers' report,
+/// whose every bite on a hunter backed against a wall counted as begun off
+/// screen.
 pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
     let p = &scene.players[who];
     let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
@@ -1115,7 +1115,10 @@ pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -
     if dir.dot(look.look_dir()).raw() < cos_turns(half_angle).raw() {
         return false;
     }
-    let near = near_clip(eye, dir, origin(p.pos)).min(reach);
+    // From the character itself rather than the crosshair's near clip a
+    // body's radius short of it: with the fighter's back to a wall, that
+    // clip lies inside the wall.
+    let near = origin(p.pos).sub(eye).dot(dir).max(Fx::ZERO).min(reach);
     sight_clear(eye.add(dir.scale(near)), at, scene)
 }
 

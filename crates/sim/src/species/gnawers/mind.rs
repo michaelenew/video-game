@@ -39,18 +39,19 @@ use crate::state::{Action, MAX_PLAYERS, Player};
 
 /// The pack's memo, word by word. Twelve words; every one is used.
 pub mod word {
-    /// Frames left in the pile-on under way: tokens are suspended while it
-    /// is non-zero.
-    pub const PILE_LEFT: usize = 0;
-    /// Frames before another pile-on may be called.
-    pub const PILE_REST: usize = 1;
+    /// Two clocks, sixteen bits each ([`super::Clock`]): frames left in the
+    /// pile-on under way (tokens are suspended while it is non-zero), and
+    /// frames before another may be called.
+    pub const PILE_CLOCKS: usize = 0;
+    /// Where the pile-on under way was called on, raw fixed point: the lane
+    /// every leaper locks to.
+    pub const PILE_X: usize = 1;
     /// Pile-on bites landed this pile-on, per fighter: sixteen bits each.
     pub const PILE_HITS: usize = 2;
-    /// Frames before the Big One may howl again.
-    pub const HOWL_LOCK: usize = 3;
-    /// Frames since the pack last lost a body, counting down from
-    /// `HowlAfterLoss`: non-zero is "it has just lost one".
-    pub const SINCE_LOSS: usize = 4;
+    /// Two clocks: frames before the Big One may howl again, and frames since
+    /// the pack last lost a body, counting down from `HowlAfterLoss`.
+    pub const HOWL_CLOCKS: usize = 3;
+    pub const PILE_Z: usize = 4;
     /// The Big One's strain: recent damage, bled each frame.
     pub const STRAIN: usize = 5;
     /// Frames each fighter's feet have been above `LeapReach`: sixteen bits
@@ -66,6 +67,43 @@ pub mod word {
     pub const GNAW_Z: usize = 10;
     /// Bits: [`super::COOP_DONE`], [`super::WAS_ROUTED`].
     pub const BITS: usize = 11;
+}
+
+/// The pack's four clocks, two to a memo word.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Clock {
+    PileLeft,
+    PileRest,
+    HowlLock,
+    SinceLoss,
+}
+
+impl Clock {
+    const ALL: [Clock; 4] = [
+        Clock::PileLeft,
+        Clock::PileRest,
+        Clock::HowlLock,
+        Clock::SinceLoss,
+    ];
+
+    fn slot(self) -> (usize, usize) {
+        match self {
+            Clock::PileLeft => (word::PILE_CLOCKS, 0),
+            Clock::PileRest => (word::PILE_CLOCKS, 1),
+            Clock::HowlLock => (word::HOWL_CLOCKS, 0),
+            Clock::SinceLoss => (word::HOWL_CLOCKS, 1),
+        }
+    }
+}
+
+fn clock(pack: &Pack, k: Clock) -> i32 {
+    let (w, h) = k.slot();
+    half(pack.memo[w], h)
+}
+
+fn set_clock(pack: &mut Pack, k: Clock, v: i32) {
+    let (w, h) = k.slot();
+    set_half(&mut pack.memo[w], h, v);
 }
 
 /// The coop bodies have been mustered.
@@ -142,7 +180,7 @@ pub fn gnawed(pack: &Pack) -> Option<(usize, Fx)> {
 
 /// Is a pile-on under way: tokens suspended, the ring closing?
 pub fn piling(pack: &Pack) -> bool {
-    pack.memo[word::PILE_LEFT] > 0
+    clock(pack, Clock::PileLeft) > 0
 }
 
 /// Is fighter `who` treed, as far as the report and the renderer are
@@ -219,12 +257,12 @@ impl PackMind for Mind {
             return 0;
         }
         // The pile-on suspends the tokens.
-        if m.token && pack.memo[word::PILE_LEFT] > 0 {
+        if m.token && clock(pack, Clock::PileLeft) > 0 {
             return 0;
         }
         match m.kind {
             // The dart is handed out by the pack, in `frame`: a token first,
-            // and the crouch once the body has closed to it.
+            // and the crouch once the body has closed to it (`close_in`).
             DART => 0,
             MAUL => {
                 if !same_level(c, seen.pos) || treed(pack, who) || !in_front(c, seen) {
@@ -232,23 +270,8 @@ impl PackMind for Mind {
                 }
                 default_appetite(look, i, m, a)
             }
-            HAMSTRING => {
-                if !same_level(c, seen.pos) || treed(pack, who) {
-                    return 0;
-                }
-                // **Only at a back.** The bearing that matters is the
-                // target's, not ours: where we stand against the way it
-                // faces, by the glance's own sample of its facing.
-                let from = c.pos.sub(seen.pos);
-                let from = V3::new(from.x, Fx::ZERO, from.z).normalized();
-                let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
-                if from.flat_len().raw() == 0
-                    || facing.dot(from).raw() > knob_fx(Knob::RearCos).raw()
-                {
-                    return 0;
-                }
-                default_appetite(look, i, m, a)
-            }
+            // Handed out by the pack, as the dart is: see `close_in`.
+            HAMSTRING => 0,
             SCRAMBLE => {
                 let Some(top) = scramble_top(look, seen.pos) else {
                     return 0;
@@ -261,12 +284,12 @@ impl PackMind for Mind {
                 a.weight.max(1)
             }
             HOWL => {
-                if !c.has(flag::LEADER) || pack.memo[word::HOWL_LOCK] > 0 {
+                if !c.has(flag::LEADER) || clock(pack, Clock::HowlLock) > 0 {
                     return 0;
                 }
                 let health = crate::critter::stat(look.sp, c.kind, CritterField::Health);
                 let desperate = (c.health as i32) * 2 < health;
-                let worth = pack.memo[word::SINCE_LOSS] > 0 || set_up(pack, who) || desperate;
+                let worth = clock(pack, Clock::SinceLoss) > 0 || set_up(pack, who) || desperate;
                 // From behind the ring, never at somebody's feet: the
                 // move's own range says where.
                 if worth {
@@ -284,18 +307,13 @@ impl PackMind for Mind {
 
     fn frame(&self, pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         let sp = pack.sp();
-        let tick = |v: &mut i32| *v = (*v - 1).max(0);
-        for w in [
-            word::PILE_LEFT,
-            word::PILE_REST,
-            word::HOWL_LOCK,
-            word::SINCE_LOSS,
-        ] {
-            tick(&mut pack.memo[w]);
+        for k in Clock::ALL {
+            let left = clock(pack, k);
+            set_clock(pack, k, left - 1);
         }
         let bleed = knob(Knob::StrainBleed);
         pack.memo[word::STRAIN] = (pack.memo[word::STRAIN] - bleed).max(0);
-        if pack.memo[word::PILE_LEFT] == 0 {
+        if clock(pack, Clock::PileLeft) == 0 {
             pack.memo[word::PILE_HITS] = 0;
         }
 
@@ -360,8 +378,8 @@ impl PackMind for Mind {
         // Coming back from a rout, behind a howl, for free.
         let routed = pack.mood == mood::ROUTED;
         if pack.memo[word::BITS] as u32 & WAS_ROUTED != 0 && pack.mood == mood::HUNTING {
-            pack.memo[word::HOWL_LOCK] = 0;
-            pack.memo[word::SINCE_LOSS] = knob(Knob::HowlAfterLoss);
+            set_clock(pack, Clock::HowlLock, 0);
+            set_clock(pack, Clock::SinceLoss, knob(Knob::HowlAfterLoss));
         }
         if routed {
             pack.memo[word::BITS] |= WAS_ROUTED as i32;
@@ -374,7 +392,7 @@ impl PackMind for Mind {
         for c in critters.iter_mut() {
             if c.alive() && c.state == is::ACTIVE && c.act == HOWL && !c.has(flag::HIT_USED) {
                 c.set(flag::HIT_USED, true);
-                pack.memo[word::HOWL_LOCK] = knob(Knob::HowlLockout);
+                set_clock(pack, Clock::HowlLock, knob(Knob::HowlLockout));
                 let base = sp.pack_raw(PackKnob::Tokens).max(0);
                 let wanted = knob(Knob::HowlTokens).max(base) + coop;
                 pack.rally(
@@ -388,13 +406,13 @@ impl PackMind for Mind {
             }
         }
 
-        dart(pack, critters, herd, frame);
+        close_in(pack, critters, herd, frame);
 
         // **The pile-on**, on what the glance saw: somebody slowed or on the
         // floor, and the pack hunting and rested.
         if pack.mood != mood::HUNTING
-            || pack.memo[word::PILE_LEFT] > 0
-            || pack.memo[word::PILE_REST] > 0
+            || clock(pack, Clock::PileLeft) > 0
+            || clock(pack, Clock::PileRest) > 0
             || pack.grace > 0
         {
             return;
@@ -438,8 +456,16 @@ impl PackMind for Mind {
             c.set(flag::HIT_USED, false);
         }
         let last = a.startup as i32 + step as i32 * (n as i32 - 1);
-        pack.memo[word::PILE_LEFT] = last + a.active as i32 + a.recovery as i32;
-        pack.memo[word::PILE_REST] = pack.memo[word::PILE_LEFT] + knob(Knob::PileonRest);
+        let left = last + a.active as i32 + a.recovery as i32;
+        set_clock(pack, Clock::PileLeft, left);
+        set_clock(pack, Clock::PileRest, left + knob(Knob::PileonRest));
+        // **One lane for all of them**: where the glance put the fighter
+        // when it was called. They close on it and leap at it, and do not
+        // follow: the heap lands where you were, so a dodge out of it is the
+        // answer and the heap is the sweep target.
+        let lane = crate::pack::lead_of(pack, who);
+        pack.memo[word::PILE_X] = lane.x.raw();
+        pack.memo[word::PILE_Z] = lane.z.raw();
         pack.memo[word::PILE_HITS] = 0;
     }
 
@@ -480,15 +506,23 @@ impl PackMind for Mind {
             let tracking = c.timer > crate::critter::stat(sp, c.kind, CritterField::Lock) as u16;
             let face = tracking.then_some(lead).or(want.face);
             return match c.act {
-                PILE_ON => Steer {
-                    to: away(lead, knob_fx(Knob::PileonRing)),
-                    speed: run,
-                    face,
-                },
+                PILE_ON => {
+                    let lane = V3::new(
+                        Fx::from_raw(pack.memo[word::PILE_X]),
+                        lead.y,
+                        Fx::from_raw(pack.memo[word::PILE_Z]),
+                    );
+                    Steer {
+                        to: away(lane, knob_fx(Knob::PileonRing)),
+                        speed: run,
+                        face: Some(lane),
+                    }
+                }
+                // The scuttle: in at the heels.
                 HAMSTRING => {
                     let back = V3::from_turns(Fx::from_raw(seen.facing as i32));
                     Steer {
-                        to: lead.sub(back.scale(Fx::ONE)),
+                        to: lead.sub(back.scale(sim_body_radius())),
                         speed: walk,
                         face,
                     }
@@ -500,10 +534,17 @@ impl PackMind for Mind {
             return want;
         }
 
-        // Closing to its crouch, tail up.
+        // Closing to its windup, tail up: to the crouch in front, or round to
+        // the heels.
         if c.role & role::CLOSING != 0 {
+            let to = if c.act == HAMSTRING {
+                let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
+                lead.sub(facing.scale(knob_fx(Knob::HamstringFrom)))
+            } else {
+                away(lead, knob_fx(Knob::DartFrom))
+            };
             return Steer {
-                to: away(lead, knob_fx(Knob::DartFrom)),
+                to,
                 speed: run,
                 face: Some(lead),
             };
@@ -657,7 +698,7 @@ impl PackMind for Mind {
             give_back(pack, c);
             c.state = is::FLINCH;
             c.timer = knob(Knob::HowlFlinch).max(1) as u16;
-            pack.memo[word::HOWL_LOCK] = knob(Knob::HowlLockout);
+            set_clock(pack, Clock::HowlLock, knob(Knob::HowlLockout));
         }
         // **Strain**: recent damage past the threshold knocks the Big One
         // down. Lower when it is hurt.
@@ -679,7 +720,7 @@ impl PackMind for Mind {
 
     fn died(&self, pack: &mut Pack, critters: &mut Critters, i: usize) {
         critters[i].role = 0;
-        pack.memo[word::SINCE_LOSS] = knob(Knob::HowlAfterLoss);
+        set_clock(pack, Clock::SinceLoss, knob(Knob::HowlAfterLoss));
     }
 
     fn body(&self, c: &Critter, plain: Body) -> Body {
@@ -695,19 +736,23 @@ impl PackMind for Mind {
     }
 }
 
-/// **The dart-bite**, as the pack runs it. At a body's decision point, with a
-/// token free and the pack hunting, the pack hands it a token: its tail goes
-/// up and it closes from the ring to `DartFrom`, where it crouches -- the 24
-/// frames of tell, tracking until `Lock` -- and lunges. A body that cannot
-/// close in `DartGiveUp` frames (its target walked off) gives the token back.
+/// **The bites, as the pack hands them out.** At a body's decision point,
+/// with a token free and the pack hunting, the pack hands it a token for the
+/// bite its place calls for: **in front of its target, the dart-bite**;
+/// **in its rear third, the hamstring**; at its side, nothing yet. Its tail
+/// goes up and it closes from the ring -- to `DartFrom` in front, or to
+/// `HamstringFrom` behind the heels -- and there the windup begins: the
+/// dart's crouch, tracking until `Lock`, or the hamstring's scuttle. A body
+/// that cannot get there in `DartGiveUp` frames, or whose target turns to
+/// face it before a hamstring begins, gives the token back.
 ///
-/// Why the close is its own step: the ring is at five metres and the answer
+/// Why the close is its own step: the ring is at five metres, and the answer
 /// to the crouch is a hit, which only means something if the crouch happens
-/// where a hit can reach it. The tail up while it comes is the warning a
-/// slow class answers by swinging before the crouch.
-fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
+/// where a hit can reach it. The tail up while it comes is the warning a slow
+/// class answers by swinging before the crouch, and turning to face it is
+/// the answer to a hamstring before it is thrown.
+fn close_in(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
     let sp = pack.sp();
-    let from = knob_fx(Knob::DartFrom);
     let give_up = (knob(Knob::DartGiveUp).max(16) / 16).min(15) as u8;
     let hunting = pack.mood == mood::HUNTING && pack.grace == 0;
     for i in 0..MAX_CRITTERS {
@@ -720,6 +765,7 @@ fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         let lead = crate::pack::lead_of(pack, who);
         let gap = crate::math::big_len(V3::new(lead.x.sub(c.pos.x), Fx::ZERO, lead.z.sub(c.pos.z)));
         let steps = (c.role & role::STEPS) / role::LATCH_STEP;
+        let behind = in_the_rear(&c, &seen);
         let body = &mut critters[i];
         let stop = |body: &mut Critter, pack: &mut Pack| {
             body.role &= !(role::CLOSING | role::STEPS);
@@ -735,15 +781,27 @@ fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
             }
             continue;
         }
+        // Faced before it could begin: the back it was going for is gone.
+        if body.act == HAMSTRING && !behind {
+            stop(body, pack);
+            continue;
+        }
+        let from = if body.act == HAMSTRING {
+            knob_fx(Knob::HamstringFrom)
+        } else {
+            knob_fx(Knob::DartFrom)
+        };
         if gap.raw() <= from.add(crate::arena::SKIN).raw() {
-            // There: the crouch. Belly to the floor -- it stops where it is
-            // rather than sliding the last metre in on its momentum, so the
-            // body you see crouch is the body still there to be hit.
+            // There: the windup. Belly to the floor for the crouch -- it
+            // stops where it is rather than sliding the last metre in on its
+            // momentum, so the body you see crouch is the body still there to
+            // be hit.
             body.role &= !(role::CLOSING | role::STEPS);
-            body.vel = V3::new(Fx::ZERO, body.vel.y, Fx::ZERO);
+            if body.act == DART {
+                body.vel = V3::new(Fx::ZERO, body.vel.y, Fx::ZERO);
+            }
             body.state = is::STARTUP;
-            body.act = DART;
-            body.timer = sp.attack(DART).startup.max(1);
+            body.timer = sp.attack(body.act).startup.max(1);
             body.set(flag::HIT_USED, false);
             continue;
         }
@@ -761,23 +819,18 @@ fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
     // Handing out: one body at a time, on its own decision frame, while a
     // token is free.
     let every = pack.think_every().max(1);
-    let a = sp.attack(DART);
     for i in 0..MAX_CRITTERS {
         if crate::pack::tokens_out(pack, critters, herd) >= pack.token_cap() {
             return;
         }
         let c = critters[i];
+        let can = |m: u8| sp.kind(c.kind).moves.iter().any(|k| k.kind == m && k.token);
         if frame % every != i as u32 % every
             || !c.alive()
             || c.state != is::PROWL
             || c.has(flag::LEADER)
             || c.has(flag::TOKEN)
             || c.role & (role::DIGGER | role::LATCHED) != 0
-            || !sp
-                .kind(c.kind)
-                .moves
-                .iter()
-                .any(|m| m.kind == DART && m.token)
         {
             continue;
         }
@@ -788,26 +841,42 @@ fn dart(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         }
         let lead = crate::pack::lead_of(pack, who);
         let gap = crate::math::big_len(V3::new(lead.x.sub(c.pos.x), Fx::ZERO, lead.z.sub(c.pos.z)));
-        if gap.sub(a.ideal_range).abs().raw() > a.range_span.raw() {
+        let within = |m: u8| {
+            let a = sp.attack(m);
+            gap.sub(a.ideal_range).abs().raw() <= a.range_span.raw()
+        };
+        // **From in front, the dart; from behind, the hamstring.** Facing is
+        // something the glance saw, so this reads nothing it could not see --
+        // and it keeps a crouch on the screen of the fighter it is for (the
+        // report's hidden commits).
+        let act = if can(DART) && in_front(&c, &seen) && within(DART) {
+            DART
+        } else if can(HAMSTRING) && in_the_rear(&c, &seen) && within(HAMSTRING) {
+            HAMSTRING
+        } else {
             continue;
-        }
-        // **From in front.** The dart is the move you face; a body at your
-        // side or back waits for the hamstring or for the ring to move.
-        // Facing is something the glance saw, so this reads nothing it could
-        // not see -- and it keeps the crouch on the screen of the fighter it
-        // is for (the report's hidden commits).
-        if !in_front(&c, &seen) {
-            continue;
-        }
+        };
         // Individuals are noisy: the same coin the generic pack throws.
         if pack.roll() % 4 == 0 {
             continue;
         }
         let body = &mut critters[i];
         body.set(flag::TOKEN, true);
-        body.act = DART;
+        body.act = act;
         body.role = (body.role & !role::STEPS) | role::CLOSING;
     }
+}
+
+/// Is the critter in its target's rear third, by the facing the glance saw?
+fn in_the_rear(c: &Critter, seen: &crate::pack::Seen) -> bool {
+    let from = V3::new(c.pos.x.sub(seen.pos.x), Fx::ZERO, c.pos.z.sub(seen.pos.z));
+    let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
+    from.flat_len().raw() > 0 && facing.dot(from.normalized()).raw() <= knob_fx(Knob::RearCos).raw()
+}
+
+/// A fighter's radius: how close behind the heels the scuttle aims.
+fn sim_body_radius() -> Fx {
+    crate::tuning::body_radius()
 }
 
 /// A point `dist` from `from`, on the side of it `toward` is.

@@ -60,6 +60,10 @@ const WINDOW: u32 = 60;
 const SLOW_POKE: u16 = 9;
 /// It dodges toward the Big One when it is further than this.
 const DASH_FROM: Fx = Fx::ratio(45, 10);
+/// A pile-on crouch this near is one to get out of.
+const HEAP: Fx = Fx::from_raw(9 << 16);
+/// A body this near a slowed fighter is on its heels: a latch.
+const AT_HEEL: Fx = Fx::ratio(16, 10);
 /// A raised tail this near is a crouch coming: the swing waits for it.
 const WATCH_TAILS: Fx = Fx::from_raw(6 << 16);
 /// How far it steps out to meet a raised tail or a crouch.
@@ -104,8 +108,6 @@ pub struct Gnawers {
     slowed_for: u32,
     /// Frames left holding the jump.
     hop_left: u32,
-    /// Which hand the last swing was: the Dual mage alternates.
-    hand: bool,
     rng: u32,
 }
 
@@ -124,7 +126,6 @@ impl Gnawers {
             was_alive: 0,
             slowed_for: 0,
             hop_left: 0,
-            hand: false,
             rng: seed | 1,
         }
     }
@@ -185,11 +186,15 @@ fn find_post(w: &World, from: V3) -> Option<V3> {
 
 /// The button for the auto. The Dual mage's two hands are two bars, and a
 /// hand thrown alone runs one of them away until she burns (`sim::dual`), so
-/// she alternates, the way a person playing her does.
-fn auto_button(class: sim::Class, toggle: bool) -> u16 {
-    match class {
-        sim::Class::DualMage if toggle => Input::RIGHT,
-        _ => Input::LEFT,
+/// she throws the hand whose bar is lower, the way a person playing her
+/// learns to. (Her dark auto is a lunge that carries her through a knee-high
+/// body inside two metres -- `critcheck`'s "runs through it at 1 2 m" -- and
+/// choosing hands by range instead burned her to death: the bars win.)
+fn auto_button(me: &sim::state::Player) -> u16 {
+    match sim::dual::bars(me) {
+        Some((dark, light)) if dark.raw() < light.raw() => Input::LEFT,
+        Some(_) => Input::RIGHT,
+        None => Input::LEFT,
     }
 }
 
@@ -273,15 +278,23 @@ impl Plan for Gnawers {
         let facing_pack = centroid.unwrap_or(me.pos.add(me.facing));
         let (pack_yaw, pack_aim, _) = look_at(facing_pack, facing_pack);
 
-        // 4. **Slowed or latched: dodge at once**, out away from the pack.
+        // 4. **Slowed: dodge out of the ring** -- when the pile-on comes, and
+        // at once if one is hanging off a calf. The leapers are locked to
+        // where they were called on, so the dodge is timed at the crouches
+        // rather than at the slow: thrown at the slow, it is spent before the
+        // pile-on is called, and they leap at where it ends. (§9 says "at
+        // once"; the harness found the timing, and the document says so.)
         if me.slowed > 0 {
             self.slowed_for += 1;
         } else {
             self.slowed_for = 0;
         }
-        // A latch comes with its slow, so the one rule answers both: felt a
-        // reaction after it began, like everything else.
-        if self.slowed_for as usize >= REACTION && self.dodge_left == 0 && free {
+        let piling = members
+            .iter()
+            .any(|s| s.crouching && s.act == gnawers::PILE_ON && dist(s).raw() < HEAP.raw());
+        let at_heel = members.iter().any(|s| dist(s).raw() < AT_HEEL.raw());
+        let shed = self.slowed_for as usize >= REACTION && at_heel;
+        if (piling || shed) && self.dodge_left == 0 && free {
             self.intent = SHED;
             self.dodge_left = sim::tuning::dodge_frames() as u32 + 20;
             let away = centroid.map_or(me.facing.scale(Fx::ONE.neg()), |c| {
@@ -345,8 +358,7 @@ impl Plan for Gnawers {
                 }
                 if self.cooldown == 0 && free {
                     self.cooldown = SWING_GAP + self.roll() % 4;
-                    self.hand = !self.hand;
-                    return Input::looking_at(auto_button(me.class, self.hand), aim, pitch);
+                    return Input::looking_at(auto_button(&me), aim, pitch);
                 }
                 return Input::looking_at(0, aim, pitch);
             }
@@ -388,8 +400,7 @@ impl Plan for Gnawers {
             if self.cooldown == 0 && free {
                 self.intent = SWING;
                 self.cooldown = SWING_GAP + self.roll() % 4;
-                self.hand = !self.hand;
-                return Input::looking_at(auto_button(me.class, self.hand), aim, pitch);
+                return Input::looking_at(auto_button(&me), aim, pitch);
             }
             return Input::looking_at(0, aim, pitch);
         }

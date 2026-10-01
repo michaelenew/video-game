@@ -246,7 +246,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 7] {
+fn scenarios() -> [Scenario; 8] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -265,6 +265,12 @@ fn scenarios() -> [Scenario; 7] {
         // swing tested against ten boxes are all at their most.
         ("full pack", |c| {
             full_pack(World::hunt_of([c; MAX_PLAYERS], SpeciesId::GNATS))
+        }),
+        // The Gnawers in the Commons, every slot filled (their coop pack is
+        // ten): the dart's hand-out, the pile-on's call, the latch, the gnaw
+        // and the scramble all run on top of the generic pack.
+        ("the gnawers' full pack", |c| {
+            full_pack(World::hunt_of([c; MAX_PLAYERS], SpeciesId::GNAWERS))
         }),
         // And a pack with a creature in the fight as well -- the Broodmother's
         // and the Siegeshell's shape -- in the range.

@@ -1251,7 +1251,14 @@ fn drive(sp: &Species, c: &mut Critter, want: Steer) {
         }
         _ => V3::ZERO,
     };
-    if !c.has(flag::AIRBORNE) {
+    if c.state == is::ACTIVE && c.alive() && !c.has(flag::AIRBORNE) {
+        // **A lunge is at its speed from its first frame**: the move's
+        // `Advance`, not a walk accelerating up to it. Through the
+        // acceleration a twelve-frame dart covered a third of its distance and
+        // an eight-frame leap almost none, so the volume drawn on the floor
+        // was not where the body went.
+        c.vel = V3::new(target_vel.x, c.vel.y, target_vel.z);
+    } else if !c.has(flag::AIRBORNE) {
         let dv = target_vel.sub(flat_vel);
         let len = dv.flat_len();
         let dv = if len.raw() > accel.raw() {
