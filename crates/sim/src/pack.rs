@@ -354,6 +354,15 @@ pub trait PackMind {
     fn died(&self, pack: &mut Pack, critters: &mut Critters, i: usize) {
         let _ = (pack, critters, i);
     }
+
+    /// **A critter walked into a solid**: an arena wall, a raised solid, a
+    /// defended thing that is one. `push` is what the resolve did to get it
+    /// out, in the floor plane. Before it goes round the face -- so a species
+    /// that stuns it here (the Hornback's bull, charging a rock) stops it
+    /// sliding off. Nothing, for a pack that says nothing.
+    fn bumped(&self, c: &mut Critter, push: V3) {
+        let _ = (c, push);
+    }
 }
 
 /// The pack's own appetite for a move: see [`PackMind::appetite`].
@@ -1183,6 +1192,12 @@ fn move_body(
         }
     }
     let r = arena.resolve_sized(pos, c.vel, !c.has(flag::AIRBORNE), half_wid, height);
+    if r.wall {
+        if let Some(decl) = sp.pack {
+            decl.mind
+                .bumped(c, V3::new(r.pos.x.sub(pos.x), Fx::ZERO, r.pos.z.sub(pos.z)));
+        }
+    }
     // **Blocked, it goes round.** There is no path-finding: a critter heading
     // for its place with a platform in the way slides along the face it hit,
     // whichever way it was already leaning -- or, meeting it square, the way

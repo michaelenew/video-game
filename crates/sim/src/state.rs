@@ -9669,6 +9669,9 @@ impl World {
                 self.critters[c].set(critter::flag::HIT_USED, true);
             }
         }
+        // And the defended things in their reach (P7), once a move: the
+        // Hornback's bull charging the cart.
+        self.critters_strike_the_objectives();
 
         // What the fighters have out.
         for i in 0..MAX_PLAYERS {
@@ -10178,6 +10181,40 @@ impl World {
             state.struck |= bit;
             objective::set(&mut self.lore, i, state);
             objective::strike(&mut self.lore, i, damage);
+        }
+    }
+
+    /// **The critters' blows on the defended things** (P7): each critter's
+    /// move volume against each one's box, once a move, as a creature's.
+    fn critters_strike_the_objectives(&mut self) {
+        let Some(pack) = self.pack else { return };
+        let sp = pack.sp();
+        let lore = self.lore;
+        for o in objective::standing(&lore, self.arena.get()) {
+            if o.state.broken {
+                continue;
+            }
+            let mut state = o.state;
+            let mut damage = 0;
+            for c in 0..critter::MAX_CRITTERS {
+                let body = self.critters[c];
+                let bit = 1u16 << c;
+                if !body.alive() || body.state != critter::is::ACTIVE {
+                    state.struck_by_critters &= !bit;
+                    continue;
+                }
+                if state.struck_by_critters & bit != 0 {
+                    continue;
+                }
+                if body.reaches(sp, o.at, o.site.extent().y, o.radius()) {
+                    state.struck_by_critters |= bit;
+                    damage += sp.attack(body.act).damage;
+                }
+            }
+            objective::set(&mut self.lore, o.index, state);
+            if damage > 0 {
+                objective::strike(&mut self.lore, o.index, damage);
+            }
         }
     }
 

@@ -22,7 +22,8 @@
 //!   struck it (a move hits it once).
 //!
 //! The world steps it (a cart rolls), creature attacks reach it through the
-//! same volume they reach a fighter with (`Monster::reaches`), it is a solid
+//! same volume they reach a fighter with (`Monster::reaches`, and a critter's
+//! `Critter::reaches`), it is a solid
 //! in [`crate::arena::Terrain`] when it says so, the renderer draws its box,
 //! and the fight report counts what it took. `World::advance` ends the hunt on
 //! [`lost`] and [`won`].
@@ -220,6 +221,8 @@ pub struct Objective {
     /// Which creature slots' current moves have already struck it, a bit each;
     /// cleared for a slot when its creature is not mid-move.
     pub struck: u8,
+    /// The same, for each critter slot: the Hornback's bull is a critter.
+    pub struck_by_critters: u16,
     /// How far along its route, in metres: a fixed-point value's raw bits,
     /// never negative.
     pub along: u32,
@@ -246,8 +249,9 @@ impl Objective {
         if self.arrived {
             flags |= flag::ARRIVED;
         }
+        let [lo, hi] = self.struck_by_critters.to_le_bytes();
         [
-            u32::from_le_bytes([flags, self.struck, 0, 0]),
+            u32::from_le_bytes([flags, self.struck, lo, hi]),
             self.along,
             self.health as u32,
             self.taken as u32,
@@ -255,12 +259,13 @@ impl Objective {
     }
 
     fn from_cell(c: Cell) -> Objective {
-        let [flags, struck, _, _] = c[0].to_le_bytes();
+        let [flags, struck, lo, hi] = c[0].to_le_bytes();
         Objective {
             present: flags & flag::PRESENT != 0,
             broken: flags & flag::BROKEN != 0,
             arrived: flags & flag::ARRIVED != 0,
             struck,
+            struck_by_critters: u16::from_le_bytes([lo, hi]),
             along: c[1],
             health: c[2] as i32,
             taken: c[3] as i32,

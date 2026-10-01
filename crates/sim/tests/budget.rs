@@ -246,7 +246,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 6] {
+fn scenarios() -> [Scenario; 7] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -275,7 +275,60 @@ fn scenarios() -> [Scenario; 6] {
                 sim::arena::ArenaId::RANGE,
             ))
         }),
+        // Everything the hunt's lore can hold (bestiary P4 to P7): the dev
+        // creature in the range, every hazard slot full where the fight is --
+        // tar burning and spreading, smoke, a sinkhole, a strand, a vent on
+        // its back -- every noise heard, both defended things standing, and
+        // its senses asked of both fighters every frame.
+        ("full floor in the range", |c| {
+            full_floor(World::hunt_in(
+                [c; MAX_PLAYERS],
+                [Some(SpeciesId::SENTINEL), None],
+                sim::arena::ArenaId::RANGE,
+            ))
+        }),
     ]
+}
+
+/// Every hazard slot of the sentinel's fight filled round the hunters' marks.
+fn full_floor(mut w: World) -> World {
+    use sim::hazard::{self, Hazard};
+    use sim::species::sentinel as s;
+    w.lore.set_word(s::word::LAID, 1);
+    let at =
+        |x: i32, z: i32| sim::V3::new(sim::Fx::from_int(x), sim::Fx::ZERO, sim::Fx::from_int(z));
+    let r = sim::Fx::from_int(3);
+    let kinds = [
+        s::TAR,
+        s::BURNING,
+        s::TAR,
+        s::SMOKE,
+        s::SINKHOLE,
+        s::SNARE,
+        s::TAR,
+        s::BURNING,
+    ];
+    for (i, kind) in kinds.into_iter().enumerate() {
+        hazard::place(
+            &mut w.lore,
+            Hazard::disc(kind, at(-110 + i as i32 * 3, (i as i32 % 3) * 2 - 2), r),
+        );
+    }
+    hazard::place(
+        &mut w.lore,
+        Hazard::strand(s::STRAND, at(-112, 6), at(-96, 6), sim::Fx::ONE),
+    );
+    hazard::place(
+        &mut w.lore,
+        Hazard::on_part(
+            s::VENT,
+            0,
+            sim::species::ridgeback::RIDGE,
+            sim::V3::ZERO,
+            sim::Fx::ONE,
+        ),
+    );
+    w
 }
 
 /// Every critter slot of a pack fight filled, spawned beside the pack's den.

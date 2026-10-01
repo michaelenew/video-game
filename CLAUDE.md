@@ -40,7 +40,7 @@ every one of them is a function in `aim.rs`:**
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. Standing, pointed at something **shorter than a fighter** (`aim::stands_at`), it dips to meet it at the same share of its height a level swing meets a fighter at (`aim::stoop`); zero where only fighters stand. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 
-Eleven more functions live there and are **not** lines of effect. `aim::pointing_at`
+Fifteen more functions live there and are **not** lines of effect. `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
@@ -73,7 +73,16 @@ into how far below the shoulder a standing swing meets it: what makes a
 knee-high critter hittable (bestiary A1, [`docs/design/critters.md`](docs/design/critters.md)).
 `aim::line_clear` answers *is anything solid on this straight line*, which a pack
 asks when it cuts a ring round a fighter. Critters are on `aim::first_along`'s
-list with the creatures (A2).
+list with the creatures (A2). `aim::sight_clear` answers *can something at this
+point see that one* -- `line_clear`, and no floor hazard that blocks sight
+(smoke) -- which a creature's perception filter asks from its head
+(`crate::perception`, bestiary P5). `aim::in_view` and `aim::in_view_of` (A5)
+answer *is that point on this fighter's screen and not behind anything*: a cone
+round the look, from the eye, then `sight_clear` -- the Veilstalker asks so it
+never reveals itself off-screen. A sight test written beside a creature's brain
+would be the mistake below with the roles swapped. **Every eye `aim.rs` starts
+from is `camera::eye_under`**: the eye held under a cave's vault, which the
+drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 
 Which one a move is comes from `Move::aim()`, **declared** in the move table so
 every move has an answer, and printed in the `aimed` column of
@@ -85,7 +94,7 @@ entry — come out as a bubble seven metres in front of the body.
 from the *chest* along the *look angle*. That ray is parallel to the crosshair's
 and never converges with it, so the reticle sits on one thing and the ability
 goes past it — by more the further away it is. If you find yourself writing
-`camera::eye(...)`, `look_dir()`, or a ray-vs-shape call outside those two
+`camera::eye(...)`, `camera::eye_under(...)`, `look_dir()`, or a ray-vs-shape call outside those two
 files, stop: the thing you want already exists.
 
 If none of the four fits a new ability, **change `aim.rs`** rather than working

@@ -6350,3 +6350,60 @@ disc like a line.
 look at critters.md §7: the box, the share-of-height dip, the Guillotine passing
 over a 0.6 m body (lower `lotus_height`, or let it be the Big One's tool), and
 lunges running through critters.
+
+### 2026-10-01 — The hunt's shared machinery: floor, senses, falls, defended things (bestiary P4, P5, P6's falls, P7, A5)
+
+**Changed** Nothing a player can feel in any fight that exists, on purpose. The
+world gained one region, the hunt's **lore** -- 24 cells each fight lays out
+for itself -- and on it floor hazards (discs and strands, kinds declared by the
+species, with slow, root, damage, pull, lift, blocks-sight, fire that spreads
+and burnt tar that becomes a solid), a noise ring made by diffing each
+fighter's body across the frame, and defended things (a wall, a cart on a
+road). Creatures got a perception filter per species and hearing; `aim.rs` got
+`sight_clear` and `in_view` (A5); the eye is held under a ceiling; creatures can
+collide with solids (opt-in); lengths across the 240 m valley no longer
+saturate; the sparring bot reads its walls off the arena. **One fall rule for
+the whole game**: from the last thing stood on, free to 9 m, 25 a metre past
+it, halved for a slow landing. A dev creature, the sentinel (`--hunt
+sentinel`), uses every piece. See [hazards.md](hazards.md).
+
+**Why** The ten creatures after the Ridgeback are to be built two at a time,
+each touching only its own files; everything they share had to exist first, and
+fit the 4 KiB snapshot with room for each one's own state.
+
+**Found** The bit-identical bar held: both pinned hunts unchanged, the fight
+report for every class, twelve seeds each, solo and duo, and the gnats, byte for
+byte. On the way:
+
+- **The first fall rule moved the pins.** Free below 6 m from the *apex* of the
+  fall (the Siegeshell's number, the Galewing's measure) charged the Champion
+  for his own 7.9 m leap in a random-input hunt, and the scripted Dual mage
+  for jumping off the Ridgeback's back -- her hunts got a third shorter. From
+  the apex is the wrong measure: a fighter's own jump is not a fall. Measured
+  from the *footing* it still moved them: **the Ridgeback's shoulders reach
+  8.73 m at the top of the rear** (5.5 m is the back standing), and the
+  scripted hunter rides up there. So the free height is 9 m, above anything the
+  proving ground can stand a fighter on, and a test computes that from every
+  frame of every clip so it stays true.
+- **A sinkhole pulled a fighter into the proving ground's platform and the
+  test read it as no pull.** The machinery was right; the test stood on the
+  wrong lane.
+- **A cloud as a capsule blocked a line passing over it**: two metres above a
+  four-metre column read as inside it, because a capsule's top is round. It is
+  an upright cylinder now (`math::segment_meets_column`).
+- **The cart crawled at 1.8 m/s on a 2 m/s knob**: its progress was kept in
+  centimetres and lost a third of a centimetre a frame. It is fixed point now.
+- **A dev creature's bite at a gate never landed**: it lunged into the gate,
+  which is a solid, and its `bumped` hook knocked it out of the move. Right
+  behaviour, wrong distance in the test.
+- A frame with every hazard slot full, burning and spreading, in the range
+  costs 26–70 µs in release, about what two creatures there do; nothing
+  allocates.
+
+**Reverted** The apex-based fall rule, and free below 6 m.
+
+**Verdict** built; nothing moved for fighters by construction. A person should
+look at hazards.md §8: the 9 m free height (the Galewing asked for 7.5), 25 a
+metre (the documents asked for 30 and 18), the Ridgeback not colliding with
+solids, hazards reaching a creature by its centre, and the sentinel in the
+`Shift+H` cycle.

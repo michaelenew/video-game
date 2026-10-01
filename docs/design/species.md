@@ -32,6 +32,7 @@ the re-baked pose table is the same table.
 | `clips`, `stock` | `ClipDecl` (name, looping, phased) per clip, and which clips stand for idle, walk, gallop, flinch, stumble, topple and dead. |
 | `span`, `rows`, `row` | The baked pose table, from the species' own `baked.rs`. |
 | `own`, `tuned`, `tuned_path` | Its own knobs, and its own baked tuning file. |
+| `fight` | What it brings to the fight besides its body and pack: its hazard kinds, its defended things, its perception filter and whether it hears, whether it collides with solids, the layout of its share of the hunt's lore, and its hooks (`frame`, `bumped`, `shown`). `FightDecl::PLAIN` for none of it, which is the Ridgeback. See [hazards.md](hazards.md). |
 
 `Monster` keeps a `SpeciesId` (one byte) in the snapshot and reads the rest
 through `Monster::sp()`. `beast::Rig` carries the `&'static Species` it was built
@@ -189,6 +190,10 @@ edit outside its own files and its registry lines.
    `crates/sim/src/arena/<creature>.rs` naming the species, its two registry
    lines, and optionally a dressing in `crates/game/src/arenas/`. Until it
    exists the creature is hunted in the proving ground.
+
+10. **What it brings to the fight** -- hazards, senses, defended things, its
+   own state in the hunt's lore: [hazards.md](hazards.md) §7. The dev
+   creature that uses all of it is the sentinel (`--hunt sentinel`, id 12).
 
 What you should **not** need to touch: `monster.rs`, `beast.rs`, `state.rs`,
 `oven.rs`, the report. If you do, it is a place the rig was not data yet — fix

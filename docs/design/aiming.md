@@ -380,6 +380,41 @@ sentence pull opposite ways:
 A class whose swings are discs never reads the pitch, so this changes nothing
 for five of the six.
 
+### Two questions about seeing (2026-10-01, bestiary P5 and A5)
+
+**Can something at this point see that one?** `aim::sight_clear` answers it:
+`aim::line_clear` -- nothing solid between the two points: the arena's solids,
+the ones a fight has raised (slag, a wall) and the stones -- and no floor hazard
+that **blocks sight** on the way. A cloud is an upright column: a line through
+the part of it between its floor and its top is blocked, a line over it is not,
+and a watcher standing inside one is blinded by it. Bodies do not block it, as
+they are not on the crosshair's ray. A creature's perception filter asks it from
+its head (`perception::in_line_of_sight`): the Pair do not see you through a
+pillar, the dev sentinel not through smoke.
+
+**Is that point on this fighter's screen?** `aim::in_view(who, look, at,
+half_angle, scene)` -- **A5**, asked by the [Veilstalker](creatures/veilstalker.md)
+so that it never reveals itself off-screen. Inside a cone of `half_angle` round
+the look, from the eye, and `sight_clear` from the eye to the point. Built from
+the eye and the look, so it lives beside `pointing_at`; `aim::in_view_of` takes
+an eye and a look direction already known -- the look a creature glanced some
+frames ago. A new question rather than a changed answer: nothing that aimed
+before aims differently.
+
+### The eye under a ceiling (2026-10-01)
+
+The ray starts at the eye, and the eye rides a sphere round the body that can
+rise several metres above it. Under a cave's vault that put the start of every
+aim inside the rock. **`camera::eye_under` holds the eye
+`tuning::eye_under_ceiling` below the lowest ceiling over the eye or over the
+fighter** -- a solid hanging from the roof whose underside is above the
+fighter's head -- and moves it nowhere else. Where nothing hangs overhead it is
+`camera::eye` exactly, which is every arena but a cave, so nothing outside one
+moved. Every eye `aim.rs` takes is this one, and the drawn camera
+(`view::camera`) starts from it too, so the crosshair stays on the line the ray
+follows. `look_onto` still settles against `camera::eye`: it has no arena to
+ask, and a bot aiming under a vault is off by the clamp at worst.
+
 ## Small bodies: how tall "there" is
 
 **Added 2026-10-01, with the critters** ([critters.md](critters.md); bestiary §6

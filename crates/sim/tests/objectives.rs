@@ -9,6 +9,7 @@
 //! it.
 
 use sim::arena::{ArenaId, range};
+use sim::critter::Critter;
 use sim::fixed::Fx;
 use sim::monster::Doing;
 use sim::objective::{self, ObjectiveField};
@@ -193,4 +194,56 @@ fn a_creature_s_blow_lands_on_it_once_a_move() {
         "one bite, three frames of it, one blow"
     );
     assert_eq!(after.taken, bite.damage);
+}
+
+#[test]
+fn a_critter_s_blow_lands_on_it_too() {
+    use sim::critter::is;
+    use sim::species::gnats;
+    // The sentinel's fight, with the dev pack in it as well: the lore is the
+    // first creature's, the pack the gnats'.
+    let mut w = World::hunt_in(
+        [Class::Champion; MAX_PLAYERS],
+        [Some(SpeciesId::SENTINEL), Some(SpeciesId::GNATS)],
+        ArenaId::RANGE,
+    );
+    w.lore.set_word(sentinel::word::LAID, 1);
+    park(&mut w);
+    let cart = cart(&w);
+    let sp = &gnats::SPECIES;
+    let bite = sp.attack(gnats::BITE);
+    assert!(bite.damage > 0);
+    // Somewhere beside the cart that the bite reaches it from.
+    let mut found = None;
+    for back in 0..40 {
+        let mut c = w.critters[0];
+        c.pos = cart
+            .at
+            .sub(V3::new(Fx::ratio(back, 4).add(Fx::ONE), Fx::ZERO, Fx::ZERO));
+        c.yaw = 0;
+        c.state = is::ACTIVE;
+        c.act = gnats::BITE;
+        c.timer = bite.active.max(3);
+        if c.reaches(sp, cart.at, cart.site.extent().y, cart.radius()) {
+            found = Some(c);
+            break;
+        }
+    }
+    let gnat = found.expect("somewhere a gnat's bite reaches the cart");
+    for _ in 0..3 {
+        park(&mut w);
+        let keep = w.critters[0].timer;
+        w.critters[0] = Critter {
+            timer: keep.max(gnat.timer),
+            ..gnat
+        };
+        w.advance([Input::default(); MAX_PLAYERS]);
+    }
+    let after = objective::get(&w.lore, sentinel::CART);
+    let takes = objective::stat_fx(&sentinel::SPECIES, sentinel::CART, ObjectiveField::Takes);
+    assert_eq!(
+        after.taken,
+        Fx::from_int(bite.damage).mul(takes).to_int(),
+        "once a move"
+    );
 }

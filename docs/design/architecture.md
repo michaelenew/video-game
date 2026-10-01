@@ -92,6 +92,30 @@ What catches drift is the pair of checks that give the same answer on every mach
   The cap keeps the ring inside L2. Raising it means every frame and every rollback got
   heavier, so it wants a reason the way an Oven exemption does.
 
+### Where the 4 KiB goes (measured 2026-10-01, with `size_of`)
+
+| Piece | Bytes | |
+| --- | --- | --- |
+| Two fighters | 952 | 476 each, the fall height included |
+| Effects (12) | 768 | |
+| Debris, bolts, gusts | 776 | |
+| Two creature slots | 360 | 180 each; the second is the Pair's |
+| Ten critters and their species | 484 | bestiary P3 |
+| The pack brain | 164 | |
+| **The hunt's lore** | **388** | 24 cells of 16 bytes and whose layout it is ([hazards.md](hazards.md)) |
+| Frame, phase, arena, padding | 20 | |
+| **World** | **3,912** | **184 to spare** |
+
+**The lore is the decision that made the cast fit.** Hazards, the noise ring, defended
+things and every creature's own state (a Veilstalker's footfalls, a Siegeshell's falling
+plates, a Pair's scar) are wanted by one fight each, and only one fight is ever loaded. So
+rather than a field per feature summed across the cast, the `World` keeps one fixed region
+sized to the largest fight, and the fight's species lays it out: so many cells of hazards,
+of noises, of objectives, the rest its own. The largest itemised fights need 18 and 19
+cells (the Mireback, the Siegeshell); 24 leaves each creature five or more to grow into, and
+`tests/lore.rs` fails if a layout does not fit. The region is hashed only when a cell is not
+zero, so a fight that uses none of it hashes as it did before it existed.
+
 ## Why not Unreal or Unity
 
 Not because they are slow. Unreal is not slow, and frame time will not be the problem.
