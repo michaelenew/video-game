@@ -1316,3 +1316,81 @@ fn a_hit_on_the_bull_or_a_hunter_nearer_the_herd_holds_it_off_the_cart() {
         "a hunter nearer the herd is the threat"
     );
 }
+
+// ---------------------------------------------------------------------------
+// In the world (§12)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_won_hunt_is_the_hornback_trophy_at_its_temper() {
+    // The bull down and the herd gone by the ford: the hunt is won, and what
+    // was beaten is the Hornback, at the temper it was fought at.
+    let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::HORNBACK).tempered(2);
+    w.players[1].health = 0;
+    assert_eq!(w.pack.unwrap().temper, 2);
+    alarmed(&mut w);
+    let b = bull(&w);
+    let hp = w.critters[b].health as i32;
+    pack::hurt(
+        &mut w.pack,
+        &mut w.critters,
+        b,
+        hp + 1,
+        V3::ZERO,
+        Fx::ZERO,
+        Fx::ZERO,
+    );
+    w.players[0].pos = at(-22, 18);
+    for _ in 0..1200 {
+        keep_up(&mut w);
+        w.advance(idle());
+        if !matches!(w.phase, sim::state::Phase::Fighting) {
+            break;
+        }
+    }
+    let (beaten, temper) = w.hunt_won().expect("a won hunt");
+    assert!(beaten.contains(&Some(SpeciesId::HORNBACK)));
+    assert_eq!(temper, 2);
+}
+
+#[test]
+fn the_crossing_is_won_when_the_cart_arrives_and_lost_when_it_breaks() {
+    // Arrived: won, with the bull still standing.
+    let mut w = crossing(Class::Champion);
+    settle(&mut w);
+    let end = cart(&w).site.length();
+    cart_to(&mut w, end.sub(Fx::ratio(1, 10)));
+    for _ in 0..60 {
+        keep_up(&mut w);
+        escort(&mut w);
+        w.advance(idle());
+        if !matches!(w.phase, sim::state::Phase::Fighting) {
+            break;
+        }
+    }
+    assert!(w.critters[bull(&w)].alive(), "nobody touched the bull");
+    let (beaten, _) = w.hunt_won().expect("the cart arrived: won");
+    assert!(beaten.contains(&Some(SpeciesId::HORNBACK)));
+
+    // Broken: lost.
+    let mut w = crossing(Class::Champion);
+    settle(&mut w);
+    sim::objective::strike(&mut w.lore, 0, 100_000);
+    for _ in 0..5 {
+        keep_up(&mut w);
+        w.advance(idle());
+    }
+    assert!(
+        !matches!(w.phase, sim::state::Phase::Fighting),
+        "the hunt is over"
+    );
+    assert!(w.hunt_won().is_none(), "and lost");
+}
+
+#[test]
+fn a_harder_herd_glances_sooner() {
+    let plain = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::HORNBACK);
+    let hard = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::HORNBACK)
+        .tempered(sim::temper::HIGHEST);
+    assert!(hard.pack.unwrap().glance_frames() < plain.pack.unwrap().glance_frames());
+}

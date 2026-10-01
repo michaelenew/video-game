@@ -246,7 +246,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 8] {
+fn scenarios() -> [Scenario; 9] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -281,6 +281,16 @@ fn scenarios() -> [Scenario; 8] {
                 sim::arena::ArenaId::RANGE,
             ))
         }),
+        // The Hornback's herd running a stampede on the crossing: every cow
+        // steered down its lane round every lee and every fallen fighter, the
+        // swept stop asked of the boulders, the cart standing as a solid.
+        ("the herd's stampede on the crossing", |c| {
+            herd_running(World::hunt_in(
+                [c; MAX_PLAYERS],
+                [Some(SpeciesId::HORNBACK), None],
+                sim::arena::ArenaId::HORNBACK_CROSSING,
+            ))
+        }),
         // Everything the hunt's lore can hold (bestiary P4 to P7): the dev
         // creature in the range, every hazard slot full where the fight is --
         // tar burning and spreading, smoke, a sinkhole, a strand, a vent on
@@ -294,6 +304,26 @@ fn scenarios() -> [Scenario; 8] {
             ))
         }),
     ]
+}
+
+/// The Hornback's bull bellowing now, so the whole herd is about to run.
+fn herd_running(mut w: World) -> World {
+    use sim::species::hornback as h;
+    let idle = [Input::default(); MAX_PLAYERS];
+    for _ in 0..2 {
+        w.advance(idle);
+    }
+    if let Some(pack) = w.pack.as_mut() {
+        pack.mood = sim::pack::mood::HUNTING;
+        pack.grace = 0;
+    }
+    if let Some(b) = w.critters.iter().position(|c| c.kind == h::BULL) {
+        let bull = &mut w.critters[b];
+        bull.state = sim::critter::is::STARTUP;
+        bull.act = h::BELLOW;
+        bull.timer = 1;
+    }
+    w
 }
 
 /// Every hazard slot of the sentinel's fight filled round the hunters' marks.
