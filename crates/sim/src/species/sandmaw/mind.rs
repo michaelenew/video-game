@@ -157,7 +157,14 @@ pub fn appetite(m: &Monster, kind: u8, base: i32, mind: &Mind) -> i32 {
             base + Knob::FrontAppetite.raw().min(base) + island
         }
         SOUND => {
-            if fight::standing(m) && m.own[fight::body::UP_FOR] >= Knob::SurfaceMax.raw() {
+            // Frantic, it cuts its own stand short to go after the landing
+            // of whoever it just launched (§4).
+            let most = if fight::frantic(m) {
+                Knob::FranticStand.raw()
+            } else {
+                Knob::SurfaceMax.raw()
+            };
+            if fight::standing(m) && m.own[fight::body::UP_FOR] >= most {
                 Knob::SoundAppetite.raw()
             } else {
                 0
@@ -175,15 +182,22 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
         return Some(m.pos);
     }
     let now = fight::now(mind.lore);
-    let Some(a) = fight::attended(mind.lore) else {
-        let home = mind.lore.word(word::GRACE_AT);
-        let at = V3::new(
-            crate::lore::from_cm(crate::lore::lo(home)),
-            Fx::ZERO,
-            crate::lore::from_cm(crate::lore::hi(home)),
-        );
-        return Some(orbit(m, mind, at, Knob::CircleRadius.fx()));
-    };
+    // Nothing heard yet: where it started is its last noise, heard as the
+    // hunt began, and the search starts from there.
+    let home = mind.lore.word(word::GRACE_AT);
+    let start = V3::new(
+        crate::lore::from_cm(crate::lore::lo(home)),
+        Fx::ZERO,
+        crate::lore::from_cm(crate::lore::hi(home)),
+    );
+    let a = fight::attended(mind.lore).unwrap_or(Attended {
+        what: 0,
+        kind: None,
+        who: crate::noise::NOBODY,
+        on_rock: false,
+        at: start,
+        frame: 0,
+    });
     let patience = if fight::hungry(m) {
         Knob::HungerPatience.raw()
     } else {
@@ -191,10 +205,50 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
     }
     .max(0) as u32;
     let since = now.wrapping_sub(a.frame);
-    if since < patience || a.on_rock {
-        return Some(orbit(m, mind, a.at, Knob::CircleRadius.fx()));
+    let to = if since < patience || a.on_rock {
+        orbit(m, mind, a.at, Knob::CircleRadius.fx())
+    } else {
+        spiral(m, mind, a.at)
+    };
+    Some(round_rock(m, mind, to))
+}
+
+/// **A way to it round rock**: straight at it if nothing is in the way;
+/// otherwise turned off the line, a little at a time either side, until a
+/// stretch of the swim ahead is clear -- so it goes round an island rather
+/// than pressing its head into the side of one.
+fn round_rock(m: &Monster, mind: &Mind, to: V3) -> V3 {
+    let from = V3::new(m.pos.x, Fx::ZERO, m.pos.z);
+    let want = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
+    let far = math::wide_flat_len(want);
+    if far.raw() <= 0 {
+        return to;
     }
-    Some(spiral(m, mind, a.at))
+    let body = m.sp().fight_fx(crate::species::FightField::BodyRadius);
+    let ahead = far.min(Knob::CircleRadius.fx());
+    let clear = |dir: V3| {
+        // Three points along the stretch ahead, each clear of rock.
+        (1..=3).all(|k| {
+            let p = from.add(dir.scale(ahead.mul(Fx::from_int(k)).div(Fx::from_int(3))));
+            mind.ground.fence(p, body, Fx::ZERO).0 == p
+        })
+    };
+    let dir = math::wide_normalized(want);
+    if clear(dir) {
+        return to;
+    }
+    let base = math::atan2_turns(dir.z, dir.x);
+    let step = Knob::SearchLook.fx();
+    for i in 1..=LOOKS as i32 {
+        for side in [Fx::ONE, Fx::ONE.neg()] {
+            let turn = base.add(step.mul(Fx::from_int(i)).mul(side));
+            let d = V3::from_turns(turn);
+            if clear(d) {
+                return from.add(d.scale(ahead));
+            }
+        }
+    }
+    to
 }
 
 /// A point a little way round a circle from where it is now: what it swims
@@ -254,16 +308,23 @@ fn spiral(m: &Monster, mind: &Mind, centre: V3) -> V3 {
     centre.add(V3::from_turns(at.add(look)).scale(wider))
 }
 
+/// A move it chose and cannot aim after all: back to swimming, the move not
+/// spent.
+fn give_up(m: &mut Monster, kind: u8) {
+    m.doing = crate::monster::Doing::Prowl;
+    m.brain.cooldown[kind as usize] = 0;
+}
+
 /// **As a move commits**: the rise is aimed at the noise, kept off rock (or
 /// beside the island); the breach's lane is laid along the trail's lead and
 /// it turns to it; the undertow is under the body it felt.
 pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
     match kind {
-        RISE => {
-            if let Some(at) = rise_at(m, mind) {
-                m.aim_at(at);
-            }
-        }
+        RISE => match rise_at(m, mind) {
+            Some(at) => m.aim_at(at),
+            // Nowhere to come up after all: it does not.
+            None => give_up(m, kind),
+        },
         BREACH => {
             if let Some(at) = breach_at(m, mind) {
                 m.aim_at(at);
@@ -274,11 +335,10 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
                 }
             }
         }
-        UNDERTOW => {
-            if let Some(at) = undertow_at(m, mind) {
-                m.aim_at(at);
-            }
-        }
+        UNDERTOW => match undertow_at(m, mind) {
+            Some(at) => m.aim_at(at),
+            None => give_up(m, kind),
+        },
         _ => {}
     }
 }

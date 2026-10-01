@@ -337,6 +337,12 @@ pub struct FightDecl {
     /// was: the Ridgeback's shake turns its shoulders far enough that the
     /// rule would cost a braced rider their footing.
     pub rolls_over: bool,
+    /// **The steepest face that is still somewhere to stand**: the species'
+    /// own knob, by index, holding the cosine of that slope. A part whose top
+    /// face tilts further from level is a wall, not a floor -- the Sandmaw's
+    /// column, six metres of worm leaning out of the sand. `None`, every top
+    /// face is a surface whichever way it tilts, as it always was.
+    pub steepest: Option<u16>,
     /// Called when it walks into a solid, with the push that got it out: the
     /// Hornback's charge into a rock is a stun.
     pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
@@ -385,11 +391,13 @@ pub struct FightDecl {
     pub marks: Option<fn(&crate::state::World, &mut Marks)>,
 
     // ---- a body that is not always there (the Sandmaw) ----
-    /// **Which parts have no body this frame**, a bit per part: no hurtbox,
-    /// not solid, not mountable, not drawn. Handed the creature and its rig
-    /// as built; `None` is every part always there. The Sandmaw under the
-    /// sand.
-    pub buried: Option<fn(&crate::monster::Monster, &crate::beast::Rig) -> u64>,
+    /// **Which parts have no body this frame** -- no hurtbox, not solid, not
+    /// mountable, not drawn -- and **which nobody can stand on** though they
+    /// are there: a bit per part each. Handed the creature and its rig as
+    /// built; `None` is every part always there. The Sandmaw under the sand,
+    /// and only ridden when it is beached.
+    pub presence:
+        Option<fn(&crate::monster::Monster, &crate::beast::Rig) -> crate::beast::Presence>,
     /// **What it looks like, when its posture says so**: a pose (sampled from
     /// its own clips, `beast::sample`) in place of the shared choice between
     /// idle, walk and gallop and the stock states -- `None` from the hook is
@@ -514,6 +522,7 @@ impl FightDecl {
         collides: false,
         lands_on_bodies: false,
         rolls_over: false,
+        steepest: None,
         bumped: None,
         frame: None,
         shown: None,
@@ -524,7 +533,7 @@ impl FightDecl {
         struck: None,
         landed: None,
         marks: None,
-        buried: None,
+        presence: None,
         clip: None,
         hearing: None,
         from_inside: None,

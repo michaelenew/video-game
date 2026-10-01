@@ -450,10 +450,12 @@ fn nothing_passes_under_rock() {
                 let gap = sim::math::flat_box_gap(m.pos, solid.min, solid.max);
                 assert!(
                     gap.raw() >= body.sub(Fx::ratio(1, 20)).raw(),
-                    "its head at {:?} is {gap:?} from rock, {:?}, posture {}",
+                    "its head at {:?} is {gap:?} from rock, {:?}, posture {}, acted {:?}, attended {:?}",
                     m.pos,
                     m.doing,
-                    fight::posture_of(&m)
+                    fight::posture_of(&m),
+                    fight::acted_on(&w.lore),
+                    fight::attended(&w.lore)
                 );
             }
             frames += 1;

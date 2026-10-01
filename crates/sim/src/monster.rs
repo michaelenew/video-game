@@ -981,9 +981,11 @@ impl Monster {
     pub fn rig(&self) -> Rig {
         let mut rig = Rig::build(self.sp(), self.pos, self.yaw, &self.pose());
         // What of it is under the floor this frame, for a species with a
-        // body that is not always there (`FightDecl::buried`).
-        if let Some(buried) = self.sp().fight.buried {
-            rig.buried = buried(self, &rig);
+        // body that is not always there (`FightDecl::presence`).
+        if let Some(presence) = self.sp().fight.presence {
+            let here = presence(self, &rig);
+            rig.buried = here.buried;
+            rig.unmountable = here.unmountable;
         }
         rig
     }
@@ -1015,6 +1017,17 @@ impl Monster {
 }
 
 impl Rig {
+    /// Is this part's top face level enough to stand on? Always, for a
+    /// species that does not say (`FightDecl::steepest`).
+    fn standable(&self, part: usize) -> bool {
+        match self.species.fight.steepest {
+            Some(k) => {
+                self.of(part).rot.r[1].y.raw() >= self.species.own_raw(k as usize)
+            }
+            None => true,
+        }
+    }
+
     /// See [`Monster::surface_under`]. Lives on the rig because everything it
     /// needs is a bone transform, and the callers that already hold one should
     /// not have to rebuild the skeleton to ask.
@@ -1046,12 +1059,17 @@ impl Rig {
         let lip = body_radius.mul(t::edge_grace());
         let mut best: Option<(usize, Fx, Fx)> = None;
         for (index, part) in self.species.parts.iter().enumerate() {
-            if !part.shape.mountable || !self.there(index) {
+            if !part.shape.mountable || !self.boardable(index) {
                 continue;
             }
             // **A face pointing at the floor is not a surface**, for a species
             // that rolls onto its back (`FightDecl::rolls_over`).
             if self.species.fight.rolls_over && self.of(index).rot.r[1].y.raw() <= 0 {
+                continue;
+            }
+            // **Nor is a face too steep to stand on**, for a species that
+            // says how steep (`FightDecl::steepest`).
+            if !self.standable(index) {
                 continue;
             }
             let sh = self.species.shape(index);
@@ -1075,6 +1093,12 @@ impl Rig {
             let height = self
                 .part_to_world(index, V3::new(local.x, sh.max.y, local.z))
                 .y;
+            // **A face under the floor is nobody's to stand on**, for a
+            // species with a body that goes under it (`FightDecl::steepest`
+            // says it has faces that are not always floors).
+            if self.species.fight.steepest.is_some() && height.raw() < 0 {
+                continue;
+            }
             if best.is_none_or(|(_, _, seen)| height.raw() > seen.raw()) {
                 best = Some((index, sh.max.y, height));
             }
@@ -1242,7 +1266,11 @@ impl Rig {
             // walking into the side of one should be stopped by it rather than
             // hoisted on top. Using the step here lifted a rider off the tail
             // onto the haunch mid-sweep and dropped them off the far side.
-            let step = part.mountable && up.raw() >= 0 && up.raw() <= t::mount_snap().raw();
+            let step = part.mountable
+                && self.boardable(index)
+                && self.standable(index)
+                && up.raw() >= 0
+                && up.raw() <= t::mount_snap().raw();
             // **Never pressed down**, for a species whose parts come down on
             // bodies (`FightDecl::lands_on_bodies`): a body under the
             // Mireback's belly as a flop lands -- on the floor, or on a slag
@@ -1280,7 +1308,14 @@ impl Rig {
                     p.z = p.z.add(d.z.mul(t));
                     shoved = true;
                 }
-            } else if step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw())
+            } else if step
+                || (vertical.raw() <= px.abs().raw()
+                    && vertical.raw() <= pz.abs().raw()
+                    // A face too steep to stand on is never stood on by
+                    // least penetration either: it is a wall to be pushed
+                    // off sideways (`FightDecl::steepest`).
+                    && (up.raw() > down.raw()
+                        || (self.standable(index) && self.boardable(index))))
             {
                 if step || up.raw() <= down.raw() {
                     p.y = sh.max.y;

@@ -219,10 +219,13 @@ pub const PARTS: [Part; PART_COUNT] = [
         Knob::VulnHead as u16,
     )
     .mountable(),
-    segment("tail 1", TAIL1),
-    segment("tail 2", TAIL2),
-    segment("tail 3", TAIL3),
-    segment("tail 4", TAIL4),
+    // The body behind the hole is **soft**: it is what the tail lash sweeps
+    // with, and a whip that shoved and lifted whoever it passed through would
+    // take away the crouch that answers it. Still a back to stand on.
+    segment("tail 1", TAIL1).soft(),
+    segment("tail 2", TAIL2).soft(),
+    segment("tail 3", TAIL3).soft(),
+    segment("tail 4", TAIL4).soft(),
     // The tip tapers.
     part(
         "tail 5",
@@ -231,7 +234,8 @@ pub const PARTS: [Part; PART_COUNT] = [
         v((50, 100), (80, 100), (80, 100)),
         Knob::VulnHide as u16,
     )
-    .mountable(),
+    .mountable()
+    .soft(),
     // The tooth ring: the front face of the head, a hand thick.
     part(
         "tooth ring",
@@ -457,6 +461,7 @@ crate::species_knobs! {
     // surface_max
     SurfaceMax,      "mind",    "Stays up at most",                     Frames,0, 900;
     SoundAppetite,   "mind",    "Sound, appetite once the stand is up", Int,   0, 8000;
+    StandTurn,       "mind",    "Standing, turns at (x its swim)",      Fixed, 0, fx(1,1);
     // breach_deafness
     BreachDeafness,  "mind",    "Deaf after a breach for",              Frames,0, 240;
     // hunger_hearing
@@ -501,6 +506,9 @@ crate::species_knobs! {
     RiderThrow,      "sound",   "Riders thrown, damage",                Int,   0, 400;
     RootPush,        "sound",   "A root holds it up for",               Frames,0, 240;
     // the beach
+    // The steepest of its back a rider can stand on, as the cosine of the
+    // slope: the beached writhe's roll, not the column out of the sand.
+    Steepest,        "beach",   "Back stood on no steeper than (cos)",  Fixed, 0, fx(1,1);
     StoneReach,      "beach",   "A stone this near the circle beaches", Fixed, 0, fx(4,1);
     // how it is drawn
     SegmentLength,   "wake",    "Wake, a segment every",                Fixed, 0, fx(4,1);

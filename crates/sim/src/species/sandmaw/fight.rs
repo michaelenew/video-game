@@ -193,6 +193,7 @@ pub static FIGHT: FightDecl = FightDecl {
     perceives,
     hears: true,
     collides: true,
+    steepest: Some(Knob::Steepest as u16),
     frame: Some(frame),
     appetite: Some(mind::appetite),
     prowl_to: Some(mind::prowl_to),
@@ -202,7 +203,7 @@ pub static FIGHT: FightDecl = FightDecl {
     landed: Some(landed),
     marks: Some(marks),
     shown: Some(shown),
-    buried: Some(buried),
+    presence: Some(presence),
     clip: Some(clip),
     hearing: Some(hearing),
     from_inside: Some(from_inside),
@@ -457,7 +458,9 @@ pub fn fit(m: &Monster, ground: &Terrain, at: V3) -> Option<V3> {
 /// nearest point to the noise its body fits, along the line from its head.
 pub fn island_edge(m: &Monster, ground: &Terrain, at: V3) -> Option<V3> {
     let body = m.sp().fight_fx(FightField::BodyRadius);
-    let from = head_flat(m);
+    // From where it is, not from its head: the same answer whatever pose it
+    // is in, so the brain that chose it and the move that aims it agree.
+    let from = flat(m.pos);
     let to = flat(at);
     let span = math::wide_flat_dist(from, to);
     if span.raw() <= 0 {
@@ -566,15 +569,25 @@ fn in_discs(discs: &[(V3, Fx)], pos: V3) -> bool {
 
 /// **Which parts are under the sand**: every part whose box is wholly below
 /// the floor. Buried, that is all of it; standing, the body behind the hole.
-fn buried(m: &Monster, rig: &Rig) -> u64 {
+/// And **it is only ridden beached**: a column standing out of the sand is a
+/// thing to hit, and a tail breaking the sand under you is not a back.
+fn presence(m: &Monster, rig: &Rig) -> crate::beast::Presence {
     let sp = m.sp();
-    let mut mask = 0u64;
+    let mut buried = 0u64;
     for i in 0..sp.parts.len() {
         if top_of(sp, rig, i).raw() < 0 {
-            mask |= 1 << i;
+            buried |= 1 << i;
         }
     }
-    mask
+    let unmountable = if beached(m) || posture_of(m) == posture::BEACHED {
+        0
+    } else {
+        u64::MAX
+    };
+    crate::beast::Presence {
+        buried,
+        unmountable,
+    }
 }
 
 /// The highest point of a part's box, in the world.
@@ -696,6 +709,12 @@ fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
         m.doing = Doing::Flinch {
             left: Knob::GagFrames.raw() as u16,
         };
+        return true;
+    }
+    // Going under -- off its feet or off its side -- it is past breaking:
+    // the dive is the end of the window, not a second one.
+    if matches!(m.doing.attacking(), Some(SOUND | DIVE)) {
+        m.poise = 0;
         return true;
     }
     // **Broken while it stands**, or in the air over a breach: beached.
@@ -1013,12 +1032,21 @@ fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {
                 kind: DIVE,
                 left: sp.attack(DIVE).startup,
             };
+            m.poise = 0;
             m.hit_used = false;
             m.own[body::EVENTS] &= !event::THROWN;
         }
         _ => {}
     }
     if standing(m) {
+        // **The column turns slowly**: a worm six metres out of a hole is
+        // not a turret. What the shared steer turned it this frame is cut
+        // to `StandTurn` of itself.
+        if matches!(m.doing, Doing::Prowl) {
+            let turned = m.yaw_rate.mul(DT);
+            let kept = turned.mul(Knob::StandTurn.fx());
+            m.yaw = m.yaw.sub(turned).add(kept);
+        }
         m.own[body::UP_FOR] += 1;
         // A root keeps it up: the dive put back, once a stand.
         if m.rooted > 0 && m.own[body::EVENTS] & event::ROOTED == 0 {

@@ -372,15 +372,31 @@ pub struct Rig {
     pub species: &'static Species,
     /// **Parts with no body this frame**, a bit per part: no hurtbox, not
     /// solid, not mountable. Zero from [`Rig::build`]; a creature's rig
-    /// (`Monster::rig`) fills it from its species' `FightDecl::buried`. The
+    /// (`Monster::rig`) fills it from its species' `FightDecl::presence`. The
     /// Sandmaw under the sand.
     pub buried: u64,
+    /// **Parts nobody can stand on this frame**, though they are there to
+    /// hit and to walk into: the Sandmaw, which is only ridden beached.
+    pub unmountable: u64,
+}
+
+/// What of a creature is there this frame: see [`Rig::buried`] and
+/// [`Rig::unmountable`], a bit per part each.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Presence {
+    pub buried: u64,
+    pub unmountable: u64,
 }
 
 impl Rig {
     /// Is this part there to be hit, stood on or walked into this frame?
     pub fn there(&self, part: usize) -> bool {
         self.buried & (1u64 << (part as u64 & 63)) == 0
+    }
+
+    /// Can this part be stood on this frame, as far as its creature says?
+    pub fn boardable(&self, part: usize) -> bool {
+        (self.buried | self.unmountable) & (1u64 << (part as u64 & 63)) == 0
     }
 
     /// Place every bone. One forward pass, parents before children.
@@ -418,6 +434,7 @@ impl Rig {
             facing,
             species,
             buried: 0,
+            unmountable: 0,
         }
     }
 
