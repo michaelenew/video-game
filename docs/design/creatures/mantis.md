@@ -704,7 +704,7 @@ after the passes in [feel-log.md](../feel-log.md) of 2026-10-01:
 ```text
                 solo won   mean    duo won   mean   threat / guarded / poke / way in / walk up   unanswerable
   Champion       0/24      --       4/12    115 s      38 / 26 /  9 / 17 / 10 %                   0
-  Bulwark       18/24     246 s    11/12    178 s      47 / 18 /  7 / 15 / 13 %                   0
+  Bulwark       18/24     246 s    11/12    176 s      47 / 18 /  7 / 15 / 13 %                   0
   Reaver         0/24      --       0/12     --        37 / 29 / 11 / 17 /  5 %                   0
   Elementalist  24/24      71 s     7/12    133 s      31 / 30 / 11 / 22 /  6 %                   0
   Blood mage     0/24      --       0/12     --        37 / 30 / 11 / 16 /  6 %                   0
@@ -802,3 +802,9 @@ because a guessed Ready is a stance it is not hit in. The windows sit on §9's
    creature's damage taken from a Slam (a rule for one class), accept it, or
    give the plan's other classes their tools before deciding?
 
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here nothing: the Mantis plan never walks in on a window from range, so the solo row is bit for bit the same; the duo's one throw moved its mean by two seconds.

@@ -108,6 +108,16 @@ impl SpeciesId {
     pub fn get(self) -> &'static Species {
         lookup(self).unwrap_or(&ridgeback::SPECIES)
     }
+
+    /// **A dev species**: registered so its tests, `critcheck`, `beastcheck`,
+    /// the Oven and `--hunt <name>` reach it, and not a creature anybody hunts
+    /// for a trophy -- the gnats (the critter machinery with nothing of its
+    /// own) and the sentinel (one of every hazard, sense and defended thing).
+    /// The picker's `Shift+H` cycle ([`after`]) and its list ([`shown`]) leave
+    /// them out, the way the range is an arena no creature lives in.
+    pub const fn is_dev(self) -> bool {
+        matches!(self, SpeciesId::GNATS | SpeciesId::SENTINEL)
+    }
 }
 
 /// How many ids there are, registered or not.
@@ -148,6 +158,12 @@ pub fn all() -> impl Iterator<Item = &'static Species> {
     (0..COUNT as u8).filter_map(|i| lookup(SpeciesId(i)))
 }
 
+/// Every registered species a player is offered, in id order: [`all`] less
+/// the dev species ([`SpeciesId::is_dev`]). The picker's list and its cycle.
+pub fn shown() -> impl Iterator<Item = &'static Species> {
+    all().filter(|s| !s.id.is_dev())
+}
+
 /// Find a registered species by name, ignoring case. For the tools that take
 /// `--species`.
 pub fn named(name: &str) -> Option<&'static Species> {
@@ -156,11 +172,13 @@ pub fn named(name: &str) -> Option<&'static Species> {
 
 /// The next registered species after this one, in id order, wrapping round:
 /// what the picker's cycle steps to. Unregistered ids are skipped, so a
-/// creature whose branch has not landed is never offered.
+/// creature whose branch has not landed is never offered, and so are the dev
+/// species ([`SpeciesId::is_dev`]): from one of them it steps on to the next
+/// creature a player is shown.
 pub fn after(id: SpeciesId) -> &'static Species {
     (1..=COUNT as u8)
         .filter_map(|step| lookup(SpeciesId((id.0.wrapping_add(step)) % COUNT as u8)))
-        .next()
+        .find(|s| !s.id.is_dev())
         .unwrap_or(&ridgeback::SPECIES)
 }
 

@@ -687,7 +687,7 @@ with a fifteen-frame reaction; the herd's own report lines are §9's
   Reaver       15/24   163 s    231 of  750      36 /  7 / 26 / 31 %                  1
   Elementalist 24/24    36 s    869 of 1000      34 /  7 / 15 / 45 %                  0
   Blood mage   21/24   109 s    366 of 1000      39 /  8 / 20 / 32 %                  1
-  Bulwark      20/24   170 s    586 of 1250      36 /  7 / 27 / 30 %                  1
+  Bulwark      19/24   163 s    542 of 1250      37 /  8 / 26 / 30 %                  1
   Dual mage    14/24   219 s    383 of 1000      37 /  8 / 28 / 27 %                  1
 
   (2026-10-01, every class played; before it: Reaver 16 in 159 s, Elementalist
@@ -711,7 +711,7 @@ with a fifteen-frame reaction; the herd's own report lines are §9's
     Reaver                9 / 12                          56 s        9 in 56 s
     Elementalist         11 / 12                          49 s        7 in 68 s
     Blood mage            4 / 12                          58 s        8 in 60 s
-    Bulwark               8 / 12                          59 s        9 in 58 s
+    Bulwark               7 / 12                          57 s        9 in 58 s
     Dual mage             9 / 12                          67 s       11 in 55 s
     two Champions         1 / 12                          54 s
 
@@ -819,3 +819,9 @@ numbers: a person's to decide whether that is her identity or a hole.
   from the bull through the cart; the escort post is now off that line, ahead of
   the cart, and the hunter walks across the bull's line while a charge winds up.
 
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here it costs him one hunt in each arena: a throw the plan cuts short with a dodge leaves him without his guard until the shield is home (26 throws, 16 given up, in the 24).

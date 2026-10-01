@@ -465,7 +465,7 @@ acts only on what is on that screen and moves the mouse off it by a flick.
 | Class | What it does now |
 | --- | --- |
 | Champion | **Exactly what the plan says** -- the plans were written for him, and the Ridgeback's pin proves his hunts did not move. |
-| Bulwark | The plans' own guards where they had them (the Ridgeback, the Mireback, the Sandmaw, the Broodmother), and now the Hornback's hook and shoulder taken on the shield; a Slam answers a blow the shield took. A guard on the Pair's answers was tried and took him from 12 wins in 24 to 3 -- two cats, one shield -- and taken out. Not built: the shield thrown. |
+| Bulwark | The plans' own guards where they had them (the Ridgeback, the Mireback, the Sandmaw, the Broodmother), and now the Hornback's hook and shoulder taken on the shield; a Slam answers a blow the shield took. A guard on the Pair's answers was tried and took him from 12 wins in 24 to 3 -- two cats, one shield -- and taken out. **The shield thrown** (2026-10-01, later the same day): on a window five to eleven metres off, it is thrown at the work, he leaps to it as it flies and Slams out of the leap; a shield left planted is recalled. The thrown shield strikes no creature, so this is his way across the floor, not a ranged blow. |
 | Shadow Reaver | Sends the shadow beside the work between openings, and calls it home when the work has moved; swings at nothing now and then so its copy marks the creature; **the lotus** on a shadow standing at the work, dragged home through it by a recall; **dashes** to a shadow standing there to go in, and to one lying the way out to leave; the **Executioner** to cash marks. |
 | Elementalist | **Bolts and the Cataclysm aimed** through the crosshair onto the point (the plans had levelled them at the horizon), the **fire pillar** planted where the creature stands in any window or quiet moment long enough. A cover stone raised between her and the creature was tried and cost her hunts on every creature it was tried on (they block her own bolts and her way); not kept. The plans that raised stones already (the Hornback's lanes, the Sandmaw's beaches, the Pair's split) still do. |
 | Blood mage | The scythe where the plan pressed her Haemorrhage in reach (four in a hundred of her red for thirty, against something that does not bleed), measured by the scythe's own reach -- several plans measured her by her poke slot, the Bloodletter, and swung the scythe at the air from seven metres. **The spike on a pool under it** worth the price (eighty of essence and up), **blinks** to a pool to go in or out, the **Grasp** as a way in on a long window, the cut from range with red to spare. |
@@ -487,11 +487,14 @@ plan B `--gamble`; the Broodmother `cargo run -p hunt --bin brood -- --all
 --repeats 24` (the balanced plan here; the other two in her §13). *Before* is
 the same command on main the hour before the class layer; for the Siegeshell,
 which arrived later, the same build before its plan was wired to the layer. Alone and as a pair (`--hunters 2 --repeats 12`, both of the class).
+**The Bulwark's rows were re-run on 2026-10-01** after his shield throw was
+added to the layer; the guard-only build reproduced every Bulwark row above to
+the hunt before it moved (see *Across the cast*, below, and the feel log).
 
 | Creature | Class | Won | Mean win | Unanswerable | Before (won) |
 | --- | --- | --- | --- | --- | --- |
 | Ridgeback | Champion | 14/24 | 64 s | 0 | 14/24 |
-|  | Bulwark | 0/24 | -- | 0 | 0/24 |
+|  | Bulwark | 1/24 | 103 s | 0 | 0/24 |
 |  | Reaver | 12/24 | 64 s | 0 | 5/24 |
 |  | Elementalist | 6/24 | 141 s | 0 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
@@ -503,43 +506,43 @@ which arrived later, the same build before its plan was wired to the layer. Alon
 |  | Blood mage | 21/24 | 57 s | 0 | 24/24 |
 |  | Dual mage | 20/24 | 87 s | 0 | 2/24 |
 | Hornback, meadow | Champion | 22/24 | 109 s | 0 | 22/24 |
-|  | Bulwark | 20/24 | 170 s | 1 | 19/24 |
+|  | Bulwark | 19/24 | 163 s | 1 | 19/24 |
 |  | Reaver | 15/24 | 163 s | 1 | 16/24 |
 |  | Elementalist | 24/24 | 36 s | 0 | 23/24 |
 |  | Blood mage | 21/24 | 109 s | 1 | 5/24 |
 |  | Dual mage | 14/24 | 219 s | 1 | 1/24 |
 | Hornback, crossing | Champion | 11/12 | 56 s | 0 | 11/12 |
-|  | Bulwark | 8/12 | 59 s | 0 | 9/12 |
+|  | Bulwark | 7/12 | 57 s | 0 | 9/12 |
 |  | Reaver | 9/12 | 56 s | 0 | 9/12 |
 |  | Elementalist | 11/12 | 49 s | 0 | 7/12 |
 |  | Blood mage | 4/12 | 58 s | 0 | 8/12 |
 |  | Dual mage | 9/12 | 67 s | 0 | 11/12 |
 | Mireback | Champion | 21/24 | 120 s | 1 | 21/24 |
-|  | Bulwark | 16/24 | 98 s | 0 | 16/24 |
+|  | Bulwark | 18/24 | 102 s | 0 | 16/24 |
 |  | Reaver | 22/24 | 89 s | 2 | 23/24 |
 |  | Elementalist | 24/24 | 42 s | 0 | 24/24 |
 |  | Blood mage | 5/24 | 149 s | 3 | 5/24 |
 |  | Dual mage | 0/24 | -- | 0 | 0/24 |
 | Sandmaw | Champion | 18/24 | 191 s | 0 | 18/24 |
-|  | Bulwark | 24/24 | 214 s | 0 | 24/24 |
+|  | Bulwark | 22/24 | 209 s | 0 | 24/24 |
 |  | Reaver | 10/24 | 223 s | 0 | 8/24 |
 |  | Elementalist | 11/24 | 338 s | 0 | 4/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 3/24 | 209 s | 0 | 0/24 |
 | The Pair | Champion | 16/24 | 159 s | 0 | 16/24 |
-|  | Bulwark | 12/24 | 186 s | 0 | 12/24 |
+|  | Bulwark | 21/24 | 161 s | 0 | 12/24 |
 |  | Reaver | 7/24 | 111 s | 0 | 4/24 |
 |  | Elementalist | 24/24 | 46 s | 0 | 4/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 4/24 | 128 s | 0 | 0/24 |
 | Broodmother (balanced) | Champion | 7/24 | 143 s | 2 | 7/24 |
-|  | Bulwark | 0/24 | -- | 0 | 0/24 |
+|  | Bulwark | 1/24 | 248 s | 1 | 0/24 |
 |  | Reaver | 0/24 | -- | 0 | 0/24 |
 |  | Elementalist | 1/24 | 142 s | 1 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 10/24 | 152 s | 3 | 0/24 |
 | Veilstalker | Champion | 6/24 | 336 s | 0 | 6/24 |
-|  | Bulwark | 8/24 | 463 s | 0 | 8/24 |
+|  | Bulwark | 9/24 | 483 s | 0 | 8/24 |
 |  | Reaver | 6/24 | 491 s | 0 | 3/24 |
 |  | Elementalist | 22/24 | 208 s | 0 | 5/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
@@ -557,7 +560,7 @@ which arrived later, the same build before its plan was wired to the layer. Alon
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 0/24 | -- | 0 | 0/24 |
 | Galewing, plan B | Champion | 7/24 | 491 s | 0 | 7/24 |
-|  | Bulwark | 2/24 | 752 s | 0 | 2/24 |
+|  | Bulwark | 2/24 | 700 s | 0 | 2/24 |
 |  | Reaver | 11/24 | 580 s | 0 | 2/24 |
 |  | Elementalist | 18/24 | 230 s | 0 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
@@ -625,11 +628,23 @@ before this change as after it.
   bodies carry none), and she is 750 health against everybody's 1000. The
   Mantis is still 0: her shadow out beside its guard is not yet the fight §7
   of its document describes.
-- **The Bulwark** moved only where the layer guards for him or answers a
-  guarded blow with Slam: the Hornback (19 to 20, 191 s to 170 s), the Sandmaw
-  (the same 24 wins, with more health), the Broodmother and the crossing (one
-  fewer). His Ridgeback (0) and Galewing (0 and 2) are the open questions they
-  were.
+- **The Bulwark** moved first only where the layer guards for him or answers
+  a guarded blow with Slam: the Hornback (19 to 20, 191 s to 170 s), the
+  Sandmaw (the same 24 wins, with more health), the Broodmother and the
+  crossing (one fewer). **Then the throw** (2026-10-01, the rows above): the
+  shield thrown at a window five to eleven metres off, the leap to it, and the
+  Slam out of the leap. **The Pair 12 to 21**, in 161 s from 186 -- a leap
+  closes on a cat in its recovery before its mate comes round -- the Mireback
+  16 to 18, the Ridgeback 0 to 1, the Veilstalker 8 to 9, the Broodmother 0
+  to 1; the Sandmaw 24 to 22 and the Hornback and the crossing one fewer
+  each, where a throw given up for a dodge leaves him without his guard
+  until it is home. The Gnawers, the Mantis and the Siegeshell never call for
+  it (no plan there walks in on a window from range), and the Galewing's
+  windows are too short for the leap and the Slam (0 and 2, as before). **The
+  thrown shield strikes no creature** -- only a fighter, in versus -- though
+  three creature documents assume it does (the Galewing's wing, the
+  Broodmother's sac, the Siegeshell's climb): a person's call, `CLASS-5` in
+  [review.md](review.md).
 - **The Champion** did not move on any creature.
 
 ### The fire pillar, looked into

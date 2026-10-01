@@ -589,7 +589,7 @@ Numbers from `cargo run -p hunt --bin fight -- --species mireback --class <c>
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable
   Champion     21/24   120 s        454                  44 / 9 / 14 / 33 %                  1
-  Bulwark      16/24    98 s        530                  46 / 8 / 13 / 33 %                  0
+  Bulwark      18/24   102 s        563                  45 / 8 / 13 / 34 %                  0
   Reaver       22/24    89 s        441                  43 / 8 / 13 / 37 %                  2
   Elementalist 24/24    41 s        653                  34 / 7 / 11 / 48 %                  0
   Blood mage    5/24   149 s        118                  42 / 8 / 13 / 36 %                  3
@@ -702,3 +702,10 @@ her identity or a hole (`flee` could favour her fire); is 45 % threatening
 oppressive in the hands or only in the harness; and does the flop -- the
 toad's main damage, nineteen landings in 24 hunts -- read from its ring of
 warnings early enough, which only somebody watching it come down can say.
+
+**2026-10-01, later: the Bulwark throws his shield** (`hunt::class`,
+`Hands::throw_in`): on a window five to eleven metres off he throws it at the
+work, leaps to it as it flies and Slams out of the leap. His row above is
+re-run with it; the feel log of the day has the before and after. The thrown
+shield strikes no creature, so it is a way in, not a ranged blow
+([review.md](../review.md) `CLASS-5`). Here it wins him two more (37 throws, every one leapt and slammed).
