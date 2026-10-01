@@ -70,6 +70,15 @@ pub fn breach_at(m: &Monster, mind: &Mind) -> Option<V3> {
     (inside && fight::on_sand(mind.ground, at)).then_some(at)
 }
 
+/// **Where the sinkhole opens**: under a body it felt at its last glance,
+/// kept off rock as a rise is, since a rise at its middle ends it.
+pub fn undertow_at(m: &Monster, mind: &Mind) -> Option<V3> {
+    let a = fresh(m, mind).filter(|a| {
+        a.felt() && fight::now(mind.lore).wrapping_sub(a.frame) <= m.glance_frames() as u32
+    })?;
+    fight::fit(m, mind.ground, a.at)
+}
+
 /// A tent: one at `ideal`, nothing past `span` either side.
 fn tent(d: Fx, ideal: Fx, span: Fx) -> Fx {
     if span.raw() <= 0 {
@@ -127,10 +136,7 @@ pub fn appetite(m: &Monster, kind: u8, base: i32, mind: &Mind) -> i32 {
             if !fight::under(m) {
                 return 0;
             }
-            let felt = fresh(m, mind).is_some_and(|a| {
-                a.felt() && fight::now(mind.lore).wrapping_sub(a.frame) <= m.glance_frames() as u32
-            });
-            if felt {
+            if undertow_at(m, mind).is_some() {
                 Knob::UndertowAppetite.raw()
             } else {
                 0
@@ -176,7 +182,7 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
             Fx::ZERO,
             crate::lore::from_cm(crate::lore::hi(home)),
         );
-        return Some(orbit(m, at, Knob::CircleRadius.fx()));
+        return Some(orbit(m, mind, at, Knob::CircleRadius.fx()));
     };
     let patience = if fight::hungry(m) {
         Knob::HungerPatience.raw()
@@ -186,22 +192,40 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
     .max(0) as u32;
     let since = now.wrapping_sub(a.frame);
     if since < patience || a.on_rock {
-        return Some(orbit(m, a.at, Knob::CircleRadius.fx()));
+        return Some(orbit(m, mind, a.at, Knob::CircleRadius.fx()));
     }
     Some(spiral(m, mind, a.at))
 }
 
 /// A point a little way round a circle from where it is now: what it swims
-/// at to go round it.
-fn orbit(m: &Monster, centre: V3, r: Fx) -> V3 {
+/// at to go round it. A point inside rock is no point to swim at -- it would
+/// press its head against the island's side and stop -- so it looks further
+/// round until one is clear.
+fn orbit(m: &Monster, mind: &Mind, centre: V3, r: Fx) -> V3 {
     let from = V3::new(m.pos.x.sub(centre.x), Fx::ZERO, m.pos.z.sub(centre.z));
     let at = if math::wide_flat_len(from).raw() > 0 {
         math::atan2_turns(from.z, from.x)
     } else {
         m.yaw
     };
-    centre.add(V3::from_turns(at.add(Knob::SearchLook.fx())).scale(r))
+    let look = Knob::SearchLook.fx();
+    let body = m.sp().fight_fx(crate::species::FightField::BodyRadius);
+    let mut ahead = at;
+    let mut first = None;
+    for _ in 0..LOOKS {
+        ahead = ahead.add(look);
+        let p = centre.add(V3::from_turns(ahead).scale(r));
+        first.get_or_insert(p);
+        if mind.ground.fence(p, body, Fx::ZERO).0 == p {
+            return p;
+        }
+    }
+    first.unwrap_or(centre)
 }
+
+/// How many steps round a circle it looks for a point clear of rock: a
+/// count, not a distance -- the step is `SearchLook`.
+const LOOKS: usize = 5;
 
 /// **The search**: a spiral out from the last noise, wider by `SearchPitch`
 /// a turn. Out past the arena, it starts again from the middle of it.
@@ -220,7 +244,7 @@ fn spiral(m: &Monster, mind: &Mind, centre: V3) -> V3 {
             Fx::ZERO,
             math::half(b.lo_z.add(b.hi_z)),
         );
-        return orbit(m, middle, Knob::CircleRadius.fx());
+        return orbit(m, mind, middle, Knob::CircleRadius.fx());
     }
     let at = if r.raw() > 0 {
         math::atan2_turns(from.z, from.x)
@@ -251,8 +275,8 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
             }
         }
         UNDERTOW => {
-            if let Some(a) = fight::attended(mind.lore) {
-                m.aim_at(a.at);
+            if let Some(at) = undertow_at(m, mind) {
+                m.aim_at(at);
             }
         }
         _ => {}

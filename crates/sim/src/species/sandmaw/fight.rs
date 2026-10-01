@@ -659,25 +659,25 @@ fn beach(m: &mut Monster, why: u32) {
 /// tooth ring, and a stand broken past `interrupt_strain` -- which beaches
 /// it -- take their frame here before the shared ladder.
 fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
+    // **The tooth ring takes every blow that reaches it here**, so the shared
+    // ladder never counts one twice: broken, a flinch and the rise smaller
+    // for good.
+    let mut teeth_broke = false;
+    if let Some(slot) = m.sp().break_slot(part) {
+        if m.breaks[slot] > 0 {
+            m.breaks[slot] = (m.breaks[slot] - dealt).max(0);
+            if m.breaks[slot] == 0 {
+                m.own[body::EVENTS] |= event::TEETH;
+                teeth_broke = true;
+            }
+        }
+    }
     // A teammate's blow on the head lets the swallowed go.
     if let Doing::Active { kind: HOLD, .. } = m.doing {
         if HEAD_PARTS.contains(&part) {
             m.own[body::EVENTS] |= event::RESCUE;
         }
         return true;
-    }
-    // The tooth ring breaking: a flinch, and the rise smaller for good.
-    if let Some(slot) = m.sp().break_slot(part) {
-        if m.breaks[slot] > 0 && m.breaks[slot] <= dealt {
-            m.breaks[slot] = 0;
-            m.own[body::EVENTS] |= event::TEETH;
-            if !beached(m) {
-                m.doing = Doing::Flinch {
-                    left: Knob::GagFrames.raw() as u16,
-                };
-            }
-            return true;
-        }
     }
     // A blow into the open mouth through the swallow's tell gags it -- and
     // if it was already reeling, puts it over.
@@ -692,13 +692,19 @@ fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
         }
         return true;
     }
+    if teeth_broke && !beached(m) {
+        m.doing = Doing::Flinch {
+            left: Knob::GagFrames.raw() as u16,
+        };
+        return true;
+    }
     // **Broken while it stands**, or in the air over a breach: beached.
     let aloft = matches!(m.doing, Doing::Active { kind: BREACH, .. });
     if (standing(m) || aloft) && !beached(m) && m.strain >= m.interrupt_bar() {
         beach(m, if aloft { route::LANE } else { route::BROKEN });
         return true;
     }
-    beached(m)
+    beached(m) || part == TEETH
 }
 
 // ---------------------------------------------------------------------------
@@ -784,7 +790,7 @@ fn creature(w: &mut World, slot: usize) {
     act(w, slot, &mut m, &ground);
     hold(w, slot, &mut m);
     own_hits(w, &mut m, &ground);
-    circle_in_grace(w, &mut m);
+    circle_in_grace(w, &mut m, &ground);
     w.monsters[slot] = Some(m);
 }
 
@@ -911,7 +917,9 @@ fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {
             let to = m.aimed_at();
             let t = Fx::from_int((a.startup - left.min(a.startup)) as i32)
                 .div(Fx::from_int(a.startup.max(1) as i32));
-            m.pos = flat(math::lerp3(from, to, t));
+            // Under the sand to the circle, round any rock between.
+            let body = sp.fight_fx(FightField::BodyRadius);
+            m.pos = flat(ground.fence(math::lerp3(from, to, t), body, Fx::ZERO).0);
             m.speed = Fx::ZERO;
         }
         Doing::Active { kind: RISE, left } if left == sp.attack(RISE).active => {
@@ -930,6 +938,21 @@ fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {
 
         // ---- the breach: what it came for, and where it comes down ----
         Doing::Startup { kind: BREACH, left } if left == sp.attack(BREACH).startup => act_on(w),
+        // **The arc is in the air**: over whatever lies in the lane, rock
+        // included, at its own speed -- the lane drawn is the lane flown.
+        Doing::Active { kind: BREACH, left } => {
+            let a = sp.attack(BREACH);
+            if left == a.active {
+                w.lore.set_word(word::RISE_FROM, word_of(m.pos));
+            }
+            let from = point(w.lore.word(word::RISE_FROM));
+            let gone = a
+                .advance
+                .mul(Fx::from_int((a.active - left.min(a.active) + 1) as i32))
+                .mul(DT);
+            m.pos = flat(from.add(V3::from_turns(m.yaw).scale(gone)));
+            m.speed = a.advance;
+        }
         Doing::Recovery { kind: BREACH, left } if left == sp.attack(BREACH).recovery => {
             // Down on rock it did not hear: beached across its own lane.
             let body = sp.fight_fx(FightField::BodyRadius);
@@ -940,11 +963,14 @@ fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {
         }
 
         // ---- the undertow: the sinkhole, then a rise at its middle ----
+        Doing::Startup {
+            kind: UNDERTOW,
+            left,
+        } if left == sp.attack(UNDERTOW).startup => act_on(w),
         Doing::Active {
             kind: UNDERTOW,
             left,
         } if left == sp.attack(UNDERTOW).active => {
-            act_on(w);
             let r = hazard::stat_fx(&SPECIES, SINKHOLE, HazardField::Radius);
             hazard::place(&mut w.lore, Hazard::disc(SINKHOLE, m.aimed_at(), r));
         }
@@ -980,6 +1006,9 @@ fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {
         // A knock-up while it is reeling: over it goes.
         Doing::Stumble { .. } => beach(m, route::KNOCKED),
         Doing::Prowl if posture_of(m) == posture::BEACHED => {
+            // Off the rock it came down on, if it did, before it dives.
+            let body = sp.fight_fx(FightField::BodyRadius);
+            m.pos = flat(ground.fence(m.pos, body, Fx::ZERO).0);
             m.doing = Doing::Startup {
                 kind: DIVE,
                 left: sp.attack(DIVE).startup,
@@ -1280,7 +1309,7 @@ fn own_hits(w: &mut World, m: &mut Monster, ground: &Terrain) {
 
 /// **It opens circling**, while it takes the hunters in: round where it
 /// started, at its swimming speed.
-fn circle_in_grace(w: &mut World, m: &mut Monster) {
+fn circle_in_grace(w: &mut World, m: &mut Monster, ground: &Terrain) {
     if m.brain.grace == 0 || !under(m) {
         return;
     }
@@ -1295,12 +1324,20 @@ fn circle_in_grace(w: &mut World, m: &mut Monster) {
     } else {
         m.yaw
     };
+    // Swim at a point a little way round the circle, at its swimming speed,
+    // round any rock in the way as its own swim is.
     let speed = m.sp().gallop();
-    // Arc length over the circle's circumference: turns.
-    let step = speed.mul(DT).div(r.mul(math::turns_to_radians(Fx::ONE)));
-    let next = at.add(step);
-    m.pos = centre.add(V3::from_turns(next).scale(r));
-    m.yaw = next.add(math::QUARTER_TURN);
+    let ahead = centre.add(V3::from_turns(at.add(Knob::SearchLook.fx())).scale(r));
+    let to = flat(ahead.sub(m.pos));
+    let dir = if math::wide_flat_len(to).raw() > 0 {
+        math::wide_normalized(to)
+    } else {
+        V3::from_turns(m.yaw)
+    };
+    let body = m.sp().fight_fx(FightField::BodyRadius);
+    let want = flat(m.pos).add(dir.scale(speed.mul(DT)));
+    m.pos = flat(ground.fence(want, body, Fx::ZERO).0);
+    m.yaw = math::atan2_turns(dir.z, dir.x);
     m.speed = speed;
     m.stride = m.stride.wrapping_add(
         speed

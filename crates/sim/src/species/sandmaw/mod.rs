@@ -248,7 +248,7 @@ pub const PARTS: [Part; PART_COUNT] = [
         "upper lip",
         LIP_UP,
         v((0, 1), (-15, 100), (-110, 100)),
-        v((140, 100), (15, 100), (110, 100)),
+        v((110, 100), (15, 100), (110, 100)),
         Knob::VulnHead as u16,
     )
     .soft(),
@@ -256,7 +256,7 @@ pub const PARTS: [Part; PART_COUNT] = [
         "lower lip",
         LIP_DOWN,
         v((0, 1), (-15, 100), (-110, 100)),
-        v((140, 100), (15, 100), (110, 100)),
+        v((110, 100), (15, 100), (110, 100)),
         Knob::VulnHead as u16,
     )
     .soft(),

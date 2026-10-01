@@ -103,9 +103,9 @@ fn swim() -> Recipe {
 /// under the sand: where every move from below starts its hit.
 fn coiled() -> Pose {
     Pose::rest(sim::species::sandmaw::bones::COUNT)
-        .hips(0.0, -6.9, 0.0)
+        .hips(0.0, -8.4, 0.0)
         .root(90.0, 0.0, 0.0)
-        .mouth(10.0)
+        .mouth(0.0)
 }
 
 fn rise() -> Recipe {
@@ -114,9 +114,8 @@ fn rise() -> Recipe {
     // the front goes down into a coil, all of it under the floor. The marker
     // is the tell; this only has to be in place when it runs out.
     let gathering = Pose::under()
-        .hips(UNDER_BACK * 0.4, UNDER_DEPTH - 1.0, 0.0)
-        .root(40.0, 0.0, 0.0)
-        .column([10.0, 10.0, 5.0, 0.0, 0.0, 0.0]);
+        .hips(UNDER_BACK * 0.4, UNDER_DEPTH - 2.0, 0.0)
+        .root(5.0, 0.0, 0.0);
     let coil = coiled();
     // Out: straighter than the stand, the mouth wide, the head thrown up.
     let out = Pose::standing()
@@ -133,8 +132,9 @@ fn rise() -> Recipe {
         Clip::Rise,
         vec![
             Key::eased(0.0, ready, Ease::SMOOTH),
-            Key::eased(mark(Clip::Rise, 0, 0.55), gathering, Ease::SMOOTH),
-            Key::eased(mark(Clip::Rise, 0, 0.95), coil, Ease::STRIKE),
+            Key::eased(mark(Clip::Rise, 0, 0.5), gathering, Ease::SMOOTH),
+            Key::eased(mark(Clip::Rise, 0, 0.85), coil, Ease::SMOOTH),
+            Key::eased(mark(Clip::Rise, 0, 1.0), coil, Ease::STRIKE),
             Key::eased(mark(Clip::Rise, 1, 0.7), out, Ease::OUT),
             Key::eased(mark(Clip::Rise, 2, 0.35), over, Ease::SMOOTH),
             Key::eased(mark(Clip::Rise, 2, 0.8), stood, Ease::SMOOTH),
@@ -154,9 +154,7 @@ fn rise() -> Recipe {
 fn breach() -> Recipe {
     let ready = Pose::under();
     // A dip before the arc: it goes deeper to come up faster.
-    let dip = Pose::under()
-        .hips(UNDER_BACK, UNDER_DEPTH - 0.6, 0.0)
-        .column([8.0, 4.0, 0.0, 0.0, 0.0, 0.0]);
+    let dip = Pose::under().hips(UNDER_BACK, UNDER_DEPTH - 1.0, 0.0);
     // Coming out: the head and the front up through the sand.
     let surfacing = Pose::under()
         .hips(UNDER_BACK, -0.9, 0.0)
@@ -172,15 +170,16 @@ fn breach() -> Recipe {
         .mouth(20.0);
     // Going back in head first.
     let diving = Pose::under()
-        .hips(UNDER_BACK, -0.4, 0.0)
+        .hips(UNDER_BACK, -0.6, 0.0)
         .root(-12.0, 0.0, 0.0)
         .column([-10.0, -10.0, -8.0, -6.0, -4.0, 0.0])
-        .tail([-12.0, -10.0, -6.0, -4.0, 0.0]);
+        .tail([-6.0, -4.0, -2.0, 0.0, 0.0]);
     Recipe::new(
         Clip::Breach,
         vec![
             Key::eased(0.0, ready, Ease::SMOOTH),
-            Key::eased(mark(Clip::Breach, 0, 0.85), dip, Ease::ANTICIPATE),
+            Key::eased(mark(Clip::Breach, 0, 0.6), dip, Ease::SMOOTH),
+            Key::eased(mark(Clip::Breach, 0, 1.0), dip, Ease::OUT),
             Key::eased(mark(Clip::Breach, 1, 0.15), surfacing, Ease::OUT),
             Key::eased(mark(Clip::Breach, 1, 0.5), arched, Ease::SMOOTH),
             Key::eased(mark(Clip::Breach, 1, 0.9), diving, Ease::IN),
