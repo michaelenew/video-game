@@ -669,6 +669,7 @@ from twelve single runs each, which print the report's lines:
   Dual mage       0/24        --        0/24        --           58 / 56 %                  0
 
   windows, every class: threatening 79-80 %, poke 6-7, way in 9, walk up 5
+  (as built, over the whole fight; in reach, from 2026-10-01: below)
   coop, two Champions: 0/12
 ```
 
@@ -684,8 +685,24 @@ unseen tells** for every class and both plans. Short of the targets:
   (1.0 a second) perches it more and took ten points off, and lost the
   Champion half his wins; a longer dwell on the floor after a Stoop did the
   same. Left at the first guesses for a person to decide.
-- **The windows are four fifths threatening**: the bird is threatening while
-  it circles, and it circles most of the fight.
+- **The windows were four fifths threatening**: the bird counted as
+  threatening while it circled, and it circles most of the fight. **The
+  measure was wrong, and changed (2026-10-01,
+  [plans/polish-fights.md](../plans/polish-fights.md))**, in two places.
+  §9 asks for the windows "of the frames it is in reach", and the report
+  asked them of every frame: a bird circling out of reach is neither offering
+  an opening nor refusing one, so those frames are left out
+  (`Tally::windowed`). And the gather and the lift (and the flight to the
+  perch) counted as threats because they are moves; neither does damage or
+  moves anybody, and a bird gathering itself off the floor for 45 frames,
+  wings down and in reach, is the end of the walk-up the Stoop and the crash
+  open -- counted now as what is left of the move and its pause, as the
+  Veilstalker's retreat is. **In reach: threatening 52–66 %, poke 7–11, way in
+  10–17, walk up 17–23** (the Champion 61 / 11 / 10 / 18). Walk-up is the
+  sixth §9 asks. Threatening is still over its four tenths, and that part is
+  real: in reach, the bird is either making a pass or dwelling on the floor
+  after a Stoop with the buffet and the Screech ready -- the dwell the build
+  added to bring it into reach (below), whose price is exactly that.
 - **The carry and the barrel roll are rarely or never seen**: the scripted
   hunter crouches under every pass, and plan B's rides end in the first lap.
 - **The rest of the roster loses** to the scripted hunter, which plays the

@@ -32,7 +32,7 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
 ## Status
 
 - [x] 1 contract breach -- `pack::watch`/`unanswered`, glance keeps a committed target, report asks the fighter reached, Mireback's fresh-tar rule fixed. Zero for Gnawers, Hornback, Mireback, Broodmother, Siegeshell, six classes, solo 24 / coop 12.
-- [ ] 2 threatening share
+- [x] 2 threatening share -- Pair: measure (per body; `together` line). Galewing: measure (windowed in reach; lift/perch not threats). Sandmaw: target (its tally's §9 measure is right; stand throws moves).
 - [ ] 3 specific misses
 - [ ] 4 merge and re-measure
 
@@ -41,3 +41,5 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
 - 2026-10-01: item 1. Data: every brood hidden hit began behind a Hollows
   pillar (sight blocked from the chest) or below the screen of a hunter
   pitched up at a sac. Rule kept by the referee (exchange), not the brain.
+- 2026-10-01: item 2. Single-body creatures' windows verified identical
+  after the report change (same seeds, same lines).

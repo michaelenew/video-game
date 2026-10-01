@@ -491,7 +491,9 @@ unmeasured.
 **Target numbers.** Tier 3: the scripted hunter wins **about one in three**,
 won fights **3–6 minutes**. The four windows, measured with `frames_until_free`
 taken as the **smaller of the two cats'** (the pair is free when either is):
-threatening ~45%, poke ~20%, way in ~20%, walk up ~15%. Higher threatening and
+threatening ~45%, poke ~20%, way in ~20%, walk up ~15%. *(Changed 2026-10-01,
+§13: each cat's own window, with the min-of-two kept as its own line,
+"threatening, together".)* Higher threatening and
 lower walk-up than the Ridgeback's 40/20 because there are two animals; the
 crash is most of the walk-up share. Unanswerable hits: zero. Every move used.
 No move landing more than two times in three or fewer than one in ten.
@@ -726,11 +728,20 @@ plays win 36 of 96, three in eight, against "about one in three", in two and
 a half to four and a half minutes (three to six asked). Every move is used.
 **What is off:**
 
-- **Threatening is 78–81 %, against 45.** The pair is free when either cat
-  is, as §9 says to measure it, and with two animals one of them nearly always
-  is: the walk-up share is the crash and the two cats' recoveries overlapping,
-  and the stagger rule keeps those apart. Reaching 45 would mean both cats
-  idle half the fight; the harness wins anyway, through the openings it has.
+- **Threatening was 78–81 %, against 45**, with the pair free when either
+  cat is, as §9 said to measure it. **The measure was wrong, and changed
+  (2026-10-01, [plans/polish-fights.md](../plans/polish-fights.md))**: the
+  four windows are the rhythm of openings on *a body* -- how often the one in
+  front of you can be punished -- and the harness won two hunts in three
+  through openings the min-of-two said were not there. Each cat's own window
+  now, each frame counted once for each cat alive: **threatening 55–58 %,
+  poke 7–8, way in 11, walk up 23–26** across the six classes. The cover the
+  second cat gives is the fight's lesson, and it is measured where it is
+  taught: *both in view*, the off-screen hits, and a new report line,
+  **threatening, together** (either cat able to answer), still about four
+  fifths. The creature was left alone: the remaining ten points over 45 are a
+  prowling cat close enough to pounce, which is a threat, and fewer of them
+  would make a fight the harness already wins two in three easier still.
 - **Several moves land under one in ten**: the rake (one in thirteen), the
   second rake, the tail trip, the twin pounce, the interpose. The harness
   answers every marker it sees at a fifteen-frame reaction, perfectly; the

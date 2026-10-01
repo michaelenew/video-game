@@ -7043,3 +7043,41 @@ pairs as before.
 **Verdict** kept. For a person: whether a bite going through you from behind
 reads as luck or as the rule it is -- the lane under you is the only warning
 you were owed, and you were not under it long enough to have had it.
+
+### 2026-10-01 — The windows are each body's own, and of the frames they are about
+
+**Changed** The fight report's four windows. In a fight of more than one body
+each frame is counted once for each body alive, in that body's own band
+(`hunt::report`); the old reading -- the bodies free when any is -- is kept as
+its own line, *threatening, together*. A creature's tally can leave a frame
+out of the windows (`Tally::windowed`): the Galewing leaves out the frames it
+is out of the first hunter's reach, as its §9 always said. The Galewing's
+gather, lift and flight to the perch count as what is left of the move and
+its pause, not as threats. Nothing else measured moved: the Ridgeback, the
+Mantis, the Veilstalker, the Hornback, the Gnawers, the Mireback, the
+Sandmaw, the Broodmother and the Siegeshell print the same windows to the
+frame, re-run on the same seeds.
+
+**Why** Three creatures sat at four fifths or two thirds threatening against
+targets of 35 to 45 %, and each was asked whether the measure or the
+creature was wrong. **The Pair**: the measure -- the harness won two in
+three through openings the min-of-two said were not there; each cat's own
+window is 55–58 % threatening, walk-up a quarter, and the second cat's cover
+is measured where it is taught (both in view, off-screen hits, *together*).
+**The Galewing**: the measure, twice -- a bird out of reach offers no window
+either way, and a 45-frame gather on the floor with its wings down is the end
+of a walk-up, not a threat; in reach it is 52–66 % threatening, walk-up a
+sixth as asked, and the rest is real (passes, and the dwell after a Stoop
+with the buffet ready). **The Sandmaw**: neither -- its own §9 measure (the
+report's *threatening (perceived)*, 46–49 %) is right, and a standing worm
+answers whoever closes with the swallow, the lash or the Sound's knockdown, as
+§2 and §5 build it. The target was written for a stand that was only a
+window; it now reads ~45–50 %.
+
+**Reverted** The Sandmaw's `surface_max` at 150 and at 100 (from 240):
+threatening 50 and 50 % against 49, won 15 and 17 of 24 against 18. A stand
+ends at its first standing move or its Sound long before either.
+
+**Verdict** kept. For a person: whether a Pair at a quarter walk-up per cat
+feels like a fight with openings, and whether the Sandmaw's stand reads as
+the window §4 promises or as the worm's most dangerous moment.

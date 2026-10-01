@@ -190,6 +190,12 @@ pub struct Report {
 
     pub timeline: Vec<Beat>,
 
+    /// **The bodies' windows taken together**, a fight of more than one:
+    /// the smaller of their `frames_until_free`, so free when any is. What
+    /// the windows were before they were each body's own; for the Pair, how
+    /// much of the fight one cat or the other could answer a commit.
+    pub together: [u32; 5],
+
     /// The small bodies, when the fight has a pack (`sim::pack`). Counted for
     /// every pack creature the same way, so a creature's plan and its report
     /// lines can lean on them.
@@ -257,6 +263,15 @@ pub trait Tally: Send + Sync {
     fn until_free(&self, w: &World, slot: usize, free: u16) -> u16 {
         let _ = (w, slot);
         free
+    }
+    /// **Does this frame count toward the windows at all?** Called after
+    /// [`Tally::observe_with`]. Yes, unless a creature says the windows are
+    /// asked of only some of the fight: the Galewing's are of the frames it
+    /// is in reach (`galewing.md` §9), since a bird circling out of reach is
+    /// neither offering an opening nor refusing one.
+    fn windowed(&self, w: &World) -> bool {
+        let _ = w;
+        true
     }
 }
 
@@ -351,6 +366,7 @@ impl Report {
             idle_frames: 0,
             fought: 0,
             threat: [0; 5],
+            together: [0; 5],
             ride_frames: 0,
             rides: 0,
             longest_ride: 0,
@@ -803,41 +819,57 @@ impl Report {
         if fighting {
             self.fought += 1;
         }
-        // The smaller of the bodies' `frames_until_free`, among the living:
-        // a pair is free to act when either of them is.
-        let free = slots
+        // **Each body's own window.** The four windows are the rhythm of
+        // openings on a body -- how often the one you are fighting can be
+        // punished -- so a fight of two is two bodies' windows, each frame
+        // counted once for each that is alive. Counted as the smaller of the
+        // two (the pair free when either is), the Pair's were four fifths
+        // threatening while the hunter won through the openings it had: the
+        // second cat's cover is the fight's lesson, and its own line below
+        // (`together`) and the Pair's "both in view" measure it.
+        let bands: Vec<(u16, Threat)> = slots
             .iter()
             .filter_map(|s| after.monsters[*s].map(|m| (*s, m)))
             .filter(|(_, m)| m.alive())
             .map(|(s, m)| {
                 let free = m.frames_until_free();
-                match self.extra.as_ref() {
+                let free = match self.extra.as_ref() {
                     Some(extra) => extra.until_free(after, s, free),
                     None => free,
-                }
-            })
-            .min();
-        // **Guarded**, the fifth band (the Mantis, `mantis.md` §9): its guard
-        // or its prayer is up and a hunter is inside it, so a frontal hit is
-        // wasted -- not threatening, and not open either. Only a creature
-        // with a guard (`Monster::covers`) is ever here.
-        let guarded = slots
-            .iter()
-            .filter_map(|s| after.monsters[*s])
-            .filter(|m| m.alive())
-            .any(|m| {
-                after
+                };
+                // **Guarded**, the fifth band (the Mantis, `mantis.md` §9):
+                // its guard or its prayer is up and a hunter is inside it,
+                // so a frontal hit is wasted -- not threatening, and not open
+                // either. Only a creature with a guard (`Monster::covers`)
+                // is ever here.
+                let guarded = after
                     .players
                     .iter()
-                    .any(|p| p.health > 0 && m.covers(p.pos))
-            });
-        if let (Some(free), true) = (free, fighting) {
-            let band = if guarded {
+                    .any(|p| p.health > 0 && m.covers(p.pos));
+                let band = if guarded {
+                    Threat::Guarded
+                } else {
+                    Threat::of(free as i32)
+                };
+                (free, band)
+            })
+            .collect();
+        // And whether the frame is one the windows are about at all: a
+        // creature out of every hunter's reach is not offering or refusing
+        // an opening (the Galewing, `galewing.md` §9: "of the frames it is
+        // in reach").
+        let windowed = self.extra.as_ref().is_none_or(|x| x.windowed(after));
+        let free = bands.iter().map(|(f, _)| *f).min();
+        if let (Some(free), true, true) = (free, fighting, windowed) {
+            for (_, band) in &bands {
+                self.threat[*band as usize] += 1;
+            }
+            let band = if bands.iter().all(|(_, b)| *b == Threat::Guarded) {
                 Threat::Guarded
             } else {
                 Threat::of(free as i32)
             };
-            self.threat[band as usize] += 1;
+            self.together[band as usize] += 1;
         }
 
         for &slot in &slots {
@@ -1389,6 +1421,18 @@ impl Report {
                 t.label(),
                 format!("{:.0}%", self.threat_share(t) * 100.0),
                 what,
+            );
+        }
+        if self.together.iter().sum::<u32>() > 0 && self.together != self.threat {
+            let total: u32 = self.together.iter().sum();
+            line(
+                &mut out,
+                "threatening, together",
+                format!(
+                    "{:.0}%",
+                    ratio(self.together[Threat::Threatening as usize], total) * 100.0
+                ),
+                "any body able to answer: the windows as one",
             );
         }
         line(
