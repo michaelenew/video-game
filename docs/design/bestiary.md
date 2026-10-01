@@ -363,7 +363,7 @@ bit-identical step and never inside it, with the Ridgeback's twelve seeds and
 | --- | --- | --- | --- |
 | A1 **built** | [Gnawers](creatures/gnawers.md) §1a | `aim::stands_at`: the height of the last body the crosshair's ray passed through. A ground-aimed skillshot goes to *that* body's middle, and the standing swing's dead zone reads it. Bodies still do not stop the ray. | Nothing where only fighters stand: bit-identical |
 | A2 **built** | [Hornback](creatures/hornback.md) §10 | Critters join what `aim::first_along` can run into | Nothing until critters exist |
-| A3 | [Siegeshell](creatures/siegeshell.md) §6 | Seen from above, the top face of a mountable part counts as a place, so aiming at your feet on a shell does not land on the floor below | **Shots at the Ridgeback's back change** |
+| A3 **built** | [Siegeshell](creatures/siegeshell.md) §6 | Seen from above, the top face of a mountable part counts as a place, so aiming at your feet on a shell does not land on the floor below | **Shots at the Ridgeback's back change**: measured, its pins did not move, and of its twelve-seed reports only the Elementalist's and the Blood mage's landed counts did, by a hit or two |
 | A4 | [Galewing](creatures/galewing.md) §6 | `swing_path` and `origin` measure the dead zone against the surface underfoot, so a swing on a banked back is level with the back | Nothing on the floor: bit-identical. The Ridgeback's shake gets it too |
 | A5 **built** | [Veilstalker](creatures/veilstalker.md) §6 | `aim::in_view`: whether a point is inside a fighter's view, so it can never reveal itself off-screen | Nothing: a new question, not a changed answer |
 

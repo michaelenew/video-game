@@ -34,7 +34,7 @@ pub mod mantis;
 
 pub mod galewing;
 
-// pub mod siegeshell;
+pub mod siegeshell;
 
 /// One material, as numbers: the renderer turns it into a Bevy material once.
 #[derive(Clone, Copy, Debug)]
@@ -163,8 +163,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
         SpeciesId::MANTIS => &mantis::LOOK,
 
         SpeciesId::GALEWING => &galewing::LOOK,
-
-        // SpeciesId::SIEGESHELL => &siegeshell::LOOK,
+        SpeciesId::SIEGESHELL => &siegeshell::LOOK,
         _ => &ridgeback::LOOK,
     }
 }
@@ -174,6 +173,7 @@ pub fn tint(id: SpeciesId) -> Option<&'static Tint> {
     match id {
         SpeciesId::BROODMOTHER => Some(&broodmother::TINT),
         SpeciesId::GALEWING => Some(&galewing::TINT),
+        SpeciesId::SIEGESHELL => Some(&siegeshell::TINT),
         _ => None,
     }
 }

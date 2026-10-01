@@ -453,6 +453,9 @@ pub struct Sighted {
     /// Distance along the camera's ray, for comparing two candidates.
     pub dist: Fx,
     pub met: Met,
+    /// The ground met is the top of a creature's part (A3): a place, but
+    /// not one the floor knows about, so nothing settles it.
+    pub aboard: bool,
 }
 
 /// **The** raycast: from the camera, through the crosshair, out to the edge of
@@ -527,6 +530,25 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
     let limit = sphere.unwrap_or(Fx::MAX);
 
     let best = nearest_terrain(eye, dir, near, limit, scene, lids);
+    // **Seen from above, the top of a part you could stand on is a place**
+    // (A3, `creatures/siegeshell.md` §6): aboard a shell, the floor is the
+    // shell, and a crosshair on your own feet means there rather than the
+    // valley floor under it. Met from below or on a side the creature is
+    // still a body, and the ray still goes through it.
+    let mut aboard = false;
+    let mut best = best;
+    for beast in scene.quarry.iter().flatten() {
+        let Some(d) = beast.rig().top_along(eye, dir) else {
+            continue;
+        };
+        if d.raw() >= near.raw()
+            && d.raw() <= limit.raw()
+            && best.is_none_or(|(b, _)| d.raw() < b.raw())
+        {
+            best = Some((d, Met::Ground));
+            aboard = true;
+        }
+    }
     // **Bodies are not on this list, and that is deliberate.** See the note on
     // this function: the ray is asking which *place* the player is pointing at,
     // and a creature is a thing standing in a place rather than the place
@@ -539,11 +561,13 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
             at: eye.add(dir.scale(dist)),
             dist,
             met,
+            aboard,
         },
         (None, Some(edge)) => Sighted {
             at: eye.add(dir.scale(edge)),
             dist: edge,
             met: Met::Reach,
+            aboard: false,
         },
         // The ray leaves the world without meeting anything, and without even
         // crossing the reach sphere -- which needs the eye to be outside it and
@@ -553,6 +577,7 @@ fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> 
             at: cast.add(dir.scale(reach)),
             dist: reach,
             met: Met::Reach,
+            aboard: false,
         },
     }
 }
@@ -629,15 +654,23 @@ pub fn grounded_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path 
         // the direction the mouse is facing. Settling the sphere's own point
         // instead would make an upward aim land short, which reads as the
         // ability refusing to go where it was pointed.
+        //
+        // Mounted, the ground is the footing: the edge of the range on the
+        // creature's back if it reaches that far, the floor beyond it if not
+        // (A3).
         Met::Reach => {
             let dir = look.look_dir();
             let flat = V3::new(dir.x, Fx::ZERO, dir.z).normalized();
-            settle(
-                origin(caster.pos).add(flat.scale(reach)),
-                scene.stones,
-                scene.arena,
-            )
+            let at = origin(caster.pos).add(flat.scale(reach));
+            if caster.mount != crate::monster::NO_PART {
+                settle_aboard(at, scene)
+            } else {
+                settle(at, scene.stones, scene.arena)
+            }
         }
+        // On the top of a creature's part, exactly there: it is a place the
+        // floor does not know about (A3).
+        Met::Ground if seen.aboard => seen.at,
         // On the ground, exactly there -- `settle` is a no-op on a surface
         // something already stands on. On a wall, the floor beneath it,
         // because that is where the thing being placed can exist.
@@ -1680,6 +1713,20 @@ pub fn first_along(
         }
     }
     best
+}
+
+/// [`settle`], with the creatures' backs as floors too: the highest of the
+/// floor, a stone, or a part's top face under the point.
+fn settle_aboard(at: V3, scene: &Scene) -> V3 {
+    let mut put = settle(at, scene.stones, scene.arena);
+    for beast in scene.quarry.iter().flatten() {
+        if let Some(top) = beast.rig().footing_under(at) {
+            if top.raw() > put.y.raw() {
+                put.y = top;
+            }
+        }
+    }
+    put
 }
 
 /// Drop a point onto whatever it would stand on.
