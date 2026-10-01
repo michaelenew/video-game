@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 4
 ---
 
@@ -642,3 +643,119 @@ liability in a hunt. A playstyle, not power.
    crowd — which could be a mechanic rather than a flaw.
 7. **Six seconds of paint, 500 to mottle.** Both decide how fast the fight
    becomes easy, and both are first guesses.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt veilstalker`, the Ashwood. The species is
+`sim/src/species/veilstalker/` (the table and its own knobs; `fight.rs` for
+the veil, the glance of the look and the view gate, the footfall and paint
+rings, the regions and the mottle, fire and panic, the smoke, the quills, the
+mimic's ghost, the retreat, the perches and the leaps -- run in the frame
+hook and kept in the hunt's lore; `mind.rs` for appetite and where it walks),
+the arena `sim/src/arena/veilstalker.rs`, the clips
+`anim/src/beast/veilstalker/`, the look, the veil's materials, the Ashwood's
+dressing and the trail, paint, breath, ripples and quills in `game`
+(`species/veilstalker.rs`, `arenas/veilstalker.rs`, `beast.rs`, `veil.rs`),
+the plan, the view and the report lines `hunt/src/plans/veilstalker.rs`, and
+the rules as sentences in `sim/tests/veilstalker.rs`, `sim/tests/feel.rs`
+(`no_decloak_knob_may_go_below_the_floor`) and `hunt/tests/veilstalker.rs`.
+The plan is [plans/veilstalker.md](../plans/veilstalker.md); the passes are in
+[feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin fight -- --species veilstalker --class
+<c> --repeats 24`; the scripted hunter plays §9 with a fifteen-frame reaction,
+a camera it sweeps, sight of only what `World::shown`, the prints, the paint,
+the apparition and the floor markers put on its screen, and a timed answer
+off by a tenth of the wait it judged (below).
+
+```text
+                won    mean win   threat / poke / way in / walk up   unanswerable (blind)
+  Champion      6/24    336 s         45 /  8 /  6 / 40 %                0
+  Bulwark       8/24    463 s         44 /  7 /  7 / 43 %                0
+  Reaver        3/24    433 s         46 /  8 /  6 / 40 %                0
+  Elementalist  5/24    347 s         24 /  7 /  8 / 62 %                0
+  Blood mage    0/24      --          34 / 10 /  9 / 47 %                0
+  Dual mage     0/24      --          48 /  9 /  6 / 38 %                0
+
+  coop, two Champions 12/12 in 303 s;  temper 3, Champion 5/12 in 344 s
+
+  landed / thrown, 24 hunts of each class
+    Ambush lunge 9/137   Tail spear 4/73   Rake 66/292   Rake, again 46/194
+    Pounce 1/108   Quill fling 46/134   (Champion's 24)
+    Pounce 39/199 (Elementalist's, on the trunk tops), every strike landed
+    in some class's hunts; Smoke, Mimic, Retreat, Climb, Get up do no damage
+```
+
+**Its own lines**, over single Champion hunts: blind hits **zero** of every
+hit; print lead four to eight seconds; time to find a retreated animal two to
+four seconds; paint lit half to two thirds of the fight; the second hit of an
+engagement landed one time in three to ten; mimics held, never dodged, a
+handful a hunt; decloaks three quarters in the centre third of the screen,
+almost never at the edge; one or two retreats broken by a burst in the recoil
+in a long hunt; panics rare (the Champion tips a brazier now and then) and no
+cloud burnt off -- the harness's Champion carries no fire.
+
+**Against the targets.** **Zero blind hits and zero unanswerable** in all
+144 hunts of the six classes, in coop and at temper 3. Twenty-two of the 144
+won, about one in six and a half -- tier 4 -- in five and a half to eight
+minutes (five to ten asked). Threatening 44-48 % against ~40. **What is
+off:**
+
+- **The way in is 6-8 %, against ~20, and walking up ~40 % against ~30.** The
+  windows read `frames_until_free` plus the decloak floor (`Tally::until_free`),
+  and the animal's long recoveries are visible and *walkable*: the hunter
+  is near enough to walk in, so the time that §9 calls the way in reads as
+  walk-up. The split between them is the measure's, not the fight's.
+- **The lunge and the pounce land rarely** against a hunter that reads every
+  silhouette (one in fifteen; one in a hundred against the Champion, who
+  walks out of every circle; one in five against the Elementalist on a trunk
+  top). They are answered as designed; whether a person answers them as well
+  is the playing question.
+- **The Blood mage and the Dual mage lose every hunt**, as against every
+  creature: the harness does not play their pools or their bars.
+- **The Elementalist's fire is not played**: the harness casts no fire at
+  the clouds or the hide, so §7's worry (her fight too easy) is untested.
+
+**Changed from this document while building**, beyond the numbers:
+
+- **Health 7 000** (11 200 with two hunters), not 4 500, and **the hits
+  heavier**: lunge 260, spear 190, rake 140 + 140, pounce 220, quill 70; a
+  region mottles at **800**. At the document's damage the Champion won ten to
+  twelve hunts in twelve with half his health left, and fights at 4 500 ran
+  short of five minutes: a hunter that reads the floor perfectly is hit only
+  when it is slow, so each hit has to count.
+- **The stalk is 90-150 frames at 11 m**, and the first one starts when the
+  hunt's grace ends rather than under it.
+- **Eighteen bones**, the Pair's cat topology, not twelve: bones cost the
+  snapshot nothing (§10's "lighter rig").
+- **The glance is the facing**: the simulation keeps no input, and a
+  fighter's facing is the look's yaw whenever they can act. The eye is built
+  by `aim::in_view_from` from `camera::eye_under`, level.
+- **The view gate is "plainly in view"**: from where the hunter stood and a
+  metre either side (`ViewMargin`), through a few degrees of the look's
+  wander (`ViewSweep`), and of where a strike thrown out of a bound will stop
+  skidding as well as where it starts. Each closed a way a stale glance
+  became a blind hit in the harness.
+- **At most three strikes an engagement** (`EngagementStrikes`), not counting
+  mimics; hits closer than eight frames are one hit for the retreat
+  (`HitGap`); a painted animal close to its hunter while it stalks runs off
+  (`ExposedNear`); it will not strike on bare ground (no prints there); it
+  walks round a trunk on its way rather than into it (`PostWidth`,
+  `PostClear`).
+- **The hunter's timing is judged, not known**: a dodge timed to an arrival
+  is off by up to a tenth of the frames it judged across, either way, beside
+  the fixed three. Without it the harness dodged a lunge on the same frame
+  from any distance, which no person does; it is the only change that made
+  the lunge land at all.
+- **Seams**: `FightDecl::apparition` and `World::apparition` (the mimic's
+  ghost, drawn and read like a body), `aim::in_view_from` and `aim::off_look`,
+  `Tally::until_free`, and `MonsterField::Cooldown` widened to 900 for the
+  smoke; listed in [species.md](../species.md).
+
+**Not built**: the Veilstep sidegrade (parked with the rest of §11's
+sidegrades); a foreign smoke cloud outlining it; the water-crossing rule for
+prints (ripples are drawn, the trail simply has no prints in water); the
+trophy is the hunt's ordinary trophy, not the mottled pelt; the hunter does
+not read the breath (it is drawn); the shimmer is a translucent silhouette,
+the stated fallback, not a refraction of what is behind it.
+

@@ -1,5 +1,5 @@
 ---
-status: action plan — in progress
+status: action plan — built
 opened: 2026-10-01
 implements: ../creatures/veilstalker.md
 ---
@@ -16,11 +16,10 @@ milestone by milestone, so a successor can pick it up from the checkboxes.
 
 ## State
 
-Started 2026-10-01 on `claude/creature-veilstalker`. Built and committed:
-the species, its veil/trail/paint/fire/smoke/quills/mimic/retreat (M1-M5),
-its clips (M6), its hunter and report (M7, first passes), its look, the
-veil rendering and the Ashwood (M8, screenshots taken). Now: tuning against
-the harness across classes, then docs, web smoke, merge.
+Started 2026-10-01 on `claude/creature-veilstalker`; built the same day.
+Every milestone below is done; where it landed is the creature document's
+§13, and the passes are in the feel log. `origin/main` (the Broodmother)
+merged in. What is open is at the end.
 
 **Tuning method** (for a successor): the baked file is the truth. A
 scratch script reads every `// id = value` comment out of
@@ -108,15 +107,22 @@ from that description if it is gone.
 
 ### M7 · The hunter and the report
 - [x] `hunt/src/plans/veilstalker.rs`: the view, §9's plan, the lines.
-- [ ] Twelve+ seeds per class; tune toward tier 4; feel-log entries.
+- [x] Twenty-four seeds per class; tier 4 (22 of 144 won); feel-log entries.
 
 ### M8 · Drawn
 - [x] Look; veil rendering (shimmer, prints, paint, breath, ghost, quills);
       the Ashwood's dressing; screenshots of every telegraph.
 
 ### M9 · Finished
-- [ ] Trophy, tempers; docs (creature doc built + "Where it landed",
+- [x] Trophy, tempers; docs (creature doc built + "Where it landed",
       species.md, README map, manual); web smoke `?hunt=veilstalker`;
       merge `origin/main`, fmt/clippy/test, push.
 
 ## Open
+
+- **The way-in window** reads 6-8 % against ~20: the measure files the long,
+  visible recoveries as walk-up (§13).
+- **The Elementalist's fire and the Blood and Dual mages** are not played by
+  the harness; their hunts say nothing about the fire window or the pools.
+- **Not built**: Veilstep, a foreign cloud outlining it, prints across water,
+  the mottled-pelt trophy, a refracting shimmer.
