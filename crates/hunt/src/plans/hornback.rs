@@ -957,11 +957,26 @@ impl Hornback {
         };
         let _ = w;
         if stop {
+            // Clear of the cart toward the bull -- and further back along the
+            // road if a lane is drawn over that spot: a hunter standing in the
+            // lane steps out of it, back past the cart, and the cart rolls on.
             let back = road.scale(Fx::from_int(2).neg());
-            (
-                cart.at.add(toward.scale(near.add(PAST_ESCORT))).add(back),
-                true,
-            )
+            let off = near.add(PAST_ESCORT);
+            let in_a_lane = |p: V3| {
+                seen.signs.iter().any(|s| {
+                    s.shape == Shape::Strip
+                        && matches!(s.says, Says::Coming | Says::Live)
+                        && s.width.raw() > Fx::from_int(6).raw()
+                        && s.covers(p)
+                })
+            };
+            let there = cart.at.add(toward.scale(off)).add(back);
+            let spot = [0, 3, 6, 9]
+                .into_iter()
+                .map(|k| there.sub(road.scale(Fx::from_int(k))))
+                .find(|p| !in_a_lane(*p))
+                .unwrap_or(there);
+            (spot, true)
         } else {
             // Off the road on the bull's side, and ahead: never on the line
             // from the bull through the cart, so a charge at the hunter runs
