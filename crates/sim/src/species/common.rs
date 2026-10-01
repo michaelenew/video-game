@@ -88,8 +88,8 @@ species_knobs! {
     VarietyFrames,    "mind",  "Repeat penalty decay",       Frames,  0,         300;
     PoiseMax,         "",      "Poise",                      Int,     50,        5000;
     PoiseRegen,       "",      "Poise regained per frame",   Int,     0,         60;
-    ToppleFrames,     "",      "Topple length",              Frames,  30,        600;
-    StumbleFrames,    "",      "Stumble length",             Frames,  20,        300;
+    ToppleFrames,     "",      "Topple length",              Frames,  30,        1500;
+    StumbleFrames,    "",      "Stumble length",             Frames,  20,        900;
     FlinchFrames,     "",      "Flinch length",              Frames,  1,         90;
     FlinchThreshold,  "",      "Damage that flinches it",    Int,     1,         2000;
     LegDrop,          "legs",  "Corner drop per break",      Fixed,   0,         fx(2,1);

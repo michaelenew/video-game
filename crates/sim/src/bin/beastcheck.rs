@@ -478,4 +478,113 @@ fn main() {
         m(front.sub(back)),
         sp.clips.len()
     );
+    if sp.id == sim::species::SpeciesId::SIEGESHELL {
+        siegeshell(&apexes);
+    }
+}
+
+/// **The Siegeshell's stair** (`creatures/siegeshell.md` §1, §4): in a
+/// stumble on its left with two ankles broken there, and in a kneel, the top
+/// of a splayed thigh from its knee up to the hip, then the rim -- every
+/// rise against every class's hop.
+fn siegeshell(apexes: &[(sim::Class, Fx)]) {
+    use sim::species::siegeshell::{self as ss, fight};
+    let mut lame = Monster::new(sim::species::SpeciesId::SIEGESHELL);
+    for leg in [0usize, 2] {
+        let slot = lame.sp().break_slot(ss::ankle_part(leg)).expect("an ankle");
+        lame.breaks[slot] = 0;
+    }
+    let mut stumbling = lame;
+    fight::stumble(&mut stumbling, -1);
+    if let Doing::Stumble { left, front } = stumbling.doing {
+        stumbling.doing = Doing::Stumble {
+            left: left / 2,
+            front,
+        };
+    }
+    let mut kneeling = Monster::new(sim::species::SpeciesId::SIEGESHELL);
+    kneeling.doing = Doing::Toppled {
+        left: kneeling.sp().topple_frames() / 2,
+    };
+    println!("\nits heights, standing (§1):");
+    let standing = Monster::new(sim::species::SpeciesId::SIEGESHELL);
+    for (what, part) in [
+        ("rim", ss::rim_part(1, -1)),
+        ("lower flank", ss::FLANK_LOWER_L),
+        ("upper flank", ss::FLANK_UPPER_L),
+        ("plateau", ss::PLATEAU_MID),
+        ("crown", ss::CROWN_PART),
+        ("an anchor's top", ss::anchor_part(0)),
+        ("an ankle's top", ss::ankle_part(0)),
+    ] {
+        println!("  {:<16} {:>7} m", what, m(top(&standing, part)));
+    }
+    println!(
+        "  {:<16} {:>7} m",
+        "the belly",
+        m(bottom(&standing, ss::PLASTRON))
+    );
+    println!(
+        "  {:<16} {:>7} m",
+        "a side, 2 broken",
+        m(top(&lame, ss::rim_part(1, -1)))
+    );
+    for (label, beast, leg) in [
+        ("stumbling, its left", stumbling, 0usize),
+        ("kneeling", kneeling, 0),
+    ] {
+        println!("\nthe stair, {label} (the fore left leg):");
+        let rig = beast.rig();
+        let sh = beast.sp().shape(ss::thigh_part(leg));
+        let mut was = Fx::ZERO;
+        let mut worst = Fx::ZERO;
+        let mut first = Fx::ZERO;
+        for i in 0..=4 {
+            // From the knee end in to the hip, along the top's middle.
+            let x = sh.max.x.sub(sh.max.x.sub(sh.min.x).mul(Fx::ratio(i, 4)));
+            let h = rig
+                .part_to_world(ss::thigh_part(leg), V3::new(x, sh.max.y, Fx::ZERO))
+                .y;
+            if i == 0 {
+                first = h;
+            } else {
+                worst = worst.max(h.sub(was));
+            }
+            println!("  thigh, {}% up   {:>7} m", i * 25, m(h));
+            was = h;
+        }
+        let rim = top(&beast, ss::rim_part(0, -1));
+        let rim_edge = {
+            let rs = beast.sp().shape(ss::rim_part(0, -1));
+            rig.part_to_world(
+                ss::rim_part(0, -1),
+                V3::new(
+                    rs.min.x.add(rs.max.x).mul(Fx::ratio(1, 2)),
+                    rs.max.y,
+                    rs.min.z,
+                ),
+            )
+            .y
+        };
+        println!(
+            "  the rim          {:>7} m (its outer edge {} m)",
+            m(rim),
+            m(rim_edge)
+        );
+        worst = worst.max(rim_edge.sub(was));
+        println!(
+            "  the first tread {} m from the floor; the biggest rise after it {} m",
+            m(first),
+            m(worst)
+        );
+        for (class, apex) in apexes {
+            let ok = first.raw() < apex.raw() && worst.raw() < apex.raw();
+            println!(
+                "    {:<13} hop {:>6} m: {}",
+                class.name(),
+                m(*apex),
+                if ok { "climbs it" } else { "does not" }
+            );
+        }
+    }
 }

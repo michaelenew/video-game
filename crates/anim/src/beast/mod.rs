@@ -71,7 +71,7 @@ pub mod mantis;
 
 pub mod galewing;
 
-// pub mod siegeshell;
+pub mod siegeshell;
 
 use crate::ease::Ease;
 use crate::spring::Spring;
@@ -123,8 +123,7 @@ pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
         SpeciesId::MANTIS => Some(&mantis::MANTIS),
 
         SpeciesId::GALEWING => Some(&galewing::GALEWING),
-
-        // SpeciesId::SIEGESHELL => Some(&siegeshell::SIEGESHELL),
+        SpeciesId::SIEGESHELL => Some(&siegeshell::SIEGESHELL),
         _ => None,
     }
 }

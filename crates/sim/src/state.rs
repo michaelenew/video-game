@@ -4975,11 +4975,12 @@ fn part_under(beast: &Monster, attacker: &Player, box_out: &Hitbox) -> Option<us
     }
     const SAMPLES: i32 = 5;
     let thick = box_out.radius;
+    let rig = beast.rig();
     let mut best: Option<usize> = None;
     for i in 0..=SAMPLES {
         let at = crate::math::lerp3(box_out.from, box_out.to, Fx::ratio(i, SAMPLES));
         let foot = V3::new(at.x, at.y.sub(thick), at.z);
-        if let Some(part) = beast.part_struck(foot, thick, thick.add(thick)) {
+        if let Some(part) = beast.part_struck_on(&rig, foot, thick, thick.add(thick)) {
             // Softest wins, the creature's own rule: a swing that reaches a
             // leg with its haft and the ridge with its head has hit the ridge.
             best = Some(match best {
@@ -8820,7 +8821,7 @@ fn step_rider(
         next.z = next.z.clamp(lo(sh.min.z), hi(sh.max.z).max(lo(sh.min.z)));
         next.y = sh.min.y;
         p.local = next;
-        p.pos = beast.world_of(part, next);
+        p.pos = rig.part_to_world(part, next);
         return;
     }
 
@@ -8835,22 +8836,26 @@ fn step_rider(
     // centimetres, which the buck reads as an enormous acceleration and throws
     // them for. Descending is the ordinary landing test's job, a few lines
     // below. See `Rig::surface_within`.
-    let stepped = beast
-        .rig()
-        .surface_within(beast.world_of(part, next), radius, Fx::ZERO, t::step_up())
+    let stepped = rig
+        .surface_within(
+            rig.part_to_world(part, next),
+            radius,
+            Fx::ZERO,
+            t::step_up(),
+        )
         .filter(|(up, _)| *up != part);
     if let Some((up, top)) = stepped {
-        let mut rest = beast.rest_frame(up, beast.world_of(part, next));
+        let mut rest = rig.world_to_part(up, rig.part_to_world(part, next));
         rest.y = top;
         p.mount = mount_of(slot, up);
         p.local = rest;
-        p.pos = beast.world_of(up, rest);
+        p.pos = rig.part_to_world(up, rest);
         p.grip_settle = t::mount_settle() as u8;
         return;
     }
 
-    let moved = beast.resolve(beast.world_of(part, next), radius, t::body_height());
-    match beast.surface_under(moved.pos, radius) {
+    let moved = rig.resolve(rig.part_to_world(part, next), radius, t::body_height());
+    match rig.surface_under(moved.pos, radius) {
         Some((on, top)) => {
             // Staying on the same part keeps the body-space position that was
             // just computed rather than converting to the world and back. The
@@ -8859,7 +8864,7 @@ fn step_rider(
             let mut rest = if on == part && !moved.shoved {
                 next
             } else {
-                beast.rest_frame(on, moved.pos)
+                rig.world_to_part(on, moved.pos)
             };
             rest.y = top;
             if on != part {
@@ -8868,7 +8873,7 @@ fn step_rider(
                 p.mount = mount_of(slot, on);
             }
             p.local = rest;
-            p.pos = beast.world_of(on, rest);
+            p.pos = rig.part_to_world(on, rest);
         }
         None => {
             // Walked off the edge. You leave with whatever the surface was

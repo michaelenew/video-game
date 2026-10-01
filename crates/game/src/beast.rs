@@ -216,10 +216,56 @@ fn darker(paint: Paint) -> Paint {
     }
 }
 
+/// The camera's arm this frame: from the eye to the middle of the fighter it
+/// follows. Written by the camera, read by [`place`] to cut away a part the
+/// arm runs through.
+#[derive(Resource, Default, Clone, Copy)]
+pub struct Boom {
+    pub eye: Vec3,
+    pub to: Vec3,
+}
+
+impl Boom {
+    /// Does the arm run through a box centred at `at`, with axes `x` and `y`
+    /// (one unit of the part's own frame each) and extents `size`?
+    pub fn crosses(&self, at: Vec3, x: Vec3, y: Vec3, size: Vec3) -> bool {
+        if self.eye == self.to {
+            return false;
+        }
+        let (x, y) = (x.normalize_or_zero(), y.normalize_or_zero());
+        let z = x.cross(y);
+        let local = |p: Vec3| {
+            let d = p - at;
+            Vec3::new(d.dot(x), d.dot(y), d.dot(z))
+        };
+        let (a, b) = (local(self.eye), local(self.to));
+        let half = size * 0.5;
+        let (mut lo, mut hi) = (0.0_f32, 1.0_f32);
+        for axis in 0..3 {
+            let (from, along) = (a[axis], b[axis] - a[axis]);
+            if along.abs() < 1e-6 {
+                if from.abs() > half[axis] {
+                    return false;
+                }
+                continue;
+            }
+            let t0 = (-half[axis] - from) / along;
+            let t1 = (half[axis] - from) / along;
+            lo = lo.max(t0.min(t1));
+            hi = hi.min(t0.max(t1));
+            if lo > hi {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 /// Put every part where the simulation says it is.
 pub fn place(
     sim: Res<crate::Sim>,
     hide: Res<Hide>,
+    boom: Res<Boom>,
     mut limbs: Query<
         (
             &Limb,
@@ -239,6 +285,12 @@ pub fn place(
         Without<Limb>,
     >,
 ) {
+    // Each body posed once a frame, not once a part: the Siegeshell is
+    // forty-four parts and thirty joints, and a pose is a full skeleton.
+    let mut rigs: [Option<sim::beast::Rig>; BODIES] = [None; BODIES];
+    let mut rig_of = |slot: usize, beast: &Monster| {
+        *rigs[slot.min(BODIES - 1)].get_or_insert_with(|| beast.rig())
+    };
     for (limb, mut transform, mut visible, mut material) in limbs.iter_mut() {
         let (slot, index) = (limb.0, limb.1);
         let Some((beast, strength)) =
@@ -261,7 +313,7 @@ pub fn place(
             *visible = Visibility::Hidden;
             continue;
         }
-        let rig = beast.rig();
+        let rig = rig_of(slot, &beast);
         let shape = beast.sp().shape(index);
         let mid = shape.min.add(shape.max).scale(sim::Fx::ratio(1, 2));
         let size = shape.max.sub(shape.min);
@@ -275,6 +327,14 @@ pub fn place(
         let x = at(sim::V3::new(sim::Fx::ONE, sim::Fx::ZERO, sim::Fx::ZERO)) - origin;
         let y = at(sim::V3::new(sim::Fx::ZERO, sim::Fx::ONE, sim::Fx::ZERO)) - origin;
 
+        // **Cut away where the camera's arm runs through it**, for a body
+        // the arm is not pulled in by (`FightDecl::camera_passes`): a part
+        // between the eye and the fighter is not drawn, rather than filling
+        // the screen.
+        if beast.sp().fight.camera_passes && boom.crosses(origin, x, y, fx3(size)) {
+            *visible = Visibility::Hidden;
+            continue;
+        }
         *transform = Transform {
             translation: origin,
             rotation: orient(x, y),
@@ -319,7 +379,7 @@ pub fn place(
             *visible = Visibility::Hidden;
             continue;
         };
-        let rig = beast.rig();
+        let rig = rig_of(slot, &beast);
         *transform = Transform {
             translation: fx3(rig.bone[bone].at),
             rotation: Quat::IDENTITY,

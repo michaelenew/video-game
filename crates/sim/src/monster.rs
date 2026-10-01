@@ -1092,6 +1092,54 @@ impl Rig {
         }
     }
 
+    /// **The first top face a ray meets from above** (aiming A3): how far
+    /// along it, for a part you could stand on. Seen from above the top of a
+    /// mountable part is a *place* -- a rider aiming at their own feet on a
+    /// shell means the shell, not the valley floor twenty metres under it --
+    /// and met from below, or on a side, the creature is still a body, off
+    /// the aiming ray. Asked by `aim` only; the geometry is here because the
+    /// articulation is.
+    pub fn top_along(&self, from: V3, dir: V3) -> Option<Fx> {
+        let mut best: Option<Fx> = None;
+        for (index, part) in self.species.parts.iter().enumerate() {
+            if !part.shape.mountable || !self.boardable(index) || !self.standable(index) {
+                continue;
+            }
+            if self.species.fight.rolls_over && self.of(index).rot.r[1].y.raw() <= 0 {
+                continue;
+            }
+            let frame = self.of(index);
+            let d = frame.rot.unapply(dir);
+            // From above: the ray is going down the part's own up.
+            if d.y.raw() >= 0 {
+                continue;
+            }
+            let o = frame.world_to_local(from);
+            let sh = self.species.shape(index);
+            let Some(dist) = crate::math::ray_hits_box(o, d, sh.min, sh.max) else {
+                continue;
+            };
+            let y = o.y.add(d.y.mul(dist));
+            if y.sub(sh.max.y).abs().raw() > crate::arena::SKIN.raw() {
+                continue;
+            }
+            if best.is_none_or(|seen| dist.raw() < seen.raw()) {
+                best = Some(dist);
+            }
+        }
+        best
+    }
+
+    /// The highest top face you could stand on under `world`, no higher than
+    /// it, as a height in the world: where a thing put down at that point
+    /// lands, aboard.
+    pub fn footing_under(&self, world: V3) -> Option<Fx> {
+        let (part, top) =
+            self.surface_within(world, Fx::ZERO, world.y.max(Fx::ZERO), crate::arena::SKIN)?;
+        let local = self.world_to_part(part, world);
+        Some(self.part_to_world(part, V3::new(local.x, top, local.z)).y)
+    }
+
     /// See [`Monster::surface_under`]. Lives on the rig because everything it
     /// needs is a bone transform, and the callers that already hold one should
     /// not have to rebuild the skeleton to ask.
@@ -1656,7 +1704,19 @@ impl Monster {
     /// point has hit the weak point. Rewarding the aim rather than the array
     /// order is the only version of this a player could predict.
     pub fn part_struck(&self, centre: V3, radius: Fx, body_height: Fx) -> Option<usize> {
-        let rig = self.rig();
+        self.part_struck_on(&self.rig(), centre, radius, body_height)
+    }
+
+    /// [`Monster::part_struck`] on a rig already posed this frame: a swing
+    /// asked down its length asks it half a dozen times, and posing the body
+    /// for each is most of the cost.
+    pub fn part_struck_on(
+        &self,
+        rig: &Rig,
+        centre: V3,
+        radius: Fx,
+        body_height: Fx,
+    ) -> Option<usize> {
         let sp = self.sp();
         let mut best: Option<(usize, Fx)> = None;
         for index in 0..sp.parts.len() {

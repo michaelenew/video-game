@@ -171,7 +171,7 @@ fn colour_of(sp: &Species, part: usize) -> [u8; 3] {
 }
 
 /// How much bigger than the Ridgeback's scale a species is drawn: one for
-/// anything thirteen metres long or more, and enough to fill the cell for a
+/// anything thirteen to twenty metres long, and enough to fill the cell for a
 /// smaller animal -- a four-metre cat at the Ridgeback's scale is a dozen
 /// pixels of boxes nobody can check a pose in.
 fn zoom(sp: &'static Species) -> f32 {
@@ -187,7 +187,10 @@ fn zoom(sp: &'static Species) -> f32 {
         }
     }
     let extent = (hi - lo).max(0.1);
-    (13.0 / extent).max(1.0)
+    // And smaller than it for a colossus: a forty-metre shell at the
+    // Ridgeback's scale is three cells wide and nothing can be read in one.
+    let fit = 13.0 / extent;
+    if extent > 20.0 { fit } else { fit.max(1.0) }
 }
 
 fn draw_creature(c: &mut Canvas, sp: &'static Species, pose: &beast::Pose, lens: Lens, alpha: f32) {

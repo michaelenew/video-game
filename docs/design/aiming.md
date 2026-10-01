@@ -1,7 +1,7 @@
 ---
 status: decided
 decided: 2026-09-12
-revised: 2026-10-01 (small bodies: A1 and A2 of the bestiary)
+revised: 2026-10-01 (small bodies: A1 and A2 of the bestiary; the top of a part you stand on: A3)
 ---
 
 # Aiming
@@ -77,6 +77,26 @@ own path, not the camera's ray, and the two were never the same line: the camera
 is behind and above, so a body it could not see was always still a body the shot
 went through.
 
+**Except the top of a part you could stand on, seen from above** (A3,
+2026-10-01, asked by the [Siegeshell](creatures/siegeshell.md) §6). Aboard a
+shell twenty metres up, the floor *is* the creature, and with the whole body
+off the ray a crosshair on your own feet went through the plateau to the valley
+floor: a grounded cast came out twenty metres below, and a skillshot at a rider
+two plates over flew at the dirt under them. So the top face of a mountable
+part, met by the ray going **down** through it, is a place -- ground, the same
+as the top of a platform (`Rig::top_along`, asked only by `aim`). Met from
+below or on a side it is still a body and the ray goes through it, which keeps
+what the 2026-09-13 change was for: under the rim, the crosshair on the
+creature's chest still goes to the floor behind. A part that is buried, not
+boardable this frame or too steep to stand on is not a place either -- the same
+rules the ride's landing uses.
+
+What it changed, measured: the Ridgeback's bit-for-bit pins did not move (the
+pinned hunts never cast down at its back), and of its twelve-seed reports per
+class only the Elementalist's and the Blood mage's moved, by a hit or two in a
+move's landed count, with the same outcomes -- the cases where a caster on a
+platform or aboard puts a grounded cast on its back.
+
 **Fire is also not on the list**, for its own reason: you can see through flame,
 so a fire pillar never steals the crosshair — but a shot that *travels through*
 one still notices it.
@@ -117,7 +137,10 @@ them: a structure, a fire pillar.
 - **Hit the max-range sphere** — cast it at max range on the ground, in the
   direction the mouse is facing. Settling the sphere's own point instead would
   make an upward aim land short, which reads as the ability refusing to go where
-  it was pointed.
+  it was pointed. **Mounted, "the ground" is the footing** (A3): the creature's
+  back under that point if it reaches that far, the floor beyond it if not.
+- **Hit the top of a creature's part** (A3) — exactly there, on the shell: it is
+  a place the floor does not know about, so nothing settles it.
 - **Hit anything else** — a body, a wall — it drops to whatever is underneath,
   because the thing being placed can only exist on the floor.
 - **If it travels**, it travels from the character model to that point.

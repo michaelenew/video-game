@@ -70,7 +70,7 @@ pub mod mantis;
 
 pub mod galewing;
 
-// pub mod siegeshell;
+pub mod siegeshell;
 
 /// Which arena. The one byte of arena the world keeps in the snapshot.
 ///
@@ -144,8 +144,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::MANTIS => Some(&mantis::ARENA),
 
         ArenaId::GALEWING => Some(&galewing::ARENA),
-
-        // ArenaId::SIEGESHELL => Some(&siegeshell::ARENA),
+        ArenaId::SIEGESHELL => Some(&siegeshell::ARENA),
         _ => None,
     }
 }
