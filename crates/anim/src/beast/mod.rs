@@ -63,7 +63,7 @@ pub mod sandmaw;
 
 // pub mod pair;
 
-// pub mod broodmother;
+pub mod broodmother;
 
 // pub mod veilstalker;
 
@@ -115,8 +115,7 @@ pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
         SpeciesId::SANDMAW => Some(&sandmaw::SANDMAW),
 
         // SpeciesId::PAIR => Some(&pair::PAIR),
-
-        // SpeciesId::BROODMOTHER => Some(&broodmother::BROODMOTHER),
+        SpeciesId::BROODMOTHER => Some(&broodmother::BROODMOTHER),
 
         // SpeciesId::VEILSTALKER => Some(&veilstalker::VEILSTALKER),
 
@@ -569,7 +568,7 @@ fn move_of(species: &Species, clip: usize) -> Option<u8> {
     species
         .moves
         .iter()
-        .position(|m| m.clip == clip)
+        .position(|m| m.clip == clip && !m.unanimated)
         .map(|k| k as u8)
 }
 

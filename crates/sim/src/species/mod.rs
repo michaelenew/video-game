@@ -69,7 +69,7 @@ pub mod sandmaw;
 
 // pub mod pair;
 
-// pub mod broodmother;
+pub mod broodmother;
 
 // pub mod veilstalker;
 
@@ -130,8 +130,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
 
         // SpeciesId::PAIR => Some(&pair::SPECIES),
-
-        // SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
+        SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
 
         // SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
 
@@ -224,6 +223,18 @@ pub struct MoveDecl {
     /// the Sandmaw's cone of spray, its tail's half-ring -- or a reach a solid
     /// can stop, which only the world can ask about.
     pub own_hit: bool,
+    /// **A move that always leads to another**: when its recovery ends, this
+    /// one starts at once, with no pause to think and no choice. Declared in
+    /// the move table, as `Move::aim()` is for a fighter's moves, so the chain
+    /// is a fact about the move rather than something its species remembers to
+    /// do. The Broodmother's screech, which is always followed by the slam.
+    pub then: Option<u8>,
+    /// **Its body plays no clip for it**: a move only something else throws --
+    /// the brood's bites, whose `clip` is a critter's stock pose
+    /// (`critter::pose`) rather than one of the creature's clips, or a sac
+    /// bursting. The animation factory does not phase any clip by it. Always
+    /// with `never_chosen`.
+    pub unanimated: bool,
 }
 
 impl MoveDecl {
@@ -238,7 +249,20 @@ impl MoveDecl {
             harmless: false,
             never_chosen: false,
             own_hit: false,
+            then: None,
+            unanimated: false,
         }
+    }
+
+    pub const fn unanimated(mut self) -> MoveDecl {
+        self.unanimated = true;
+        self.never_chosen = true;
+        self
+    }
+
+    pub const fn then(mut self, next: u8) -> MoveDecl {
+        self.then = Some(next);
+        self
     }
 
     pub const fn lobbed(mut self) -> MoveDecl {

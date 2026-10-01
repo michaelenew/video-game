@@ -2071,7 +2071,14 @@ impl Monster {
             }
         }
         let kind = chosen.unwrap_or(0);
+        self.begin(kind, mind);
+    }
 
+    /// **Start a move**: everything the brain does as a move commits, whether
+    /// it chose the move or the move was declared to follow another
+    /// (`MoveDecl::then`).
+    fn begin(&mut self, kind: u8, mind: &Mind) {
+        let sp = self.sp();
         let m = sp.attack(kind);
         // A move that mirrors goes to whichever side the target is on -- the
         // Ridgeback's sweep. Decided once, here, and held for the move: the
@@ -2471,6 +2478,14 @@ impl Monster {
             return;
         }
         self.glance(quarry, senses);
+        // **A declared chain** (`MoveDecl::then`): a move whose recovery ends
+        // this frame and that always leads to another starts that one at
+        // once, with no pause to think and no choice. Nothing in the cast
+        // declared one before the Broodmother's screech.
+        let chained = match self.doing {
+            Doing::Recovery { kind, left: 0 } => self.move_decl(kind).then,
+            _ => None,
+        };
         self.tick_action();
         self.bleed_off();
 
@@ -2482,6 +2497,9 @@ impl Monster {
             ground: arena,
             lore,
         };
+        if let Some(next) = chained.filter(|_| self.doing.free()) {
+            self.begin(next, &mind);
+        }
         if self.doing.free() && !noticing {
             if self.brain.think_left > 0 {
                 self.brain.think_left -= 1;
