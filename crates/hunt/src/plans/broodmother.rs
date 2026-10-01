@@ -95,9 +95,6 @@ const BROOD_NEAR: Fx = Fx::ratio(45, 10);
 /// sidestep lasts.
 const STUCK: u16 = 6;
 const DETOUR: u16 = 24;
-/// The Elementalist shoots sacs from no nearer than this.
-const SNIPE_FROM: Fx = Fx::ratio(80, 10);
-
 /// One frame of what it saw: the whole world, as it was on screen.
 #[derive(Clone)]
 struct Seen {
@@ -685,6 +682,30 @@ impl Broodmother {
             }
         }
 
+        // A broodling's lane drawn under it: off the line, sideways -- the
+        // answer to a bite whose crouch is off the screen.
+        for i in 0..MAX_CRITTERS {
+            if !seen.critters[i].alive() {
+                continue;
+            }
+            let Some(t) = sim::pack::telegraph(seen.pack.as_ref(), &seen.critters, i) else {
+                continue;
+            };
+            let a = flat(t.anchor);
+            let b = a.add(t.along.scale(t.sweep));
+            let wide = t.radius.add(sim::tuning::body_radius());
+            if sim::math::flat_segment_gap(me.pos, a, b).raw() <= wide.raw() {
+                self.intent = EVADE;
+                let across = V3::new(t.along.z.neg(), Fx::ZERO, t.along.x);
+                let side = if flat(me.pos.sub(a)).dot(across).raw() >= 0 {
+                    across
+                } else {
+                    across.scale(Fx::ONE.neg())
+                };
+                return face_walk(&me, &m, unit(side), 0);
+            }
+        }
+
         // 2. **Kill a broodling that comes to you** -- in the window, only
         // one already crouched at you: the sacs come first.
         let window = matches!(m.doing, Doing::Recovery { kind: bm::SLAM, left }
@@ -723,31 +744,6 @@ impl Broodmother {
                 // Out before the lift.
                 self.intent = EVADE;
                 return face_walk(&me, &m, unit(me.pos.sub(m.pos)), 0);
-            }
-        }
-
-        // The Elementalist's free pop: the reddest sac, from range, with the
-        // crosshair on it.
-        if hits_sacs && me.class == sim::Class::Elementalist && !fight::enraged(&m) {
-            let target = sacs(&m).min_by_key(|(i, _, h)| {
-                let ripe = sim::species::broodmother::fight::ripeness(&seen, *i);
-                (Fx::ONE.sub(ripe).raw(), *h)
-            });
-            if let Some((_, mid, _)) = target {
-                let gap = wide_flat_dist(me.pos, mid);
-                self.intent = SAC;
-                if gap.raw() < SNIPE_FROM.raw() {
-                    // Back off to range first, still facing it.
-                    let away = unit(me.pos.sub(mid));
-                    return face_walk(&me, &m, away, 0);
-                }
-                let bits = if free && self.cooldown == 0 {
-                    self.cooldown = SWING_GAP;
-                    Input::LEFT
-                } else {
-                    0
-                };
-                return looking(&me, mid, bits);
             }
         }
 
@@ -797,7 +793,6 @@ impl Broodmother {
         if to.flat_len().raw() > SETTLED.raw() {
             return face_walk(&me, &m, unit(to), crouch);
         }
-        let _ = MAX_PLAYERS;
         looking(&me, part_point(&m, bm::THORAX, me.pos), 0)
     }
 
@@ -896,9 +891,12 @@ impl Broodmother {
         } else {
             0
         };
+        // At the flank, as near as the body lets it: swing -- §1 rule 4 says
+        // every class reaches every sac from there.
+        let arrived = walk == 0 || wide_flat_dist(me.pos, self.last).raw() == 0;
         let swing = if self.cooldown == 0
             && me.action.actionable()
-            && far.raw() <= reach.add(Fx::ratio(1, 2)).raw()
+            && (far.raw() <= reach.add(Fx::ratio(1, 2)).raw() || arrived)
         {
             self.cooldown = SWING_GAP;
             auto_button(me)

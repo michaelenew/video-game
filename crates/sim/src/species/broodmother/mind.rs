@@ -302,10 +302,17 @@ fn screeching(m: &Monster) -> bool {
     )
 }
 
+fn down(m: &Monster) -> bool {
+    matches!(m.doing, Doing::Recovery { kind: SLAM, .. })
+}
+
 impl PackMind for Brood {
     fn appetite(&self, look: &Look, i: usize, m: CritterMove, a: &Attack) -> i32 {
-        // Called home: nobody bites.
-        if mother(look.pack, look.herd).is_some_and(screeching) {
+        // Called home: nobody bites. And none starts a windup while she lies
+        // in the slam: the fighter in the window has the camera on a sac, and
+        // a bite begun then comes from off the screen -- the guard's bill is
+        // paid as she lifts, by a ring already crouched in front of them.
+        if mother(look.pack, look.herd).is_some_and(|m| screeching(m) || down(m)) {
             return 0;
         }
         GNAWER.appetite(look, i, m, a)
@@ -316,8 +323,9 @@ impl PackMind for Brood {
         let Some(mom) = mother(pack, herd).copied() else {
             return;
         };
-        // The screech: every broodling breaks off what it was winding up.
-        if screeching(&mom) {
+        // The screech: every broodling breaks off what it was winding up --
+        // and, while she lies in the slam, none starts one (see `appetite`).
+        if screeching(&mom) || down(&mom) {
             for c in critters.iter_mut() {
                 if c.alive() && c.state == is::STARTUP {
                     c.state = is::PROWL;
@@ -332,7 +340,11 @@ impl PackMind for Brood {
         if let Some(who) = named {
             let near = Knob::GuardRadius.fx();
             for c in critters.iter_mut() {
-                if c.alive() && math::wide_flat_dist(c.pos, mom.pos).raw() <= near.raw() {
+                let committed = c.state == is::STARTUP || c.state == is::ACTIVE;
+                if c.alive()
+                    && !committed
+                    && math::wide_flat_dist(c.pos, mom.pos).raw() <= near.raw()
+                {
                     c.target = who as u8;
                 }
             }
