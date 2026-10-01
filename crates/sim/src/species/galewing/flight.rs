@@ -193,6 +193,11 @@ fn ceiling(m: &Monster, base: Fx, want: Fx) -> Fx {
 }
 
 /// The height it circles at, over `base`: lower when desperate.
+/// The height it cruises at over `base`, for placing it (`fight::ready_for`).
+pub fn cruise_over(m: &Monster, base: Fx) -> Fx {
+    cruise(m, base)
+}
+
 fn cruise(m: &Monster, base: Fx) -> Fx {
     let alt = if fight::below(m, Knob::DesperateHealth.fx()) {
         Knob::DesperateAlt.fx()

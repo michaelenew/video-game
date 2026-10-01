@@ -363,6 +363,74 @@ fn the_downwash_does_not_move_a_fighter_behind_a_solid() {
     );
 }
 
+/// **What is drawn through the windup is where the hit lands** (§6): every
+/// lee disc the Downwash's sign draws on its last windup frame is still
+/// a lee when the push comes -- a fighter standing in one is not moved --
+/// and the ring it draws is centred where the push blows from.
+#[test]
+fn what_is_drawn_through_the_windup_is_where_the_hit_lands() {
+    let mut w = hunt();
+    // The stone at (-12, -8), with the bird hanging just north of it.
+    let under = V3::new(Fx::from_int(-12), plateau(&w), Fx::from_int(-4));
+    let over = under.add(V3::new(Fx::ZERO, Knob::HoverHeight.fx(), Fx::ZERO));
+    fly_at(&mut w, over, Fx::ZERO);
+    let at = on(&w, -12, -3);
+    stand(&mut w, at);
+    start(&mut w, gw::DOWNWASH);
+    advance(&mut w, look());
+    w.lore.set_word(fight::word::WASH_AT, fight::word_of(under));
+    let a = gw::SPECIES.attack(gw::DOWNWASH);
+    while matches!(beast(&w).doing, Doing::Startup { left, .. } if left > 0) {
+        advance(&mut w, look());
+    }
+    let mut drawn = sim::sign::Signs::NONE;
+    fight::signs(&w, &mut drawn);
+    let lees: Vec<V3> = drawn
+        .all
+        .iter()
+        .flatten()
+        .filter(|s| s.says == sim::sign::Says::Clear)
+        .map(|s| s.at)
+        .collect();
+    assert!(!lees.is_empty(), "no lee drawn behind the stone");
+    advance(&mut w, look());
+    assert!(
+        matches!(
+            beast(&w).doing,
+            Doing::Active {
+                kind: gw::DOWNWASH,
+                ..
+            }
+        ),
+        "the push did not come after {} frames of windup: {:?}",
+        a.startup,
+        beast(&w).doing
+    );
+    let blows = fight::wash_point(&w);
+    assert_eq!(
+        (blows.x, blows.z),
+        (under.x, under.z),
+        "the push blows from somewhere the ring was not drawn"
+    );
+    let field = sim::stones::gather(&w.players);
+    let ground = w.terrain();
+    let scene = Scene {
+        stones: &field,
+        players: &w.players,
+        effects: &w.effects,
+        quarry: &w.monsters,
+        critters: &w.critters,
+        arena: &ground,
+    };
+    for at in lees {
+        let mut p = w.players[0];
+        p.pos = at;
+        p.crouching = false;
+        let push = fight::wash_push(&scene, blows, &p);
+        assert_eq!(push, V3::ZERO, "a lee drawn at {at:?} is blown {push:?}");
+    }
+}
+
 /// **The eye** (§2): under it, the air goes straight down. Crouching
 /// outside it only slows the slide.
 #[test]
@@ -771,4 +839,81 @@ fn it_throws_everything_it_has_from_the_air() {
             gw::MOVES[kind as usize].name
         );
     }
+}
+
+/// **A swing on a banked back is level with the back** (§6, bestiary A4).
+/// `aim::swing_path` measures its dead zone against the up of the surface
+/// underfoot: a rider on a back banked forty degrees, looking across it a
+/// little below the back's own horizon, swings along the back -- not into
+/// the low wing and over the high one, as a world-level swing would. On a
+/// level back the up is the floor's exactly, so nothing else changes.
+#[test]
+fn a_swing_on_a_banked_back_is_level_with_the_back() {
+    let mut w = hunt();
+    let at = on(&w, 0, -10).add(V3::new(Fx::ZERO, Knob::RideClimb.fx(), Fx::ZERO));
+    fly_at(&mut w, at, Fx::ZERO);
+    let reach = Fx::from_int(3);
+    let swing = |w: &World, facing: V3, pitch: Fx| {
+        let field = sim::stones::gather(&w.players);
+        let ground = w.terrain();
+        let scene = Scene {
+            stones: &field,
+            players: &w.players,
+            effects: &w.effects,
+            quarry: &w.monsters,
+            critters: &w.critters,
+            arena: &ground,
+        };
+        let up = aim::underfoot_up(0, &scene);
+        let look = Input::looking_at(0, 0, pitch.raw() as i16);
+        let p = &w.players[0];
+        let path = aim::swing_path(
+            p.pos,
+            facing,
+            look,
+            true,
+            reach,
+            aim::Hand::Centre,
+            aim::Stand::fighter(),
+            up,
+        );
+        (path.to.sub(path.from), up)
+    };
+
+    // On the plateau: the floor's up, exactly, so the swing is what it was.
+    let (_, up) = swing(&w, V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO), Fx::ZERO);
+    assert_eq!(up, V3::Y, "standing on the plateau is not the floor's up");
+    board(&mut w, gw::BACK);
+
+    // Banked forty degrees.
+    let m = w.monsters[0].as_mut().unwrap();
+    fight::set_bank(m, Fx::ratio(40, 360));
+    let rig = beast(&w).rig();
+    let up = rig.of(gw::BACK).rot.apply(V3::Y);
+    assert!(
+        up.y.raw() < Fx::ratio(9, 10).raw(),
+        "the back did not bank: up {up:?}"
+    );
+    // Facing across the back, toward its low side.
+    let side = V3::new(up.x, Fx::ZERO, up.z);
+    let facing = side.scale(Fx::ONE.div(side.flat_len()));
+    // Ten degrees under the back's own horizon that way.
+    let lean = sim::math::atan2_turns(
+        facing.sub(up.scale(facing.dot(up))).y,
+        facing.sub(up.scale(facing.dot(up))).flat_len(),
+    );
+    let pitch = lean.sub(Fx::ratio(10, 360));
+    let (dir, got) = swing(&w, facing, pitch);
+    assert_eq!(got, up, "the swing was not given the back's up");
+    let off = dir.dot(up).abs();
+    assert!(
+        off.raw() < reach.div(Fx::from_int(20)).raw(),
+        "on a back banked forty degrees the swing leaves the back by {off:?} of {reach:?}"
+    );
+    // The world's level, for comparison: well into the back.
+    let world_level = facing.scale(reach);
+    assert!(
+        world_level.dot(up).abs().raw() > reach.div(Fx::from_int(2)).raw(),
+        "a world-level swing would have been level with this back too"
+    );
 }

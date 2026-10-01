@@ -886,6 +886,7 @@ fn swing_tilt_from(w: &World, pitch: i16, grounded: bool) -> f32 {
         reach,
         aim::Hand::Centre,
         aim::Stand::fighter(),
+        sim::V3::Y,
     );
     let rise = path.to.y.sub(path.from.y).to_f32_for_render();
     (rise / reach.to_f32_for_render())

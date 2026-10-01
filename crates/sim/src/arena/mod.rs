@@ -782,6 +782,26 @@ impl Terrain {
         ground_among(&self.lists(), pos)
     }
 
+    /// **The floor a point is over**: the highest top under it that is no
+    /// higher than the point itself (a skin's slack), or the floor. Unlike
+    /// [`Terrain::ground_under`] a tower beside you is not under a point at
+    /// your feet. What a floor marker is drawn on: the Cliffs' plateau, not the
+    /// shelf twelve metres under it.
+    pub fn floor_below(&self, pos: V3) -> Fx {
+        let mut best = Fx::ZERO;
+        for s in self.solids() {
+            let top = s.max.y;
+            if s.over(pos.x, pos.z, Fx::ZERO)
+                && !s.hangs()
+                && top.raw() <= pos.y.add(SKIN).raw()
+                && top.raw() > best.raw()
+            {
+                best = top;
+            }
+        }
+        best
+    }
+
     /// [`Arena::material_under`], with the raised solids' tops.
     pub fn material_under(&self, pos: V3) -> Material {
         material_among(self.arena, &self.lists(), pos)

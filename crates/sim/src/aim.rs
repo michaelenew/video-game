@@ -732,6 +732,15 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
 /// in this file is: the look direction is one of the two ingredients of the
 /// mistake this module exists to prevent, so the places that turn it into a
 /// line are all in one file where they can be compared.
+///
+/// **`up` is the up of the surface underfoot** ([`underfoot_up`]): `+y` on
+/// the floor, the back's own normal on a creature (bestiary A4). The dead zone
+/// is measured against the plane that surface defines, so a rider on a back
+/// banked forty degrees who looks at the wing root at their feet swings along
+/// the back rather than into one wing and over the other; and the swing leaves
+/// from cast height *along that up*. On the floor it is exactly `+y` and
+/// nothing below changes by a bit.
+#[allow(clippy::too_many_arguments)]
 pub fn swing_path(
     pos: V3,
     facing: V3,
@@ -740,13 +749,37 @@ pub fn swing_path(
     reach: Fx,
     hand: Hand,
     stands: Stand,
+    up: V3,
 ) -> Path {
     // From the hand: an overhead begins at the chest and a rising cut is aimed
     // from there, and a one-armed move begins a shoulder's width to one side of
     // both. Where along the body a given weapon actually hinges is
     // `moves::swing_hub`'s business; which side of it is [`Hand`].
-    let from = hand_origin(pos, facing, hand);
-    let tilt = swing_tilt(pos, look, grounded, reach, stands);
+    let level = up == V3::Y;
+    let from = if level {
+        hand_origin(pos, facing, hand)
+    } else {
+        pos.add(up.scale(t::cast_height()))
+            .add(across(facing, hand).scale(t::hand_offset()))
+    };
+    let tilt = if level {
+        swing_tilt(pos, look, grounded, reach, stands)
+    } else {
+        // The surface's own horizon along the facing: the facing laid onto
+        // the plane `up` defines, and how far that leans out of the world's.
+        // The look is read against it, the dead zone spent there, and the
+        // lean put back.
+        let along = facing.sub(up.scale(facing.dot(up)));
+        let lean = crate::math::atan2_turns(along.y, along.flat_len());
+        let rel = look.pitch_turns().sub(lean);
+        let dead = Fx::ratio(t::swing_level_to(), 360);
+        let off = if grounded {
+            rel.max(Fx::ZERO).add(rel.add(dead).min(Fx::ZERO))
+        } else {
+            rel
+        };
+        lean.add(off)
+    };
     let flat = cos_turns(tilt);
     let dir = V3::new(facing.x.mul(flat), sin_turns(tilt), facing.z.mul(flat));
     Path {
@@ -813,6 +846,30 @@ fn swing_tilt(pos: V3, look: Input, grounded: bool, reach: Fx, stands: Stand) ->
         return tilt;
     }
     tilt.min(crate::math::atan2_turns(drop, run).neg())
+}
+
+/// **The up of the surface a fighter is standing on**: `+y` on the floor and
+/// on anything in the arena, and the mounted part's own `+y` -- the normal of
+/// its top face -- on a creature. What [`swing_path`] measures its dead zone
+/// against (bestiary A4).
+pub fn underfoot_up(who: usize, scene: &Scene) -> V3 {
+    let p = &scene.players[who];
+    if p.mount == crate::monster::NO_PART {
+        return V3::Y;
+    }
+    let slot = crate::monster::mount_slot(p.mount);
+    let Some(m) = scene.quarry.get(slot).and_then(|m| m.as_ref()) else {
+        return V3::Y;
+    };
+    let part = crate::monster::mount_part(p.mount);
+    let up = m.rig().of(part).rot.apply(V3::Y);
+    // A back that has not tipped is the floor's up exactly, so a level ride
+    // is bit-identical to standing on the ground.
+    if up.x.raw() == 0 && up.z.raw() == 0 {
+        V3::Y
+    } else {
+        up
+    }
 }
 
 /// Is the crosshair on the thing standing at `at`?

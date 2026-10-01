@@ -39,7 +39,7 @@ pub mod veilstalker;
 
 // pub mod mantis;
 
-// pub mod galewing;
+pub mod galewing;
 
 // pub mod siegeshell;
 
@@ -95,8 +95,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::VEILSTALKER => &veilstalker::DRESSING,
 
         // ArenaId::MANTIS => &mantis::DRESSING,
-
-        // ArenaId::GALEWING => &galewing::DRESSING,
+        ArenaId::GALEWING => &galewing::DRESSING,
 
         // ArenaId::SIEGESHELL => &siegeshell::DRESSING,
         _ => &proving_ground::DRESSING,
@@ -123,6 +122,23 @@ pub fn colour(material: Material) -> [f32; 3] {
     }
 }
 
+/// **The key light**, the one that casts shadows: put where [`sun`] says
+/// when the arena is drawn.
+#[derive(Component)]
+pub struct Sun;
+
+/// Where the key light shines from, in metres, looking at the middle of the
+/// arena. Most arenas take the low afternoon sun every fight was first lit
+/// by. **The Cliffs take it nearly overhead** (galewing.md §11): the bird's
+/// shadow on the plateau is a tell -- where it is over you when it is out of
+/// frame -- and a low sun throws it off the plateau altogether.
+pub fn sun(id: ArenaId) -> Vec3 {
+    match id {
+        ArenaId::GALEWING => Vec3::new(1.5, 20.0, 1.0),
+        _ => Vec3::new(6.0, 14.0, 5.0),
+    }
+}
+
 /// Everything drawn for the arena, so all of it can go when the arena does.
 #[derive(Component)]
 pub struct Scenery;
@@ -136,6 +152,7 @@ pub struct Drawn(Option<ArenaId>);
 const APRON: f32 = 12.0;
 
 /// Draw the arena the simulation is in, when it is not the one already drawn.
+#[allow(clippy::too_many_arguments)] // A Bevy system: one argument per resource it reads.
 pub fn dress(
     mut commands: Commands,
     sim: Res<crate::Sim>,
@@ -144,6 +161,7 @@ pub fn dress(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut sky: ResMut<ClearColor>,
+    mut suns: Query<&mut Transform, With<Sun>>,
 ) {
     let arena = sim.cur.arena();
     if drawn.0 == Some(arena.id) {
@@ -155,6 +173,9 @@ pub fn dress(
     }
     let dressing = dressing(arena.id);
     sky.0 = Color::srgb(dressing.sky[0], dressing.sky[1], dressing.sky[2]);
+    for mut light in &mut suns {
+        *light = Transform::from_translation(sun(arena.id)).looking_at(Vec3::ZERO, Vec3::Y);
+    }
 
     let mut paint = |rgb: [f32; 3]| {
         materials.add(StandardMaterial {

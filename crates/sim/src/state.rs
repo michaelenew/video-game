@@ -5573,7 +5573,10 @@ fn aim_at(p: &mut Player, who: usize, kind: u8, reach: Fx, input: Input, scene: 
                 aim::Stand::fighter()
             };
             p.stoop = aim::stoop(input, p.grounded, stands);
-            aim::swing_path(p.pos, p.facing, input, p.grounded, reach, m.hand, stands)
+            let up = aim::underfoot_up(who, scene);
+            aim::swing_path(
+                p.pos, p.facing, input, p.grounded, reach, m.hand, stands, up,
+            )
         }
         aim::Kind::AtTheMechanic => aim::mechanic_path(p.pos, &p.mechanic),
         // From the stone she is holding churning, flat along her look. Her

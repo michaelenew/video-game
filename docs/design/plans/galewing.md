@@ -10,9 +10,9 @@ implements: ../creatures/galewing.md
 > The species, its flight, every move, the wings, the crash, the perch and
 > the ride are built and pinned by `crates/sim/tests/galewing.rs`; its clips
 > are authored and baked; its hunter and report lines run
-> (`cargo run -p hunt --bin fight -- --species galewing`). Next: drawing it
-> in the game (look, the Cliffs' dressing, the sun overhead), the aim and
-> camera changes (M7), more tuning, the docs. A successor resumes from the
+> (`cargo run -p hunt --bin fight -- --species galewing`); it is drawn
+> (look, the Cliffs, the sun overhead) and the aim and camera changes are
+> in. Next: tuning across classes (M10), the docs and the finish (M11). A successor resumes from the
 > first unchecked box; the decisions below are binding unless a milestone's
 > note says one was revisited.
 >
@@ -114,11 +114,16 @@ move's aim height), the pitch, and the posture flags with the bank.
       Wing tests.
 - [x] **M6 · The sky ride.** Take-off with riders, laps, wingbeat heave,
       roll, swoop, riding a broken wing down. Ride tests.
-- [ ] **M7 · Aim and camera.** `swing_path` against the surface's up;
-      `top_under` below the feet; guard tests; pins unchanged.
+- [x] **M7 · Aim and camera.** `swing_path` against the surface's up
+      (`aim::underfoot_up`); `top_under` below the feet; guard tests
+      (`crates/view/tests/galewing.rs`, the banked swing and the lee in
+      `crates/sim/tests/galewing.rs`); pins unchanged.
 - [x] **M8 · Animation.** (first pass; review in the game) Factory clips, bake, contact sheets.
-- [ ] **M9 · Drawn.** Look, Cliffs dressing, sun overhead, SHOT_MOVE
-      screenshots.
+- [x] **M9 · Drawn.** Look (wing roots pale, cracked wings rust, broken
+      dark: a `Tint`), Cliffs dressing, sun overhead (`arenas::sun`),
+      SHOT_MOVE screenshots (`fight::ready_for`) looked at. Floor markers
+      are drawn on `Terrain::floor_below` their anchor -- they were drawn at
+      zero, under the plateau, for every shared telegraph.
 - [ ] **M10 · The hunt.** Plans A and B, report lines, tuning passes,
       feel log.
 - [ ] **M11 · Finished.** Trophy, tempers, docs (built + where it landed),

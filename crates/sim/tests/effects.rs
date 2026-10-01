@@ -94,6 +94,7 @@ fn aiming_at(w: &World, slot: u8, target: sim::V3) -> i16 {
                 reach,
                 m.hand,
                 sim::aim::Stand::fighter(),
+                sim::V3::Y,
             ),
             _ => sim::aim::skillshot_path(0, look, reach, &scene),
         };

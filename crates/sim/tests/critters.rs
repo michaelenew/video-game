@@ -656,7 +656,16 @@ fn a_standing_swing_pointed_at_a_gnat_dips_and_one_pointed_over_it_stays_level()
     let reach = Fx::from_int(2);
     let at_it = aim::stands_at(0, look, &scene);
     assert_eq!(at_it.height, w.critters[0].body(w.critters.sp()).height);
-    let dipped = aim::swing_path(p.pos, p.facing, look, true, reach, aim::Hand::Centre, at_it);
+    let dipped = aim::swing_path(
+        p.pos,
+        p.facing,
+        look,
+        true,
+        reach,
+        aim::Hand::Centre,
+        at_it,
+        sim::V3::Y,
+    );
     assert!(
         dipped.dir().y.raw() < 0,
         "pointed at a gnat, the swing stayed level"
@@ -666,7 +675,16 @@ fn a_standing_swing_pointed_at_a_gnat_dips_and_one_pointed_over_it_stays_level()
     let over = Input::looking_at(0, 0, -800);
     let past = aim::stands_at(0, over, &scene);
     assert_eq!(past.height, sim::tuning::body_height());
-    let level = aim::swing_path(p.pos, p.facing, over, true, reach, aim::Hand::Centre, past);
+    let level = aim::swing_path(
+        p.pos,
+        p.facing,
+        over,
+        true,
+        reach,
+        aim::Hand::Centre,
+        past,
+        sim::V3::Y,
+    );
     assert_eq!(
         level.dir().y,
         Fx::ZERO,
@@ -681,6 +699,7 @@ fn a_standing_swing_pointed_at_a_gnat_dips_and_one_pointed_over_it_stays_level()
         reach,
         aim::Hand::Centre,
         at_it,
+        sim::V3::Y,
     );
     let plain = aim::swing_path(
         p.pos,
@@ -690,6 +709,7 @@ fn a_standing_swing_pointed_at_a_gnat_dips_and_one_pointed_over_it_stays_level()
         reach,
         aim::Hand::Centre,
         aim::Stand::fighter(),
+        sim::V3::Y,
     );
     assert_eq!(airborne, plain);
 }

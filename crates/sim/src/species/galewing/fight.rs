@@ -1783,3 +1783,88 @@ pub fn through(left: u16, total: u16) -> Fx {
 fn diameter(r: Fx) -> Fx {
     r.add(r)
 }
+
+/// **Which paint a wing part wears**, for the renderer's tint: `None` for a
+/// part that is not a wing's, `Some(0)` for a whole wing root (where a hit
+/// counts double -- painted so it reads as the place to aim), `Some(1)` for a
+/// wing past half its bar, `Some(2)` for a broken wing. Read off the first
+/// Galewing in the world; there is only ever one.
+pub fn wing_stage(w: &World, part: usize) -> Option<usize> {
+    let side = super::wing_of(part)?;
+    let m = w
+        .monsters
+        .iter()
+        .flatten()
+        .find(|m| m.species == SpeciesId::GALEWING)?;
+    if broken(m, side) {
+        return Some(2);
+    }
+    if flags(m) & flag::SET_UP != 0 && bar(m, side).saturating_mul(2) < Knob::WingBar.raw() {
+        return Some(1);
+    }
+    if super::is_root(part) {
+        return Some(0);
+    }
+    None
+}
+
+/// **Put it where it would throw `kind` at player one, and start it**: for a
+/// capture of a telegraph (the game's `SHOT_MOVE`), the way the Sandmaw's
+/// `ready_for` is. An air move from its cruising height, a ground move from
+/// the plateau, each at the move's own distance along `+x` -- the way the
+/// camera starts looking -- facing them. The move starts a frame early so its
+/// first frame (the lane laid, the aim taken) happens in the world.
+pub fn ready_for(w: &mut World, kind: u8) {
+    let me = w.players[0].pos;
+    let ground = base(w);
+    let Some(slot) = w
+        .monsters
+        .iter()
+        .position(|m| m.is_some_and(|m| m.species == SpeciesId::GALEWING))
+    else {
+        return;
+    };
+    // Its first frame's set-up now, so that frame does not put it back on
+    // its circle.
+    setup(w, slot);
+    let Some(m) = w.monsters[slot].as_mut() else {
+        return;
+    };
+    let mv = SPECIES.attack(kind);
+    let air = super::aerial(kind);
+    let y = if air {
+        flight::cruise_over(m, ground)
+    } else {
+        ground
+    };
+    let at = V3::new(me.x.add(mv.ideal_range), y, me.z);
+    let yaw = Fx::ratio(1, 2);
+    let f = flight::Flight {
+        pos: at,
+        speed: if air {
+            Knob::CruiseSpeed.fx()
+        } else {
+            Fx::ZERO
+        },
+        vy: Fx::ZERO,
+        yaw,
+        yaw_rate: Fx::ZERO,
+    };
+    f.save(&mut w.lore);
+    m.pos = at;
+    m.yaw = yaw;
+    set_flag(m, flag::ALOFT, air);
+    m.brain.seen = me;
+    m.brain.target = 0;
+    m.brain.grace = 0;
+    m.brain.think_left = u16::MAX;
+    m.aim_at(me);
+    m.doing = Doing::Startup {
+        kind,
+        left: mv.startup + 1,
+    };
+    // A lobbed move lands on the ground its aim is on, as `mind::commit` keeps.
+    set_aim_height(m, me.y);
+    m.hit_used = false;
+    m.brain.last_move = kind;
+}

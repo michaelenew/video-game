@@ -257,6 +257,7 @@ fn a_standing_swing_pointed_at_a_gnawer_dips_to_meet_it() {
         Fx::from_int(2),
         aim::Hand::Centre,
         at_it,
+        sim::V3::Y,
     );
     assert!(
         dipped.dir().y.raw() < 0,
@@ -291,6 +292,7 @@ fn a_swing_pointed_over_a_gnawer_stays_level() {
         Fx::from_int(2),
         aim::Hand::Centre,
         past,
+        sim::V3::Y,
     );
     assert_eq!(
         level.dir().y,

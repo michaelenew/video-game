@@ -548,6 +548,10 @@ fn shot_move(w: &mut World) {
     }
     if species == sim::species::SpeciesId::VEILSTALKER {
         shot_veil_move(w, kind as u8);
+    } // The bird flies its own position from its lore: placed there, aloft for
+    // an air move, and started a frame early.
+    if species == sim::species::SpeciesId::GALEWING {
+        sim::species::galewing::fight::ready_for(w, kind as u8);
     }
 }
 
@@ -1325,6 +1329,7 @@ fn setup(
             ..default()
         },
         Transform::from_xyz(6.0, 14.0, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+        arenas::Sun,
     ));
     // A second, dimmer light from behind and opposite, with no shadows. The
     // old camera looked down on the arena from outside it; this one looks along
