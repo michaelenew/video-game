@@ -1,18 +1,19 @@
 ---
-status: action plan — one implementation thread
+status: action plan — built
 opened: 2026-10-01
 implements: ../creatures/mantis.md
 ---
 
 # Mantis — action plan
 
-> **State, 2026-10-01 (built, tuning).** M1-M6 done: species, Shrine, the
-> guard seam at every hit site, the delay-line eyes, every move, blades,
-> stages, habit and Ready with the notches, prayer and haste, animation
-> baked and reviewed, its look and dressing, 19 tests in
-> `crates/sim/tests/mantis.rs`, a budget scene. M7 (measured) in progress:
-> the duellist's plan and its ablations (`MANTIS_PLAN`, `MANTIS_HABIT`) run;
-> tuning toward 1 in 20. Then M8: screenshots, docs, manual, web, merge.
+> **State, 2026-10-01 (built).** M1-M8 done: species, Shrine, the guard
+> seam at every hit site, the delay-line eyes, every move, blades, stages,
+> habit and Ready with the notches, prayer and haste, animation, its look and
+> dressing, 21 tests in `crates/sim/tests/mantis.rs`, a budget scene; the
+> duellist's plan and its three ablations plus the habit flag measured
+> (`MANTIS_PLAN`, `MANTIS_HABIT`); telegraph screenshots; docs and manual.
+> Numbers are in `../creatures/mantis.md` §13. Open for a person: the Bulwark
+> wins three in four (§12, 9), and a won fight is 3-4 minutes (§12, 7).
 > Branch `claude/creature-mantis`, worktree `/home/user/wt/mantis`.
 
 The specification is [`../creatures/mantis.md`](../creatures/mantis.md); the
@@ -69,8 +70,8 @@ contract [`../bestiary.md`](../bestiary.md) §1. Also read
       geometric guess; the three habit tests.
 - [x] **M6 · Animation.** Clips in `anim/src/beast/mantis/`, baked, sheets
       reviewed.
-- [ ] **M7 · Measured.** The duellist's plan and three ablations, report lines
+- [x] **M7 · Measured.** The duellist's plan and three ablations, report lines
       and the guarded band, tuning passes, feel log.
-- [ ] **M8 · Reading it, world, docs, browser.** Look, Shrine dressing,
+- [x] **M8 · Reading it, world, docs, browser.** Look, Shrine dressing,
       telegraph screenshots, trophy, docs, manual, web smoke, merge main,
       checks, push.
