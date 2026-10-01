@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 5
 ---
 
@@ -676,3 +677,94 @@ real cost. A playstyle, not power: it moves you from one answer to the other.
 8. **Three classes want things to live on a part** (a shield, a pool, a shadow). Build
    the one mechanism and give it to all three, or give none of them and accept that the
    Bulwark and the Blood mage climb by the stair like everybody else?
+
+---
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt siegeshell`, the Last Valley. The species is
+`sim/src/species/siegeshell/` (the table: 30 bones, 44 parts, 13 moves, the
+knobs; `gait.rs` for the tripod walk, the beat and the procedural legs, the
+stumble's splay and the kneel; `fight.rs` for the ankles, the anchors, the
+Opening, the footfall, the legs' channel, the vents, the Shed, the Plough, the
+Siege beam and the wall; `mind.rs` for the body's appetites, the legs' chooser
+and the parasites' roost over the gnawers' pack mind), the arena
+`sim/src/arena/siegeshell.rs`, the clips `anim/src/beast/siegeshell/`, the look
+and the valley's dressing in `game`, the plan and its lines
+`hunt/src/plans/siegeshell.rs`, the heights in `beastcheck --species siegeshell`,
+and the rules pinned as sentences in `sim/tests/siegeshell.rs` (25 of them,
+every one §10 lists). The plan is [plans/siegeshell.md](../plans/siegeshell.md);
+the passes are in [feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin fight -- --species siegeshell --hunters 2
+--repeats 24` (the pair: one on the legs, one climbing for the crown) and the
+same without `--hunters 2` (alone):
+
+```text
+                         won     mean (a win)   health left (a win)   unanswerable
+  two Champions          8/24       557 s              788                 12
+  one Champion           0/24         --                --                  1
+  two, 12 seeds each:  Bulwark 0, Reaver 11 in 260 s, Elementalist 7 in 328 s,
+                       Blood mage 0, Dual mage 1 in 453 s
+
+  one pair's hunt, lost at the wall in 920 s:
+  distance left at each anchor     124 m        arrived at the siege line   9:17
+  beams fired / cancelled          2 / 0        wall breaches               2 of 2
+  beats: exposed / caught          62 / 7       stamps landed / thrown      0 / 1
+  stumbles (buckles)               28 (132)     climbs started / crown      117 / 23
+  thrown / fell                    6 / 111      parasites killed            26
+  windows, ground    9 / 1 / 2 / 88 %           windows, aboard   32 / 3 / 6 / 59 %
+```
+
+**Against the targets.** The pair wins a third, as asked, and a won fight lasts
+nine minutes, inside the band; the clock does what §9 said it would -- an
+untouched walk is five minutes, and a pair that stumbles and limps it arrives
+at nine. Alone the Champion wins none of 24 against a target of one in twenty:
+the solo hunter dies to attrition (parasites, falls, the rings it is caught by)
+in three to five minutes. **Short of the target**: the windows. The shell is
+near the asked four tenths threatening; the floor is not -- under a tenth --
+because the ground hunter spends the back half of the fight at a broken leg
+buckling it (as §4 says it should), and a broken leg throws nothing. The stamp
+and the drag are rare for the same reason. **Unanswerable hits are not zero**:
+every one counted is a parasite's bite from a windup begun off the hunter's
+screen while it watched an ankle or an anchor, the Broodmother's brood's case
+exactly; the Siegeshell's own three kinds (a stamp with no disc, a ring on the
+helpless, two channels inside the gap) are zero in every run.
+
+What the build decided beside the document:
+
+- **Three hundred metres, not 240**: the walk is 233 m of it, and a body forty
+  metres long that stops twenty short of the wall needs its own length on top.
+- **Health is the anchors'**: 30,000 that nothing but an anchor breaking takes,
+  a third each, so the bar reads in thirds and the shared desperation follows
+  anchors broken. Anchors **7000**, not 2400: at the document's number a pair
+  broke all three before the walk was half done.
+- **Two channels on one `Monster`**: the shared `Doing` is the body's, the legs'
+  stamp and drag are a word in `Monster::own`, and the footfall is the gait
+  itself -- the stride crossing a landing phase. A broken ankle buckles every
+  400; a buckle **cannot stumble it again for fifteen seconds**
+  (`StumbleRest`), or a pair at one broken leg kept it down for good.
+- **The stair is a ramp**, not four treads: the splayed thigh runs from the
+  floor to the rim, its knee 2.4 m up and the shin folded back under it --
+  footing at 2.14, 3.11, 4.08, 5.05 and 6.02 m along it, every step inside the
+  Bulwark's hop.
+- **The flanks hinge under the far side** so the shrug throws its own side's
+  riders (rim, lower and upper flank between grip and a brace) and the crown
+  and the far side ride it out; the shiver throws the crown through a brace.
+- **The fall rule is the cast's** (9 m free, 25 a metre past it): the rim costs
+  125, the crown 325.
+- **Aim A3 is built** (`aiming.md`): the top of a part you could stand on, seen
+  from above, is a place. It moved neither of the Ridgeback's pins, and of its
+  twelve-seed reports only the Elementalist's and the Blood mage's landed
+  counts, by a hit or two.
+- **The camera passes through it** (`FightDecl::camera_passes`): its parts
+  never pull the arm in, and a part the arm runs through is cut away.
+- **Per-frame cost**: the budget's worst scenario is it at the wall with the
+  pack full, a stamp under way and a rider on the crown -- 90 to 130 us a frame,
+  level with the Hollows. Grouping the parts was not needed; posing the body
+  once where a query used to pose it per vent, per swing sample and per step of
+  a rider's walk was.
+
+For a person: whether the beat is a rhythm or a chore (§12, 6), whether 0.8
+m/s reads as walking (§12, 5), the solo rate (§12, 7), and the Reaver, who
+wins eleven of twelve as a pair.

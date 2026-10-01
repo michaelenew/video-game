@@ -6955,3 +6955,44 @@ The noise-driven `ridgeback_pin.rs` and the Dual mage's hunt are unchanged.
 **Verdict** kept; for a person on the Ridgeback's back: does a swing that
 follows the back through the shake feel like aiming, or like the animal
 moving your sword.
+
+### 2026-10-01 — The Siegeshell: a hill that walks to the wall, tuned by harness for two
+
+**Changed** A creature: the colossus in the Last Valley (`--hunt siegeshell`),
+a tripod walk that is the clock, footfall rings on the beat, the stamp and the
+drag on a second channel, ankles that break and buckle, the stumble and its
+stair, vents on the shell, parasites roosting on it (the Gnawers' gnawer),
+the shrug and the shiver, three anchors, the Opening, the Shed, the Plough, the
+Siege beam and the wall; a plan for one hunter and for two
+([creatures/siegeshell.md](creatures/siegeshell.md) §13). Against the
+document: anchors 7000 (from 2400); a buckle cannot stumble it again for 900
+frames; crevices refill one every 2400, six at most, four at the start; the
+beam waits 1800 between breaches. Aim A3, landed on its own: the Ridgeback's
+pins did not move.
+
+**Why** At the document's anchors a pair broke all three in the first half of
+the walk, so a won fight was four minutes. At 7000 the pair died first: the
+attrition was the parasites (eight at the start and one every twenty seconds),
+so fewer of them. Then the fights that reached the wall were over in a minute,
+two beams ten seconds apart; with thirty seconds between breaches a fight at
+the wall is a fight. The plan braced through the shiver instead of jumping it:
+it swung at the anchor during the tell, and a rider in a swing's recovery
+cannot leave, so it holds still until the jump.
+
+**Found** Two Champions 8 of 24 in 557 s; one Champion 0 of 24. As a pair, 12
+seeds each: Reaver 11 in 260 s, Elementalist 7 in 328 s, Dual mage 1, Bulwark
+and Blood mage 0. Windows aboard about a third threatening, on the floor under
+a tenth: the ground hunter spends the back half at a broken leg, which throws
+nothing. Unanswerable: the parasites' off-screen windups only, about one a
+pair's hunt; the creature's own three kinds zero.
+
+**Reverted** Stamp reach 11-12 m and a 60 % stamp chance, so the next leg over
+stamps at a hunter buckling a broken one: the floor's threatening share went
+from 10 % to 14-17 %, and the pair's wins from 4 in 8 to 2 in 12. Cling radius
+4.5 m: drags three times as often and no better a floor. Anchors 7000 with the
+parasites as they were: one pair in twelve.
+
+**Verdict** built, a third won as a pair in the band; short of tier 5's solo
+one in twenty, of the floor's threatening share, and of zero unanswerable
+hits. For a person: the beat as rhythm or chore (§12, 6), 0.8 m/s as walking
+(§12, 5), and the Reaver.

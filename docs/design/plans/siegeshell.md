@@ -6,12 +6,10 @@ implements: ../creatures/siegeshell.md
 
 # Siegeshell — action plan
 
-> **State, 2026-10-01.** M1-M5 built and tested (`crates/sim/tests/siegeshell.rs`,
-> 24 tests); the plan and the report lines exist (M7 first pass). Numbers so
-> far: coop 2 Champions 4/8 at ~374 s mean (short of 8-20 min), solo 0/8;
-> 3-4 unanswerable hits across runs not yet investigated. Next: budget
-> scenario, M6 (A3), tuning, docs, web. Branch `claude/creature-siegeshell`,
-> worktree `/home/user/wt/siegeshell`.
+> **State, 2026-10-01.** Built. M1-M7 done; M8 under way (contact sheets,
+> telegraph screenshots, web smoke, final merge). Two Champions win 8 of 24 in
+> 557 s; one wins 0 of 24. Where it landed is the document's §13. Branch
+> `claude/creature-siegeshell`, worktree `/home/user/wt/siegeshell`.
 
 The specification is [`../creatures/siegeshell.md`](../creatures/siegeshell.md);
 the recipes are [`../species.md`](../species.md), [`../critters.md`](../critters.md)
@@ -89,7 +87,7 @@ bar: [`../monsters.md`](../monsters.md), contract [`../bestiary.md`](../bestiary
       Shed, Plough, the Siege beam, the wall. A full solo hunt runs to an end.
 - [x] **M6 · The aim rule (A3).** Top face of a mountable part is a place;
       Ridgeback pins and report before/after; own commit.
-- [ ] **M7 · Two hunters.** Coop and solo plans, report lines, per-region
+- [x] **M7 · Two hunters.** Coop and solo plans, report lines, per-region
       windows, tuning passes, feel log.
 - [ ] **M8 · Animation, look, reading it, world, docs, browser.** Clips,
       contact sheets, look and dressing, telegraph screenshots, trophy,
