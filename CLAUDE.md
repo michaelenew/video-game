@@ -36,11 +36,11 @@ every one of them is a function in `aim.rs`:**
 | Kind | Call | Rule |
 | --- | --- | --- |
 | Grounded | `aim::grounded_path` | Ground: cast exactly there. Max range: max range on the ground in the mouse's direction. If it travels, it travels from the character to that point. |
-| Skillshot | `aim::skillshot_path` | Ground: that spot raised to the **middle of a fighter standing on it** (`aim::standing_middle`), because the floor is never the target — bodies are not on the ray, so a ground hit means "there". Anything else — wall, stone (its top too: `aim::sight_for_attack`), body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
-| Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
+| Skillshot | `aim::skillshot_path` | Ground: that spot raised to the **middle of whatever stands on it** (`aim::standing_middle`, with the height from `aim::stands_at` — a fighter's, unless the crosshair passed through something shorter), because the floor is never the target — bodies are not on the ray, so a ground hit means "there". Anything else — wall, stone (its top too: `aim::sight_for_attack`), body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
+| Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. Standing, pointed at something **shorter than a fighter** (`aim::stands_at`), it dips to meet it at the same share of its height a level swing meets a fighter at (`aim::stoop`); zero where only fighters stand. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
 
-Seven more functions live there and are **not** lines of effect. `aim::pointing_at`
+Eleven more functions live there and are **not** lines of effect. `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
@@ -65,6 +65,15 @@ swing; this is only its yaw. `aim::look_onto` is the raycast run backwards —
 *which pitch puts the crosshair on that point* — for anything that plays the
 game rather than referees it: the sparring bot, and the Elementalist rehearsal.
 A bot that aimed from its chest would be the mistake below, made by a player.
+`aim::look_onto_closely` is the same, settled for as many rounds as a steep look
+needs (`critcheck`, and the dev pack's hunter); the bot keeps its six.
+`aim::stands_at` answers *how tall is the thing under the crosshair* — the last
+body the ray passed through, which never stops it — and `aim::stoop` turns that
+into how far below the shoulder a standing swing meets it: what makes a
+knee-high critter hittable (bestiary A1, [`docs/design/critters.md`](docs/design/critters.md)).
+`aim::line_clear` answers *is anything solid on this straight line*, which a pack
+asks when it cuts a ring round a fighter. Critters are on `aim::first_along`'s
+list with the creatures (A2).
 
 Which one a move is comes from `Move::aim()`, **declared** in the move table so
 every move has an answer, and printed in the `aimed` column of

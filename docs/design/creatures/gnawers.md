@@ -129,6 +129,21 @@ beside `hits_crouching`. It is a workaround written as a property. The overlay
 would draw the spear passing over the gnawer while the hit test hit it, which is
 the one thing [CLAUDE.md](../../../CLAUDE.md) says an overlay may never do.
 
+**Built 2026-10-01, ahead of this creature, with P3** ([critters.md](../critters.md),
+[aiming.md](../aiming.md) §"Small bodies"). `stands_at`, the skillshot to the
+body's middle, and the standing swing's dip are in `aim.rs`, bit-identical
+where only fighters stand. Changed while building, by the instrument: the swing
+meets a short body at **the share of its height a level swing meets a fighter
+at** (`aim::stoop`), not its middle -- the middle tipped it steeper than it meets
+a fighter for nothing -- and the Dual mage's wing, a flat disc and a thrust each
+read the same drop. The instrument is `cargo run -p sim --bin critcheck`, generic
+rather than `gnawcheck`, with a fighter standing at the same distance as the
+control. On a 0.6 m body every move touches it wherever it touches a fighter,
+except **lunges that carry the fighter through it** (the Skewer and the Dual
+mage's dark auto at 1–2 m) and **the Guillotine**, whose blades are flat at 0.9 m
+(critters.md §7 -- a person's call). The Elementalist's bolt and her air shots
+touch it at every distance; her auto is no longer the sharpest form of the hole.
+
 ## 2 · The moves
 
 Frame numbers and damage are **first guesses**, to be moved by the fight
@@ -457,8 +472,10 @@ beside `frames_until_free`, and the four bands are computed from it unchanged.
 
 ## 10 · What it needs built
 
-**Depends on:** P1 (species), P3 (critters and the pack brain — this creature
-brings it), P8 (the harness per species). P2 only for the den: the current
+**Depends on:** P1 (species), P3 (critters and the pack brain — **built
+2026-10-01 ahead of this creature**: [critters.md](../critters.md) §6 is the
+recipe, and its last list says which of the below are machinery already), P8
+(the harness per species). P2 only for the den: the current
 28 × 28 m arena works with a den mouth at one wall's midpoint. Nothing from P4–P7.
 
 **New and specific:** the aim change of §1a; `stands_at` reading critter

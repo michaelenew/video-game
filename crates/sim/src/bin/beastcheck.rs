@@ -118,6 +118,14 @@ fn main() {
         eprintln!("no species called {wanted}; there is {}", known.join(", "));
         std::process::exit(2);
     };
+    if !sp.has_body() {
+        eprintln!(
+            "the {} have no body to climb: they are a pack. `cargo run -p sim --bin critcheck -- --species {}` measures small bodies.",
+            sp.name,
+            sp.slug()
+        );
+        std::process::exit(2);
+    }
     println!("the {}\n", sp.name);
 
     // **Two jumps, not one.** This printed a single apex until 2026-09-17,

@@ -109,7 +109,7 @@ pub const MAX_RING: usize = 12;
 pub const MAX_TOKENS: usize = 6;
 
 /// Words of the pack's memory kept for its species: see [`Pack::memo`].
-pub const MEMO: usize = 8;
+pub const MEMO: usize = 12;
 
 /// No leader, no owner.
 pub const NONE: u8 = NOBODY;
@@ -166,7 +166,8 @@ pub struct Pack {
     /// **The species' own words.** The pack brain never reads these; a
     /// species' [`PackMind`] keeps whatever it needs here -- the herd's state
     /// and lane, the bull's horns, a howl's lockout -- so a creature adds no
-    /// field to the world. Eight 32-bit words.
+    /// field to the world. Twelve 32-bit words: the Hornback's bull, the
+    /// largest ask in the bestiary, is about forty bytes.
     pub memo: [i32; MEMO],
 }
 
@@ -337,8 +338,11 @@ pub trait PackMind {
 
     /// Once a frame, before anybody steers: the species' own pack-level rules
     /// -- spawning, a herd's states, a howl's timer -- kept in [`Pack::memo`].
-    fn frame(&self, pack: &mut Pack, critters: &mut Critters, frame: u32) {
-        let _ = (pack, critters, frame);
+    /// `herd` is every creature in the fight as it stands this frame, so a
+    /// monster that owns the pack (`Pack::owner`) can be read: the
+    /// Broodmother's sacs bursting are her pack's spawns ([`spawn`]).
+    fn frame(&self, pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
+        let _ = (pack, critters, herd, frame);
     }
 
     /// Critter `i` just took `dealt`.
@@ -449,6 +453,22 @@ pub fn spawn(
     critters[slot] = Critter::new(sp, kind, at, yaw);
     pack.mustered = pack.mustered.saturating_add(1);
     Some(slot)
+}
+
+/// **Stand critter `i` on a creature's part**: slot `slot` of the herd, part
+/// `part`, at `local` in that part's own frame. From then on the perch is
+/// authoritative and the animal carries it (`Critter::perch`). The
+/// Siegeshell's parasites are spawned and then perched; one that walks off the
+/// part's top falls, and lands on whatever is under it.
+pub fn perch_on(c: &mut Critter, herd: &Herd, slot: usize, part: usize, local: V3) {
+    let Some(beast) = herd.get(slot).and_then(|m| m.as_ref()) else {
+        return;
+    };
+    c.mount = mount_of(slot, part);
+    c.set_perch(local);
+    c.pos = beast.world_of(part, c.perch_local());
+    c.vel = V3::ZERO;
+    c.set(flag::AIRBORNE, false);
 }
 
 /// Critter `i` has just been killed: the body goes down, its token comes back,
@@ -669,7 +689,7 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
         _ => {}
     }
 
-    decl.mind.frame(pack, critters, w.frame);
+    decl.mind.frame(pack, critters, w.herd, w.frame);
 
     // ---- each body ----
     let every = sp.pack_raw(PackKnob::ThinkEvery).max(1) as u32;

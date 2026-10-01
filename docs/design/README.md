@@ -115,6 +115,7 @@ few enough to balance and to read in third person.
 | [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt; **hunts since 2026-09-25**: eight moves, a threat at every range, unplayed |
 | [bestiary.md](bestiary.md) | The cast after the Ridgeback: the contract every creature is held to, eleven creatures on five tiers, the shared machinery (P1–P8) and the aiming changes (A1–A5) they need, and the build order | **Proposed 2026-09-30; the cast accepted as the first mix**; P1, P2 and P8 built 2026-10-01 |
 | [species.md](species.md) | A creature is a table: the `Species` every creature is declared as, its knobs, two creatures in the world, and **the recipe for adding one** | **Built 2026-10-01** (bestiary P1 and P8); the Ridgeback pinned bit for bit |
+| [critters.md](critters.md) | Small bodies and packs: the 48-byte critter (a box on its feet), the pack brain (glance, ring, tokens, leader, morale, spawning, a monster's pack, standing on a creature), the aim change that makes a knee-high body hittable, `critcheck`, and **the recipe for a pack creature** | **Built 2026-10-01** (bestiary P3, A1, A2); the Ridgeback and versus pinned bit for bit |
 | [arenas.md](arenas.md) | An arena is a table: bounds, solids (ceilings included), floor materials, spawns; the picker (`--hunt <creature>`, `--arena`, `H` / `Shift+H` on the wire); **the recipe for adding one** | **Built 2026-10-01** (bestiary P2, world W0); the proving ground pinned bit for bit |
 | [creatures/](creatures/) | One design per creature: [Gnawers](creatures/gnawers.md), [Hornback herd](creatures/hornback.md), [Sandmaw](creatures/sandmaw.md), [Mireback](creatures/mireback.md), [The Pair](creatures/the-pair.md), [Broodmother](creatures/broodmother.md), [Galewing](creatures/galewing.md), [Veilstalker](creatures/veilstalker.md), [Mantis](creatures/mantis.md), [Siegeshell](creatures/siegeshell.md) | Proposed, unbuilt |
 | [world.md](world.md) | For now: separate arenas picked from the dev harness, with trophies and tempered rematches. Later: a valley of places joined by trails | **Decided in part, 2026-09-30**; W0, the picker, built 2026-10-01 |
@@ -247,6 +248,12 @@ presentation. See [animation.md](animation.md) §"The creature has its own rig".
 can stand on is, in every state that lowers one, against how high a fighter can actually jump.
 The climb is a geometry problem and this is the geometry. `--species <name>` for any creature:
 it reads everything off the species table.
+
+**Small bodies:** `cargo run -p sim --bin critcheck` stands a critter at 1, 2, 3 and 5 m in
+front of every class, puts the crosshair on it, presses every move, and prints where it touched
+beside where the same move touches a fighter. `--species <pack> --kind <name>` for any pack. See
+[critters.md](critters.md). `cargo run -p sim --bin bake_tuning -- --set <id>=<value>` sets a
+knob from a terminal and bakes.
 
 ## 7 · The feel harness
 

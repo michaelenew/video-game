@@ -629,6 +629,26 @@ pub fn update(
             let share = beast.poise.max(0) as f32 / beast.sp().poise_max().max(1) as f32;
             node.width = Val::Percent(100.0 * share.min(1.0));
         }
+    } else if sim.cur.pack.is_some() {
+        // A pack and nothing else: the bar is what is left of all of it,
+        // every body that has stood in the fight counted at its full health.
+        let sp = sim.cur.critters.sp();
+        let (now, full) =
+            sim.cur
+                .critters
+                .iter()
+                .filter(|c| c.present())
+                .fold((0, 0), |(now, full), c| {
+                    let max = sim::critter::stat(sp, c.kind, sim::critter::CritterField::Health);
+                    let left = if c.alive() { c.health as i32 } else { 0 };
+                    (now + left, full + max)
+                });
+        if let Ok(mut node) = quarry.single_mut() {
+            node.width = Val::Percent(100.0 * now as f32 / full.max(1) as f32);
+        }
+        if let Ok(mut node) = poise.single_mut() {
+            node.width = Val::Percent(0.0);
+        }
     }
 
     for (tag, mut text) in states.iter_mut() {

@@ -70,7 +70,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --hunt [creature]",
-                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature.",
+                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature. --hunt gnats is the dev pack: six small bodies and a queen, the critter machinery with nothing of its own.",
             ),
             e(
                 "cargo run -p game -- --arena <name>",
@@ -512,6 +512,10 @@ pub const SECTIONS: &[Section] = &[
                 "cargo run -p sim --bin bake_tuning",
                 "The same write, without launching the game.",
             ),
+            e(
+                "cargo run -p sim --bin bake_tuning -- --set <id>=<value>",
+                "Set knobs by the identifier their line in a baked file carries, in the unit it shows, then bake: the slider from a terminal. How a new creature gets its first numbers without a window. Repeat --set for as many as you like.",
+            ),
         ],
     },
     Section {
@@ -602,6 +606,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "cargo run -p sim --bin beastcheck",
                 "What a creature measures: how high every surface you can stand on is, standing and in each state that lowers one, against how high a fighter can actually jump. The climb is a geometry problem, and this is the geometry. --species <name> for a creature other than the Ridgeback; everything it prints is read off the species' table.",
+            ),
+            e(
+                "cargo run -p sim --bin critcheck",
+                "Can every move touch something short? Stands one critter of a pack at 1, 2, 3 and 5 m in front of each class, crosshair on its middle, presses every move, and prints where it touched -- beside where the same move touches a fighter standing there, which is what it is held to. The dev pack's 0.6 m gnat by default; --species <pack> --kind <name> for another.",
             ),
             e(
                 "cargo run -p anim --bin preview -- <clip>",

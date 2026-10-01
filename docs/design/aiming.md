@@ -1,7 +1,7 @@
 ---
 status: decided
 decided: 2026-09-12
-revised: 2026-09-14
+revised: 2026-10-01 (small bodies: A1 and A2 of the bestiary)
 ---
 
 # Aiming
@@ -379,6 +379,70 @@ sentence pull opposite ways:
 
 A class whose swings are discs never reads the pitch, so this changes nothing
 for five of the six.
+
+## Small bodies: how tall "there" is
+
+**Added 2026-10-01, with the critters** ([critters.md](critters.md); bestiary §6
+A1 and A2). Everything above was written when the only things that stood were
+fighters, so "the middle of whoever stands on that patch" was a constant, and a
+level swing at the shoulder met everybody. A knee-high body breaks both: every
+skillshot aimed *through* a gnawer was raised to a fighter's middle and sent over
+its back, and every standing swing pointed at it stayed level over its head
+(the Gnawers' §1a has the arithmetic). The fix is one idea, and it is in this
+file so it is true of every ability at once: **"there" has a height, and the
+height is whatever stands there.**
+
+- **`aim::stands_at`** casts the crosshair's own ray to the terrain it meets and
+  reports the **last body it passed through** on the way -- its height, and where
+  its feet are (`aim::Stand`). Fighters count at their *standing* height, so where
+  only fighters stand the answer is a fighter's height, exactly as before; crouch
+  stays the move table's `hits_crouching`. A creature's skeleton is not a body
+  here: it is a place you aim at, and what a shot meets on it is `first_along`'s.
+  **Bodies are still not on the ray** -- nothing stops it short, and the
+  creature-filling-the-screen bug cannot come back.
+- **A ground-aimed skillshot** goes to `standing_middle(ground, height)`: the
+  middle of what stands there. On a gnawer that is 0.3 m up, and the line from
+  the caster's hand to it passes through the gnawer.
+- **A standing swing pointed at something short dips to meet it.** `aim::stoop`
+  says how far below the shoulder it should meet the body -- `cast height × (1 −
+  h / fighter height)`, the same share of the body's height a level swing meets a
+  fighter at -- and `swing_path` tilts the line by the angle that drop makes over
+  the distance to the body (or the swing's reach, if shorter). Only standing,
+  only looking down, never shallower than the dead zone's own answer, and zero
+  where only fighters stand. **It reads the crosshair, not the pack**: a swing
+  that looked for the nearest short body and ducked for it would be aim assist.
+  Point over a gnawer at the Big One's head and it swings level.
+
+  The Gnawers' document proposed the *middle* of the body for the swing too. The
+  instrument (`critcheck`) said otherwise: a swing leaves the hand at cast height,
+  not at a fighter's middle, so aiming its line at a 0.6 m body's middle tipped it
+  steeper than it meets a fighter and lost reach for nothing. The share of the
+  height is what makes a short body behave like a small fighter.
+- **Three volumes read the stoop rather than the path's pitch**, because they do
+  not follow the pitch: the Dual mage's wing lies flat at the shoulder when she
+  stands, and comes down by the drop; a flat disc has no height at all, and goes
+  out level along the facing rather than being pulled in toward her; a thrust
+  lowered at a gnawer still reaches as far across the floor as it would level.
+  All three are exactly what they were among fighters (`Player::stoop` is zero).
+
+**The small bodies are on `first_along`'s list (A2).** With the creatures, under
+`Targets::quarry`: a critter's box, swollen by the travelling thing's girth.
+What a shot runs into changed, not how it is aimed.
+
+**`aim::line_clear`** is the question the pack asks when it cuts a ring round a
+fighter -- is there nothing solid on the straight line from here to there -- and
+**`aim::look_onto_closely`** is `look_onto` settled for as many rounds as a steep
+look needs: six rounds leave the crosshair a metre above a point forty degrees
+below the horizon, which is exactly where a gnawer at three metres is. The bot's
+own six rounds are left alone; its pinned fights were played on them.
+
+`cargo run -p sim --bin critcheck` is the instrument: one critter at 1, 2, 3 and
+5 m, the crosshair on its middle, every class's every move pressed, beside the
+same move against a fighter standing there. Every move touches a 0.6 m gnat
+wherever it touches a fighter, except where a lunge carries the fighter through
+it (fighters pass through critters) and the Guillotine, whose blades are flat at
+0.9 m above the shadow's feet by their own design -- a question for a person, in
+[critters.md](critters.md).
 
 ## What the path runs into
 

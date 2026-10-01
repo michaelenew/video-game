@@ -439,7 +439,9 @@ hits: zero.**
 ## 10 · What it needs built
 
 **Depends on:** P1 (species — her rig, legs, sacs, moves), P2 (the cave, with a
-ceiling), P3 (critters and the pack brain, from the Gnawers), P4 (web patches),
+ceiling), P3 (critters and the pack brain — **built 2026-10-01**: a body that
+brings a pack owns it, `OwnerTokens` shares the budget, `pack::spawn` fills a
+freed slot, morale is optional; see [critters.md](../critters.md) §6), P4 (web patches),
 P8 (the harness plan and the per-species report). It is the bestiary's seventh
 build for that reason: nothing here is new machinery except what is below.
 

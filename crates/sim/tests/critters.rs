@@ -393,6 +393,39 @@ fn critters_stand_on_a_monsters_back_and_go_where_it_goes() {
 }
 
 #[test]
+fn a_critter_perched_on_a_part_is_carried_by_it() {
+    // The Siegeshell's parasites: spawned, then stood on a part by its own
+    // frame. The perch is authoritative, so the animal turning and walking
+    // carries the critter with it.
+    let mut w = World::hunt_with(
+        [Class::Bulwark; MAX_PLAYERS],
+        [Some(SpeciesId::RIDGEBACK), Some(SpeciesId::GNATS)],
+    );
+    let beast = w.monsters[0].unwrap();
+    let part = beast.sp().part_named("haunch").unwrap();
+    let top = beast.sp().shape(part).max.y;
+    let herd = w.monsters;
+    let c = &mut w.critters[1];
+    pack::perch_on(c, &herd, 0, part, V3::new(Fx::ZERO, top, Fx::ZERO));
+    c.state = is::FLINCH;
+    c.timer = u16::MAX;
+    let start = w.critters[1].pos;
+    for _ in 0..180 {
+        w.advance(idle());
+    }
+    let c = w.critters[1];
+    // Still on the animal -- on whichever of its treads it now stands on, as
+    // a rider would be.
+    assert_ne!(c.mount, NO_PART);
+    let held = c.perched_at(&w.monsters).unwrap();
+    assert!(held.sub(c.pos).len().raw() < Fx::ratio(1, 20).raw());
+    assert!(
+        start.sub(c.pos).flat_len().raw() > Fx::ratio(1, 10).raw(),
+        "the animal moved and the critter did not"
+    );
+}
+
+#[test]
 fn critters_do_not_walk_through_the_arenas_solids() {
     let mut w = gnats(Class::Bulwark);
     let arena = w.arena();

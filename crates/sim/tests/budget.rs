@@ -56,8 +56,9 @@ const ADVANCE_BUDGET_NS: u128 = FRAME_NS / 32;
 /// L2 cache, which is what makes a save a memcpy nobody notices.
 ///
 /// About 2.8 KiB since the world gained a second creature slot for the Pair
-/// (2026-10-01: 2,856 bytes, from 2,680), and about 3.4 KiB since it gained ten
-/// critter slots and a pack brain (bestiary P3, 2026-10-01). Raising this is a real decision -- it means
+/// (2026-10-01: 2,856 bytes, from 2,680), and 3,520 bytes since it gained ten
+/// critter slots and a pack brain (bestiary P3, 2026-10-01; see
+/// `docs/design/critters.md`). Raising this is a real decision -- it means
 /// every frame and every rollback got heavier -- so change it deliberately, the
 /// way `knobs.rs` wants a reason, rather than to make a red test green.
 const SNAPSHOT_CAP: usize = 4096;

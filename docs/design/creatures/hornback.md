@@ -472,7 +472,9 @@ five.
 ## 10 · What it needs built
 
 **Depends on P1** (species), **P2** (arenas as data: a bigger meadow with rocks),
-**P3** (critters and the pack brain), **P8** (a plan and report per species), and
+**P3** (critters and the pack brain — **built 2026-10-01**: the box from the
+floor is the critter's hit shape, critters are on `aim::first_along`'s list, and
+the bull's extra state fits the pack's `memo`; see [critters.md](../critters.md)), **P8** (a plan and report per species), and
 **P7** for the cart variant only (§11).
 
 **The bull is a critter with extra state, not a light monster.** A monster's

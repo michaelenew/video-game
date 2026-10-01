@@ -533,7 +533,9 @@ roughly two more. A won fight lands at nine to thirteen minutes, inside the band
 **Depends on:** P1 (a bigger rig: the species table must carry a skeleton of 26 bones
 rather than 18, and breakables as their own list rather than health on every part), P2
 (the valley: 50 × 240 m, boulders, standing stones, the siege line), P3 (gnawers, and a
-critter that can hold a part), P4 (vents, in a part's frame), P6 (the long ride and
+critter that can hold a part — **built 2026-10-01**: a critter's perch on a part is
+authoritative and carried by the pose, `pack::perch_on` stands one there, and one
+falling lands on any mountable top; see [critters.md](../critters.md)), P4 (vents, in a part's frame), P6 (the long ride and
 **fall damage**), P7 (the wall), P8 (a coop plan, and per-region windows).
 
 **New and specific to it:**
