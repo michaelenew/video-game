@@ -71,7 +71,7 @@ bar: [`../monsters.md`](../monsters.md), contract [`../bestiary.md`](../bestiary
 
 ## Milestones
 
-- [ ] **M1 · The body walks.** Species table (30 bones, ~46 parts, 6 legs,
+- [x] **M1 · The body walks.** Species table (30 bones, ~46 parts, 6 legs,
       13 moves, clips, knobs), bootstrap files, registry lines, the Last
       Valley, the walk and the procedural legs, `beastcheck --species
       siegeshell` heights, geometry tests, a screenshot.

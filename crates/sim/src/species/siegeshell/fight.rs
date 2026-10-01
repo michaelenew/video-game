@@ -155,13 +155,14 @@ pub mod leg {
     pub const RETURN: u32 = 3;
 
     /// The channel as it stands: which move, which leg, which phase, frames
-    /// left.
+    /// left, and the fighters it has struck (a bit each).
     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
     pub struct Channel {
         pub kind: u32,
         pub leg: usize,
         pub phase: u32,
         pub left: u16,
+        pub struck: u32,
     }
 
     pub fn get(m: &Monster) -> Channel {
@@ -171,6 +172,7 @@ pub mod leg {
             leg: ((w >> 2) & 0b111) as usize,
             phase: (w >> 5) & 0b11,
             left: ((w >> 7) & 0x7FF) as u16,
+            struck: (w >> 18) & 0b11,
         }
     }
 
@@ -178,7 +180,8 @@ pub mod leg {
         let w = (c.kind & 0b11)
             | ((c.leg as u32 & 0b111) << 2)
             | ((c.phase & 0b11) << 5)
-            | ((c.left as u32 & 0x7FF) << 7);
+            | ((c.left as u32 & 0x7FF) << 7)
+            | ((c.struck & 0b11) << 18);
         m.own[body::LEG] = w as i32;
     }
 
@@ -458,6 +461,14 @@ fn walk(w: &mut World, slot: usize) {
     let Some(mut m) = w.monsters[slot] else {
         return;
     };
+    // What the shared walk did this frame, taken back: it is held (rooted)
+    // and braking, but a body this slow brakes over many frames, and in
+    // those it would walk -- and stride -- a second time beside this one.
+    let gait_len = m.sp().gait_stride().max(Fx::ratio(1, 2));
+    let shared = m.speed;
+    m.pos = m.pos.sub(V3::from_turns(m.yaw).scale(shared.mul(DT)));
+    let undo = shared.mul(DT).div(gait_len);
+    m.stride = m.stride.wrapping_sub(undo.raw().clamp(0, 65535) as u16);
     m.rooted = m.rooted.max(2);
     // The siege line: its head this far from the wall.
     if !at_siege_line(&m) && to_wall(w, &m).raw() <= Knob::SiegeLine.fx().raw() {
@@ -468,7 +479,7 @@ fn walk(w: &mut World, slot: usize) {
     m.pos = m.pos.add(forward.scale(speed.mul(DT)));
     m.pos.y = Fx::ZERO;
     let before = m.stride;
-    let covered = speed.mul(DT).div(m.sp().gait_stride().max(Fx::ratio(1, 2)));
+    let covered = speed.mul(DT).div(gait_len);
     m.stride = m.stride.wrapping_add(covered.raw().clamp(0, 65535) as u16);
     m.speed = speed;
     if let Some(t) = gait::landed(before, m.stride) {

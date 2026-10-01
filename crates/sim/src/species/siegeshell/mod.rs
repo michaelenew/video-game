@@ -790,6 +790,10 @@ crate::species_knobs! {
     BroodFrames,     "parasites", "A crevice refills one every",         Frames, 0, 3600;
     BroodCap,        "parasites", "Parasites on the shell at most",      Int,   0, 10;
     BroodAtStart,    "parasites", "Parasites when the hunt begins",      Int,   0, 10;
+    // the legs' channel, after a move
+    FootHome,        "stamp",   "A foot goes home over",                 Frames, 0, 120;
+    StampChance,     "stamp",   "Stamps on a beat it can (%)",           Percent, 0, 100;
+    LegRest,         "stamp",   "The legs rest after a move for",        Frames, 0, 600;
 }
 
 const OWN: &[KnobDecl] = Knob::DECLS;

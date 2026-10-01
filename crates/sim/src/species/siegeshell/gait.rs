@@ -124,6 +124,18 @@ pub fn frames_to_beat(m: &Monster) -> Option<u16> {
     Some(to.div(per_frame).to_int().clamp(0, u16::MAX as i32) as u16)
 }
 
+/// Frames between beats at the pace it is walking: a large number halted.
+pub fn frames_per_beat(m: &Monster) -> i32 {
+    let speed = m.speed;
+    if speed.raw() <= 0 {
+        return i32::MAX / 2;
+    }
+    math::half(m.sp().gait_stride())
+        .div(speed.mul(DT))
+        .to_int()
+        .max(1)
+}
+
 // ---------------------------------------------------------------------------
 // Where the feet are
 // ---------------------------------------------------------------------------
@@ -402,6 +414,11 @@ fn ankle_over(m: &Monster, foot: V3) -> V3 {
         cm(BUILD.ankle_drop + BUILD.pad_thick).mul(k),
         Fx::ZERO,
     ))
+}
+
+/// Where leg `leg`'s pad would be in the gait alone, in the world.
+pub fn foot_in_gait(m: &Monster, leg: usize) -> V3 {
+    flat_world(m, gait_foot(m, leg))
 }
 
 /// **Where leg `leg`'s pad is this frame**, its underside's middle in the
