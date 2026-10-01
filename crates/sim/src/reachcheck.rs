@@ -30,12 +30,15 @@ use crate::state::{MAX_PLAYERS, World};
 /// What a class can do to one part.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Reach {
-    /// From the floor, swinging where it stands.
+    /// From the floor beside it, swinging where it stands.
     pub standing: bool,
-    /// From the top of a full hop.
+    /// From the top of a full hop taken beside it.
     pub hop: bool,
     /// Where the first hop that reached it was taken from.
     pub hop_from: Option<V3>,
+    /// From the floor straight under it, standing or hopping: a place the
+    /// creature's own body overhangs.
+    pub under: bool,
 }
 
 /// How many bodies tall the column over a footing is asked about: the Dual
@@ -63,6 +66,13 @@ pub fn stage(species: SpeciesId, class: Class) -> World {
 /// Pin the creature where the trial wants it, every frame: still, in the
 /// state being measured, not thinking.
 pub fn pin(w: &mut World, doing: Doing, at: V3) {
+    pin_with(w, doing, at, |_| {});
+}
+
+/// [`pin`], and then `prepare` on the creature: what a trial wants of it
+/// besides its state -- the Broodmother with only one sac on her back, so a
+/// swing that touches two is asked about the one being measured.
+pub fn pin_with(w: &mut World, doing: Doing, at: V3, prepare: fn(&mut crate::monster::Monster)) {
     if let Some(m) = w.monsters[0].as_mut() {
         m.pos = at;
         m.yaw = Fx::ZERO;
@@ -73,6 +83,7 @@ pub fn pin(w: &mut World, doing: Doing, at: V3) {
         m.brain.grace = 600;
         m.rooted = 2;
         m.health = m.sp().health();
+        prepare(m);
     }
 }
 
@@ -156,9 +167,11 @@ fn yaw_to(from: V3, to: V3) -> u16 {
     (crate::math::atan2_turns(d.z, d.x).raw() & 0xFFFF) as u16
 }
 
-/// One trial: a fighter of `class` at `from`, walking toward the part with
-/// the crosshair on it, swinging `button` where it stands or at the top of a
-/// hop. True if the part lost health.
+/// One trial: a fighter of `class` at `from`, the crosshair on the part,
+/// swinging `button` where it stands -- after walking in toward the part --
+/// or from the top of a hop taken on the spot, drifting toward it only once
+/// off the floor. True if the part lost health.
+#[allow(clippy::too_many_arguments)]
 pub fn trial(
     base: &World,
     doing: Doing,
@@ -167,9 +180,10 @@ pub fn trial(
     from: V3,
     button: u16,
     hop: bool,
+    prepare: fn(&mut crate::monster::Monster),
 ) -> bool {
     let mut w = base.clone();
-    pin(&mut w, doing, at);
+    pin_with(&mut w, doing, at, prepare);
     let target = middle(&w, part);
     w.players[0].pos = from;
     w.players[0].vel = V3::ZERO;
@@ -180,11 +194,11 @@ pub fn trial(
     let mut pressed = false;
     let mut rising = false;
     for frame in 0..110 {
-        pin(&mut w, doing, at);
+        pin_with(&mut w, doing, at, prepare);
         let p = &w.players[0];
         let aim = yaw_to(p.pos, target);
         let pitch = crate::aim::look_onto_closely(p.pos, aim, p.aloft, target);
-        let mut bits = Input::W;
+        let mut bits = if !hop || !p.grounded { Input::W } else { 0 };
         // Held while rising: the Dual mage's float is a held jump.
         if hop && !pressed && (frame < 4 || p.vel.y.raw() > 0) {
             bits |= Input::SPACE;
@@ -211,35 +225,49 @@ pub fn trial(
     false
 }
 
-/// **Can `class` strike `part` of a `species` held in `doing`** -- standing,
-/// and from the top of a hop? Every bearing, two distances, both autos, until
-/// one lands.
+/// **Can `class` strike `part` of a `species` held in `doing`** -- from the
+/// floor beside it, from the top of a hop beside it, and from the floor
+/// straight under it? Every bearing, two distances, both autos, until one
+/// lands.
 pub fn reach(species: SpeciesId, doing: Doing, class: Class, part: usize) -> Reach {
+    reach_with(species, doing, class, part, |_| {})
+}
+
+/// [`reach`], with `prepare` done to the creature every frame of every trial
+/// (see [`pin_with`]).
+pub fn reach_with(
+    species: SpeciesId,
+    doing: Doing,
+    class: Class,
+    part: usize,
+    prepare: fn(&mut crate::monster::Monster),
+) -> Reach {
     let mut base = stage(species, class);
     let at = centre(&base);
-    pin(&mut base, doing, at);
+    pin_with(&mut base, doing, at, prepare);
     // A frame for the world to settle with the fighter out of the way, where
     // the other one is.
     base.players[0].pos = base.players[1].pos;
     base.advance([Input::default(); MAX_PLAYERS]);
-    pin(&mut base, doing, at);
+    pin_with(&mut base, doing, at, prepare);
     let target = middle(&base, part);
     let mut out = Reach::default();
-    let below = under(&base, target);
+    let buttons = [Input::LEFT, Input::RIGHT];
+    if let Some(below) = under(&base, target) {
+        out.under = buttons.iter().any(|b| {
+            trial(&base, doing, at, part, below, *b, false, prepare)
+                || trial(&base, doing, at, part, below, *b, true, prepare)
+        });
+    }
     for bearing in BEARINGS {
         let near = footing(&base, target, bearing);
         let dir = V3::from_turns(Fx::from_raw(bearing));
-        let spots = [
-            Some(near),
-            Some(near.add(dir.scale(Fx::ratio(1, 2)))),
-            below,
-        ];
-        for from in spots.into_iter().flatten() {
-            for button in [Input::LEFT, Input::RIGHT] {
-                if !out.standing && trial(&base, doing, at, part, from, button, false) {
+        for from in [near, near.add(dir.scale(Fx::ratio(1, 2)))] {
+            for button in buttons {
+                if !out.standing && trial(&base, doing, at, part, from, button, false, prepare) {
                     out.standing = true;
                 }
-                if !out.hop && trial(&base, doing, at, part, from, button, true) {
+                if !out.hop && trial(&base, doing, at, part, from, button, true, prepare) {
                     out.hop = true;
                     out.hop_from = Some(from.sub(at));
                 }

@@ -226,7 +226,7 @@ pub const fn middle_leg(leg: usize) -> bool {
 /// the sides, the front over the thorax, the hump behind -- because that is
 /// how far the roster's swings reach out from a body at the top of a hop
 /// (`tests/broodmother.rs`, and `beastcheck` prints it).
-const SAC_AT: [(i32, i32); 3] = [(-150, 150), (-300, 190), (-395, 270)];
+const SAC_AT: [(i32, i32); 3] = [(-150, 150), (-280, 190), (-385, 270)];
 /// How far either side of the abdomen's middle line a pair sits, and half a
 /// sac across, in centimetres.
 const SAC_SIZE: (i32, i32) = (65, 50);
@@ -321,13 +321,13 @@ const fn body_parts() -> [Part; PART_COUNT] {
         Knob::VulnPedicel as u16,
     )
     .soft();
-    // The abdomen, five metres long and five across, 4.5 m to 6.4 m standing:
+    // The abdomen, 5.6 m long and five across, 4.5 m to 6.4 m standing:
     // carried high, so that the space under it is somewhere to stand and the
     // sacs on its back are out of a hop.
     out[ABDOMEN_PART] = part(
         "abdomen",
         ABDOMEN,
-        v((-500, 100), (-90, 100), (-250, 100)),
+        v((-560, 100), (-90, 100), (-250, 100)),
         v((0, 1), (100, 100), (250, 100)),
         Knob::VulnHide as u16,
     );

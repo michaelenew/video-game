@@ -298,7 +298,7 @@ fn slam() -> Recipe {
         -0.2,
         0.0,
     );
-    let down = crashed(8.0);
+    let down = crashed(15.0);
     let m = |phase, u| mark(Clip::Slam, phase, u);
     Recipe::new(
         Clip::Slam,
@@ -307,7 +307,7 @@ fn slam() -> Recipe {
             Key::eased(m(0, 0.45), up, Ease::OUT),
             Key::eased(m(0, 0.9), top, Ease::IN),
             Key::eased(m(1, 0.6), down, Ease::OUT),
-            Key::at(m(2, 0.75), crashed(9.0)),
+            Key::at(m(2, 0.75), crashed(16.0)),
             Key::eased(1.0, Pose::standing(), Ease::SMOOTH),
         ],
         SWING,
