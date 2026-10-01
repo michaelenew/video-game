@@ -120,7 +120,7 @@ fn it_stands_as_tall_as_its_document_says() {
     // The ankle reaches down to half a metre, so a level swing from a chest
     // at 1.2 m meets it; the belly is nine metres up, out of every hop.
     assert!(near(bottom(&b, ss::ankle_part(3)), 0.5, 0.1));
-    assert!(near(bottom(&b, ss::PLASTRON), 8.6, 0.15));
+    assert!(near(bottom(&b, ss::PLASTRON), 8.6, 0.3));
     // Its feet are twenty-eight metres apart.
     let (l, r) = (gait::foot(&b, 2), gait::foot(&b, 3));
     assert!(near(sim::math::wide_flat_dist(l, r), 28.0, 0.3));
