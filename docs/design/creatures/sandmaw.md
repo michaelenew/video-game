@@ -608,7 +608,7 @@ Numbers from `cargo run -p hunt --bin fight -- --species sandmaw --class <c>
   Champion     18/24   191 s        461                  65 / 12 / 15 /  8 %                 0
   Bulwark      24/24   214 s        665                  64 / 12 / 16 /  7 %                 0
   Reaver       10/24   223 s        329                  67 / 11 / 15 /  8 %                 0
-  Elementalist 20/24   314 s        378                  49 /  7 /  9 / 35 %                 0
+  Elementalist 11/24   338 s        252                  49 /  7 /  9 / 35 %                 0
   Blood mage    0/24     --          --                  66 / 11 / 15 /  8 %                 0
   Dual mage     3/24   209 s        326                  61 / 12 / 18 /  8 %                 0
 
@@ -636,11 +636,16 @@ threatening band is 49 %, unperceived 18 %. The Elementalist's 24: 268
 beaches, all but one by a stone in the circle.
 
 **2026-10-01: the hunter plays all six classes** (`hunt::class`,
-[bestiary.md](../bestiary.md) §8). **The Elementalist** wins 20 from 4: the
+[bestiary.md](../bestiary.md) §8). **The Elementalist** wins 11 from 4: the
 plan's stone beaches the worm as before, and now a pillar goes under the
-beached back (135 in the 24) and her bolts at the throat are aimed at it --
-slow, at five minutes, but won. **The Reaver** sends her shadow to the throat
-on the way in to a stand (427) and opens a lotus on it (196): 10 from 8.
+beached back (138 in the 24) and her bolts at the throat are aimed at it --
+slow, at five and a half minutes, but won. It was 20 before main's aim A3
+merged in: the beached back seen from above became a place, so a bolt aimed
+at it from a stone stopped on the hide's top; the layer now pushes such a
+spot out past the edge (`Hands::spot`), which won back ten of the nineteen
+the merge first cost. Whether the rest is the aim or the plan is open.
+**The Reaver** sends her shadow to the throat on the way in to a stand (427)
+and opens a lotus on it (196): 10 from 8.
 **The Dual mage** wins 3, her finishers into the stand (711). **The Blood mage
 still wins nothing**: she blinks in and out of a stand on her pools (166), but
 the pools a scythe leaves on a worm this size are never worth a spike, and her

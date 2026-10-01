@@ -663,8 +663,8 @@ from twelve single runs each, which print the report's lines:
                 plan A won   mean     plan B won   mean     out of reach (A / B)   unanswerable, unseen tells
   Champion        4/24      482 s       7/24      491 s          67 / 65 %                  0
   Bulwark         0/24        --        2/24      752 s          55 / 53 %                  0
-  Reaver          9/24      650 s      10/24      585 s          55 / 53 %                  0
-  Elementalist   18/24      177 s      16/24      214 s           5 /  4 %                  0
+  Reaver          9/24      646 s      11/24      580 s          55 / 53 %                  0
+  Elementalist   17/24      176 s      18/24      230 s           5 /  4 %                  0
   Blood mage      0/24        --        0/24        --           51 / 49 %                  0
   Dual mage       0/24        --        0/24        --           56 / 55 %                  0
 
@@ -676,11 +676,11 @@ from twelve single runs each, which print the report's lines:
 ```
 
 **2026-10-01: the hunter plays all six classes** (`hunt::class`,
-[bestiary.md](../bestiary.md) §8). **The Elementalist** wins 18 and 16: when
+[bestiary.md](../bestiary.md) §8). **The Elementalist** wins 17 and 18: when
 the bird is down -- crashed, dwelling after a Stoop -- a pillar goes under it
-(279 in plan A's 24) and her bolts at its wings are aimed. **The Reaver** wins 9
-and 10 from 0 and 2: her shadow goes to the downed bird's wing (846), a lotus
-opens on it and is dragged home through it (799), and she cashes the marks (235)
+(286 in plan A's 24) and her bolts at its wings are aimed. **The Reaver** wins 9
+and 11 from 0 and 2: her shadow goes to the downed bird's wing (845), a lotus
+opens on it and is dragged home through it (799), and she cashes the marks (233)
 -- a bird on the floor is a target that stays beside her shadow. **The Blood
 mage and the Dual mage still win nothing**: out of reach half the fight, and
 the windows when it is not are too few for the Dual mage's bars (goaded up 2671

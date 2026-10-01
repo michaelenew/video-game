@@ -7021,8 +7021,8 @@ the report said nothing about them.
 whole table.) The Champion's hunts are bit-identical everywhere; the Bulwark's
 moved only where the layer guards for him or answers a guarded blow with Slam
 (the Hornback, the Sandmaw, the Broodmother). **The Elementalist's fire pillar decides most
-fights**: 24 of 24 against five creatures, 20-22 against two more, because no
-creature steps out of one. **The Dual mage** went from 2, 1 and 0 to 20, 14 and
+fights**: 24 of 24 against five creatures, 22 against the Veilstalker, because
+no creature steps out of one. **The Dual mage** went from 2, 1 and 0 to 20, 14 and
 10 against the Gnawers, the Hornback and the Broodmother once both hands were
 played. **The Reaver** doubled against the Ridgeback, the Pair, the Veilstalker
 and both Galewing plans. **The Blood mage** wins only against the Gnawers and
@@ -7046,6 +7046,17 @@ in front of the Elementalist (it cost her hunts on all four creatures tried);
 Ridgeback hunts in 24 for 7); **whole commitments** for the Dual mage's
 finishers and the Blood mage's spike (14 Hornback wins fell to 7, and 16 to 4);
 and a **Bulwark's guard against the Pair** (12 wins to 3: one shield, two cats).
+
+**After main merged** (the Siegeshell, aim A3): the Siegeshell's plan is wired
+too, and a pair of Dual mages went from 1 to 9 of 12 against it, a pair of
+Reavers from 11 to 12; the Bulwark and the Blood mage win nothing there in any
+company. A3 made the top of a creature's part seen from above a place, so an
+Elementalist's bolt aimed onto the beached Sandmaw's back from a stone, or off
+the Ridgeback's ridge from the saddle, stopped on the hide: her Sandmaw fell
+from 20 to 1 and her Ridgeback from 7 to 3. The layer now sends such a shot
+past the part's edge to the floor beyond, and a rider's past the mount's
+(`Hands::spot`): 11 and 6. Of the rest only the Galewing's Elementalist and
+Reaver rows moved, by a hunt or two; every other row is bit-identical.
 
 **Verdict** kept. For a person: is the pillar on a creature that stands in it
 the Elementalist's identity or a hole in every creature at once; is the Blood

@@ -833,12 +833,12 @@ Champion's poke, heavy and dodge whatever it held. 24 hunts a class,
   Champion     14/24   64 s        329                  46 / 13 / 19 / 21 %                0          14/24
   Bulwark       0/24    --          --                  48 / 12 / 18 / 22 %                0           0/24
   Reaver       12/24   64 s        336                  41 / 14 / 22 / 22 %                0           5/24
-  Elementalist  7/24  127 s        451                  51 / 10 / 15 / 24 %                0           0/24
+  Elementalist  6/24  141 s        463                  51 / 10 / 15 / 24 %                0           0/24
   Blood mage    0/24    --          --                  53 / 11 / 16 / 20 %                0           0/24
   Dual mage     0/24    --          --                  52 / 11 / 16 / 21 %                0           0/24
 
   the class, over the 24:  Reaver -- shadows sent 67, lotuses 24, dashes 27, Executioners cashed 24
-                           Elementalist -- pillars 172, bolts 1792
+                           Elementalist -- pillars 170, bolts 1874
                            Blood mage -- blinks 33, Grasps 11, cuts 62, spikes 1
                            Dual mage -- hands turned 307, goads 351, finishers 137
 ```
@@ -896,8 +896,11 @@ worth a spike.
   walk forward past the shoulders, on the part of the back the shake is most
   violent on. Whether anyone chooses it over the ridge is a question for a
   person.
-- **The Elementalist wins seven in 24 now** (2026-10-01), with the plan's
-  ground game and her own pillars; the ride is still a melee plan's.
+- **The Elementalist wins six in 24 now** (2026-10-01), with the plan's
+  ground game and her own pillars; the ride is still a melee plan's. (Seven
+  before main's aim A3 came in, which made the ridge she stands on a place:
+  a bolt from the saddle aimed at the ridge stopped at her feet until the
+  rider's shots were sent past the mount's edge.)
 - **The Blood mage and the Dual mage win nothing** (2026-10-01): the Blood
   mage's damage breaks no foot, and the Dual mage's punch misses the ridge
   from the plan's work spot. Whether either is the creature's question or the
