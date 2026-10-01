@@ -66,7 +66,9 @@ touches its box.
 **Critters hit fighters** with their move's volume: an upright cylinder in the
 critter's own frame (`HitX` ahead, `HitZ` across, `HitLow`/`HitHigh`), the same
 shape and the same knobs as a monster's move (`oven::MonsterField`), carried
-along the facing by `Travel` and the body by `Advance`. Guard and parry are the
+along the facing by `Travel` and the body by `Advance` -- **at its speed from
+the first active frame** (since the Gnawers: through the walking acceleration
+a twelve-frame lunge covered a third of its distance). Guard and parry are the
 monster's: guarding in its arc blocks, a parry knocks the critter out of it.
 `Critter::telegraph` is what will land, from the windup, for markers.
 
@@ -135,6 +137,17 @@ release: 15–63 µs a frame against the Ridgeback's 11–61 µs; with the Ridge
 in the range as well, 22–114 µs; the budget is 520). `budget.rs` runs both
 shapes for every class, and they allocate nothing.
 
+**Added with the Gnawers**, each generic and each defaulted to nothing:
+`PackMind::landed` (a critter's hit just connected: the hamstring's slow and
+latch, the pile-on's knockdown), `PackMind::body` (the box changes with what
+the body does: the Big One rears to howl -- `Critter::body` still the one
+description), `Seen::staggered` (on the floor rather than in a bite's
+hitstun), `CritterMove::committed` (a windup the pack's fright does not call
+off), a windup steered by its species (`plain_steer` holds it still, as
+before), `pack::give_back` and `pack::lead_of` public for a species' own
+rules, and `pack::frames_until_free` -- the soonest hit a pack could land,
+what the report's four windows are cut by in a fight that is only a pack.
+
 **What a species supplies** is `pack::PackMind`, every method defaulted to the
 generic pack above: `appetite` (how much a critter wants a move now -- the
 default is the monster's tent on range and bearing times its appetite),
@@ -185,8 +198,16 @@ The queen (1.1 m) is touched by everything wherever a fighter is.
 ## 5 · What you see
 
 - **The renderer** (`crates/game/src/critters.rs`) draws every critter as a few
-  boxes -- body, head, four legs, tail, eyes -- **sized from its kind's own
-  knobs**, so the body on screen is the hit test's box. It is posed from the
+  boxes -- body, head, four legs, tail, eyes -- **sized from `Critter::body`**,
+  so the body on screen is the hit test's box (and a body the species reshapes
+  is drawn reshaped). A pack-only species has no clips, so **a move's clip
+  number names one of the renderer's stock poses** (`critter::pose`: crouch,
+  scuttle, leap, rear, maul, dig, climb); the gnats use the crouch for both.
+- **Floor markers** for every critter's windup and hit, from
+  `Critter::telegraph`, in the same pool and the same drawn-over-everything
+  material as a creature's (`beast::signs`, a set per critter slot after the
+  creature slots). `SHOT_MOVE=<move>` puts a body winding it up at player one
+  for a screenshot. It is posed from the
   snapshot: a trot from its clock and speed, the crouch and wiggle of a windup,
   the lunge, the flinch, lying on its side and fading as the corpse runs out,
   and **the tail up and lit while it holds a token**. Interpolated between
@@ -198,7 +219,14 @@ The queen (1.1 m) is touched by everything wherever a fighter is.
 - **The fight report** (`crates/hunt`) has a THE PACK section whenever there is
   one: kills (and whether the leader), spawns, blows landed on critters, hits
   and damage taken from them, the most attacking at once, the share of the fight
-  with two or more, "tokens live", scatters, routs, regroups and breaks. Critter
+  with two or more, "tokens live", scatters, routs, regroups and breaks -- and,
+  since the Gnawers, **crouches interrupted**, **behind you**, **swings over**
+  (a swing within half a metre above a crown that touched nothing) and **hidden
+  commits** (a hit from a windup begun off its target's screen, by
+  `aim::in_view` and the hunter's last look; counted as unanswerable). A fight
+  that is only a pack gets the shared measures too: the four windows, swings,
+  damage both ways and the play sequence. A species' card can add its own lines
+  (`plans::Card::tally`). Critter
   moves are counted in the move table with the species' numbering. The dev pack
   has a minimal hunter (`plans/gnats.rs`): closes, swings at a crouch first,
   aims with the crosshair on the body.
@@ -231,7 +259,13 @@ Follow [species.md](species.md) §5, with these differences.
 
 What you should **not** need to touch: `critter.rs`, `pack.rs`, `state.rs`,
 `aim.rs`, the renderer, the report. If you do, it is a place the machinery was
-not generic yet -- fix it there, for every pack, and say so here.
+not generic yet -- fix it there, for every pack, and say so here. **The
+Gnawers did**, and every change is listed in §2 and §5 above: two `PackMind`
+hooks, a committed move, a lunge at speed, the pack's window, critter
+markers and stock poses in the renderer, the report's pack measures and a
+card's own lines, and `aim::in_view`'s line of sight. Pack species should
+append their own knobs (`species_knobs!`) at the end of the enum: an inserted
+one shifts every later index in the baked file.
 
 **For the four that use it, specifically:**
 
@@ -286,9 +320,8 @@ creature's does, and `PackMind::bumped` is told when one walks into a solid.
 Packs keep their own glance and perceive every fighter -- P5's filter is the
 monsters'.)
 
-Each the creature's own: telegraph floor markers for critter moves (the data is
-`Critter::telegraph`); a "swings over" and "hidden commits" line in the report
-(Gnawers §9); scrambling up a platform's edge (critters slide round solids, they
-do not climb them); critters riding a critter (the Hornback's cow ride); a
+Each the creature's own (and since built, by the Gnawers: floor markers for
+critter moves, the "swings over" and "hidden commits" lines; scrambling up a
+platform's edge is the Gnawers' own move, in their rules): critters riding a critter (the Hornback's cow ride); a
 creature hit or held by the Grasp. The renderer's critter is boxes; a species
 that wants a silhouette of its own adds it to its look.

@@ -82,6 +82,9 @@ pub struct Hunter {
     /// The creature its plan is for.
     pub species: SpeciesId,
     plan: Box<dyn Plan + Send + Sync>,
+    /// What it pressed last, and so where it was looking: the camera the
+    /// report asks what was on screen (`sim::aim::in_view`).
+    pub last: Input,
 }
 
 impl Hunter {
@@ -92,6 +95,7 @@ impl Hunter {
             who,
             species: SpeciesId::RIDGEBACK,
             plan: Box::new(plans::ridgeback::Ridgeback::new(who)),
+            last: Input::default(),
         }
     }
 
@@ -108,6 +112,7 @@ impl Hunter {
             who,
             species: card.species,
             plan: (card.plan)(who, seed, hop),
+            last: Input::default(),
         }
     }
 
@@ -116,7 +121,8 @@ impl Hunter {
     }
 
     pub fn act(&mut self, w: &World) -> Input {
-        self.plan.act(w)
+        self.last = self.plan.act(w);
+        self.last
     }
 
     pub fn intent(&self) -> Intent {

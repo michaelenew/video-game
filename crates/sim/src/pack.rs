@@ -128,6 +128,10 @@ pub struct Seen {
     pub down: bool,
     /// Slowed: what the Gnawers' pile-on waits for.
     pub slowed: bool,
+    /// On the floor for a moment: staggered, knocked down or held -- not the
+    /// flicker of hitstun every bite leaves, which `down` counts too. The
+    /// Gnawers' pile-on waits for this or a slow.
+    pub staggered: bool,
     /// The ring this fighter has: how many places it was cut into, and the
     /// bearing of place zero, in turns. Worked out at the glance.
     pub ring_places: u8,
@@ -277,7 +281,7 @@ fn owner_holds(pack: &Pack, herd: &Herd) -> usize {
 }
 
 /// Give a token back: it rests before it can be handed again.
-fn give_back(pack: &mut Pack, c: &mut Critter) {
+pub fn give_back(pack: &mut Pack, c: &mut Critter) {
     if !c.has(flag::TOKEN) {
         return;
     }
@@ -369,6 +373,35 @@ pub trait PackMind {
     /// Broodmother's sacs bursting are her pack's spawns ([`spawn`]).
     fn frame(&self, pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         let _ = (pack, critters, herd, frame);
+    }
+
+    /// **The body critter `c` stands in this frame**, given its kind's own
+    /// box. The default is the box. A species whose animal changes shape with
+    /// what it is doing -- the Gnawers' Big One rearing to howl -- says so
+    /// here, and [`Critter::body`] is still the one description everything
+    /// reads. Must be a pure function of the critter.
+    fn body(&self, c: &Critter, plain: crate::critter::Body) -> crate::critter::Body {
+        let _ = c;
+        plain
+    }
+
+    /// **Critter `i`'s move just connected with fighter `who`** (`victim`),
+    /// after the hit itself: `blocked` if it was taken on a guard, `parried`
+    /// if it was parried. What a bite does besides its damage -- the
+    /// Gnawers' hamstring slows and latches; three of a pile-on knock you
+    /// down. Nothing, for a pack that says nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn landed(
+        &self,
+        pack: &mut Pack,
+        critters: &mut Critters,
+        i: usize,
+        who: usize,
+        victim: &mut Player,
+        blocked: bool,
+        parried: bool,
+    ) {
+        let _ = (pack, critters, i, who, victim, blocked, parried);
     }
 
     /// Critter `i` just took `dealt`.
@@ -539,10 +572,16 @@ pub fn killed(pack: &mut Pack, critters: &mut Critters, i: usize) {
             pack.mood_left = frames;
         }
     }
-    // Afraid, nobody finishes winding up.
+    // Afraid, nobody finishes winding up -- but a move its kind declares
+    // committed.
     if pack.mood != mood::HUNTING {
         for c in critters.iter_mut() {
-            if c.state == is::STARTUP {
+            let kept = sp
+                .kind(c.kind)
+                .moves
+                .iter()
+                .any(|m| m.kind == c.act && m.committed);
+            if c.state == is::STARTUP && !kept {
                 c.state = is::PROWL;
                 c.timer = 0;
                 give_back(pack, c);
@@ -629,6 +668,82 @@ pub fn hurt(
     let dealt = damage.min(c.health as i32);
     struck(brain, critters, i, damage, dir, shove, launch);
     dealt
+}
+
+/// **Frames until the soonest hit the pack could land**, as things stand: the
+/// pack's answer to `Monster::frames_until_free`, which the fight report
+/// divides the fight by into its four windows (the Gnawers' §9: "the soonest
+/// any token holder, or anybody in a pile-on, could land"). A pack is many
+/// bodies, so its window is the soonest any of them could hit:
+///
+/// - a hit out and unspent: now;
+/// - a windup: the frames left in it;
+/// - a body holding a token and not yet winding up (closing in): its move's
+///   whole windup;
+/// - a token free: the cadence a body decides on, and the quickest windup a
+///   token buys;
+/// - every token out: the soonest one comes back -- a holder's recovery and
+///   the rest after it, or a resting token's rest -- and then the same;
+/// - the grace, or a scatter: what is left of it first. Routed or broken,
+///   never.
+///
+/// Moves that need no token (the Gnawers' pile-on, the Big One's maul) wait
+/// for something -- a slow, a fighter in reach -- that this cannot see
+/// coming, so they count only once they are winding up.
+pub fn frames_until_free(pack: &Pack, critters: &Critters, herd: &Herd) -> u16 {
+    let sp = pack.sp();
+    let hurts = |act: u8| sp.attack(act).damage > 0;
+    let mut soonest = u32::MAX;
+    for c in critters.iter().filter(|c| c.alive()) {
+        let left = match c.state {
+            is::ACTIVE if hurts(c.act) && !c.has(flag::HIT_USED) => 0,
+            is::STARTUP if hurts(c.act) => c.timer as u32,
+            is::PROWL if c.has(flag::TOKEN) && hurts(c.act) => sp.attack(c.act).startup as u32,
+            _ => continue,
+        };
+        soonest = soonest.min(left);
+    }
+    if soonest < u32::MAX || !critters.iter().any(Critter::alive) {
+        return soonest.min(u16::MAX as u32) as u16;
+    }
+    let before = match pack.mood {
+        mood::ROUTED | mood::BROKEN | mood::CALM => return u16::MAX,
+        mood::SCATTERED => pack.mood_left as u32,
+        _ => 0,
+    }
+    .max(pack.grace as u32);
+    // The quickest windup a token buys, among the bodies still standing.
+    let quickest = critters
+        .iter()
+        .filter(|c| c.alive())
+        .flat_map(|c| sp.kind(c.kind).moves.iter())
+        .filter(|m| m.token && hurts(m.kind))
+        .map(|m| sp.attack(m.kind).startup as u32)
+        .min();
+    let Some(quickest) = quickest else {
+        return u16::MAX;
+    };
+    let then = pack.think_every() + quickest;
+    let back = if tokens_out(pack, critters, herd) < pack.token_cap() {
+        0
+    } else {
+        let rest = sp.pack_raw(PackKnob::TokenRest).max(0) as u32;
+        let held = critters
+            .iter()
+            .filter(|c| c.alive() && c.has(flag::TOKEN))
+            .map(|c| match c.state {
+                is::RECOVERY | is::FLINCH => c.timer as u32 + rest,
+                _ => u32::MAX,
+            });
+        let resting = pack
+            .rest
+            .iter()
+            .copied()
+            .filter(|r| *r > 0)
+            .map(|r| r as u32);
+        held.chain(resting).min().unwrap_or(0)
+    };
+    (before.max(back) + then).min(u16::MAX as u32) as u16
 }
 
 /// Is the pack beaten: nobody left in the fight?
@@ -782,6 +897,13 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
     }
 }
 
+/// Where the pack thinks fighter `who` will be: the glance, projected by
+/// `Lead`. What [`Look::lead`] answers, for a species' own rules that hold
+/// the pack rather than a look at it.
+pub fn lead_of(pack: &Pack, who: usize) -> V3 {
+    lead_point(pack, &pack.seen[who.min(MAX_PLAYERS - 1)])
+}
+
 /// Where a fighter will be, by the pack's reckoning.
 fn lead_point(pack: &Pack, seen: &Seen) -> V3 {
     let frames = pack.lead_frames();
@@ -808,6 +930,10 @@ fn glance(pack: &mut Pack, critters: &mut Critters, w: &World) {
         s.alive = p.health > 0;
         s.down = p.action.stunned();
         s.slowed = p.slowed > 0;
+        s.staggered = matches!(
+            p.action,
+            crate::state::Action::Stagger { .. } | crate::state::Action::Held { .. }
+        );
     }
     // Each critter is after the nearest fighter still standing.
     for c in critters.iter_mut().filter(|c| c.alive()) {
@@ -1109,7 +1235,10 @@ fn drive(sp: &Species, c: &mut Critter, want: Steer) {
     let target_vel = match c.state {
         // A move that travels carries the body along the facing.
         is::ACTIVE => c.facing().scale(sp.attack(c.act).advance),
-        is::PROWL if c.alive() => {
+        // A windup goes where its species steers it, which by default is
+        // nowhere (`plain_steer` holds it still): the Gnawers' pile-on closes
+        // its ring as it crouches.
+        is::PROWL | is::STARTUP if c.alive() => {
             let to = want.to.sub(c.pos);
             let to = V3::new(to.x, Fx::ZERO, to.z);
             // Close enough that one more frame at this speed would carry it
@@ -1122,7 +1251,14 @@ fn drive(sp: &Species, c: &mut Critter, want: Steer) {
         }
         _ => V3::ZERO,
     };
-    if !c.has(flag::AIRBORNE) {
+    if c.state == is::ACTIVE && c.alive() && !c.has(flag::AIRBORNE) {
+        // **A lunge is at its speed from its first frame**: the move's
+        // `Advance`, not a walk accelerating up to it. Through the
+        // acceleration a twelve-frame dart covered a third of its distance and
+        // an eight-frame leap almost none, so the volume drawn on the floor
+        // was not where the body went.
+        c.vel = V3::new(target_vel.x, c.vel.y, target_vel.z);
+    } else if !c.has(flag::AIRBORNE) {
         let dv = target_vel.sub(flat_vel);
         let len = dv.flat_len();
         let dv = if len.raw() > accel.raw() {

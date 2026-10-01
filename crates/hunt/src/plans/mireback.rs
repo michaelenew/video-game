@@ -18,12 +18,12 @@
 use sim::fixed::Fx;
 use sim::hazard::{Floor, Placed};
 use sim::math::{atan2_turns, wide_flat_dist, wrap_turns};
-use sim::monster::{self, Doing, Monster};
+use sim::monster::{Doing, Monster};
 use sim::species::mireback::{self, Knob, fight};
 use sim::state::{Action, Phase};
 use sim::{Input, V3, World};
 
-use crate::report::{Report, Tally};
+use crate::report::Tally;
 use crate::{HALF, Intent, Plan, QUARTER, REACTION, heavy, steer, turns_to_aim};
 
 /// Hold at the flank, on clean floor.
@@ -1039,6 +1039,8 @@ pub struct MireTally {
     /// The lore's counters, as the hunt ended.
     lore: [u32; 32],
     frames: u32,
+    /// All the health it lost, from anything: what self-burn is a share of.
+    lost: i32,
 }
 
 impl Tally for MireTally {
@@ -1138,6 +1140,7 @@ impl Tally for MireTally {
             }
         }
         if let Some(was) = before.monster() {
+            self.lost += (was.health - now.health).max(0);
             for w in mireback::WARTS {
                 if !was.broken(w) && now.broken(w) {
                     self.warts.push(after.frame);
@@ -1153,11 +1156,12 @@ impl Tally for MireTally {
         self.unanswerable
     }
 
-    fn render(&self, report: &Report) -> String {
-        let mut out = String::from("\nTHE MIRE\n");
-        let line = |out: &mut String, name: &str, value: String, why: &str| {
-            out.push_str(&format!("  {name:<26} {value:>9}   {why}\n"));
-        };
+    fn lines(&self) -> Vec<(String, String, String)> {
+        let mut out = Vec::new();
+        let line =
+            |out: &mut Vec<(String, String, String)>, name: &str, value: String, why: &str| {
+                out.push((name.to_string(), value, why.to_string()));
+            };
         let w = |i: usize| self.lore[i];
         let mean = if self.coverage_samples == 0 {
             0
@@ -1202,13 +1206,13 @@ impl Tally for MireTally {
             format!(
                 "{} ({:.0}%)",
                 burn,
-                if report.dealt > 0 {
-                    burn as f32 * 100.0 / report.dealt as f32
+                if self.lost > 0 {
+                    burn as f32 * 100.0 / self.lost as f32
                 } else {
                     0.0
                 }
             ),
-            "of all damage dealt: 30-45% is the target",
+            "of all the health it lost: 30-45% is the target",
         );
         line(
             &mut out,
@@ -1289,7 +1293,6 @@ impl Tally for MireTally {
             format!("{}", self.unanswerable),
             "tar under you after it committed (unanswerable)",
         );
-        let _ = monster::NO_PART;
         out
     }
 }

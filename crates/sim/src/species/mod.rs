@@ -59,7 +59,7 @@ pub mod gnats;
 
 pub mod sentinel;
 
-// pub mod gnawers;
+pub mod gnawers;
 
 // pub mod hornback;
 
@@ -122,7 +122,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::SENTINEL => Some(&sentinel::SPECIES),
 
-        // SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
+        SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
 
         // SpeciesId::HORNBACK => Some(&hornback::SPECIES),
         SpeciesId::MIREBACK => Some(&mireback::SPECIES),
@@ -340,7 +340,7 @@ pub struct FightDecl {
     /// **Its own terms in the scoring**, after the shared ones: handed a move,
     /// the score the shared brain gave it, and what the brain may read, and
     /// returns the score. The Mireback's floor, kindle, coat, crowd and flee.
-    pub appetite: Option<fn(&crate::monster::Monster, u8, i32, &crate::monster::Mind) -> i32>,
+    pub appetite: Option<AppetiteFn>,
     /// **Where it walks when it is free**, if not at its target: the Mireback
     /// walks to the middle of its own tar. `None` from the hook is "at the
     /// target", as every other creature does.
@@ -364,7 +364,7 @@ pub struct FightDecl {
     /// **One of its moves has landed on a fighter** (creature slot, fighter,
     /// move, whether it was guarded), after the hit itself is dealt: what the
     /// move does besides hurt. The tongue's grab, the Backwash's tar.
-    pub landed: Option<fn(&mut crate::state::World, usize, usize, u8, bool)>,
+    pub landed: Option<LandedFn>,
     /// **What it draws besides its hazards and its telegraph**: rings on the
     /// floor for what a move will leave or light, and the things it owns in
     /// the arena. Read by the renderer and the overlay, from the snapshot, so
@@ -402,6 +402,14 @@ pub enum MarkLook {
     /// Embers: a thing that is coming back.
     Embers,
 }
+
+/// [`FightDecl::appetite`]: the creature, a move, the shared brain's score
+/// for it, and what the brain may read.
+pub type AppetiteFn = fn(&crate::monster::Monster, u8, i32, &crate::monster::Mind) -> i32;
+
+/// [`FightDecl::landed`]: the world, the creature's slot, the fighter, the
+/// move, and whether it was guarded.
+pub type LandedFn = fn(&mut crate::state::World, usize, usize, u8, bool);
 
 /// The most marks a species draws at once.
 pub const MAX_MARKS: usize = 32;

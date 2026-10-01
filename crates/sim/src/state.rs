@@ -2591,7 +2591,12 @@ impl World {
                 hash_v3(&mut h, &s.pos);
                 hash_v3(&mut h, &s.vel);
                 h.write_u32(s.facing as u32);
-                h.write_u32(s.alive as u32 | (s.down as u32) << 1 | (s.slowed as u32) << 2);
+                h.write_u32(
+                    s.alive as u32
+                        | (s.down as u32) << 1
+                        | (s.slowed as u32) << 2
+                        | (s.staggered as u32) << 3,
+                );
                 h.write_u32(s.ring_places as u32 | (s.ring_base as u32) << 8);
                 h.write_u32(s.arc as u32);
             }
@@ -9789,6 +9794,17 @@ impl World {
                     let now = self.monsters;
                     fall_off(&mut self.players[i], &now);
                 }
+                if let Some(decl) = sp.pack {
+                    decl.mind.landed(
+                        &mut brain,
+                        &mut self.critters,
+                        c,
+                        i,
+                        &mut self.players[i],
+                        guarding,
+                        parried,
+                    );
+                }
                 freeze(
                     &mut self.players[i],
                     impact_freeze(t::creature_freeze(), guarding && !parried),
@@ -9902,7 +9918,7 @@ impl World {
                 .map(|(a, _, _, _)| a)
                 .unwrap_or(beast.pos);
             let mut landed = false;
-            for i in 0..MAX_PLAYERS {
+            for (i, struck_one) in struck.iter_mut().enumerate() {
                 let victim = self.players[i];
                 if victim.health <= 0 || victim.action.invulnerable() {
                     continue;
@@ -9964,7 +9980,7 @@ impl World {
                     impact_freeze(t::creature_freeze(), guarding && !parried),
                 );
                 landed = true;
-                struck[i] = Some((kind, guarding || parried));
+                *struck_one = Some((kind, guarding || parried));
             }
             if landed {
                 beast.hit_used = true;

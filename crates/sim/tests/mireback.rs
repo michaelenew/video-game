@@ -827,9 +827,8 @@ fn a_swallowed_fighter_is_spat_out_by_time_or_by_damage_whichever_is_first() {
         lost > Knob::SpitDamage.raw(),
         "acid and the spit took {lost}"
     );
-    assert_eq!(
+    assert!(
         w.monsters[0].unwrap().brain.cooldown[mireback::TONGUE as usize] > 0,
-        true,
         "and the tongue is locked after a swallow"
     );
 

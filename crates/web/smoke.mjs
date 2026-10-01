@@ -40,7 +40,8 @@ page.on('requestfailed', (r) => errors.push(`request: ${r.url()} ${r.failure()?.
 
 // `?dev` is `--dev`: the Oven and the overlay open, which exercises more of
 // the page than the plain load does.
-await page.goto(url + '?dev', { waitUntil: 'load', timeout: 120_000 });
+// A URL that already asks for something (`?hunt=gnawers`) gets `&dev`.
+await page.goto(url + (url.includes('?') ? '&dev' : '?dev'), { waitUntil: 'load', timeout: 120_000 });
 // The module is twenty-odd megabytes and compiles on load; give it time to
 // start and draw.
 await page.waitForTimeout(25_000);
