@@ -98,13 +98,19 @@ lid or side, like a wall. The stone stays on the ray rather than coming off it,
 because where on a stone you point is a mechanic: the Bolt kicks one along the
 line it was shot along.
 
-## The four lines of effect
+## The five lines of effect
 
 Two are **skillshots**: they start with the raycast above and go where it lands.
-Two are not: they are pointed by something the player already decided — which
-way their body is facing, or where they put the mechanic — and consult nothing.
+Three are not: they are pointed by something the player already decided — which
+way their body is facing, where they put the mechanic, or where they raised the
+stone a crack races from — and consult no ray.
 
-Every move declares which, in the move table. There is no fifth.
+Every move declares which, in the move table (`aim::Kind`). There is no sixth.
+
+*Was four until the Elementalist's v2 (2026-09-30)*: Fissure, a crack racing out
+of a held stone, was given a line of its own, `aim::racing_path`, and this
+section kept saying "there is no fifth" for a week. Brought up to date
+2026-10-01 from what `aim.rs` contains.
 
 ## The two kinds of skillshot
 
@@ -149,7 +155,7 @@ landing spot. The Grasp then picks a point along that line with a channel — se
   point**, and that line is its whole reach. There is no separate range number:
   the sphere is part of the raycast.
 
-## The two that are not skillshots
+## The three that are not skillshots
 
 ### Swing
 
@@ -231,6 +237,19 @@ so "the left arm" is the side a quarter turn *toward* the strafe-right axis. Wha
 an animation and a hitbox have to agree about is which arm the player can see
 swinging, and `view/tests/kinematics.rs` fails if they ever part company.
 
+### Racing
+
+From the stone the Elementalist is holding churning — or her own feet, if there
+is none — **flat along the yaw of her look**, for as far as the hold bought. One
+move: Fissure, `E` held. `aim::racing_path`.
+
+The place it starts was aimed already, with the crosshair, when the stone was
+raised; what is chosen now is a direction and a distance, and the distance is
+the hold's. So the look is read for its yaw only. A crack through the ground has
+no pitch to be given, and one that went shorter because she happened to be
+looking down would be aiming twice. What it meets on the way is `first_along`'s
+question, asked when the crack comes out.
+
 ### At the mechanic
 
 Wherever the class mechanic is standing. One move: the Reaver's Guillotine
@@ -263,11 +282,12 @@ swing.
 
 | Line of effect | Moves |
 | --- | --- |
-| **Grounded** | Fissure, Fire pillar, Black spike, Judgement, Send shadow |
+| **Grounded** | Fire pillar, Black spike, Judgement, Send shadow, Quake |
 | **Skillshot** | Bolt, Cataclysm, Air bolt, Gale, Bloodletter, Grasp, Lance |
 | **Swing** (the ones worth naming) | Reaping sweep — the Blood mage's scythe, whose reach and width grow with her grey and are drawn, as essence around the weapon, at the size they hit at |
 | **Swing** | every melee attack: Bash, Slam, Grapple, Slash, Executioner, Rend, Landfall, the Dual mage's Sweep and both of her autos, and all nineteen of the Champion's |
 | **At the mechanic** | Guillotine lotus |
+| **Racing** | Fissure |
 
 The table is a convenience and the move table is the authority; where they
 disagree, the `aimed` column of the frame table is right and this is stale.
@@ -283,7 +303,14 @@ thing in her kit the crosshair aims, and the mouse is where aiming lives. The
 swing it displaced went to the key, which does not read the crosshair as a
 place. See [kits/shadow-reaver.md](kits/shadow-reaver.md).
 
-### Three things that are not lines of effect
+### The questions that are not lines of effect
+
+Everything else in `aim.rs` answers a question about where something is or what
+can be seen, and points nothing anywhere: twenty-seven functions as of
+2026-10-01, beside the five lines. The raycast itself is `aim::sight` (and
+`aim::sight_for_attack`, below); where a cast leaves the body is `aim::origin`
+and, for a one-armed move, `aim::hand_origin`; what a path runs into is
+`aim::first_along` (§"What the path runs into"). The rest, one question each:
 
 **Is the crosshair on the shadow?** `aim::pointing_at` answers it, and the
 Reaver's forward dodge reads the answer to decide whether it is a dodge or the
@@ -372,6 +399,29 @@ reads as a wall. Trimming the body rather than the world is the choice that
 matters: shaving the solids instead opens a hairline between two stacked ones
 that a ray can thread, and two stones on top of each other have to be one
 obstruction.
+
+**Where does a body sent along the floor stop?** `aim::blink_to` answers that
+one — the Dual mage's blink, which puts her where the dodge would have ended on
+its first frame. Stricter than `clear_between` on purpose: the dash to a shadow
+goes wherever the shadow is, up included, so one clear corner line is a way
+through; a blink goes along the floor to a spot at her own height, so she stops
+where the **first** of the four lines meets something, less her own radius.
+**What does this point stand on?** `aim::settle` drops it onto whatever is under
+it — a stone's top, a ledge, the floor — for anything that lands a thing
+somewhere it was not aimed (a thrown body, a mark on the ground).
+
+**Which way is up underfoot?** `aim::underfoot_up` — `+y` on the floor and on
+anything in the arena, the mounted part's own `+y` on a creature. What the
+swing's dead zone is measured against (§"Swing", bestiary A4); added
+2026-10-01 for the Galewing, whose back tilts under a rider.
+
+**Where was a remembered look pointing?** `aim::in_view_from` is `in_view` for a
+look a creature *remembers* — where a fighter stood and which way they faced, a
+glance old, with the camera level — and `aim::off_look` how far off that look a
+point is, in turns of bearing. The Veilstalker decloaks only where that view
+would have shown it, and the report's thirds of the screen read the same
+number; both build their eye from `camera::eye_under`, as everything here does.
+See §"Two questions about seeing" for `in_view`, `in_view_of` and `on_screen`.
 
 **A swing still commits to a plane, and the crosshair is where the plane comes
 from.** Added 2026-09-12 with the Champion's rebuild. The yaw of a swing is the

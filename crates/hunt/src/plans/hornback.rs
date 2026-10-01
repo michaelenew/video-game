@@ -797,6 +797,12 @@ impl Plan for Hornback {
                     out.add(out).add(bull.facing).normalized()
                 };
                 let dodge = Input::aimed(steer(bull_yaw, way) | Input::SHIFT, bull_aim);
+                // A Bulwark takes it on the shield instead, if it can be.
+                let hook = sp.attack(h::HOOK);
+                let over = (bull.timer as i32 + hook.active as i32 + 4).max(8) as u16;
+                if let Some(guard) = self.hands.guard(&me, !hook.unblockable, bull.middle, over) {
+                    return guard;
+                }
                 return self.hands.leave(w, &me, way, dodge);
             }
             // The shoulder's lean, at its flank: a swing already in flight
@@ -813,6 +819,11 @@ impl Plan for Hornback {
                     side.scale(Fx::ONE.neg())
                 };
                 let dodge = Input::aimed(steer(bull_yaw, out) | Input::SHIFT, bull_aim);
+                let lean = sp.attack(h::SHOULDER);
+                let over = (bull.timer as i32 + lean.active as i32 + 4).max(8) as u16;
+                if let Some(guard) = self.hands.guard(&me, !lean.unblockable, bull.middle, over) {
+                    return guard;
+                }
                 return self.hands.leave(w, &me, out, dodge);
             }
             let body_reach = reach.add(half_wid);

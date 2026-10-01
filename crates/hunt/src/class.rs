@@ -80,6 +80,8 @@ const LOTUS_DRAG: u16 = 24;
 const FLICK: Fx = Fx::ratio(3, 100);
 /// Frames past a move's own that make a window long: a creature down.
 const LONG_WINDOW: i32 = 45;
+/// Further than this from what it hits is thrown from range.
+const RANGED: Fx = Fx::from_int(4);
 /// Marks on the creature worth cashing with the Executioner.
 const CASH_AT: u8 = 2;
 /// A pool this near the point being hit is a pool under it.
@@ -95,7 +97,7 @@ const ALONG: Fx = Fx::ratio(5, 10);
 const GOAD_TO: i32 = 80;
 /// The Blood mage's red, in percent, below which she stops paying for things.
 const RED_FLOOR: i32 = 25;
-const RED_GRASP: i32 = 55;
+const RED_GRASP: i32 = 70;
 const RED_CUT: i32 = 70;
 /// **A pool worth a spike**: one holding about what the spike costs her and
 /// more. The spike drinks the whole pool and comes up half again as hard, but
@@ -110,9 +112,11 @@ const SPIKE_POOL: i32 = 80;
 /// harness can say whether it did anything at all.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Uses {
-    /// The Reaver: shadows sent, dashes to one, lotuses opened, recalls, and
-    /// Executioners thrown with marks on the creature.
+    /// The Reaver: shadows sent, swings thrown at nothing for the shadow's
+    /// copy, dashes to one, lotuses opened, recalls, and Executioners thrown
+    /// with marks on the creature.
     pub sent: u32,
+    pub copies: u32,
     pub dashes: u32,
     pub lotuses: u32,
     pub recalls: u32,
@@ -143,6 +147,7 @@ impl Uses {
     /// Add another hunter's.
     pub fn add(&mut self, o: &Uses) {
         self.sent += o.sent;
+        self.copies += o.copies;
         self.dashes += o.dashes;
         self.lotuses += o.lotuses;
         self.recalls += o.recalls;
@@ -181,6 +186,11 @@ impl Uses {
             ],
             Class::ShadowReaver => vec![
                 ("shadows sent", self.sent, "out beside the work"),
+                (
+                    "copies",
+                    self.copies,
+                    "swings at nothing, for the shadow's copy",
+                ),
                 ("lotuses", self.lotuses, "opened on the shadow"),
                 ("recalls", self.recalls, "dragged home through it"),
                 ("dashes", self.dashes, "to the shadow, in or out"),
@@ -355,9 +365,11 @@ impl Hands {
     }
 
     /// **How far from what it is hitting this class hits it from.** The poke's
-    /// reach for the classes that swing; the bolt's, less a little, for the
-    /// Elementalist; the scythe's as it is now -- grey makes it longer -- for
-    /// the Blood mage. A plan that walks to "in reach" walks this far.
+    /// reach -- the bolt's nine metres, for the Elementalist -- and for the
+    /// Blood mage the scythe's as it is now, grey making it longer: her poke
+    /// slot is the Bloodletter, a thrown blade, and a plan that walked to its
+    /// seven metres swung her scythe at the air. A plan that walks to "in
+    /// reach" walks this far.
     pub fn reach(&self, me: &Player) -> Fx {
         let poke = moves::get(me.class, SLOT_POKE);
         match me.class {
@@ -421,7 +433,7 @@ impl Hands {
         let far = flat(at.sub(me.pos)).flat_len();
         if me.grounded {
             let pillar = moves::get(me.class, SLOT_SPECIAL);
-            if window >= (pillar.startup + pillar.active) as i32 + SPARE
+            if window >= fits(&pillar, far)
                 && far.raw() < pillar.reach.sub(Fx::ratio(5, 10)).raw()
                 && self.ready(w, me, SLOT_SPECIAL)
                 && let Some(b) = self.button(me, SLOT_SPECIAL)
@@ -430,7 +442,7 @@ impl Hands {
                 return self.look_keeping(me, plan, floor_under(me, at), b);
             }
             let heavy = moves::get(me.class, SLOT_COMMITTED);
-            if window >= (heavy.startup + heavy.active) as i32 + SPARE
+            if window >= fits(&heavy, far)
                 && far.raw() < heavy.reach.sub(Fx::ONE).raw()
                 && self.ready(w, me, SLOT_COMMITTED)
                 && let Some(b) = self.button(me, SLOT_COMMITTED)
@@ -447,7 +459,8 @@ impl Hands {
     /// through it; **the Executioner on a marked creature**, which cashes the
     /// marks; and otherwise her own swing, which the shadow copies from where
     /// it stands. The shadow is sent between openings ([`Hands::idle`]), not
-    /// in one: the send is nineteen frames the window was for.
+    /// in one: the send is nineteen frames the window was for, and sending it
+    /// into the Hornback's stun -- a long window -- halved her wins there.
     fn reave(&mut self, w: &World, me: &Player, at: V3, plan: Input, window: i32) -> Input {
         let Some(shadow) = sim::shadow::of(me) else {
             return plan;
@@ -456,7 +469,7 @@ impl Hands {
         let lotus = moves::get(me.class, SLOT_SPECIAL);
         if shadow.is_out()
             && near
-            && window >= (lotus.startup + lotus.active) as i32 + SPARE
+            && window >= fits(&lotus, flat(at.sub(me.pos)).flat_len())
             && self.ready(w, me, SLOT_SPECIAL)
             && let Some(b) = self.button(me, SLOT_SPECIAL)
         {
@@ -469,21 +482,9 @@ impl Hands {
             return self.look_keeping(me, plan, at, b);
         }
         let far = flat(at.sub(me.pos)).flat_len();
-        // A shadow still at her heel in a long window -- a creature down --
-        // goes out to it first: every swing after is thrown twice.
-        let send = moves::get(me.class, SLOT_MECHANIC);
-        if !shadow.is_out()
-            && window >= (send.startup + send.active + send.recovery) as i32 + LONG_WINDOW
-            && far.raw() < send.reach.raw()
-            && self.ready(w, me, SLOT_MECHANIC)
-            && let Some(b) = self.button(me, SLOT_MECHANIC)
-        {
-            self.uses.sent += 1;
-            return self.look_keeping(me, plan, floor_under(me, at), b);
-        }
         let exe = moves::get(me.class, SLOT_COMMITTED);
         if marks_near(w, at) >= CASH_AT
-            && window >= (exe.startup + exe.active) as i32 + SPARE
+            && window >= busy(&exe)
             && far.raw() < exe.reach.add(exe.step).add(Fx::ratio(8, 10)).raw()
             && self.ready(w, me, SLOT_COMMITTED)
             && let Some(b) = self.button(me, SLOT_COMMITTED)
@@ -547,10 +548,12 @@ impl Hands {
         plan
     }
 
-    /// The Grasp, if it is worth holding: from beyond the scythe, in a window
-    /// long enough for the hold and the arms, with red to pay for it. The hold
-    /// is what sets the depth, so it is held for the frames that put the
-    /// arms' meeting point on `at`.
+    /// The Grasp, if it is worth holding: from beyond the scythe, in a long
+    /// window, with red to spare. **Against a creature it is a way in and
+    /// little else**: the arms cannot haul it, so they haul her to it, and
+    /// what they deal is one arm's worth -- forty or fifty, measured on the
+    /// Pair, for seven in a hundred of her red. The hold sets the depth, so
+    /// it is held for the frames that put the arms' meeting point on `at`.
     fn grasp(
         &mut self,
         w: &World,
@@ -570,7 +573,7 @@ impl Hands {
         if red < RED_GRASP
             || far.raw() < Fx::from_int(3).raw()
             || far.raw() > far_end.sub(Fx::ratio(5, 10)).raw()
-            || window < frames as i32 + (grasp.startup + grasp.active) as i32 + SPARE
+            || window < frames as i32 + (grasp.startup + grasp.active) as i32 + LONG_WINDOW
             || self.cool > 0
             || !self.ready(w, me, moves::blood::GRASP)
         {
@@ -732,6 +735,7 @@ impl Hands {
             && self.cool == 0
         {
             // At nothing, for the copy: it turns to the creature beside it.
+            self.uses.copies += 1;
             self.rest();
             return Some(self.look(me, at, Input::LEFT));
         }
@@ -966,22 +970,37 @@ impl Hands {
         }
     }
 
-    /// **A blockable blow is coming** from `toward`: the Bulwark takes it on
-    /// the shield, if the shield is in his hand. `None` for everybody else,
-    /// and the plan dodges. The blow loads the shield, and the next
-    /// [`Hands::hit`] answers it with Slam.
-    pub fn guard(&mut self, me: &Player, blockable: bool, toward: V3) -> Option<Input> {
-        if me.class != Class::Bulwark || !blockable || !me.shield().is_some_and(|s| s.in_hand()) {
+    /// **A blockable blow is coming** from `toward`, and lands within `frames`:
+    /// the Bulwark takes it on the shield, if the shield is in his hand,
+    /// raising it now and holding it through the hit -- where a plan was about
+    /// to dodge, the guard goes up on the same frame, so its first frames are
+    /// the parry. `None` for everybody else, and the plan dodges. The blow
+    /// loads the shield, and the next [`Hands::hit`] answers it with Slam.
+    pub fn guard(
+        &mut self,
+        me: &Player,
+        blockable: bool,
+        toward: V3,
+        frames: u16,
+    ) -> Option<Input> {
+        if me.class != Class::Bulwark
+            || !blockable
+            || !me.shield().is_some_and(|s| s.in_hand())
+            || !(me.action.actionable() || me.action.guarding())
+        {
             return None;
         }
         if !me.action.guarding() {
             self.uses.guards += 1;
         }
-        let yaw = yaw_of(toward.sub(me.pos));
-        Some(Input::aimed(
-            Input::RIGHT,
-            turns_to_aim(yaw.sub(me.carry_yaw)),
-        ))
+        let at = chest(toward);
+        self.seq = Some(Seq::Hold {
+            bits: Input::RIGHT,
+            at,
+            left: frames.max(1),
+        });
+        self.fresh = true;
+        Some(self.look(me, at, Input::RIGHT))
     }
 
     // -----------------------------------------------------------------------
@@ -996,6 +1015,7 @@ impl Hands {
     pub fn finish(&mut self, w: &World, me: &Player, input: Input) -> Input {
         self.sync(me);
         self.cool = self.cool.saturating_sub(1);
+        self.answer_left = self.answer_left.saturating_sub(1);
         let mut out = input;
         if me.class == Class::Champion {
             self.last_bits = out.bits;
@@ -1006,31 +1026,7 @@ impl Hands {
         } else if let Some(seq) = self.seq {
             out = self.carry(w, me, seq, out);
         }
-        if me.class == Class::BloodMage && std::env::var_os("HANDS_DEBUG").is_some() {
-            eprintln!(
-                "{} health {} grey {:?} action {:?} in {:x} out {:x}",
-                w.frame,
-                me.health,
-                me.grey_share(),
-                me.action,
-                input.bits,
-                out.bits
-            );
-        }
         if me.class == Class::DualMage {
-            if std::env::var_os("HANDS_DEBUG").is_some() && w.frame % 30 == 0 {
-                eprintln!(
-                    "{} bars {:?} health {} tier {:?} grounded {} action {:?} in {:x} out {:x}",
-                    w.frame,
-                    sim::dual::bars(me).map(|(a, b)| (a.to_int(), b.to_int())),
-                    me.health,
-                    sim::dual::tier(me),
-                    me.grounded,
-                    me.action,
-                    input.bits,
-                    out.bits
-                );
-            }
             out = self.hands_level(me, out);
             out = self.second_jump(me, out);
         }
@@ -1256,6 +1252,27 @@ fn marks_near(w: &World, at: V3) -> u8 {
         .filter(|m| m.alive())
         .min_by_key(|m| flat(m.pos.sub(at)).flat_len().raw())
         .map_or(0, |m| m.marks)
+}
+
+/// Every frame a move keeps its thrower busy: what an opening has to hold
+/// for the move to be over before the creature can act again -- the rule
+/// the plans keep for their own heavy (`crate::heavy_commitment`).
+fn busy(m: &sim::Move) -> i32 {
+    (m.startup + m.active + m.recovery) as i32
+}
+
+/// What an opening has to hold for a move thrown from `far`: all of it up
+/// close, where whatever the creature starts next reaches; from range, its
+/// startup and its hit and a few frames -- the recovery is spent where
+/// nothing the creature starts in the time can arrive. (Half the recovery
+/// as well was tried: the Elementalist won two Ridgeback hunts in 24 for
+/// eight, its windows too short for a pillar.)
+fn fits(m: &sim::Move, far: Fx) -> i32 {
+    if far.raw() < RANGED.raw() {
+        busy(m)
+    } else {
+        (m.startup + m.active) as i32 + SPARE
+    }
 }
 
 fn flat(v: V3) -> V3 {
