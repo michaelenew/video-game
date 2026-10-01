@@ -663,6 +663,23 @@ pub fn segment_meets_column(a: V3, b: V3, base: V3, radius: Fx, height: Fx) -> b
     flat_segment_gap(base, p0, p1).raw() < radius.raw()
 }
 
+/// A hump from nought through one and back over `t` from nought to one: a
+/// thrown thing's height as a share of its highest, `4t(1 - t)`.
+pub fn hump(t: Fx) -> Fx {
+    Fx::from_int(4).mul(t).mul(Fx::ONE.sub(t))
+}
+
+/// Half of something.
+pub fn half(v: Fx) -> Fx {
+    Fx::from_raw(v.raw() / 2)
+}
+
+/// The square root of a fixed-point number: zero for anything not above it.
+/// For areas turned back into radii -- two pools of tar merging into one.
+pub fn sqrt(v: Fx) -> Fx {
+    Fx::from_raw(isqrt((v.raw().max(0) as i64) << 16))
+}
+
 /// Integer square root of a 64-bit value, saturating into `i32`.
 ///
 /// A fixed iteration count rather than "until it converges": a value that

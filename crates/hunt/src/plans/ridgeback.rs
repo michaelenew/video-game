@@ -891,4 +891,5 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
         toppled_pool: "off the pool under a Ridgeback on its side",
     },
     tally: None,
+    gamble: None,
 };

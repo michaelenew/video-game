@@ -492,6 +492,12 @@ impl Placed {
             && self.covers_flat(p)
     }
 
+    /// The point of its middle nearest `p`: its centre, or the nearest point
+    /// of its line. What a shape is measured to.
+    pub fn nearest_to(&self, p: V3) -> V3 {
+        self.pull_point(p)
+    }
+
     /// The point it pulls toward, from `p`: its centre, or the nearest point
     /// of its line.
     pub fn pull_point(&self, p: V3) -> V3 {
@@ -746,12 +752,21 @@ pub fn step(lore: &mut Lore, herd: &Herd, fires: &[Fire]) {
         }
         let touched_by = |at: V3, r: Fx| h.flat_gap(at).raw() <= h.radius.add(r).raw();
         let outside = fires.iter().any(|f| touched_by(f.at, f.radius));
+        // A fire spreads **once it has burned for its `Spread`**, and every
+        // `Spread` after: a field of joined pools burns outward a step at a
+        // time, at a rate a person can watch and outrun. (It used to spread on
+        // its first frame too, so a joined field went up a pool a frame.)
+        // What it touches is measured shape to shape -- a burning strand,
+        // the Mireback's coals, lights tar along its whole line.
         let spread = floor.iter().any(|o| {
             if !o.decl.burns || o.slot == h.slot {
                 return false;
             }
             let every = stat(sp, o.kind, HazardField::Spread);
-            every > 0 && o.age as i32 % every == 0 && touched_by(o.a, o.radius)
+            every > 0
+                && o.age > 0
+                && o.age as i32 % every == 0
+                && h.flat_gap(o.nearest_to(h.a)).raw() <= h.radius.add(o.radius).raw()
         });
         if outside || spread {
             lit[h.slot as usize] = true;
@@ -784,6 +799,32 @@ pub fn step(lore: &mut Lore, herd: &Herd, fires: &[Fire]) {
             continue;
         }
         set(lore, i, h);
+    }
+}
+
+/// **Put fire to one hazard**, by a species' own rule rather than by a fire
+/// touching it: the Mireback's belch lighting every pool it marked. A kind
+/// that `ignites` becomes what it ignites into, exactly as if a flame had
+/// reached it; anything else is left alone. Returns whether it caught.
+pub fn ignite(lore: &mut Lore, i: usize) -> bool {
+    let Some(sp) = lore.owner.map(|s| s.get()) else {
+        return false;
+    };
+    let h = get(lore, i);
+    if !h.present() {
+        return false;
+    }
+    match sp
+        .fight
+        .hazards
+        .get(h.index() as usize)
+        .and_then(|d| d.ignites)
+    {
+        Some(into) => {
+            set(lore, i, changed(sp, h, into));
+            true
+        }
+        None => false,
     }
 }
 

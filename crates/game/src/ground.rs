@@ -18,6 +18,7 @@ use bevy::prelude::*;
 use sim::arena::{MAX_RAISED, Material};
 use sim::hazard::{MAX_HAZARDS, Placed, Shape};
 use sim::objective::{self, MAX_STANDING};
+use sim::species::{MAX_MARKS, Mark, MarkLook};
 
 use crate::arenas::colour;
 
@@ -29,6 +30,11 @@ pub enum Piece {
     Objective(usize),
     /// What is left of an objective: a bar over it.
     Bar(usize),
+    /// A species' own mark (`World::marks`): a ring on the floor or a thing
+    /// standing in the arena.
+    Mark(usize),
+    /// The same mark's progress: a ring filling to its edge, embers rising.
+    MarkFill(usize),
 }
 
 /// Materials, one per floor material, and a burning one and a cloud.
@@ -38,6 +44,12 @@ pub struct Looks {
     fire: Handle<StandardMaterial>,
     cloud: Handle<StandardMaterial>,
     bar: Handle<StandardMaterial>,
+    /// A species' marks, by `MarkLook`, and a ring's fill.
+    warning: Handle<StandardMaterial>,
+    warning_fill: Handle<StandardMaterial>,
+    kindling: Handle<StandardMaterial>,
+    iron: Handle<StandardMaterial>,
+    embers: Handle<StandardMaterial>,
     disc: Handle<Mesh>,
     cube: Handle<Mesh>,
 }
@@ -107,13 +119,36 @@ pub fn setup(
         unlit: true,
         ..default()
     });
+    let see_through = |rgb: [f32; 3], alpha: f32, glow: f32| StandardMaterial {
+        base_color: Color::srgba(rgb[0], rgb[1], rgb[2], alpha),
+        emissive: LinearRgba::rgb(rgb[0] * glow, rgb[1] * glow, rgb[2] * glow),
+        alpha_mode: AlphaMode::Blend,
+        unlit: true,
+        ..default()
+    };
+    let warning = materials.add(see_through([0.95, 0.25, 0.12], 0.22, 0.4));
+    let warning_fill = materials.add(see_through([1.0, 0.35, 0.15], 0.45, 0.8));
+    let kindling = materials.add(see_through([1.0, 0.62, 0.15], 0.5, 1.6));
+    let iron = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.16, 0.15, 0.14),
+        perceptual_roughness: 0.5,
+        metallic: 0.6,
+        ..default()
+    });
+    let embers = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.45, 0.12, 0.04),
+        emissive: LinearRgba::rgb(0.9, 0.18, 0.02),
+        ..default()
+    });
     let disc = meshes.add(Cylinder::new(1.0, 1.0));
     let cube = meshes.add(Cuboid::new(1.0, 1.0, 1.0));
     let pieces = (0..MAX_HAZARDS)
         .map(Piece::Hazard)
         .chain((0..MAX_RAISED).map(Piece::Raised))
         .chain((0..MAX_STANDING).map(Piece::Objective))
-        .chain((0..MAX_STANDING).map(Piece::Bar));
+        .chain((0..MAX_STANDING).map(Piece::Bar))
+        .chain((0..MAX_MARKS).map(Piece::Mark))
+        .chain((0..MAX_MARKS).map(Piece::MarkFill));
     for piece in pieces {
         commands.spawn((
             Mesh3d(cube.clone()),
@@ -128,6 +163,11 @@ pub fn setup(
         fire,
         cloud,
         bar,
+        warning,
+        warning_fill,
+        kindling,
+        iron,
+        embers,
         disc,
         cube,
     });
@@ -160,6 +200,7 @@ pub fn place(
     let hazards: Vec<Placed> = ground.floor.iter().copied().collect();
     let (raised, raised_n) = ground.floor.solids::<MAX_RAISED>();
     let standing: Vec<objective::Standing> = objective::standing(&w.lore, w.arena()).collect();
+    let marks = w.marks();
     for (piece, mut transform, mut visible, mut mesh, mut material) in pieces.iter_mut() {
         let shown = match *piece {
             Piece::Hazard(i) => hazards.get(i).map(|h| {
@@ -244,6 +285,12 @@ pub fn place(
                     looks.bar.clone(),
                 )
             }),
+            Piece::Mark(i) => marks.items[i].map(|m| mark(&looks, &m, false)),
+            Piece::MarkFill(i) => marks.items[i]
+                .filter(|m| {
+                    m.progress.raw() > 0 && matches!(m.look, MarkLook::Warning | MarkLook::Embers)
+                })
+                .map(|m| mark(&looks, &m, true)),
         };
         match shown {
             Some((m, t, paint)) => {
@@ -259,6 +306,55 @@ pub fn place(
             None => *visible = Visibility::Hidden,
         }
     }
+}
+
+/// How high a ring on the floor is drawn: over any hazard's skin, so a
+/// warning on tar still reads.
+const RING_LIFT: f32 = 0.07;
+
+/// A species' mark: a ring on the floor (filling to its edge with progress),
+/// or a column standing in the arena (its fill rising with progress).
+fn mark(
+    looks: &Looks,
+    m: &Mark,
+    fill: bool,
+) -> (Handle<Mesh>, Transform, Handle<StandardMaterial>) {
+    let at = v3(m.at);
+    let r = fx(m.radius);
+    let progress = fx(m.progress).clamp(0.0, 1.0);
+    let height = fx(m.height);
+    if height <= 0.0 {
+        let (radius, lift, paint) = match (m.look, fill) {
+            (MarkLook::Kindling, _) => (r, RING_LIFT, looks.kindling.clone()),
+            (_, false) => (r, RING_LIFT, looks.warning.clone()),
+            (_, true) => (r * progress, RING_LIFT + 0.005, looks.warning_fill.clone()),
+        };
+        return (
+            looks.disc.clone(),
+            Transform {
+                translation: at + Vec3::Y * lift,
+                rotation: Quat::IDENTITY,
+                scale: Vec3::new(radius, 0.01, radius),
+            },
+            paint,
+        );
+    }
+    let (tall, radius, paint) = match (m.look, fill) {
+        (MarkLook::Flame, _) => (height, r, looks.fire.clone()),
+        (MarkLook::Iron, _) => (height, r, looks.iron.clone()),
+        (MarkLook::Embers, false) => (height, r, looks.iron.clone()),
+        (MarkLook::Embers, true) => (height * progress, r * 1.05, looks.embers.clone()),
+        (_, _) => (height, r, looks.warning.clone()),
+    };
+    (
+        looks.disc.clone(),
+        Transform {
+            translation: at + Vec3::Y * (tall * 0.5),
+            rotation: Quat::IDENTITY,
+            scale: Vec3::new(radius, tall.max(0.01), radius),
+        },
+        paint,
+    )
 }
 
 /// The overlay: each hazard's outline at the radius its effects are tested

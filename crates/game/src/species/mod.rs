@@ -20,7 +20,7 @@ pub mod gnawers;
 
 // pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -112,8 +112,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
         SpeciesId::GNAWERS => &gnawers::LOOK,
 
         // SpeciesId::HORNBACK => &hornback::LOOK,
-
-        // SpeciesId::MIREBACK => &mireback::LOOK,
+        SpeciesId::MIREBACK => &mireback::LOOK,
 
         // SpeciesId::SANDMAW => &sandmaw::LOOK,
 

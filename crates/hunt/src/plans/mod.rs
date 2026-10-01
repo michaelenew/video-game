@@ -25,7 +25,7 @@ pub mod gnawers;
 
 // pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -41,7 +41,12 @@ pub mod gnawers;
 
 // pub mod siegeshell;
 
+/// Make a hunter: which fighter it drives, the hunt's seed, and how high its
+/// class jumps.
+pub type MakePlan = fn(who: usize, seed: u32, hop: Fx) -> Box<dyn Plan + Send + Sync>;
+
 /// A creature's entry in the harness.
+#[derive(Clone, Copy)]
 pub struct Card {
     pub species: SpeciesId,
     /// Make a hunter: which fighter it drives, the hunt's seed (for its
@@ -55,9 +60,14 @@ pub struct Card {
     /// tally the report feeds every frame and prints under the creature's
     /// name. The Gnawers' pile-ons, howls and windows (§9).
     pub tally: Option<fn() -> Box<dyn crate::report::Tally>>,
+    /// **A second plan that takes a gamble the first will not**, if its
+    /// document asks whether the gamble pays: `fight --gamble` plays it.
+    /// The Mireback's `swallow_greed`, which lets the tongue land late.
+    pub gamble: Option<MakePlan>,
 }
 
 /// What the report calls the creature's parts, in its own words.
+#[derive(Clone, Copy)]
 pub struct Words {
     /// Hits that filled the poise pool: damage on a weak point.
     pub weak_hits: &'static str,
@@ -84,8 +94,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         SpeciesId::GNAWERS => Some(&gnawers::CARD),
 
         // SpeciesId::HORNBACK => Some(&hornback::CARD),
-
-        // SpeciesId::MIREBACK => Some(&mireback::CARD),
+        SpeciesId::MIREBACK => Some(&mireback::CARD),
 
         // SpeciesId::SANDMAW => Some(&sandmaw::CARD),
 

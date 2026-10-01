@@ -6500,3 +6500,51 @@ lower bar decides. The crouch at 2.8 m. A pile-on whose leapers tracked.
 raised tails better than a person will. The first questions for a person are
 in gnawers.md §13: is it too easy, is 28 frames too readable, does the tail
 coming in read, and is a cornered rout fighting at the den right.
+
+### 2026-10-01 — The Mireback: the first creature on the floor, tuned by harness
+
+**Changed** A creature: the toad that takes the floor away, in the Mire
+(`--hunt mireback`), with tar, burning tar, slag and coals on the hazard list,
+four braziers, a hunter plan and report lines of its own
+([creatures/mireback.md](creatures/mireback.md) §13). Against the document's
+first guesses: health 10 000 (from 11 000); the crown and its warts at 6.4 m
+(from 7.0); legs soft; the brow on the root; self-burn by footprint, up to
+three pools; the flop at 450 appetite and a 360-frame cooldown, the walk away
+from fire when the flop is not ready. Generic: fire spreads after its
+`Spread` frames and shape to shape; a creature that lands on bodies shoves
+them out sideways (`lands_on_bodies`); a face pointing at the floor is no
+surface on a creature that rolls over (`rolls_over`). Both opt-in, so the
+Ridgeback's pins hold.
+
+**Why** The harness, pass by pass. A pool that had just caught lit its
+neighbours the same frame, so a fuse ran the arena in a second. The flop's
+crash pressed a fighter under its belly through the floor (least penetration
+chose down), and a fighter dodging past a wallow was mounted on the underside
+of its flank and thrown. A solid forearm made a ledge at hip height the
+hunter climbed by accident. The flop was most of the toad's damage and won
+fights ran past three minutes at 11 000. The hunter itself needed teaching
+before its numbers meant anything: it counted fire ticks as landings, swung
+inside windows too short to finish in, kindled braziers from behind the
+plinth and walked off the arena, and stood in its own fire.
+
+**Found** 24 hunts per class: Champion 15 won in about two minutes, Bulwark
+12, Reaver 13 (three minutes), Elementalist all 24 in 44 s, Blood mage 1,
+Dual mage 0 (the last two as against the Ridgeback: the hunter does not play
+their bars or pools). Threatening 45 % against 35; one unanswerable flop in
+24 for three classes; self-burn about 45 % of what it loses; a wart burst in
+14 of 15 wins; the floor peaks under half, so the losses are not the clock.
+Coop 10 of 12; temper 3, 6 of 12. `swallow_greed` changes nothing measurable.
+
+**Reverted** Self-burn capped at two pools: it did not slow the
+Elementalist, and the Champion lost two more hunts. The hunter dodging five
+frames early instead of three, and the brain thinking every 32 frames
+instead of 40: neither moved the numbers the right way. The face-up
+rule for mounting in the shared rig: it threw a braced rider off the
+Ridgeback's shoulders mid-shake, so it is the Mireback's flag now. Pushing a
+body down out of a creature that lands on it: up was right for the toad and
+wrong for the Ridgeback's pin, so it is the flag above.
+
+**Verdict** built; a tier-2 fight for three classes, tier 1 for the
+Elementalist. For a person: is 45 % threatening oppressive in the hands, does
+the flop's ring read early enough, is her one-minute fight her identity, and
+the document's own §12.

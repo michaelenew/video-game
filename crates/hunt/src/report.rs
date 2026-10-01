@@ -227,6 +227,12 @@ pub trait Tally: Send + Sync {
     fn observe(&mut self, before: &World, after: &World);
     /// Its lines: a name, a value, and why it is counted.
     fn lines(&self) -> Vec<(String, String, String)>;
+    /// Hits its own rule says were unanswerable that the shared rule could
+    /// not see -- the Mireback's flop out of fresh tar: added to the
+    /// report's count when the hunt ends.
+    fn unanswerable(&self) -> u32 {
+        0
+    }
 }
 
 /// What the report counts about the hunt's lore: the defended things, falls,
@@ -558,9 +564,6 @@ impl Report {
         if behind {
             self.pack.behind_frames += 1;
         }
-        if let Some(extra) = self.extra.as_mut() {
-            extra.observe(before, after);
-        }
     }
 
     /// The shared measures of a fight that is only a pack: what the
@@ -692,6 +695,9 @@ impl Report {
 
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        if let Some(extra) = self.extra.as_mut() {
+            extra.observe(before, after);
+        }
         self.observe_pack(before, after, bots);
         self.observe_ground(before, after);
         // The first creature. A fight against two (the Pair) reports on the
@@ -881,12 +887,23 @@ impl Report {
             }
         }
 
+        // **A fight with a floor burns people too.** Where the species lays
+        // hazards, health lost on a frame the creature's move did not
+        // connect is the floor's, not a hit: counted in what was taken and
+        // nowhere else, or every tick of burning tar under a hunter would read
+        // as the move in progress landing. A fight without a floor counts as
+        // it always did.
+        let floored = !sp.fight.hazards.is_empty();
+        let connected = !was.hit_used && now.hit_used;
         for i in 0..MAX_PLAYERS {
             let lost = before.players[i].health - after.players[i].health;
             if lost <= 0 {
                 continue;
             }
             self.taken += lost;
+            if floored && !connected {
+                continue;
+            }
             self.hits_taken += 1;
             if self.commit_kind == monster::NO_PART {
                 continue;
@@ -967,6 +984,9 @@ impl Report {
         }
         if self.shortest_opening == u32::MAX {
             self.shortest_opening = 0;
+        }
+        if let Some(extra) = self.extra.as_ref() {
+            self.unanswerable += extra.unanswerable();
         }
         self.spread = self.hi.sub(self.lo).flat_len();
         self.outcome = match w.phase {

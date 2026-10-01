@@ -278,9 +278,24 @@ pub fn play_tempered(
     partners: usize,
     limit: u32,
     seed: u32,
-    mut watch: impl FnMut(&World),
+    watch: impl FnMut(&World),
 ) -> Report {
     let card = plans::card(species).expect("no hunter plan is registered for that species");
+    play_card(card, temper, classes, partners, limit, seed, watch)
+}
+
+/// The whole loop, with a card in hand rather than a species: what
+/// `fight --gamble` runs, with the card's second plan in its first's place.
+pub fn play_card(
+    card: &'static plans::Card,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
+    mut watch: impl FnMut(&World),
+) -> Report {
+    let species = card.species;
     let mut w = World::hunt_of(classes, species).tempered(temper);
     for beast in w.monsters.iter_mut().flatten() {
         beast.brain.rng = seed | 1;

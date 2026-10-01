@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 2
 ---
 
@@ -570,3 +571,104 @@ against anything with a crash circle.
 8. **Is a full floor a loss condition or a slow one?** At the tar ceiling the
    fight is still winnable with fire. Whether that final minute feels desperate
    or merely tiring is the question the whole premise stands on.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt mireback`, the Mire. The species is
+`sim/src/species/mireback/` (the table, `fight.rs` for the floor and the rules,
+`mind.rs` for its own scoring), the arena `sim/src/arena/mireback.rs`, the
+clips `anim/src/beast/mireback/`, the look and the Mire's dressing in `game`,
+the plan and the report lines `hunt/src/plans/mireback.rs`, and the rules
+pinned as sentences in `sim/tests/mireback.rs`. The plan is
+[plans/mireback.md](../plans/mireback.md); the passes are in
+[feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin fight -- --species mireback --class <c>
+--repeats 24`; the scripted hunter plays §9 with a fifteen-frame reaction.
+
+```text
+                won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable
+  Champion     15/24   121 s        478                  45 / 9 / 14 / 32 %                  1
+  Bulwark      12/24   130 s        385                  46 / 9 / 13 / 32 %                  1
+  Reaver       13/24   180 s        298                  45 / 9 / 13 / 33 %                  1
+  Elementalist 24/24    44 s        719                  32 / 7 / 11 / 49 %                  0
+  Blood mage    1/24   122 s        245                  46 / 9 / 14 / 32 %                  0
+  Dual mage     0/24     --          --                  44 / 9 / 13 / 34 %                  0
+
+  coop, two Champions 10/12 in 84 s;  temper 3, Champion 6/12 in 115 s
+  swallow_greed (--gamble), Champion 7/12 in 113 s -- the same as the plan without it
+
+  landed / thrown, 24 Champion hunts
+    Spew 21/307  Belly flop 19/342  Tongue 18/232  Flint belch 2/22  Backwash 0/25
+    Inflate 22/113  Wallow 9/64     (Swallow and Gag are never chosen: the tongue starts one)
+```
+
+**The Mireback's own lines**, over the same 24 Champion hunts: tar coverage
+peaks at 18–45 % in a won fight and 28–52 % in a lost one; self-burn is 25–72
+% of all the health it lost in a won fight, about 45 % at the median; at
+least one wart burst in 14 of the 15 wins, the first at 0.6–2 minutes; one or
+two guttings a fight; zero to three swallows.
+
+**Against the targets.** The Champion wins five in eight, against about two
+in three, in two minutes (two to four asked). Zero unanswerable hits except one
+in 24 for three classes, each a flop out of tar laid after it committed (the
+report's own rule). Self-burn is about where §9 wants it, a little high. Warts
+are being burst. **What is off:** threatening is 45 % against 35, and walk-up
+32 against 25 -- the toad spends its time winding up long moves, and the
+openings are long ones; the poke window is small because nearly everything it
+throws covers the flank. **The losses are not about the clock**: the floor
+never nears the 60 % ceiling, and the hunter dies to the flop and the spew it
+did not walk out of. The belch is thrown rarely and lands rarely (the hunter
+leaves tar before it, which is the answer); the Backwash hits for nothing by
+design (it tars), so the generic "landed" never counts it. **The Elementalist
+makes it a tier-1 fight** (§12 question 3): her pillar lights every flop ring
+under it, and she wins every hunt in under a minute. **The Dual mage and the
+Blood mage** lose nearly all of them, as they do against the Ridgeback: the
+scripted hunter does not play their bars or their pools, which is the
+harness's limit, not a finding about the toad.
+
+**The body, as `beastcheck --species mireback` prints it**: rim 5.18 m
+standing (the Dual mage's 5.97 hop only), the dome 5.78, the crown and its
+warts 6.4 (a walk up the dome; §1 said 7.0, but on a toad whose rim is 5.2
+the warts at 6.4–7.0 read as "on top" and stay out of every hop); winded,
+the left flank 3.73 (all but the Bulwark); through the flop 4.48 (Reaver,
+Elementalist, Dual mage); gutted or wallowing, the flank at 1.7–1.8 (everybody).
+Slag adds 1.5 m a layer, so one mound puts the rim inside everybody's hop but
+the Bulwark's and two put it inside his; a loaded planted shield is his other
+way (`tests/mireback.rs`).
+
+**Changed from this document while building**, beyond the numbers:
+
+- **Health 10 000**, from 11 000: won fights ran past three minutes.
+- **The Swallow and the Gag are moves the brain never chooses**
+  (`MoveDecl::never_chosen`): the tongue landing starts the swallow, a guarded
+  tongue the gag. Their frames are still declared, so the table, the clips and
+  the frame data have them.
+- **Gutted is the stock topple, winded the stock stumble**: the shared strain
+  machinery runs them, and `beastcheck` reads their poses.
+- **The legs are soft**: a solid forearm made a ledge at hip height that the
+  hunter climbed by accident.
+- **The brow sits on the root**, not the head, so the rim does not dip every
+  time the head moves; the head's moves keep the rim at 5.0 or above.
+- **It burns by its footprint**, up to three pools (`burn_self_pools`), not by
+  the shared rule's position ([hazards.md](../hazards.md) §8).
+- **Fire spreads after its `Spread` frames**, measured shape to shape, so a
+  fuse runs at a pace a hunter can see and the coals' lane lights what it
+  touches (generic, [hazards.md](../hazards.md) §8).
+- **The flop shoves bodies out sideways** (`FightDecl::lands_on_bodies`) and
+  **a face pointing at the floor is no surface** (`rolls_over`): the crash
+  pressed a fighter through the ground, and a fighter dodging past a wallow
+  was mounted on the underside of its flank. Both are opt-in so the
+  Ridgeback's pins hold; whether the Ridgeback wants them is a person's call.
+- **The braziers are drawn from the snapshot** as the species' marks (iron,
+  flame, embers relighting), not a renderer prop; tipped by any fighter's hit
+  or the toad's own body.
+- **Not built**: the coat's sheen and a swollen sac on the body (the renderer
+  has one material per paint, not per creature state); the stomach camera
+  stays outside (§12 question 7).
+
+**Questions for a person**, beyond §12: is the Elementalist's one-minute fight
+her identity or a hole (`flee` could favour her fire); is 45 % threatening
+oppressive in the hands or only in the harness; and does the flop -- the
+toad's main damage, nineteen landings in 24 hunts -- read from its ring of
+warnings early enough, which only somebody watching it come down can say.

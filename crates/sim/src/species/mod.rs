@@ -63,7 +63,7 @@ pub mod gnawers;
 
 // pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -125,8 +125,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::GNAWERS => Some(&gnawers::SPECIES),
 
         // SpeciesId::HORNBACK => Some(&hornback::SPECIES),
-
-        // SpeciesId::MIREBACK => Some(&mireback::SPECIES),
+        SpeciesId::MIREBACK => Some(&mireback::SPECIES),
 
         // SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
 
@@ -197,6 +196,27 @@ pub struct MoveDecl {
     /// gameplay rather than content, because it decides whether a braced
     /// rider stays on. The Ridgeback's shake, by its shake force.
     pub scaled_by: Option<u16>,
+    /// **Lobbed at a point**: its volume lands on the floor at the creature's
+    /// aim point (`monster::Brain::aim`), chosen when it commits and held -- the
+    /// lead point, kept inside the move's range, unless the species' `commit`
+    /// hook says otherwise. Its `HitX`/`HitZ` are not read. The Mireback's glob
+    /// and its belly flop: the telegraph is drawn where it will land from the
+    /// first frame of the tell, because that is where it will land.
+    pub lobbed: bool,
+    /// **Its travel stops at the aim point**: a volume that `travels` goes no
+    /// further along the facing than the creature's aim point, which the species
+    /// keeps on the first solid in the way. The Mireback's tongue, which slag
+    /// or a stone or a planted shield stops.
+    pub stops_at_aim: bool,
+    /// **It lands for no damage.** A move whose zero damage would otherwise
+    /// mean it has no volume at all: it still reaches, is still drawn, and its
+    /// landing is still handed to the species (`FightDecl::landed`). The
+    /// Mireback's Backwash, which tars rather than hurts.
+    pub harmless: bool,
+    /// **The brain never picks it**: a state the species puts the creature in
+    /// from its own hooks, played and timed as a move -- the Mireback's
+    /// swallow, its gag. It scores nothing.
+    pub never_chosen: bool,
 }
 
 impl MoveDecl {
@@ -206,7 +226,31 @@ impl MoveDecl {
             clip,
             mirrors_to_target_side: false,
             scaled_by: None,
+            lobbed: false,
+            stops_at_aim: false,
+            harmless: false,
+            never_chosen: false,
         }
+    }
+
+    pub const fn lobbed(mut self) -> MoveDecl {
+        self.lobbed = true;
+        self
+    }
+
+    pub const fn stops_at_aim(mut self) -> MoveDecl {
+        self.stops_at_aim = true;
+        self
+    }
+
+    pub const fn harmless(mut self) -> MoveDecl {
+        self.harmless = true;
+        self
+    }
+
+    pub const fn never_chosen(mut self) -> MoveDecl {
+        self.never_chosen = true;
+        self
     }
 
     pub const fn mirrors_to_target_side(mut self) -> MoveDecl {
@@ -269,6 +313,17 @@ pub struct FightDecl {
     /// bounds -- which is what the Ridgeback has always had, and what keeps it
     /// bit-identical.
     pub collides: bool,
+    /// **Its parts come down on bodies** -- a belly flop -- so a body standing
+    /// on the floor under a part is shoved out sideways rather than into the
+    /// ground. Off, the collision is least penetration as it always was,
+    /// which keeps the Ridgeback bit-identical.
+    pub lands_on_bodies: bool,
+    /// **It rolls onto its back**, so a part's top face can point at the
+    /// floor -- and a face pointing at the floor is nobody's to stand on.
+    /// Off, every top face is a surface whichever way it points, as it always
+    /// was: the Ridgeback's shake turns its shoulders far enough that the
+    /// rule would cost a braced rider their footing.
+    pub rolls_over: bool,
     /// Called when it walks into a solid, with the push that got it out: the
     /// Hornback's charge into a rock is a stun.
     pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
@@ -280,6 +335,106 @@ pub struct FightDecl {
     /// renderer draws it at, and what the report and the scripted hunter call
     /// visible. `None` is always fully. The Veilstalker's veil.
     pub shown: Option<fn(&crate::state::World, usize, usize) -> Fx>,
+
+    // ---- the brain's seams: see `monster::Mind` ----
+    /// **Its own terms in the scoring**, after the shared ones: handed a move,
+    /// the score the shared brain gave it, and what the brain may read, and
+    /// returns the score. The Mireback's floor, kindle, coat, crowd and flee.
+    pub appetite: Option<AppetiteFn>,
+    /// **Where it walks when it is free**, if not at its target: the Mireback
+    /// walks to the middle of its own tar. `None` from the hook is "at the
+    /// target", as every other creature does.
+    pub prowl_to: Option<fn(&crate::monster::Monster, &crate::monster::Mind) -> Option<V3>>,
+    /// Called on the frame a move commits, after the shared brain has set it
+    /// up: where a lobbed move lands (`monster::Brain::aim`), which way it
+    /// leaps.
+    pub commit: Option<fn(&mut crate::monster::Monster, u8, &crate::monster::Mind)>,
+
+    // ---- the body's seams: state in `Monster::own` ----
+    /// **What its hide is worth on a part this frame**, times the part's own
+    /// multiplier: the Mireback's tar coat, the throat sac shown or hidden.
+    pub hide: Option<fn(&crate::monster::Monster, usize) -> Fx>,
+    /// **A hit has landed**, for this much, after health and strain and before
+    /// the shared ladder (breaks, topple, interrupt, flinch). Returning true
+    /// says the species has decided what the hit did and the ladder is
+    /// skipped: the Mireback's sac tearing, its wallow broken, the warts.
+    pub struck: Option<fn(&mut crate::monster::Monster, usize, i32) -> bool>,
+
+    // ---- the fight's seams ----
+    /// **One of its moves has landed on a fighter** (creature slot, fighter,
+    /// move, whether it was guarded), after the hit itself is dealt: what the
+    /// move does besides hurt. The tongue's grab, the Backwash's tar.
+    pub landed: Option<LandedFn>,
+    /// **What it draws besides its hazards and its telegraph**: rings on the
+    /// floor for what a move will leave or light, and the things it owns in
+    /// the arena. Read by the renderer and the overlay, from the snapshot, so
+    /// what is drawn is what the fight will do. See [`Mark`].
+    pub marks: Option<fn(&crate::state::World, &mut Marks)>,
+}
+
+/// Something a species draws beyond its hazards and its telegraph.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Mark {
+    /// The middle of it, on the floor or wherever it stands.
+    pub at: V3,
+    pub radius: Fx,
+    /// Zero: a ring on the floor. Above zero: a column this tall -- a thing
+    /// standing in the arena.
+    pub height: Fx,
+    pub look: MarkLook,
+    /// How far through what it warns of, nought to one: a ring that closes,
+    /// a glow that brightens.
+    pub progress: Fx,
+}
+
+/// How a [`Mark`] is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarkLook {
+    /// **Something lands here**: a telegraph ring, in the telegraph's colour.
+    Warning,
+    /// **This will catch**: a hazard that is about to ignite, glowing from
+    /// inside.
+    Kindling,
+    /// Fire standing: a brazier's flame.
+    Flame,
+    /// A dark thing standing: iron, a plinth's load.
+    Iron,
+    /// Embers: a thing that is coming back.
+    Embers,
+}
+
+/// [`FightDecl::appetite`]: the creature, a move, the shared brain's score
+/// for it, and what the brain may read.
+pub type AppetiteFn = fn(&crate::monster::Monster, u8, i32, &crate::monster::Mind) -> i32;
+
+/// [`FightDecl::landed`]: the world, the creature's slot, the fighter, the
+/// move, and whether it was guarded.
+pub type LandedFn = fn(&mut crate::state::World, usize, usize, u8, bool);
+
+/// The most marks a species draws at once.
+pub const MAX_MARKS: usize = 32;
+
+/// A fixed list of marks, filled by a species' `marks` hook.
+#[derive(Clone, Copy, Debug)]
+pub struct Marks {
+    pub items: [Option<Mark>; MAX_MARKS],
+}
+
+impl Marks {
+    pub const NONE: Marks = Marks {
+        items: [None; MAX_MARKS],
+    };
+
+    /// Add one; past the end it is dropped.
+    pub fn push(&mut self, m: Mark) {
+        if let Some(slot) = self.items.iter_mut().find(|s| s.is_none()) {
+            *slot = Some(m);
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Mark> {
+        self.items.iter().flatten()
+    }
 }
 
 impl std::fmt::Debug for FightDecl {
@@ -306,9 +461,18 @@ impl FightDecl {
         perceives: crate::perception::sees_all,
         hears: false,
         collides: false,
+        lands_on_bodies: false,
+        rolls_over: false,
         bumped: None,
         frame: None,
         shown: None,
+        appetite: None,
+        prowl_to: None,
+        commit: None,
+        hide: None,
+        struck: None,
+        landed: None,
+        marks: None,
     };
 }
 

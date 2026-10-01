@@ -71,11 +71,24 @@ fn holding(sp: &Species, doing: Doing) -> Monster {
     beast
 }
 
+/// Does a part's top face point up enough to stand on? A creature on its back
+/// has every "top" facing the floor, and one rolling over has them on edge: a
+/// face steeper than forty-five degrees is a wall.
+fn faces_up(beast: &Monster, part: usize) -> bool {
+    let up = beast
+        .rig()
+        .of(part)
+        .rot
+        .apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    // Steeper than forty-five degrees: more across than up.
+    up.y.raw() > V3::new(up.x, Fx::ZERO, up.z).flat_len().raw()
+}
+
 /// The lowest mountable surface on a body, and which part it is.
 fn lowest_mount(beast: &Monster) -> Option<(usize, Fx)> {
     let sp = beast.sp();
     (0..sp.parts.len())
-        .filter(|p| sp.parts[*p].shape.mountable)
+        .filter(|p| sp.parts[*p].shape.mountable && faces_up(beast, *p))
         .map(|p| (p, top(beast, p)))
         .min_by_key(|(_, h)| h.raw())
 }
