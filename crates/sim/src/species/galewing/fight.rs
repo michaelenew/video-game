@@ -127,8 +127,9 @@ pub mod word {
     /// The stoop's dive: where it began (cm) and its height (raw).
     pub const DIVE_AT: usize = 28;
     pub const DIVE_UP: usize = 29;
-    /// The volley's and the Downwash's own aim heights, unused for now.
-    pub const SPARE: usize = 30;
+    /// The air move it last committed to, plus one (none: zero) -- what a
+    /// crash is counted against.
+    pub const LAST_AIR: usize = 30;
     /// The heave of the back's last wingbeat (raw metres) -- the integral of
     /// the beat, kept so the pose is a function of the body.
     pub const HEAVE_V: usize = 31;
@@ -557,12 +558,14 @@ fn trouble(w: &mut World, m: &mut Monster) {
         set_fx(&mut w.lore, word::FELL_FROM, m.pos.y);
         let cause = if broken_wings(m) > 0 && (grounded_for_good(m) || riding(m)) {
             3
-        } else if m.brain.last_move == STOOP {
-            1
-        } else if matches!(m.brain.last_move, TALON | CARRY) {
-            0
         } else {
-            2
+            // The air move that brought it low: a Stoop's poise, a pass's,
+            // or a clip anywhere else.
+            match w.lore.word(word::LAST_AIR).checked_sub(1).map(|k| k as u8) {
+                Some(STOOP) => 1,
+                Some(TALON) => 0,
+                _ => 2,
+            }
         };
         bump_byte(&mut w.lore, word::CRASHES, cause);
     }
@@ -585,6 +588,9 @@ fn committed(w: &mut World, m: &mut Monster) {
     }
     spend(&mut w.lore, kind);
     w.lore.set_word(word::INTENT, 0);
+    if super::aerial(kind) {
+        w.lore.set_word(word::LAST_AIR, kind as u32 + 1);
+    }
     let lead = m.lead_point(a.startup);
     let lead = V3::new(lead.x, Fx::ZERO, lead.z);
     let to = V3::new(lead.x.sub(m.pos.x), Fx::ZERO, lead.z.sub(m.pos.z));

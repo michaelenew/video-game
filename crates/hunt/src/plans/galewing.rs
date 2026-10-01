@@ -408,8 +408,15 @@ impl Galewing {
         let phase_now = (flight::beat_phase(s) + REACTION as i32).rem_euclid(period);
         let down = Knob::BeatDown.raw();
         let downstroke = phase_now >= period - 4 || phase_now <= down + 2;
-        if rolling || downstroke || !gw::is_spine(part) {
-            return self.onto_spine(me, now, rolling || downstroke);
+        // A swing only where all of it fits before the next downstroke: a
+        // rider mid-swing cannot brace.
+        let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
+        let swing = (poke.startup + poke.active + poke.recovery) as i32;
+        let until = (period - 4 - phase_now).rem_euclid(period);
+        let fits = me.action.actionable() && swing + 2 <= until;
+        if rolling || downstroke || !gw::is_spine(part) || !fits {
+            let brace = rolling || downstroke || (gw::is_spine(part) && !fits);
+            return self.onto_spine(me, now, brace);
         }
         // Between beats, on the spine: hit the root beside it.
         self.intent = WING;
@@ -643,6 +650,26 @@ impl Galewing {
             }
             return Some(self.swing(me, part_at(s, root), 0));
         }
+        // **Plan B boards it**: its wings are on the floor after a Stoop, so
+        // up the nearest one, hopping onto it if it is above a step, and the
+        // ride takes it from there.
+        if self.gamble == Gamble::B && !fight::grounded_for_good(s) {
+            // The lowest top in reach of its wings and back, nearest first.
+            let wing = WINGS
+                .iter()
+                .chain([gw::BACK].iter())
+                .map(|p| top_of(s, *p))
+                .filter(|at| at.y.sub(me.pos.y).raw() < self.hop.raw())
+                .min_by_key(|at| wide_flat_dist(*at, me.pos).raw())
+                .unwrap_or(at);
+            self.intent = RIDE;
+            let near = wide_flat_dist(me.pos, wing).raw() < Fx::ratio(12, 10).raw();
+            let above = wing.y.sub(me.pos.y).raw() > Fx::ratio(4, 10).raw();
+            if near && above && me.grounded && self.leap_left == 0 {
+                self.leap_left = LEAP_HOLD;
+            }
+            return Some(walk(me, wing, Some(wing), 0));
+        }
         let close = sim::math::wide_len(at.sub(me.pos));
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE).reach;
         if close.raw() <= poke.add(Fx::ONE).raw() {
@@ -854,6 +881,18 @@ fn marker_points(w: &World, m: &Monster) -> Vec<V3> {
         if s.length.raw() > 0 {
             out.push(s.at.add(s.along.scale(s.length.mul(crate::HALF))));
             out.push(s.at.add(s.along.scale(s.length)));
+        } else {
+            // A disc's rim as well as its middle: a disc half behind a ledge
+            // is still on the screen.
+            let r = s.width.mul(crate::HALF);
+            for d in [
+                V3::new(r, Fx::ZERO, Fx::ZERO),
+                V3::new(r.neg(), Fx::ZERO, Fx::ZERO),
+                V3::new(Fx::ZERO, Fx::ZERO, r),
+                V3::new(Fx::ZERO, Fx::ZERO, r.neg()),
+            ] {
+                out.push(s.at.add(d));
+            }
         }
     }
     out
@@ -1021,11 +1060,22 @@ impl Tally for GaleTally {
                             // Struck by it: hurt and knocked into stun. A
                             // Blood mage's own price and a hard landing hurt
                             // without either.
+                            let stun = |a: &Action| match *a {
+                                Action::HitStun { left } => Some(left),
+                                Action::Stagger { left, .. } => Some(left),
+                                _ => None,
+                            };
+                            let fresh = match (
+                                stun(&before.players[i].action),
+                                stun(&after.players[i].action),
+                            ) {
+                                (_, None) => false,
+                                (None, Some(_)) => true,
+                                (Some(b), Some(a)) => a > b,
+                            };
                             let hit = after.players[i].health < before.players[i].health
-                                && matches!(
-                                    after.players[i].action,
-                                    Action::HitStun { .. } | Action::Stagger { .. }
-                                )
+                                && fresh
+                                && gw::SPECIES.attack(k).damage > 0
                                 && !before.players[i].aboard();
                             let watched = bots.iter().any(|b| b.who == i);
                             if hit
