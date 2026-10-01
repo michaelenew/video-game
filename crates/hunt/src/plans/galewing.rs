@@ -240,6 +240,11 @@ fn clear(w: &World, at: V3, dir: V3) -> bool {
 
 /// A look along `yaw`, a little down at the floor, or onto `at` when it
 /// throws something at it.
+/// The steepest a hunter on the floor looks up when not shooting at the
+/// sky: level. Looking any higher from beside a bird standing over you puts
+/// the floor at your own feet below the bottom of the screen.
+const SWING_UP: i16 = 0;
+
 fn wire(me: &Player, yaw: Fx, at: Option<V3>, bits: u16) -> Input {
     let aim = turns_to_aim(yaw.sub(me.carry_yaw));
     let pitch = match at {
@@ -332,6 +337,14 @@ impl Plan for Galewing {
         };
         if self.leap_left > 0 {
             input = input.with(Input::SPACE);
+        }
+        // **Never craned at the sky from the floor**, unless shooting at it:
+        // under a bird standing over you, the part you swing at is metres
+        // up, and a look that follows it takes the floor -- where its next
+        // windup is drawn -- off the screen. A player fights it from under it
+        // with the floor round their feet in view.
+        if me.grounded && !me.aboard() && self.intent != SHOOT && input.pitch > SWING_UP {
+            input = Input::looking_at(input.bits, input.aim, SWING_UP);
         }
         input
     }
@@ -560,12 +573,6 @@ impl Galewing {
                 self.intent = OUT;
                 let out = out_of_strip(w, start, along, me.pos);
                 let to = me.pos.add(out.scale(width.add(Fx::from_int(3))));
-                if std::env::var_os("GALE_DEBUG").is_some() {
-                    eprintln!(
-                        "{} OUT me {:?} start {:?} along {:?} out {:?} act {:?} active {}",
-                        w.frame, me.pos, start, along, out, me.action, active
-                    );
-                }
                 Some(walk(me, to, Some(start), 0))
             }
             gw::SCREECH => {
@@ -995,6 +1002,7 @@ impl Tally for GaleTally {
                     self.watch = Some((kind, [0; 4]));
                 }
                 let points = marker_points(after, &now);
+                }
                 if let Some((_, frames)) = self.watch.as_mut() {
                     for bot in bots {
                         if points
@@ -1011,7 +1019,14 @@ impl Tally for GaleTally {
                     if k == kind {
                         for (i, seen) in frames.iter().enumerate().take(after.players.len().min(4))
                         {
+                            // Struck by it: hurt and knocked into stun. A
+                            // Blood mage's own price and a hard landing hurt
+                            // without either.
                             let hit = after.players[i].health < before.players[i].health
+                                && matches!(
+                                    after.players[i].action,
+                                    Action::HitStun { .. } | Action::Stagger { .. }
+                                )
                                 && !before.players[i].aboard();
                             let watched = bots.iter().any(|b| b.who == i);
                             if hit

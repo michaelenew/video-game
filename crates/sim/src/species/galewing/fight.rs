@@ -437,9 +437,18 @@ pub fn base(w: &World) -> Fx {
 }
 
 /// The ground under a point: the top of whatever stands under it, however
-/// high the point is.
+/// high the point is. What it flies over -- the tower counts.
 pub fn ground_at(w: &World, at: V3) -> Fx {
     w.terrain().ground_under(V3::new(at.x, Fx::ZERO, at.z))
+}
+
+/// **The floor a marker or a push lies on** at a point: the highest top
+/// under it no higher than the point or the plateau, whichever is higher. A
+/// lane that starts beside the tower lies on the plateau, not on the tower's
+/// top twelve metres up.
+pub fn floor_at(w: &World, at: V3) -> Fx {
+    let from = at.y.max(base(w));
+    w.terrain().floor_below(V3::new(at.x, from, at.z))
 }
 
 // ---------------------------------------------------------------------------
@@ -525,7 +534,6 @@ fn trouble(w: &mut World, m: &mut Monster) {
                 m.doing = Doing::Toppled {
                     left: m.sp().topple_frames(),
                 };
-                bump_byte(&mut w.lore, word::CRASHES, 2);
             } else {
                 m.doing = Doing::Prowl;
                 w.lore
@@ -551,15 +559,12 @@ fn trouble(w: &mut World, m: &mut Monster) {
             3
         } else if m.brain.last_move == STOOP {
             1
-        } else if m.brain.last_move == TALON {
+        } else if matches!(m.brain.last_move, TALON | CARRY) {
             0
         } else {
             2
         };
-        // A clip's crash was counted where it was decided.
-        if !(cause == 2 && byte_of(&w.lore, word::CRASHES, 2) > 0 && aloft(m)) {
-            bump_byte(&mut w.lore, word::CRASHES, cause);
-        }
+        bump_byte(&mut w.lore, word::CRASHES, cause);
     }
     if toppled && aloft(m) {
         let h = fx_word(&w.lore, word::FELL_FROM).max(m.pos.y);
@@ -897,7 +902,7 @@ fn sense(w: &mut World, m: &Monster) {
             V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO)
         };
         let under = p.pos.add(toward.scale(Knob::WashBeside.fx()));
-        let under = V3::new(under.x, ground_at(w, under), under.z);
+        let under = V3::new(under.x, floor_at(w, under), under.z);
         if aim::clear_between(under, p.pos, &scene) {
             s |= seen::EXPOSED;
         }
@@ -1107,7 +1112,7 @@ fn talons(w: &mut World, m: &mut Monster, slot: usize) {
             continue;
         }
         // The talons clear `TalonHeight` over the ground under the lane.
-        let floor = ground_at(w, p.pos);
+        let floor = w.terrain().floor_below(p.pos);
         let top = p.pos.y.add(p.hurt_height());
         if top.raw() <= floor.add(reach).raw() {
             continue;
@@ -1230,7 +1235,7 @@ fn drop_carried(w: &mut World, m: &Monster) {
 /// The point under the hovering bird, on the ground.
 pub fn wash_point(w: &World) -> V3 {
     let at = point(w.lore.word(word::WASH_AT));
-    V3::new(at.x, ground_at(w, at), at.z)
+    V3::new(at.x, floor_at(w, at), at.z)
 }
 
 /// **Is a fighter at `p` in the Downwash's lee**: a solid between them and
@@ -1618,7 +1623,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         Doing::Startup { kind: TALON, left } => {
             let a = SPECIES.attack(TALON);
             let (at, along, length, width) = lane(lore);
-            let at = V3::new(at.x, ground_at(w, at), at.z);
+            let at = V3::new(at.x, floor_at(w, at), at.z);
             out.push(
                 Sign::strip(Says::Coming, at, along, length, width)
                     .filled(through(left, a.startup)),
@@ -1626,7 +1631,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         }
         Doing::Active { kind: TALON, left } => {
             let (at, along, length, width) = lane(lore);
-            let at = V3::new(at.x, ground_at(w, at), at.z);
+            let at = V3::new(at.x, floor_at(w, at), at.z);
             let f = front(left);
             out.push(Sign::strip(Says::Coming, at, along, length, width));
             out.push(Sign::strip(
@@ -1661,7 +1666,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         Doing::Startup { kind: VOLLEY, left } => {
             let a = SPECIES.attack(VOLLEY);
             let (at, along, length, width) = rake_lane(lore);
-            let at = V3::new(at.x, ground_at(w, at), at.z);
+            let at = V3::new(at.x, floor_at(w, at), at.z);
             out.push(
                 Sign::strip(Says::Coming, at, along, length, width)
                     .filled(through(left, a.startup)),
@@ -1670,7 +1675,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         Doing::Active { kind: VOLLEY, left } => {
             let a = SPECIES.attack(VOLLEY);
             let (at, along, length, width) = rake_lane(lore);
-            let at = V3::new(at.x, ground_at(w, at), at.z);
+            let at = V3::new(at.x, floor_at(w, at), at.z);
             let (lo, hi) = raked(a.active.saturating_sub(left));
             out.push(Sign::strip(Says::Coming, at, along, length, width));
             out.push(Sign::strip(
@@ -1764,7 +1769,7 @@ fn lees(w: &World, under: V3, out: &mut Signs) {
         for k in 0..8 {
             let dir = V3::from_turns(Fx::ratio(k, 8));
             let p = under.add(dir.scale(at_r));
-            let p = V3::new(p.x, ground_at(w, p), p.z);
+            let p = V3::new(p.x, floor_at(w, p), p.z);
             if in_lee(&scene, under, p) {
                 out.push(Sign::disc(Says::Clear, p, Knob::LeeDisc.fx()));
             }
