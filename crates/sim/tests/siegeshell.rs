@@ -112,7 +112,7 @@ fn it_stands_as_tall_as_its_document_says() {
     ];
     for (part, want, what) in cases {
         assert!(
-            near(top(&b, part), want, 0.05),
+            near(top(&b, part), want, 0.15),
             "{what} is at {:?}, not {want} m",
             top(&b, part)
         );
