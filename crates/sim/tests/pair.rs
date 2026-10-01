@@ -377,94 +377,296 @@ fn three_hundred_and_fifty_into_a_head_scars_the_eye_on_that_side() {
     assert_eq!(fight::scar(&cat(&w)), 1);
 }
 
-#[test]
-#[ignore]
-fn debug_pounce() {
-    let toward = Input::aimed(Input::SHIFT | Input::W, 0x8000);
-    let mut w = duel(7);
-    throw(&mut w, pair::POUNCE);
-    for f in 0..96u32 {
-        let input = if (28..30).contains(&f) { toward } else { idle() };
-        w.advance([input, Input::default()]);
-        let m = cat(&w);
-        let p = me(&w);
-        let hv = m.hit_volume();
-        println!(
-            "{f:3} {:?} cat ({:.2},{:.2},{:.2}) aim ({:.2},{:.2}) me ({:.2},{:.2}) {:?} hp {} vol {:?}",
-            m.doing,
-            m.pos.x.to_f32_for_render(),
-            m.pos.y.to_f32_for_render(),
-            m.pos.z.to_f32_for_render(),
-            m.aimed_at().x.to_f32_for_render(),
-            m.aimed_at().z.to_f32_for_render(),
-            p.pos.x.to_f32_for_render(),
-            p.pos.z.to_f32_for_render(),
-            p.action,
-            p.health,
-            hv.map(|(a, r, _, _)| (a.x.to_f32_for_render(), a.z.to_f32_for_render(), r.to_f32_for_render()))
-        );
-    }
-}
-
-#[test]
-#[ignore]
-fn debug_flick() {
-    for f in 0..24u16 {
-        let pose_at = |kind: u8| {
-            let mut m = Monster::new(SpeciesId::PAIR);
-            let a = pair::SPECIES.attack(kind);
-            m.doing = Doing::Startup { kind, left: a.startup - f };
-            m.pose()
-        };
-        let (p, q) = (pose_at(pair::POUNCE), pose_at(pair::FEINT));
-        println!("{f} {:?} {:?}", (1..4).map(|b| p.bone[pair::bones::TAIL1 + b - 1].x.to_f32_for_render()).collect::<Vec<_>>(),
-          (1..4).map(|b| q.bone[pair::bones::TAIL1 + b - 1].x.to_f32_for_render()).collect::<Vec<_>>());
-    }
-}
-
-#[test]
-#[ignore]
-fn debug_dodge_distance() {
-    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
-    for _ in 0..30 {
-        w.advance([Input::default(); MAX_PLAYERS]);
-    }
-    let start = w.players[0].pos;
-    for f in 0..30 {
-        let i = if f < 2 { Input::aimed(Input::SHIFT | Input::W, 0) } else { Input::default() };
-        w.advance([i, Input::default()]);
-        println!("{f} {:.2} {:?}", w.players[0].pos.sub(start).x.to_f32_for_render(), w.players[0].action);
-    }
-}
-
-#[test]
-#[ignore]
-fn debug_feet_in_view() {
-    let mut w = World::with_classes([Class::Champion; MAX_PLAYERS]);
-    for _ in 0..30 {
-        w.advance([Input::default(); MAX_PLAYERS]);
-    }
-    let stones = sim::stones::gather(&w.players);
-    let ground = w.terrain();
-    let scene = sim::aim::Scene {
-        stones: &stones,
-        players: &w.players,
-        effects: &w.effects,
-        quarry: &w.monsters,
-        critters: &w.critters,
-        arena: &ground,
+/// A fixed stream of buttons and looks for both fighters, as the Ridgeback's
+/// pin drives its hunt.
+fn script(frames: u32, seed: u64) -> Vec<[Input; MAX_PLAYERS]> {
+    let mut rng = seed | 1;
+    let mut next = move || {
+        rng ^= rng << 13;
+        rng ^= rng >> 7;
+        rng ^= rng << 17;
+        rng
     };
-    let p = w.players[0].pos;
-    for pitch in [-3000i16, -1500, 0, 1500, 3000] {
-        let look = Input::looking_at(0, 0, pitch);
-        let mut row = String::new();
-        for back in [-3i32, -2, -1, 0, 1, 2, 4] {
-            let at = p.add(V3::new(Fx::ratio(back * 5, 10), Fx::ZERO, Fx::ZERO));
-            row.push_str(&format!(
-                "{:>6}",
-                sim::aim::in_view(0, look, at, Fx::from_raw(9100), &scene)
-            ));
-        }
-        println!("pitch {pitch}: {row}");
+    (0..frames)
+        .map(|_| {
+            [
+                Input::aimed((next() & 0x1ff) as u16, next() as u16),
+                Input::default(),
+            ]
+        })
+        .collect()
+}
+
+/// A long hunt against both cats, the fighter kept alive so the cats keep
+/// working. `each` sees every frame, before and after.
+fn scripted(seed: u64, frames: u32, mut each: impl FnMut(&World, &World)) {
+    let mut w = hunt();
+    let full = w.players[0].health;
+    for input in script(frames, seed) {
+        let before = w.clone();
+        w.advance(input);
+        each(&before, &w);
+        keep(&mut w, full);
     }
 }
+
+/// The scripted fighter kept alive and inside the Den: a random walk is
+/// over a 1.5 m wall in a minute, and a cat cannot follow it there.
+fn keep(w: &mut World, full: i32) {
+    let p = &mut w.players[0];
+    p.health = full;
+    let edge = Fx::from_int(12);
+    p.pos.x = p.pos.x.clamp(edge.neg(), edge);
+    p.pos.z = p.pos.z.clamp(edge.neg(), edge);
+}
+
+/// Did cat `s` land a hit that hurts on this frame?
+fn landed(before: &World, after: &World, s: usize) -> Option<u8> {
+    let (Some(was), Some(now)) = (before.monsters[s], after.monsters[s]) else {
+        return None;
+    };
+    let kind = now.doing.attacking()?;
+    (!was.hit_used && now.hit_used && pair::SPECIES.attack(kind).damage > 0).then_some(kind)
+}
+
+#[test]
+fn the_brain_decides_the_same_whatever_buttons_were_pressed() {
+    // Two hunts whose fighter stands in the same place and looks anywhere:
+    // the look, the facing and the camera differ every frame, the quarry
+    // never does. The cats must not be able to tell.
+    let mut a = hunt();
+    let mut b = hunt();
+    let looks = script(1800, 0x5eed);
+    let others = script(1800, 0xfeed);
+    let mut differed = 0;
+    for f in 0..1800 {
+        let (la, lb) = (looks[f][0], others[f][0]);
+        a.advance([Input::aimed(0, la.aim), Input::default()]);
+        b.advance([Input::aimed(0, lb.aim), Input::default()]);
+        if a.players[0].facing != b.players[0].facing {
+            differed += 1;
+        }
+        assert_eq!(a.players[0].pos, b.players[0].pos, "frame {f}: the quarry is the same");
+        assert_eq!(a.monsters, b.monsters, "frame {f}: so are the cats");
+    }
+    assert!(differed > 1000, "the looks really did differ ({differed})");
+}
+
+#[test]
+fn every_hit_lands_at_least_fifteen_frames_after_the_glance_that_chose_it() {
+    // Below a reaction, only the swat -- positional, and short enough that
+    // what it reaches was already in reach (Swat in §2).
+    for kind in 0..pair::MOVES.len() as u8 {
+        let a = pair::SPECIES.attack(kind);
+        if a.damage > 0 && a.startup < 15 {
+            assert_eq!(kind, pair::SWAT, "{} tells under a reaction", pair::MOVES[kind as usize].name);
+            assert!(
+                a.ideal_range.add(a.range_span).raw() < a.hit_x.add(a.hit_radius).raw(),
+                "and the swat is only thrown at what its paw already reaches"
+            );
+        }
+    }
+    // Every other hit: at least fifteen frames after its commit, and after
+    // the last frame anything it aims at moved.
+    let mut hits = 0;
+    for seed in 1..=4u64 {
+        let mut commit = [0u32; 2];
+        let mut aimed = [0u32; 2];
+        scripted(seed * 0x9E37_79B9, 3600, |before, after| {
+            for s in 0..2 {
+                let (Some(was), Some(now)) = (before.monsters[s], after.monsters[s]) else {
+                    continue;
+                };
+                let started = matches!(now.doing, Doing::Startup { .. })
+                    && (was.doing.attacking() != now.doing.attacking()
+                        || !matches!(was.doing, Doing::Startup { .. }));
+                if started {
+                    commit[s] = after.frame;
+                    aimed[s] = after.frame;
+                }
+                if now.doing.attacking().is_some() && now.aimed_at() != was.aimed_at() {
+                    aimed[s] = after.frame;
+                }
+                if let Some(kind) = landed(before, after, s) {
+                    if kind == pair::SWAT {
+                        continue;
+                    }
+                    hits += 1;
+                    let name = pair::MOVES[kind as usize].name;
+                    assert!(after.frame - commit[s] >= 15, "{name}: {} after its commit", after.frame - commit[s]);
+                    assert!(after.frame - aimed[s] >= 15, "{name}: {} after its aim last moved", after.frame - aimed[s]);
+                }
+            }
+        });
+    }
+    assert!(hits > 10, "enough hits to mean something ({hits})");
+}
+
+#[test]
+fn the_two_never_land_within_the_gap_except_the_twin_pounce() {
+    let gap = Knob::StaggerGap.raw() as u32;
+    let mut windows = 0;
+    for seed in 1..=4u64 {
+        // The last frame each cat was live with something that hurts.
+        let mut live: [Option<u32>; 2] = [None; 2];
+        scripted(seed * 0x2545_F491, 3600, |_, after| {
+            for s in 0..2 {
+                let Some(m) = after.monsters[s] else { continue };
+                let Doing::Active { kind, .. } = m.doing else { continue };
+                if kind == pair::TWIN || pair::SPECIES.attack(kind).damage <= 0 {
+                    continue;
+                }
+                if live[s] != Some(after.frame - 1) {
+                    windows += 1;
+                }
+                if let Some(o) = live[1 - s] {
+                    assert!(
+                        after.frame - o > gap,
+                        "frame {}: {} live {} frames after the other",
+                        after.frame,
+                        pair::MOVES[kind as usize].name,
+                        after.frame - o
+                    );
+                }
+                live[s] = Some(after.frame);
+            }
+        });
+    }
+    assert!(windows > 20, "enough moves to mean something ({windows})");
+}
+
+/// Both cats either side of the fighter, coiled for the twin pounce at them.
+fn twin_coiled() -> World {
+    let mut w = duel(7);
+    let mut other = cat(&w);
+    other.pos = at(14, 0);
+    other.yaw = Fx::ratio(1, 2);
+    w.monsters[1] = Some(other);
+    let mid = me(&w).pos;
+    let ground = w.terrain();
+    for s in 0..2 {
+        let m = w.monsters[s].as_mut().unwrap();
+        m.brain.seen = mid;
+        m.doing = Doing::Startup {
+            kind: pair::TWIN,
+            left: pair::SPECIES.attack(pair::TWIN).startup,
+        };
+        m.hit_used = false;
+        m.lob(pair::TWIN);
+        fight::mark_at(m, mid, &ground, &[None; sim::stones::MAX_STONES]);
+    }
+    w
+}
+
+/// Play the twin pounce out with `press` from frame `at`.
+fn play_twin(w: &mut World, at: u32, press: Input) -> (i32, bool) {
+    let before = me(w).health;
+    let total = pair::SPECIES.attack(pair::TWIN).total() as u32;
+    let mut crashed = false;
+    for f in 0..total + 4 {
+        let input = if f >= at && f < at + 2 { press } else { Input::aimed(0, 0) };
+        w.advance([input, Input::default()]);
+        for m in w.monsters.iter_mut().flatten() {
+            m.brain.think_left = m.brain.think_left.max(60);
+        }
+        crashed |= w.monsters.iter().flatten().all(|m| matches!(m.doing, Doing::Toppled { .. }));
+    }
+    (before - me(w).health, crashed)
+}
+
+#[test]
+fn a_late_dodge_crashes_the_twin_pounce_and_an_early_one_does_not() {
+    // Sideways, across the line between them (the fighter faces +z here).
+    let side = Input::aimed(Input::SHIFT | Input::D, 0x4000);
+    let leave = Knob::TwinLeave.raw() as u32;
+
+    // Late: after they have left the ground, the mark cannot follow.
+    let mut w = twin_coiled();
+    let (lost, crashed) = play_twin(&mut w, leave + 2, side);
+    assert_eq!(lost, 0, "a late dodge is out from under both");
+    assert!(crashed, "and they land on each other");
+
+    // Early: the one mark is still following, and finds you.
+    let mut w = twin_coiled();
+    let (lost, crashed) = play_twin(&mut w, 2, side);
+    assert!(lost > 0, "an early dodge is followed");
+    assert!(!crashed, "and nobody crashes");
+}
+
+#[test]
+fn hurting_the_wounded_cat_brings_the_other_between() {
+    let mut w = hunt();
+    let full = w.monsters[0].unwrap().health;
+    // The fighter beside the wounded one; its mate off to the side.
+    w.players[0].pos = at(3, 0);
+    let wounded = at(0, 0);
+    let guard = at(4, -8);
+    for (s, pos) in [(0, wounded), (1, guard)] {
+        let m = w.monsters[s].as_mut().unwrap();
+        m.pos = pos;
+        m.brain.grace = 0;
+        m.brain.seen = at(3, 0);
+    }
+    w.monsters[0].as_mut().unwrap().health = full / 5;
+    let mut between = false;
+    for _ in 0..240 {
+        w.advance([Input::aimed(0, 0x8000), Input::default()]);
+        w.players[0].pos = at(3, 0);
+        let g = w.monsters[1].unwrap();
+        let w0 = w.monsters[0].unwrap();
+        let mid = sim::math::lerp3(w0.pos, me(&w).pos, sim::math::half(Fx::ONE));
+        let near_line = sim::math::wide_flat_dist(g.pos, mid).raw() < Fx::from_int(2).raw();
+        if g.doing.attacking() == Some(pair::INTERPOSE) || near_line {
+            between = true;
+            break;
+        }
+    }
+    assert!(between, "the healthy one comes between you and its mate");
+}
+
+#[test]
+fn the_survivor_enrages_and_no_tell_goes_below_fifteen_frames() {
+    let mut tells = 0;
+    for seed in 1..=3u64 {
+        let mut w = hunt();
+        w.monsters[1].as_mut().unwrap().health = 0;
+        let full = w.players[0].health;
+        let mut enraged = false;
+        for input in script(3600, seed * 0x51ED) {
+            let before = w.clone();
+            w.advance(input);
+            keep(&mut w, full);
+            let (Some(was), Some(now)) = (before.monsters[0], w.monsters[0]) else { continue };
+            enraged |= fight::enraged(&now);
+            if let Doing::Startup { kind, left } = now.doing {
+                let fresh = was.doing.attacking() != Some(kind)
+                    || !matches!(was.doing, Doing::Startup { .. });
+                if fresh && pair::SPECIES.attack(kind).damage > 0 {
+                    tells += 1;
+                    let tell = left + 1;
+                    if kind == pair::SWAT {
+                        assert!(tell >= pair::SPECIES.attack(kind).startup, "the swat stays itself");
+                    } else {
+                        assert!(tell >= 15, "{} told in {tell}", pair::MOVES[kind as usize].name);
+                    }
+                }
+            }
+        }
+        assert!(enraged, "the survivor enrages");
+    }
+    assert!(tells > 10, "enough tells to mean something ({tells})");
+}
+
+#[test]
+fn the_ridgeback_is_bit_identical_with_two_slots() {
+    // The second slot is there in every hunt and empty in the Ridgeback's:
+    // nothing in the pair brain runs, and nothing fills it. The hash itself
+    // is pinned by `ridgeback_pin.rs`.
+    let mut w = World::hunt([Class::Champion; MAX_PLAYERS]);
+    for input in script(1200, 0x1d) {
+        w.advance(input);
+        assert!(w.monsters[1].is_none());
+    }
+    assert!(w.monsters[0].is_some_and(|m| m.species == SpeciesId::RIDGEBACK));
+}
+

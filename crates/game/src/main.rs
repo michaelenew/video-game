@@ -23,6 +23,7 @@ mod beast;
 mod critters;
 mod crosshair;
 mod debug;
+mod glint;
 mod ground;
 mod hub;
 mod hud;
@@ -161,6 +162,7 @@ fn main() {
                 hud::setup,
                 hud::setup_picker,
                 crosshair::setup,
+                glint::setup,
             ),
         )
         .add_systems(
@@ -227,6 +229,7 @@ fn main() {
                 ground::place,
                 ground::overlay,
                 hud::update_picker,
+                glint::update,
             )
                 .chain()
                 .after(beast::signs)
