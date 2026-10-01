@@ -20,7 +20,12 @@ fn hashed(class: Class, seed: u32, frames: u32) -> u64 {
 const PINNED: [(Class, u32, u64); 7] = [
     (Class::Champion, 0x2545_F491, 0x0efd64f4a51bd0e0),
     (Class::Champion, 7, 0x70a143ee72ab5797),
-    (Class::Bulwark, 101, 0x1b707320b9c4af07),
+    // Moved 2026-10-01, deliberately: the class layer throws his shield to
+    // close on a window five to eleven metres off, leaps to it and Slams out
+    // of the leap (`hunt::class`, `Hands::throw_in`), where it had handed
+    // the Ridgeback plan's walk back unchanged. Nothing else in his hunt, and
+    // no other pin, moved with it. See feel-log.md.
+    (Class::Bulwark, 101, 0x6dacc95234ce6050),
     // Moved 2026-10-01 by the class layer (`hunt::class`): the Dual mage's
     // hands are kept on the side that does not burn her, her finishers are
     // thrown into the windows the plan finds, and she goads her bars between

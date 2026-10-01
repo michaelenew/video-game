@@ -79,6 +79,44 @@ fn every_class_plays_its_own_kit_against_a_creature() {
         bulwark.guards > 0,
         "the Bulwark never took a blow on the shield: {bulwark:?}"
     );
+    // And his throw: the shield thrown at a window, the leap after it, and
+    // the Slam out of the leap.
+    let thrower = uses(Class::Bulwark, SpeciesId::PAIR, 6_000);
+    assert!(
+        thrower.throws > 0 && thrower.leaps > 0 && thrower.leap_slams > 0,
+        "the Bulwark never threw and leapt to his shield: {thrower:?}"
+    );
+}
+
+#[test]
+fn the_bulwarks_shield_comes_home() {
+    // Every Bulwark move but the throw needs the shield in his hand, so a
+    // throw given up -- a dodge the plan asked for in the middle of it -- is
+    // recalled rather than left planted for the rest of the hunt.
+    let mut planted_for = 0u32;
+    let mut longest = 0u32;
+    hunt::play_species_watched(
+        SpeciesId::RIDGEBACK,
+        [Class::Bulwark; MAX_PLAYERS],
+        1,
+        6_000,
+        101,
+        |w| {
+            if matches!(
+                w.players[0].shield(),
+                Some(sim::class::Shield::Planted { .. })
+            ) {
+                planted_for += 1;
+                longest = longest.max(planted_for);
+            } else {
+                planted_for = 0;
+            }
+        },
+    );
+    assert!(
+        longest < 120,
+        "his shield lay planted for {longest} frames in a row"
+    );
 }
 
 #[test]

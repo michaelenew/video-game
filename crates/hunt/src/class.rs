@@ -47,6 +47,7 @@
 //! learned the way the sparring bot learns it (`duel::Kit::learn`), not typed
 //! a second time.
 
+use sim::class::Shield;
 use sim::effects::EffectKind;
 use sim::fixed::Fx;
 use sim::math::{atan2_turns, wrap_turns};
@@ -102,6 +103,28 @@ const GOAD_TO: i32 = 80;
 const RED_FLOOR: i32 = 25;
 const RED_GRASP: i32 = 70;
 const RED_CUT: i32 = 70;
+/// **The Bulwark's throw and leap**: the nearest and furthest a window is
+/// worth crossing that way. Inside the near one he walks; past the far one
+/// the shield's nine metres and the leap's four or five leave him walking
+/// most of it anyway.
+const LEAP_NEAR: Fx = Fx::from_int(5);
+const LEAP_FAR: Fx = Fx::from_int(11);
+/// Frames the thrown shield is let travel before the leap after it: about
+/// two metres of its nineteen a second, so he is thrown toward something
+/// rather than at his own hand, and the key has been let up for the edge.
+const LEAP_WAIT: u16 = 6;
+/// Frames from the leap to the Slam out of it: the leap's rise is six metres
+/// a second against forty-two of gravity, about seventeen frames up and down.
+const LEAP_AIR: i32 = 18;
+/// And how long the whole sequence may take before it is given up -- the
+/// shield is recalled by [`Hands::finish`] if it was left out.
+const LEAP_GIVE_UP: u16 = 60;
+/// Frames before he throws to close again, at the least, and the spread on
+/// top: a person throws a shield to cross a gap now and then, not at every
+/// window the plan finds -- with only the class's ordinary rest it was
+/// thrown about once a second against the Ridgeback.
+const LEAP_REST: u16 = 150;
+const LEAP_REST_SPREAD: u32 = 90;
 /// **A pool worth a spike**: one holding about what the spike costs her and
 /// more. The spike drinks the whole pool and comes up half again as hard, but
 /// it costs nine in a hundred of her red on the press, and a scythe's pool is
@@ -141,9 +164,15 @@ pub struct Uses {
     pub finishers: u32,
     pub second_jumps: u32,
     pub goads: u32,
-    /// The Bulwark: guards raised on a blockable blow, and Slams answering one.
+    /// The Bulwark: guards raised on a blockable blow, and Slams answering
+    /// one; shields thrown to close on a window, leaps after them, Slams out
+    /// of a leap, and recalls of a shield left planted.
     pub guards: u32,
     pub slams: u32,
+    pub throws: u32,
+    pub leaps: u32,
+    pub leap_slams: u32,
+    pub shield_recalls: u32,
 }
 
 impl Uses {
@@ -169,6 +198,10 @@ impl Uses {
         self.goads += o.goads;
         self.guards += o.guards;
         self.slams += o.slams;
+        self.throws += o.throws;
+        self.leaps += o.leaps;
+        self.leap_slams += o.leap_slams;
+        self.shield_recalls += o.shield_recalls;
     }
 
     /// The lines for one class: (what, how many, what it means).
@@ -185,6 +218,14 @@ impl Uses {
                     "slams answering",
                     self.slams,
                     "the weight it stored, given back",
+                ),
+                ("throws", self.throws, "the shield thrown at a window"),
+                ("leaps", self.leaps, "to the shield in flight"),
+                ("leap slams", self.leap_slams, "Slams out of the leap"),
+                (
+                    "recalls",
+                    self.shield_recalls,
+                    "a planted shield called home",
                 ),
             ],
             Class::ShadowReaver => vec![
@@ -250,6 +291,16 @@ enum Seq {
     /// body is free of it (or inside the Reaver's carry), giving up after
     /// `left` frames.
     Then { then: u16, at: V3, left: u16 },
+    /// The Bulwark's shield thrown at `at`: `wait` frames of its flight, then
+    /// the leap to it, then -- shield in hand again, in the air -- the Slam
+    /// out of the leap at `at`. `leapt` once the leap is pressed. Given up
+    /// after `left` frames.
+    Leap {
+        at: V3,
+        wait: u16,
+        leapt: bool,
+        left: u16,
+    },
 }
 
 /// One hunter's class, in its hands. See the module.
@@ -930,8 +981,46 @@ impl Hands {
                 self.fresh = true;
                 Some(self.look(me, pool, Input::SHIFT | Input::W))
             }
+            Class::Bulwark => self.throw_in(me, at, far, window),
             _ => None,
         }
+    }
+
+    /// **The Bulwark's way in from range** (`kits/bulwark.md`, Throw /
+    /// Recall: *throw to commit, leap to follow*): the shield thrown at the
+    /// work, the leap to it while it flies -- it turns and meets him, so he
+    /// arrives in the air with it in hand -- and a Slam out of the leap,
+    /// which lands with the feet and is paid for the fall. On a window long
+    /// enough for all of it, from five to eleven metres, with the shield in
+    /// his hand and the work on his screen.
+    ///
+    /// The thrown shield does not strike a creature (only a fighter, in
+    /// versus), so this is a way across the floor and not a ranged blow.
+    fn throw_in(&mut self, me: &Player, at: V3, far: Fx, window: i32) -> Option<Input> {
+        if self.cool > 0
+            || !me.shield().is_some_and(|s| s.in_hand())
+            || far.raw() < LEAP_NEAR.raw()
+            || far.raw() > LEAP_FAR.raw()
+            || self.last_bits & Input::MECHANIC != 0
+            || !self.sees(me, at)
+        {
+            return None;
+        }
+        let slam = moves::get(me.class, SLOT_COMMITTED);
+        let need = LEAP_WAIT as i32 + LEAP_AIR + (slam.startup + slam.active) as i32 + SPARE;
+        if window < need {
+            return None;
+        }
+        self.uses.throws += 1;
+        self.cool = LEAP_REST + self.roll(LEAP_REST_SPREAD) as u16;
+        self.seq = Some(Seq::Leap {
+            at,
+            wait: LEAP_WAIT,
+            leapt: false,
+            left: LEAP_GIVE_UP,
+        });
+        self.fresh = true;
+        Some(self.look(me, at, Input::MECHANIC))
     }
 
     /// **Get out**, along `out`. `plan` is the dodge the plan was about to
@@ -1035,7 +1124,27 @@ impl Hands {
             out = self.hands_level(me, out);
             out = self.second_jump(me, out);
         }
+        if me.class == Class::Bulwark {
+            out = self.shield_home(me, out);
+        }
         self.last_bits = out.bits;
+        out
+    }
+
+    /// **A shield left planted comes home.** Every Bulwark move but the throw
+    /// needs it in his hand -- the guard, the Bash, the Slam -- so a shield
+    /// out of a leap given up, or knocked out of it, is recalled on the next
+    /// frame he is free and not dodging. Nothing he does plants it on purpose.
+    fn shield_home(&mut self, me: &Player, out: Input) -> Input {
+        if self.seq.is_none()
+            && matches!(me.shield(), Some(Shield::Planted { .. }))
+            && me.action.actionable()
+            && out.bits & (ATTACKS | Input::SHIFT) == 0
+            && self.last_bits & Input::MECHANIC == 0
+        {
+            self.uses.shield_recalls += 1;
+            return Input::looking_at(out.bits | Input::MECHANIC, out.aim, out.pitch);
+        }
         out
     }
 
@@ -1090,6 +1199,61 @@ impl Hands {
                 });
                 // Riding the dodge: nothing to press but the way it is going.
                 Input::looking_at(0, plan.aim, plan.pitch)
+            }
+            Seq::Leap {
+                at,
+                wait,
+                leapt,
+                left,
+            } => {
+                // A dodge the plan asks for comes first: the leap is given
+                // up, and the shield comes home after (`shield_home`).
+                if left == 0 || plan.bits & Input::SHIFT != 0 {
+                    self.seq = None;
+                    return plan;
+                }
+                let next = |wait, leapt| Seq::Leap {
+                    at,
+                    wait,
+                    leapt,
+                    left: left - 1,
+                };
+                match me.shield() {
+                    Some(Shield::Flying { outbound: true, .. }) if !leapt => {
+                        if wait > 0 {
+                            self.seq = Some(next(wait - 1, false));
+                            return self.look_keeping(me, plan, at, 0);
+                        }
+                        self.uses.leaps += 1;
+                        self.seq = Some(next(0, true));
+                        self.look_keeping(me, plan, at, Input::MECHANIC)
+                    }
+                    Some(Shield::Held { .. }) if leapt => {
+                        if !me.grounded && me.action.actionable() {
+                            self.seq = None;
+                            self.uses.leap_slams += 1;
+                            return self.look_keeping(me, plan, at, Input::MIDDLE);
+                        }
+                        if me.grounded {
+                            // Landed with it before a Slam could start.
+                            self.seq = None;
+                            return plan;
+                        }
+                        self.seq = Some(next(0, true));
+                        self.look_keeping(me, plan, at, 0)
+                    }
+                    Some(Shield::Flying { .. }) => {
+                        // Coming home to meet him.
+                        self.seq = Some(next(wait, leapt));
+                        self.look_keeping(me, plan, at, 0)
+                    }
+                    _ => {
+                        // Planted already, or in hand without a leap: the
+                        // throw is over, and `shield_home` has it.
+                        self.seq = None;
+                        plan
+                    }
+                }
             }
         }
     }
