@@ -74,6 +74,8 @@ const SWING_GAP: u16 = 24;
 /// Swings in a string before it stops and backs off: the swell punishes
 /// the third.
 const STRING: u8 = 2;
+/// Frames of an opening kept back to get out in.
+const EXIT: i32 = 10;
 /// Do not bother correcting for less than this.
 const SETTLED: Fx = Fx::ratio(6, 10);
 /// Once committed to the brazier or a climb, keep at it this long.
@@ -525,6 +527,15 @@ impl Mireback {
             }
         }
 
+        // Standing in fire: out of it, first. Twelve every ten frames is the
+        // fastest thing in the fight to die to, and it is a thing you walk out
+        // of.
+        if on_kind(&seen.floor, me.pos, &[fight::BURNING, fight::COALS]) && me.grounded {
+            self.intent = EVADE;
+            let away = flat(me.pos.sub(beast.pos)).normalized();
+            return Input::aimed(steer(aim, self.clean_way(seen, me.pos, away)), wire);
+        }
+
         // 1. Kindle: a brazier whose tar is joined to the toad. Kept to the
         //    one it chose while that one is still a fuse, and given up if it
         //    is taking too long to get there.
@@ -660,16 +671,23 @@ impl Mireback {
             } else {
                 0
             };
+            // **Only a swing that is over before it can act again**: the
+            // window it can see, less its own reaction, against the swing.
+            let window = beast.frames_until_free() as i32 - REACTION as i32;
+            let poke_busy = (poke.startup + poke.active + poke.recovery) as i32;
+            let heavy_busy = crate::heavy_commitment(me.class) as i32;
             let swing = if self.cooldown == 0
                 && me.action.actionable()
                 && to_target.flat_len().raw() <= strike.add(Fx::ONE).raw()
+                && window > poke_busy + EXIT
             {
                 self.cooldown = SWING_GAP;
                 self.string = self.string.saturating_add(1);
-                let long = matches!(beast.doing, Doing::Toppled { .. } | Doing::Stumble { .. })
-                    || beast.doing.frames_left() as usize
-                        > crate::heavy_commitment(me.class) + REACTION;
-                if long { heavy(me.class) } else { Input::LEFT }
+                if window > heavy_busy + EXIT {
+                    heavy(me.class)
+                } else {
+                    Input::LEFT
+                }
             } else {
                 0
             };
