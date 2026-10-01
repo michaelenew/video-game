@@ -1300,8 +1300,7 @@ fn own_hits(w: &mut World, m: &mut Monster, ground: &Terrain) {
     // what stops it is what stands on the sand in its way.
     let mouth = head_flat(m);
     let spray_from = V3::new(mouth.x, Knob::SpitFrom.fx(), mouth.z);
-    for i in 0..MAX_PLAYERS {
-        let p = fighters[i];
+    for (i, p) in fighters.iter().copied().enumerate() {
         if struck & 1 << i != 0 || p.health <= 0 || p.action.invulnerable() || p.aboard() {
             continue;
         }

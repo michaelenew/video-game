@@ -297,6 +297,10 @@ pub struct Stock {
     pub dead: usize,
 }
 
+/// What a species does with the press of a fighter inside it: the world, the
+/// creature's slot, the fighter and what they sent; what they may still do.
+pub type FromInside = fn(&mut crate::state::World, usize, usize, crate::Input) -> crate::Input;
+
 /// What a species brings to a fight besides its body and its pack: the
 /// shared machinery of bestiary P4, P5 and P7, and the hooks a creature's own
 /// file plugs into. Every field defaults to nothing ([`FightDecl::PLAIN`]), and
@@ -411,8 +415,7 @@ pub struct FightDecl {
     /// world, the creature's slot, the fighter and what they sent, and it
     /// returns what they may still do. The Sandmaw's swallow reads the escape
     /// off it and lets them do nothing else.
-    pub from_inside:
-        Option<fn(&mut crate::state::World, usize, usize, crate::Input) -> crate::Input>,
+    pub from_inside: Option<FromInside>,
     /// **A move's radius this frame**, from the radius its knobs give: a
     /// consequence that changes the size of a move for the rest of the
     /// fight -- the Sandmaw's broken tooth ring, which shrinks its rise-bite.
