@@ -183,6 +183,23 @@ One key, and which of three things it does depends on where the shield is.
 > same price is open**, and it is the one place this class gets something for nothing.
 >
 > The planting is built: see the note under *Two systems are meant to share the object*.
+>
+> **On a creature, since 2026-10-01** (`CLASS-5` in [../review.md](../review.md), resolved):
+> the throw and the recall strike creatures and critters exactly as they strike a fighter in
+> versus — thrown, the first body it meets takes `Throw` damage with its weight and the shield
+> plants there empty; recalled, each body it passes through takes the recall's damage once and
+> it comes on home. It goes through the swing's own path, not a second one: the volume is
+> `state::shield_hitbox` (the stretch it flew this frame, `shield_radius` thick, which the
+> debug overlay draws), a creature's part is found by `part_under` and struck through
+> `Monster::take_blow`, and a critter by `Body::touched_by`, its guard and `pack::struck`. So
+> each creature's own rules decide the blow: a guard turns it (the Mantis's, the Hornback
+> bull's horns), a weak point and a breakable part count it, and a part that is not there (a
+> buried Sandmaw) is not struck. A guard reads the blow as coming from where the shield was
+> thrown or planted, on the floor. A turned throw has still struck: it plants empty. Loaded,
+> it knocks a critter down for `knockdown_frames` if the blow knocked it out of what it was
+> doing at all; a creature takes the weight as damage and lets its own flinch and poise show
+> it. The versus test against a fighter is unchanged. Not built: a shield that strikes a
+> mountable part planting *on* it (the Siegeshell's climb, which needs P1).
 
 Recall is the class's mobility and its approach tool — throw to commit, leap to follow. It
 sets up Slam: the leap brings the shield back in the air, and a Slam thrown there lands with

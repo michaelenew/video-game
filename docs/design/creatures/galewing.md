@@ -662,7 +662,7 @@ from twelve single runs each, which print the report's lines:
 ```text
                 plan A won   mean     plan B won   mean     out of reach (A / B)   unanswerable, unseen tells
   Champion        4/24      482 s       7/24      491 s          67 / 65 %                  0
-  Bulwark         0/24        --        2/24      700 s          55 / 53 %                  0
+  Bulwark         0/24        --        1/24      538 s          55 / 53 %                  0
   Reaver          9/24      646 s      11/24      580 s          55 / 53 %                  0
   Elementalist   17/24      176 s      18/24      230 s           5 /  4 %                  0
   Blood mage      0/24        --        0/24        --           51 / 49 %                  0
@@ -784,5 +784,6 @@ unseen tells** for every class and both plans. Short of the targets:
 `Hands::throw_in`): on a window five to eleven metres off he throws it at the
 work, leaps to it as it flies and Slams out of the leap. His row above is
 re-run with it; the feel log of the day has the before and after. The thrown
-shield strikes no creature, so it is a way in, not a ranged blow
-([review.md](../review.md) `CLASS-5`). Here nothing in wins (33 and 22 throws): the windows on the floor are too short for the leap and the Slam.
+shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
+did** -- thrown, the first body it meets; recalled, each it passes once. Here nothing in wins (33 and 22 throws): the windows on the floor are too short for the leap and the Slam.
+ Same seeds, after: plan A 0 of 24, plan B 1 of 24 in 538 s (from 2 in 700 s); 22 and 21 throws, 15 and 4 of them planted and recalled rather than leapt to. The wing on a pass and the legs of a carrying bird are struck now; the hunter does not yet throw at a pass.

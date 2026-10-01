@@ -786,5 +786,6 @@ the stated fallback, not a refraction of what is behind it.
 `Hands::throw_in`): on a window five to eleven metres off he throws it at the
 work, leaps to it as it flies and Slams out of the leap. His row above is
 re-run with it; the feel log of the day has the before and after. The thrown
-shield strikes no creature, so it is a way in, not a ranged blow
-([review.md](../review.md) `CLASS-5`). Here one more win, 9 from 8 (14 throws).
+shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
+did** -- thrown, the first body it meets; recalled, each it passes once. Here one more win, 9 from 8 (14 throws).
+ Same seeds, after: 9 of 24 in 483 s, unchanged (14 throws, every one leapt).

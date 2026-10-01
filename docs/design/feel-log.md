@@ -7115,6 +7115,52 @@ short leaves him without his guard (the Hornback, the Sandmaw). For a person:
 should a thrown and recalled shield strike a creature (`CLASS-5`), and should
 the throw cost frames (`CLASS-6`).
 
+### 2026-10-01 — The thrown shield strikes creatures and critters (`CLASS-5`)
+
+**Changed** A thrown or recalled shield is a blow on a creature and on a
+critter, as it has always been on a fighter in versus: thrown, the first body
+it meets takes `bulwark::throw_damage` (its weight in it) and the shield
+plants there empty; recalled, each body it passes through takes
+`shield_damage` once and it comes on home. It goes through the swing's own
+path rather than a new one -- the volume is `state::shield_hitbox` (the
+stretch it flew this frame, `shield_radius` thick), a creature's part is
+`part_under` and `Monster::take_blow`, a critter is `Body::touched_by`, its
+pack's `guarded` and `pack::struck` -- and the debug overlay draws that
+volume. A flight remembers whom its recall has been through in a new `met`
+word on `Shield::Flying`, folded into the hash beside `struck` so a flight
+that meets nobody hashes as it did. Versus is untouched.
+
+**Why** Three creature documents assumed it (the Galewing's wing on a pass,
+the Broodmother's sac, the Siegeshell's climb), and a projectile that passes
+through the thing it is thrown at reads as a bug.
+
+**What the harness caught** A guard handed the shield's own position as the
+point the blow came from never guarded it: the Mantis reads a blow from closer
+than its body radius as "from under its belly". So the blow comes from where
+the shield was thrown or planted (back along its flight by as far as it has
+flown, on the floor), the way a sword's comes from the swordsman's feet.
+`thrown_shield.rs` holds it: open, the Mantis takes the throw; guarding, it
+turns it. Then the fight reports, Bulwark, same seeds, before and after: the
+Ridgeback 1 → 1, the Gnawers 24 → 24, the Hornback 19 → 20 (163 s → 154 s),
+the crossing 7 → 8 of 12, the Mireback 18 → 18, the Sandmaw 22 → 22, **the
+Pair 21 → 23**, the Broodmother (balanced) 1 → 0 (sac pops 49 in 109 slam
+windows → 43 in 129), the Veilstalker 9 → 9, the Mantis 18 → 18 and 11 → 11
+as a pair, the Galewing 0 → 0 and 2 → 1, the Siegeshell 0 → 0 alone and as a
+pair. The leap comes six frames after the throw, two metres out, so the
+shield seldom reaches anything outbound; what changed is the shield that
+turns to meet him cutting what lies between (the Pair's cats) and, against
+the herd, a throw meeting a cow on its way (29 throws, 8 leaps, 21 recalls).
+No pin moved: the Ridgeback pins (`ridgeback_pin.rs`, `hunt/tests/pin.rs`)
+are bit for bit as they were.
+
+**Reverted** The blow from the shield's own position (above).
+
+**Verdict** kept. For a person: whether a loaded throw should break a guard
+on a creature as a loaded Slam does (it does not: it is a blocked hit, as in
+versus); whether a critter knocked by a loaded throw should lie down even
+when the blow would not have flinched it (it does not); and the hunter, which
+still leaps before the shield arrives and so seldom uses it as a ranged blow.
+
 ### 2026-10-01 — A bite from off the screen is answered by its marker, or not at all
 
 **Changed** Every pack (`sim::pack`): a windup that began off a fighter's

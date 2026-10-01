@@ -195,10 +195,20 @@ pub enum Shield {
         /// plants where it strikes, so only the way home needs to know: a
         /// recall passes through whoever is in the way, once.
         struck: bool,
+        /// **Which creatures and critters this flight has already gone
+        /// through**, in a hunt: bit `c` for critter `c`, bit
+        /// [`Shield::MET_MONSTER`]` + slot` for a creature. A thrown one plants
+        /// on the first it meets, so only the recall reads it -- once each,
+        /// and on through them. See `state::World::shields_strike_the_quarry`.
+        met: u16,
     },
 }
 
 impl Shield {
+    /// The first of a flight's `met` bits that stands for a creature; the critters'
+    /// are below it.
+    pub const MET_MONSTER: u32 = 12;
+
     pub const fn in_hand(self) -> bool {
         matches!(self, Shield::Held { .. })
     }
@@ -230,6 +240,7 @@ impl Shield {
                 outbound,
                 travelled,
                 struck,
+                met,
                 ..
             } => Shield::Flying {
                 pos,
@@ -238,6 +249,7 @@ impl Shield {
                 travelled,
                 weight,
                 struck,
+                met,
             },
         }
     }

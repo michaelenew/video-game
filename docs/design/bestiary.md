@@ -465,7 +465,7 @@ acts only on what is on that screen and moves the mouse off it by a flick.
 | Class | What it does now |
 | --- | --- |
 | Champion | **Exactly what the plan says** -- the plans were written for him, and the Ridgeback's pin proves his hunts did not move. |
-| Bulwark | The plans' own guards where they had them (the Ridgeback, the Mireback, the Sandmaw, the Broodmother), and now the Hornback's hook and shoulder taken on the shield; a Slam answers a blow the shield took. A guard on the Pair's answers was tried and took him from 12 wins in 24 to 3 -- two cats, one shield -- and taken out. **The shield thrown** (2026-10-01, later the same day): on a window five to eleven metres off, it is thrown at the work, he leaps to it as it flies and Slams out of the leap; a shield left planted is recalled. The thrown shield strikes no creature, so this is his way across the floor, not a ranged blow. |
+| Bulwark | The plans' own guards where they had them (the Ridgeback, the Mireback, the Sandmaw, the Broodmother), and now the Hornback's hook and shoulder taken on the shield; a Slam answers a blow the shield took. A guard on the Pair's answers was tried and took him from 12 wins in 24 to 3 -- two cats, one shield -- and taken out. **The shield thrown** (2026-10-01, later the same day): on a window five to eleven metres off, it is thrown at the work, he leaps to it as it flies and Slams out of the leap; a shield left planted is recalled. The shield strikes the creatures and critters it meets (`CLASS-5`, resolved), but the leap comes first, so this is mostly his way across the floor and only now and then a ranged blow. |
 | Shadow Reaver | Sends the shadow beside the work between openings, and calls it home when the work has moved; swings at nothing now and then so its copy marks the creature; **the lotus** on a shadow standing at the work, dragged home through it by a recall; **dashes** to a shadow standing there to go in, and to one lying the way out to leave; the **Executioner** to cash marks. |
 | Elementalist | **Bolts and the Cataclysm aimed** through the crosshair onto the point (the plans had levelled them at the horizon), the **fire pillar** planted where the creature stands in any window or quiet moment long enough. A cover stone raised between her and the creature was tried and cost her hunts on every creature it was tried on (they block her own bolts and her way); not kept. The plans that raised stones already (the Hornback's lanes, the Sandmaw's beaches, the Pair's split) still do. |
 | Blood mage | The scythe where the plan pressed her Haemorrhage in reach (four in a hundred of her red for thirty, against something that does not bleed), measured by the scythe's own reach -- several plans measured her by her poke slot, the Bloodletter, and swung the scythe at the air from seven metres. **The spike on a pool under it** worth the price (eighty of essence and up), **blinks** to a pool to go in or out, the **Grasp** as a way in on a long window, the cut from range with red to spare. |
@@ -490,6 +490,8 @@ which arrived later, the same build before its plan was wired to the layer. Alon
 **The Bulwark's rows were re-run on 2026-10-01** after his shield throw was
 added to the layer; the guard-only build reproduced every Bulwark row above to
 the hunt before it moved (see *Across the cast*, below, and the feel log).
+**And again later the same day, when the thrown shield began to strike
+creatures and critters** (`CLASS-5`, resolved): the rows above are that build's.
 
 | Creature | Class | Won | Mean win | Unanswerable | Before (won) |
 | --- | --- | --- | --- | --- | --- |
@@ -506,13 +508,13 @@ the hunt before it moved (see *Across the cast*, below, and the feel log).
 |  | Blood mage | 21/24 | 57 s | 0 | 24/24 |
 |  | Dual mage | 20/24 | 87 s | 0 | 2/24 |
 | Hornback, meadow | Champion | 22/24 | 109 s | 0 | 22/24 |
-|  | Bulwark | 19/24 | 163 s | 1 | 19/24 |
+|  | Bulwark | 20/24 | 154 s | 1 | 19/24 |
 |  | Reaver | 15/24 | 163 s | 1 | 16/24 |
 |  | Elementalist | 24/24 | 36 s | 0 | 23/24 |
 |  | Blood mage | 21/24 | 109 s | 1 | 5/24 |
 |  | Dual mage | 14/24 | 219 s | 1 | 1/24 |
 | Hornback, crossing | Champion | 11/12 | 56 s | 0 | 11/12 |
-|  | Bulwark | 7/12 | 57 s | 0 | 9/12 |
+|  | Bulwark | 8/12 | 59 s | 0 | 9/12 |
 |  | Reaver | 9/12 | 56 s | 0 | 9/12 |
 |  | Elementalist | 11/12 | 49 s | 0 | 7/12 |
 |  | Blood mage | 4/12 | 58 s | 0 | 8/12 |
@@ -530,13 +532,13 @@ the hunt before it moved (see *Across the cast*, below, and the feel log).
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 3/24 | 209 s | 0 | 0/24 |
 | The Pair | Champion | 16/24 | 159 s | 0 | 16/24 |
-|  | Bulwark | 21/24 | 161 s | 0 | 12/24 |
+|  | Bulwark | 23/24 | 163 s | 0 | 12/24 |
 |  | Reaver | 7/24 | 111 s | 0 | 4/24 |
 |  | Elementalist | 24/24 | 46 s | 0 | 4/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 4/24 | 128 s | 0 | 0/24 |
 | Broodmother (balanced) | Champion | 7/24 | 143 s | 2 | 7/24 |
-|  | Bulwark | 1/24 | 248 s | 1 | 0/24 |
+|  | Bulwark | 0/24 | -- | 0 | 0/24 |
 |  | Reaver | 0/24 | -- | 0 | 0/24 |
 |  | Elementalist | 1/24 | 142 s | 1 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
@@ -560,7 +562,7 @@ the hunt before it moved (see *Across the cast*, below, and the feel log).
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
 |  | Dual mage | 0/24 | -- | 0 | 0/24 |
 | Galewing, plan B | Champion | 7/24 | 491 s | 0 | 7/24 |
-|  | Bulwark | 2/24 | 700 s | 0 | 2/24 |
+|  | Bulwark | 1/24 | 538 s | 0 | 2/24 |
 |  | Reaver | 11/24 | 580 s | 0 | 2/24 |
 |  | Elementalist | 18/24 | 230 s | 0 | 0/24 |
 |  | Blood mage | 0/24 | -- | 0 | 0/24 |
@@ -640,11 +642,19 @@ before this change as after it.
   each, where a throw given up for a dodge leaves him without his guard
   until it is home. The Gnawers, the Mantis and the Siegeshell never call for
   it (no plan there walks in on a window from range), and the Galewing's
-  windows are too short for the leap and the Slam (0 and 2, as before). **The
-  thrown shield strikes no creature** -- only a fighter, in versus -- though
-  three creature documents assume it does (the Galewing's wing, the
-  Broodmother's sac, the Siegeshell's climb): a person's call, `CLASS-5` in
-  [review.md](review.md).
+  windows are too short for the leap and the Slam (0 and 2, as before).
+  **Then the shield struck creatures** (`CLASS-5`, resolved later the same
+  day): thrown, it strikes the first body it meets and plants there empty;
+  recalled, each it passes through once. Same seeds, before and after: the
+  Hornback 19 to 20 (163 s to 154 s) and the crossing 7 to 8 of 12 -- a throw
+  at the work now meets a cow on the way and is a blow rather than a way
+  across (29 throws, 8 leaps, against the Hornback) -- **the Pair 21 to 23**,
+  the Broodmother 1 to 0 (sac pops 49 to 43), the Galewing's plan B 2 to 1;
+  every other row the same, to the hunt. The leap usually comes before the
+  shield reaches anything (it is six frames out, two metres), and the shield
+  that turns to meet him passes through what lies between, so the throw is
+  still mostly his way across. The Siegeshell's planted climb (a shield that
+  plants *on* a part) is not built: it needs P1.
 - **The Champion** did not move on any creature.
 
 ### The fire pillar, looked into

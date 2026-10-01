@@ -817,5 +817,6 @@ written.
 `Hands::throw_in`): on a window five to eleven metres off he throws it at the
 work, leaps to it as it flies and Slams out of the leap. His row above is
 re-run with it; the feel log of the day has the before and after. The thrown
-shield strikes no creature, so it is a way in, not a ranged blow
-([review.md](../review.md) `CLASS-5`). Here nothing: the Mantis plan never walks in on a window from range, so the solo row is bit for bit the same; the duo's one throw moved its mean by two seconds.
+shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
+did** -- thrown, the first body it meets; recalled, each it passes once. Here nothing: the Mantis plan never walks in on a window from range, so the solo row is bit for bit the same; the duo's one throw moved its mean by two seconds.
+ Same seeds, after: 18 of 24 alone and 11 of 12 as a pair, unchanged; the plan still throws once in the pair's twelve. Its guard turns a thrown shield as it turns a sword (`thrown_shield.rs`).
