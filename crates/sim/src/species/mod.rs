@@ -71,7 +71,7 @@ pub mod pair;
 
 // pub mod broodmother;
 
-// pub mod veilstalker;
+pub mod veilstalker;
 
 // pub mod mantis;
 
@@ -133,7 +133,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
 
-        // SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
+        SpeciesId::VEILSTALKER => Some(&veilstalker::SPECIES),
 
         // SpeciesId::MANTIS => Some(&mantis::SPECIES),
 

@@ -1122,6 +1122,38 @@ pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -
     sight_clear(origin(p.pos), at, scene)
 }
 
+/// **[`in_view`] as a creature remembers it**: a fighter who stood at `pos`
+/// looking along the flat bearing `yaw` (in turns) -- their facing, which is
+/// their look's yaw whenever they can act -- with the camera level. The
+/// Veilstalker glances where you stood and which way you faced, a glance
+/// old, and decloaks only where that view would have shown it; the eye is
+/// built here, from `camera::eye_under`, as every eye the simulation aims
+/// from is. Level, because the facing carries no pitch: a 40° cone round a
+/// level look from a fighter's eye takes in a body standing anywhere from a
+/// stride out to across the arena.
+pub fn in_view_from(pos: V3, aloft: Fx, yaw: Fx, at: V3, half_angle: Fx, scene: &Scene) -> bool {
+    let look = Input::aimed(0, (yaw.raw() as u32 & 0xFFFF) as u16);
+    let eye = crate::camera::eye_under(pos, look, aloft, scene.arena);
+    let to = at.sub(eye);
+    if crate::math::wide_len(to).raw() <= 0 {
+        return true;
+    }
+    let along = crate::math::wide_normalized(to).dot(look.look_dir());
+    along.raw() >= cos_turns(half_angle).raw() && sight_clear(origin(pos), at, scene)
+}
+
+/// How far off a remembered look a point is, in turns of bearing in the
+/// floor plane: zero dead ahead, the cone's half-angle at its edge. What the
+/// Veilstalker's `edge` term reads, and the report's thirds of the screen --
+/// from the same eye as [`in_view_from`], so "the edge" means one thing.
+pub fn off_look(pos: V3, aloft: Fx, yaw: Fx, at: V3, scene: &Scene) -> Fx {
+    let look = Input::aimed(0, (yaw.raw() as u32 & 0xFFFF) as u16);
+    let eye = crate::camera::eye_under(pos, look, aloft, scene.arena);
+    let to = at.sub(eye);
+    let want = crate::math::atan2_turns(to.z, to.x);
+    crate::math::wrap_turns(want.sub(yaw)).abs()
+}
+
 /// [`in_view`] from an eye and a look direction already known -- a look the
 /// creature glanced some frames ago, from where the fighter stood then.
 pub fn in_view_of(eye: V3, look: V3, at: V3, half_angle: Fx, scene: &Scene) -> bool {
