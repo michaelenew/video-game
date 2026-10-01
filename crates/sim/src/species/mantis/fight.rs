@@ -156,7 +156,15 @@ pub mod word {
     /// **The frame its guard was last committed**: raised, or a blow taken
     /// on it. Its minimum hold is counted from here.
     pub const GUARD_SINCE: usize = HABIT_META + 3;
-    pub const END: usize = HABIT_META + 4;
+    /// **The commitment it last decided about raising late for**: the stamp
+    /// its deed began on (low 24 bits), and whether it chose to (the top
+    /// bit). Decided once a commitment, so a string seen is one choice.
+    pub const LATE: usize = HABIT_META + 4;
+    /// The frame its guard went up, and the frame it last came down: the
+    /// longest it holds it, and the rest it takes before raising it again.
+    pub const GUARD_UP: usize = HABIT_META + 5;
+    pub const GUARD_DOWN: usize = HABIT_META + 6;
+    pub const END: usize = HABIT_META + 7;
 }
 
 /// A valid bit at the top of a word.
@@ -700,6 +708,8 @@ pub fn may_guard(m: &Monster) -> bool {
 /// its hit comes out, and whether it reaches from where they were seen.
 pub struct Coming {
     pub who: usize,
+    /// The stamp its deed began on.
+    pub began: u32,
     pub kind: u8,
     pub hit_at: u32,
     pub ends_at: u32,
@@ -733,6 +743,7 @@ pub fn coming(m: &Monster, lore: &Lore, t: u32) -> [Option<Coming>; MAX_PLAYERS]
         // has already come and gone: a string's next link is coming.
         Some(Coming {
             who,
+            began,
             kind,
             hit_at,
             ends_at,
@@ -767,7 +778,10 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
 
     // ---- the guard, raised on what it saw ----
     let plan = lore.word(word::PLAN);
-    if m.doing.free() && m.brain.grace == 0 && may_guard(m) {
+    // A guard just lowered is not raised again at once: it has to do
+    // something else first, or stand there open.
+    let rested = t.wrapping_sub(lore.word(word::GUARD_DOWN)) as i32 >= Knob::GuardRest.raw();
+    if m.doing.free() && m.brain.grace == 0 && may_guard(m) && rested {
         let half = (Knob::ParryWindow.raw().max(1) / 2) as u32;
         match blockable {
             // **Seen before its hit comes out** -- a move whose startup is
@@ -787,10 +801,22 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
             // **Seen too late for its hit**: that one has landed or is
             // landing, and a parry of it is not on. Raised anyway, past its
             // parry, against what follows -- the next link of a string.
-            Some(_) => {
-                raise(m, true, false);
-                lore.set_word(word::PLAN, 0);
-                lore.set_word(word::GUARD_SINCE, t);
+            // Most of the time: `LateGuard` of the commitments it sees too
+            // late, chosen once each.
+            Some(c) => {
+                let late = lore.word(word::LATE);
+                let raise_it = if late & FRAME == c.began & FRAME && late != 0 {
+                    late & VALID != 0
+                } else {
+                    let yes = (super::mind::draw(m) % 100) < Knob::LateGuard.raw() as u32;
+                    lore.set_word(word::LATE, (c.began & FRAME) | if yes { VALID } else { 0 });
+                    yes
+                };
+                if raise_it {
+                    raise(m, true, false);
+                    lore.set_word(word::PLAN, 0);
+                    lore.set_word(word::GUARD_SINCE, t);
+                }
             }
             None if plan & VALID != 0
                 && ((t & FRAME).wrapping_sub(plan & FRAME) & FRAME) < FRAME / 2 =>
@@ -807,9 +833,13 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
 
     // ---- the guard, held while something comes, lowered on a breaker ----
     if let Doing::Active { kind: GUARD, left } = m.doing {
-        // Its first frame, raised by its own choice: committed from now.
-        if left == SPECIES.attack(GUARD).active {
+        // Its first frame, however it went up -- by its own choice, or on
+        // something it saw: committed from now, and the clock on its
+        // longest hold starts. (`GUARD_UP` is zero while the guard is down,
+        // so frame zero is written as one.)
+        if lore.word(word::GUARD_UP) == 0 {
             lore.set_word(word::GUARD_SINCE, t);
+            lore.set_word(word::GUARD_UP, t.max(1));
         }
         let held = t.wrapping_sub(lore.word(word::GUARD_SINCE)) as i32;
         let mut quiet = lore.word(word::GUARD_QUIET);
@@ -818,12 +848,12 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
         let held_off = (0..MAX_PLAYERS).any(|who| {
             sight::glimpse(lore, who, t).is_some_and(|g| {
                 g.alive
-                    && math::wide_flat_dist(g.pos, m.pos).raw()
-                        <= Knob::StandOff.fx().add(Fx::ONE).raw()
+                    && math::wide_flat_dist(g.pos, m.pos).raw() <= Knob::StandOff.fx().raw()
                     && inside(m, g.pos)
             })
         });
-        if blockable.is_some() {
+        let worn = t.wrapping_sub(lore.word(word::GUARD_UP)) as i32 >= Knob::GuardMost.raw();
+        if blockable.is_some() && !worn {
             quiet = 0;
             // Something is still coming: it keeps it up.
             m.doing = Doing::Active {
@@ -841,15 +871,29 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
             let to_hit = c.hit_at.wrapping_sub(t) as i32;
             (0..=Knob::DropsFor.raw()).contains(&to_hit)
         });
-        if committed && (drop_for || quiet as i32 >= Knob::GuardQuiet.raw() || !may_guard(m)) {
+        if committed
+            && (drop_for || worn || quiet as i32 >= Knob::GuardQuiet.raw() || !may_guard(m))
+        {
             m.doing = Doing::Recovery {
                 kind: GUARD,
                 left: SPECIES.attack(GUARD).recovery,
             };
             set_flag(m, flag::DROPPED, drop_for);
         }
-    } else {
-        lore.set_word(word::GUARD_QUIET, 0);
+    }
+    match m.doing {
+        Doing::Active { kind: GUARD, .. } => {}
+        Doing::Recovery { kind: GUARD, left } => {
+            if left == SPECIES.attack(GUARD).recovery {
+                lore.set_word(word::GUARD_DOWN, t);
+            }
+            lore.set_word(word::GUARD_QUIET, 0);
+            lore.set_word(word::GUARD_UP, 0);
+        }
+        _ => {
+            lore.set_word(word::GUARD_QUIET, 0);
+            lore.set_word(word::GUARD_UP, 0);
+        }
     }
 
     // ---- the coil: released on a commitment it saw ----

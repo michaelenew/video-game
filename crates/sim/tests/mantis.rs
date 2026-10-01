@@ -62,6 +62,7 @@ fn duel(class: Class, dist: i32) -> World {
         let m = w.monsters[0].as_mut().unwrap();
         m.doing = Doing::Prowl;
         m.brain.grace = 0;
+        m.brain.think_left = 600;
     }
     place(&mut w, dist);
     for _ in 0..40 {
@@ -109,6 +110,20 @@ fn eyes(lo: i32, hi: i32) {
     );
 }
 
+/// How often it raises its guard on a move seen too late to parry, for a
+/// test about the guard its eyes raise.
+fn late_guard(share: i32) {
+    let sp = &mantis::SPECIES;
+    let i = sim::species::Common::ALL.len() + Knob::LateGuard as usize;
+    sim::oven::set_species_raw(sp.id, i, share);
+}
+
+fn late_guard_as_baked() {
+    let sp = &mantis::SPECIES;
+    let i = sim::species::Common::ALL.len() + Knob::LateGuard as usize;
+    sim::oven::set_species_raw(sp.id, i, sp.tuned[i]);
+}
+
 /// Put its eyes back as baked.
 fn eyes_as_baked() {
     let sp = &mantis::SPECIES;
@@ -125,7 +140,7 @@ fn guard_up(w: &mut World, parry: bool) {
     let held = if parry {
         0
     } else {
-        Knob::ParryWindow.raw() as u16 + 2
+        Knob::ParryWindow.raw() as u16
     };
     m.doing = Doing::Active {
         kind: mantis::GUARD,
@@ -599,6 +614,9 @@ fn earthbreaker_as_the_third_link_breaks_the_guard_its_first_two_raised() {
     // Earthbreaker, the hammer as the third link, lands inside its minimum
     // hold and breaks it.
     let _knobs = lock();
+    // Every commitment it sees too late, it raises its guard for: the route
+    // is about the guard it raised, not whether it raised one.
+    late_guard(100);
     let mut w = duel(Class::Champion, 2);
     let mut presses = [Input::LEFT, Input::LEFT, Input::MIDDLE].into_iter();
     let mut next = presses.next();
@@ -635,6 +653,7 @@ fn earthbreaker_as_the_third_link_breaks_the_guard_its_first_two_raised() {
             }
         );
     }
+    late_guard_as_baked();
     assert!(
         broke,
         "the string did not break its guard:\n{}",

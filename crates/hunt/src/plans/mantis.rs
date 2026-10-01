@@ -94,6 +94,8 @@ const INSIDE: Fx = Fx::ratio(45, 10);
 /// How many frames early or late its timed presses can be.
 /// One frame in this many, standing off a free Mantis, it presses in.
 const PRESS_EVERY: u32 = 120;
+/// Of the guards it meets, the share it presses rather than goes round (%).
+const PRESS_SHARE: u32 = 70;
 /// Frames between its presses: it does not mash.
 const PRESS_GAP: u16 = 8;
 /// A guard raised this recently is one to break (§9.4).
@@ -137,6 +139,9 @@ pub struct Duellist {
     across: Option<(V3, bool, u32)>,
     /// The guard it saw go up, and when (its frame, seen).
     guard_seen: Option<u32>,
+    /// What it chose to do about the guard it saw go up then: press it, or
+    /// go round.
+    guard_plan: Option<(u32, bool)>,
     rng: u32,
     slop: i32,
     hop: Fx,
@@ -172,6 +177,7 @@ impl Duellist {
             circle_left: 120,
             across: None,
             guard_seen: None,
+            guard_plan: None,
             rng: (0x9E37_79B9
                 ^ (who as u32).wrapping_mul(0x85EB_CA6B)
                 ^ seed.wrapping_mul(0x27D4_EB2F))
@@ -684,7 +690,20 @@ impl Duellist {
             let fresh = self
                 .guard_seen
                 .is_some_and(|up| (seen.frame.saturating_sub(up) as i32) <= FRESH_GUARD);
+            // Otherwise a mix, chosen once a guard: mostly pressed -- a
+            // string it has not seen three times, which raises it again and
+            // breaks it on the third link -- sometimes gone round.
+            let up = self.guard_seen.unwrap_or(seen.frame);
+            let press = match self.guard_plan {
+                Some((at, press)) if at == up => press,
+                _ => {
+                    let press = self.roll() % 100 < PRESS_SHARE;
+                    self.guard_plan = Some((up, press));
+                    press
+                }
+            };
             if self.style == Style::Repeater
+                || press
                 || self.intent == PRESS && fresh && self.chain_depth(me) >= 1
             {
                 return Some(self.press(w, me, m, seen));
@@ -803,8 +822,15 @@ impl Duellist {
         self.intent = PRESS;
         let d = wide_flat_dist(m.pos, me.pos);
         let to = unit(m.pos.sub(me.pos), V3::from_turns(self.look));
+        // A poke's length to its body, not its middle: half a metre of
+        // thorax and arm stands between the two, and a Ready's cocked blade
+        // holds a fighter off at about that.
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-        let reach = poke.reach.add(poke.step).add(sim::tuning::body_radius());
+        let reach = poke
+            .reach
+            .add(poke.step)
+            .add(sim::tuning::body_radius())
+            .add(crate::HALF);
         if d.raw() > reach.raw() {
             return self.turn_and(me, Some(chest(m)), keep_in(w, me.pos, to), 0);
         }
@@ -897,16 +923,10 @@ impl Duellist {
         );
         if ready {
             self.intent = ROUND;
+            // The repeater has no step 5: Ready or not, in it goes with its
+            // one move.
             if self.style == Style::Repeater {
-                // The repeater throws its one move anyway.
-                if d.raw() < Fx::from_int(3).raw() {
-                    if let Some(input) = {
-                        let bits = self.pick_press(me, seen);
-                        self.swing(me, chest(m), bits)
-                    } {
-                        return input;
-                    }
-                }
+                return self.press(w, me, m, seen);
             }
             let dir = keep_in(w, me.pos, unit(around.sub(to), around));
             return self.turn_and(me, Some(chest(m)), dir, 0);
@@ -947,9 +967,14 @@ impl Duellist {
     /// **What to throw into its guard**: the repeater, the same thing every
     /// time; the duellist, whatever the notches hold fewest of.
     fn pick_press(&mut self, me: &Player, seen: &Seen) -> u16 {
-        let options: [u16; 3] = match me.class {
-            Class::Champion => [Input::LEFT, Input::RIGHT, Input::LEFT],
-            _ => [Input::LEFT, crate::heavy(me.class), Input::LEFT],
+        // **Only what is faster than its eyes** (§2): at its front a slow
+        // move is parried on sight. The Champion's fast ones by link: sword
+        // or spear to open, the backcut second (the spear's and the hammer's
+        // seconds are slow), the upcut or the whirl third.
+        let options: [u16; 3] = match (me.class, self.chain_depth(me)) {
+            (Class::Champion, 1) => [Input::LEFT; 3],
+            (Class::Champion, _) => [Input::LEFT, Input::RIGHT, Input::LEFT],
+            _ => [Input::LEFT; 3],
         };
         if self.style == Style::Repeater {
             return options[0];
@@ -1192,6 +1217,12 @@ impl Tally for MantisTally {
                             }
                         }
                         mantis::SLASH_FAST | mantis::SLASH_HELD => {
+                            // A stayer is anybody inside its reach (§6: be
+                            // outside four metres -- the blade's four and a
+                            // body's width); outside it, the shared rule has
+                            // counted it as unanswerable already.
+                            let a = mantis::SPECIES.attack(kind);
+                            let reach = a.hit_x.add(a.hit_radius).add(sim::tuning::body_radius());
                             let d = wide_flat_dist(now.pos, b.pos);
                             let pressed = matches!(
                                 b.action,
@@ -1201,19 +1232,10 @@ impl Tally for MantisTally {
                             );
                             if pressed {
                                 self.second[0] += 1;
-                            } else if d.raw() <= Fx::from_int(4).raw() {
+                            } else if d.raw() <= reach.raw() {
                                 self.second[1] += 1;
                             } else {
                                 self.second[2] += 1;
-                                // Outside its reach, the shared rule has
-                                // counted it already; inside it and over
-                                // four metres is this rule's alone (§6).
-                                let a = mantis::SPECIES.attack(kind);
-                                let reach =
-                                    a.hit_x.add(a.hit_radius).add(sim::tuning::body_radius());
-                                if d.raw() <= reach.raw() {
-                                    self.unanswerable += 1;
-                                }
                             }
                         }
                         _ => {}

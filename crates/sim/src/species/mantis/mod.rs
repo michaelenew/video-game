@@ -536,6 +536,9 @@ crate::species_knobs! {
     OneSideAcross,   "guard",  "One blade, covers across the broken side (turns)", Fixed, 0, fx(1,4);
     GuardReach,      "guard",  "Raises it against a move that reaches within", Fixed, 0, fx(20,1);
     DropsFor,        "guard",  "Drops it before a breaker this many frames out", Frames, 0, 60;
+    LateGuard,       "guard",  "Raises it on a move seen too late to parry (%)", Percent, 0, 100;
+    GuardMost,       "guard",  "Holds it at most",                         Frames, 0, 600;
+    GuardRest,       "guard",  "Lowered, raises it again no sooner than",  Frames, 0, 240;
     // coil_min, coil_max (the lunge's startup), lunge_lead
     CoilMin,         "coil",   "Coiled at least",                          Frames, 0, 120;
     LungeLead,       "coil",   "The lunge leads what it saw by (x)",       Fixed, 0, fx(2,1);

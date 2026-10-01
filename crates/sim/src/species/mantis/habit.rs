@@ -42,8 +42,19 @@ const STAMP: u32 = 0x000F_FFFF;
 const CODE_SHIFT: u32 = 20;
 
 /// **A move's identity**, as it sees it: the class carrying it and which of
-/// its moves -- never zero.
+/// its moves -- never zero. **The swing, not the button press**: a
+/// Champion's string is one weapon swung three ways, and a sword is a sword
+/// whether it opens the string or ends it -- so his nine chain moves are
+/// remembered as the weapon that threw them (`moves::champion::weapon`). A
+/// sword opened with every time is a sword three times, however the string
+/// went on; the Champion who mixes weapons is the one it cannot read
+/// (`mantis.md` §7).
 pub fn code(class: Class, kind: u8) -> i32 {
+    use crate::moves::champion as c;
+    let kind = match (class, c::link_of(kind)) {
+        (Class::Champion, Some(_)) => c::FIRST + c::weapon(kind),
+        _ => kind,
+    };
     ((class as i32 + 1) << 8) | kind as i32
 }
 

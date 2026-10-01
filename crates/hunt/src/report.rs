@@ -1084,9 +1084,15 @@ impl Report {
             )
             .flat_len();
             // Health nothing connected for -- a Blood mage paying for her
-            // own spells -- is not the move's, however far away it was.
+            // own spells -- is not the move's, however far away it was. Nor
+            // is it when the move connected with somebody else: a Dual mage
+            // paying for a spell on the frame a counter cuts her partner,
+            // standing farther from the body than its volume reaches.
+            let from_now =
+                V3::new(p.pos.x.sub(now.pos.x), Fx::ZERO, p.pos.z.sub(now.pos.z)).flat_len();
             if (m.startup as usize) < REACTION
                 && any_connected
+                && from_now.raw() <= reach.raw()
                 && range[i].raw() > reach.raw()
                 && from_commit.raw() > reach.raw()
             {
