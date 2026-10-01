@@ -256,7 +256,7 @@ fn a_stone_stops_at_the_wall_like_anything_else() {
     run(&mut w, 300, 0, 0);
     let out = stones_of(&w, 0)[0].at.x;
     assert!(
-        out.raw() < sim::arena::ARENA_HALF.raw(),
+        out.raw() < sim::arena::proving_ground::half().raw(),
         "a stone left the arena: it is at {}",
         out.to_f32_for_render()
     );

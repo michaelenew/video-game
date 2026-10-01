@@ -957,7 +957,7 @@ impl MoveField {
             // A reach may be as far as a shot fired corner to corner has to
             // travel, and no further: past that, more range is a number that
             // cannot change anything. That is the **diagonal** rather than the
-            // width -- `arena::ARENA_HALF` is fourteen, so the floor is
+            // width -- the proving ground's half-width is fourteen, so the floor is
             // twenty-eight across and a little under forty corner to corner.
             //
             // The shared `Fixed` bound below is twelve metres, which was every

@@ -69,8 +69,12 @@ pub const SECTIONS: &[Section] = &[
                 "Play the sparring bot against itself, every pairing, and count throws, hits and rounds. --level and --against set the two sides.",
             ),
             e(
-                "cargo run -p game -- --hunt",
-                "Start against the Ridgeback instead of each other. H switches either way in game.",
+                "cargo run -p game -- --hunt [creature]",
+                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature.",
+            ),
+            e(
+                "cargo run -p game -- --arena <name>",
+                "Fight in another arena: proving_ground (the default), or range -- a 240 m dev arena with one of everything an arena can have: sand, snow, a 12 m tower, a cave under a vault. With --hunt, the creature comes too.",
             ),
             e(
                 "cargo run -p game -- --port <n> --peer <ip:port>",
@@ -100,8 +104,12 @@ pub const SECTIONS: &[Section] = &[
                 "Pick classes, the same names the flags take. Tab still cycles player one in game.",
             ),
             e(
-                "?hunt",
-                "Start against the Ridgeback. H switches either way in game.",
+                "?hunt or ?hunt=<creature>",
+                "Start a hunt: the Ridgeback, or any creature that is built, in its own arena. H switches either way in game, and Shift+H steps to the next creature.",
+            ),
+            e(
+                "?arena=<name>",
+                "Fight in another arena, exactly as --arena does: proving_ground or range.",
             ),
             e(
                 "?bot=<level>",
@@ -364,6 +372,10 @@ pub const SECTIONS: &[Section] = &[
             e(
                 "H",
                 "Hunt the Ridgeback, or go back to fighting each other. Restarts the match either way.",
+            ),
+            e(
+                "Shift+H",
+                "Hunt the next creature there is, in its own arena. Creatures not built yet are skipped. Online, both players go together.",
             ),
             e(
                 "Land on it",

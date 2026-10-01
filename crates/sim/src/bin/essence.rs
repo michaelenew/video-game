@@ -113,6 +113,7 @@ fn pitch_at(w: &World, slot: u8, target: V3) -> i16 {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        arena: w.arena(),
     };
     // A skillshot is pointed at the body's middle; a grounded move at its
     // feet, since that is where it lands.

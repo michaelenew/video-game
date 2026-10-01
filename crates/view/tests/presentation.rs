@@ -868,7 +868,7 @@ fn camera_pulls_in_rather_than_sitting_inside_a_platform() {
         let yaw = step as f32 / 64.0 * std::f32::consts::TAU;
         for pitch in [-0.8, 0.0, 0.8] {
             let framing = rig.update(0.016, spot, yaw, pitch);
-            let inside = sim::arena::SOLIDS.iter().any(|s| {
+            let inside = sim::arena::proving_ground::ARENA.solids().iter().any(|s| {
                 (0..3).all(|i| {
                     let lo = [s.min.x, s.min.y, s.min.z][i].to_f32_for_render();
                     let hi = [s.max.x, s.max.y, s.max.z][i].to_f32_for_render();
@@ -1048,6 +1048,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
                 aboard: false,
                 aloft: 0.0,
                 carried: 0.0,
+                arena: &sim::arena::proving_ground::ARENA,
             },
         );
     }
@@ -1063,6 +1064,7 @@ fn the_camera_never_ends_up_inside_the_creature() {
                 aboard: false,
                 aloft: 0.0,
                 carried: 0.0,
+                arena: &sim::arena::proving_ground::ARENA,
             },
         );
         let eye = sim::V3::new(
@@ -1101,6 +1103,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
             aboard: true,
             aloft: 0.0,
             carried: 0.0,
+            arena: &sim::arena::proving_ground::ARENA,
         },
     );
     for _ in 0..60 {
@@ -1114,6 +1117,7 @@ fn riding_does_not_jam_the_camera_against_your_own_back() {
                 aboard: true,
                 aloft: 0.0,
                 carried: 0.0,
+                arena: &sim::arena::proving_ground::ARENA,
             },
         );
     }

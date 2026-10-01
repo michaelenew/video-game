@@ -62,6 +62,7 @@ fn with_scene<T>(w: &World, ask: impl FnOnce(&aim::Scene) -> T) -> T {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        arena: w.arena(),
     })
 }
 
@@ -1158,9 +1159,10 @@ fn standing_where_the_shadow_is_is_what_gets_you_cut() {
 /// The platform in the play area, found rather than written down: the walls are
 /// solids too, and they sit outside it.
 fn platform() -> sim::arena::Solid {
-    *sim::arena::SOLIDS
+    *sim::arena::proving_ground::ARENA
+        .solids()
         .iter()
-        .filter(|s| s.max.x.raw() < sim::arena::ARENA_HALF.raw())
+        .filter(|s| s.max.x.raw() < sim::arena::proving_ground::half().raw())
         .max_by_key(|s| s.min.x.raw())
         .expect("the arena has a platform")
 }

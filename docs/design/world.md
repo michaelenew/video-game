@@ -204,6 +204,10 @@ place is locked to the lone player, not to the pair. The creature's coop tuning
   dev-harness command and a `--hunt <creature>` flag (and `?hunt=<creature>` in
   the browser, since the query string does what the flags do). Which arena is
   loaded is in the snapshot, so both peers change on the same frame.
+  **Built 2026-10-01** with P2 ([arenas.md](arenas.md) §3): `--hunt <creature>`,
+  `?hunt=<creature>`, `--arena <name>`, and `H` / `Shift+H` in game, which
+  travel by a byte on the wire so a peer goes on the same frame. The "list" is
+  the cycle for now; a menu is for when there are creatures to list.
 - **W1 · Trophies.** A record of which creatures a player has beaten, and at
   which temper. Stored the way a player's settings are stored — a file on the
   desktop, local storage in the browser — so it lives in

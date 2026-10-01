@@ -188,6 +188,7 @@ fn draw_one(rig: &mut CameraRig, prev: &World, cur: &World, n: u32) {
             aboard: cur.players[0].aboard(),
             aloft: frame.players[0].aloft,
             carried: frame.players[0].carried,
+            arena: cur.arena(),
         },
     );
     std::hint::black_box(framing);
@@ -233,6 +234,7 @@ fn input_script(frames: u32) -> Vec<[Input; MAX_PLAYERS]> {
                     bits: (r & 0x1ff) as u16,
                     aim: (r >> 16) as u16,
                     pitch: ((r >> 32) as i16) / 8,
+                    travel: Default::default(),
                 }
             })
         })

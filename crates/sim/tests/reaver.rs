@@ -82,6 +82,7 @@ fn with_scene<T>(w: &World, ask: impl FnOnce(&sim::aim::Scene) -> T) -> T {
         players: &players,
         effects: &effects,
         quarry: &w.monsters,
+        arena: w.arena(),
     })
 }
 
@@ -138,9 +139,10 @@ fn in_the_open() -> World {
 /// are solids too and they sit *outside* the play area, which is what tells
 /// them apart from a platform you can stand in front of.
 fn dais() -> sim::arena::Solid {
-    *sim::arena::SOLIDS
+    *sim::arena::proving_ground::ARENA
+        .solids()
         .iter()
-        .filter(|s| s.max.x.raw() < sim::arena::ARENA_HALF.raw())
+        .filter(|s| s.max.x.raw() < sim::arena::proving_ground::half().raw())
         .max_by_key(|s| s.min.x.raw())
         .expect("the arena has a platform")
 }
@@ -753,7 +755,7 @@ fn the_dash_jump_does_not_clear_the_arena() {
     }
     let from = took_off_at.expect("the dash jump never left the ground");
     let flew = w.players[0].pos.sub(from).flat_len();
-    let arena = sim::arena::ARENA_HALF.add(sim::arena::ARENA_HALF);
+    let arena = sim::arena::proving_ground::half().add(sim::arena::proving_ground::half());
     assert!(
         flew.raw() < arena.mul(Fx::ratio(1, 2)).raw(),
         "a dash jump carried her {:.1} m, over half the arena's {:.1}",

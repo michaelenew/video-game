@@ -188,6 +188,12 @@ material per region, spawns), chosen by id in the snapshot, with
 `resolve`/`ground_under`/`inside` reading it. The current arena becomes one
 entry. This is also the first half of [the world](world.md).
 
+**Built 2026-10-01**, ahead of the Hornback so the creature branches can each
+author their own arena: see [arenas.md](arenas.md) for what was built and the
+recipe. The proving ground is the old arena bit for bit; a dev arena, the range,
+has one of everything at the Siegeshell's size. Ceilings are solids hanging from
+the roof.
+
 ### P3 · Small bodies and packs (Gnawers, Hornback, Broodmother, Siegeshell)
 
 A full `Monster` is about two hundred bytes of a 4 KiB snapshot that is already

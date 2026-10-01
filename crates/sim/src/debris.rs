@@ -23,6 +23,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
+use crate::arena::Arena;
 use crate::effects::Effects;
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::{V3, frame_about};
@@ -124,6 +125,7 @@ pub fn step(
     effects: &Effects,
     versus: bool,
     quarry: &mut Herd,
+    arena: &Arena,
 ) {
     let stones = stones::gather(players);
     for slot in shrapnel.iter_mut() {
@@ -140,6 +142,7 @@ pub fn step(
                 players: &seen,
                 effects,
                 quarry: &*quarry,
+                arena,
             };
             aim::first_along(
                 leg,
@@ -196,8 +199,7 @@ pub fn step(
         piece.pos = leg.to;
         piece.travelled = piece.travelled.add(step);
         // Spent, or gone off the end of the world.
-        *slot = (piece.travelled.raw() < t::debris_range().raw()
-            && crate::arena::inside(piece.pos))
-        .then_some(piece);
+        *slot = (piece.travelled.raw() < t::debris_range().raw() && arena.inside(piece.pos))
+            .then_some(piece);
     }
 }

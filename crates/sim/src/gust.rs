@@ -72,6 +72,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
+use crate::arena::Arena;
 use crate::class::Class;
 use crate::effects::Effects;
 use crate::fixed::Fx;
@@ -313,6 +314,7 @@ pub fn step(
     effects: &Effects,
     versus: bool,
     quarry: &mut Herd,
+    arena: &Arena,
     bursts: &mut Bursts,
 ) {
     let stones = stones::gather(players);
@@ -335,6 +337,7 @@ pub fn step(
             players: &seen,
             effects,
             quarry: &*quarry,
+            arena,
         };
         if shot.gale.ignites()
             && !shot.lit
@@ -474,8 +477,8 @@ pub fn step(
         // to expire on something, and its range is the honest answer -- and
         // for the ember, the range *is* the destination: the range sphere the
         // aim stopped at is where it bursts.
-        let flying = shot.travelled.raw() < m.reach.raw() && crate::arena::inside(shot.pos);
-        if !flying && burst_radius.is_some() && crate::arena::inside(shot.pos) {
+        let flying = shot.travelled.raw() < m.reach.raw() && arena.inside(shot.pos);
+        if !flying && burst_radius.is_some() && arena.inside(shot.pos) {
             burst_at(shot.pos, None);
         }
         *slot = flying.then_some(shot);

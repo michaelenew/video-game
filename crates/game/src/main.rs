@@ -17,6 +17,7 @@
 //! in-game with Tab. Names are matched loosely: bulwark, champion, reaver,
 //! elementalist, blood, dual.
 
+mod arenas;
 mod bake;
 mod beast;
 mod crosshair;
@@ -25,6 +26,7 @@ mod hub;
 mod hud;
 mod online;
 mod palette;
+mod picker;
 mod platform;
 mod settings;
 mod species;
@@ -33,7 +35,7 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use online::Driver;
 use sim::state::MAX_PLAYERS;
-use sim::{Input as SimInput, World, arena};
+use sim::{Input as SimInput, World};
 use view::interp::TickClock;
 use view::play::{Crossfade, PoseInput};
 use view::skeleton::{JOINTS, Joint, Skeleton, skeleton_for};
@@ -63,12 +65,16 @@ fn matches(n: &str, c: sim::Class) -> bool {
     c.name().to_lowercase().contains(n) && !n.is_empty()
 }
 
-/// Start in a hunt rather than a versus match.
+/// What this run starts in: `--hunt [creature]` and `--arena <name>`.
 ///
-/// A flag as well as a key, because the headless screenshot script takes flags
-/// and not keystrokes.
-fn hunting() -> bool {
-    platform::flag("--hunt")
+/// Flags as well as keys, because the headless screenshot script takes flags
+/// and not keystrokes. See [`picker`].
+fn chosen_start() -> picker::Start {
+    picker::start(
+        platform::flag("--hunt"),
+        platform::value("--hunt"),
+        platform::value("--arena"),
+    )
 }
 
 /// A hunt, with only the people who are actually hunting in it.
@@ -80,9 +86,8 @@ fn hunting() -> bool {
 /// nothing. `cargo run -p hunt --bin fight` has always taken absent hunters
 /// out for the same reason; the game did not, which is why the harness never
 /// saw it. Pressing `4` and then `R` brings the second hunter in.
-fn hunt_with(classes: [sim::Class; 2], dummy: Dummy) -> World {
-    let mut w = World::hunt(classes);
-    if dummy != Dummy::Human {
+fn seated(mut w: World, dummy: Dummy) -> World {
+    if w.hunting() && dummy != Dummy::Human {
         w.players[1].health = 0;
     }
     w
@@ -114,6 +119,7 @@ fn main() {
         }))
         .insert_resource(ClearColor(Color::srgb(0.05, 0.06, 0.08)))
         .init_resource::<Sim>()
+        .init_resource::<arenas::Drawn>()
         .init_resource::<Rig>()
         .init_resource::<debug::ShowDebug>()
         .init_resource::<Look>()
@@ -154,7 +160,9 @@ fn main() {
                 // Mouse look runs next: aim is an input to the tick, not a
                 // decoration applied after it.
                 mouse_look,
-                tick_sim,
+                // The arena is drawn after the tick, so a fight that has just
+                // moved arena is drawn in the new one on the frame it starts.
+                (tick_sim, arenas::dress).chain(),
                 apply_poses,
                 place_shields,
                 // Grouped because Bevy's chained tuple holds twenty systems
@@ -271,6 +279,10 @@ pub struct Sim {
     /// The scripted double structure jump, if one is playing. See
     /// [`rehearsal`].
     rehearsing: Option<u32>,
+    /// A trip the picker has asked for and the next tick will carry:
+    /// [`picker`]. On the wire rather than a fresh `World` built here, so a
+    /// peer changes arena on the same frame.
+    travel: sim::input::Travel,
 }
 
 /// A ring of past snapshots, and how far back through it we have stepped.
@@ -390,11 +402,10 @@ struct Sparring(Option<hunt::Duelist>);
 
 impl Default for Sim {
     fn default() -> Self {
-        let mut w = if hunting() {
-            hunt_with(chosen_classes(), starting_dummy())
-        } else {
-            World::with_classes(chosen_classes())
-        };
+        let mut w = seated(
+            picker::world(chosen_start(), chosen_classes()),
+            starting_dummy(),
+        );
         shot_bars(&mut w);
         shot_weight(&mut w);
         shot_move(&mut w);
@@ -413,6 +424,7 @@ impl Default for Sim {
             stop_at: env_num("SHOT_FRAME"),
             history: Rewind::new(&seed),
             rehearsing: None,
+            travel: sim::input::Travel::NONE,
         }
     }
 }
@@ -993,35 +1005,8 @@ fn setup(
         ..default()
     });
 
-    // Floor.
-    let floor = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.13, 0.15, 0.18),
-        perceptual_roughness: 0.95,
-        ..default()
-    });
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(40.0, 40.0))),
-        MeshMaterial3d(floor),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-    ));
-
-    // Arena geometry, straight from the simulation's own collision data. One
-    // source of truth: if you can see it, you collide with it.
-    let stone = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.30, 0.34, 0.40),
-        perceptual_roughness: 0.9,
-        ..default()
-    });
-    for solid in arena::SOLIDS.iter() {
-        let min = fx3(solid.min);
-        let max = fx3(solid.max);
-        let size = max - min;
-        commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(size.x, size.y, size.z))),
-            MeshMaterial3d(stone.clone()),
-            Transform::from_translation((min + max) * 0.5),
-        ));
-    }
+    // The floor and the arena's geometry are drawn by `arenas::dress`, from
+    // whichever arena the simulation is in.
 
     // Fighters: a root per player, six primitive parts parented to it.
     let colors = [Color::srgb(0.29, 0.66, 1.0), Color::srgb(1.0, 0.54, 0.30)];
@@ -2748,36 +2733,29 @@ fn tick_sim(
         // mid-round would leave the mechanic in someone else's state.
         let next = (sim.cur.players[0].class as usize + 1) % ALL.len();
         let classes = [ALL[next], sim.cur.players[1].class];
-        let w = if sim.cur.hunting() {
-            hunt_with(classes, sim.dummy)
-        } else {
-            World::with_classes(classes)
-        };
+        let w = seated(sim.cur.restarted(classes), sim.dummy);
         sim.prev = w.clone();
         sim.cur = w;
     }
     if keys.just_pressed(KeyCode::Backspace) {
         let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
-        let w = if sim.cur.hunting() {
-            hunt_with(classes, sim.dummy)
-        } else {
-            World::with_classes(classes)
-        };
+        let w = seated(sim.cur.restarted(classes), sim.dummy);
         sim.prev = w.clone();
         sim.cur = w;
     }
-    // Swap between hunting something and fighting each other. A restart either
-    // way, because a creature appearing in the middle of a round would land on
-    // somebody.
+    // The picker. `H` swaps between hunting the Ridgeback and fighting each
+    // other; `Shift+H` steps to the next creature there is, in its own arena.
+    // A restart either way, because a creature appearing in the middle of a
+    // round would land on somebody -- and **asked for, not done**: the next
+    // tick carries it on the wire and the simulation builds the new fight, so
+    // a peer builds it on the same frame. See `picker`.
     if keys.just_pressed(KeyCode::KeyH) {
-        let classes = [sim.cur.players[0].class, sim.cur.players[1].class];
-        let w = if sim.cur.hunting() {
-            World::with_classes(classes)
+        let shifted = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
+        sim.travel = if shifted {
+            picker::next(&sim.cur)
         } else {
-            hunt_with(classes, sim.dummy)
+            picker::toggle(&sim.cur)
         };
-        sim.prev = w.clone();
-        sim.cur = w;
     }
     for (key, mode) in [
         (KeyCode::Digit1, Dummy::Idle),
@@ -2841,7 +2819,7 @@ fn tick_sim(
                 });
                 let two = match sim.dummy {
                     // Not in a hunt: the bot fights a fighter, and in a hunt
-                    // player two is out of it (see `hunt_with`).
+                    // player two is out of it (see `seated`).
                     Dummy::Bot(level) if !sim.cur.hunting() => spar(
                         &mut sparring,
                         level,
@@ -2850,8 +2828,13 @@ fn tick_sim(
                     ),
                     mode => dummy_input(mode, sim.cur.frame, held_two),
                 };
+                // A trip rides on the first tick after it was asked for, and
+                // only that one.
+                let travel = std::mem::take(&mut sim.travel);
                 let pair = [
-                    rehearsed.unwrap_or_else(|| scripted_or(scripted, held)),
+                    rehearsed
+                        .unwrap_or_else(|| scripted_or(scripted, held))
+                        .travelling(travel),
                     two,
                 ];
                 // Remembered before the tick, so one press of `[` lands on the
@@ -2861,6 +2844,12 @@ fn tick_sim(
                 history.push(cur);
                 sim.prev = sim.cur.clone();
                 sim.cur.advance(pair);
+                if travel != sim::input::Travel::NONE {
+                    // A new fight: nothing to interpolate from, and player two
+                    // sits a hunt out unless a person has their keys.
+                    sim.cur = seated(sim.cur.clone(), sim.dummy);
+                    sim.prev = sim.cur.clone();
+                }
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -2868,7 +2857,8 @@ fn tick_sim(
             let ticks = sim.clock.advance(time.delta_secs());
             for _ in 0..ticks {
                 let scripted = demo_mode().then(|| script(&mut scripted.0, &sim.cur));
-                let local = scripted_or(scripted, held);
+                let travel = std::mem::take(&mut sim.travel);
+                let local = scripted_or(scripted, held).travelling(travel);
                 online::step(&mut sim, local);
             }
         }
@@ -3450,6 +3440,9 @@ fn drive_camera(
             // facing and to the ray the crosshair draws, so the camera has to
             // have it too or it points somewhere the fighter is not.
             carried: frame.players[me].carried,
+            // Where the fight is, for the walls, towers and vaults the arm is
+            // pulled in from.
+            arena: sim.cur.arena(),
         },
     );
     inside.0 = framing.hidden;

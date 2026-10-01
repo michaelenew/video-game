@@ -144,3 +144,22 @@ pub extern "C" fn move_recovery(kind: u32) -> u32 {
 pub extern "C" fn parry_window() -> u32 {
     sim::state::parry_window() as u32
 }
+
+/// The arena's bounds, so the sandbox draws the floor the simulation is
+/// using rather than a number of its own. Raw 16.16, like everything else.
+#[unsafe(no_mangle)]
+pub extern "C" fn arena_lo_x() -> i32 {
+    world().arena().bounds.lo_x.raw()
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn arena_hi_x() -> i32 {
+    world().arena().bounds.hi_x.raw()
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn arena_lo_z() -> i32 {
+    world().arena().bounds.lo_z.raw()
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn arena_hi_z() -> i32 {
+    world().arena().bounds.hi_z.raw()
+}

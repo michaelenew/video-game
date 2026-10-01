@@ -241,13 +241,22 @@ type Scenario = (&'static str, fn(Class) -> World);
 
 /// The shapes a match comes in, since the creature is most of the work when it
 /// is present and none of it when it is not -- and two creatures, the most the
-/// world holds, are twice that.
-fn scenarios() -> [Scenario; 3] {
+/// world holds, are twice that. The last is the same in the range: the biggest
+/// arena and the most solids any arena has, which is what every collision,
+/// floor and aiming query walks.
+fn scenarios() -> [Scenario; 4] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
         ("two creatures", |c| {
             World::hunt_with([c; MAX_PLAYERS], [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS])
+        }),
+        ("two creatures in the range", |c| {
+            World::hunt_in(
+                [c; MAX_PLAYERS],
+                [Some(SpeciesId::RIDGEBACK); MAX_MONSTERS],
+                sim::arena::ArenaId::RANGE,
+            )
         }),
     ]
 }
@@ -276,6 +285,7 @@ fn input_script(frames: u32) -> Vec<[Input; MAX_PLAYERS]> {
                     bits: (r & 0x1ff) as u16,
                     aim: (r >> 16) as u16,
                     pitch: ((r >> 32) as i16) / 8,
+                    travel: Default::default(),
                 }
             })
         })

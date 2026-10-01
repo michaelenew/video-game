@@ -140,6 +140,16 @@ pub fn named(name: &str) -> Option<&'static Species> {
     all().find(|s| s.name.eq_ignore_ascii_case(name) || s.slug() == name.to_lowercase())
 }
 
+/// The next registered species after this one, in id order, wrapping round:
+/// what the picker's cycle steps to. Unregistered ids are skipped, so a
+/// creature whose branch has not landed is never offered.
+pub fn after(id: SpeciesId) -> &'static Species {
+    (1..=COUNT as u8)
+        .filter_map(|step| lookup(SpeciesId((id.0.wrapping_add(step)) % COUNT as u8)))
+        .next()
+        .unwrap_or(&ridgeback::SPECIES)
+}
+
 // ---------------------------------------------------------------------------
 // The table
 // ---------------------------------------------------------------------------

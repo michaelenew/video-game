@@ -455,7 +455,7 @@ fn slam() {
 /// dummy standing where the shake lands.
 fn arriving(load: Fx, press: impl Fn(i32, &World) -> u16 + Copy) -> Slammed {
     let mut dry = slam_at(load);
-    dry.players[1].pos.x = sim::arena::ARENA_HALF;
+    dry.players[1].pos.x = sim::arena::proving_ground::half();
     slam_run(&mut dry, 90, press);
     let landed = dry.players[0].pos;
     let mut w = slam_at(load);
@@ -647,7 +647,7 @@ fn stomp() {
             .to_world(V3::new(m.ideal_range, Fx::ZERO, Fx::ZERO));
         w.players[0].grounded = true;
         // Parked in a corner, so the second fighter is not a second target.
-        let corner = sim::arena::ARENA_HALF;
+        let corner = sim::arena::proving_ground::half();
         w.players[1].pos = V3::new(corner, w.players[1].pos.y, corner);
         let toward = beast.pos.sub(w.players[0].pos);
         let aim = (sim::math::atan2_turns(toward.z, toward.x).raw() & 0xFFFF) as u16;

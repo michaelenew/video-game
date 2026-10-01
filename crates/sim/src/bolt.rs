@@ -30,6 +30,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
+use crate::arena::Arena;
 use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
@@ -179,6 +180,7 @@ pub fn step(
     effects: &crate::effects::Effects,
     versus: bool,
     quarry: &mut Herd,
+    arena: &Arena,
 ) {
     let stones = stones::gather(players);
     for slot in flight.iter_mut() {
@@ -198,6 +200,7 @@ pub fn step(
                 players: &seen,
                 effects,
                 quarry: &*quarry,
+                arena,
             };
             aim::first_along(
                 leg,
@@ -258,8 +261,7 @@ pub fn step(
         shot.travelled = shot.travelled.add(step);
         // Spent, or gone off the end of the world. A bolt aimed at the sky has
         // to expire on something, and its range is the honest answer.
-        *slot = (shot.travelled.raw() < t::fire_bolt_range().raw()
-            && crate::arena::inside(shot.pos))
-        .then_some(shot);
+        *slot = (shot.travelled.raw() < t::fire_bolt_range().raw() && arena.inside(shot.pos))
+            .then_some(shot);
     }
 }

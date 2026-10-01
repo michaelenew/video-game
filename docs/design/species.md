@@ -185,6 +185,11 @@ This recipe was dry-run on 2026-10-01 with a copy of the Ridgeback registered as
 the Pair: steps 1 to 6 and the checks in 8 compiled, baked and measured with no
 edit outside its own files and its registry lines.
 
+9. **Its arena.** Follow [arenas.md](arenas.md) §4: a table in
+   `crates/sim/src/arena/<creature>.rs` naming the species, its two registry
+   lines, and optionally a dressing in `crates/game/src/arenas/`. Until it
+   exists the creature is hunted in the proving ground.
+
 What you should **not** need to touch: `monster.rs`, `beast.rs`, `state.rs`,
 `oven.rs`, the report. If you do, it is a place the rig was not data yet — fix
 it there, for every creature, and say so in this document.
@@ -210,5 +215,7 @@ it there, for every creature, and say so in this document.
   overlap (shoulders stumbling 2.665 m, front feet broken 3.807 m, through the
   slam 3.23 m, nose to tail 13.406 m).
 - **Not here:** critters (P3), the `sheds` part flag the Pair asks for, a
-  perception filter (P5), arenas as data (P2). Each lands with the creature that
-  needs it.
+  perception filter (P5). Each lands with the creature that needs it. Arenas as
+  data (P2) landed after this, ahead of the creatures:
+  [arenas.md](arenas.md) is the same kind of recipe for a creature's arena, and
+  a creature branch follows both.

@@ -992,7 +992,7 @@ fn a_full_hop_gets_you_onto_the_terrain_and_over_a_body() {
     // a body-height count. You have to be able to get on to the arena's
     // terrain, and you have to be able to come down on somebody's head.
     let head = sim::tuning::body_height().to_f32_for_render();
-    let platform = sim::arena::WALL_HEIGHT.to_f32_for_render();
+    let platform = sim::arena::proving_ground::wall_height().to_f32_for_render();
     for class in ALL_CLASSES {
         let (apex, _) = jump_profile(class, 60);
         assert!(

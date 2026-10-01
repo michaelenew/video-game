@@ -6259,3 +6259,41 @@ first bake has every hide knob at zero, which is now what its failure says.
 **Verdict** built; the Ridgeback is unchanged by construction. A person should
 look at §6 of species.md: the shared ranges on the common knobs, a broken part
 always stumbling, and the report reading only the first creature.
+
+
+### 2026-10-01 — Arenas: the proving ground becomes a table (bestiary P2, world W0)
+
+**Changed** Nothing a player can feel in the first arena, on purpose. The
+arena is an `Arena` table now — bounds, solids with a material each, floor
+regions, spawn marks — and the old `const` arena is the first, "the proving
+ground" (`crates/sim/src/arena/`). The world keeps an `ArenaId` in the
+snapshot and every geometry question reads it: the resolve, the floor under a
+planted shield, projectiles leaving, the creature's walls, the aiming ray, the
+camera, the renderer. A ceiling is a solid hanging from the roof. A dev arena,
+the range, has one of everything at 240 × 50 m. The picker: `--hunt
+<creature>`, `--arena <name>`, `H`, and `Shift+H` to step through creatures,
+which travels as a byte on the wire so a peer goes on the same frame. See
+[arenas.md](arenas.md).
+
+**Why** Ten creature branches are next, and each authors its own arena. Each
+is a file and two registry lines.
+
+**Found** The bit-identical bar held: both pinned hunts unchanged, the fight
+report for every class, twelve seeds each, solo and duo, diffs empty against
+the code before. The creature's clamp and its room-to-brake read the bounds
+the arena gives, written so `lo + margin` is bit-for-bit the old
+`-(half - margin)`. The snapshot grew 8 bytes (2,856 to 2,864), the input 2 (6
+to 8 in memory, 6 to 7 on the wire). A fight in the range costs 142 µs a frame
+at worst against 102 µs in the proving ground (budget 520 µs), with 34 solids
+scanned linearly. The first range test caught the world still calling the
+creature's step without its arena, so it was clamped to fourteen metres in a
+240 m valley.
+
+**Reverted** A shadow re-attending its owner at the hunt marks: the old code
+leaves it at the versus mark, and changing that would have moved the Reaver's
+pin. Left as it was; noted in arenas.md for whoever wants it.
+
+**Verdict** built; the proving ground is unchanged by construction. A person
+should look at arenas.md §5: ceilings as solids, bounds that are not walls,
+and what each creature branch still owns (the sim's eye under a vault,
+creatures colliding with solids, materials read by the fight).

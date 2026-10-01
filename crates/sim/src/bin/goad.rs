@@ -308,7 +308,7 @@ fn run(script: Script, dummy: bool, verbose: bool) -> Report {
         // the curve thrown four times ends the round -- which resets the bars
         // and the health and makes the numbers lie about a fight that never
         // happened.
-        let corner = sim::arena::ARENA_HALF.sub(t::body_radius().add(t::body_radius()));
+        let corner = sim::arena::proving_ground::half().sub(t::body_radius().add(t::body_radius()));
         w.players[1].pos = sim::V3::new(corner.neg(), Fx::ZERO, corner.neg());
     }
     let start_health = w.players[0].health;

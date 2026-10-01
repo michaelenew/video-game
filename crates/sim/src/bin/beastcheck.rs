@@ -142,7 +142,7 @@ fn main() {
     }
     let (short, apex) = lowest;
     let (tall, best) = highest;
-    let platform = sim::arena::WALL_HEIGHT;
+    let platform = sim::arena::proving_ground::wall_height();
     let from_platform = best.add(platform);
     println!(
         "a full hop reaches {} m off the floor ({}) to {} m ({})",

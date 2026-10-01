@@ -32,6 +32,7 @@
 use crate::DT;
 pub use crate::beast::{Rig, Shape};
 
+use crate::arena::{Arena, Bounds};
 use crate::beast::{self, MAX_BREAKABLE, Pose};
 use crate::fixed::Fx;
 use crate::math::V3;
@@ -1899,7 +1900,7 @@ impl Monster {
 
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
     /// that could strafe would make its turn limit decorative.
-    fn walk(&mut self) {
+    fn walk(&mut self, bounds: &Bounds) {
         let want = match self.doing {
             _ if self.rooted > 0 => Fx::ZERO,
             // Noticing you: it stands its ground and turns to face you.
@@ -1961,7 +1962,7 @@ impl Monster {
         // reads as a buck, so it threw braced riders off the barrel. Within
         // its braking distance of the wall it brakes instead: speed squared
         // over twice the braking rate.
-        let room = self.room_ahead();
+        let room = self.room_ahead(bounds);
         let stopping = self
             .speed
             .mul(self.speed)
@@ -2012,28 +2013,34 @@ impl Monster {
         // It stays inside the arena and on the floor. Nothing in the move set
         // takes it off the ground, and a creature this size on a platform would
         // be a camera problem rather than a fight.
-        let limit = crate::arena::ARENA_HALF.sub(self.sp().margin());
-        self.pos.x = self.pos.x.clamp(limit.neg(), limit);
-        self.pos.z = self.pos.z.clamp(limit.neg(), limit);
+        let margin = self.sp().margin();
+        self.pos.x = self
+            .pos
+            .x
+            .clamp(bounds.lo_x.add(margin), bounds.hi_x.sub(margin));
+        self.pos.z = self
+            .pos
+            .z
+            .clamp(bounds.lo_z.add(margin), bounds.hi_z.sub(margin));
         self.pos.y = Fx::ZERO;
     }
 
     /// Metres of floor ahead of it before the wall it is kept off, along its
     /// facing.
-    fn room_ahead(&self) -> Fx {
-        let limit = crate::arena::ARENA_HALF.sub(self.sp().margin());
+    fn room_ahead(&self, bounds: &Bounds) -> Fx {
+        let margin = self.sp().margin();
         let forward = V3::from_turns(self.yaw);
-        let along = |pos: Fx, dir: Fx| -> Fx {
+        let along = |pos: Fx, dir: Fx, lo: Fx, hi: Fx| -> Fx {
             if dir.raw() > 0 {
-                limit.sub(pos).div(dir)
+                hi.sub(margin).sub(pos).div(dir)
             } else if dir.raw() < 0 {
-                limit.neg().sub(pos).div(dir)
+                lo.add(margin).sub(pos).div(dir)
             } else {
                 Fx::MAX
             }
         };
-        along(self.pos.x, forward.x)
-            .min(along(self.pos.z, forward.z))
+        along(self.pos.x, forward.x, bounds.lo_x, bounds.hi_x)
+            .min(along(self.pos.z, forward.z, bounds.lo_z, bounds.hi_z))
             .max(Fx::ZERO)
     }
 
@@ -2090,8 +2097,15 @@ impl Monster {
         };
     }
 
-    /// One tick of creature.
+    /// One tick of creature, in the proving ground. For the tests and tools
+    /// that hold a creature without a world; the world calls [`Monster::step_in`].
     pub fn step(&mut self, quarry: &[Quarry]) {
+        self.step_in(quarry, &crate::arena::proving_ground::ARENA);
+    }
+
+    /// One tick of creature, in an arena: its bounds are the walls it is kept
+    /// inside and pulls up short of.
+    pub fn step_in(&mut self, quarry: &[Quarry], arena: &Arena) {
         if self.health <= 0 {
             self.doing = Doing::Dead;
             self.speed = Fx::ZERO;
@@ -2118,7 +2132,7 @@ impl Monster {
         self.brain.repeat_left = self.brain.repeat_left.saturating_sub(1);
 
         self.steer();
-        self.walk();
+        self.walk(&arena.bounds);
     }
 
     /// Frames until it can start another move, as things stand.
