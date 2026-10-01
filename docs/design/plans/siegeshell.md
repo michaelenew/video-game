@@ -6,10 +6,11 @@ implements: ../creatures/siegeshell.md
 
 # Siegeshell — action plan
 
-> **State, 2026-10-01.** Built. M1-M7 done; M8 under way (contact sheets,
-> telegraph screenshots, web smoke, final merge). Two Champions win 8 of 24 in
-> 557 s; one wins 0 of 24. Where it landed is the document's §13. Branch
-> `claude/creature-siegeshell`, worktree `/home/user/wt/siegeshell`.
+> **State, 2026-10-01.** Built, M1-M8. Two Champions win 8 of 24 in 557 s;
+> one wins 0 of 24 (short of one in twenty); the floor's threatening share and
+> the parasites' off-screen bites are open. Contact sheets, telegraph
+> screenshots and the browser build (`?hunt=siegeshell`) checked. Where it
+> landed is the document's §13.
 
 The specification is [`../creatures/siegeshell.md`](../creatures/siegeshell.md);
 the recipes are [`../species.md`](../species.md), [`../critters.md`](../critters.md)
@@ -89,6 +90,6 @@ bar: [`../monsters.md`](../monsters.md), contract [`../bestiary.md`](../bestiary
       Ridgeback pins and report before/after; own commit.
 - [x] **M7 · Two hunters.** Coop and solo plans, report lines, per-region
       windows, tuning passes, feel log.
-- [ ] **M8 · Animation, look, reading it, world, docs, browser.** Clips,
+- [x] **M8 · Animation, look, reading it, world, docs, browser.** Clips,
       contact sheets, look and dressing, telegraph screenshots, trophy,
       camera, budget, docs, manual, web smoke, merge main, checks, push.
