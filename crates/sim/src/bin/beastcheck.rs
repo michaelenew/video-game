@@ -75,14 +75,13 @@ fn holding(sp: &Species, doing: Doing) -> Monster {
 /// has every "top" facing the floor, and one rolling over has them on edge: a
 /// face steeper than forty-five degrees is a wall.
 fn faces_up(beast: &Monster, part: usize) -> bool {
-    beast
+    let up = beast
         .rig()
         .of(part)
         .rot
-        .apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO))
-        .y
-        .raw()
-        > Fx::ratio(7, 10).raw()
+        .apply(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+    // Steeper than forty-five degrees: more across than up.
+    up.y.raw() > V3::new(up.x, Fx::ZERO, up.z).flat_len().raw()
 }
 
 /// The lowest mountable surface on a body, and which part it is.
