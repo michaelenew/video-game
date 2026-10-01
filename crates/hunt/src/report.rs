@@ -231,6 +231,13 @@ pub const HALF_VIEW: Fx = Fx::from_raw(9100);
 pub trait Tally: Send + Sync {
     /// One tick, the world before and after it.
     fn observe(&mut self, before: &World, after: &World);
+    /// One tick, with the hunters that played it: what a creature whose
+    /// measures ask what was on a hunter's screen needs (the Pair's). Calls
+    /// [`Tally::observe`] unless a tally says otherwise.
+    fn observe_with(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        let _ = bots;
+        self.observe(before, after);
+    }
     /// Its lines: a name, a value, and why it is counted.
     fn lines(&self) -> Vec<(String, String, String)>;
     /// Hits its own rule says were unanswerable that the shared rule could
@@ -703,7 +710,7 @@ impl Report {
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
         if let Some(extra) = self.extra.as_mut() {
-            extra.observe(before, after);
+            extra.observe_with(before, after, bots);
         }
         self.observe_pack(before, after, bots);
         self.observe_ground(before, after);
