@@ -729,5 +729,6 @@ read as the thing to hit, which only somebody facing it can say.
 `Hands::throw_in`): on a window five to eleven metres off he throws it at the
 work, leaps to it as it flies and Slams out of the leap. His row above is
 re-run with it; the feel log of the day has the before and after. The thrown
-shield strikes no creature, so it is a way in, not a ranged blow
-([review.md](../review.md) `CLASS-5`). Here it costs him two of 24 (37 throws, leaping in to a stand).
+shield struck no creature then ([review.md](../review.md) `CLASS-5`); **later the same day it
+did** -- thrown, the first body it meets; recalled, each it passes once. Here it costs him two of 24 (37 throws, leaping in to a stand).
+ Same seeds, after: 22 of 24 in 209 s, unchanged. A shield does not strike a worm under the sand, only one standing out of it (`thrown_shield.rs`).
