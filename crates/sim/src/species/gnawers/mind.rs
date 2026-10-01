@@ -495,7 +495,7 @@ impl PackMind for Mind {
                 let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
                 lead.sub(facing.scale(knob_fx(Knob::HamstringFrom)))
             } else {
-                away(lead, knob_fx(Knob::DartFrom))
+                dart_spot(c, seen, lead)
             };
             return Steer {
                 to,
@@ -716,10 +716,17 @@ fn close_in(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         }
         let who = target_of(&c);
         let seen = pack.seen[who];
-        let lead = crate::pack::lead_of(pack, who);
-        let gap = crate::math::big_len(V3::new(lead.x.sub(c.pos.x), Fx::ZERO, lead.z.sub(c.pos.z)));
+        // Arrived is measured to where the glance saw the fighter, not to
+        // the lead it steers by: a dodge projects the lead metres ahead, and
+        // a crouch begun there is a crouch at nobody.
+        let gap = crate::math::big_len(V3::new(
+            seen.pos.x.sub(c.pos.x),
+            Fx::ZERO,
+            seen.pos.z.sub(c.pos.z),
+        ));
         let steps = (c.role & role::STEPS) / role::LATCH_STEP;
         let behind = in_the_rear(&c, &seen);
+        let ahead = in_front(&c, &seen);
         let body = &mut critters[i];
         let stop = |body: &mut Critter, pack: &mut Pack| {
             body.role &= !(role::CLOSING | role::STEPS);
@@ -735,7 +742,8 @@ fn close_in(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
             }
             continue;
         }
-        // Faced before it could begin: the back it was going for is gone.
+        // Faced before it could begin, the back it was going for is gone: the
+        // token goes back.
         if body.act == HAMSTRING && !behind {
             stop(body, pack);
             continue;
@@ -745,7 +753,10 @@ fn close_in(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         } else {
             knob_fx(Knob::DartFrom)
         };
-        if gap.raw() <= from.add(crate::arena::SKIN).raw() {
+        let there = gap.raw() <= from.add(crate::arena::SKIN).raw();
+        // A dart crouches only in front: arrived anywhere else -- the fighter
+        // turned while it came round -- it goes on coming round.
+        if there && (body.act == HAMSTRING || ahead) {
             // There: the windup. Belly to the floor for the crouch -- it
             // stops where it is rather than sliding the last metre in on its
             // momentum, so the body you see crouch is the body still there to
@@ -803,10 +814,13 @@ fn close_in(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         // something the glance saw, so this reads nothing it could not see --
         // and it keeps a crouch on the screen of the fighter it is for (the
         // report's hidden commits).
-        let act = if can(DART) && in_front(&c, &seen) && within(DART) {
-            DART
-        } else if can(HAMSTRING) && in_the_rear(&c, &seen) && within(HAMSTRING) {
+        let act = if can(HAMSTRING) && in_the_rear(&c, &seen) && within(HAMSTRING) {
             HAMSTRING
+        } else if can(DART) && !in_the_rear(&c, &seen) && within(DART) {
+            // From the side as well: it comes round into the front to crouch
+            // (`dart_spot`), so a ring pushed to a fighter's flanks by a wall
+            // behind them still bites.
+            DART
         } else {
             continue;
         };
@@ -819,6 +833,37 @@ fn close_in(pack: &mut Pack, critters: &mut Critters, herd: &Herd, frame: u32) {
         body.act = act;
         body.role = (body.role & !role::STEPS) | role::CLOSING;
     }
+}
+
+/// **Where a dart-bite crouches from**: `DartFrom` off the fighter, inside
+/// the front arc, on the side the body is coming from -- straight in if it is
+/// already in front, the arc's edge if it is out at a flank.
+fn dart_spot(c: &Critter, seen: &crate::pack::Seen, lead: V3) -> V3 {
+    let facing = V3::from_turns(Fx::from_raw(seen.facing as i32));
+    let from = V3::new(c.pos.x.sub(seen.pos.x), Fx::ZERO, c.pos.z.sub(seen.pos.z));
+    let dist = knob_fx(Knob::DartFrom);
+    if from.flat_len().raw() == 0 {
+        return lead.add(facing.scale(dist));
+    }
+    let from = from.normalized();
+    let arc = knob_fx(Knob::FrontArc);
+    if facing.dot(from).raw() >= arc.raw() {
+        return lead.add(from.scale(dist));
+    }
+    // The edge of the arc on the body's side: the facing turned by the arc's
+    // half-angle toward it. cos is the knob; sin is what squares with it.
+    let side = V3::new(facing.z.neg(), Fx::ZERO, facing.x);
+    let toward = if side.dot(from).raw() >= 0 {
+        side
+    } else {
+        side.scale(Fx::ONE.neg())
+    };
+    // Halfway in from the edge to dead ahead, so that arriving there is
+    // arriving in front.
+    let cos = arc.add(Fx::ONE).mul(Fx::ratio(1, 2));
+    let sin = Fx::ONE.sub(cos.mul(cos)).max(Fx::ZERO).sqrt();
+    let edge = facing.scale(cos).add(toward.scale(sin));
+    lead.add(edge.scale(dist))
 }
 
 /// Is the critter in its target's rear third, by the facing the glance saw?

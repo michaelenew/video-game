@@ -13,6 +13,7 @@
 //! | A fallen trunk, west | 1.5 m | They **scramble** up it |
 //! | Two standing boulders, east | 3.5 m | A back, and too tall to climb: a corner, which does not win |
 //! | Low walls, the other three sides | 1.5 m | A back; stood on, scrambled |
+//! | A thorn hedge behind them and the bank | 6 m | The edge of the world: nobody hops it |
 //!
 //! 36 by 30 metres: the proving ground's 28 had the den mouth at one wall's
 //! midpoint (§10), and the extra room is the open middle a retreating fighter
@@ -64,7 +65,7 @@ const REGIONS: [Region; 3] = [
     },
 ];
 
-const SOLIDS: [Solid; 9] = [
+const SOLIDS: [Solid; 13] = [
     // Low walls on three sides, just outside the floor.
     Solid::cm([-1900, 0, -1600], [-1800, 150, 1500], Stone),
     Solid::cm([1800, 0, -1600], [1900, 150, 1500], Stone),
@@ -78,6 +79,14 @@ const SOLIDS: [Solid; 9] = [
     // above and behind (the report's hidden commits), and the pack is fought
     // there when a rout is cornered. The hole itself is the dark at its back.
     Solid::cm([-150, 0, 1450], [150, 300, 1600], Rock),
+    // A hedge of old thorn behind the walls and the bank, six metres: the
+    // walls are low enough to hop, and the meadow does not end at them. A
+    // hunter jumping a maul with her back to the south wall went over it
+    // and fought the rest of the hunt from outside.
+    Solid::cm([-2100, 0, -1800], [-1900, 600, 1800], Grass),
+    Solid::cm([1900, 0, -1800], [2100, 600, 1800], Grass),
+    Solid::cm([-2100, 0, -1800], [2100, 600, -1600], Grass),
+    Solid::cm([-2100, 0, 1600], [2100, 600, 1800], Grass),
     // A fallen trunk, west of the middle: a platform they scramble.
     Solid::cm([-1150, 0, -550], [-350, 150, -450], Wood),
     // Two standing boulders, east: backs to stand against, too tall to climb.

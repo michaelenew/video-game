@@ -1090,7 +1090,7 @@ pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
 /// **Is that point on this fighter's screen, and not behind anything?** (A5.)
 ///
 /// Inside a cone of `half_angle` (in turns) round where they are looking, from
-/// their eye, and [`sight_clear`] to it. Built from the eye and the look, so
+/// their eye, and [`sight_clear`] to it from their chest. Built from the eye and the look, so
 /// it lives here beside [`pointing_at`]: the Veilstalker uses it so that it
 /// never reveals itself off-screen -- its brain with the look it last
 /// glanced, the fight report with the live one. A question about the camera
@@ -1099,10 +1099,9 @@ pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
 /// **Nothing between the camera and the character hides anything**, as
 /// nothing there is on the crosshair's ray ([`sight`]): the eye sits behind
 /// the shoulder, and a fighter with their back to a wall has the camera
-/// looking through it. So the line of sight starts where it passes the
-/// character, as the crosshair's ray does. Found by the Gnawers' report,
-/// whose every bite on a hunter backed against a wall counted as begun off
-/// screen.
+/// looking through it. So the cone is the eye's, and the line of sight is
+/// the character's own. Found by the Gnawers' report, whose every bite on a
+/// hunter backed against a wall counted as begun off screen.
 pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
     let p = &scene.players[who];
     let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
@@ -1115,11 +1114,12 @@ pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -
     if dir.dot(look.look_dir()).raw() < cos_turns(half_angle).raw() {
         return false;
     }
-    // From the character itself rather than the crosshair's near clip a
-    // body's radius short of it: with the fighter's back to a wall, that
-    // clip lies inside the wall.
-    let near = origin(p.pos).sub(eye).dot(dir).max(Fx::ZERO).min(reach);
-    sight_clear(eye.add(dir.scale(near)), at, scene)
+    // And nothing hides it **from the character's own chest**: the camera
+    // the renderer draws is pulled in off any wall behind the fighter, so
+    // what stands between the character and the point is what can hide it.
+    // From the eye this function places, a fighter with their back to a
+    // wall had the wall between the camera and everything in front of them.
+    sight_clear(origin(p.pos), at, scene)
 }
 
 /// [`in_view`] from an eye and a look direction already known -- a look the
