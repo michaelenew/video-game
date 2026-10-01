@@ -187,6 +187,33 @@ pub struct Report {
     /// every pack creature the same way, so a creature's plan and its report
     /// lines can lean on them.
     pub pack: PackTally,
+
+    /// What the fight put on the ground and asked the hunters to defend, and
+    /// what falling cost them (bestiary P4, P6, P7). Printed only when there
+    /// is something in it, so a fight with none of it reads as it always did.
+    pub ground: GroundTally,
+}
+
+/// What the report counts about the hunt's lore: the defended things, falls,
+/// and the floor.
+#[derive(Clone, Debug, Default)]
+pub struct GroundTally {
+    /// Each defended thing: its name, what it took, what it had at the end,
+    /// and whether it broke or arrived.
+    pub objectives: Vec<(String, i32, i32, bool, bool)>,
+    /// Landings that cost a hunter something, and what they cost.
+    pub falls: u32,
+    pub fall_damage: i32,
+    /// Frames a hunter spent standing in a hazard, and the most hazards on
+    /// the floor at once.
+    pub hazard_frames: u32,
+    pub most_hazards: u32,
+}
+
+impl GroundTally {
+    fn any(&self) -> bool {
+        !self.objectives.is_empty() || self.falls > 0 || self.most_hazards > 0
+    }
 }
 
 /// What the report counts about a pack: who died, who bit, how many at once.
@@ -276,6 +303,7 @@ impl Report {
             commit_at: V3::ZERO,
             timeline: Vec::new(),
             pack: PackTally::default(),
+            ground: GroundTally::default(),
         }
     }
 
@@ -363,9 +391,46 @@ impl Report {
         }
     }
 
+    /// The ground: falls, hazards underfoot, and the defended things.
+    fn observe_ground(&mut self, before: &World, after: &World) {
+        let g = &mut self.ground;
+        for (was, now) in before.players.iter().zip(after.players.iter()) {
+            let paid = sim::state::landing_damage(was, now);
+            if paid > 0 {
+                g.falls += 1;
+                g.fall_damage += paid;
+            }
+        }
+        if after.lore.owner.is_none() {
+            return;
+        }
+        let ground = after.terrain();
+        let hazards = ground.floor.iter().count() as u32;
+        g.most_hazards = g.most_hazards.max(hazards);
+        if hazards > 0 {
+            for p in after.players.iter().filter(|p| p.health > 0) {
+                if ground.floor.iter().any(|h| h.holds(p.pos)) {
+                    g.hazard_frames += 1;
+                }
+            }
+        }
+        g.objectives = sim::objective::standing(&after.lore, after.arena())
+            .map(|o| {
+                (
+                    o.decl.name.to_string(),
+                    o.state.taken,
+                    o.state.health,
+                    o.state.broken,
+                    o.state.arrived,
+                )
+            })
+            .collect();
+    }
+
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
         self.observe_pack(before, after);
+        self.observe_ground(before, after);
         // The first creature. A fight against two (the Pair) reports on the
         // first; a report per creature is that fight's to add.
         let (Some(&was), Some(&now)) = (before.monster(), after.monster()) else {
@@ -1047,6 +1112,45 @@ impl Report {
                 "regroups / broke",
                 format!("{} / {}", t.regroups, t.broke),
                 "came back, and left for good",
+            );
+        }
+
+        if self.ground.any() {
+            let g = &self.ground;
+            out.push_str("\nTHE GROUND\n");
+            for (name, taken, left, broke, arrived) in &g.objectives {
+                line(
+                    &mut out,
+                    name,
+                    format!("{taken} / {left}"),
+                    if *broke {
+                        "taken / left: it broke"
+                    } else if *arrived {
+                        "taken / left: it arrived"
+                    } else {
+                        "taken / left"
+                    },
+                );
+            }
+            if g.most_hazards > 0 {
+                line(
+                    &mut out,
+                    "hazards, most at once",
+                    format!("{}", g.most_hazards),
+                    "on the floor together",
+                );
+                line(
+                    &mut out,
+                    "frames in one",
+                    format!("{}", g.hazard_frames),
+                    "a hunter standing in a hazard",
+                );
+            }
+            line(
+                &mut out,
+                "falls that hurt",
+                format!("{} / {}", g.falls, g.fall_damage),
+                "landings past the free height, and their cost",
             );
         }
 

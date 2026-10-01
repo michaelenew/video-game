@@ -588,7 +588,7 @@ fn where_only_fighters_stand_every_aim_is_unchanged() {
         effects: &w.effects,
         quarry: &w.monsters,
         critters: &w.critters,
-        arena: w.arena(),
+        arena: &w.terrain(),
     };
     for pitch in [-12000i16, -6000, -2000, 0, 3000] {
         let look = Input::looking_at(0, 0, pitch);
@@ -614,7 +614,7 @@ fn a_skillshot_aimed_through_a_gnat_lands_on_the_gnat() {
             effects: &w.effects,
             quarry: &w.monsters,
             critters: &w.critters,
-            arena: w.arena(),
+            arena: &w.terrain(),
         };
         let reach = Fx::from_int(20);
         let path = aim::skillshot_path(0, look, reach, &scene);
@@ -651,7 +651,7 @@ fn a_standing_swing_pointed_at_a_gnat_dips_and_one_pointed_over_it_stays_level()
         effects: &w.effects,
         quarry: &w.monsters,
         critters: &w.critters,
-        arena: w.arena(),
+        arena: &w.terrain(),
     };
     let p = w.players[0];
     let reach = Fx::from_int(2);

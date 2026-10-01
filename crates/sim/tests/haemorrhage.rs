@@ -52,7 +52,7 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         effects: &effects,
         quarry: &w.monsters,
         critters: &sim::critter::Critters::NONE,
-        arena: w.arena(),
+        arena: &w.terrain(),
     };
     let middle = sim::aim::standing_middle(target, sim::tuning::body_height());
     let miss = |pitch: i16| {
@@ -265,7 +265,7 @@ fn a_spike_on_the_trail_chains_to_the_bleeding_fighter() {
             effects: &effects,
             quarry: &w.monsters,
             critters: &sim::critter::Critters::NONE,
-            arena: w.arena(),
+            arena: &w.terrain(),
         };
         (-40..=80)
             .map(|step| -(step * 200) as i16)

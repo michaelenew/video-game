@@ -30,6 +30,7 @@ replaced.
 | `floor`, `regions` | What the floor is made of: a `Material` everywhere, then rectangles and discs of other materials, later ones winning. |
 | `solids` | Axis-aligned boxes, at most `MAX_SOLIDS` (64). Every face stops a body, every top is standable however high, and each has a `Material` for its top. |
 | `spawns` | Two versus marks; and the hunt's marks (two hunters, a creature per slot), or `None` for the species' own spawn distances along x, which is how the proving ground places a hunt. A `Mark` is a point and a facing, written as "stand here, face there". |
+| `sites` | Where a fight's defended things stand (bestiary P7): a route of points and a box's size each -- a wall's place, a cart's road. What stands there is the species' ([hazards.md](hazards.md) §5). Empty for most arenas; the range has a gate and a road. |
 
 **Materials** are `Ground`, `Grass`, `Rock`, `Stone`, `Sand`, `Snow`, `Ash`,
 `Peat`, `Water`, `Wood`. The simulation can ask `Arena::material_under(pos)`
@@ -137,17 +138,19 @@ there, for every arena, and say so here.
   creatures) measured 142 µs a frame in the worst class against 102 µs in the
   proving ground, with a 520 µs budget. No grid until an arena needs one.
 - **Lengths over 181 m saturate** in 16.16 (`V3::len`). The range is 240 m
-  long, so two things at its two ends read as 181 m apart; nothing in the
-  arena code takes such a length, and `math::big_len` exists for the
-  Siegeshell's branch if its fight does.
-- **Not done here, each the creature's:** the camera is not clamped under a
-  ceiling in the simulation's eye (`sim::camera::eye`) — the drawn camera is
-  pulled in under the vault, but an aim ray from an eye above a low vault would
-  start inside it; the Broodmother should test it at her 12 m. Creatures do not
-  collide with solids (they are clamped to the bounds), so a creature that
-  must go round a tower or a pillar needs that. The sparring bot's wall sense
-  is still the proving ground's. Floor materials are not read by anything in
-  the fight.
+  long, so two things at its two ends read as 181 m apart. **Done 2026-10-01**
+  ([hazards.md](hazards.md) §6): `math::wide_len` and its siblings are exact at
+  any distance and bit-identical below a hundred metres, and the glance, the
+  creature's walk and the straight-line tests use them.
+- **Done 2026-10-01, in F3b** ([hazards.md](hazards.md)): the simulation's eye
+  is held under a ceiling (`camera::eye_under`) and the drawn camera starts from
+  it; creatures collide with solids when their species says so
+  (`FightDecl::collides`) -- the Ridgeback does not, and stays bit-identical; the
+  sparring bot reads its walls off the arena; and the floor's material is read
+  by the fight for the first time (a footfall on rock or stone is a louder
+  noise). **The ground as it stands** (`arena::Terrain`) -- the arena, the
+  solids a fight raises at runtime, and the floor hazards -- is what every query
+  takes now; with nothing raised it is the arena exactly.
 - **A Reaver's shadow starts at the versus mark in a hunt**, as it always has:
   the hunt moves her to the hunters' mark afterwards and the shadow eases over.
   Fixing it moves the Reaver's pinned hunt, so it was left for a change that

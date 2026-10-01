@@ -139,7 +139,8 @@ shapes for every class, and they allocate nothing.
 generic pack above: `appetite` (how much a critter wants a move now -- the
 default is the monster's tent on range and bearing times its appetite),
 `steer` (where it goes, given the generic answer), `frame` (pack-level rules,
-with the herd to read an owner by), `hurt` and `died`. Its own state lives in
+with the herd to read an owner by), `hurt`, `died`, and `bumped` (it walked
+into a solid -- added with [hazards.md](hazards.md), for the Hornback's bull). Its own state lives in
 `Pack::memo`, twelve words the brain never reads, so a creature adds no field
 to the world. Roles (`Critter::role`) are the species' to mean.
 
@@ -278,6 +279,12 @@ not generic yet -- fix it there, for every pack, and say so here.
   moves the bot's pinned fights, so that is a change for whoever means to.
 
 ## 8 · Not done here
+
+(Since built, in [hazards.md](hazards.md): critters take damage from floor
+hazards that reach them, a critter's move strikes a defended thing as a
+creature's does, and `PackMind::bumped` is told when one walks into a solid.
+Packs keep their own glance and perceive every fighter -- P5's filter is the
+monsters'.)
 
 Each the creature's own: telegraph floor markers for critter moves (the data is
 `Critter::telegraph`); a "swings over" and "hidden commits" line in the report

@@ -304,6 +304,20 @@ impl EffectKind {
     /// one this way, it only ever comes from a pillar that already stood --
     /// but the match has to say something, so it says what the pillar it came
     /// from would.
+    /// **Is it fire?** What lights a floor hazard that ignites -- tar into
+    /// burning tar -- and burns away one that burns (web), declared here per
+    /// kind the way a move declares its line of effect, rather than named in
+    /// the hazard code. Judgement's field is light, not fire.
+    pub const fn ignites(self) -> bool {
+        matches!(
+            self,
+            EffectKind::FirePillar
+                | EffectKind::FireTornado
+                | EffectKind::Embers
+                | EffectKind::FireRing
+        )
+    }
+
     pub const fn grounded(self) -> bool {
         match self {
             EffectKind::FirePillar | EffectKind::FireTornado | EffectKind::BlackSpike => true,

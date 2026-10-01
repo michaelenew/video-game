@@ -34,6 +34,7 @@ pub static ARENA: Arena = Arena {
         // The Ridgeback's own spawn distances, which are knobs.
         hunt: None,
     },
+    sites: &[],
 };
 
 const SOLIDS: [Solid; 6] = [

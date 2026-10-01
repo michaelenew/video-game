@@ -32,7 +32,7 @@
 use crate::DT;
 pub use crate::beast::{Rig, Shape};
 
-use crate::arena::{Arena, Bounds};
+use crate::arena::{Bounds, Terrain};
 use crate::beast::{self, MAX_BREAKABLE, Pose};
 use crate::fixed::Fx;
 use crate::math::V3;
@@ -457,6 +457,36 @@ pub struct Quarry {
     /// the follow-up appetite reads -- a sweep that staggers is a sweep that
     /// sets up the bite, and this is how the animal knows to throw it.
     pub stunned: bool,
+}
+
+/// What a creature's senses allow it this frame (bestiary P5): which fighters
+/// its species' perception filter lets the glance sample, and the noise it
+/// would attend to if it perceives nobody.
+///
+/// Worked out by the world, which has the scene a filter needs -- line of
+/// sight is asked through `aim` -- and handed in beside the [`Quarry`], so the
+/// brain still receives positions and velocities and nothing else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Senses {
+    pub perceived: [bool; crate::state::MAX_PLAYERS],
+    pub heard: Option<Heard>,
+}
+
+impl Senses {
+    /// It perceives everybody and hears nothing: the Ridgeback's, and the
+    /// glance as it was before there were filters.
+    pub const ALL: Senses = Senses {
+        perceived: [true; crate::state::MAX_PLAYERS],
+        heard: None,
+    };
+}
+
+/// A noise the creature attends to: where, and who made it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Heard {
+    pub at: V3,
+    /// The fighter who made it, or `noise::NOBODY`.
+    pub who: u8,
 }
 
 /// Where its attention is, and what it remembers seeing.
@@ -1618,12 +1648,17 @@ impl Monster {
     /// the whole difficulty model: it cannot react to a button because it is
     /// not looking, and a player who changes direction between two glances has
     /// done something real.
-    fn glance(&mut self, quarry: &[Quarry]) {
+    fn glance(&mut self, quarry: &[Quarry], senses: &Senses) {
         if self.brain.glance_left > 0 {
             self.brain.glance_left -= 1;
             return;
         }
         self.brain.glance_left = self.sp().glance_frames();
+        // **What it cannot perceive it does not sample** (bestiary P5). A
+        // fighter its species' filter rules out this glance is not there to
+        // it; if nobody is, it takes its sample from what it heard, and if it
+        // heard nothing it keeps the old sample -- which it goes on leading.
+        let perceived = |i: usize| senses.perceived.get(i).copied().unwrap_or(true);
 
         // It looks at whoever is nearest and *not* on its back: there is
         // nothing to bite at up there, and if a second hunter is on the ground
@@ -1634,10 +1669,10 @@ impl Monster {
         let nearest = |aboard_counts: bool| -> Option<usize> {
             let mut best: Option<(usize, Fx)> = None;
             for (i, q) in quarry.iter().enumerate() {
-                if !q.alive || (!aboard_counts && q.aboard) {
+                if !q.alive || (!aboard_counts && q.aboard) || !perceived(i) {
                     continue;
                 }
-                let d = q.pos.sub(self.pos).flat_len();
+                let d = crate::math::wide_flat_len(q.pos.sub(self.pos));
                 if best.is_none_or(|(_, seen)| d.raw() < seen.raw()) {
                     best = Some((i, d));
                 }
@@ -1645,6 +1680,14 @@ impl Monster {
             best.map(|(i, _)| i)
         };
         let Some(mut pick) = nearest(false).or_else(|| nearest(true)) else {
+            if let Some(h) = senses.heard {
+                self.brain.seen = h.at;
+                self.brain.seen_vel = V3::ZERO;
+                self.brain.seen_stunned = false;
+                if (h.who as usize) < quarry.len() {
+                    self.brain.target = h.who;
+                }
+            }
             return;
         };
         // **It keeps the target it has.** Nearest-wins alone made it turn
@@ -1656,9 +1699,9 @@ impl Monster {
         let held = self.brain.target as usize;
         if held < quarry.len() && held != pick {
             let q = quarry[held];
-            let usable = q.alive && (!q.aboard || quarry[pick].aboard);
-            let mine = q.pos.sub(self.pos).flat_len();
-            let theirs = quarry[pick].pos.sub(self.pos).flat_len();
+            let usable = q.alive && (!q.aboard || quarry[pick].aboard) && perceived(held);
+            let mine = crate::math::wide_flat_len(q.pos.sub(self.pos));
+            let theirs = crate::math::wide_flat_len(quarry[pick].pos.sub(self.pos));
             if usable && theirs.raw() >= mine.mul(self.sp().target_switch()).raw() {
                 pick = held;
             }
@@ -1912,7 +1955,7 @@ impl Monster {
                     Fx::ZERO,
                     self.brain.seen.z.sub(self.pos.z),
                 );
-                let range = to.flat_len();
+                let range = crate::math::wide_flat_len(to);
                 // **It gallops when you run.** The clamp used to be the walk,
                 // which is slower than a fighter's, so the whole fight was
                 // walking away from it at leisure. Wanting to close a long gap
@@ -1930,7 +1973,7 @@ impl Monster {
                 let fleeing = self
                     .brain
                     .seen_vel
-                    .dot(to.normalized())
+                    .dot(crate::math::wide_normalized(to))
                     .max(Fx::ZERO)
                     .mul(self.sp().pursuit_gain());
                 let want = range
@@ -1946,7 +1989,9 @@ impl Monster {
                 // is what it does when you are too close, whichever way it is
                 // pointed.
                 if want.raw() > 0 {
-                    let ahead = V3::from_turns(self.yaw).dot(to.normalized()).max(Fx::ZERO);
+                    let ahead = V3::from_turns(self.yaw)
+                        .dot(crate::math::wide_normalized(to))
+                        .max(Fx::ZERO);
                     want.mul(ahead)
                 } else {
                     want
@@ -2100,19 +2145,25 @@ impl Monster {
     /// One tick of creature, in the proving ground. For the tests and tools
     /// that hold a creature without a world; the world calls [`Monster::step_in`].
     pub fn step(&mut self, quarry: &[Quarry]) {
-        self.step_in(quarry, &crate::arena::proving_ground::ARENA);
+        self.step_in(
+            quarry,
+            &Senses::ALL,
+            &Terrain::bare(&crate::arena::proving_ground::ARENA),
+        );
     }
 
-    /// One tick of creature, in an arena: its bounds are the walls it is kept
-    /// inside and pulls up short of.
-    pub fn step_in(&mut self, quarry: &[Quarry], arena: &Arena) {
+    /// One tick of creature, on the ground as it stands: its bounds are the
+    /// walls it is kept inside and pulls up short of, and -- for a species
+    /// that `collides` -- its solids are what it walks into. `senses` is what
+    /// its perception filter allows the glance this frame.
+    pub fn step_in(&mut self, quarry: &[Quarry], senses: &Senses, arena: &Terrain) {
         if self.health <= 0 {
             self.doing = Doing::Dead;
             self.speed = Fx::ZERO;
             self.yaw_rate = Fx::ZERO;
             return;
         }
-        self.glance(quarry);
+        self.glance(quarry, senses);
         self.tick_action();
         self.bleed_off();
 
@@ -2133,6 +2184,65 @@ impl Monster {
 
         self.steer();
         self.walk(&arena.bounds);
+        self.fence(arena);
+    }
+
+    /// **Walk into the arena's solids**, for a species that `collides`: pushed
+    /// out sideways from anything taller than its row's `StepOver`, at its
+    /// row's `BodyRadius`, and told so through its `bumped` hook (the
+    /// Hornback's charge into a rock). A species that does not collide is only
+    /// kept inside the bounds, which is what the Ridgeback has always had.
+    fn fence(&mut self, arena: &Terrain) {
+        let sp = self.sp();
+        if !sp.fight.collides {
+            return;
+        }
+        use crate::species::FightField;
+        let radius = sp.fight_fx(FightField::BodyRadius);
+        let step = sp.fight_fx(FightField::StepOver);
+        let (at, push) = arena.fence(self.pos, radius, step);
+        if push != V3::ZERO {
+            self.pos = at;
+            // Whatever of its speed went into the solid is gone.
+            let forward = V3::from_turns(self.yaw);
+            let into = forward.dot(crate::math::wide_normalized(push));
+            if into.raw() < 0 {
+                self.speed = self.speed.mul(Fx::ONE.add(into)).max(Fx::ZERO);
+            }
+            if let Some(bumped) = sp.fight.bumped {
+                bumped(self, push);
+            }
+        }
+    }
+
+    /// **Where it sees from**: its head -- the last bone of its neck -- or its
+    /// root bone for a species with no neck. What a perception filter measures
+    /// sight, feel and hearing from.
+    pub fn head(&self) -> V3 {
+        let sp = self.sp();
+        if !sp.has_body() {
+            return self.pos;
+        }
+        let bone = sp.neck.last().copied().unwrap_or(0);
+        self.rig().bone[bone.min(sp.bones.len() - 1)].at
+    }
+
+    /// **Damage from the floor**: a burning hazard under it. Health and strain,
+    /// as any blow; no part, so no hide multiplier, no break and no poise --
+    /// fire under a body is not a blow on one of its parts. Returns what went
+    /// in.
+    pub fn scorch(&mut self, damage: i32) -> i32 {
+        if !self.alive() || damage <= 0 {
+            return 0;
+        }
+        self.brain.grace = 0;
+        let dealt = damage.min(self.health);
+        self.health -= dealt;
+        self.strain += dealt;
+        if self.health <= 0 {
+            self.doing = Doing::Dead;
+        }
+        dealt
     }
 
     /// Frames until it can start another move, as things stand.

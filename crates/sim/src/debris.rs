@@ -23,7 +23,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
-use crate::arena::Arena;
+use crate::arena::Terrain;
 use crate::effects::Effects;
 use crate::fixed::{Fx, cos_turns, sin_turns};
 use crate::math::{V3, frame_about};
@@ -125,7 +125,7 @@ pub fn step(
     effects: &Effects,
     versus: bool,
     prey: pack::Prey,
-    arena: &Arena,
+    arena: &Terrain,
 ) {
     let stones = stones::gather(players);
     for slot in shrapnel.iter_mut() {

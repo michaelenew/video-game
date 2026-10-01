@@ -70,7 +70,7 @@ pub const SECTIONS: &[Section] = &[
             ),
             e(
                 "cargo run -p game -- --hunt [creature]",
-                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature. --hunt gnats is the dev pack: six small bodies and a queen, the critter machinery with nothing of its own.",
+                "Start a hunt instead of fighting each other: the Ridgeback, or any creature that is built, by name, in its own arena. H switches either way in game, and Shift+H steps to the next creature. --hunt gnats is the dev pack: six small bodies and a queen, the critter machinery with nothing of its own. --hunt sentinel is the dev creature for the floor, the senses and the defended things: one of each hazard on the floor, a cone it sees in, a ring of noises it hears (F1 draws them), and in --arena range a gate and a cart.",
             ),
             e(
                 "cargo run -p game -- --arena <name>",

@@ -592,6 +592,20 @@ scalars! {
     // break through it, and how far the crosshair may miss its middle.
     BreakReach,       "Elementalist", "Break-through, reach",                 Fixed,   fx(1,2),  fx(8,1);
     BreakLock,        "Elementalist", "Break-through, crosshair slack",       Fixed,   0,        fx(4,1);
+    // **Falling** (bestiary P6): one rule for the whole game, keyed to the
+    // height fallen -- from the last thing stood on, lowered by any push up on
+    // the way down -- rather than to the landing speed, because terminal
+    // velocity arrives after four metres and every fall above that lands at
+    // the same speed. Free below the first; so much a metre past it; halved
+    // for a landing slower than the third. See `state::Player::fall_over`.
+    FallFree,         "Air",      "Fall, free up to (m)",                   Fixed,   0,        fx(30,1);
+    FallPerMetre,     "Air",      "Fall, damage per metre past it",         Int,     0,        200;
+    FallSoft,         "Air",      "Fall, halved landing slower than",       Fixed,   0,        fx(40,1);
+    // **The eye under a ceiling.** The aiming ray starts at the eye, and an
+    // eye above a cave's vault would start inside the rock: it is held this
+    // far under the lowest ceiling over it or over its fighter. See
+    // `camera::eye_under`.
+    EyeUnderCeiling,  "Aim",      "Eye, held under a ceiling by",           Fixed,   0,        fx(2,1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1161,6 +1175,13 @@ pub enum Tunable {
     Pack(u16),
     /// One field of one kind of critter in its pack.
     Critter(u8, crate::critter::CritterField),
+    /// One field of its senses and body row, for a species that has one
+    /// (`species::FightDecl::row`).
+    Fight(crate::species::FightField),
+    /// One field of one of its hazard kinds (`crate::hazard`).
+    Hazard(u8, crate::hazard::HazardField),
+    /// One field of one of its objectives (`crate::objective`).
+    Objective(u8, crate::objective::ObjectiveField),
 }
 
 impl Tunable {
@@ -1172,6 +1193,9 @@ impl Tunable {
             Tunable::Move(slot, f) => species.move_index(slot as usize, f),
             Tunable::Pack(k) => species.pack_base() + k as usize,
             Tunable::Critter(kind, f) => species.critter_index(kind as usize, f),
+            Tunable::Fight(f) => species.fight_index(f),
+            Tunable::Hazard(kind, f) => species.hazard_index(kind as usize, f),
+            Tunable::Objective(i, f) => species.objective_index(i as usize, f),
         }
     }
 
@@ -1191,6 +1215,36 @@ impl Tunable {
             }
             Tunable::Pack(k) => crate::pack::PackKnob::DECLS[k as usize],
             Tunable::Critter(_, f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+            Tunable::Fight(f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "senses",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+            Tunable::Hazard(_, f) => {
+                let (lo, hi) = f.range();
+                KnobDecl {
+                    family: "",
+                    label: f.label(),
+                    unit: f.unit(),
+                    lo,
+                    hi,
+                }
+            }
+            Tunable::Objective(_, f) => {
                 let (lo, hi) = f.range();
                 KnobDecl {
                     family: "",
@@ -1293,14 +1347,37 @@ fn species_baked(id: SpeciesId, index: usize) -> i32 {
         let field = (index - common - s.own.len()) % MONSTER_FIELDS;
         return MonsterField::ALL.get(field).map_or(0, |f| f.range().0);
     }
-    let packs = crate::pack::PackKnob::DECLS;
-    if index < pack + packs.len() {
-        return packs[index - pack].lo;
+    let fight = s.fight_base();
+    if index < fight {
+        let packs = crate::pack::PackKnob::DECLS;
+        if index < pack + packs.len() {
+            return packs[index - pack].lo;
+        }
+        let field = (index - pack - packs.len()) % crate::critter::CRITTER_FIELDS;
+        return crate::critter::CritterField::ALL
+            .get(field)
+            .map_or(0, |f| f.range().0);
     }
-    let field = (index - pack - packs.len()) % crate::critter::CRITTER_FIELDS;
-    crate::critter::CritterField::ALL
+    // What a species brings to the fight: the senses row, then a row per
+    // hazard kind, then a row per objective -- each at the bottom of its range,
+    // like everything else a species has never baked.
+    let hazards = s.hazard_base();
+    if index < hazards {
+        return crate::species::FightField::ALL
+            .get(index - fight)
+            .map_or(0, |f| f.range().0);
+    }
+    let objectives = s.objective_base();
+    if index < objectives {
+        let field = (index - hazards) % crate::hazard::HAZARD_FIELDS;
+        return crate::hazard::HazardField::ALL
+            .get(field)
+            .map_or(0, |f| f.neutral());
+    }
+    let field = (index - objectives) % crate::objective::OBJECTIVE_FIELDS;
+    crate::objective::ObjectiveField::ALL
         .get(field)
-        .map_or(0, |f| f.range().0)
+        .map_or(0, |f| f.neutral())
 }
 
 pub fn scalar(s: Scalar) -> i32 {
@@ -1457,6 +1534,12 @@ impl Knob {
                     Tunable::Critter(kind, _) => {
                         format!("{} · {}", s.name, s.kind(kind).name)
                     }
+                    Tunable::Hazard(kind, _) => {
+                        format!("{} · {}", s.name, s.fight.hazards[kind as usize].name)
+                    }
+                    Tunable::Objective(i, _) => {
+                        format!("{} · {}", s.name, s.fight.objectives[i as usize].name)
+                    }
                     _ => species::common::family(s, &t.decl(s)),
                 }
             }
@@ -1502,6 +1585,18 @@ impl Knob {
                         "{}.{}.{}",
                         slug(s.name),
                         slug(s.kind(kind).name),
+                        slug(f.label())
+                    ),
+                    Tunable::Hazard(kind, f) => format!(
+                        "{}.{}.{}",
+                        slug(s.name),
+                        slug(s.fight.hazards[kind as usize].name),
+                        slug(f.label())
+                    ),
+                    Tunable::Objective(i, f) => format!(
+                        "{}.{}.{}",
+                        slug(s.name),
+                        slug(s.fight.objectives[i as usize].name),
                         slug(f.label())
                     ),
                     _ => format!(
@@ -1644,6 +1739,23 @@ pub fn species_knobs(s: &Species) -> Vec<Knob> {
             for field in crate::critter::CritterField::ALL {
                 out.push(Knob::Species(s.id, Tunable::Critter(kind as u8, *field)));
             }
+        }
+    }
+    // What it brings to the fight: the senses row, a row per hazard kind, a
+    // row per objective. Appended, so a species with none keeps its indices.
+    if s.fight.row {
+        for field in crate::species::FightField::ALL {
+            out.push(Knob::Species(s.id, Tunable::Fight(*field)));
+        }
+    }
+    for kind in 0..s.fight.hazards.len() {
+        for field in crate::hazard::HazardField::ALL {
+            out.push(Knob::Species(s.id, Tunable::Hazard(kind as u8, *field)));
+        }
+    }
+    for i in 0..s.fight.objectives.len() {
+        for field in crate::objective::ObjectiveField::ALL {
+            out.push(Knob::Species(s.id, Tunable::Objective(i as u8, *field)));
         }
     }
     out

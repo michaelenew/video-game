@@ -214,6 +214,16 @@ A2 below landed with it.
 
 ### P4 · Floor hazards (Mireback, Broodmother, Veilstalker, Sandmaw, Siegeshell)
 
+**Built 2026-10-01** with P5, P7 and the shared half of P6, the Ridgeback and
+versus bit-identical: see [hazards.md](hazards.md) for what was built, the
+recipe, and what a person should review. Sixteen bytes a hazard, not eight (a
+strand's second end and a point that reaches the far end of the valley), in
+the hunt's **lore** -- one region of the snapshot each fight lays out
+differently -- rather than a fixed list every fight pays for. Discs and
+strands; kinds and their effects declared by the species, with generic slow,
+root, damage, pull, lift, blocks-sight, fire and runtime solids; anchored to a
+creature part when they live on one.
+
 Tar, web, smoke, burning ground, a sinkhole's pull, vented steam. A small fixed
 list of circular floor areas — kind, centre, radius, age, state — about eight
 bytes each, sixteen of them. The fighters' `effects` list is the precedent. The
@@ -221,6 +231,11 @@ list is what the renderer draws and what the hit test reads, which keeps the
 rule that the overlay draws what the hit test uses.
 
 ### P5 · Perception beyond sight (Sandmaw, Veilstalker, The Pair)
+
+**Built 2026-10-01**: a perception filter per species (cone, blind arc, line
+of sight through `aim::sight_clear`, feel), hearing from a noise ring made by
+diffing each fighter's body across the frame, `World::shown` for a creature
+that is unseen, and A5. See [hazards.md](hazards.md) §3.
 
 The glance samples every target. Three creatures need it to sample less. The
 Sandmaw hears movement, not bodies. The Veilstalker is *un*seen, which is a
@@ -231,12 +246,23 @@ cannot perceive it does not sample.
 
 ### P6 · Flight (Galewing), and the long ride (Galewing, Siegeshell)
 
+**The shared half built 2026-10-01: one fall rule** (§6 below, and
+[hazards.md](hazards.md) §4). Flight and the long ride are still the
+Galewing's and the Siegeshell's.
+
 A 3D steering controller alongside the ground one, and a ride whose surface is
 tens of metres off the floor. Falling damage stops being an afterthought. This
 is the largest single piece of new machinery in the cast, and only two
 creatures use it, which is why they are late.
 
 ### P7 · Objectives (Hornback's cart variant, Siegeshell)
+
+**Built 2026-10-01**: a defended thing -- a box with health at a site the
+arena declares, rolling along its route while escorted if it says so, a solid
+if it says so -- reached by a creature's move with the volume it reaches a
+fighter with, losing or winning the hunt, drawn, and counted by the fight
+report. See [hazards.md](hazards.md) §5. The harness learning to defend is the
+creature's.
 
 Something besides the hunters that can lose: a wall with health, a cart with a
 route. Small in code; large in what it changes about the harness, which has to
@@ -278,6 +304,15 @@ creature slot included; one `Monster` is 180 bytes. Estimates, to be replaced by
 
 Only one fight is loaded at a time, so the worst case is the Siegeshell at
 about 2.5 KiB total. It fits, and it is the fight to watch.
+
+**Measured 2026-10-01, with everything shared built** (P1 to P8): the `World`
+is **3,912 bytes**, 184 to spare. Every creature's state beyond the two
+monster slots, the ten critters and the pack brain lives in the hunt's
+**lore**: 24 cells of 16 bytes that each fight lays out for itself -- so many
+for hazards, noises and defended things, the rest its own. The itemised worst
+cases are the Siegeshell (19 cells) and the Mireback (18); every creature has
+five or more cells to grow into. `tests/lore.rs` checks every layout fits, and
+architecture.md §"Where the 4 KiB goes" has the table.
 
 The frame budget matters more than the bytes: a rollback re-simulates up to
 eight frames. A pack of ten critters doing ten ray queries each is a hundred
@@ -330,7 +365,7 @@ bit-identical step and never inside it, with the Ridgeback's twelve seeds and
 | A2 **built** | [Hornback](creatures/hornback.md) §10 | Critters join what `aim::first_along` can run into | Nothing until critters exist |
 | A3 | [Siegeshell](creatures/siegeshell.md) §6 | Seen from above, the top face of a mountable part counts as a place, so aiming at your feet on a shell does not land on the floor below | **Shots at the Ridgeback's back change** |
 | A4 | [Galewing](creatures/galewing.md) §6 | `swing_path` and `origin` measure the dead zone against the surface underfoot, so a swing on a banked back is level with the back | Nothing on the floor: bit-identical. The Ridgeback's shake gets it too |
-| A5 | [Veilstalker](creatures/veilstalker.md) §6 | `aim::in_view`: whether a point is inside a fighter's view, so it can never reveal itself off-screen | Nothing: a new question, not a changed answer |
+| A5 **built** | [Veilstalker](creatures/veilstalker.md) §6 | `aim::in_view`: whether a point is inside a fighter's view, so it can never reveal itself off-screen | Nothing: a new question, not a changed answer |
 
 One more is open rather than proposed: the [Broodmother](creatures/broodmother.md)'s
 sacs are part of her body, so they are not on the crosshair's ray, and whether a
@@ -338,6 +373,13 @@ ranged shot at a sac lands depends on `first_along`. Her document leaves it to a
 test.
 
 ### One fall-damage rule, not two
+
+**Decided 2026-10-01** ([hazards.md](hazards.md) §4): a fall is measured from
+**the last thing stood on**, lowered by any push up on the way down; free up
+to **9 m**, **25 a metre** past it, halved for a landing slower than 12 m/s.
+Not 7.5 m, because the Ridgeback's rear lifts a rider to 8.73 m and the pinned
+hunts must not take fall damage; not the apex of a jump, because a fighter's
+own jump is not a fall. Below, as the two documents had it.
 
 The Galewing and the Siegeshell each wrote a fall-damage rule, and they
 disagree: the Galewing's is free below 7.5 m and 30 per metre above, and the

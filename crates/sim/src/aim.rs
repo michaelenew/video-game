@@ -81,7 +81,7 @@
 //! is simulation state and its numbers are in the desync checksum. See
 //! `crate::camera`, which says what that bought and what it cost.
 
-use crate::arena::{self, Arena};
+use crate::arena::{self, Terrain};
 use crate::class::{Mechanic, Structure};
 use crate::critter::Critters;
 use crate::effects::{EffectKind, Effects};
@@ -201,8 +201,10 @@ pub struct Scene<'a> {
     pub quarry: &'a Herd,
     /// Every small body (`crate::critter`). All empty outside a pack fight.
     pub critters: &'a Critters,
-    /// Where the fight is: its solids are terrain to every ray here.
-    pub arena: &'a Arena,
+    /// Where the fight is, as it stands this frame: the arena's solids and
+    /// the ones the fight has raised are terrain to every ray here, and the
+    /// floor hazards are what [`sight_clear`] sees through or not.
+    pub arena: &'a Terrain,
 }
 
 /// Where a fighter standing at `pos` casts from: the height abilities leave at.
@@ -256,7 +258,7 @@ pub fn standing_middle(ground: V3, height: Fx) -> V3 {
 /// the crosshair is a question about the world, not about the move asking.
 pub fn stands_at(who: usize, look: Input, scene: &Scene) -> Stand {
     let caster = &scene.players[who];
-    let eye = crate::camera::eye(caster.pos, look, caster.aloft);
+    let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
     let dir = look.look_dir();
     let near = near_clip(eye, dir, origin(caster.pos));
     let limit = nearest_terrain(eye, dir, near, Fx::MAX, scene, false).map_or(Fx::MAX, |(d, _)| d);
@@ -511,7 +513,7 @@ pub fn sight_for_attack(who: usize, look: Input, reach: Fx, scene: &Scene) -> Si
 /// The raycast itself; `lids` is whether the top of a stone counts as ground.
 fn sight_over(who: usize, look: Input, reach: Fx, scene: &Scene, lids: bool) -> Sighted {
     let caster = &scene.players[who];
-    let eye = crate::camera::eye(caster.pos, look, caster.aloft);
+    let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
     let dir = look.look_dir();
     let cast = origin(caster.pos);
 
@@ -585,7 +587,7 @@ fn nearest_terrain(
     // Terrain. Ground is whatever faces upward, which is what decides whether
     // a skillshot flies level over the spot or straight at it.
     keep(floor_hit(eye, dir), Met::Ground);
-    for solid in scene.arena.solids().iter() {
+    for solid in scene.arena.solids() {
         let hit = crate::math::ray_hits_box(eye, dir, solid.min, solid.max);
         keep(hit, facing(hit, eye, dir, solid.max.y));
     }
@@ -664,7 +666,7 @@ pub fn skillshot_path(who: usize, look: Input, reach: Fx, scene: &Scene) -> Path
         // goes through whoever is on that spot instead of burying itself in
         // the dirt. See [`standing_middle`].
         Met::Ground => {
-            let eye = crate::camera::eye(caster.pos, look, caster.aloft);
+            let eye = crate::camera::eye_under(caster.pos, look, caster.aloft, scene.arena);
             let dir = look.look_dir();
             let near = near_clip(eye, dir, from);
             standing_middle(
@@ -832,7 +834,12 @@ fn swing_tilt(pos: V3, look: Input, grounded: bool, reach: Fx, stands: Stand) ->
 /// wall, and whether she can actually *get* there is a separate question asked
 /// of the world rather than of the camera -- see [`clear_between`].
 pub fn pointing_at(who: usize, look: Input, at: V3, slack: Fx, scene: &Scene) -> bool {
-    let eye = crate::camera::eye(scene.players[who].pos, look, scene.players[who].aloft);
+    let eye = crate::camera::eye_under(
+        scene.players[who].pos,
+        look,
+        scene.players[who].aloft,
+        scene.arena,
+    );
     let column = t::body_radius().add(slack);
     let foot = V3::new(at.x, at.y.sub(slack), at.z);
     crate::math::ray_hits_cylinder(
@@ -914,7 +921,12 @@ pub fn pointing_at_disc(
     height: Fx,
     scene: &Scene,
 ) -> bool {
-    let eye = crate::camera::eye(scene.players[who].pos, look, scene.players[who].aloft);
+    let eye = crate::camera::eye_under(
+        scene.players[who].pos,
+        look,
+        scene.players[who].aloft,
+        scene.arena,
+    );
     crate::math::ray_hits_cylinder(eye, look.look_dir(), at, radius, height).is_some()
 }
 
@@ -1013,11 +1025,11 @@ pub fn blink_to(from: V3, dir: V3, reach: Fx, scene: &Scene) -> V3 {
 /// `None` if nothing solid crosses it before the far end.
 fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
     let span = b.sub(a);
-    let reach = span.len();
+    let reach = crate::math::wide_len(span);
     if reach.raw() <= 0 {
         return None;
     }
-    let dir = span.normalized();
+    let dir = crate::math::wide_normalized(span);
     let mut nearest: Option<Fx> = None;
     let mut consider = |hit: Option<Fx>| {
         if let Some(d) = hit {
@@ -1026,7 +1038,7 @@ fn first_solid_between(a: V3, b: V3, scene: &Scene) -> Option<Fx> {
             }
         }
     };
-    for solid in scene.arena.solids().iter() {
+    for solid in scene.arena.solids() {
         consider(crate::math::ray_hits_box(a, dir, solid.min, solid.max));
     }
     for stone in scene.stones.iter().flatten() {
@@ -1052,21 +1064,71 @@ pub fn line_clear(a: V3, b: V3, scene: &Scene) -> bool {
     nothing_between(a, b, scene)
 }
 
+/// **Can something at `a` see `b`?** [`line_clear`] -- nothing solid between
+/// them -- and no floor hazard that blocks sight (smoke) on the way.
+///
+/// A creature's glance asks it from its head (`perception::in_line_of_sight`:
+/// the Pair do not see through a pillar or a cloud), and [`in_view`] asks it
+/// from a fighter's eye. Bodies do not block it, as they do not block the
+/// crosshair's ray: a body is a thing standing in a place.
+pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
+    if !nothing_between(a, b, scene) {
+        return false;
+    }
+    // A cloud is a column: a line through it is blocked when it passes within
+    // the cloud's radius of its axis, between its floor and its top.
+    //
+    // A watcher standing inside the cloud is blinded by it as well, which
+    // the same test says: the line starts inside the column.
+    !scene
+        .arena
+        .floor
+        .sight_blockers()
+        .any(|h| crate::math::segment_meets_column(a, b, h.a, h.radius, h.height))
+}
+
+/// **Is that point on this fighter's screen, and not behind anything?** (A5.)
+///
+/// Inside a cone of `half_angle` (in turns) round where they are looking, from
+/// their eye, and [`sight_clear`] from the eye to it. Built from the eye and
+/// the look, so it lives here beside [`pointing_at`]: the Veilstalker uses it
+/// so that it never reveals itself off-screen -- its brain with the look it
+/// last glanced, the fight report with the live one. A question about the
+/// camera rather than a line of effect; it points nothing anywhere.
+pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
+    let p = &scene.players[who];
+    let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
+    in_view_of(eye, look.look_dir(), at, half_angle, scene)
+}
+
+/// [`in_view`] from an eye and a look direction already known -- a look the
+/// creature glanced some frames ago, from where the fighter stood then.
+pub fn in_view_of(eye: V3, look: V3, at: V3, half_angle: Fx, scene: &Scene) -> bool {
+    let to = at.sub(eye);
+    if crate::math::wide_len(to).raw() <= 0 {
+        return true;
+    }
+    let along = crate::math::wide_normalized(to).dot(look);
+    along.raw() >= cos_turns(half_angle).raw() && sight_clear(eye, at, scene)
+}
+
 /// One line of [`clear_between`], against the terrain and the structures on it.
 ///
 /// The ground plane is not consulted: every surface a body can stand on is at
 /// or above it, so the floor is never *between* two of them.
 fn nothing_between(a: V3, b: V3, scene: &Scene) -> bool {
     let span = b.sub(a);
-    let reach = span.len();
+    // Wide: a line across the valley is longer than 16.16 can square, and
+    // below a hundred metres these are `len` and `normalized` exactly.
+    let reach = crate::math::wide_len(span);
     if reach.raw() <= 0 {
         return true;
     }
-    let dir = span.normalized();
+    let dir = crate::math::wide_normalized(span);
     // Short of the far end, so a line that arrives exactly on the surface the
     // other body is standing on has not been stopped by it.
     let stopped = |hit: Option<Fx>| hit.is_some_and(|d| d.raw() < reach.raw());
-    for solid in scene.arena.solids().iter() {
+    for solid in scene.arena.solids() {
         if stopped(crate::math::ray_hits_box(a, dir, solid.min, solid.max)) {
             return false;
         }
@@ -1140,7 +1202,7 @@ pub fn racing_path(from: V3, look: Input, reach: Fx) -> Path {
 ///
 /// [`settle`] does the last step, so the stone comes up on top of whatever is
 /// under that spot -- another stone included -- rather than inside it.
-pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field, arena: &Arena) -> V3 {
+pub fn planted_ahead(pos: V3, facing: V3, ahead: Fx, stones: &Field, arena: &Terrain) -> V3 {
     let flat = V3::new(facing.x, Fx::ZERO, facing.z).normalized();
     settle(pos.add(flat.scale(ahead)), stones, arena)
 }
@@ -1490,7 +1552,7 @@ pub fn first_along(
         // all three axes -- the same trick the stones use, so "do these two
         // volumes touch" stays one ray against one shape.
         let fat = V3::new(girth, girth, girth);
-        for solid in scene.arena.solids().iter() {
+        for solid in scene.arena.solids() {
             if let Some(dist) =
                 crate::math::ray_hits_box(from, dir, solid.min.sub(fat), solid.max.add(fat))
             {
@@ -1502,7 +1564,7 @@ pub fn first_along(
 }
 
 /// Drop a point onto whatever it would stand on.
-pub fn settle(at: V3, stones: &Field, arena: &Arena) -> V3 {
+pub fn settle(at: V3, stones: &Field, arena: &Terrain) -> V3 {
     let mut floor = arena.ground_under(at);
     for stone in stones.iter().flatten() {
         let apart = V3::new(at.x.sub(stone.at.x), Fx::ZERO, at.z.sub(stone.at.z)).flat_len();

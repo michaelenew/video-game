@@ -19,9 +19,10 @@
 //! | -40 to 0 | Snow, with ash round two old pits; five 5 m trunks; a stream. |
 //! | 0 to 40 | The tower, 6 m square and 12 m tall, eight ledges up its sides; a 3 m bank along the north wall, with a 1.5 m step. |
 //! | 40 to 80 | The cave: rock floor, a vault at 12 m that drops to 8 m at the walls, two pillars. |
-//! | 80 to 120 | Grass and boulders. |
+//! | 80 to 120 | Grass and boulders; a gate and a road, the two sites a defended thing can stand at. |
 
 use super::{Area, Arena, ArenaId, Bounds, HuntMarks, Mark, Material, Region, Solid, Spawns};
+use crate::objective::Site;
 
 use Material::{Ash, Grass, Rock, Sand, Snow, Stone, Water, Wood};
 
@@ -51,7 +52,27 @@ pub static ARENA: Arena = Arena {
             ],
         }),
     },
+    sites: &SITES,
 };
+
+/// Two places for a defended thing, at the grass end: a gate across a gap
+/// near the east wall, and a road from the cave mouth to it. Nothing stands
+/// at either unless the fight's species declares an objective for it --
+/// `tests/objectives.rs` puts the dev pack's there.
+const SITES: [Site; 2] = [
+    Site {
+        name: "gate",
+        route: &[(11600, 1500)],
+        size: (100, 300, 400),
+        material: Wood,
+    },
+    Site {
+        name: "road",
+        route: &[(8400, -1800), (10000, -1800), (11400, -400)],
+        size: (100, 120, 75),
+        material: Wood,
+    },
+];
 
 const REGIONS: [Region; 7] = [
     Region {

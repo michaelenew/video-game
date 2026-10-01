@@ -300,11 +300,11 @@ impl Duelist {
                     };
                     // Not into a wall: a Rush carries six metres.
                     let lands = me.pos.add(away.scale(RUSH_REACH));
-                    if by_the_wall(lands, super::EDGE) {
+                    if by_the_wall(lands, super::EDGE, &self.bounds) {
                         away = side.scale(Fx::from_int(-self.strafe));
                     }
                     let lands = me.pos.add(away.scale(RUSH_REACH));
-                    if !by_the_wall(lands, super::EDGE) {
+                    if !by_the_wall(lands, super::EDGE, &self.bounds) {
                         self.gesture = Some(
                             Gesture::press(Input::MECHANIC, seen.them.pos)
                                 .walking(away)
@@ -319,8 +319,8 @@ impl Duelist {
         // Rush in from mid range and swing out of it.
         let mid = dist.raw() > Fx::from_int(4).raw() && dist.raw() < Fx::from_int(9).raw();
         let eager = matches!(self.plan, super::Plan::Press | super::Plan::DashIn);
-        let walled =
-            by_the_wall(me.pos, super::JUMP_CLEAR) || by_the_wall(seen.them.pos, super::JUMP_CLEAR);
+        let walled = by_the_wall(me.pos, super::JUMP_CLEAR, &self.bounds)
+            || by_the_wall(seen.them.pos, super::JUMP_CLEAR, &self.bounds);
         if rush_ready
             && mid
             && eager
@@ -508,7 +508,7 @@ impl Duelist {
         let pressed = dist.raw() < Fx::ratio(25, 10).raw();
         // Ride a stone up and out of trouble.
         if (red < 40 || pressed)
-            && !by_the_wall(me.pos, super::JUMP_CLEAR)
+            && !by_the_wall(me.pos, super::JUMP_CLEAR, &self.bounds)
             && self.chance(self.style.caution / 6 + self.style.air / 8)
         {
             self.gesture = Some(

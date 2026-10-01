@@ -375,7 +375,9 @@ impl CameraRig {
             crate::pitch_from_radians(pitch),
         );
         let stood = sim::V3::new(fx_of(self.focus[0]), fx_of(feet), fx_of(self.focus[2]));
-        let eye = sim::camera::eye(stood, look, fx_of(around.aloft));
+        // Held under a cave's vault exactly as the aimed-from eye is, so the
+        // two stay one point there too.
+        let eye = sim::camera::eye_under(stood, look, fx_of(around.aloft), around.arena);
         let (back, up) = (
             -((eye.x.to_f32_for_render() - self.focus[0]) * along[0]
                 + (eye.z.to_f32_for_render() - self.focus[2]) * along[1]),

@@ -20,7 +20,7 @@
 //! (`cargo run -p anim --bin bake_beast`), and `tuned.rs`, its knobs
 //! (`cargo run -p sim --bin bake_tuning`).
 
-mod baked;
+pub(crate) mod baked;
 mod tuned;
 
 use crate::beast::{Bone, ClipDecl, Leg, NO_PARENT, Part, bone, breakables, part, v};
@@ -628,4 +628,5 @@ pub static SPECIES: Species = Species {
     tuned: &tuned::KNOBS,
     tuned_path: "crates/sim/src/species/ridgeback/tuned.rs",
     pack: None,
+    fight: &crate::species::FightDecl::PLAIN,
 };

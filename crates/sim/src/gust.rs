@@ -72,7 +72,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
-use crate::arena::Arena;
+use crate::arena::Terrain;
 use crate::class::Class;
 use crate::effects::Effects;
 use crate::fixed::Fx;
@@ -314,7 +314,7 @@ pub fn step(
     effects: &Effects,
     versus: bool,
     prey: pack::Prey,
-    arena: &Arena,
+    arena: &Terrain,
     bursts: &mut Bursts,
 ) {
     let stones = stones::gather(players);

@@ -10,7 +10,7 @@ use hunt::duel::{Plan, spar, spar_traced};
 use hunt::{Duelist, Level};
 use sim::class::ALL_CLASSES;
 use sim::state::{MAX_PLAYERS, Phase};
-use sim::{Class, Input, World};
+use sim::{Class, Input, V3, World};
 
 const MINUTE: u32 = 60 * 60;
 
@@ -220,4 +220,44 @@ fn the_dual_mage_keeps_her_balance() {
         "her lower bar never reached the blink: best {}",
         best.to_int()
     );
+}
+
+/// The sparring bot's walls are the arena's: in the range, two hundred metres
+/// long, the middle of the floor is nowhere near one, and in the proving
+/// ground the test is the one it always was.
+#[test]
+fn the_bot_reads_the_walls_off_the_arena() {
+    use hunt::duel::{by_the_wall, to_the_wall};
+    use sim::arena::{proving_ground, range};
+    use sim::fixed::Fx;
+    let middle_of_the_range = V3::new(Fx::from_int(100), Fx::ZERO, Fx::ZERO);
+    assert!(!by_the_wall(
+        middle_of_the_range,
+        Fx::from_int(4),
+        &range::ARENA.bounds
+    ));
+    assert!(by_the_wall(
+        middle_of_the_range,
+        Fx::from_int(4),
+        &proving_ground::ARENA.bounds
+    ));
+    let near = V3::new(Fx::from_int(118), Fx::ZERO, Fx::from_int(3));
+    assert!(by_the_wall(near, Fx::from_int(4), &range::ARENA.bounds));
+    assert_eq!(to_the_wall(near, &range::ARENA.bounds), Fx::from_int(2));
+    // In the proving ground, exactly the old arithmetic: |x| against the
+    // half-width, either side.
+    let half = proving_ground::half();
+    for (x, z) in [(-13, 2), (12, -11), (0, 0), (14, 14), (-7, 13)] {
+        let p = V3::new(Fx::from_int(x), Fx::ZERO, Fx::from_int(z));
+        let old = p.x.abs().sub(half).abs().min(p.z.abs().sub(half).abs());
+        assert_eq!(to_the_wall(p, &proving_ground::ARENA.bounds), old);
+        let old_by = |m: Fx| {
+            let h = half.sub(m);
+            p.x.abs().raw() > h.raw() || p.z.abs().raw() > h.raw()
+        };
+        for m in [0, 2, 4] {
+            let m = Fx::from_int(m);
+            assert_eq!(by_the_wall(p, m, &proving_ground::ARENA.bounds), old_by(m));
+        }
+    }
 }

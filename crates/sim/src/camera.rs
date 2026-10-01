@@ -462,3 +462,32 @@ pub fn eye(pos: V3, look: Input, aloft: Fx) -> V3 {
         pos.z.sub(along.z.mul(back)),
     )
 }
+
+/// [`eye`], kept under the arena's ceiling.
+///
+/// **The aiming ray starts here**, so an eye that rose through a cave's vault
+/// would cast every shot from inside the rock. It is held
+/// `tuning::eye_under_ceiling` below the lowest ceiling over the eye or over
+/// the fighter -- a solid hanging from the roof whose underside is above the
+/// fighter's head -- and nowhere else does it move. With no ceiling over
+/// either it is [`eye`] exactly, which is every arena but a cave.
+///
+/// The drawn camera starts from this one too (`view::camera`), so the
+/// crosshair and the eye stay the same line under a vault.
+pub fn eye_under(pos: V3, look: Input, aloft: Fx, arena: &crate::arena::Arena) -> V3 {
+    let mut at = eye(pos, look, aloft);
+    let head = pos.y.add(t::body_height());
+    let over_eye = arena.ceiling_over(at.x, at.z, head);
+    let over_body = arena.ceiling_over(pos.x, pos.z, head);
+    let lowest = match (over_eye, over_body) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
+    if let Some(ceiling) = lowest {
+        let cap = ceiling.sub(t::eye_under_ceiling()).max(head);
+        if at.y.raw() > cap.raw() {
+            at.y = cap;
+        }
+    }
+    at
+}
