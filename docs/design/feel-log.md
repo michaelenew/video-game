@@ -6798,3 +6798,54 @@ nearest, a metre added per hundred of health left, is kept.
 unanswerable hits. For a person: whether the colours read (the sacs are the
 brightest things in the cave), and whether the screech reads as a tell or as a
 script (§12, 4).
+
+### 2026-10-01 — The Veilstalker: the animal you never see, tuned by harness
+
+**Changed** An unseen creature: the Veilstalker, in the Ashwood
+(`--hunt veilstalker`), drawn at the strength `World::shown` gives each part,
+with a trail in the snow and the ash, paint where hits land, regions that
+mottle for good, smoke that blocks sight, braziers that tip into coals, a
+panic in fire, quills stopped by trunks, a mimic that is a decloak with
+nothing in it (`World::apparition`), a retreat after two hits, and a view
+gate on the glanced look so no decloak happens off a hunter's screen
+([creatures/veilstalker.md](creatures/veilstalker.md) §13). Against the
+document's first guesses: health 7 000 (11 200 for two), lunge 260, spear
+190, rake 140 + 140, pounce 220, quill 70, mottle at 800, a stalk of 90-150
+frames at 11 m begun after the hunt's grace. Generic, every one off for
+everybody else: `FightDecl::apparition`, `aim::in_view_from`,
+`aim::off_look`, `Tally::until_free`, the cooldown range to 900.
+
+**Why** The contract first. Every blind hit the harness found was a stale
+glance trusted too far: a decloak just behind a trunk's edge (now a metre
+either side, `ViewMargin`), a strike thrown out of a bound that skidded
+behind a trunk (now the stopping point is gated too), a camera that swept a
+few degrees and swung the eye behind the bark (`ViewSweep`), quills over a
+trunk from a decloak half hidden. Then the tuning: a hunter that reads the
+floor perfectly is only hit when it is slow, and at the document's numbers
+the Champion won ten to twelve in twelve with half his health. The lunge
+never landed until the hunter's timing was made a judgement -- off by a
+tenth of the frames it judged across -- because the harness dodged a lunge
+on the same frame from any distance, which nobody does.
+
+**Found** 24 hunts per class: Champion 6 won in 336 s, Bulwark 8 in 463 s,
+Reaver 3, Elementalist 5, Blood mage 0, Dual mage 0 (the harness does not
+play their pools or bars): 22 of 144, tier 4, in five and a half to eight
+minutes. **Zero blind hits and zero unanswerable** in all 144, coop (12 of
+12) and temper 3 (5 of 12). Threatening 44-48 %, poke 7-10, way in 6-8
+against twenty, walk up ~40 against thirty. Five Bulwark hunts in 24 ran
+out the twenty minutes with nothing thrown: the animal stood against a
+trunk on its stalking circle, its way-point inside a stride, facing the
+hunter through the bark. It walks round a trunk now, to a point past it
+and never inside a stride, and none run out.
+
+**Reverted** Lunge advance 40 and rake reach 80 (`exp1`): no change in what
+landed, since the hunter answered the silhouette, not the reach. Health
+7 000 with the document's damage: the Champion still won ten in twelve. The
+footfall test's walking condition, read too wide: a foot reaching over the
+cordwood wall comes down on its top, not on snow -- the test now asks for a
+foot over the floor, as its sentence says.
+
+**Verdict** built; tier 4. For a person: does a translucent shimmer read on
+a laptop at 9 m/s; does the view gate feel eerie or exploitable (§12 1); is
+the way-in window really walk-up; and the Elementalist's fire, which the
+harness does not cast.

@@ -35,6 +35,7 @@ mod settings;
 mod signs;
 mod species;
 mod trophies;
+mod veil;
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
@@ -165,6 +166,7 @@ fn main() {
                 hud::setup_picker,
                 crosshair::setup,
                 glint::setup,
+                veil::setup,
             ),
         )
         .add_systems(
@@ -233,6 +235,7 @@ fn main() {
                 ground::overlay,
                 hud::update_picker,
                 glint::update,
+                veil::place,
             )
                 .chain()
                 .after(beast::signs)
@@ -539,8 +542,56 @@ fn shot_move(w: &mut World) {
     if beast.species == sim::species::SpeciesId::SANDMAW {
         sim::species::sandmaw::fight::ready_for(beast, kind as u8);
     }
-    if beast.species == sim::species::SpeciesId::PAIR {
+    let species = beast.species;
+    if species == sim::species::SpeciesId::PAIR {
         shot_pair_move(w, kind as u8);
+    }
+    if species == sim::species::SpeciesId::VEILSTALKER {
+        shot_veil_move(w, kind as u8);
+    }
+}
+
+/// [`shot_move`] for the Veilstalker: the move starts a frame early, so its
+/// first frame -- the feet setting, the mimic's ghost placed -- happens in
+/// the world; the pounce is thrown from the top of the trunk nearest the
+/// camera's line, at player one.
+fn shot_veil_move(w: &mut World, kind: u8) {
+    use sim::species::veilstalker::{self as vs, fight};
+    let me = w.players[0].pos;
+    let ground = w.terrain();
+    let Some(beast) = w.monster_mut() else {
+        return;
+    };
+    let a = vs::SPECIES.attack(kind);
+    beast.doing = sim::monster::Doing::Startup {
+        kind,
+        left: a.startup + 1,
+    };
+    if kind == vs::POUNCE {
+        // On a trunk top in front of the camera, nine metres or so out.
+        let (x, z) = sim::arena::veilstalker::TRUNKS
+            .iter()
+            .copied()
+            .min_by_key(|(x, z)| {
+                let d = sim::V3::new(
+                    sim::Fx::ratio(*x, 100),
+                    sim::Fx::ZERO,
+                    sim::Fx::ratio(*z, 100),
+                )
+                .sub(me)
+                .flat_len();
+                (d.sub(sim::Fx::from_int(9))).abs().raw()
+            })
+            .unwrap_or((0, 0));
+        beast.pos = sim::V3::new(
+            sim::Fx::ratio(x, 100),
+            sim::Fx::from_int(5),
+            sim::Fx::ratio(z, 100),
+        );
+        beast.own[fight::body::FLAGS] |= fight::flag::PERCHED;
+        let to = me.sub(beast.pos);
+        beast.yaw = sim::math::atan2_turns(to.z, to.x);
+        fight::mark_pounce(beast, me, &ground);
     }
 }
 

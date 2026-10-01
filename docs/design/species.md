@@ -283,6 +283,17 @@ twelve read a phantom one).
 | `MoveDecl::unanimated` | a move in its table its own body never plays (implies `never_chosen`): the gnawer moves at the head of her table, which are her brood's. Clips are not looked for |
 | `repose(m, pose)` | the last word on the pose, after the clip and the shared layers: eight planted feet, the stabbing foot lifted to its disc, the list. What the hit test reads, so it is the simulation's, not the renderer's |
 
+**The seams an unseen creature adds** (the Veilstalker, 2026-10-01), on the
+same terms -- every one off in `PLAIN`, and no other creature's code moved:
+
+| Seam | What it is for |
+| --- | --- |
+| `FightDecl::apparition` / `World::apparition()` | a decloak drawn where no body is -- the mimic's ghost: where it stands, which way, which rear it plays and its frame, from the lore. What the renderer draws of a decloak, real or not, and the only thing the hunter reads to see one |
+| `FightDecl::shown` (P5's, first used here) | how strongly each part is drawn, `0` cloaked to `1` whole: the veil, derived each frame from the move, the fade, speed, paint, mottle and hazards (`fight::shown`) |
+| `aim::in_view_from`, `aim::off_look` | *is that point on a screen looked along this yaw, from here, and not behind anything* -- the creature's view gate, built from the eye `aim.rs` builds every other eye from |
+| `Tally::until_free(w, slot, free)` | a species' own correction to `frames_until_free` for the windows: the Veilstalker adds its decloak floor, so a stalk is free but not threatening until it is in reach and in view; identity for everybody else |
+| `MonsterField::Cooldown` range to 900 | the smoke's fifteen seconds |
+
 ## 6 · Decided while building, for a person to review
 
 - **Sizes are maximums, not generics.** `MAX_BONES` 40, `MAX_PARTS` 48,

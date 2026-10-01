@@ -1150,7 +1150,9 @@ impl MonsterField {
         match self {
             // To four seconds: the Mireback's wallow grinds for two and a half.
             MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 240),
-            MonsterField::Cooldown => (0, 600),
+            // To fifteen seconds: the Veilstalker's smoke stands for eight
+            // and is not vented again for fifteen.
+            MonsterField::Cooldown => (0, 900),
             MonsterField::Root => (0, 300),
             MonsterField::Travel => (0, fx(90, 1)),
             MonsterField::Hitstun | MonsterField::Blockstun => (0, 120),
