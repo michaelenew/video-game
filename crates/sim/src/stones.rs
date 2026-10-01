@@ -27,7 +27,7 @@
 //! with the thing it is warning about is worse than no warning.
 
 use crate::DT;
-use crate::arena::{self, Arena};
+use crate::arena::{self, Terrain};
 use crate::class::{MAX_STRUCTURES, Mechanic, Shield, Structure};
 use crate::fixed::Fx;
 use crate::math::V3;
@@ -254,7 +254,7 @@ fn owner_of(index: usize) -> u8 {
 ///
 /// Runs **before** the fighters step, so what a fighter collides with this
 /// frame is where the stone actually is rather than where it was.
-pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Arena) {
+pub fn step(players: &mut [Player; MAX_PLAYERS], arena: &Terrain) {
     let mut field = gather(players);
 
     for stone in field.iter_mut().flatten() {
@@ -699,7 +699,7 @@ pub fn relocate_and_erupt(
     players: &mut [Player; MAX_PLAYERS],
     index: usize,
     to: V3,
-    arena: &Arena,
+    arena: &Terrain,
 ) {
     let mut field = gather(players);
     let settled = crate::aim::settle(to, &field, arena);

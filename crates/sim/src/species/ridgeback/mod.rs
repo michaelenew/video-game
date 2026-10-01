@@ -628,4 +628,5 @@ pub static SPECIES: Species = Species {
     tuned: &tuned::KNOBS,
     tuned_path: "crates/sim/src/species/ridgeback/tuned.rs",
     pack: None,
+    fight: &crate::species::FightDecl::PLAIN,
 };

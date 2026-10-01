@@ -59,7 +59,7 @@ fn pitch_onto(w: &World, at: V3) -> i16 {
         effects: &effects,
         quarry: &w.monsters,
         critters: &sim::critter::Critters::NONE,
-        arena: w.arena(),
+        arena: &w.terrain(),
     };
     (-40..=80)
         .map(|step| -(step * 200) as i16)
@@ -351,7 +351,7 @@ fn a_victim_hauled_by_the_grasp_stands_at_her_feet_when_the_hold_ends() {
         effects: &effects,
         quarry: &[None; sim::monster::MAX_MONSTERS],
         critters: &sim::critter::Critters::NONE,
-        arena: &sim::arena::proving_ground::ARENA,
+        arena: &sim::arena::Terrain::bare(&sim::arena::proving_ground::ARENA),
     };
     let middle = sim::aim::standing_middle(w.players[1].pos, sim::tuning::body_height());
     let pitch = (-40..=80)

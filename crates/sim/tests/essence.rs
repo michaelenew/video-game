@@ -68,7 +68,7 @@ fn pitch_at(w: &World, target: V3) -> i16 {
         effects: &effects,
         quarry: &w.monsters,
         critters: &sim::critter::Critters::NONE,
-        arena: w.arena(),
+        arena: &w.terrain(),
     };
     let middle = V3::new(
         target.x,

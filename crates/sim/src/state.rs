@@ -14,7 +14,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
-use crate::arena::{self, Arena, ArenaId};
+use crate::arena::{self, Arena, ArenaId, Terrain};
 use crate::bolt::{self, Flight, MAX_BOLTS};
 use crate::bulwark;
 use crate::camera;
@@ -26,12 +26,15 @@ use crate::dual;
 use crate::effects::{Effect, EffectKind, GRASP_ARMS, LOTUS_BLADES, MAX_EFFECTS, quarry_victim};
 use crate::fixed::Fx;
 use crate::gust::{self, Gale, MAX_GUSTS};
+use crate::hazard::{self, Floor};
 use crate::input::{Destination, Input, Travel};
+use crate::lore::Lore;
 use crate::math::V3;
 use crate::monster::{
-    self, Doing, Herd, MAX_MONSTERS, Monster, Quarry, mount_of, mount_part, mount_slot,
+    self, Doing, Herd, MAX_MONSTERS, Monster, Quarry, Senses, mount_of, mount_part, mount_slot,
 };
 use crate::moves;
+use crate::objective;
 use crate::pack::{self, Pack};
 use crate::shadow;
 use crate::species::SpeciesId;
@@ -619,6 +622,28 @@ pub struct Player {
     /// same frame -- the shape `blinked` has, for the same reason: a frame
     /// re-simulated must break the same stone.
     pub breaking: u8,
+    /// **How far this fall goes past the free height** (bestiary P6), in
+    /// metres: how high the last thing stood on was above
+    /// `tuning::fall_free`, lowered by any push upward on the way down, and
+    /// zero for any fall that started lower than that.
+    ///
+    /// One rule for the whole game, keyed to the **height fallen** rather than
+    /// the landing speed -- terminal velocity arrives after four metres, so
+    /// speed cannot tell a ledge from the sky. Measured from the last
+    /// *footing* -- the floor, a solid, a creature's back -- because a
+    /// fighter's own jump is not a fall: a hop off a platform, the Champion's
+    /// leap, the Dual mage flying are all free however high they go. A push
+    /// up on the way down -- a second jump, a wing beat, an Updraft, a
+    /// launch -- starts the fall again from where it happened, never higher.
+    /// A creature that carries a fighter up and lets go sets it where it let
+    /// go ([`Player::falling_from`]).
+    ///
+    /// Kept as the excess over the free height rather than the height itself
+    /// so that it is **zero for every fall that cannot hurt**: in the proving
+    /// ground nothing stands higher than the Ridgeback's back, which is under
+    /// the free height, so this never leaves zero there and the pinned hunts
+    /// hash exactly as they did. See `World::land`.
+    pub fall_over: Fx,
     /// Frames left before each of this class's moves may be thrown again.
     ///
     /// **Per move, and only ever the one you just threw** -- which is what
@@ -994,6 +1019,52 @@ impl Player {
             t::body_height()
         }
     }
+
+    /// **Start this fighter's fall from `height`**: what a creature that has
+    /// carried somebody up calls as it lets go -- a talon drop, a fling from a
+    /// back -- so the fall is measured from where they were released rather
+    /// than from the last thing they stood on.
+    pub fn falling_from(&mut self, height: Fx) {
+        self.fall_over = height.sub(t::fall_free()).max(Fx::ZERO);
+    }
+
+    /// Is something under the feet that a fall is measured from: the floor, a
+    /// solid, a creature's back?
+    pub fn footed(&self) -> bool {
+        self.grounded || self.aboard()
+    }
+}
+
+/// **The fall rule, a frame on** (bestiary P6): `was` the fighter at the top
+/// of the frame, `p` at the end of it. Returns the damage a landing this frame
+/// is worth, and keeps [`Player::fall_over`].
+///
+/// Footing sets the height a fall starts from. In the air, a push up starts it
+/// again from wherever the body is, never higher. Landing pays for what is
+/// past the free height and below where it landed: a fall from the crown of
+/// a shell onto its rim is the drop between them, not the crown's height.
+/// Halved for a landing slower than `fall_soft`, which only the Dual mage's
+/// slow fall manages.
+pub fn fall_rule(was: &Player, p: &mut Player) -> i32 {
+    let free = t::fall_free();
+    let over_here = p.pos.y.sub(free).max(Fx::ZERO);
+    let mut damage = 0;
+    if !was.footed() && p.footed() && p.fall_over.raw() > 0 {
+        let past = p.fall_over.sub(p.pos.y.max(Fx::ZERO));
+        if past.raw() > 0 {
+            damage = past.mul(Fx::from_int(t::fall_per_metre())).to_int();
+            let landing = was.vel.y.neg();
+            if landing.raw() < t::fall_soft().raw() {
+                damage /= 2;
+            }
+        }
+    }
+    if p.footed() {
+        p.fall_over = over_here;
+    } else if p.vel.y.raw() > 0 {
+        p.fall_over = p.fall_over.min(over_here);
+    }
+    damage
 }
 
 impl Default for Player {
@@ -1063,6 +1134,7 @@ impl Default for Player {
             r_held: false,
             side_b_held: false,
             breaking: NO_STONE,
+            fall_over: Fx::ZERO,
         }
     }
 }
@@ -1112,6 +1184,12 @@ pub struct World {
     /// creature that is only a pack (the Gnawers) has this and no monster; a
     /// creature that owns one (the Broodmother) has both.
     pub pack: Option<Pack>,
+    /// **The hunt's own room**: floor hazards, the noise ring, defended
+    /// things, and whatever state the fight's species keeps -- one region
+    /// sized to the largest fight and laid out by whichever species this one
+    /// is. See [`crate::lore`]. Blank, and not hashed, in a fight that uses
+    /// none of it.
+    pub lore: Lore,
 }
 
 impl World {
@@ -1133,6 +1211,7 @@ impl World {
             arena: ArenaId::PROVING_GROUND,
             critters: Critters::NONE,
             pack: None,
+            lore: Lore::NONE,
         };
         for (p, class) in w.players.iter_mut().zip(classes.iter()) {
             *p = Player::new(*class);
@@ -1179,6 +1258,10 @@ impl World {
     ) -> World {
         let mut w = World::with_classes(classes);
         w.arena = arena::lookup(place).map_or(ArenaId::PROVING_GROUND, |a| a.id);
+        // The lore is laid out by the first creature named: the fight's.
+        if let Some(first) = herd.iter().flatten().next() {
+            w.lore = Lore::of(*first);
+        }
         for (slot, species) in herd.iter().enumerate() {
             let Some(id) = species else { continue };
             let sp = id.get();
@@ -1229,6 +1312,28 @@ impl World {
         self.arena.get()
     }
 
+    /// **The ground as it stands this frame**: the arena, the solids the fight
+    /// has raised on it (slag, a wall, a cart), and its floor hazards placed in
+    /// the world. What every body, ray and glance in the frame reads; see
+    /// [`arena::Terrain`].
+    pub fn terrain(&self) -> Terrain {
+        let mut ground = Terrain::bare(self.arena.get());
+        if self.lore.owner.is_none() {
+            return ground;
+        }
+        ground.floor = Floor::build(&self.lore, &self.monsters);
+        let (raised, n) = ground.floor.solids::<{ arena::MAX_RAISED }>();
+        for s in &raised[..n] {
+            ground.raise(*s);
+        }
+        for o in objective::standing(&self.lore, self.arena.get()) {
+            if o.decl.solid && !o.state.broken {
+                ground.raise(o.solid());
+            }
+        }
+        ground
+    }
+
     /// Go somewhere else: the picker's request, carried on the wire as
     /// [`Input::travel`]. A fresh fight with the same classes, keeping only the
     /// frame number -- which the rollback session owns and checks.
@@ -1276,6 +1381,12 @@ impl World {
         self.debris = [None; MAX_DEBRIS];
         self.gusts = [None; MAX_GUSTS];
         let here = self.arena();
+        // The hunt's lore starts again with the round: nothing on the floor,
+        // nothing heard, every defended thing whole and back at its start.
+        if let Some(owner) = self.lore.owner {
+            self.lore = Lore::of(owner);
+            objective::set_up(&mut self.lore, here);
+        }
         for (i, p) in self.players.iter_mut().enumerate() {
             let wins = p.rounds_won;
             let class = p.class;
@@ -1389,7 +1500,8 @@ impl World {
             return;
         }
 
-        let here = self.arena();
+        let here = self.terrain();
+        let here = &here;
         if let Phase::RoundOver { winner, left } = self.phase {
             if left > 0 {
                 self.phase = Phase::RoundOver {
@@ -1416,7 +1528,7 @@ impl World {
         // Stones move before the fighters do, so what a fighter walks into --
         // or stands on -- is where the stone is this frame rather than where it
         // was last one.
-        stones::step(&mut self.players, self.arena.get());
+        stones::step(&mut self.players, here);
         let field = stones::gather(&self.players);
 
         // The creature decides and moves first, so that riders are carried by
@@ -1425,6 +1537,7 @@ impl World {
         // velocities, no buttons -- so "it reads your inputs" is not a thing
         // that can quietly become true. See `monster::Quarry`.
         let mut spin = [Fx::ZERO; MAX_MONSTERS];
+        let senses = self.senses(here, &field);
         for (slot, place) in self.monsters.iter_mut().enumerate() {
             let Some(mut beast) = *place else { continue };
             let before = beast.yaw;
@@ -1435,7 +1548,7 @@ impl World {
                 aboard: self.players[i].aboard(),
                 stunned: self.players[i].action.stunned(),
             });
-            beast.step_in(&seen, self.arena.get());
+            beast.step_in(&seen, &senses[slot], here);
             // Its *heading*, not its wobble: a shake would otherwise spin the
             // rider's camera as hard as it spins the animal, and you are about
             // to be thrown off anyway.
@@ -1458,7 +1571,7 @@ impl World {
                 effects: &effects,
                 quarry: &beasts,
                 critters: &nobody,
-                arena: self.arena.get(),
+                arena: here,
             };
             pack::step(
                 &mut brain,
@@ -1472,6 +1585,23 @@ impl World {
             );
             self.pack = Some(brain);
         }
+
+        // **The species' own rules**, after its bodies have moved and before
+        // anybody else does: where its tar spreads, when a vent blows. Then
+        // the ground is placed again -- a vent rides the plate that just moved,
+        // and anything the species put down this frame is on the floor for the
+        // fighters' step below -- and the floor does what it does to whoever
+        // is standing in it.
+        if let Some(hook) = self.lore.owner.and_then(|s| s.get().fight.frame) {
+            hook(self);
+        }
+        let ground = if self.lore.owner.is_some() {
+            self.terrain()
+        } else {
+            *here
+        };
+        let here = &ground;
+        self.feel_the_floor(here);
 
         // **The creature's turn goes into the look, here and nowhere else.**
         //
@@ -1534,13 +1664,23 @@ impl World {
                 effects: &effects,
                 quarry: &beast,
                 critters: &crowd,
-                arena: self.arena.get(),
+                arena: here,
             };
             step_player(p, i, input, &field, &beast, &scene, carrying[i]);
             advance_clocks(p);
-            step_aloft(p, &field, self.arena.get());
+            step_aloft(p, &field, here);
             fade_grey(p, frame);
         }
+        // **Falls** (bestiary P6), and **noise** (P5): both read what the step
+        // just did to each body, against the body as the frame found it.
+        self.land(&seen);
+        crate::noise::listen(
+            &mut self.lore,
+            &seen,
+            &self.players,
+            |p| here.material_under(p),
+            frame,
+        );
         // Landing with a Downdraft still blowing: the burst. Read here, after
         // the step that put her feet down and before anything else moves,
         // because the column is an effect and the body's step cannot see it.
@@ -1619,13 +1759,7 @@ impl World {
             // up behind her is not a thing a mouse flick can produce.
             if p.class == Class::Elementalist && kind == moves::elementalist::LANDFALL {
                 let field = stones::gather(&self.players);
-                let at = aim::planted_ahead(
-                    p.pos,
-                    p.facing,
-                    t::landfall_ahead(),
-                    &field,
-                    self.arena.get(),
-                );
+                let at = aim::planted_ahead(p.pos, p.facing, t::landfall_ahead(), &field, here);
                 stones::raise(
                     &mut self.players[i],
                     class::Structure::slammed(at, p.facing),
@@ -1737,6 +1871,17 @@ impl World {
                 }
                 if place {
                     spawn_effect(&mut self.effects, born);
+                }
+                // A quake is the loudest thing a fighter does (P5).
+                if leaves == EffectKind::Quake {
+                    crate::noise::make(
+                        &mut self.lore,
+                        crate::noise::NoiseKind::Quake,
+                        born.pos,
+                        i as u8,
+                        0,
+                        self.frame,
+                    );
                 }
             }
         }
@@ -1959,7 +2104,7 @@ impl World {
                     // the floor, a recall through anybody never came back.
                     self.players[owner].mechanic = Mechanic::Shield(if outbound {
                         Shield::Planted {
-                            pos: V3::new(pos.x, self.arena.get().ground_under(pos), pos.z),
+                            pos: V3::new(pos.x, self.terrain().ground_under(pos), pos.z),
                             weight: Fx::ZERO,
                         }
                     } else {
@@ -1995,7 +2140,7 @@ impl World {
                 critters: &mut self.critters,
                 pack: &mut self.pack,
             },
-            self.arena.get(),
+            here,
         );
         debris::step(
             &mut self.debris,
@@ -2007,7 +2152,7 @@ impl World {
                 critters: &mut self.critters,
                 pack: &mut self.pack,
             },
-            self.arena.get(),
+            here,
         );
         let mut bursts: gust::Bursts = [None; gust::MAX_GUSTS];
         gust::step(
@@ -2020,7 +2165,7 @@ impl World {
                 critters: &mut self.critters,
                 pack: &mut self.pack,
             },
-            self.arena.get(),
+            here,
             &mut bursts,
         );
         // What the shots left where they landed: a cloud of embers per
@@ -2029,7 +2174,7 @@ impl World {
         // burning patch rather than a half-buried one, and its top still
         // reaches a standing body. See `effects::EffectKind::Embers`.
         for burst in bursts.into_iter().flatten() {
-            let floor = self.arena.get().ground_under(burst.at);
+            let floor = self.terrain().ground_under(burst.at);
             let mut at = burst.at;
             if at.y.sub(burst.radius).raw() < floor.raw() {
                 at.y = floor;
@@ -2059,13 +2204,22 @@ impl World {
         drag_the_held(&mut self.players);
         self.drink_where_the_haul_ends();
 
+        // The hunt's lore, a frame on: fire on the floor, hazards aging, a
+        // cart rolling.
+        self.step_the_lore();
+
         // Knockout check last, so the killing blow is fully applied first.
         if matches!(self.phase, Phase::Fighting) && self.hunting() {
             let standing = self.players.iter().any(|p| p.health > 0);
             // The hunt is won when every creature in it is down, and every
-            // small body dead or gone.
-            let winner = if !self.monsters.iter().flatten().any(Monster::alive)
-                && pack::beaten(&self.critters)
+            // small body dead or gone -- or when a defended thing that wins it
+            // arrives. It is lost when the hunters are down, or when a defended
+            // thing that loses it breaks (P7).
+            let winner = if objective::lost(&self.lore) {
+                QUARRY
+            } else if objective::won(&self.lore)
+                || !self.monsters.iter().flatten().any(Monster::alive)
+                    && pack::beaten(&self.critters)
             {
                 0
             } else if !standing {
@@ -2264,6 +2418,12 @@ impl World {
             if p.stoop != Fx::ZERO {
                 h.write_i32(p.stoop.raw());
             }
+            // Only while a fall could hurt: nothing in the proving ground
+            // stands high enough, so its fights hash as they always did.
+            if p.fall_over != Fx::ZERO {
+                h.write_i32(0xFA11);
+                h.write_i32(p.fall_over.raw());
+            }
             for f in &p.repeat_lock {
                 h.write_u32(*f as u32);
             }
@@ -2374,6 +2534,17 @@ impl World {
                 h.write_u32(u32::from_le_bytes([c.role, c.slot, c.target, c.mount]));
                 h.write_u32(c.perch[0] as u16 as u32 | (c.perch[1] as u16 as u32) << 16);
                 h.write_u32(c.perch[2] as u16 as u32 | (c.seared as u32) << 16);
+            }
+        }
+        // The hunt's lore, last, and only when something is in it: a fight
+        // with nothing on the floor, nothing heard and nothing to defend
+        // hashes exactly as it did before there was any.
+        if !self.lore.is_blank() {
+            h.write_u32(0x10E | (self.lore.owner.map_or(0xFF, |s| s.0) as u32) << 16);
+            for cell in self.lore.cells() {
+                for w in cell {
+                    h.write_u32(*w);
+                }
             }
         }
         h.finish()
@@ -3330,6 +3501,19 @@ fn step_player(
     // frame it was meant to come back.
     let out = p.abilities_out(who, scene);
     p.tick_repeat_locks(&out);
+    // **What the floor does to the feet** (bestiary P4): a dodge from inside
+    // tar carries half as far, a jump from inside web hardly leaves it. The
+    // walk is slowed through the ordinary slow (`World::feel_the_floor`);
+    // these two are read here, where the dodge and the jump are thrown. On
+    // clear floor all three are one, and multiplying by one changes nothing.
+    let foot = if p.footed() {
+        scene
+            .arena
+            .floor
+            .underfoot(p.pos, hazard::reach::FIGHTERS, true, 0)
+    } else {
+        hazard::Underfoot::CLEAR
+    };
     // Before anything moves the body, so the frame the feet land on still
     // sees the fall that got them there.
     bulwark::track_fall(p);
@@ -3595,8 +3779,8 @@ fn step_player(
                         // airdodge, and costs the airdodge.
                         p.breaking = slot as u8;
                         if p.grounded {
-                            p.vel.x = dir.x.mul(t::dodge_speed());
-                            p.vel.z = dir.z.mul(t::dodge_speed());
+                            p.vel.x = dir.x.mul(t::dodge_speed().mul(foot.dodge));
+                            p.vel.z = dir.z.mul(t::dodge_speed().mul(foot.dodge));
                             Action::Dodge {
                                 left: t::dodge_frames(),
                             }
@@ -3668,8 +3852,8 @@ fn step_player(
                             left: t::dodge_frames(),
                         }
                     } else if p.grounded {
-                        p.vel.x = dir.x.mul(t::dodge_speed());
-                        p.vel.z = dir.z.mul(t::dodge_speed());
+                        p.vel.x = dir.x.mul(t::dodge_speed().mul(foot.dodge));
+                        p.vel.z = dir.z.mul(t::dodge_speed().mul(foot.dodge));
                         Action::Dodge {
                             left: t::dodge_frames(),
                         }
@@ -3878,7 +4062,7 @@ fn step_player(
     }
 
     if input.has(Input::SPACE) && p.grounded && p.action.actionable() {
-        p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump));
+        p.vel.y = p.vel.y.add(t::jump_speed().mul(mob.jump).mul(foot.jump));
         p.grounded = false;
         p.jump_hold = t::jump_hold_frames();
     }
@@ -4969,7 +5153,7 @@ fn rearm_multihit(p: &mut Player) {
 }
 
 /// The velocity a dash is driving this frame, or `None` if there is no dash.
-fn rushing(p: &Player) -> Option<V3> {
+pub(crate) fn rushing(p: &Player) -> Option<V3> {
     match p.mechanic {
         Mechanic::Forms { rush, rush_vel, .. } if rush > 0 => Some(rush_vel),
         _ => None,
@@ -5554,7 +5738,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
 
 /// Per-tick mechanic upkeep: shields in flight, shadows on a leash, the meter
 /// burning at depth.
-fn step_mechanic(p: &mut Player, arena: &Arena) {
+fn step_mechanic(p: &mut Player, arena: &Terrain) {
     bulwark::drain(p);
     match p.mechanic {
         Mechanic::Shield(Shield::Flying {
@@ -5919,7 +6103,7 @@ pub const PARRY_FLOURISH: u16 = 14;
 /// was actually looking at when they pressed the button -- the renderer draws
 /// frame *n-1*'s snapshot while frame *n*'s input is being made. Stepping this
 /// first would aim against a framing nobody had seen yet.
-fn step_aloft(p: &mut Player, field: &Field, arena: &Arena) {
+fn step_aloft(p: &mut Player, field: &Field, arena: &Terrain) {
     // How far the feet are above whatever they would land on. **Not `pos.y`**:
     // standing on a platform, on a stone or on the creature's back is
     // standing, and a framing that measured height from the world's origin
@@ -6014,7 +6198,7 @@ const SHORTEST_STRIDE: Fx = Fx::ratio(1, 10);
 
 /// Let a body come to rest without accepting input. Used during the pause
 /// between rounds.
-fn settle(p: &mut Player, arena: &Arena) {
+fn settle(p: &mut Player, arena: &Terrain) {
     p.vel.x = p.vel.x.mul(t::settle_decay());
     p.vel.z = p.vel.z.mul(t::settle_decay());
     if !p.grounded {
@@ -6137,7 +6321,7 @@ impl World {
             effects: &self.effects,
             quarry: &self.monsters,
             critters: &self.critters,
-            arena: self.arena.get(),
+            arena: &self.terrain(),
         };
         let facing = aim::shadow_faces(at, owner, reach, !self.hunting(), &scene)
             .unwrap_or(self.players[owner].facing);
@@ -6642,7 +6826,7 @@ impl World {
             effects: &self.effects,
             quarry: &self.monsters,
             critters: &self.critters,
-            arena: self.arena.get(),
+            arena: &self.terrain(),
         };
         // **Is there anything to pull on?** Asked along the arms' own path with
         // the shared question `aim::first_along` already answers for every
@@ -6678,7 +6862,7 @@ impl World {
         let stop = aim::settle(
             path.at(anchor.dist().sub(t::body_radius())),
             &stones,
-            self.arena.get(),
+            &self.terrain(),
         );
         let speed = t::grasp_haul_speed();
         // Long enough to cover the whole of the Grasp's reach at that speed,
@@ -7177,7 +7361,7 @@ impl World {
                             let owner = self.players[effect.owner as usize];
                             let from = V3::new(
                                 middle.x.sub(owner.facing.x.mul(t::structure_radius())),
-                                self.arena.get().ground_under(middle),
+                                self.terrain().ground_under(middle),
                                 middle.z.sub(owner.facing.z.mul(t::structure_radius())),
                             );
                             spawn_effect(
@@ -8746,7 +8930,7 @@ impl World {
             effects: &effects,
             quarry: &beast,
             critters: &crowd,
-            arena: self.arena.get(),
+            arena: &self.terrain(),
         };
         let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
 
@@ -8846,7 +9030,7 @@ impl World {
             effects: &effects,
             quarry: &beast,
             critters: &crowd,
-            arena: self.arena.get(),
+            arena: &self.terrain(),
         };
         let met = aim::first_along(beam, m.radius, i as u8, &scene, bolt::targets(versus));
 
@@ -8995,7 +9179,7 @@ impl World {
             effects: &effects,
             quarry: &beast,
             critters: &crowd,
-            arena: self.arena.get(),
+            arena: &self.terrain(),
         };
         let met = aim::first_along(
             path,
@@ -9059,7 +9243,8 @@ impl World {
         let held = self.players[i].charging_stone;
         if held != NO_STONE {
             let index = i * class::MAX_STRUCTURES + held as usize;
-            stones::relocate_and_erupt(&mut self.players, index, end, self.arena.get());
+            let ground = self.terrain();
+            stones::relocate_and_erupt(&mut self.players, index, end, &ground);
             self.players[i].charging_stone = NO_STONE;
         }
         // And the scar: the whole line, however far the crack got.
@@ -9067,7 +9252,7 @@ impl World {
         if length.raw() > 0 {
             let from = V3::new(
                 path.from.x,
-                self.arena.get().ground_under(path.from),
+                self.terrain().ground_under(path.from),
                 path.from.z,
             );
             spawn_effect(
@@ -9138,7 +9323,7 @@ impl World {
         let owner = effect.owner as usize;
         if owner < MAX_PLAYERS {
             let field = stones::gather(&self.players);
-            let at = aim::settle(effect.pos, &field, self.arena.get());
+            let at = aim::settle(effect.pos, &field, &self.terrain());
             stones::raise(&mut self.players[owner], class::Structure::raised(at));
         }
     }
@@ -9165,7 +9350,7 @@ impl World {
         let across = t::structure_radius().mul(Fx::from_int(2));
         let from = V3::new(
             middle.x.sub(dir.x.mul(t::structure_radius())),
-            self.arena.get().ground_under(middle),
+            self.terrain().ground_under(middle),
             middle.z.sub(dir.z.mul(t::structure_radius())),
         );
         spawn_effect(
@@ -9378,7 +9563,7 @@ impl World {
             effects: &effects,
             quarry: &beasts,
             critters: &crowd,
-            arena: self.arena.get(),
+            arena: &self.terrain(),
         };
         let p = &mut self.players[who.min(MAX_PLAYERS - 1)];
         let aerial = !p.grounded;
@@ -9635,6 +9820,8 @@ impl World {
                 beast.hit_used = true;
             }
         }
+        // And the defended things in its reach (P7), once a move.
+        self.strike_the_objectives(slot, &beast);
 
         // What the fighters have out.
         for i in 0..MAX_PLAYERS {
@@ -9716,5 +9903,285 @@ impl World {
             }
         }
         self.monsters[slot] = Some(beast);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The hunt's shared machinery: senses, the floor, falls, defended things
+// (bestiary P4 to P7)
+// ---------------------------------------------------------------------------
+
+/// The most fires a frame can hold at once: every effect, every stone, every
+/// bolt.
+const MAX_FIRES: usize = MAX_EFFECTS + crate::stones::MAX_STONES + MAX_BOLTS;
+
+impl World {
+    /// **What each creature's senses allow its glance this frame** (P5): its
+    /// species' perception filter asked of every fighter, and -- for a species
+    /// that hears -- the noise it would attend to.
+    ///
+    /// A species without the senses row is the Ridgeback's glance exactly:
+    /// it perceives everybody, and nothing is asked, so a fight without
+    /// filters costs nothing here and hashes as it did.
+    fn senses(&self, ground: &Terrain, field: &Field) -> [Senses; MAX_MONSTERS] {
+        let mut out = [Senses::ALL; MAX_MONSTERS];
+        if !self.monsters.iter().flatten().any(|m| m.sp().fight.row) {
+            return out;
+        }
+        let seen = self.players;
+        let effects = self.effects;
+        let herd = self.monsters;
+        let crowd = self.critters;
+        let scene = Scene {
+            stones: field,
+            players: &seen,
+            effects: &effects,
+            quarry: &herd,
+            critters: &crowd,
+            arena: ground,
+        };
+        for (slot, beast) in self.monsters.iter().enumerate() {
+            let Some(m) = beast else { continue };
+            let sp = m.sp();
+            if !sp.fight.row {
+                continue;
+            }
+            let head = m.head();
+            for (i, p) in self.players.iter().enumerate() {
+                let q = Quarry {
+                    pos: p.pos,
+                    vel: p.vel,
+                    alive: p.health > 0,
+                    aboard: p.aboard(),
+                    stunned: p.action.stunned(),
+                };
+                out[slot].perceived[i] = (sp.fight.perceives)(&crate::perception::Perceiver {
+                    monster: m,
+                    slot,
+                    head,
+                    quarry: &q,
+                    who: i,
+                    scene: &scene,
+                    lore: &self.lore,
+                });
+            }
+            if sp.fight.hears {
+                out[slot].heard = self.heard_by(m, head);
+            }
+        }
+        out
+    }
+
+    /// **The noise a creature attends to**: of those made since its last
+    /// glance, the one that reached its head with the most to spare -- its
+    /// loudness to this species, less its distance. `None` if nothing reached.
+    pub fn heard_by(&self, m: &Monster, head: V3) -> Option<monster::Heard> {
+        let sp = m.sp();
+        let window = sp.glance_frames().max(1) as u32;
+        let mut best: Option<(Fx, monster::Heard)> = None;
+        for n in crate::noise::all(&self.lore) {
+            if self.frame.wrapping_sub(n.born) > window {
+                continue;
+            }
+            let spare =
+                crate::noise::loudness(sp, &n).sub(crate::math::wide_len(n.pos().sub(head)));
+            if spare.raw() <= 0 || best.is_some_and(|(b, _)| b.raw() >= spare.raw()) {
+                continue;
+            }
+            best = Some((
+                spare,
+                monster::Heard {
+                    at: n.pos(),
+                    who: n.who,
+                },
+            ));
+        }
+        best.map(|(_, h)| h)
+    }
+
+    /// **What the floor does to whoever is standing in it** (P4): the walk
+    /// slowed through the ordinary slow, damage ticking, a pull toward the
+    /// middle, a lift up the column -- for the fighters, the creatures and the
+    /// small bodies its kind reaches. The dodge and the jump read the same
+    /// floor where they are thrown (`step_player`).
+    fn feel_the_floor(&mut self, ground: &Terrain) {
+        let floor = &ground.floor;
+        if floor.is_empty() {
+            return;
+        }
+        let frame = self.frame;
+        for p in self.players.iter_mut() {
+            if p.health <= 0 {
+                continue;
+            }
+            let u = floor.underfoot(p.pos, hazard::reach::FIGHTERS, p.footed(), frame);
+            if u.walk.raw() < Fx::ONE.raw() {
+                // Two frames, so the slow is still on when the step that
+                // follows reads it, and lifts the frame after the feet leave.
+                p.slow(2, u.walk);
+            }
+            if u.damage > 0 {
+                p.wound(u.damage);
+            }
+            let (to, speed) = u.pull;
+            if speed.raw() > 0 && !p.aboard() {
+                let gap = V3::new(to.x.sub(p.pos.x), Fx::ZERO, to.z.sub(p.pos.z));
+                let far = crate::math::wide_flat_len(gap);
+                let step = speed.mul(crate::DT).min(far);
+                p.pos = p.pos.add(crate::math::wide_normalized(gap).scale(step));
+            }
+            if u.lift.raw() > p.vel.y.raw() && !p.aboard() {
+                p.vel.y = u.lift;
+                p.grounded = false;
+            }
+        }
+        for m in self.monsters.iter_mut().flatten() {
+            if !m.alive() {
+                continue;
+            }
+            let u = floor.underfoot(m.pos, hazard::reach::CREATURES, true, frame);
+            m.scorch(u.damage);
+            if u.walk.raw() < Fx::ONE.raw() {
+                m.slowed = m.slowed.max(2);
+                m.slow_mul = m.slow_mul.min(u.walk);
+            }
+        }
+        if let Some(sp) = floor.species() {
+            let _ = sp;
+            for i in 0..crate::critter::MAX_CRITTERS {
+                let c = self.critters[i];
+                if !c.alive() {
+                    continue;
+                }
+                let u = floor.underfoot(c.pos, hazard::reach::CRITTERS, true, frame);
+                if u.damage > 0 {
+                    pack::hurt(
+                        &mut self.pack,
+                        &mut self.critters,
+                        i,
+                        u.damage,
+                        V3::ZERO,
+                        Fx::ZERO,
+                        Fx::ZERO,
+                    );
+                }
+            }
+        }
+    }
+
+    /// **Falls** (P6): the rule for each fighter, against the body the frame
+    /// started with. See [`fall_rule`].
+    fn land(&mut self, before: &[Player; MAX_PLAYERS]) {
+        for (was, p) in before.iter().zip(self.players.iter_mut()) {
+            let damage = fall_rule(was, p);
+            if damage > 0 && p.health > 0 {
+                p.wound(damage);
+            }
+        }
+    }
+
+    /// **Every fire in the world this frame**: the effects that are fire
+    /// (`EffectKind::ignites`), lit stones, and fire bolts in flight. What puts
+    /// fire to the floor hazards.
+    pub fn fires(&self) -> ([hazard::Fire; MAX_FIRES], usize) {
+        let mut out = [hazard::Fire {
+            at: V3::ZERO,
+            radius: Fx::ZERO,
+        }; MAX_FIRES];
+        let mut n = 0;
+        let mut add = |at: V3, radius: Fx| {
+            if n < MAX_FIRES {
+                out[n] = hazard::Fire { at, radius };
+                n += 1;
+            }
+        };
+        for e in self.effects.iter().flatten() {
+            if !e.kind.ignites() {
+                continue;
+            }
+            match e.kind {
+                EffectKind::FireTornado => add(e.tornado_pos(), e.field_radius()),
+                EffectKind::FireRing => add(e.pos, e.ring_radius()),
+                _ => add(e.pos, e.field_radius()),
+            }
+        }
+        for stone in stones::gather(&self.players).iter().flatten() {
+            if stone.lit > 0 {
+                add(stone.at, stone.radius());
+            }
+        }
+        for b in self.bolts.iter().flatten() {
+            add(b.pos, Fx::ZERO);
+        }
+        (out, n)
+    }
+
+    /// **The hunt's lore, a frame on**: fire put to the floor and spreading
+    /// along it, every hazard aging and becoming what its kind becomes, and
+    /// the defended things rolling on while they are escorted.
+    fn step_the_lore(&mut self) {
+        if self.lore.owner.is_none() {
+            return;
+        }
+        let (fires, n) = self.fires();
+        hazard::step(&mut self.lore, &self.monsters, &fires[..n]);
+        let hunters: [V3; MAX_PLAYERS] = std::array::from_fn(|i| self.players[i].pos);
+        let alive: [bool; MAX_PLAYERS] = std::array::from_fn(|i| self.players[i].health > 0);
+        let mut near = [V3::ZERO; MAX_PLAYERS];
+        let mut count = 0;
+        for i in 0..MAX_PLAYERS {
+            if alive[i] {
+                near[count] = hunters[i];
+                count += 1;
+            }
+        }
+        objective::step(&mut self.lore, self.arena.get(), &near[..count]);
+    }
+
+    /// **A creature's blow on the defended things** (P7): its move's volume,
+    /// the one it reaches a fighter with, against each one's box -- once per
+    /// move, for the move's damage times what the thing takes of it.
+    fn strike_the_objectives(&mut self, slot: usize, beast: &Monster) {
+        let bit = 1u8 << slot.min(7);
+        let mut hits = [(0usize, 0i32); objective::MAX_STANDING];
+        let mut n = 0;
+        let lore = self.lore;
+        for o in objective::standing(&lore, self.arena.get()) {
+            let mut state = o.state;
+            let Doing::Active { kind, .. } = beast.doing else {
+                if state.struck & bit != 0 {
+                    state.struck &= !bit;
+                    objective::set(&mut self.lore, o.index, state);
+                }
+                continue;
+            };
+            if state.broken || state.struck & bit != 0 {
+                continue;
+            }
+            let height = o.site.extent().y;
+            if beast.reaches(o.at, height, o.radius()) && n < hits.len() {
+                hits[n] = (o.index, beast.sp().attack(kind).damage);
+                n += 1;
+            }
+        }
+        for (i, damage) in hits.into_iter().take(n) {
+            let mut state = objective::get(&self.lore, i);
+            state.struck |= bit;
+            objective::set(&mut self.lore, i, state);
+            objective::strike(&mut self.lore, i, damage);
+        }
+    }
+
+    /// How much of a creature part can be seen, nought to one: its species'
+    /// `shown`, or fully. What the renderer draws a part at, and what the
+    /// report and the scripted hunter call visible.
+    pub fn shown(&self, slot: usize, part: usize) -> Fx {
+        let Some(m) = self.monsters.get(slot).and_then(|m| m.as_ref()) else {
+            return Fx::ZERO;
+        };
+        match m.sp().fight.shown {
+            Some(f) => f(self, slot, part).clamp(Fx::ZERO, Fx::ONE),
+            None => Fx::ONE,
+        }
     }
 }

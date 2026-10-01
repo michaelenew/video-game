@@ -30,7 +30,7 @@
 
 use crate::DT;
 use crate::aim::{self, Contact, Path, Scene, Targets};
-use crate::arena::Arena;
+use crate::arena::Terrain;
 use crate::class::Class;
 use crate::fixed::Fx;
 use crate::math::V3;
@@ -180,7 +180,7 @@ pub fn step(
     effects: &crate::effects::Effects,
     versus: bool,
     prey: pack::Prey,
-    arena: &Arena,
+    arena: &Terrain,
 ) {
     let stones = stones::gather(players);
     for slot in flight.iter_mut() {

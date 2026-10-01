@@ -30,6 +30,10 @@ const RESERVED: &[(&str, &str)] = &[
     ("ray_hits_cylinder(", "ray against a shape"),
     ("ray_hits_box(", "ray against a shape"),
     ("camera::eye(", "where the aiming ray starts"),
+    (
+        "camera::eye_under(",
+        "where the aiming ray starts, under a ceiling",
+    ),
     (".look_dir()", "where the aiming ray points"),
 ];
 

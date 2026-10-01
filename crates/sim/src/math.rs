@@ -551,6 +551,86 @@ pub fn big_len(v: V3) -> Fx {
     Fx::from_raw(isqrt(x * x + y * y + z * z))
 }
 
+// ---------------------------------------------------------------------------
+// Long distances
+//
+// `V3::len`, `flat_len` and `normalized` square in 16.16, which saturates just
+// past 181 m: in the 240 m valley two things at its two ends read as 181 m
+// apart, and the direction from one to the other comes out wrong as well as
+// short. The `wide_` helpers are exact at any distance 16.16 can hold **and
+// bit-identical to the short ones below a hundred metres a component** -- the
+// short answer is what they return there, so code that switched to them in a
+// 28 m arena hashes exactly as it did. Use them wherever an arena can be big
+// enough to matter: target choice, steering, a pack's glance.
+// ---------------------------------------------------------------------------
+
+/// Below this on every component, the short helpers cannot saturate: three
+/// squares of a hundred metres are thirty thousand, inside 16.16's 32 767.
+const NEAR: i32 = 100 << 16;
+
+fn near(v: V3) -> bool {
+    v.x.raw().unsigned_abs() < NEAR as u32
+        && v.y.raw().unsigned_abs() < NEAR as u32
+        && v.z.raw().unsigned_abs() < NEAR as u32
+}
+
+/// A vector's length at any distance: `len` where that is exact, [`big_len`]
+/// where it would saturate.
+pub fn wide_len(v: V3) -> Fx {
+    if near(v) { v.len() } else { big_len(v) }
+}
+
+/// The floor-plane length at any distance: `flat_len` where that is exact.
+pub fn wide_flat_len(v: V3) -> Fx {
+    let flat = V3::new(v.x, Fx::ZERO, v.z);
+    if near(flat) {
+        v.flat_len()
+    } else {
+        big_len(flat)
+    }
+}
+
+/// The floor-plane distance between two points, at any distance.
+pub fn wide_flat_dist(a: V3, b: V3) -> Fx {
+    wide_flat_len(a.sub(b))
+}
+
+/// A unit vector along `v` at any length: `normalized` where that is exact.
+///
+/// Past 181 m `normalized` divides by a saturated length and returns a vector
+/// longer than one, which a steering or a lead would then scale.
+pub fn wide_normalized(v: V3) -> V3 {
+    if near(v) {
+        return v.normalized();
+    }
+    let l = big_len(v);
+    if l.raw() == 0 {
+        V3::ZERO
+    } else {
+        V3::new(v.x.div(l), v.y.div(l), v.z.div(l))
+    }
+}
+
+/// The floor-plane distance from a point to a segment's footprint: what a
+/// line on the floor -- a web strand -- is measured by.
+pub fn flat_segment_gap(p: V3, a: V3, b: V3) -> Fx {
+    let flat = |v: V3| V3::new(v.x, Fx::ZERO, v.z);
+    let (p, a, b) = (flat(p), flat(a), flat(b));
+    let d = b.sub(a);
+    // In `i64`, so a strand across a cave and a point at its far end square
+    // without saturating.
+    let dd = d.x.raw() as i64 * d.x.raw() as i64 + d.z.raw() as i64 * d.z.raw() as i64;
+    let r = p.sub(a);
+    let along = if dd == 0 {
+        0
+    } else {
+        let dot = r.x.raw() as i64 * d.x.raw() as i64 + r.z.raw() as i64 * d.z.raw() as i64;
+        ((dot << 16) / dd).clamp(0, 1 << 16)
+    };
+    let at = a.add(d.scale(Fx::from_raw(along as i32)));
+    big_len(p.sub(at))
+}
+
 /// Integer square root of a 64-bit value, saturating into `i32`.
 ///
 /// A fixed iteration count rather than "until it converges": a value that

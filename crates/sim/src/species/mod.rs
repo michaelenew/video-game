@@ -233,6 +233,173 @@ pub struct Stock {
     pub dead: usize,
 }
 
+/// What a species brings to a fight besides its body and its pack: the
+/// shared machinery of bestiary P4, P5 and P7, and the hooks a creature's own
+/// file plugs into. Every field defaults to nothing ([`FightDecl::PLAIN`]), and
+/// a species that says nothing is fought exactly as the Ridgeback always was.
+///
+/// See `docs/design/hazards.md` for the recipe.
+pub struct FightDecl {
+    /// How it lays out the hunt's lore: hazard cells, noise cells, objective
+    /// cells, and its own. See [`crate::lore`].
+    pub layout: crate::lore::Layout,
+    /// Whether it has the **senses and body row** of knobs ([`FightField`]):
+    /// its sight cone and blind arc, what it feels, how loud each noise is to
+    /// it, and how big it is against the arena's solids.
+    pub row: bool,
+    /// Its hazard kinds, in the order the cells' `kind` byte counts them.
+    pub hazards: &'static [crate::hazard::HazardDecl],
+    /// The things in its fight that can lose: a wall, a cart.
+    pub objectives: &'static [crate::objective::ObjectiveDecl],
+    /// **Its perception filter**: does it perceive this fighter now? See
+    /// [`crate::perception`]; `sees_all` is the Ridgeback's.
+    pub perceives: crate::perception::Perceive,
+    /// It hears the noise ring: when its glance perceives no body, it samples
+    /// the loudest noise that reached its head since its last glance.
+    pub hears: bool,
+    /// It collides with the arena's solids (its row's `BodyRadius`, stepping
+    /// over anything under `StepOver`). Off, it is only kept inside the
+    /// bounds -- which is what the Ridgeback has always had, and what keeps it
+    /// bit-identical.
+    pub collides: bool,
+    /// Called when it walks into a solid, with the push that got it out: the
+    /// Hornback's charge into a rock is a stun.
+    pub bumped: Option<fn(&mut crate::monster::Monster, crate::math::V3)>,
+    /// Called once a frame, after the creatures, the pack and the hazards have
+    /// stepped and before the fighters do: the species' own rules over its
+    /// lore -- where tar spreads, when a vent blows, what a strand trips.
+    pub frame: Option<fn(&mut crate::state::World)>,
+    /// How much of a creature part can be seen, nought to one: what the
+    /// renderer draws it at, and what the report and the scripted hunter call
+    /// visible. `None` is always fully. The Veilstalker's veil.
+    pub shown: Option<fn(&crate::state::World, usize, usize) -> Fx>,
+}
+
+impl std::fmt::Debug for FightDecl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FightDecl")
+            .field("layout", &self.layout)
+            .field("row", &self.row)
+            .field("hazards", &self.hazards.len())
+            .field("objectives", &self.objectives.len())
+            .field("hears", &self.hears)
+            .field("collides", &self.collides)
+            .finish()
+    }
+}
+
+impl FightDecl {
+    /// Nothing: no lore, no hazards, no objectives, sees everybody, collides
+    /// with nothing but the bounds, no hooks.
+    pub const PLAIN: FightDecl = FightDecl {
+        layout: crate::lore::Layout::NONE,
+        row: false,
+        hazards: &[],
+        objectives: &[],
+        perceives: crate::perception::sees_all,
+        hears: false,
+        collides: false,
+        bumped: None,
+        frame: None,
+        shown: None,
+    };
+}
+
+/// One field of a species' **senses and body row**, for a species whose
+/// `FightDecl::row` is set. "<Species> · senses".
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FightField {
+    /// How wide it is against the arena's solids, when it collides with them.
+    BodyRadius,
+    /// Solids lower than this it walks over.
+    StepOver,
+    /// Half the angle it sees across, in turns: a half or more is all round.
+    SightCone,
+    /// Half the width of a blind arc, in turns, centred square off one side.
+    BlindArc,
+    /// How far from its head it feels a body on the floor.
+    FeelRadius,
+    /// How far off the floor a body can be and still be felt.
+    FeelHeight,
+    /// How far each noise carries to it, in metres.
+    Footfall,
+    FootfallHard,
+    Landing,
+    LandingPerMetre,
+    LandingMost,
+    Dodge,
+    Hit,
+    Rush,
+    Stone,
+    Shield,
+    Quake,
+}
+
+pub const FIGHT_FIELDS: usize = 17;
+
+impl FightField {
+    pub const ALL: &'static [FightField] = &[
+        FightField::BodyRadius,
+        FightField::StepOver,
+        FightField::SightCone,
+        FightField::BlindArc,
+        FightField::FeelRadius,
+        FightField::FeelHeight,
+        FightField::Footfall,
+        FightField::FootfallHard,
+        FightField::Landing,
+        FightField::LandingPerMetre,
+        FightField::LandingMost,
+        FightField::Dodge,
+        FightField::Hit,
+        FightField::Rush,
+        FightField::Stone,
+        FightField::Shield,
+        FightField::Quake,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            FightField::BodyRadius => "Body radius, against solids",
+            FightField::StepOver => "Steps over solids under",
+            FightField::SightCone => "Sight, half-angle (turns)",
+            FightField::BlindArc => "Blind arc, half-width (turns)",
+            FightField::FeelRadius => "Feels a body within",
+            FightField::FeelHeight => "Feels a body no higher than",
+            FightField::Footfall => "Hears a footfall at",
+            FightField::FootfallHard => "Hears a footfall on rock at",
+            FightField::Landing => "Hears a landing at",
+            FightField::LandingPerMetre => "Landing, more per metre fallen",
+            FightField::LandingMost => "Landing, at most",
+            FightField::Dodge => "Hears a dodge at",
+            FightField::Hit => "Hears a hit at",
+            FightField::Rush => "Hears a Rush at",
+            FightField::Stone => "Hears a stone at",
+            FightField::Shield => "Hears a shield planted at",
+            FightField::Quake => "Hears a quake at",
+        }
+    }
+
+    pub const fn unit(self) -> crate::oven::Unit {
+        crate::oven::Unit::Fixed
+    }
+
+    pub const fn range(self) -> (i32, i32) {
+        const fn fx(n: i32, d: i32) -> i32 {
+            Fx::ratio(n, d).raw()
+        }
+        match self {
+            FightField::SightCone => (0, fx(1, 2)),
+            FightField::BlindArc => (0, fx(1, 4)),
+            FightField::BodyRadius | FightField::StepOver | FightField::FeelHeight => {
+                (0, fx(20, 1))
+            }
+            FightField::LandingPerMetre => (0, fx(10, 1)),
+            _ => (0, fx(200, 1)),
+        }
+    }
+}
+
 /// One kind of creature. See the module docs.
 #[derive(Debug)]
 pub struct Species {
@@ -289,6 +456,12 @@ pub struct Species {
     /// has no skeleton at all ([`Species::has_body`]); or a body that owns a
     /// pack, as the Broodmother does her brood. See `docs/design/critters.md`.
     pub pack: Option<&'static crate::pack::PackDecl>,
+
+    // ---- what it brings to the fight besides its body ----
+    /// Hazards, objectives, senses, the room it keeps in the hunt's lore, and
+    /// the hooks the shared machinery calls it by. [`FightDecl::PLAIN`] for a
+    /// creature that brings none of it, which is the Ridgeback.
+    pub fight: &'static FightDecl,
 }
 
 impl Species {
@@ -336,7 +509,15 @@ impl Species {
             tuned,
             tuned_path,
             pack: Some(pack),
+            fight: &FightDecl::PLAIN,
         }
+    }
+
+    /// The same table, bringing this to the fight: hazards, objectives,
+    /// senses, lore. `Species::pack_only(..).fighting(&FIGHT)`.
+    pub const fn fighting(mut self, fight: &'static FightDecl) -> Species {
+        self.fight = fight;
+        self
     }
 
     /// Does it have a skeleton -- is there a `Monster` to build? A species that
@@ -457,11 +638,66 @@ impl Species {
 
     /// How many knobs this species keeps: [`Common`], its own, then one row
     /// of `oven::MonsterField` per move.
+    ///
+    /// Then, after the pack's, what the species brings to the fight
+    /// ([`FightDecl`]): its senses and body row if it has one, a row of
+    /// `hazard::HazardField` per hazard kind, and a row of
+    /// `objective::ObjectiveField` per defended thing. **Appended after
+    /// everything that was there before**, so a species that brings none of
+    /// them keeps every index it had and its baked file does not move.
     pub fn knob_count(&self) -> usize {
+        self.objective_base() + self.fight.objectives.len() * crate::objective::OBJECTIVE_FIELDS
+    }
+
+    /// Where the fight's rows start: after the pack's.
+    pub fn fight_base(&self) -> usize {
         self.pack_base()
             + self.pack.map_or(0, |p| {
                 crate::pack::PackKnob::ALL.len() + p.kinds.len() * crate::critter::CRITTER_FIELDS
             })
+    }
+
+    /// Where one field of the senses and body row sits. Only meaningful when
+    /// `fight.row` is set; [`Species::fight_raw`] answers zero otherwise.
+    pub fn fight_index(&self, f: FightField) -> usize {
+        self.fight_base() + f as usize
+    }
+
+    /// One field of the senses and body row: zero for a species without one.
+    pub fn fight_raw(&self, f: FightField) -> i32 {
+        if !self.fight.row {
+            return 0;
+        }
+        crate::oven::species_raw(self.id, self.fight_index(f))
+    }
+
+    pub fn fight_fx(&self, f: FightField) -> Fx {
+        Fx::from_raw(self.fight_raw(f))
+    }
+
+    /// Where the hazard rows start.
+    pub fn hazard_base(&self) -> usize {
+        self.fight_base() + if self.fight.row { FIGHT_FIELDS } else { 0 }
+    }
+
+    /// Where one field of one hazard kind sits.
+    pub fn hazard_index(&self, kind: usize, f: crate::hazard::HazardField) -> usize {
+        self.hazard_base()
+            + kind.min(self.fight.hazards.len().saturating_sub(1)) * crate::hazard::HAZARD_FIELDS
+            + f as usize
+    }
+
+    /// Where the objective rows start.
+    pub fn objective_base(&self) -> usize {
+        self.hazard_base() + self.fight.hazards.len() * crate::hazard::HAZARD_FIELDS
+    }
+
+    /// Where one field of one objective sits.
+    pub fn objective_index(&self, i: usize, f: crate::objective::ObjectiveField) -> usize {
+        self.objective_base()
+            + i.min(self.fight.objectives.len().saturating_sub(1))
+                * crate::objective::OBJECTIVE_FIELDS
+            + f as usize
     }
 
     /// One of the numbers every creature has.

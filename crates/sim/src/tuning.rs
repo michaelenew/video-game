@@ -2740,3 +2740,24 @@ pub fn judgement_field_life() -> u16 {
 pub fn judgement_field_speed() -> Fx {
     Fx::from_raw(oven::scalar(Scalar::JudgementFieldSpeed))
 }
+
+/// A fall is free up to this many metres. See `state::Player::fall_over`.
+pub fn fall_free() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FallFree))
+}
+
+/// Damage for every metre a fall goes past [`fall_free`].
+pub fn fall_per_metre() -> i32 {
+    oven::scalar(Scalar::FallPerMetre)
+}
+
+/// A landing slower than this takes half a fall's damage: the Dual mage's
+/// slow fall, dropped from a height she did not climb to herself.
+pub fn fall_soft() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::FallSoft))
+}
+
+/// How far under a ceiling the eye is held. See `camera::eye_under`.
+pub fn eye_under_ceiling() -> Fx {
+    Fx::from_raw(oven::scalar(Scalar::EyeUnderCeiling))
+}

@@ -7,7 +7,7 @@
 //! frame counts are frames. See `oven::Unit`.
 
 #[rustfmt::skip]
-pub const SCALARS: [i32; 315] = [
+pub const SCALARS: [i32; 319] = [
           458752, // movement.walk_speed = 7
           131072, // movement.walk_speed,_guarding = 2
           196608, // movement.walk_speed,_crouching = 3
@@ -323,6 +323,10 @@ pub const SCALARS: [i32; 315] = [
           393216, // elementalist.quake,_eruption_push_(m/s) = 6
           196608, // elementalist.break-through,_reach = 3
            65536, // elementalist.break-through,_crosshair_slack = 1
+          589824, // air.fall,_free_up_to_(m) = 9
+              25, // air.fall,_damage_per_metre_past_it = 25
+          786432, // air.fall,_halved_landing_slower_than = 12
+           16384, // aim.eye,_held_under_a_ceiling_by = 0.25
 ];
 
 #[rustfmt::skip]

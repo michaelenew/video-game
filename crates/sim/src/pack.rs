@@ -46,7 +46,7 @@
 //! ray at all. No allocation, no floats, deterministic order throughout.
 
 use crate::DT;
-use crate::arena::Arena;
+use crate::arena::Terrain;
 use crate::critter::{
     Critter, CritterField, CritterMove, Critters, MAX_CRITTERS, NO_SLOT, flag, is, stat, stat_fx,
 };
@@ -297,7 +297,7 @@ pub struct Look<'a> {
     pub pack: &'a Pack,
     pub critters: &'a Critters,
     pub herd: &'a Herd,
-    pub arena: &'a Arena,
+    pub arena: &'a Terrain,
     pub frame: u32,
 }
 
