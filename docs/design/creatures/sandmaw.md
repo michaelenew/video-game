@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 2
 ---
 
@@ -586,3 +587,105 @@ in versus it is a spacing tool traded for reach. Enabling, not power.
 7. **Is the swallow's `Q`-on-a-gulp readable?** It is the one timed press in
    any creature fight. The alternative — a fixed cost, no escape — is simpler
    and has no skill in it.
+
+## 13 · Where it landed
+
+Built 2026-10-01: `--hunt sandmaw`, the Pan. The species is
+`sim/src/species/sandmaw/` (the table; `fight.rs` for the postures, the
+senses, the sinkhole, the swallow and the beach; `mind.rs` for its own
+scoring and where it swims), the arena `sim/src/arena/sandmaw.rs`, the clips
+`anim/src/beast/sandmaw/`, the look and the Pan's dressing in `game`, the plan
+and the report lines `hunt/src/plans/sandmaw.rs`, and the rules pinned as
+sentences in `sim/tests/sandmaw.rs`. The plan is
+[plans/sandmaw.md](../plans/sandmaw.md); the passes are in
+[feel-log.md](../feel-log.md) of 2026-10-01.
+
+Numbers from `cargo run -p hunt --bin fight -- --species sandmaw --class <c>
+--repeats 24`; the scripted hunter plays §9 with a fifteen-frame reaction.
+
+```text
+                won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable
+  Champion     19/24   202 s        442                  66 / 12 / 15 /  7 %                 0
+  Bulwark      23/24   229 s        558                  65 / 12 / 16 /  6 %                 0
+  Reaver        6/24   273 s        187                  67 / 12 / 15 /  6 %                 0
+  Elementalist  4/24   556 s        162                  55 /  9 / 11 / 26 %                 0
+  Blood mage    0/24     --          --                  66 / 11 / 15 /  8 %                 0
+  Dual mage     0/24     --          --                  66 / 11 / 15 /  9 %                 0
+
+  coop, two Champions 12/12 in 95 s;  temper 3, Champion 6/12 in 207 s
+
+  landed / thrown, 24 Champion hunts
+    Rise-bite 39/717  Breach-dive 2/53  Undertow 0/157  Sand spit 60/199
+    Tail lash 7/114   Swallow-grab 8/309  Sound 46/684  Dive 0/35
+    (the undertow's damage is the rise at its middle, counted as a rise-bite;
+     Swallowed and Dive are never chosen: the grab and the beach start them)
+```
+
+**Its own lines**, over the same 24 Champion hunts: bitten while quiet 0 felt
+/ 0 unfelt; the marker covered the noise 717 of 717; unperceived 24 % of the
+fight; what it acted on, felt 83 %, footfalls 14 %, landings 2 %, rock 1 %;
+717 stands and 35 beaches (6 broken, 29 knocked down by the Champion's rush,
+none by stone, lane or gag); 1 % of the fight on rock; 8 swallows, all out on
+the first gulp; the tooth ring broken in 2 of the 19 wins. The perceived
+threatening band is 49 %, unperceived 18 %. The Elementalist's 24: 268
+beaches, all but one by a stone in the circle.
+
+**Against the targets.** Zero unanswerable hits and zero quiet-unfelt bites in
+every class, every hunt: the contract holds. The Champion wins four in five
+(two in three asked) in a little over three minutes (two to four asked).
+**What is off:** threatening is 49–66 % against 35, walk-up 7 % against 20, and
+beaches come about once in two minutes, not one a minute. The stand is the
+window, and the stand counts as *threatening* -- it can act at once -- so the
+walk-up band is only the beached worm and the rise's recovery. "Felt" is 83 %
+of what it acts on: the hunter stands inside the feel radius at a stand far
+more than §9's plan says, because the stand is where the damage is. The tooth
+ring is rarely broken: the hunter hits the throat and the spiracles, not the
+mouth, except through a gag. **The Reaver** loses to the spit (half of its
+spits land): a dodge that has to cover six active frames from fifteen frames
+behind is the hardest timing in her kit. **The Elementalist** beaches it at
+every rise with a stone and still loses: the harness's caster does little to
+a beached back. **The Dual mage and the Blood mage** lose them all, as they do
+against the Ridgeback: the scripted hunter does not play their bars or their
+pools, which is the harness's limit, not a finding about the worm.
+
+**The body, as `beastcheck --species sandmaw` prints it**: nose to tail
+12.5 m (eleven of body and the lips); buried, every surface under the floor;
+beached, its lowest surface at the floor and its back, through the whole
+writhe, inside every class's hop
+(`the_beached_back_is_inside_every_class_hop`). Standing, the column is a
+wall (`Steepest`, cos 0.7): nobody stands on it, and nobody mounts a worm that
+is not beached.
+
+**Changed from this document while building**, beyond the numbers:
+
+- **Health 13 000**, from 5 200: a stand is eight seconds of a free throat,
+  and the scripted hunter at 9 000 and 10 000 won in two minutes and a half.
+- **The spit is 6 active**, from 10: the dodge's ten invulnerable frames
+  could not cover ten active frames with any slop, so a spit with no rock near
+  was a hit nobody could answer by the dodge §2 offers.
+- **The swallow's tell is 30 frames**, from 24, and **a blow inside the open
+  ring gags it** (`MouthOpen`, 2 m half across), not only one on the teeth: the
+  neck arcs over a fighter in front and the throat meets a swing before the
+  ring does. At 24 frames a person with a quarter-second reaction had two
+  frames to start a swing in.
+- **The Bulwark's raised shield stops the spit** (it is a solid he carries);
+  §7 already said so.
+- **Struck past `interrupt_strain` in a stand beaches it**, rather than
+  sending it under (§5): one rule for the stand, the window that pays.
+- **The rise travels round rock under the sand** and is aimed at the nearest
+  sand to the noise it can fit (`fit`), 1.2 m off any rock; a noise on an
+  island is answered by surfacing at its edge to spit (`IslandPatience`).
+- **The swallow is 60 on the bite, 20 a gulp at 30, 60 and 90 frames, and 80
+  when it spits you out at 120** -- the only reading of §2 that makes both of
+  its totals true.
+- **Strain bleeds at 1 % a frame** and **the interrupt is 700**, from the
+  shared 2 % and 900: at those, three swings into a stand never added up.
+- **Not built**: the sand-step dodge (§11, parked), and a separate camera for
+  the swallowed fighter (the Mireback's stomach is the same).
+
+**Questions for a person**, beyond §12: is a stand that counts as threatening
+the right reading of §9's band (the worm can act at once, but every move it
+has from a stand is a 20–30-frame tell); is the stone beach on every rise the
+Elementalist's identity or a solved puzzle (§12 question 5 -- the harness
+says it is every rise); and does the swallow's mouth, coming down 4 m across,
+read as the thing to hit, which only somebody facing it can say.

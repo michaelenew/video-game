@@ -934,6 +934,18 @@ fn act_on(w: &mut World) {
         .set_word(word::ACTED_AT, w.lore.word(word::ATTEND_AT));
 }
 
+/// **Put it in the posture a move is thrown from**, for a capture that starts
+/// it winding one up out of nowhere (`SHOT_MOVE`): under the sand for the
+/// three it throws from below, standing for the rest.
+pub fn ready_for(m: &mut Monster, kind: u8) {
+    m.own[body::POSTURE] = if super::from_below(kind) {
+        posture::BURIED
+    } else {
+        posture::STANDING
+    };
+    m.own[body::UP_FOR] = 0;
+}
+
 /// **Its postures and its moves, frame by frame**: the rise travelling under
 /// its tell and standing at its hit, the sinkhole, the beach, the dive.
 fn act(w: &mut World, slot: usize, m: &mut Monster, ground: &Terrain) {

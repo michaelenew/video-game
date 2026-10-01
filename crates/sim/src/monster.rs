@@ -1021,9 +1021,7 @@ impl Rig {
     /// species that does not say (`FightDecl::steepest`).
     fn standable(&self, part: usize) -> bool {
         match self.species.fight.steepest {
-            Some(k) => {
-                self.of(part).rot.r[1].y.raw() >= self.species.own_raw(k as usize)
-            }
+            Some(k) => self.of(part).rot.r[1].y.raw() >= self.species.own_raw(k as usize),
             None => true,
         }
     }

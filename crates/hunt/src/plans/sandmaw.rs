@@ -445,9 +445,9 @@ impl Sandmaw {
             // The spray: out of the cone, sideways.
             sandmaw::SPIT => {
                 let discs = fight::spit_discs(beast);
-                let inside = discs
-                    .iter()
-                    .any(|(c, r)| wide_flat_dist(*c, me.pos).raw() <= r.add(body).add(MARGIN).raw());
+                let inside = discs.iter().any(|(c, r)| {
+                    wide_flat_dist(*c, me.pos).raw() <= r.add(body).add(MARGIN).raw()
+                });
                 if !inside {
                     return None;
                 }
@@ -490,9 +490,9 @@ impl Sandmaw {
             // The tail: under it.
             sandmaw::LASH => {
                 let discs = fight::lash_discs(beast);
-                let inside = discs
-                    .iter()
-                    .any(|(c, r)| wide_flat_dist(*c, me.pos).raw() <= r.add(body).add(MARGIN).raw());
+                let inside = discs.iter().any(|(c, r)| {
+                    wide_flat_dist(*c, me.pos).raw() <= r.add(body).add(MARGIN).raw()
+                });
                 if !inside {
                     return None;
                 }
@@ -514,8 +514,8 @@ impl Sandmaw {
                 let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
                 let ahead = V3::from_turns(beast.yaw);
                 let rel = flat(me.pos.sub(beast.pos));
-                let facing = rel.flat_len().raw() > 0
-                    && ahead.dot(rel.normalized()).raw() > FRONT_COS.raw();
+                let facing =
+                    rel.flat_len().raw() > 0 && ahead.dot(rel.normalized()).raw() > FRONT_COS.raw();
                 let melee = poke.reach.raw() <= GAG_REACH.raw();
                 let real_left = left as i32 - REACTION as i32 - self.slop;
                 let swing_at = poke.startup as i32 + GAG_LATE;
@@ -631,7 +631,11 @@ impl Sandmaw {
                 } else {
                     side.scale(Fx::ONE.neg())
                 };
-                let toward = if front { ahead } else { ahead.scale(Fx::ONE.neg()) };
+                let toward = if front {
+                    ahead
+                } else {
+                    ahead.scale(Fx::ONE.neg())
+                };
                 side.add(toward).normalized()
             } else {
                 d
@@ -685,7 +689,9 @@ impl Sandmaw {
         let to = flat(middle.sub(me.pos));
         self.intent = CLIMB;
         // Not worth getting on for the last of it, or out of its hop.
-        let back = middle.y.add(sandmaw::SPECIES.shape(sandmaw::SEG_ROOT).max.y);
+        let back = middle
+            .y
+            .add(sandmaw::SPECIES.shape(sandmaw::SEG_ROOT).max.y);
         if (left as i32) < REACTION as i32 + 20 || back.raw() >= self.hop.raw() {
             return self.punish_beached(me, beast);
         }
@@ -700,11 +706,16 @@ impl Sandmaw {
 
     /// Beached but not climbing: hit what is in reach from the sand.
     fn punish_beached(&mut self, me: &sim::state::Player, beast: &Monster) -> Input {
-        let target = [sandmaw::HEAD_PART, sandmaw::SEG_N3, sandmaw::SEG_ROOT, sandmaw::SEG_T2]
-            .into_iter()
-            .map(|p| part_at(beast, p))
-            .min_by_key(|p| wide_flat_dist(*p, me.pos).raw())
-            .unwrap_or(beast.pos);
+        let target = [
+            sandmaw::HEAD_PART,
+            sandmaw::SEG_N3,
+            sandmaw::SEG_ROOT,
+            sandmaw::SEG_T2,
+        ]
+        .into_iter()
+        .map(|p| part_at(beast, p))
+        .min_by_key(|p| wide_flat_dist(*p, me.pos).raw())
+        .unwrap_or(beast.pos);
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let to = flat(target.sub(me.pos));
         self.intent = PUNISH;
@@ -724,7 +735,11 @@ impl Sandmaw {
     /// the writhe -- and off when they clamp.
     fn ride(&mut self, me: &sim::state::Player, beast: &Monster) -> Input {
         let along = V3::from_turns(beast.yaw);
-        if self.leap_left > 0 || matches!(beast.doing.attacking(), Some(sandmaw::DIVE | sandmaw::SOUND))
+        if self.leap_left > 0
+            || matches!(
+                beast.doing.attacking(),
+                Some(sandmaw::DIVE | sandmaw::SOUND)
+            )
         {
             self.intent = LEAVE;
             let side = V3::new(along.z.neg(), Fx::ZERO, along.x);
@@ -1020,9 +1035,19 @@ impl Tally for SandTally {
             }
         }
         // A stand.
-        if matches!(m.doing, Doing::Active { kind: sandmaw::RISE, .. })
-            && !matches!(was.doing, Doing::Active { kind: sandmaw::RISE, .. })
-        {
+        if matches!(
+            m.doing,
+            Doing::Active {
+                kind: sandmaw::RISE,
+                ..
+            }
+        ) && !matches!(
+            was.doing,
+            Doing::Active {
+                kind: sandmaw::RISE,
+                ..
+            }
+        ) {
             self.stands += 1;
         }
         // A beach, by route.
@@ -1054,7 +1079,14 @@ impl Tally for SandTally {
             self.island_spits += 1;
         }
         // A bite: on a quiet hunter? And did its marker cover them?
-        let bit = lost > 0 && matches!(m.doing, Doing::Active { kind: sandmaw::RISE, .. });
+        let bit = lost > 0
+            && matches!(
+                m.doing,
+                Doing::Active {
+                    kind: sandmaw::RISE,
+                    ..
+                }
+            );
         let _ = doing_was;
         if bit {
             // Quiet: nothing of theirs for a second, and what it came up at
@@ -1123,7 +1155,10 @@ impl Tally for SandTally {
             .enumerate()
             .filter(|(i, _)| self.heard[i + 1] > 0)
             .map(|(i, k)| format!("{k} {}", pct(self.heard[i + 1], total_heard)))
-            .chain(std::iter::once(format!("felt {}", pct(self.felt, total_heard))))
+            .chain(std::iter::once(format!(
+                "felt {}",
+                pct(self.felt, total_heard)
+            )))
             .collect();
         vec![
             (

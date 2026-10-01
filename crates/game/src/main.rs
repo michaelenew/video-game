@@ -529,6 +529,10 @@ fn shot_move(w: &mut World) {
         kind: kind as u8,
         left: m.startup,
     };
+    // The worm throws three from under the sand and the rest standing.
+    if beast.species == sim::species::SpeciesId::SANDMAW {
+        sim::species::sandmaw::fight::ready_for(beast, kind as u8);
+    }
 }
 
 /// [`shot_move`] for a fight that is only a pack: one body of a kind that

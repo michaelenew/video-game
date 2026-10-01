@@ -939,3 +939,25 @@ fn the_noise_ring_is_bounded_and_does_not_allocate() {
     let copy = w.clone();
     assert_eq!(copy.lore, w.lore);
 }
+
+// ---------------------------------------------------------------------------
+// The world
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_dead_worm_is_a_won_hunt_with_its_trophy_and_its_temper() {
+    // The trophy is written from `hunt_won` (world W1), and a temper is the
+    // same worm fought cleverer (W2): both have to name the Sandmaw, and a
+    // tempered worm glances more often -- which, for a hunter of noises, is
+    // hearing the noise sooner.
+    let calm = hunt(Class::Champion);
+    let mut w = hunt(Class::Champion).tempered(2);
+    assert_eq!(w.arena().id, sim::arena::ArenaId::SANDMAW);
+    assert!(worm(&w).glance_frames() < worm(&calm).glance_frames());
+    assert_eq!(w.hunt_won(), None);
+    w.monsters[0].as_mut().unwrap().health = 0;
+    w.advance([Input::default(); MAX_PLAYERS]);
+    let (beaten, at) = w.hunt_won().expect("a dead worm is a won hunt");
+    assert_eq!(beaten[0], Some(SpeciesId::SANDMAW));
+    assert_eq!(at, 2);
+}

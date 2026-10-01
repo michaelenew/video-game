@@ -233,6 +233,22 @@ creature, and both pins, are unchanged:
 | `Part::hollow` | a part you are inside (the stomach): mounted only by being put there (`state::put_inside`), no jump, no buck |
 | `Monster::own` | four words of its own on the body, hashed only when not zero |
 
+**The seams a creature that is not always there adds** (the Sandmaw,
+2026-10-01), on the same terms -- `None` in `FightDecl::PLAIN`, both pins
+bit-identical:
+
+| Seam | What it is for |
+| --- | --- |
+| `presence(m, rig)` | which parts have no body this frame (`beast::Presence`): **buried** parts have no hurtbox, are not solid and are not stood on; **unmountable** ones are solid but not a back. The worm's answer is geometric: a part whose box is wholly under the floor is buried |
+| `clip(m)` | the clip its posture plays, ahead of the speed-picked stock -- a worm circling slowly under the sand swims rather than standing up out of it |
+| `hearing(m, lore)` | a multiplier on what it hears (`World::heard_by`): hunger, the deafness after a breach |
+| `from_inside(world, slot, fighter, input)` | the input of a fighter inside one of its hollow parts, and what they may still do with it -- the swallow's gulp press |
+| `radius(m, move, r)` | a move's hit radius from its own state: the rise-bite smaller once the tooth ring is broken |
+| `steepest` | its own knob for the steepest face that is still floor, and a face below the floor is never one: a standing column is a wall, a beached back is a ridge |
+| `MoveDecl::own_hit` | a move whose hit the species tests itself in its `frame` hook (the spit's cone, the lash's half-ring), from the same discs its `marks` draws |
+| `MarkLook::{Sand, Fin, Heard, Feel}` | a raised wake, a dorsal fin, a ring where it heard you, the disc it feels in |
+| `noise::nth(lore, cell)` | a noise by its cell, for a hook that keeps per-noise state of its own beside the ring |
+
 ## 6 · Decided while building, for a person to review
 
 - **Sizes are maximums, not generics.** `MAX_BONES` 40, `MAX_PARTS` 48,

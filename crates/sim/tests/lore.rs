@@ -79,7 +79,10 @@ fn the_snapshot_fits_with_every_cell_of_the_region_full() {
             19,
         ),
         ("Veilstalker: footfalls, paint, veil, four hazards", 15),
-        ("Sandmaw: noise ring, spine, sinkhole, swallow", 14),
+        (
+            "Sandmaw: noise ring, sinkholes, spine, attention, swallow",
+            17,
+        ),
         ("Broodmother: patches, strands, sacs, list", 13),
     ] {
         assert!(cells < CELLS, "{who} needs {cells} cells of {CELLS}");

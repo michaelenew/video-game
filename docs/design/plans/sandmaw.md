@@ -1,5 +1,5 @@
 ---
-status: action plan — in progress
+status: action plan — built
 opened: 2026-10-01
 implements: ../creatures/sandmaw.md
 ---
@@ -16,8 +16,13 @@ milestone, so a successor can pick it up from the checkboxes.
 
 ## State
 
-Started 2026-10-01. Working in `/home/user/wt/sandmaw` on
-`claude/creature-sandmaw`.
+Started and built 2026-10-01 on `claude/creature-sandmaw`. Every milestone
+below is done; where it landed, numbers and all, is the creature doc's §13,
+and the tuning passes are the feel log's entry of the same day. **Open**: the
+threatening band (49 % perceived against 35) and walk-up (7 % against 20) --
+the stand counts as threatening because the worm can act at once, which is a
+reading of §9 for a person to settle before anybody tunes toward it -- and
+beaches once in two minutes rather than once a minute.
 
 ## Decisions taken before building (the design reasons are in the creature doc)
 
@@ -26,9 +31,10 @@ Started 2026-10-01. Working in `/home/user/wt/sandmaw` on
   origin (`hips.x`), so the body's collision with rock (`FightDecl::collides`,
   `BodyRadius` 1.2) is the head's, and the tail follows the path the head
   took. The standing clips stand the column on the origin.
-- **Buried is a mask, not a static flag**: `FightDecl::buried(m, rig)` names
-  the parts with no body this frame -- no hurtbox, not solid, not mountable,
-  not drawn. The Sandmaw's answer is geometric: a part whose box is wholly
+- **Buried is a mask, not a static flag**: `FightDecl::presence(m, rig)`
+  names the parts with no body this frame -- no hurtbox, not solid, not
+  mountable -- and the parts that are solid but no back (a worm that is not
+  beached is never ridden); `shown` keeps buried parts from being drawn. The Sandmaw's answer is geometric: a part whose box is wholly
   under the sand is buried. So the 5 m of body still under the floor while it
   stands is buried too, as §1 says.
 - **Its posture picks its clip**: `FightDecl::clip` -- buried it plays the swim
@@ -51,63 +57,63 @@ Started 2026-10-01. Working in `/home/user/wt/sandmaw` on
 
 ## M0 · Seams in the shared code (Ridgeback bit-identical)
 
-- [ ] `FightDecl::buried`, `clip`, `hearing`, `from_inside`; `MoveDecl::own_hit`.
-- [ ] `MarkLook::{Sand, Fin, Heard, Feel}` and their drawing in `game/src/ground.rs`.
-- [ ] Pins unchanged: `ridgeback_pin.rs`, `hunt/tests/pin.rs`.
+- [x] `FightDecl::presence`, `clip`, `hearing`, `from_inside`, `radius`, `steepest`; `MoveDecl::own_hit`; `noise::nth`.
+- [x] `MarkLook::{Sand, Fin, Heard, Feel}` and their drawing in `game/src/ground.rs`.
+- [x] Pins unchanged: `ridgeback_pin.rs`, `hunt/tests/pin.rs`.
 
 ## M1 · The Pan and the table
 
-- [ ] Arena `arena/sandmaw.rs`: 36 × 36 sand, 1.5 m rock rim, three rock
+- [x] Arena `arena/sandmaw.rs`: 36 × 36 sand, 1.5 m rock rim, three rock
       islands 5 m across and 0.5 m high in a 14 m triangle, a boulder on each.
-- [ ] `species/sandmaw/`: bones (an 11-bone worm), parts (segments, vents,
+- [x] `species/sandmaw/`: bones (a 14-bone worm: root, five neck, head, two lips, five tail), parts (segments, vents,
       throat, head, tooth ring, gullet), moves, clips, own knobs; bootstrap
       `tuned.rs`/`baked.rs`; register; first-guess knobs with `bake_tuning --set`.
-- [ ] `nothing_passes_under_rock`.
+- [x] `nothing_passes_under_rock`.
 
 ## M2 · Noise, feel, and what it attends
 
-- [ ] Perception: felt (radius, height, on sand), hears; the attended record
+- [x] Perception: felt (radius, height, on sand), hears; the attended record
       in the lore (kind, where, who, when); heard noises marked for drawing.
-- [ ] Prowl: circle the last noise, search spiral after `silence_patience`,
+- [x] Prowl: circle the last noise, search spiral after `silence_patience`,
       circle an island.
-- [ ] The three perception tests; `determinism.rs`.
+- [x] The three perception tests; `determinism.rs`.
 
 ## M3 · Buried, and the rise-bite
 
-- [ ] The spine (head trail in the lore), wake, fin, feel disc, heard rings as marks.
-- [ ] Rise-bite: aim at the noise, kept 1.2 m off rock; travels under during
+- [x] The spine (head trail in the lore), wake, fin, feel disc, heard rings as marks.
+- [x] Rise-bite: aim at the noise, kept 1.2 m off rock; travels under during
       the tell; stands for the recovery; shield thrown clear; stone beaches.
-- [ ] Marker tests; `SHOT_MOVE=rise_bite` screenshot.
+- [x] Marker tests; `SHOT_MOVE=rise_bite` screenshot.
 
 ## M4 · The rest of the moves
 
-- [ ] Breach (trail lead, lane, arc hurtbox, beach on rock / interrupt),
+- [x] Breach (trail lead, lane, arc hurtbox, beach on rock / interrupt),
       undertow (sinkhole hazard, rise at its centre), spit (cone, cover, slow),
       lash (half-annulus, crouch ducks), swallow (grab, hold, gulps, escape,
       rescue, gag), sound (vents clamp, riders thrown, ring), dive from a beach.
-- [ ] Each move's test; frametable.
+- [x] Each move's test; frametable.
 
 ## M5 · The beach and the ride
 
-- [ ] Three routes; the beached body mountable at 2.2 m; vents; the writhe
+- [x] Three routes; the beached body mountable at 2.2 m; vents; the writhe
       as a buck; the tooth ring and its consequence.
-- [ ] `beastcheck --species sandmaw`; the beach and tooth-ring tests.
+- [x] `beastcheck --species sandmaw`; the beach and tooth-ring tests.
 
 ## M6 · Animation
 
-- [ ] `anim/src/beast/sandmaw/`: swim, stand, every move, flinch, beached,
+- [x] `anim/src/beast/sandmaw/`: swim, stand, every move, flinch, beached,
       dead; bake; contact sheets looked at.
 
 ## M7 · The hunter and the report
 
-- [ ] `hunt/src/plans/sandmaw.rs`: §9's plan; the tally lines; the new
+- [x] `hunt/src/plans/sandmaw.rs`: §9's plan; the tally lines; the new
       threatening/unperceived bands; the creature's own unanswerable rule.
-- [ ] Twelve+ hunts per class, tune to tier 2, feel-log entries.
+- [x] Twelve+ hunts per class, tune to tier 2, feel-log entries.
 
 ## M8 · Finished
 
-- [ ] Look and dressing in `game`; screenshots of every telegraph.
-- [ ] Trophy (the tooth ring), tempers.
-- [ ] Docs: creature doc built + "Where it landed"; README map; manual.
-- [ ] Web smoke with `?hunt=sandmaw`.
-- [ ] Merge `origin/main`, fmt/clippy/test, push.
+- [x] Look and dressing in `game`; screenshots of every telegraph.
+- [x] Trophy (the tooth ring), tempers.
+- [x] Docs: creature doc built + "Where it landed"; README map; manual.
+- [x] Web smoke with `?hunt=sandmaw`.
+- [x] Merge `origin/main`, fmt/clippy/test, push.

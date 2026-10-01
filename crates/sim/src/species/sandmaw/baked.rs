@@ -18,9 +18,9 @@ pub const ROWS: usize = 993;
 
 /// `(first row, how many)` per clip, in `Clip::ALL` order.
 pub const SPAN: [(u16, u16); CLIP_COUNT] = [
-    (0, 32), // stand
-    (32, 32), // swim
-    (64, 96), // rise
+    (0, 32),   // stand
+    (32, 32),  // swim
+    (64, 96),  // rise
     (160, 96), // breach
     (256, 96), // undertow
     (352, 96), // spit
@@ -31,7 +31,7 @@ pub const SPAN: [(u16, u16); CLIP_COUNT] = [
     (832, 96), // dive
     (928, 32), // flinch
     (960, 32), // beached
-    (992, 1), // dead
+    (992, 1),  // dead
 ];
 
 #[rustfmt::skip]
