@@ -466,7 +466,11 @@ fn rake2() -> Recipe {
         Clip::Rake2,
         vec![
             Key::eased(0.0, cocked(), Ease::IN),
-            Key::eased(mark(Clip::Rake2, 0, 0.5), cocked().chest(10.0, 0.0, 8.0), Ease::SNAP),
+            Key::eased(
+                mark(Clip::Rake2, 0, 0.5),
+                cocked().chest(10.0, 0.0, 8.0),
+                Ease::SNAP,
+            ),
             Key::eased(mark(Clip::Rake2, 1, 0.0), driven, Ease::STRIKE),
             Key::eased(mark(Clip::Rake2, 2, 0.35), driven, Ease::OUT),
             Key::at(1.0, ready),

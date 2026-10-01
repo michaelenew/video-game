@@ -93,7 +93,12 @@ pub const BONES: [Bone; COUNT] = [
     bone("tail2", TAIL1, v((-40, 100), (-4, 100), (0, 1)), 0),
     bone("tail3", TAIL2, v((-40, 100), (-10, 100), (0, 1)), 0),
     bone("tail4", TAIL3, v((-35, 100), (-10, 100), (0, 1)), 0),
-    bone("shoulder.l", CHEST, v((-5, 100), (-30, 100), (-26, 100)), -1),
+    bone(
+        "shoulder.l",
+        CHEST,
+        v((-5, 100), (-30, 100), (-26, 100)),
+        -1,
+    ),
     bone("forearm.l", SHOULDER_L, v((0, 1), (-52, 100), (0, 1)), -1),
     bone("shoulder.r", CHEST, v((-5, 100), (-30, 100), (26, 100)), 1),
     bone("forearm.r", SHOULDER_R, v((0, 1), (-52, 100), (0, 1)), 1),

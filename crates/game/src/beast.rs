@@ -277,7 +277,11 @@ fn joint_width(sp: &kinds::Species, look: &Look, bone: usize) -> Option<f32> {
 
 /// The plain hide of the body in `slot`.
 fn hide_of(hide: &Skin, slot: usize) -> &Handle<StandardMaterial> {
-    if slot == 0 { &hide.armour } else { &hide.second }
+    if slot == 0 {
+        &hide.armour
+    } else {
+        &hide.second
+    }
 }
 
 fn skin<'a>(

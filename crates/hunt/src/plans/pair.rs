@@ -223,7 +223,8 @@ pub fn marker_points(m: &Monster, near: V3) -> Option<[V3; 3]> {
     } else {
         t.anchor
     };
-    let toward = unit(near.sub(closest), V3::ZERO).scale(t.radius.min(wide_flat_dist(near, closest)));
+    let toward =
+        unit(near.sub(closest), V3::ZERO).scale(t.radius.min(wide_flat_dist(near, closest)));
     // On whatever the circle is drawn on: the floor, or a top.
     let up = |p: V3| V3::new(p.x, t.anchor.y, p.z);
     Some([up(t.anchor), up(end), up(closest.add(toward))])
@@ -306,11 +307,9 @@ fn elapsed(m: &Monster) -> Option<(u8, i32, bool)> {
     let a = pair::SPECIES.attack(kind);
     match m.doing {
         Doing::Startup { left, .. } => Some((kind, a.startup as i32 - left as i32, false)),
-        Doing::Active { left, .. } => Some((
-            kind,
-            a.startup as i32 + a.active as i32 - left as i32,
-            true,
-        )),
+        Doing::Active { left, .. } => {
+            Some((kind, a.startup as i32 + a.active as i32 - left as i32, true))
+        }
         _ => None,
     }
 }
@@ -371,7 +370,9 @@ impl Plan for Pair {
                 // Looking right at where it was, and it is not there: it is
                 // somewhere else, and it has to be looked for.
                 let there = at.add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
-                if seen.frame.saturating_sub(f) > 10 && in_view(self.who, view, there, HALF_VIEW, &scene) {
+                if seen.frame.saturating_sub(f) > 10
+                    && in_view(self.who, view, there, HALF_VIEW, &scene)
+                {
                     self.known[s] = None;
                 }
             }
@@ -550,12 +551,14 @@ impl Pair {
                     };
                     let out = first_clear(w, me.pos, &[out, out.scale(Fx::ONE.neg())]);
                     self.intent = EVADE;
-                    let bits = if (live || to_live <= 3) && self.dodge_left == 0 && me.action.actionable() {
-                        self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
-                        Input::SHIFT
-                    } else {
-                        0
-                    };
+                    let bits =
+                        if (live || to_live <= 3) && self.dodge_left == 0 && me.action.actionable()
+                        {
+                            self.dodge_left = sim::tuning::dodge_frames() + DODGE_REST;
+                            Input::SHIFT
+                        } else {
+                            0
+                        };
                     return Some(self.turn_and(w, me, Some(middle(m)), out, bits));
                 }
                 // The tail: over it.
@@ -575,7 +578,11 @@ impl Pair {
                 // late to walk.
                 pair::RAKE | pair::RAKE2 | pair::SWAT | pair::COCK => {
                     let near = wide_flat_dist(m.pos, me.pos).raw()
-                        <= a.hit_x.add(a.hit_radius).add(body).add(MARGIN).raw()
+                        <= a.hit_x
+                            .add(a.hit_radius)
+                            .add(body)
+                            .add(MARGIN)
+                            .raw()
                             .max(Fx::from_int(3).raw());
                     if !near && !marker_covers(m, me.pos, MARGIN) {
                         continue;
@@ -583,7 +590,11 @@ impl Pair {
                     self.intent = EVADE;
                     let back = unit(me.pos.sub(m.pos), V3::from_turns(self.look));
                     let side = V3::new(back.z.neg(), Fx::ZERO, back.x);
-                    let out = first_clear(w, me.pos, &[back, unit(back.add(side), back), unit(back.sub(side), back)]);
+                    let out = first_clear(
+                        w,
+                        me.pos,
+                        &[back, unit(back.add(side), back), unit(back.sub(side), back)],
+                    );
                     let bits = if kind != pair::COCK
                         && (live || to_live <= 2)
                         && self.dodge_left == 0
@@ -646,7 +657,10 @@ impl Pair {
             let Some(m) = m else { continue };
             let open = matches!(
                 m.doing,
-                Doing::Recovery { .. } | Doing::Toppled { .. } | Doing::Stumble { .. } | Doing::Flinch { .. }
+                Doing::Recovery { .. }
+                    | Doing::Toppled { .. }
+                    | Doing::Stumble { .. }
+                    | Doing::Flinch { .. }
             );
             let howling = m.doing.attacking() == Some(pair::HOWL);
             if !open || howling {
@@ -672,7 +686,8 @@ impl Pair {
                     let beside = !down
                         && o.doing.free()
                         && wide_flat_dist(o.pos, stand).raw() < BESIDE.raw();
-                    down || in_sight && !beside && !marker_covers(&o, me.pos, MARGIN) || !in_sight && far
+                    down || in_sight && !beside && !marker_covers(&o, me.pos, MARGIN)
+                        || !in_sight && far
                 }
             };
             if !safe {
@@ -731,7 +746,8 @@ impl Pair {
             && self.facing(me, target, Fx::ratio(3, 100));
         let swing = if ready {
             self.cooldown = SWING_GAP;
-            if window - walk_frames > heavy_busy + EXIT && other_busy > heavy_busy - REACTION as i32 {
+            if window - walk_frames > heavy_busy + EXIT && other_busy > heavy_busy - REACTION as i32
+            {
                 heavy(me.class)
             } else {
                 Input::LEFT
@@ -769,7 +785,10 @@ impl Pair {
             // One it has no idea of: turn, and keep turning, until it is
             // on the screen.
             self.intent = FIND;
-            Some(me.pos.add(V3::from_turns(self.look.add(Fx::ratio(1, 8))).scale(Fx::from_int(6))))
+            Some(
+                me.pos
+                    .add(V3::from_turns(self.look.add(Fx::ratio(1, 8))).scale(Fx::from_int(6))),
+            )
         } else if let Some((_, at, _)) = stale {
             self.intent = FIND;
             Some(at)
@@ -810,7 +829,11 @@ impl Pair {
         }
         if let Some((_, at, _)) = nearest {
             let d = wide_flat_dist(at, me.pos);
-            let keep = if howling { KEEP.add(Fx::from_int(3)) } else { KEEP };
+            let keep = if howling {
+                KEEP.add(Fx::from_int(3))
+            } else {
+                KEEP
+            };
             if d.raw() < keep.raw() {
                 if howling {
                     self.intent = BACK;
@@ -822,7 +845,8 @@ impl Pair {
         // can see is too close: backing blind into the other is the
         // mistake the fight is teaching.
         if (lost || stale.is_some()) && self.intent == FIND {
-            let close = nearest.is_some_and(|(_, at, _)| wide_flat_dist(at, me.pos).raw() < KEEP.raw());
+            let close =
+                nearest.is_some_and(|(_, at, _)| wide_flat_dist(at, me.pos).raw() < KEEP.raw());
             if !close {
                 dir = V3::ZERO;
             }
@@ -836,7 +860,9 @@ impl Pair {
         // cannot see, when she is looking that way.
         if me.class == sim::Class::Elementalist && self.stone_left == 0 {
             if let Some((_, at, _)) = stale {
-                if self.facing(me, at, Fx::ratio(4, 100)) && wide_flat_dist(at, me.pos).raw() < Fx::from_int(12).raw() {
+                if self.facing(me, at, Fx::ratio(4, 100))
+                    && wide_flat_dist(at, me.pos).raw() < Fx::from_int(12).raw()
+                {
                     self.stone_left = STONE_GAP;
                     self.intent = STONE;
                     let mid = me.pos.add(flat(at.sub(me.pos)).scale(crate::HALF));
@@ -949,7 +975,10 @@ impl Tally for PairTally {
                     self.both_in_view += 1;
                 }
             }
-            if alive.iter().any(|s| fight::unseen(&after.monsters[*s].expect("alive")) > 0) {
+            if alive
+                .iter()
+                .any(|s| fight::unseen(&after.monsters[*s].expect("alive")) > 0)
+            {
                 self.split += 1;
             }
         }
@@ -977,8 +1006,8 @@ impl Tally for PairTally {
             if let Doing::Startup { kind, .. } = now.doing {
                 if began(kind) {
                     self.marker_seen[s] = 0;
-                    self.began_seen[s] = look(who)
-                        .is_none_or(|v| in_view(who, v, middle(&now), HALF_VIEW, &scene));
+                    self.began_seen[s] =
+                        look(who).is_none_or(|v| in_view(who, v, middle(&now), HALF_VIEW, &scene));
                     match kind {
                         pair::FEINT => {
                             self.feints += 1;
@@ -1005,7 +1034,10 @@ impl Tally for PairTally {
                 }
             }
             // The feint bitten: a dodge begun during its coil.
-            if let Doing::Startup { kind: pair::FEINT, .. } = now.doing {
+            if let Doing::Startup {
+                kind: pair::FEINT, ..
+            } = now.doing
+            {
                 let dodged = matches!(victim.action, Action::Dodge { .. })
                     && !matches!(before.players[who].action, Action::Dodge { .. });
                 if dodged {
@@ -1023,14 +1055,25 @@ impl Tally for PairTally {
                 }
             }
             // The interpose run broken by a hit.
-            if matches!(was.doing, Doing::Active { kind: pair::INTERPOSE, .. })
-                && matches!(now.doing, Doing::Flinch { .. })
+            if matches!(
+                was.doing,
+                Doing::Active {
+                    kind: pair::INTERPOSE,
+                    ..
+                }
+            ) && matches!(now.doing, Doing::Flinch { .. })
             {
                 self.interposes_punished += 1;
             }
             // The twin pounce crashing.
             if s == 0
-                && matches!(was.doing, Doing::Active { kind: pair::TWIN, .. })
+                && matches!(
+                    was.doing,
+                    Doing::Active {
+                        kind: pair::TWIN,
+                        ..
+                    }
+                )
                 && matches!(now.doing, Doing::Toppled { .. })
             {
                 self.crashed += 1;

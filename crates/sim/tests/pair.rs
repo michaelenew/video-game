@@ -104,7 +104,11 @@ fn play(w: &mut World, kind: u8, at: u32, press: Input, hold: u32) -> i32 {
     let before = me(w).health;
     let total = pair::SPECIES.attack(kind).total() as u32;
     for f in 0..total + 4 {
-        let input = if f >= at && f < at + hold { press } else { idle() };
+        let input = if f >= at && f < at + hold {
+            press
+        } else {
+            idle()
+        };
         w.advance([input, Input::default()]);
         if let Some(m) = w.monsters[0].as_mut() {
             m.brain.think_left = m.brain.think_left.max(60);
@@ -446,7 +450,10 @@ fn the_brain_decides_the_same_whatever_buttons_were_pressed() {
         if a.players[0].facing != b.players[0].facing {
             differed += 1;
         }
-        assert_eq!(a.players[0].pos, b.players[0].pos, "frame {f}: the quarry is the same");
+        assert_eq!(
+            a.players[0].pos, b.players[0].pos,
+            "frame {f}: the quarry is the same"
+        );
         assert_eq!(a.monsters, b.monsters, "frame {f}: so are the cats");
     }
     assert!(differed > 1000, "the looks really did differ ({differed})");
@@ -459,7 +466,12 @@ fn every_hit_lands_at_least_fifteen_frames_after_the_glance_that_chose_it() {
     for kind in 0..pair::MOVES.len() as u8 {
         let a = pair::SPECIES.attack(kind);
         if a.damage > 0 && a.startup < 15 {
-            assert_eq!(kind, pair::SWAT, "{} tells under a reaction", pair::MOVES[kind as usize].name);
+            assert_eq!(
+                kind,
+                pair::SWAT,
+                "{} tells under a reaction",
+                pair::MOVES[kind as usize].name
+            );
             assert!(
                 a.ideal_range.add(a.range_span).raw() < a.hit_x.add(a.hit_radius).raw(),
                 "and the swat is only thrown at what its paw already reaches"
@@ -493,8 +505,16 @@ fn every_hit_lands_at_least_fifteen_frames_after_the_glance_that_chose_it() {
                     }
                     hits += 1;
                     let name = pair::MOVES[kind as usize].name;
-                    assert!(after.frame - commit[s] >= 15, "{name}: {} after its commit", after.frame - commit[s]);
-                    assert!(after.frame - aimed[s] >= 15, "{name}: {} after its aim last moved", after.frame - aimed[s]);
+                    assert!(
+                        after.frame - commit[s] >= 15,
+                        "{name}: {} after its commit",
+                        after.frame - commit[s]
+                    );
+                    assert!(
+                        after.frame - aimed[s] >= 15,
+                        "{name}: {} after its aim last moved",
+                        after.frame - aimed[s]
+                    );
                 }
             }
         });
@@ -512,7 +532,9 @@ fn the_two_never_land_within_the_gap_except_the_twin_pounce() {
         scripted(seed * 0x2545_F491, 3600, |_, after| {
             for s in 0..2 {
                 let Some(m) = after.monsters[s] else { continue };
-                let Doing::Active { kind, .. } = m.doing else { continue };
+                let Doing::Active { kind, .. } = m.doing else {
+                    continue;
+                };
                 if kind == pair::TWIN || pair::SPECIES.attack(kind).damage <= 0 {
                     continue;
                 }
@@ -564,12 +586,20 @@ fn play_twin(w: &mut World, at: u32, press: Input) -> (i32, bool) {
     let total = pair::SPECIES.attack(pair::TWIN).total() as u32;
     let mut crashed = false;
     for f in 0..total + 4 {
-        let input = if f >= at && f < at + 2 { press } else { Input::aimed(0, 0) };
+        let input = if f >= at && f < at + 2 {
+            press
+        } else {
+            Input::aimed(0, 0)
+        };
         w.advance([input, Input::default()]);
         for m in w.monsters.iter_mut().flatten() {
             m.brain.think_left = m.brain.think_left.max(60);
         }
-        crashed |= w.monsters.iter().flatten().all(|m| matches!(m.doing, Doing::Toppled { .. }));
+        crashed |= w
+            .monsters
+            .iter()
+            .flatten()
+            .all(|m| matches!(m.doing, Doing::Toppled { .. }));
     }
     (before - me(w).health, crashed)
 }
@@ -636,7 +666,9 @@ fn the_survivor_enrages_and_no_tell_goes_below_fifteen_frames() {
             let before = w.clone();
             w.advance(input);
             keep(&mut w, full);
-            let (Some(was), Some(now)) = (before.monsters[0], w.monsters[0]) else { continue };
+            let (Some(was), Some(now)) = (before.monsters[0], w.monsters[0]) else {
+                continue;
+            };
             enraged |= fight::enraged(&now);
             if let Doing::Startup { kind, left } = now.doing {
                 let fresh = was.doing.attacking() != Some(kind)
@@ -645,9 +677,16 @@ fn the_survivor_enrages_and_no_tell_goes_below_fifteen_frames() {
                     tells += 1;
                     let tell = left + 1;
                     if kind == pair::SWAT {
-                        assert!(tell >= pair::SPECIES.attack(kind).startup, "the swat stays itself");
+                        assert!(
+                            tell >= pair::SPECIES.attack(kind).startup,
+                            "the swat stays itself"
+                        );
                     } else {
-                        assert!(tell >= 15, "{} told in {tell}", pair::MOVES[kind as usize].name);
+                        assert!(
+                            tell >= 15,
+                            "{} told in {tell}",
+                            pair::MOVES[kind as usize].name
+                        );
                     }
                 }
             }
@@ -669,4 +708,3 @@ fn the_ridgeback_is_bit_identical_with_two_slots() {
     }
     assert!(w.monsters[0].is_some_and(|m| m.species == SpeciesId::RIDGEBACK));
 }
-

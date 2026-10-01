@@ -246,7 +246,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 10] {
+fn scenarios() -> [Scenario; 11] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -305,7 +305,28 @@ fn scenarios() -> [Scenario; 10] {
         ("the pan, loud", |c| {
             loud_pan(World::hunt_of([c; MAX_PLAYERS], SpeciesId::SANDMAW))
         }),
+        // The Pair in the Den, both cats coiled for the twin pounce: two rigs
+        // posed, and each posed again for its telegraph, every frame.
+        ("the den, both coiled", |c| {
+            both_coiled(World::hunt_of([c; MAX_PLAYERS], SpeciesId::PAIR))
+        }),
     ]
+}
+
+/// Both cats winding up the twin pounce at the first fighter.
+fn both_coiled(mut w: World) -> World {
+    use sim::species::pair;
+    let me = w.players[0].pos;
+    for m in w.monsters.iter_mut().flatten() {
+        m.brain.seen = me;
+        m.brain.grace = 0;
+        m.doing = sim::monster::Doing::Startup {
+            kind: pair::TWIN,
+            left: pair::SPECIES.attack(pair::TWIN).startup,
+        };
+        m.lob(pair::TWIN);
+    }
+    w
 }
 
 /// The Sandmaw's fight with its whole lore in use: two sinkholes and a full

@@ -115,12 +115,18 @@ pub fn lob_height(m: &Monster) -> Fx {
 /// Set the mark's height.
 fn set_mark_height(m: &mut Monster, y: Fx) {
     let steps = (lore::to_cm(y) as i32 / MARK_STEP).clamp(0, 0xFF);
-    m.own[body::FLAGS] = (m.own[body::FLAGS] & !(0xFF << flag::MARK_SHIFT)) | (steps << flag::MARK_SHIFT);
+    m.own[body::FLAGS] =
+        (m.own[body::FLAGS] & !(0xFF << flag::MARK_SHIFT)) | (steps << flag::MARK_SHIFT);
 }
 
 /// Put a leap's mark at `at`, on open floor or the top it is on, and
 /// remember how high that is.
-pub fn mark_at(m: &mut Monster, at: V3, ground: &crate::arena::Terrain, field: &crate::stones::Field) {
+pub fn mark_at(
+    m: &mut Monster,
+    at: V3,
+    ground: &crate::arena::Terrain,
+    field: &crate::stones::Field,
+) {
     let at = on_open_floor(at, m.brain.seen.y, ground);
     m.aim_at(at);
     set_mark_height(m, ground_at(at, ground, field));
@@ -264,8 +270,7 @@ fn upper(m: &Monster) -> i32 {
 
 fn set_upper(m: &mut Monster, v: i32) {
     let lo = lore::lo(m.own[body::CLOCKS] as u32);
-    m.own[body::CLOCKS] =
-        lore::halves(lo, v.clamp(i16::MIN as i32, i16::MAX as i32) as i16) as i32;
+    m.own[body::CLOCKS] = lore::halves(lo, v.clamp(i16::MIN as i32, i16::MAX as i32) as i16) as i32;
 }
 
 /// A cat's block of state bits, as the pair brain wrote it.
@@ -434,7 +439,14 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
             set_flag(m, flag::SCAR_PENDING, true);
         }
     }
-    if matches!(m.doing, Doing::Active { kind: INTERPOSE, .. }) && dealt > 0 {
+    if matches!(
+        m.doing,
+        Doing::Active {
+            kind: INTERPOSE,
+            ..
+        }
+    ) && dealt > 0
+    {
         m.doing = Doing::Flinch {
             left: SPECIES.flinch_frames(),
         };
@@ -483,14 +495,21 @@ pub fn frame(w: &mut World) {
 
     // **The first death.** The survivor howls over the body, and then it is
     // a different fight.
-    let living: Vec<usize> = (0..MAX_MONSTERS)
-        .filter(|s| cats[*s] && herd[*s].is_some_and(|m| m.alive()))
-        .collect();
+    // The living slots, in order, on the stack: a frame never allocates.
+    let mut alive_at = [0usize; MAX_MONSTERS];
+    let mut count = 0;
+    for s in 0..MAX_MONSTERS {
+        if cats[s] && herd[s].is_some_and(|m| m.alive()) {
+            alive_at[count] = s;
+            count += 1;
+        }
+    }
+    let living = &alive_at[..count];
     let any_dead = (0..MAX_MONSTERS).any(|s| cats[s] && herd[s].is_some_and(|m| !m.alive()));
     if any_dead && shared & pair::DEATH == 0 {
         shared |= pair::DEATH;
         lore.set_word(word::DEATH_AT, now.wrapping_add(1));
-        for &s in &living {
+        for &s in living {
             let m = herd[s].as_mut().expect("living");
             set_flag(m, flag::ENRAGED, true);
             set_flag(m, flag::ROLE, false);
@@ -519,7 +538,7 @@ pub fn frame(w: &mut World) {
         arena: &ground,
     };
     let mut sees = [false; MAX_MONSTERS];
-    for &s in &living {
+    for &s in living {
         let m = herd[s].expect("living");
         let who = (m.brain.target as usize).min(players.len() - 1);
         let p = &players[who];
@@ -546,7 +565,7 @@ pub fn frame(w: &mut World) {
     }
 
     // The scar: which eye, read from where whoever struck it is standing.
-    for &s in &living {
+    for &s in living {
         let m = herd[s].as_mut().expect("living");
         if flags(m) & flag::SCAR_PENDING == 0 {
             continue;
@@ -559,20 +578,27 @@ pub fn frame(w: &mut World) {
             .map(|p| p.pos)
             .unwrap_or(m.brain.seen);
         let right = V3::from_turns(m.yaw.add(math::QUARTER_TURN));
-        scar_eye(m, if right.dot(from.sub(m.pos)).raw() >= 0 { 1 } else { -1 });
+        scar_eye(
+            m,
+            if right.dot(from.sub(m.pos)).raw() >= 0 {
+                1
+            } else {
+                -1
+            },
+        );
     }
 
-    roles(&mut herd, &mut lore, &living, &sees, shared, now);
-    perch_spots(&herd, &mut lore, &living, &ground, &field);
-    for &s in &living {
+    roles(&mut herd, &mut lore, living, &sees, shared, now);
+    perch_spots(&herd, &mut lore, living, &ground, &field);
+    for &s in living {
         let mut m = herd[s].expect("living");
         moves(&mut m, &ground, &field, now);
         herd[s] = Some(m);
     }
-    stuck(&herd, &mut lore, &living, &players, &ground);
-    twin(&mut herd, &mut lore, &living, &sees, &ground, &field);
-    stagger(&mut herd, &living, now);
-    apart(&mut herd, &living, &field);
+    stuck(&herd, &mut lore, living, &players, &ground);
+    twin(&mut herd, &mut lore, living, &sees, &ground, &field);
+    stagger(&mut herd, living, now);
+    apart(&mut herd, living, &field);
 
     // What each needs of the other, for the brains next frame.
     lore.set_word(word::NOW, now);
@@ -966,7 +992,10 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
     // stays up is drawn now, as the second hit commits, so the first cannot
     // teach it. Then the drop.
     match m.doing {
-        Doing::Recovery { kind: RAKE, left: 0 } => {
+        Doing::Recovery {
+            kind: RAKE,
+            left: 0,
+        } => {
             let lo = Knob::HoldMin.raw();
             let hi = Knob::HoldMax.raw().max(lo);
             let hold = (lo as u32 + draw(m) % ((hi - lo) as u32 + 1)) as u16;
@@ -1172,11 +1201,7 @@ fn fly(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones::F
     }
     if e < leave {
         // Still coiled: on whatever is under it.
-        m.pos.y = ground_at(m.pos, ground, field).max(if perched(m) {
-            m.pos.y
-        } else {
-            Fx::ZERO
-        });
+        m.pos.y = ground_at(m.pos, ground, field).max(if perched(m) { m.pos.y } else { Fx::ZERO });
         return;
     }
     let from = point(m.own[body::LEAP_FROM] as u32);
@@ -1259,7 +1284,8 @@ fn stuck(
                 None
             };
             let far = goal.is_some_and(|g| {
-                math::wide_flat_dist(g, m.pos).raw() > Knob::LandShort.fx().mul(Fx::from_int(2)).raw()
+                math::wide_flat_dist(g, m.pos).raw()
+                    > Knob::LandShort.fx().mul(Fx::from_int(2)).raw()
             });
             // Getting nowhere is measured by where it got, not by how hard
             // it is walking: a cat leaning on a wall walks at a full run.

@@ -49,10 +49,7 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
     if fight::perched(m) {
         let dive = SPECIES.attack(DIVE);
         let most = dive.ideal_range.add(dive.range_span);
-        if kind != DIVE
-            || range.raw() <= Knob::DiveLip.fx().raw()
-            || range.raw() > most.raw()
-        {
+        if kind != DIVE || range.raw() <= Knob::DiveLip.fx().raw() || range.raw() > most.raw() {
             return 0;
         }
         return score.max(0) + Knob::DiveAppetite.raw();
@@ -128,8 +125,8 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         );
         let behind = round.raw() <= fight::cos_turns(Knob::BehindAngle.fx()).raw();
         let v = m.brain.seen_vel;
-        let fast = math::wide_flat_len(V3::new(v.x, Fx::ZERO, v.z)).raw()
-            > Knob::SeenFastSpeed.fx().raw();
+        let fast =
+            math::wide_flat_len(V3::new(v.x, Fx::ZERO, v.z)).raw() > Knob::SeenFastSpeed.fx().raw();
         if !behind && !(kind == AMBUSH && fast) {
             return 0;
         }
@@ -337,7 +334,12 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
     if matches!(kind, POUNCE | DIVE) {
         // Stones are not in the brain's window; the frame hook puts the
         // mark on one before anything is live.
-        fight::mark_at(m, m.aimed_at(), mind.ground, &[None; crate::stones::MAX_STONES]);
+        fight::mark_at(
+            m,
+            m.aimed_at(),
+            mind.ground,
+            &[None; crate::stones::MAX_STONES],
+        );
     }
     match kind {
         POUNCE => {

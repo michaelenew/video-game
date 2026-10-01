@@ -67,8 +67,16 @@ pub fn place(size: Vec2, toward: Vec3, on_screen: bool) -> Option<(Vec2, bool)> 
     let dir = dir.normalize_or(Vec2::new(0.0, 1.0));
     let half = size * 0.5;
     // Out along `dir` from the middle until it meets the screen's edge.
-    let sx = if dir.x.abs() > 1e-6 { half.x / dir.x.abs() } else { f32::MAX };
-    let sy = if dir.y.abs() > 1e-6 { half.y / dir.y.abs() } else { f32::MAX };
+    let sx = if dir.x.abs() > 1e-6 {
+        half.x / dir.x.abs()
+    } else {
+        f32::MAX
+    };
+    let sy = if dir.y.abs() > 1e-6 {
+        half.y / dir.y.abs()
+    } else {
+        f32::MAX
+    };
     let side = sx < sy;
     let edge = half + dir * sx.min(sy);
     let (w, h) = if side { (THIN, LONG) } else { (LONG, THIN) };

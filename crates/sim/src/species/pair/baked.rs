@@ -18,19 +18,19 @@ pub const ROWS: usize = 1537;
 
 /// `(first row, how many)` per clip, in `Clip::ALL` order.
 pub const SPAN: [(u16, u16); CLIP_COUNT] = [
-    (0, 32), // idle
-    (32, 32), // walk
-    (64, 32), // bound
-    (96, 96), // pounce
-    (192, 96), // rake
-    (288, 96), // cock
-    (384, 96), // rake2
-    (480, 96), // swat
-    (576, 96), // feint
-    (672, 96), // ambush
-    (768, 96), // trip
-    (864, 96), // perch
-    (960, 96), // dive
+    (0, 32),    // idle
+    (32, 32),   // walk
+    (64, 32),   // bound
+    (96, 96),   // pounce
+    (192, 96),  // rake
+    (288, 96),  // cock
+    (384, 96),  // rake2
+    (480, 96),  // swat
+    (576, 96),  // feint
+    (672, 96),  // ambush
+    (768, 96),  // trip
+    (864, 96),  // perch
+    (960, 96),  // dive
     (1056, 96), // drop
     (1152, 96), // twin
     (1248, 96), // interpose
@@ -38,7 +38,7 @@ pub const SPAN: [(u16, u16); CLIP_COUNT] = [
     (1440, 32), // flinch
     (1472, 32), // stumble
     (1504, 32), // topple
-    (1536, 1), // dead
+    (1536, 1),  // dead
 ];
 
 #[rustfmt::skip]
