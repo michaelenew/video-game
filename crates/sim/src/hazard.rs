@@ -802,6 +802,32 @@ pub fn step(lore: &mut Lore, herd: &Herd, fires: &[Fire]) {
     }
 }
 
+/// **Put fire to one hazard**, by a species' own rule rather than by a fire
+/// touching it: the Mireback's belch lighting every pool it marked. A kind
+/// that `ignites` becomes what it ignites into, exactly as if a flame had
+/// reached it; anything else is left alone. Returns whether it caught.
+pub fn ignite(lore: &mut Lore, i: usize) -> bool {
+    let Some(sp) = lore.owner.map(|s| s.get()) else {
+        return false;
+    };
+    let h = get(lore, i);
+    if !h.present() {
+        return false;
+    }
+    match sp
+        .fight
+        .hazards
+        .get(h.index() as usize)
+        .and_then(|d| d.ignites)
+    {
+        Some(into) => {
+            set(lore, i, changed(sp, h, into));
+            true
+        }
+        None => false,
+    }
+}
+
 /// The same hazard, as another kind: its age starts again, and it takes the
 /// new kind's radius if that kind has one.
 fn changed(sp: &Species, h: Hazard, into: u8) -> Hazard {

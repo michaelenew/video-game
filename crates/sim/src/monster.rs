@@ -1984,25 +1984,32 @@ impl Monster {
         self.brain.repeat_left = self.sp().variety_frames();
         self.brain.cooldown[kind as usize] = m.cooldown;
         self.brain.think_left = 0;
-        // A lobbed move lands where the target will be when it does, kept
-        // inside the move's own range: the aim point, held from here on.
         if sp.moves[kind as usize].lobbed {
-            let aim = self.lead_point(m.startup);
-            let to = V3::new(aim.x.sub(self.pos.x), Fx::ZERO, aim.z.sub(self.pos.z));
-            let far = crate::math::wide_flat_len(to);
-            let near = m.ideal_range.sub(m.range_span).max(Fx::ZERO);
-            let most = m.ideal_range.add(m.range_span);
-            let reach = far.clamp(near, most);
-            let dir = if far.raw() > 0 {
-                crate::math::wide_normalized(to)
-            } else {
-                V3::from_turns(self.yaw)
-            };
-            self.aim_at(self.pos.add(dir.scale(reach)));
+            self.lob(kind);
         }
         if let Some(commit) = sp.fight.commit {
             commit(self, kind, mind);
         }
+    }
+
+    /// **Aim a lobbed move**: where the target will be when it lands, kept
+    /// inside the move's own range -- the aim point, held from here on. What
+    /// the brain does as a lobbed move commits; a species may aim it again
+    /// (`FightDecl::commit`).
+    pub fn lob(&mut self, kind: u8) {
+        let m = self.sp().attack(kind);
+        let aim = self.lead_point(m.startup);
+        let to = V3::new(aim.x.sub(self.pos.x), Fx::ZERO, aim.z.sub(self.pos.z));
+        let far = crate::math::wide_flat_len(to);
+        let near = m.ideal_range.sub(m.range_span).max(Fx::ZERO);
+        let most = m.ideal_range.add(m.range_span);
+        let reach = far.clamp(near, most);
+        let dir = if far.raw() > 0 {
+            crate::math::wide_normalized(to)
+        } else {
+            V3::from_turns(self.yaw)
+        };
+        self.aim_at(self.pos.add(dir.scale(reach)));
     }
 
     /// Turn. A proportional controller behind a rate limit and an acceleration
@@ -2061,9 +2068,13 @@ impl Monster {
             }
             _ => self.sp().prowl_lead(),
         };
-        // Walking somewhere of its own, it faces where it is going.
+        // Walking somewhere of its own, it faces where it is going -- until it
+        // is within a stride of it, and then it faces you.
+        let arrived = |to: V3| {
+            crate::math::wide_flat_dist(to, self.pos).raw() <= self.sp().gait_stride().raw()
+        };
         let aim = match prowl {
-            Some(to) if self.doing.free() => to,
+            Some(to) if self.doing.free() && !arrived(to) => to,
             _ => self.lead_point(horizon),
         };
         let want = crate::math::atan2_turns(aim.z.sub(self.pos.z), aim.x.sub(self.pos.x));
@@ -2145,8 +2156,15 @@ impl Monster {
                     .dot(crate::math::wide_normalized(to))
                     .max(Fx::ZERO)
                     .mul(self.sp().pursuit_gain());
+                // Somewhere of its own is somewhere to stand on; the
+                // preferred distance is from a target.
+                let stand_off = if prowl.is_some() {
+                    Fx::ZERO
+                } else {
+                    self.sp().prowl_range()
+                };
                 let want = range
-                    .sub(self.sp().prowl_range())
+                    .sub(stand_off)
                     .mul(self.sp().approach_gain())
                     .add(fleeing)
                     .clamp(self.sp().back().neg(), self.sp().gallop());
