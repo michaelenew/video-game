@@ -797,6 +797,28 @@ What the build decided beside the document:
   once where a query used to pose it per vent, per swing sample and per step of
   a rider's walk was.
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)).**
+
+- **Alone, its anchors are 5 900, not 7 000** (`AnchorAlone`, the
+  hunt's hunters counted on its first frame, as the Galewing's coop health
+  is). At 7 000 a lone Champion broke two anchors' worth before the
+  parasites, the rings and the falls wore him down, and won none of 24; tier
+  5 asks one in twenty. Solo, 24 hunts each: Champion 1, Bulwark 0, Reaver 4,
+  Elementalist 1, Blood mage 0, Dual mage 0 -- six in 144, one in 24. 5 000
+  gave twenty-three (the Champion 5, in four minutes), 5 600 thirteen, 6 200
+  six with the Champion at none. The pair's fight is untouched: two hunters
+  get `AnchorHealth`, and their numbers are the same to the hunt
+  (`alone_its_anchors_are_the_ones_one_hunter_can_break`).
+- **The floor's threatening share stays under a tenth.** The ground hunter
+  buckles a broken leg, and a broken leg throws nothing; the levers that
+  reach him from the next leg over (a longer stamp, more stamps) were tried
+  when it was built and cost the pair half its wins. Nothing new was found
+  that does not; the share is the price of a fight whose ground half is
+  meant to be won.
+- **The Reaver as a pair wins 12 of 12.** Her shadow at an anchor and the
+  dash to it are her §7 ("excellent above"); nothing in the shell singles
+  her out, and taking it from her is a class change. Left for the owner.
+
 For a person: whether the beat is a rhythm or a chore (§12, 6), whether 0.8
 m/s reads as walking (§12, 5), the solo rate (§12, 7), the Reaver, who
 wins twelve of twelve as a pair, and the Bulwark and the Blood mage, who win

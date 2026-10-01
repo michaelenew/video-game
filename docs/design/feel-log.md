@@ -7194,3 +7194,21 @@ out of the jump before the sweep passes, which is the scripted pair's.
 
 **Verdict** kept the measure; the third out of reach stays a person's call
 between the waiting room and the ride.
+
+### 2026-10-01 — The Siegeshell alone: one in twenty
+
+**Changed** With one hunter its anchors are 5 900 (`AnchorAlone`), with two
+7 000 as before.
+
+**Why** Tier 5 is built for two and one in twenty alone; at 7 000 a lone
+hunter won none of 24 for the Champion and 5 of 144 across the classes,
+dying to attrition two anchors in.
+
+**Found** Six of 144 alone (Champion 1, Reaver 4, Elementalist 1). Pairs
+unchanged to the hunt.
+
+**Reverted** 5 000 (23 of 144, the Champion's wins in four minutes), 5 600
+(13), 6 200 (6, the Champion none).
+
+**Verdict** kept. The floor's tenth threatening and the Reaver pair's 12 of
+12 are recorded in the creature's §13, not changed.

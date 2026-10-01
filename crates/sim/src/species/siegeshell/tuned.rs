@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 537] = [
+pub const KNOBS: [i32; 538] = [
            65536, // siegeshell.size_(x) = 1
            30000, // siegeshell.health = 30000
             1200, // siegeshell.breakable_part_health = 1200
@@ -72,6 +72,7 @@ pub const KNOBS: [i32; 537] = [
            65536, // siegeshell_·_hide.anchors_(x_damage) = 1
             3277, // siegeshell_·_hide.legs,_head_and_pads_(x_damage) = 0.05
             7000, // siegeshell_·_hide.an_anchor's_health = 7000
+            5900, // siegeshell_·_hide.an_anchor's_health,_one_hunter = 5900
              400, // siegeshell_·_hide.a_broken_ankle_buckles_every = 400
           163840, // siegeshell_·_hide.an_open_anchor_takes_(x) = 2.5
            60293, // siegeshell_·_walk.walk_per_broken_ankle_(x) = 0.92

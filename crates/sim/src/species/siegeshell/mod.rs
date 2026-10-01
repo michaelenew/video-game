@@ -724,6 +724,7 @@ crate::species_knobs! {
     VulnAnchor,      "hide",    "Anchors (x damage)",                    Fixed, 0, fx(3,1);
     VulnLimb,        "hide",    "Legs, head and pads (x damage)",        Fixed, 0, fx(3,1);
     AnchorHealth,    "hide",    "An anchor's health",                    Int,   0, 12000;
+    AnchorAlone,     "hide",    "An anchor's health, one hunter",        Int,   0, 12000;
     // buckle_health
     BuckleHealth,    "hide",    "A broken ankle buckles every",          Int,   0, 2000;
     // opening_damage

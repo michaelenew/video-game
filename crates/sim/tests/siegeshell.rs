@@ -1172,3 +1172,32 @@ fn a_top_face_met_from_above_is_a_place_and_from_below_is_not() {
     assert!(!seen.aboard, "the rim's underside is a body, off the ray");
     assert_ne!(seen.met, sim::aim::Met::Ground);
 }
+
+/// **Built for two, one in twenty alone** (tier 5, bestiary §2): with one
+/// hunter its anchors are `AnchorAlone`, with two `AnchorHealth`, and its
+/// health bar reads whole either way.
+#[test]
+fn alone_its_anchors_are_the_ones_one_hunter_can_break() {
+    for (hunters, knob) in [(1, ss::Knob::AnchorAlone), (2, ss::Knob::AnchorHealth)] {
+        let mut w = World::hunt_of([Class::Champion; MAX_PLAYERS], SpeciesId::SIEGESHELL);
+        if hunters == 1 {
+            w.players[1].health = 0;
+        }
+        w.advance([Input::default(); MAX_PLAYERS]);
+        let slot = fight::slot_of(&w).expect("the shell");
+        let beast = w.monsters[slot].unwrap();
+        for a in 0..ss::ANCHOR_COUNT {
+            assert_eq!(
+                beast.part_health(ss::anchor_part(a)),
+                knob.raw(),
+                "{hunters} hunter(s): anchor {a}"
+            );
+        }
+        assert_eq!(
+            beast.health,
+            beast.sp().health(),
+            "{hunters} hunter(s): the bar starts whole"
+        );
+    }
+    assert!(ss::Knob::AnchorAlone.raw() < ss::Knob::AnchorHealth.raw());
+}

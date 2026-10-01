@@ -33,7 +33,7 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
 
 - [x] 1 contract breach -- `pack::watch`/`unanswered`, glance keeps a committed target, report asks the fighter reached, Mireback's fresh-tar rule fixed. Zero for Gnawers, Hornback, Mireback, Broodmother, Siegeshell, six classes, solo 24 / coop 12.
 - [x] 2 threatening share -- Pair: measure (per body; `together` line). Galewing: measure (windowed in reach; lift/perch not threats). Sandmaw: target (its tally's §9 measure is right; stand throws moves).
-- [ ] 3 specific misses
+- [ ] 3 specific misses -- Galewing done (measure: walkable floor; creature levers reverted, cost the ride). Next: Siegeshell, Gnawers, Broodmother, Mireback, Veilstalker, Mantis.
 - [ ] 4 merge and re-measure
 
 ## Log
@@ -43,3 +43,7 @@ parallel (`target/release/fight`). Solo 24 seeds, coop `--hunters 2` 12.
   pitched up at a sac. Rule kept by the referee (exchange), not the brain.
 - 2026-10-01: item 2. Single-body creatures' windows verified identical
   after the report change (same seeds, same lines).
+- 2026-10-01: merged origin/main (class-playing hunter). Hornback/Mireback
+  unanswerable zero on this branch. Fire pillar investigated: bestiary §8.
+- 2026-10-01: Galewing. Coop losses are the scripted pair's jumps (falls out
+  of the jump under 2 m), not the bird.
