@@ -591,3 +591,53 @@ fn the_guard_drawn_is_the_guard_it_has() {
     let _ = habit::DEPTH;
     let _ = me(&w);
 }
+
+#[test]
+fn earthbreaker_as_the_third_link_breaks_the_guard_its_first_two_raised() {
+    // §7, the Champion's route: sword, sword into it -- it sees the first
+    // link late and raises its guard, the second is blocked -- and
+    // Earthbreaker, the hammer as the third link, lands inside its minimum
+    // hold and breaks it.
+    let _knobs = lock();
+    let mut w = duel(Class::Champion, 2);
+    let mut presses = [Input::LEFT, Input::LEFT, Input::MIDDLE].into_iter();
+    let mut next = presses.next();
+    let mut broke = false;
+    let mut log = Vec::new();
+    for _ in 0..140 {
+        let free = me(&w).action.actionable();
+        let press = match next {
+            Some(b) if free => {
+                next = presses.next();
+                idle().with(b)
+            }
+            _ => idle(),
+        };
+        w.advance([press, Input::default()]);
+        place(&mut w, 2);
+        if let Some(m) = w.monsters[0].as_mut() {
+            m.brain.think_left = m.brain.think_left.max(60);
+        }
+        log.push(format!(
+            "{} {:?} {} | {:?} {:?} {}",
+            w.frame,
+            me(&w).action,
+            me(&w).pos.x.sub(base().x).to_f32_for_render(),
+            it(&w).doing,
+            fight::mail(&it(&w), 0),
+            it(&w).health
+        ));
+        broke |= matches!(
+            it(&w).doing,
+            Doing::Recovery {
+                kind: mantis::BROKEN,
+                ..
+            }
+        );
+    }
+    assert!(
+        broke,
+        "the string did not break its guard:\n{}",
+        log.join("\n")
+    );
+}

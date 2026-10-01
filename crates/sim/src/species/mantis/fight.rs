@@ -54,6 +54,7 @@ pub static FIGHT: FightDecl = FightDecl {
     prowl_to: Some(super::mind::prowl_to),
     commit: Some(super::mind::commit),
     hide: Some(hide),
+    struck: Some(struck),
     landed: Some(landed),
     marks: Some(marks),
     signs: Some(signs),
@@ -123,6 +124,8 @@ pub mod flag {
     /// The parry under way was of a move it saw coming: its guard was
     /// raised by its eyes, not by its own choice.
     pub const SAW_IT: Bits = 1 << 13;
+    /// Its guard came down early, on a guard breaker it saw coming.
+    pub const DROPPED: Bits = 1 << 14;
 }
 
 /// The words of its own region of the lore, after its eyes.
@@ -150,7 +153,10 @@ pub mod word {
     pub const GUARD_QUIET: usize = HABIT_META + 1;
     /// The frame its last coil began, and whether its release was seen.
     pub const COIL: usize = HABIT_META + 2;
-    pub const END: usize = HABIT_META + 3;
+    /// **The frame its guard was last committed**: raised, or a blow taken
+    /// on it. Its minimum hold is counted from here.
+    pub const GUARD_SINCE: usize = HABIT_META + 3;
+    pub const END: usize = HABIT_META + 4;
 }
 
 /// A valid bit at the top of a word.
@@ -335,9 +341,14 @@ pub fn inside(m: &Monster, from: V3) -> bool {
 }
 
 fn elevated_ok(m: &Monster, from: V3) -> bool {
+    let run = math::wide_flat_dist(from, m.pos);
+    // From under its body -- a pillar at its feet -- is from below it,
+    // whatever the angle.
+    if run.raw() < SPECIES.fight_fx(FightField::BodyRadius).raw() {
+        return false;
+    }
     let chest = m.pos.y.add(Knob::GuardChest.fx());
     let middle = from.y.add(math::half(crate::tuning::body_height()));
-    let run = math::wide_flat_dist(from, m.pos);
     let rise = middle.sub(chest);
     let angle = math::atan2_turns(rise, run);
     angle.raw() <= Knob::GuardElevation.fx().raw()
@@ -505,6 +516,36 @@ pub fn hide(m: &Monster, part: usize) -> Fx {
     }
 }
 
+/// **A hit has landed on it.** In a stagger of its own -- its guard broken,
+/// a lunge into a wall -- the stagger is the window, and a flinch or an
+/// interrupt is not allowed to cut it short: its blades still wear (the
+/// window's other reward), and a blade that goes is the stumble, as ever.
+pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
+    if !matches!(
+        m.doing,
+        Doing::Recovery {
+            kind: BROKEN | STAGGER,
+            ..
+        }
+    ) {
+        return false;
+    }
+    if let Some(slot) = SPECIES.break_slot(part).filter(|s| m.breaks[*s] > 0) {
+        m.breaks[slot] -= dealt;
+        if m.breaks[slot] <= 0 {
+            m.breaks[slot] = 0;
+            m.doing = Doing::Stumble {
+                left: SPECIES.stumble_frames(),
+                front: true,
+            };
+            m.speed = Fx::ZERO;
+            m.yaw_rate = Fx::ZERO;
+            m.strain = 0;
+        }
+    }
+    true
+}
+
 /// **One of its moves landed**: the flare's shove is a slide for a braced
 /// (crouched) fighter.
 pub fn landed(w: &mut World, _slot: usize, fighter: usize, kind: u8, guarded: bool) {
@@ -552,6 +593,11 @@ pub fn frame(w: &mut World) {
             continue;
         }
         stages(&mut m, hunters);
+        // A blow its guard took last frame commits it again: blockstun is
+        // a commitment, and a guard being hit is a guard being held.
+        if (0..MAX_PLAYERS).any(|who| mail(&m, who).is_some_and(|(_, r)| r == 1 || r == 2)) {
+            lore.set_word(word::GUARD_SINCE, t.wrapping_sub(1));
+        }
         habit::drain(&mut m, &mut lore, t);
         watch(&m, &mut lore, t);
         reflexes(&mut m, &mut lore, t);
@@ -662,7 +708,8 @@ pub struct Coming {
 }
 
 /// What it sees coming at it, now: each fighter's seen deed, if it is a move
-/// that reaches it from where it saw them and whose hit has not yet passed.
+/// that reaches it from where it saw them -- its hit still to come, or
+/// already come and gone and the next link of the string still to come.
 pub fn coming(m: &Monster, lore: &Lore, t: u32) -> [Option<Coming>; MAX_PLAYERS] {
     std::array::from_fn(|who| {
         let (deed, began) = sight::deed_seen(lore, who, t);
@@ -682,10 +729,8 @@ pub fn coming(m: &Monster, lore: &Lore, t: u32) -> [Option<Coming>; MAX_PLAYERS]
         }
         let hit_at = began.wrapping_add(mv.startup as u32);
         let ends_at = hit_at.wrapping_add(mv.active as u32);
-        // Already over: nothing to answer.
-        if t.wrapping_sub(ends_at) < u32::MAX / 2 && t != ends_at {
-            return None;
-        }
+        // A move it sees is a commitment it sees, whether or not its hit
+        // has already come and gone: a string's next link is coming.
         Some(Coming {
             who,
             kind,
@@ -697,11 +742,14 @@ pub fn coming(m: &Monster, lore: &Lore, t: u32) -> [Option<Coming>; MAX_PLAYERS]
     })
 }
 
-/// Raise the guard now.
-fn raise(m: &mut Monster, on_sight: bool) {
+/// Raise the guard now: with its parry, or -- raised too late for the hit
+/// it saw, against whatever follows it -- already past it.
+fn raise(m: &mut Monster, on_sight: bool, parry: bool) {
+    let active = SPECIES.attack(GUARD).active;
+    let past = if parry { 0 } else { Knob::ParryWindow.frames() };
     m.doing = Doing::Active {
         kind: GUARD,
-        left: SPECIES.attack(GUARD).active,
+        left: active.saturating_sub(past),
     };
     m.hit_used = false;
     m.brain.last_move = GUARD;
@@ -717,27 +765,41 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
     let blockable = seen.iter().flatten().find(|c| !c.unblockable);
     let breaker = seen.iter().flatten().find(|c| c.unblockable);
 
-    // ---- the guard, raised on what it saw, timed to parry ----
+    // ---- the guard, raised on what it saw ----
     let plan = lore.word(word::PLAN);
     if m.doing.free() && m.brain.grace == 0 && may_guard(m) {
         let half = (Knob::ParryWindow.raw().max(1) / 2) as u32;
-        // **Only a move seen before its hit comes out** -- one whose startup
-        // is longer than its eyes are late (§2). Seen any later, it is
-        // already too late to raise anything against it.
-        if let Some(c) = blockable.filter(|c| (c.hit_at.wrapping_sub(t) as i32) > 0) {
-            // Raised so the hit arrives inside the parry window: as late as
-            // that, or now if now is already later.
-            let at = c.hit_at.wrapping_sub(half);
-            if t.wrapping_sub(at) < u32::MAX / 2 {
-                raise(m, true);
-                lore.set_word(word::PLAN, 0);
-            } else {
-                lore.set_word(word::PLAN, VALID | (at & FRAME));
+        match blockable {
+            // **Seen before its hit comes out** -- a move whose startup is
+            // longer than its eyes are late (§2): raised so the hit arrives
+            // inside the parry window -- as late as that, or now if now is
+            // already later.
+            Some(c) if (c.hit_at.wrapping_sub(t) as i32) > 0 => {
+                let at = c.hit_at.wrapping_sub(half);
+                if t.wrapping_sub(at) < u32::MAX / 2 {
+                    raise(m, true, true);
+                    lore.set_word(word::PLAN, 0);
+                    lore.set_word(word::GUARD_SINCE, t);
+                } else {
+                    lore.set_word(word::PLAN, VALID | (at & FRAME));
+                }
             }
-        } else if plan & VALID != 0 && ((t & FRAME).wrapping_sub(plan & FRAME) & FRAME) < FRAME / 2
-        {
-            raise(m, true);
-            lore.set_word(word::PLAN, 0);
+            // **Seen too late for its hit**: that one has landed or is
+            // landing, and a parry of it is not on. Raised anyway, past its
+            // parry, against what follows -- the next link of a string.
+            Some(_) => {
+                raise(m, true, false);
+                lore.set_word(word::PLAN, 0);
+                lore.set_word(word::GUARD_SINCE, t);
+            }
+            None if plan & VALID != 0
+                && ((t & FRAME).wrapping_sub(plan & FRAME) & FRAME) < FRAME / 2 =>
+            {
+                raise(m, true, true);
+                lore.set_word(word::PLAN, 0);
+                lore.set_word(word::GUARD_SINCE, t);
+            }
+            None => {}
         }
     } else if !m.doing.free() {
         lore.set_word(word::PLAN, 0);
@@ -745,8 +807,22 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
 
     // ---- the guard, held while something comes, lowered on a breaker ----
     if let Doing::Active { kind: GUARD, left } = m.doing {
-        let held = SPECIES.attack(GUARD).active.saturating_sub(left) as i32;
+        // Its first frame, raised by its own choice: committed from now.
+        if left == SPECIES.attack(GUARD).active {
+            lore.set_word(word::GUARD_SINCE, t);
+        }
+        let held = t.wrapping_sub(lore.word(word::GUARD_SINCE)) as i32;
         let mut quiet = lore.word(word::GUARD_QUIET);
+        // Somebody at the edge of its reach, in front of it: it holds you
+        // there with its guard up (§1), until its hold runs out.
+        let held_off = (0..MAX_PLAYERS).any(|who| {
+            sight::glimpse(lore, who, t).is_some_and(|g| {
+                g.alive
+                    && math::wide_flat_dist(g.pos, m.pos).raw()
+                        <= Knob::StandOff.fx().add(Fx::ONE).raw()
+                    && inside(m, g.pos)
+            })
+        });
         if blockable.is_some() {
             quiet = 0;
             // Something is still coming: it keeps it up.
@@ -754,19 +830,23 @@ fn reflexes(m: &mut Monster, lore: &mut Lore, t: u32) {
                 kind: GUARD,
                 left: left.max(Knob::ParryWindow.frames()),
             };
+        } else if held_off {
+            quiet = 0;
         } else {
             quiet = quiet.saturating_add(1);
         }
         lore.set_word(word::GUARD_QUIET, quiet);
         let committed = held >= Knob::GuardMinHold.raw();
         let drop_for = breaker.is_some_and(|c| {
-            c.hit_at.wrapping_sub(t) as i32 <= Knob::DropsFor.raw() || c.hit_at == t
+            let to_hit = c.hit_at.wrapping_sub(t) as i32;
+            (0..=Knob::DropsFor.raw()).contains(&to_hit)
         });
         if committed && (drop_for || quiet as i32 >= Knob::GuardQuiet.raw() || !may_guard(m)) {
             m.doing = Doing::Recovery {
                 kind: GUARD,
                 left: SPECIES.attack(GUARD).recovery,
             };
+            set_flag(m, flag::DROPPED, drop_for);
         }
     } else {
         lore.set_word(word::GUARD_QUIET, 0);
@@ -844,11 +924,14 @@ fn body_moves(m: &mut Monster, lore: &mut Lore, t: u32, scene: &crate::aim::Scen
             aim_lane(m, scene);
         }
         Doing::Active { kind: LUNGE, .. } => {
-            aim_lane(m, scene);
-            let along = V3::from_turns(m.yaw);
-            let left_to_go = m.aimed_at().sub(m.pos).dot(along);
-            if left_to_go.raw() <= 0 {
-                stagger(m, STAGGER, Knob::LungeStagger.frames());
+            // Into a solid -- one in the lane as it ran -- it stops dead and
+            // staggers. A lane with nothing in it runs its length.
+            if aim_lane(m, scene) {
+                let along = V3::from_turns(m.yaw);
+                let left_to_go = m.aimed_at().sub(m.pos).dot(along);
+                if left_to_go.raw() <= 0 {
+                    stagger(m, STAGGER, Knob::LungeStagger.frames());
+                }
             }
         }
         _ => {}
@@ -975,7 +1058,9 @@ fn step_to(m: &mut Monster, next: V3, scene: &crate::aim::Scene) {
 /// a stone, a planted shield -- through `aim::first_along`, the aiming
 /// model's question. Its aim point is kept there, so the lane drawn on the
 /// floor is the lane it will run (`MoveDecl::stops_at_aim`).
-fn aim_lane(m: &mut Monster, scene: &crate::aim::Scene) {
+///
+/// True when the lane ends at a solid rather than at its length.
+fn aim_lane(m: &mut Monster, scene: &crate::aim::Scene) -> bool {
     let along = V3::from_turns(m.yaw);
     let chest = Knob::GuardChest.fx();
     let from = V3::new(m.pos.x, chest, m.pos.z);
@@ -994,6 +1079,7 @@ fn aim_lane(m: &mut Monster, scene: &crate::aim::Scene) {
         None => most,
     };
     m.aim_at(flat(m.pos).add(along.scale(stop)));
+    hit.is_some()
 }
 
 /// **Its tempo**: the prayer's haste (three moves with shorter startups and

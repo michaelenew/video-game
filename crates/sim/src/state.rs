@@ -8133,7 +8133,7 @@ impl World {
         // The same control a fighter would have taken, offered rather than
         // applied: the creature decides how much of it it is currently in a
         // state to feel. See `monster::Monster::take_control`.
-        if !guarded.turned() {
+        if guarded == monster::Guarded::Lands {
             beast.take_control(effect.control());
         }
         self.monsters[slot] = Some(beast);
@@ -10406,7 +10406,9 @@ impl World {
             // that is already reeling should still be a decision -- so the move
             // offers what it would have done to a fighter and the creature
             // takes what it can. Nothing at all, unless it is susceptible.
-            if !guarded.turned() {
+            // A break is its own window: the control a guard breaker would
+            // have offered is not taken on top of it.
+            if guarded == monster::Guarded::Lands {
                 beast.take_control(monster::Control {
                     launch: m.launch,
                     grabs: m.grabs,
