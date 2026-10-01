@@ -258,10 +258,24 @@ pub fn play_species_watched(
     partners: usize,
     limit: u32,
     seed: u32,
+    watch: impl FnMut(&World),
+) -> Report {
+    play_tempered(species, 0, classes, partners, limit, seed, watch)
+}
+
+/// The whole loop, at a temper (`sim::temper`): what `fight --temper` runs, so
+/// a temper's difficulty is a number the harness reports rather than a guess.
+pub fn play_tempered(
+    species: SpeciesId,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
     mut watch: impl FnMut(&World),
 ) -> Report {
     let card = plans::card(species).expect("no hunter plan is registered for that species");
-    let mut w = World::hunt_of(classes, species);
+    let mut w = World::hunt_of(classes, species).tempered(temper);
     for beast in w.monsters.iter_mut().flatten() {
         beast.brain.rng = seed | 1;
     }

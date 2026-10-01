@@ -1,7 +1,8 @@
 ---
-status: decided in part
+status: decided in part; W0, W1 and W2 built
 proposed: 2026-09-30
 decided: 2026-09-30
+built: 2026-10-01 (W0), 2026-10-01 (W1, W2)
 ---
 
 # The world — a rudimentary one
@@ -25,7 +26,8 @@ reasoning does not have to be re-derived.
   wall are in the design (bestiary P7).
 - **The cast in [bestiary.md](bestiary.md) is the first mix.**
 
-What that means to build is in §6.
+What that means to build is in §6. **All three of the "now" items are built**
+(2026-10-01): the picker (W0), trophies (W1) and tempers (W2).
 
 It keeps both of [parked.md](parked.md)'s firm conclusions: **character power
 must not be able to get you past a wall**, and **versus must not be affected by
@@ -218,6 +220,41 @@ place is locked to the lone player, not to the pair. The creature's coop tuning
   knobs (glance, lead, decisiveness, how far its strain thresholds fall), applied
   when the hunt starts. That keeps "every magnitude is a knob in the Oven" true.
   The picker offers the tempers a player has earned.
+  **Built 2026-10-01**, with W1:
+  - **A temper is four shares, and a creature gets three by existing.** The
+    Oven's "Tempers" family holds, per temper, the creature's glance and lead as
+    a percentage of its own, points added to its decisiveness, and how far its
+    strain thresholds fall as a percentage of its own fall
+    (`crates/sim/src/temper.rs`). Shares rather than per-species overrides so a
+    new species declares nothing; species.md §5 step 11 is what it must not do.
+    A pack's glance, lead and critters' thinking cadence take the same shares,
+    so the Gnawers and the herd are tempered the same way the Ridgeback is.
+  - **It is in the snapshot**: a byte on each creature and on the pack, hashed
+    only when non-zero (a hunt as tuned hashes as it always did), and it
+    **travels in the picker's byte** -- `1tt sssss`, two bits of temper beside
+    five of species -- so both peers build the same tempered hunt on the same
+    frame and a rollback replays it (`net/tests/rollback.rs`). A restart keeps
+    it; `H` and `Shift+H` start a creature as tuned; versus has nothing to
+    temper.
+  - **The ladder, measured** (`fight --temper n`, Champion, forty seeds): 20,
+    12, 8 and 1 hunts won of 40 at tempers 0 to III. Two Champions: 15 and 13
+    of 20 at 0 and III -- coop is the accessibility path. The first values
+    (I = 80/120/+10/75) made temper I nearly as hard as III; see the feel log.
+  - **`T`** steps the hunted creature to the next temper on offer: temper N
+    once N-1 of that creature is beaten. `--temper <n>` (`?temper=`) starts at
+    any temper and lets `T` offer all of them.
+- **W1, as built.** A record, per species id, of the tempers beaten:
+  `crates/game/src/trophies.rs` for what it is and `platform.rs` for where
+  (`~/.config/arena/trophies.conf`, `ARENA_TROPHIES` to move it, or the
+  browser's `arena.trophies` key). Keyed by id, so a record written by a build
+  with more creatures keeps their lines. **Won** is generic: the round ends in
+  the hunters' favour -- every creature down and every small body dead or gone,
+  or a defended thing that wins it arriving (`World::hunt_won`). It is written
+  sixteen frames into the round-over pause, past any rollback, so a predicted
+  kill that is taken back never reaches the disk. Each peer writes its own,
+  and a player may go along on a temper they have not earned (§5). The picker's
+  list -- every creature, its trophies, its tempers, which is being hunted --
+  is a small text block at the right of the HUD.
 
 **Later**, if the valley is built: places with exits, trails, Hearth, waystones,
 the hunter's notes (§4), and — if progression is un-parked — sidegrades as named

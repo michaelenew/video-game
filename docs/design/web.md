@@ -59,6 +59,10 @@ worth reaching are exactly the ones you want when somebody reports something.
 link cannot carry one player's sensitivity to another, which is the correct
 behaviour and comes for free.
 
+The **trophy record** (world W1) is kept the same way under its own key,
+`arena.trophies`, beside `~/.config/arena/trophies.conf` on the desktop -- the
+same text in both, so a person can read which creatures they have beaten.
+
 **There is no peer.** A page cannot open a UDP socket, so `Driver` has one
 variant on wasm and `net` is not a dependency of the browser build at all. This
 was the known cost going in and it is an acceptable one: the browser is for

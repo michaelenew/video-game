@@ -6407,3 +6407,48 @@ look at hazards.md §8: the 9 m free height (the Galewing asked for 7.5), 25 a
 metre (the documents asked for 30 and 18), the Ridgeback not colliding with
 solids, hazards reaching a creature by its centre, and the sentinel in the
 `Shift+H` cycle.
+
+
+### 2026-10-01 — Trophies and tempers (world W1, W2)
+
+**Changed** A beaten creature can be hunted again **tempered**: three tempers
+above the creature as tuned, each four shares of the creature's own brain knobs
+in the Oven's new "Tempers" family -- glance (% of its own), lead (% of its
+own), decisiveness (+ points), and how far the strain thresholds fall (% of its
+own fall). A pack takes the glance and lead shares on its own glance, lead and
+critters' cadence. Kept: I = 90 / 110 / +5 / 80, II = 75 / 125 / +15 / 55,
+III = 60 / 145 / +25 / 30. Health, hide and moves never change. A won hunt
+writes the player's trophy for that creature at that temper, and `T` offers
+temper N once N-1 is beaten. See [world.md](world.md) §6 and
+`crates/sim/src/temper.rs`.
+
+**Why** world.md §4: the ceiling with no roof, on exactly the knobs monsters.md
+§7 calls the difficulty model -- cleverer, not tougher -- at no content cost.
+
+**What the harness caught** (`fight --temper n --repeats 30`, Champion, the
+scripted hunter, which wins about half its hunts as tuned):
+- **The first guess, I = 80 / 120 / +10 / 75, II = 65 / 140 / +20 / 50,
+  III = 50 / 160 / +30 / 25, was a cliff and then a plateau**: 16, 7, 7 and 5
+  of 30. Temper I took more than half the wins and II and III added nothing a
+  thirty-run sample could see.
+- **One knob at a time at temper I**: lead 120% alone took it from 16 to 10;
+  glance 80% to 13; decisiveness +10 to 14; desperation 75% to 16 -- nothing,
+  because the scripted hunter does not lean on crowd control late in the fight.
+  The lead is most of a temper, which is what monsters.md §7 says a lead is:
+  the creature trusting where you are going.
+- **Halving the first step and spreading the rest** gave a ladder: 20, 12, 8
+  and 1 of 40. The Reaver: 4 and 1 of 20 at 0 and III. Two Champions: 15 and
+  13 of 20 -- coop is still the way through a temper you cannot do alone. The
+  dev pack: 16 and 9 of 20, and the hunts it wins at III are shorter (18 s
+  against 32 s), because a pack that closes faster also dies faster.
+- The desperation share does nothing the scripted hunter can measure. It is
+  kept because it is the one share a person will feel at the end of a hunt
+  (the creature stays methodical as it tires), and that is a question for play.
+
+**Reverted** The first temper values (above).
+
+**Verdict** built; nothing moves at temper 0, by construction (the byte is not
+hashed while it is zero, and both pins are unchanged). For a person: is temper
+III fair or only long (one win in forty for the scripted hunter); does the
+desperation share read in play; and world.md §8's open question, whether "the
+same creature, cleverer" is the ceiling wanted.

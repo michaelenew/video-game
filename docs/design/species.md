@@ -195,6 +195,22 @@ edit outside its own files and its registry lines.
    own state in the hunt's lore: [hazards.md](hazards.md) §7. The dev
    creature that uses all of it is the sentinel (`--hunt sentinel`, id 12).
 
+11. **Its tempers come free** (world W2, `crates/sim/src/temper.rs`). A
+   temper is a share of the creature's *own* glance, lead, decisiveness and
+   strain desperation (`species::Common`) -- or, for a pack, of its pack's
+   glance, lead and thinking cadence (`pack::PackKnob`) -- set once for every
+   creature in the Oven under "Tempers". So a new species declares nothing:
+   it has three tempers the moment it is registered, its trophies are kept by
+   its id, and `fight --species <it> --temper 3` measures the hardest one.
+   What it must do is **read those knobs through the creature, never off the
+   table**: `m.glance_frames()`, `m.lead()`, `m.decisiveness()`,
+   `m.strain_desperation()`, `pack.glance_frames()`, `pack.lead_frames()`,
+   `pack.think_every()`. A species' own mind that reads `sp.glance_frames()`
+   directly is a creature whose tempers do nothing to it. A creature whose
+   difficulty lives in a knob of its own (the Veilstalker's veil, say) and
+   wants a temper to move it too is a change to `temper.rs`, for every
+   creature at once, not a special case beside the species.
+
 What you should **not** need to touch: `monster.rs`, `beast.rs`, `state.rs`,
 `oven.rs`, the report. If you do, it is a place the rig was not data yet — fix
 it there, for every creature, and say so in this document.

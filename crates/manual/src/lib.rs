@@ -636,8 +636,8 @@ pub const SECTIONS: &[Section] = &[
                 "Play a scripted hunt and report on it: how much of what the creature throws can be answered on sight, how long the openings are, how varied its moves are, and how long anyone stays on its back.",
             ),
             e(
-                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n> --species <name>",
-                "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/).",
+                "cargo run -p hunt --bin fight -- --class <name> --repeats <n> --trace --seed <n> --hunters <1|2> --frames <n> --species <name> --temper <n>",
+                "The same, with a different class, several seeds, the play sequence printed move by move, or another creature (any with a hunter plan in crates/hunt/src/plans/), at a temper (0 to 3).",
             ),
             e(
                 "cargo run -p net --bin soak",
