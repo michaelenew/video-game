@@ -294,6 +294,7 @@ same terms -- every one off in `PLAIN`, and no other creature's code moved:
 | `Tally::until_free(w, slot, free)` | a species' own correction to `frames_until_free` for the windows: the Veilstalker adds its decloak floor, so a stalk is free but not threatening until it is in reach and in view; identity for everybody else |
 | `MonsterField::Cooldown` range to 900 | the smoke's fifteen seconds |
 
+<<<<<<< ours
 **The seams a flyer adds** (the Galewing, 2026-10-01). Flight itself is in
 the species' frame hook (it owns its position in its lore and the shared walk's
 drift is discarded while it is aloft), so the shared ones are few, and on the
@@ -308,6 +309,24 @@ floor every one of them is what it was:
 | `Monster::top_under(p, below)` | the camera's floor is the highest creature top *below the fighter's feet*: a bird over the eye is not a floor |
 | `tests/species.rs`, `keeps_height` | a species that keeps its own height may stand above the ground (never under it) |
 | `game::arenas::sun` | the key light's place per arena: overhead on the Cliffs, so the bird's shadow is on the plateau |
+=======
+**The seams a creature that guards adds** (the Mantis, 2026-10-01), on the same
+terms -- every other species answers `None`, and the pins held:
+
+| Seam | What it is for |
+| --- | --- |
+| `monster::Blow`, `Monster::take_blow(part, raw, &blow)` | every place a blow reaches a creature (swings, echoes, recalls, effects, beams, bolts, gusts, debris) says where it came from, whether it is unblockable, and who threw what -- then asks the guard. A launch's control is taken only on a hit that `Lands` |
+| `guard(m, lore, part, &blow)` → `Guarded::{Lands, Blocked, Parried, Broke}` | the species' guard: the cone is the fighters' own (`state::in_guard_arc`, shared with `guard_against`); what a block, a parry and a break do is the species' |
+| `covers(m, from)` | whether its guard would turn a blow from there now -- what the report's **guarded** band and a hunter plan read |
+| `sight(m, lore)` → `species::Sight` | what its eyes saw, in place of the glance's present: the Mantis's delay line. `Monster::glance` takes the lore for it |
+| `MarkLook::Notch { class, lit }` | a remembered move drawn on its blade, in the thrower's class colour; lit when a Ready waits for it |
+| `Threat::Guarded` | the report's fifth window: its guard or prayer up and you inside it. Printed only where it is not zero |
+
+**"Unanswerable" needs the hunter in the move's reach.** A Dual mage paying for
+a spell on the frame a counter cut her partner was read as hit by it from eight
+metres. The rule now also asks that the hunter who lost health stands within the
+move's volume of the body, so it can only lower a count.
+>>>>>>> theirs
 
 ## 6 · Decided while building, for a person to review
 

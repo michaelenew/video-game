@@ -269,7 +269,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 13] {
+fn scenarios() -> [Scenario; 14] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -350,7 +350,52 @@ fn scenarios() -> [Scenario; 13] {
         ("the hollows, full", |c| {
             full_hollows(World::hunt_of([c; MAX_PLAYERS], SpeciesId::BROODMOTHER))
         }),
+        // The Mantis with its guard up between two hunters: its eyes written
+        // and read for both every frame, every blow asked of its guard, its
+        // memory and its arc drawn.
+        ("the shrine, guarded", |c| {
+            guarded_shrine(World::hunt_of([c; MAX_PLAYERS], SpeciesId::MANTIS))
+        }),
     ]
+}
+
+/// The Mantis with its guard up, its prayer over.
+fn guarded_shrine(mut w: World) -> World {
+    use sim::species::mantis;
+    let a = mantis::SPECIES.attack(mantis::GUARD);
+    if let Some(m) = w.monsters[0].as_mut() {
+        m.brain.grace = 0;
+        m.doing = sim::monster::Doing::Active {
+            kind: mantis::GUARD,
+            left: a.active,
+        };
+    }
+    w
+}
+
+/// **The Mantis's whole fight in the snapshot, run without the heap**: its
+/// eyes, its memory and its guard are cells of the `World`, so a copy is
+/// flat, it fits, and a minute of it never allocates.
+#[test]
+fn the_mantis_fight_fits_the_snapshot_and_does_not_allocate() {
+    let script = input_script(FRAMES);
+    for class in ALL_CLASSES {
+        let mut world = guarded_shrine(World::hunt_of([class; MAX_PLAYERS], SpeciesId::MANTIS));
+        assert!(std::mem::size_of_val(&world) <= SNAPSHOT_CAP);
+        let allocations = allocations_during(|| {
+            for inputs in &script {
+                world.advance(*inputs);
+                let copy = world.clone();
+                std::hint::black_box(&copy);
+                std::hint::black_box(world.marks());
+                std::hint::black_box(world.signs());
+            }
+        });
+        assert_eq!(
+            allocations, 0,
+            "{class:?} in the Shrine went to the heap {allocations} times"
+        );
+    }
 }
 
 /// Both cats winding up the twin pounce at the first fighter.
