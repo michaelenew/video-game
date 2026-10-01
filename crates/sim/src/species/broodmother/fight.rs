@@ -310,6 +310,18 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
         m.doing = Doing::Dead;
         return true;
     }
+    // Down in the slam, she stays down: the window runs out its length, and
+    // strain past the bar is still there to cancel what she starts next (§4,
+    // "popping two in one slam window buys the interrupt").
+    if matches!(
+        m.doing,
+        Doing::Recovery {
+            kind: super::SLAM,
+            ..
+        }
+    ) {
+        return true;
+    }
     // The interrupt the shared ladder would have read, and otherwise the pop's
     // own flinch -- never out of a live hit, a stumble or a collapse.
     if m.strain >= m.interrupt_bar() && m.doing.attacking().is_some() {

@@ -86,11 +86,15 @@ const SETTLED: Fx = Fx::ratio(7, 10);
 const POST_ALONG: Fx = Fx::ratio(-24, 10);
 const POST_OUT: Fx = Fx::ratio(36, 10);
 /// How far outside the slam's footprint it waits for the crash.
-const EDGE_OUT: Fx = Fx::ratio(12, 10);
+const EDGE_OUT: Fx = Fx::ratio(5, 10);
 /// Frames of the slam's recovery it keeps back to get out before the lift.
 const LIFT_EXIT: i32 = 20;
 /// A broodling this near with its tail up or crouched is the one to hit.
 const BROOD_NEAR: Fx = Fx::ratio(45, 10);
+/// Frames a walk may fail to move it before it sidesteps, and how long the
+/// sidestep lasts.
+const STUCK: u16 = 6;
+const DETOUR: u16 = 24;
 /// The Elementalist shoots sacs from no nearer than this.
 const SNIPE_FROM: Fx = Fx::ratio(80, 10);
 
@@ -114,6 +118,11 @@ pub struct Broodmother {
     /// Which side of her it holds, in her frame: `-1` her left, `+1` her
     /// right. Chosen from where it is, and kept until she turns it round.
     side: i32,
+    /// Where it stood last frame, how many frames running a walk has not
+    /// moved it, and the sidestep it is taking round whatever stopped it.
+    last: V3,
+    stuck: u16,
+    detour_left: u16,
 }
 
 impl Broodmother {
@@ -133,6 +142,42 @@ impl Broodmother {
                 ^ seed.wrapping_mul(0x27D4_EB2F))
                 | 1,
             side: 1,
+            last: V3::ZERO,
+            stuck: 0,
+            detour_left: 0,
+        }
+    }
+
+    /// **Round what stops it**: a walk that has not moved it for a few
+    /// frames -- a shelf, a pillar, a leg -- bears an eighth to its left for
+    /// a moment. What a person does without
+    /// thinking, and without it the plan stands against a shelf all window.
+    fn unstick(&mut self, me: &Player, input: Input) -> Input {
+        const WALK: u16 = Input::W | Input::A | Input::S | Input::D;
+        let walking = input.bits & WALK != 0;
+        let moved = wide_flat_dist(me.pos, self.last).raw() > Fx::ratio(1, 100).raw();
+        self.last = me.pos;
+        self.stuck = if walking && !moved && me.action.actionable() {
+            self.stuck + 1
+        } else {
+            0
+        };
+        if self.stuck >= STUCK {
+            self.stuck = 0;
+            self.detour_left = DETOUR;
+        }
+        if self.detour_left == 0 || !walking {
+            return input;
+        }
+        self.detour_left -= 1;
+        let b = input.bits;
+        let turned = (if b & Input::W != 0 { Input::A } else { 0 })
+            | (if b & Input::A != 0 { Input::S } else { 0 })
+            | (if b & Input::S != 0 { Input::D } else { 0 })
+            | (if b & Input::D != 0 { Input::W } else { 0 });
+        Input {
+            bits: (b & !WALK) | turned | (b & Input::W),
+            ..input
         }
     }
 
@@ -301,6 +346,13 @@ fn sacs(m: &Monster) -> impl Iterator<Item = (usize, V3, i32)> + '_ {
     })
 }
 
+/// Which sac to go for: the nearest walk, a metre added for every hundred of
+/// health it still has -- a sac already cut is worth a longer walk.
+fn sac_cost(m: &Monster, me: V3, sac: &(usize, V3, i32)) -> i32 {
+    let walk = wide_flat_dist(beside_sac(m, sac.1, me), me);
+    walk.add(Fx::from_int(sac.2).div(Fx::from_int(100))).raw()
+}
+
 /// Where to stand to swing at a sac lying on the floor with the abdomen: the
 /// point beside the abdomen nearest it, on the hunter's side, a body off its
 /// edge.
@@ -317,9 +369,73 @@ fn beside_sac(m: &Monster, sac: V3, me: V3) -> V3 {
     let half = bm::SPECIES.shape(bm::ABDOMEN_PART).max.z;
     let out = half
         .add(sim::tuning::body_radius())
-        .add(Fx::ratio(3, 10))
+        .add(Fx::ratio(1, 10))
         .mul(side);
     flat(m.pos).add(f.scale(along)).add(r.scale(out))
+}
+
+/// The way from `from` to `to` that keeps outside the circle round `at`:
+/// straight there if the line clears it, along the circle's tangent the
+/// short way round if not, and straight out if already in it.
+fn around(from: V3, at: V3, radius: Fx, to: V3) -> V3 {
+    let rel = flat(from.sub(at));
+    let d = rel.flat_len();
+    let want = flat(to.sub(from));
+    if want.flat_len().raw() <= SETTLED.raw() {
+        return V3::ZERO;
+    }
+    if d.raw() < radius.sub(Fx::ratio(1, 10)).raw() {
+        return unit(rel);
+    }
+    // Does the straight line pass inside the circle?
+    let dir = unit(want);
+    let along = rel.scale(Fx::ONE.neg()).dot(dir);
+    let len = want.flat_len();
+    let closest = if along.raw() <= 0 {
+        from
+    } else if along.raw() >= len.raw() {
+        to
+    } else {
+        from.add(dir.scale(along))
+    };
+    if wide_flat_dist(closest, at).raw() >= radius.raw() {
+        return dir;
+    }
+    // Along the tangent from here to the circle, on the side `to` is: the
+    // line to the centre turned by the angle whose sine is radius over
+    // distance.
+    let inward = unit(rel).scale(Fx::ONE.neg());
+    let left = V3::new(inward.z.neg(), Fx::ZERO, inward.x);
+    let side = if left.dot(want).raw() >= 0 {
+        left
+    } else {
+        left.scale(Fx::ONE.neg())
+    };
+    let sin = radius.div(d).min(Fx::ONE);
+    let cos = Fx::ONE.sub(sin.mul(sin)).max(Fx::ZERO).sqrt();
+    unit(inward.scale(cos).add(side.scale(sin)))
+}
+
+/// Straight out from her flank from `beside` until clear of a circle round
+/// `at` of radius `clear`: where to wait for the crash so the walk in to the
+/// sac is the shortest one the footprint allows.
+fn off_the_flank(m: &Monster, beside: V3, at: V3, clear: Fx) -> V3 {
+    let r = V3::from_turns(m.yaw.add(QUARTER));
+    let side = if flat(beside.sub(m.pos)).dot(r).raw() >= 0 {
+        r
+    } else {
+        r.scale(Fx::ONE.neg())
+    };
+    // |beside + side t - at| = clear: t = -b + sqrt(b^2 - c).
+    let rel = flat(beside.sub(at));
+    let b = rel.dot(side);
+    let c = rel.dot(rel).sub(clear.mul(clear));
+    if c.raw() <= 0 || b.raw() < 0 {
+        let disc = b.mul(b).sub(c).max(Fx::ZERO);
+        let t = b.neg().add(disc.sqrt()).max(Fx::ZERO);
+        return flat(beside).add(side.scale(t));
+    }
+    flat(beside)
 }
 
 /// The point on a part's box nearest a world point, at chest height or the
@@ -375,6 +491,18 @@ impl Plan for Broodmother {
     }
 
     fn act(&mut self, w: &World) -> Input {
+        let input = self.choose(w);
+        let me = w.players[self.who];
+        self.unstick(&me, input)
+    }
+
+    fn intent(&self) -> Intent {
+        self.intent
+    }
+}
+
+impl Broodmother {
+    fn choose(&mut self, w: &World) -> Input {
         self.cooldown = self.cooldown.saturating_sub(1);
         self.dodge_left = self.dodge_left.saturating_sub(1);
         let me = w.players[self.who];
@@ -444,19 +572,51 @@ impl Plan for Broodmother {
             } | Doing::Active {
                 kind: bm::SCREECH | bm::SLAM,
                 ..
+            } | Doing::Recovery {
+                kind: bm::SCREECH,
+                ..
             }
         );
-        if slamming {
+        // The crash, timed off the tell: once it has come down -- by the
+        // count from what it saw -- in to the sac at once, as it will lie.
+        let landed = matches!(
+            m.doing,
+            Doing::Startup { kind: bm::SLAM, .. } | Doing::Active { kind: bm::SLAM, .. }
+        ) && to_contact(&m) - self.slop < 0;
+        if landed && hits_sacs && !fight::enraged(&m) {
+            let mut down = m;
+            down.doing = Doing::Recovery {
+                kind: bm::SLAM,
+                left: m.sp().attack(bm::SLAM).recovery,
+            };
+            if let Some((i, mid, _)) = sacs(&down).min_by_key(|s| sac_cost(&down, me.pos, s)) {
+                let face = part_point(&down, bm::sac_part(i), me.pos);
+                let stand = beside_sac(&down, mid, me.pos);
+                return self.pop(&down, &me, stand, mid, face, reach);
+            }
+        }
+        if slamming && !landed {
             if let Some((at, r)) = crash_point(&m) {
-                let reddest = (0..bm::SAC_COUNT)
-                    .filter(|i| fight::red(&seen, *i))
-                    .map(|i| fight::sac_middle(&m, i))
-                    .next()
-                    .map_or(my_side, |s| side_of(&m, s));
-                let out = flat(body_point(&m, Fx::ZERO, Fx::from_int(reddest)).sub(m.pos));
-                let edge = at.add(unit(out).scale(r.add(EDGE_OUT).add(sim::tuning::body_radius())));
-                let inside = wide_flat_dist(me.pos, at).raw()
-                    <= r.add(sim::tuning::body_radius()).add(MARGIN).raw();
+                // Where the sacs will lie: her, posed half a second into the
+                // crash -- what the footprint drawn through the scream shows.
+                let mut down = m;
+                down.doing = Doing::Recovery {
+                    kind: bm::SLAM,
+                    left: m.sp().attack(bm::SLAM).recovery.saturating_sub(30),
+                };
+                let target = (0..bm::SAC_COUNT)
+                    .filter(|i| m.own[fight::body::SACS] & (1 << i) == 0)
+                    .max_by_key(|i| fight::ripeness(&seen, *i).raw())
+                    .map(|i| fight::sac_middle(&down, i));
+                let beside = target.map_or(me.pos, |s| beside_sac(&down, s, me.pos));
+                let edge = off_the_flank(
+                    &down,
+                    beside,
+                    at,
+                    r.add(EDGE_OUT).add(sim::tuning::body_radius()),
+                );
+                let inside =
+                    wide_flat_dist(me.pos, at).raw() <= r.add(sim::tuning::body_radius()).raw();
                 let contact = to_contact(&m) - self.slop;
                 // The bare slam's tell is short: a dodge out if it is close.
                 if inside
@@ -471,11 +631,18 @@ impl Plan for Broodmother {
                     return face_walk(&me, &m, away, Input::SHIFT);
                 }
                 self.intent = EDGE;
-                // Brood on the way are still hit.
-                if let Some(input) = self.swing_brood(&seen, &me, reach, hits_brood) {
+                let clear = r.add(sim::tuning::body_radius());
+                if inside {
+                    // Out, leaning toward the edge it means to wait at.
+                    let out = unit(me.pos.sub(at)).scale(Fx::from_int(2));
+                    let way = unit(out.add(unit(edge.sub(me.pos))));
+                    return face_walk(&me, &m, way, 0);
+                }
+                // At the edge, brood that come are still hit.
+                if let Some(input) = self.swing_brood(&seen, &me, reach, hits_brood, true) {
                     return input;
                 }
-                return go_to(&me, &m, edge);
+                return face_walk(&me, &m, around(me.pos, at, clear.add(EDGE_OUT), edge), 0);
             }
         }
 
@@ -518,8 +685,11 @@ impl Plan for Broodmother {
             }
         }
 
-        // 2. **Kill a broodling that comes to you.**
-        if let Some(input) = self.swing_brood(&seen, &me, reach, hits_brood) {
+        // 2. **Kill a broodling that comes to you** -- in the window, only
+        // one already crouched at you: the sacs come first.
+        let window = matches!(m.doing, Doing::Recovery { kind: bm::SLAM, left }
+            if left as i32 - REACTION as i32 > LIFT_EXIT);
+        if let Some(input) = self.swing_brood(&seen, &me, reach, hits_brood, !window) {
             return input;
         }
 
@@ -533,9 +703,10 @@ impl Plan for Broodmother {
             let time = left as i32 - REACTION as i32;
             if time > LIFT_EXIT {
                 if hits_sacs && !fight::enraged(&m) {
-                    if let Some((i, mid, _)) = sacs(&m).min_by_key(|(_, _, h)| *h) {
-                        let _ = i;
-                        return self.strike(&me, &m, beside_sac(&m, mid, me.pos), mid, reach, SAC);
+                    if let Some((i, mid, _)) = sacs(&m).min_by_key(|s| sac_cost(&m, me.pos, s)) {
+                        let face = part_point(&m, bm::sac_part(i), me.pos);
+                        let stand = beside_sac(&m, mid, me.pos);
+                        return self.pop(&m, &me, stand, mid, face, reach);
                     }
                 }
                 if hits_her {
@@ -630,12 +801,6 @@ impl Plan for Broodmother {
         looking(&me, part_point(&m, bm::THORAX, me.pos), 0)
     }
 
-    fn intent(&self) -> Intent {
-        self.intent
-    }
-}
-
-impl Broodmother {
     /// **Swing at a broodling coming in**: one with its tail up or crouched,
     /// near; stepped toward only as far as its reach, never walked to.
     fn swing_brood(
@@ -644,6 +809,7 @@ impl Broodmother {
         me: &Player,
         reach: Fx,
         allowed: bool,
+        tails: bool,
     ) -> Option<Input> {
         if !allowed {
             return None;
@@ -652,10 +818,13 @@ impl Broodmother {
         let target = (0..MAX_CRITTERS)
             .map(|i| seen.critters[i])
             .filter(|c| c.alive())
-            .filter(|c| c.has(flag::TOKEN) || c.state == is::STARTUP)
+            .filter(|c| (tails && c.has(flag::TOKEN)) || c.state == is::STARTUP)
             .filter(|c| wide_flat_dist(c.pos, me.pos).raw() <= BROOD_NEAR.raw())
             .min_by_key(|c| wide_flat_dist(c.pos, me.pos).raw())
             .or_else(|| {
+                if !tails {
+                    return None;
+                }
                 // Any broodling already in reach.
                 (0..MAX_CRITTERS)
                     .map(|i| seen.critters[i])
@@ -683,6 +852,62 @@ impl Broodmother {
         Some(looking(me, middle, walk | swing))
     }
 
+    /// **A sac lying in the window**: walk to the abdomen's edge level with
+    /// it, the crosshair on it the whole way, and swing only once its near
+    /// face is in reach -- a swing from further meets the abdomen's flank
+    /// instead.
+    fn pop(&mut self, m: &Monster, me: &Player, stand: V3, sac: V3, face: V3, reach: Fx) -> Input {
+        self.intent = SAC;
+        // In her frame: if it is not yet out past the flank line, out to it
+        // first, straight sideways -- the way along the abdomen's end or a
+        // leg is the way it sticks.
+        let f = V3::from_turns(m.yaw);
+        let r = V3::from_turns(m.yaw.add(QUARTER));
+        let mine = flat(me.pos.sub(m.pos));
+        let theirs = flat(stand.sub(m.pos));
+        let lat = theirs.dot(r);
+        let my_lat = mine.dot(r);
+        let sign = if lat.raw() >= 0 {
+            Fx::ONE
+        } else {
+            Fx::ONE.neg()
+        };
+        let short = lat.abs().sub(Fx::ratio(15, 100));
+        let abdomen = m.sp().shape(bm::ABDOMEN_PART);
+        let tip = m.world_of(bm::ABDOMEN_PART, V3::new(abdomen.min.x, Fx::ZERO, Fx::ZERO));
+        let tip = flat(tip.sub(m.pos)).dot(f);
+        let behind =
+            mine.dot(f).raw() < theirs.dot(f).raw() && mine.dot(f).raw() > tip.sub(Fx::ONE).raw();
+        let stand = if my_lat.mul(sign).raw() < short.raw()
+            && behind
+            && mine.dot(f).sub(theirs.dot(f)).abs().raw() > Fx::ratio(5, 10).raw()
+        {
+            flat(m.pos)
+                .add(f.scale(mine.dot(f)))
+                .add(r.scale(lat.add(sign.mul(Fx::ratio(5, 10)))))
+        } else {
+            stand
+        };
+        let to = flat(stand.sub(me.pos));
+        let far = flat(face.sub(me.pos)).flat_len();
+        let look = flat(sac.sub(me.pos));
+        let walk = if to.flat_len().raw() > Fx::ratio(15, 100).raw() {
+            steer(atan2_turns(look.z, look.x), to)
+        } else {
+            0
+        };
+        let swing = if self.cooldown == 0
+            && me.action.actionable()
+            && far.raw() <= reach.add(Fx::ratio(1, 2)).raw()
+        {
+            self.cooldown = SWING_GAP;
+            auto_button(me)
+        } else {
+            0
+        };
+        looking(me, sac, walk | swing)
+    }
+
     /// Walk to `stand`, and swing at `aimed` once within reach of it.
     fn strike(
         &mut self,
@@ -695,9 +920,10 @@ impl Broodmother {
     ) -> Input {
         self.intent = intent;
         let to = flat(stand.sub(me.pos));
-        let far = flat(aimed.sub(me.pos)).flat_len();
+        let look = flat(aimed.sub(me.pos));
+        let far = look.flat_len();
         let walk = if to.flat_len().raw() > SETTLED.raw() && far.raw() > reach.raw() {
-            steer(atan2_turns(to.z, to.x), to)
+            steer(atan2_turns(look.z, look.x), to)
         } else {
             0
         };
@@ -721,15 +947,6 @@ fn face_walk(me: &Player, m: &Monster, dir: V3, extra: u16) -> Input {
     let yaw = atan2_turns(to.z, to.x);
     let wire = turns_to_aim(yaw.sub(me.carry_yaw));
     Input::aimed(steer(yaw, dir) | extra, wire)
-}
-
-/// Walk to a point, facing her.
-fn go_to(me: &Player, m: &Monster, at: V3) -> Input {
-    let to = flat(at.sub(me.pos));
-    if to.flat_len().raw() <= SETTLED.raw() {
-        return face_walk(me, m, V3::ZERO, 0);
-    }
-    face_walk(me, m, unit(to), 0)
 }
 
 /// The nearest broodling within `near`, and its middle.
@@ -906,7 +1123,7 @@ impl Tally for Lines {
             self.windows += 1;
             self.window_pops = 0;
         }
-        if open {
+        if open || self.in_window {
             self.window_pops += pops;
         }
         if !open && self.in_window {
