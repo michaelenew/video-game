@@ -9,7 +9,7 @@
 //! critter (`critter::CritterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 533] = [
+pub const KNOBS: [i32; 536] = [
            65536, // siegeshell.size_(x) = 1
            30000, // siegeshell.health = 30000
             1200, // siegeshell.breakable_part_health = 1200
@@ -138,6 +138,9 @@ pub const KNOBS: [i32; 533] = [
               40, // siegeshell_·_stamp.a_foot_goes_home_over = 40
               35, // siegeshell_·_stamp.stamps_on_a_beat_it_can_(%) = 35
               60, // siegeshell_·_stamp.the_legs_rest_after_a_move_for = 60
+           13107, // siegeshell_·_stamp.the_foot_comes_down_over_the_last_(share) = 0.2
+          196608, // siegeshell_·_siege.the_gate's_rubble,_radius = 3
+          196608, // siegeshell_·_mind.somebody_is_on_the_floor_below = 3
               28, // siegeshell.dart-bite.startup = 28
               12, // siegeshell.dart-bite.active = 12
               30, // siegeshell.dart-bite.recovery = 30

@@ -81,6 +81,13 @@ fn walk_only(w: &mut World) {
     fight::leg::clear(beast);
 }
 
+/// Stand the fighter out of the way, by the wall, healed: a test about the
+/// walk is not a test about the parasites.
+fn park(w: &mut World) {
+    w.players[0].pos = V3::new(m(140.0), Fx::ZERO, m(20.0));
+    w.players[0].health = w.players[0].full_health();
+}
+
 fn near(a: Fx, b: f32, slack: f32) -> bool {
     (a.to_f32_for_render() - b).abs() <= slack
 }
@@ -126,6 +133,7 @@ fn it_walks_the_valley_and_halts_at_the_siege_line() {
     // Five minutes of walking, untouched, and a little more.
     for _ in 0..(60 * 330) {
         walk_only(&mut w);
+        park(&mut w);
         step(&mut w, Input::default());
     }
     let b = *w.monster().unwrap();
@@ -456,4 +464,19 @@ fn the_stumble_stair_is_climbable_by_the_bulwark() {
         climbs_the_stair(Class::Champion),
         "the Champion could not climb the stair"
     );
+}
+
+#[test]
+#[ignore]
+fn probe_walk() {
+    let mut w = hunt();
+    for f in 0..(60 * 330) {
+        walk_only(&mut w);
+        park(&mut w);
+        step(&mut w, Input::default());
+        if f % 1200 == 0 {
+            let b = *w.monster().unwrap();
+            eprintln!("f{f} x {:?} doing {:?} speed {:?} hp {} siege {} p0 {:?} hp0 {}", b.pos.x, b.doing, b.speed, b.health, fight::at_siege_line(&b), w.players[0].pos, w.players[0].health);
+        }
+    }
 }

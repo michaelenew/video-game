@@ -50,7 +50,7 @@ pub const RUBBLE: u8 = 2;
 
 pub const HAZARDS: [HazardDecl; 3] = [
     HazardDecl::disc("grate").reaching(reach::FIGHTERS),
-    HazardDecl::disc("vent").reaching(reach::FIGHTERS | reach::CRITTERS),
+    HazardDecl::disc("vent").reaching(reach::FIGHTERS),
     HazardDecl::disc("rubble").solid(crate::arena::Material::Rock),
 ];
 
@@ -116,6 +116,8 @@ pub mod body {
     pub const LEG: usize = 1;
     /// Where the legs' move is aimed, in centimetres (`lore::halves`).
     pub const LEG_AIM: usize = 2;
+    /// What the frame tells its parasites: bit 0, the pack is called down.
+    pub const PACK: usize = 3;
 
     pub const SIDE_MASK: u32 = 0b11;
     pub const OPEN_SHIFT: u32 = 2;
@@ -231,6 +233,11 @@ pub fn open_anchor(m: &Monster) -> Option<usize> {
         0 => None,
         n => Some(n as usize - 1),
     }
+}
+
+/// Is the pack called down off the shell? See `mind::Roost`.
+pub fn called(m: &Monster) -> bool {
+    m.own[body::PACK] & 1 != 0
 }
 
 /// Halted at the siege line.
@@ -437,10 +444,24 @@ pub fn frame(w: &mut World) {
     walk(w, slot);
     footfall(w, slot);
     super::mind::legs(w, slot);
+    events(w, slot);
+    vents(w, slot);
+    body_hits(w, slot);
+    roost(w, slot);
+    brood(w, slot);
 }
 
-/// The round's first frame: every anchor at its own health.
+/// The round's first frame: every anchor at its own health, the grates on
+/// the shell, and the first parasites roosting on the plateau.
 fn set_up(w: &mut World, slot: usize) {
+    for (i, (part, x, z)) in VENTS.iter().enumerate() {
+        let local = V3::new(cm(*x), part_top(*part), cm(*z));
+        let h = crate::hazard::Hazard::on_part(GRATE, slot, *part, local, Knob::VentRadius.fx());
+        crate::hazard::set(&mut w.lore, i, h);
+    }
+    for _ in 0..Knob::BroodAtStart.raw().max(0) {
+        hatch(w, slot);
+    }
     let Some(m) = w.monsters[slot].as_mut() else {
         return;
     };
@@ -512,6 +533,446 @@ pub fn head_reach() -> Fx {
     let neck = sp.rest(super::bones::NECK).x;
     let head = sp.rest(super::bones::HEAD).x;
     neck.add(head).add(sp.shape(super::HEAD_PART).max.x)
+}
+
+// ---------------------------------------------------------------------------
+// The anchors, the Opening and the kneel
+// ---------------------------------------------------------------------------
+
+/// **What the hit path told the frame**: a stumble begun with somebody at an
+/// anchor opens that anchor for the stumble (§4, the Opening); an open
+/// anchor closes when the stumble ends; an anchor broken is taken in.
+fn events(w: &mut World, slot: usize) {
+    let Some(mut m) = w.monsters[slot] else { return };
+    let f = body::flags(&m);
+    if f & body::STUMBLE_NEW != 0 {
+        body::set(&mut m, body::STUMBLE_NEW, false);
+        if let Some(a) = anchor_tended(w, &m) {
+            let f = body::flags(&m) & !body::OPEN_MASK;
+            m.own[body::FLAGS] = (f | ((a as u32 + 1) << body::OPEN_SHIFT)) as i32;
+        }
+    }
+    if open_anchor(&m).is_some() && !matches!(m.doing, Doing::Stumble { .. }) {
+        let f = body::flags(&m) & !body::OPEN_MASK;
+        m.own[body::FLAGS] = f as i32;
+    }
+    if f & body::ANCHOR_NEW != 0 {
+        body::set(&mut m, body::ANCHOR_NEW, false);
+        // A beam cut off is a beam cancelled: its tell starts again from
+        // nothing when it rises.
+        m.brain.cooldown[super::BEAM as usize] = 0;
+    }
+    w.monsters[slot] = Some(m);
+}
+
+/// The unbroken anchor a fighter stands within `OpenRadius` of, if anybody
+/// does.
+pub fn anchor_tended(w: &World, m: &Monster) -> Option<usize> {
+    let rig = m.rig();
+    let near = Knob::OpenRadius.fx();
+    (0..ANCHOR_COUNT)
+        .filter(|a| !m.broken(anchor_part(*a)))
+        .find(|a| {
+            let part = anchor_part(*a);
+            let sh = m.sp().shape(part);
+            let mid = rig.part_to_world(part, sh.min.add(sh.max).scale(Fx::ratio(1, 2)));
+            w.players.iter().any(|p| {
+                p.health > 0
+                    && p.aboard()
+                    && math::wide_flat_dist(p.pos, mid).raw() <= near.raw()
+            })
+        })
+}
+
+// ---------------------------------------------------------------------------
+// The vents
+// ---------------------------------------------------------------------------
+
+/// Centimetres as fixed point.
+const fn cm(v: i32) -> Fx {
+    Fx::ratio(v, 100)
+}
+
+/// The top of a part, in its own frame.
+fn part_top(part: usize) -> Fx {
+    SPECIES.shape(part).max.y
+}
+
+/// Where the eight grates are: a part, and a point on its top in its own
+/// frame, in centimetres. Two on each end of the plateau, one on each flank
+/// tread -- on the climb from the rim to the crown, where the treads are.
+pub const VENTS: [(usize, i32, i32); 8] = [
+    (super::PLATEAU_FORE, 900, -300),
+    (super::PLATEAU_FORE, 700, 300),
+    (super::PLATEAU_AFT, -800, -300),
+    (super::PLATEAU_AFT, -1000, 300),
+    (super::FLANK_UPPER_L, 300, -100),
+    (super::FLANK_UPPER_R, -700, 100),
+    (super::FLANK_LOWER_L, -700, -300),
+    (super::FLANK_LOWER_R, 300, 300),
+];
+
+/// A grate's cycle this phase: slow walking, quicker roused.
+fn vent_cycle(m: &Monster) -> u32 {
+    let c = if phase(m) >= 1 {
+        Knob::VentCycleRoused.raw()
+    } else {
+        Knob::VentCycle.raw()
+    };
+    c.max(1) as u32
+}
+
+/// **The vents** (§2, P4): each grate on its own clock, staggered round the
+/// shell -- hissing, then blowing a column that scalds; hurried, all of them
+/// together. The grate is drawn as a grate (state 1 while it hisses); the
+/// blast is the kind that hurts.
+fn vents(w: &mut World, slot: usize) {
+    let Some(m) = w.monsters[slot] else { return };
+    let cycle = vent_cycle(&m);
+    let blast = Knob::VentBlast.raw().max(0) as u32;
+    let hiss = Knob::VentHiss.raw().max(0) as u32;
+    let together = phase(&m) >= 2;
+    for i in 0..VENTS.len() {
+        let mut h = crate::hazard::get(&w.lore, i);
+        if !h.present() || h.anchor == crate::hazard::NO_ANCHOR {
+            continue;
+        }
+        let offset = if together {
+            0
+        } else {
+            (cycle * i as u32) / VENTS.len() as u32
+        };
+        let at = (w.frame.wrapping_add(offset)) % cycle;
+        let blowing = m.alive() && at + blast >= cycle;
+        let hissing = m.alive() && !blowing && at + blast + hiss >= cycle;
+        let kind = if blowing { BLAST + 1 } else { GRATE + 1 };
+        if h.kind != kind {
+            h.kind = kind;
+            h.age = 0;
+        }
+        h.state = u8::from(hissing);
+        crate::hazard::set(&mut w.lore, i, h);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The body's hits: the shed, the plough, the beam
+// ---------------------------------------------------------------------------
+
+/// A hash of a few numbers, for laying plates where a shed falls: the same
+/// every time it is asked about the same shed.
+fn mix(a: u32, b: u32) -> u32 {
+    let mut x = a.wrapping_mul(0x9E37_79B9) ^ b.wrapping_mul(0x85EB_CA6B);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x2C1B_3C6D);
+    x ^= x >> 12;
+    x
+}
+
+/// **The shed's plates** (§2): how many, and each one's circle and the frame
+/// of the active window it lands on. Laid round the shed's aim point (where
+/// its commit put it, on the flank), from the aim point itself, so the circles
+/// drawn from the first frame of the windup are the ones that land.
+pub fn shed_plates(m: &Monster) -> ([(V3, u16); 12], usize) {
+    let mut out = [(V3::ZERO, 0u16); 12];
+    let at = m.aimed_at();
+    let seed = m.brain.aim[0] as u16 as u32 | ((m.brain.aim[1] as u16 as u32) << 16);
+    let few = Knob::ShedPlatesFew.raw().clamp(0, 12) as u32;
+    let most = Knob::ShedPlatesMost.raw().clamp(few as i32, 12) as u32;
+    let n = few + mix(seed, 1) % (most - few + 1);
+    let active = m.sp().attack(super::SHED).active.max(1) as u32;
+    let spread = Knob::ShedFar.fx().sub(Knob::ShedNear.fx()).max(Fx::ONE);
+    let along_dir = V3::from_turns(m.yaw);
+    let out_dir = V3::from_turns(m.yaw.add(math::QUARTER_TURN));
+    for i in 0..n as usize {
+        let r = mix(seed, i as u32 + 7);
+        // Along the body, sixteen metres either way; across, the flank's band.
+        let along = Fx::from_int((r % 3200) as i32 - 1600).div(Fx::from_int(100));
+        let across = Fx::from_raw(((r >> 8) & 0xFFFF) as i32)
+            .sub(math::half(Fx::ONE))
+            .mul(spread);
+        let p = at.add(along_dir.scale(along)).add(out_dir.scale(across));
+        let lands = ((r >> 22) % active) as u16;
+        out[i] = (V3::new(p.x, Fx::ZERO, p.z), lands);
+    }
+    (out, n as usize)
+}
+
+/// **The plough's lane** (§2): from under the head out along the facing, the
+/// rubble's front this frame, and where each of five strips of it stops -- at
+/// the first solid on its line, a boulder or a stone or a planted shield.
+pub fn plough_lane(w: &World, m: &Monster) -> Option<(V3, V3, Fx, [Fx; 5])> {
+    let (kind, left, live) = match m.doing {
+        Doing::Startup { kind, left } => (kind, left, false),
+        Doing::Active { kind, left } => (kind, left, true),
+        _ => return None,
+    };
+    if kind != super::PLOUGH {
+        return None;
+    }
+    let a = m.sp().attack(kind);
+    let along = V3::from_turns(m.yaw);
+    let across = V3::from_turns(m.yaw.add(math::QUARTER_TURN));
+    let from = gait::flat_world(m, V3::new(Knob::PloughFrom.fx(), Fx::ZERO, Fx::ZERO));
+    let length = Knob::PloughTo.fx().sub(Knob::PloughFrom.fx()).max(Fx::ZERO);
+    let flown = if live {
+        Knob::PloughSpeed
+            .fx()
+            .mul(Fx::from_int(a.active.saturating_sub(left) as i32 + 1))
+            .mul(DT)
+            .min(length)
+    } else {
+        Fx::ZERO
+    };
+    let half = Knob::PloughHalf.fx();
+    let ground = w.terrain();
+    let field = crate::stones::gather(&w.players);
+    let fighters = w.players;
+    let effects = w.effects;
+    let critters = w.critters;
+    let scene = crate::aim::Scene {
+        stones: &field,
+        players: &fighters,
+        effects: &effects,
+        quarry: &[None; crate::monster::MAX_MONSTERS],
+        critters: &critters,
+        arena: &ground,
+    };
+    let mut stops = [length; 5];
+    for (j, stop) in stops.iter_mut().enumerate() {
+        let off = half.mul(Fx::from_int(j as i32 * 2 - 4)).div(Fx::from_int(4));
+        let start = from.add(across.scale(off)).add(V3::new(Fx::ZERO, Fx::ONE, Fx::ZERO));
+        // The first solid along the strip, found by halving: a line clear to
+        // a point is clear to every point before it.
+        let mut lo = Fx::ZERO;
+        let mut hi = length;
+        if crate::aim::line_clear(start, start.add(along.scale(hi)), &scene) {
+            continue;
+        }
+        for _ in 0..7 {
+            let mid = math::half(lo.add(hi));
+            if crate::aim::line_clear(start, start.add(along.scale(mid)), &scene) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        *stop = lo;
+    }
+    Some((from, along, flown, stops))
+}
+
+/// **What the body's moves hit this frame**: the shed's plates on whoever is
+/// under one as it lands; the plough's rubble on whoever its front passes,
+/// short of a solid; the beam on the wall.
+fn body_hits(w: &mut World, slot: usize) {
+    let Some(mut m) = w.monsters[slot] else { return };
+    let (kind, left) = match m.doing {
+        Doing::Active { kind, left } => (kind, left),
+        Doing::Startup { .. } => {
+            w.lore.set_word(word::BODY_STRUCK, 0);
+            return;
+        }
+        _ => return,
+    };
+    let a = m.sp().attack(kind);
+    let mut struck = w.lore.word(word::BODY_STRUCK);
+    let gone = a.active.saturating_sub(left);
+    let body = crate::tuning::body_radius();
+    match kind {
+        super::SHED => {
+            let (plates, n) = shed_plates(&m);
+            let r = Knob::ShedPlate.fx().add(body);
+            for (at, lands) in plates.iter().take(n) {
+                if *lands != gone {
+                    continue;
+                }
+                for i in 0..MAX_PLAYERS {
+                    let p = w.players[i];
+                    if struck & (1 << i) != 0 || !reachable(&p) || p.pos.y.raw() > a.hit_high.raw()
+                    {
+                        continue;
+                    }
+                    if math::wide_flat_dist(p.pos, *at).raw() <= r.raw() {
+                        strike(w, i, *at, a.damage, kind);
+                        struck |= 1 << i;
+                        m.hit_used = true;
+                    }
+                }
+            }
+        }
+        super::PLOUGH => {
+            if let Some((from, along, flown, stops)) = plough_lane(w, &m) {
+                let half = Knob::PloughHalf.fx();
+                let across = V3::from_turns(m.yaw.add(math::QUARTER_TURN));
+                let step = Knob::PloughSpeed.fx().mul(DT);
+                for i in 0..MAX_PLAYERS {
+                    let p = w.players[i];
+                    if struck & (1 << i) != 0 || !reachable(&p) || p.pos.y.raw() > a.hit_high.raw()
+                    {
+                        continue;
+                    }
+                    let d = V3::new(p.pos.x.sub(from.x), Fx::ZERO, p.pos.z.sub(from.z));
+                    let ahead = d.dot(along);
+                    let side = d.dot(across);
+                    if side.abs().raw() > half.add(body).raw() {
+                        continue;
+                    }
+                    // Which of the lane's five strips they are in.
+                    let strip = (side.add(half).raw() as i64 * 5
+                        / half.add(half).raw().max(1) as i64)
+                        .clamp(0, 4) as usize;
+                    let reach = flown.min(stops[strip]);
+                    if ahead.raw() <= reach.add(body).raw()
+                        && ahead.raw() >= flown.sub(step).sub(body).raw()
+                    {
+                        strike(w, i, p.pos.sub(along), a.damage, kind);
+                        struck |= 1 << i;
+                        m.hit_used = true;
+                    }
+                }
+            }
+        }
+        super::BEAM if gone == 0 => {
+            // The beam lands on the wall: a breach. The first brings the gate
+            // down into the valley's end; the second is the end.
+            let whole = crate::objective::stat(m.sp(), WALL, crate::objective::ObjectiveField::Health);
+            let share = Fx::from_int(whole).mul(Knob::BreachShare.fx()).to_int().max(1);
+            crate::objective::strike(&mut w.lore, WALL, share);
+            let s = w.lore.word(word::SIEGE);
+            w.lore.set_word(word::SIEGE, s.wrapping_add(1));
+            if w.lore.word(word::FLAGS) & flag::GATE_DOWN == 0 {
+                let f = w.lore.word(word::FLAGS);
+                w.lore.set_word(word::FLAGS, f | flag::GATE_DOWN);
+                gate_rubble(w);
+            }
+            m.hit_used = true;
+        }
+        _ => {}
+    }
+    w.lore.set_word(word::BODY_STRUCK, struck);
+    w.monsters[slot] = Some(m);
+}
+
+/// The gate's rubble: two heaps in the valley's last forty metres.
+fn gate_rubble(w: &mut World) {
+    let Some(site) = w.arena().sites.first() else {
+        return;
+    };
+    let (wall, _) = site.at(Fx::ZERO);
+    for (back, z) in [(12, -6), (26, 9)] {
+        let at = V3::new(wall.x.sub(Fx::from_int(back)), Fx::ZERO, Fx::from_int(z));
+        let mut h = crate::hazard::Hazard::disc(RUBBLE, at, Knob::RubbleRadius.fx());
+        h.state = 1;
+        crate::hazard::place(&mut w.lore, h);
+    }
+}
+
+/// How many times the beam has fired.
+pub fn beams_fired(w: &World) -> u32 {
+    w.lore.word(word::SIEGE) & 0xFF
+}
+
+// ---------------------------------------------------------------------------
+// The parasites
+// ---------------------------------------------------------------------------
+
+/// Parasites standing, roosting or not.
+fn living_parasites(w: &World) -> usize {
+    w.critters.iter().filter(|c| c.alive()).count()
+}
+
+/// **A parasite crawls out** of a crevice on the plateau and roosts there.
+fn hatch(w: &mut World, slot: usize) {
+    let Some(mut pack) = w.pack else { return };
+    let Some(m) = w.monsters[slot] else { return };
+    if !m.alive() || living_parasites(w) >= Knob::BroodCap.raw().max(0) as usize {
+        return;
+    }
+    let n = pack.roll();
+    let part = [super::PLATEAU_FORE, super::PLATEAU_AFT][(n % 2) as usize];
+    let sh = SPECIES.shape(part);
+    let span = |lo: Fx, hi: Fx, r: u32| {
+        let keep = crate::tuning::body_radius();
+        let w = hi.sub(lo).sub(keep.add(keep)).max(Fx::ZERO);
+        lo.add(keep).add(w.mul(Fx::from_int((r % 1000) as i32)).div(Fx::from_int(1000)))
+    };
+    let local = V3::new(span(sh.min.x, sh.max.x, n >> 4), sh.max.y, span(sh.min.z, sh.max.z, n >> 14));
+    let at = m.world_of(part, local);
+    if let Some(i) = crate::pack::spawn(&mut pack, &mut w.critters, 0, at, (n >> 20) as u16) {
+        let herd = w.monsters;
+        crate::pack::perch_on(&mut w.critters[i], &herd, slot, part, local);
+    }
+    w.pack = Some(pack);
+}
+
+/// **When the pack comes down** (§3, §5): somebody under the belly for
+/// `RoostFrames`, somebody trailing the tail by `Straggler` for
+/// `StragglerFrames`, once roused anybody on the shell, or a parasite on the
+/// shell hurt. Told to the pack on the body, which its mind can read.
+fn roost(w: &mut World, slot: usize) {
+    let Some(mut m) = w.monsters[slot] else { return };
+    let mut call = called(&m);
+    let belly = SPECIES.shape(super::PLASTRON);
+    let tail = Fx::from_int(-16);
+    for who in 0..MAX_PLAYERS {
+        let p = w.players[who];
+        if p.health <= 0 {
+            continue;
+        }
+        let local = gait::flat_body(&m, p.pos);
+        let floor = !p.aboard() && p.pos.y.raw() < Knob::FloorBelow.fx().raw();
+        let under = floor
+            && local.x.raw() > belly.min.x.raw()
+            && local.x.raw() < belly.max.x.raw()
+            && local.z.raw() > belly.min.z.raw()
+            && local.z.raw() < belly.max.z.raw();
+        let behind = local.x.raw() < tail.sub(Knob::Straggler.fx()).raw();
+        let half = |i: usize, w: &World| -> u16 {
+            let word = w.lore.word(i);
+            if who == 0 { (word & 0xFFFF) as u16 } else { (word >> 16) as u16 }
+        };
+        let set = |i: usize, v: u16, w: &mut World| {
+            let word = w.lore.word(i);
+            let word = if who == 0 {
+                (word & 0xFFFF_0000) | v as u32
+            } else {
+                (word & 0xFFFF) | ((v as u32) << 16)
+            };
+            w.lore.set_word(i, word);
+        };
+        let u = if under { half(word::ROOST, w).saturating_add(1) } else { 0 };
+        let b = if behind { half(word::STRAGGLE, w).saturating_add(1) } else { 0 };
+        set(word::ROOST, u, w);
+        set(word::STRAGGLE, b, w);
+        if u >= Knob::RoostFrames.raw().max(1) as u16
+            || b >= Knob::StragglerFrames.raw().max(1) as u16
+            || (p.aboard() && phase(&m) >= 1)
+        {
+            call = true;
+        }
+    }
+    if w
+        .critters
+        .iter()
+        .any(|c| c.alive() && c.mounted() && (c.health as i32) < crate::critter::stat(&SPECIES, c.kind, crate::critter::CritterField::Health))
+    {
+        call = true;
+    }
+    m.own[body::PACK] = i32::from(call);
+    w.monsters[slot] = Some(m);
+}
+
+/// **The brood** (§5): the shell refills one every `BroodFrames`, up to its
+/// cap, from the plateau's crevices.
+fn brood(w: &mut World, slot: usize) {
+    let t = w.lore.word(word::BROOD).wrapping_add(1);
+    if t >= Knob::BroodFrames.raw().max(1) as u32 {
+        w.lore.set_word(word::BROOD, 0);
+        hatch(w, slot);
+    } else {
+        w.lore.set_word(word::BROOD, t);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -660,6 +1121,8 @@ pub fn signs(w: &World, out: &mut Signs) {
     }
     // The legs' move.
     super::mind::signs(w, &m, out);
+    // The body's move.
+    body_signs(w, &m, out);
     // Every foot in the air: where it lands, filling as it comes down, and
     // the ring it will throw.
     for l in 0..LEG_COUNT {
@@ -677,6 +1140,73 @@ pub fn signs(w: &World, out: &mut Signs) {
         out.push(Sign::ring(Says::Faint, at, width(Knob::RingTo.fx())).filled(swing));
     }
     let _ = PAD0;
+}
+
+/// What the body's move draws: the shed's circles on the flank, filling, and
+/// each one live as its plate lands; the plough's lane, and where each strip
+/// of it stops; the beam's line to the wall, filling over its twenty seconds.
+fn body_signs(w: &World, m: &Monster, out: &mut Signs) {
+    let (kind, live, progress, gone) = match m.doing {
+        Doing::Startup { kind, left } => {
+            let a = m.sp().attack(kind);
+            let t = Fx::from_int(a.startup.saturating_sub(left) as i32)
+                .div(Fx::from_int(a.startup.max(1) as i32));
+            (kind, false, t, 0)
+        }
+        Doing::Active { kind, left } => {
+            let a = m.sp().attack(kind);
+            (kind, true, Fx::ONE, a.active.saturating_sub(left))
+        }
+        _ => return,
+    };
+    match kind {
+        super::SHED => {
+            let (plates, n) = shed_plates(m);
+            let width = Knob::ShedPlate.fx().add(Knob::ShedPlate.fx());
+            for (at, lands) in plates.iter().take(n) {
+                if live && *lands < gone {
+                    continue;
+                }
+                let says = if live && *lands == gone {
+                    Says::Live
+                } else {
+                    Says::Coming
+                };
+                out.push(Sign::disc(says, *at, width).filled(progress));
+            }
+        }
+        super::PLOUGH => {
+            let Some((from, along, flown, stops)) = plough_lane(w, m) else {
+                return;
+            };
+            let half = Knob::PloughHalf.fx();
+            let across = V3::from_turns(m.yaw.add(math::QUARTER_TURN));
+            // A fifth of the lane's width, for each of its five strips.
+            let strip = Fx::from_raw(half.raw() * 2 / 5);
+            for (j, stop) in stops.iter().enumerate() {
+                let off = half.mul(Fx::from_int(j as i32 * 2 - 4)).div(Fx::from_int(5));
+                let at = from.add(across.scale(off));
+                if live {
+                    out.push(Sign::strip(Says::Live, at, along, flown.min(*stop), strip));
+                } else {
+                    out.push(Sign::strip(Says::Coming, at, along, *stop, strip).filled(progress));
+                }
+                let full = Knob::PloughTo.fx().sub(Knob::PloughFrom.fx());
+                if stop.raw() < full.raw() {
+                    out.push(Sign::ring(Says::Stops, at.add(along.scale(*stop)), strip));
+                }
+            }
+        }
+        super::BEAM => {
+            let head = gait::flat_world(m, V3::new(head_reach(), Fx::ZERO, Fx::ZERO));
+            let gap = to_wall(w, m).max(Fx::ZERO);
+            let along = V3::from_turns(m.yaw);
+            let says = if live { Says::Live } else { Says::Coming };
+            let width = SPECIES.shape(super::HEAD_PART).max.z;
+            out.push(Sign::strip(says, head, along, gap, width.add(width)).filled(progress));
+        }
+        _ => {}
+    }
 }
 
 /// Every fighter, as a bit set, who is alive.

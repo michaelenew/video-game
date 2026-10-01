@@ -109,7 +109,7 @@ pub fn region_of(part: usize) -> Region {
 /// is one; the brain sees positions, not mounts, so it asks the shape.
 pub fn region_at(m: &Monster, at: V3) -> Option<Region> {
     let rig = m.rig();
-    let below = Fx::from_int(3);
+    let below = Knob::FloorBelow.fx();
     rig.surface_within(at, crate::tuning::body_radius(), below, below)
         .map(|(part, _)| region_of(part))
 }
@@ -396,7 +396,8 @@ fn room_for(m: &Monster, kind: u32) -> bool {
     if let Some(beat) = gait::frames_to_beat(m) {
         let ring = Knob::RingFrames.raw().max(0);
         let beat = beat as i32;
-        if ends + gap >= beat || lands <= gap + ring && fight_ring_young(m) {
+        let _ = ring;
+        if ends + gap >= beat {
             return false;
         }
     }
@@ -415,18 +416,6 @@ fn room_for(m: &Monster, kind: u32) -> bool {
         }
     }
     true
-}
-
-/// Was the beat just now -- inside the ring's frames -- by its stride?
-fn fight_ring_young(m: &Monster) -> bool {
-    let c = gait::cycle(m);
-    let half = crate::math::half(Fx::ONE);
-    let since = if c.raw() >= half.raw() {
-        c.sub(half)
-    } else {
-        c
-    };
-    since.raw() < Fx::ratio(1, 8).raw()
 }
 
 /// Fighters on the floor, alive, and where.
@@ -679,9 +668,9 @@ pub fn foot_in_move(m: &Monster, c: leg::Channel) -> Option<V3> {
     let ease = math::smoothstep;
     match (c.kind, c.phase) {
         (leg::STAMP, leg::STARTUP) => {
-            // Up and over for the first four fifths, then down: it arrives
+            // Up and over, then down for the last `StampDrop` of it: it arrives
             // on the first frame it is out.
-            let rise = Fx::ratio(4, 5);
+            let rise = Fx::ONE.sub(Knob::StampDrop.fx()).clamp(crate::arena::SKIN, Fx::ONE);
             let lift = Knob::StampLift.fx();
             if t.raw() < rise.raw() {
                 let k = ease(t.div(rise));
@@ -757,12 +746,36 @@ pub static PACK: PackDecl = PackDecl {
 };
 
 /// The parasites' mind: the gnawers', and the shell's roost on top.
+///
+/// **A parasite on the shell roosts** -- stays where it is and throws nothing
+/// -- until something calls the pack down (§3, §5): somebody standing under
+/// the belly for `RoostFrames`, somebody trailing more than `Straggler` behind
+/// the tail for `StragglerFrames`, or, once an anchor is broken and the pack
+/// is roused, anybody on the shell at all. Called, every parasite is a
+/// gnawer: it goes for whoever is nearest by the pack's own rules, walks off
+/// the shell's edge after them and drops. One on the floor is never recalled.
 pub struct Roost;
 
 const GNAWER: gnawers::Mind = gnawers::Mind;
 
+/// The owner, if it stands.
+fn shell<'a>(pack: &Pack, herd: &'a Herd) -> Option<&'a Monster> {
+    herd.get(pack.owner as usize)
+        .and_then(|m| m.as_ref())
+        .filter(|m| m.alive())
+}
+
+/// Is critter `c` roosting: on the shell, and the pack not called down (its
+/// frame decides that, and says so on the body: `fight::called`).
+fn roosting(pack: &Pack, herd: &Herd, c: &Critter) -> bool {
+    c.mounted() && !shell(pack, herd).is_some_and(fight::called)
+}
+
 impl PackMind for Roost {
     fn appetite(&self, look: &Look, i: usize, m: CritterMove, a: &Attack) -> i32 {
+        if roosting(look.pack, look.herd, &look.critters[i]) {
+            return 0;
+        }
         GNAWER.appetite(look, i, m, a)
     }
 
@@ -771,6 +784,14 @@ impl PackMind for Roost {
     }
 
     fn steer(&self, look: &Look, i: usize, want: Steer) -> Steer {
+        let c = &look.critters[i];
+        if roosting(look.pack, look.herd, c) {
+            return Steer {
+                to: c.pos,
+                speed: Fx::ZERO,
+                face: None,
+            };
+        }
         GNAWER.steer(look, i, want)
     }
 

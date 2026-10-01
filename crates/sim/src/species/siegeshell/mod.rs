@@ -794,6 +794,9 @@ crate::species_knobs! {
     FootHome,        "stamp",   "A foot goes home over",                 Frames, 0, 120;
     StampChance,     "stamp",   "Stamps on a beat it can (%)",           Percent, 0, 100;
     LegRest,         "stamp",   "The legs rest after a move for",        Frames, 0, 600;
+    StampDrop,       "stamp",   "The foot comes down over the last (share)", Fixed, 0, fx(1,1);
+    RubbleRadius,    "siege",   "The gate's rubble, radius",             Fixed, 0, fx(8,1);
+    FloorBelow,      "mind",    "Somebody is on the floor below",        Fixed, 0, fx(10,1);
 }
 
 const OWN: &[KnobDecl] = Knob::DECLS;
