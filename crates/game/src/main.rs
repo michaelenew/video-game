@@ -3859,6 +3859,7 @@ fn mouse_look(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // a Bevy system: its arguments are its resources
 fn drive_camera(
     sim: Res<Sim>,
     time: Res<Time>,

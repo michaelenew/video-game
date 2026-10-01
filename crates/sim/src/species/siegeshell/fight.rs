@@ -704,7 +704,7 @@ pub fn shed_plates(m: &Monster) -> ([(V3, u16); 12], usize) {
     let spread = Knob::ShedFar.fx().sub(Knob::ShedNear.fx()).max(Fx::ONE);
     let along_dir = V3::from_turns(m.yaw);
     let out_dir = V3::from_turns(m.yaw.add(math::QUARTER_TURN));
-    for i in 0..n as usize {
+    for (i, slot) in out.iter_mut().enumerate().take(n as usize) {
         let r = mix(seed, i as u32 + 7);
         // Along the body, sixteen metres either way; across, the flank's band.
         let along = Fx::from_int((r % 3200) as i32 - 1600).div(Fx::from_int(100));
@@ -713,7 +713,7 @@ pub fn shed_plates(m: &Monster) -> ([(V3, u16); 12], usize) {
             .mul(spread);
         let p = at.add(along_dir.scale(along)).add(out_dir.scale(across));
         let lands = ((r >> 22) % active) as u16;
-        out[i] = (V3::new(p.x, Fx::ZERO, p.z), lands);
+        *slot = (V3::new(p.x, Fx::ZERO, p.z), lands);
     }
     (out, n as usize)
 }
