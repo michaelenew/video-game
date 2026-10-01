@@ -193,6 +193,20 @@ exactly, all the way down. Two reasons, and the first is the one that matters:
 `aim::swing_path` takes `grounded` for exactly that, which is the same split
 the Champion's own swing shapes already make.
 
+**Against the surface underfoot** — added 2026-10-01, **A4**, by the
+[Galewing](creatures/galewing.md) §6. The horizon the dead zone is measured
+from is the surface's, not the world's: `swing_path` takes the `up` of what
+the fighter stands on (`aim::underfoot_up` -- `+y` on the floor and on
+anything in the arena, the mounted part's own `+y` on a creature) and reads
+the look against the plane that up defines, along the facing: the facing laid
+onto that plane, its lean out of the world's horizontal, the look less the
+lean dead-zoned, and the lean put back. The swing leaves from cast height
+*along that up*. On the floor the up is exactly `+y` and the code takes the
+old path, so every swing there is bit-identical; a rider on a back banked
+forty degrees who looks at the wing root at their feet swings along the back,
+not into one wing and over the other. The Ridgeback's shake gets it too.
+`a_swing_on_a_banked_back_is_level_with_the_back`.
+
 **Which arm it comes out of** — added 2026-09-13. A swing also takes a `hand`,
 and it moves *where the swing starts* and nothing else: a one-armed move leaves
 from that shoulder rather than from the middle of the chest, at the same height
@@ -400,6 +414,12 @@ point. Built from the eye and the look, so it lives beside `pointing_at`;
 `aim::in_view_of` takes an eye and a look direction already known -- the look a
 creature glanced some frames ago. A new question rather than a changed answer:
 nothing that aimed before aims differently.
+
+`aim::on_screen` is the cone alone, for what the renderer draws over
+everything (2026-10-01, the Galewing's report): the floor markers are drawn
+on top of the arena, so a lane on the plateau is on the screen of a fighter
+standing on a ledge above it with the ledge between them. `in_view` is
+`on_screen` and then `sight_clear`.
 
 *Changed 2026-10-01, by the Gnawers' report.* The line of sight ran from the
 eye, which this module places nine metres behind and above a standing fighter

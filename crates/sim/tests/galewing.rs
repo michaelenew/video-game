@@ -917,3 +917,24 @@ fn a_swing_on_a_banked_back_is_level_with_the_back() {
         "a world-level swing would have been level with this back too"
     );
 }
+
+/// **A crash ends in the lift, not in another crash**: once it has crashed,
+/// wing hits do not fill its poise again until it has been back up to its
+/// circle. Without it a rider on the roots, or a hunter at a wing, toppled
+/// it again every time it stood, and the fight was over without it ever
+/// leaving the floor.
+#[test]
+fn once_crashed_it_cannot_crash_again_before_it_has_flown() {
+    let mut w = hunt();
+    let m = w.monsters[0].as_mut().unwrap();
+    m.doing = Doing::Prowl;
+    fight::set_flag(m, fight::flag::ALOFT, false);
+    fight::set_flag(m, fight::flag::LOW, true);
+    m.poise = 0;
+    fight::struck(m, gw::ROOT_L, 100);
+    assert!(m.poise > 0, "a wing hit on the floor fills no poise at all");
+    fight::set_flag(m, fight::flag::SPENT, true);
+    let before = m.poise;
+    fight::struck(m, gw::ROOT_L, 100);
+    assert_eq!(m.poise, before, "a spent bird's poise filled again");
+}

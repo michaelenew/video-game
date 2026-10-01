@@ -24,7 +24,7 @@
 //! signs, as they were `REACTION` frames ago. Where its own feet are, and the
 //! rhythm of the wings it is standing on, it knows.
 
-use sim::aim::{Scene, in_view};
+use sim::aim::{Scene, on_screen};
 use sim::fixed::Fx;
 use sim::math::{atan2_turns, wide_flat_dist, wide_flat_len, wide_normalized};
 use sim::monster::{Doing, Monster, mount_part};
@@ -51,10 +51,10 @@ pub const SHOOT: Intent = Intent("Shoot");
 
 /// How many frames early or late a timed press is.
 const SLOP_EARLY: i32 = 3;
-const SLOP_LATE: i32 = 3;
+const SLOP_LATE: i32 = 2;
 /// A dodge is pressed this many frames before the hit, so its invulnerable
 /// frames are running when it lands.
-const DODGE_LEAD: i32 = 2;
+const DODGE_LEAD: i32 = 3;
 /// A jump over the buffet is pressed this many frames before it.
 const JUMP_LEAD: i32 = 8;
 /// Frames between its own swings.
@@ -489,7 +489,10 @@ impl Galewing {
                 let began = seen
                     .frame
                     .wrapping_sub((a.startup - left.min(a.startup)) as u32);
-                if self.answered != Some((kind, began)) && due <= DODGE_LEAD + self.slop {
+                if self.answered != Some((kind, began))
+                    && due <= DODGE_LEAD + self.slop
+                    && me.action.actionable()
+                {
                     self.answered = Some((kind, began));
                     self.roll_slop();
                     self.dodge_left = 20;
@@ -629,7 +632,8 @@ impl Galewing {
     /// **Down, and in reach**: walk to the nearest wing and hit it -- up a
     /// crashed bird's wing onto its back.
     fn punish(&mut self, me: &Player, s: &Monster) -> Option<Input> {
-        if fight::aloft(s) || fight::perched(s) {
+        let gathering = matches!(s.doing, Doing::Startup { kind: gw::LIFT, .. });
+        if (fight::aloft(s) && !gathering) || fight::perched(s) {
             return None;
         }
         // Not inside what it is about to throw: that was the answers' to say.
@@ -650,10 +654,10 @@ impl Galewing {
             }
             return Some(self.swing(me, part_at(s, root), 0));
         }
-        // **Plan B boards it**: its wings are on the floor after a Stoop, so
-        // up the nearest one, hopping onto it if it is above a step, and the
-        // ride takes it from there.
-        if self.gamble == Gamble::B && !fight::grounded_for_good(s) {
+        // **Plan B boards it** as it gathers itself to lift -- swinging at
+        // it until then, as plan A does: up the nearest wing or the back,
+        // hopping onto it, and the ride takes it from there.
+        if self.gamble == Gamble::B && gathering && !fight::grounded_for_good(s) {
             // The lowest top in reach of its wings and back, nearest first.
             let wing = WINGS
                 .iter()
@@ -663,7 +667,9 @@ impl Galewing {
                 .min_by_key(|at| wide_flat_dist(*at, me.pos).raw())
                 .unwrap_or(at);
             self.intent = RIDE;
-            let near = wide_flat_dist(me.pos, wing).raw() < Fx::ratio(12, 10).raw();
+            // Leave the floor early enough to be over the edge before it is
+            // reached: a jump into the side of a wing is a jump off it.
+            let near = wide_flat_dist(me.pos, wing).raw() < Fx::ratio(25, 10).raw();
             let above = wing.y.sub(me.pos.y).raw() > Fx::ratio(4, 10).raw();
             if near && above && me.grounded && self.leap_left == 0 {
                 self.leap_left = LEAP_HOLD;
@@ -1045,7 +1051,7 @@ impl Tally for GaleTally {
                     for bot in bots {
                         if points
                             .iter()
-                            .any(|p| in_view(bot.who, bot.last, *p, HALF_VIEW, &scene))
+                            .any(|p| on_screen(bot.who, bot.last, *p, HALF_VIEW, &scene))
                         {
                             frames[bot.who.min(3)] += 1;
                         }

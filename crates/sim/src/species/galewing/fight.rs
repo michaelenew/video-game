@@ -205,6 +205,11 @@ pub mod flag {
     /// A wing broke this frame (the struck hook says so; the frame hook
     /// reads it, counts it, and crashes a bird that was carrying a rider).
     pub const BROKE: u32 = 64;
+    /// (128 is the wingbeat's: `flight::BEATING`.)
+    /// **Spent**: it crashed, and has not been back up to its circle since.
+    /// No second crash from poise until it has: a crash ends in the lift,
+    /// not in another crash.
+    pub const SPENT: u32 = 256;
 }
 
 // ---------------------------------------------------------------------------
@@ -554,7 +559,11 @@ fn trouble(w: &mut World, m: &mut Monster) {
     // **A crash beginning**: counted by what earned it, and the height it
     // falls from kept for the riders' share.
     let toppled = matches!(m.doing, Doing::Toppled { .. });
+    if aloft(m) && flags(m) & flag::LOW == 0 && !toppled {
+        set_flag(m, flag::SPENT, false);
+    }
     if toppled && !was_toppled {
+        set_flag(m, flag::SPENT, true);
         set_fx(&mut w.lore, word::FELL_FROM, m.pos.y);
         let cause = if broken_wings(m) > 0 && (grounded_for_good(m) || riding(m)) {
             3
@@ -978,7 +987,9 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
     // Low -- passing, or down on the floor after a Stoop -- and not already
     // crashed or grounded for good.
     let down = matches!(m.doing, Doing::Toppled { .. }) || grounded_for_good(m);
-    if flags(m) & flag::LOW != 0 && !down && !perched(m) {
+    // Nor spent: once crashed, not again before it has been back up.
+    let spent = flags(m) & flag::SPENT != 0;
+    if flags(m) & flag::LOW != 0 && !down && !spent && !perched(m) {
         m.poise += dealt;
     }
     false
@@ -1625,11 +1636,22 @@ pub fn signs(w: &World, out: &mut Signs) {
         return;
     };
     let lore = &w.lore;
+    // A lane lies on the floor its target stands on -- a tower ledge, the
+    // plateau, the shelf -- or the plateau, with nobody to aim at.
+    let target = &w.players[(m.brain.target as usize).min(MAX_PLAYERS - 1)];
+    let on = |at: V3| {
+        let height = if target.health > 0 {
+            target.pos.y
+        } else {
+            base(w)
+        };
+        floor_at(w, V3::new(at.x, height, at.z))
+    };
     match m.doing {
         Doing::Startup { kind: TALON, left } => {
             let a = SPECIES.attack(TALON);
             let (at, along, length, width) = lane(lore);
-            let at = V3::new(at.x, floor_at(w, at), at.z);
+            let at = V3::new(at.x, on(at), at.z);
             out.push(
                 Sign::strip(Says::Coming, at, along, length, width)
                     .filled(through(left, a.startup)),
@@ -1637,7 +1659,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         }
         Doing::Active { kind: TALON, left } => {
             let (at, along, length, width) = lane(lore);
-            let at = V3::new(at.x, floor_at(w, at), at.z);
+            let at = V3::new(at.x, on(at), at.z);
             let f = front(left);
             out.push(Sign::strip(Says::Coming, at, along, length, width));
             out.push(Sign::strip(
@@ -1672,7 +1694,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         Doing::Startup { kind: VOLLEY, left } => {
             let a = SPECIES.attack(VOLLEY);
             let (at, along, length, width) = rake_lane(lore);
-            let at = V3::new(at.x, floor_at(w, at), at.z);
+            let at = V3::new(at.x, on(at), at.z);
             out.push(
                 Sign::strip(Says::Coming, at, along, length, width)
                     .filled(through(left, a.startup)),
@@ -1681,7 +1703,7 @@ pub fn signs(w: &World, out: &mut Signs) {
         Doing::Active { kind: VOLLEY, left } => {
             let a = SPECIES.attack(VOLLEY);
             let (at, along, length, width) = rake_lane(lore);
-            let at = V3::new(at.x, floor_at(w, at), at.z);
+            let at = V3::new(at.x, on(at), at.z);
             let (lo, hi) = raked(a.active.saturating_sub(left));
             out.push(Sign::strip(Says::Coming, at, along, length, width));
             out.push(Sign::strip(

@@ -1,6 +1,7 @@
 ---
-status: proposed
+status: built
 proposed: 2026-09-30
+built: 2026-10-01
 tier: 4
 ---
 
@@ -69,7 +70,7 @@ The loop:
 5. **Sky ride.** A climb to twenty metres on a back that heaves with every
    wingbeat, a circuit of the arena, and a barrel roll meant to throw you. The
    wing roots are up here, at double damage and double break. Being thrown at
-   twenty metres costs **375** — a third of a fighter. Once a lap it swoops to
+   twenty metres costs **275** — over a quarter of a fighter. Once a lap it swoops to
    three metres over the far side of the arena, and that is the moment to step
    off.
 6. **Grounding it for good.** Break one wing and it cannot climb above twelve
@@ -92,7 +93,7 @@ startup / active / recovery at sixty a second.
 | --- | --- | --- | --- | --- |
 | **Stoop** | long, from altitude | Wings fold, it drops at 30 m/s onto a point and hits the floor there. 220 damage, knockdown | 45 / 6 / 60 on the ground + 30 to lift. The floor marker is a circle 6 m across whose fill grows over the 45 | **Dodge at the hit.** It tracks for 30 frames and locks for the last 15; from the middle of the circle a walk in those 15 frames is nearly two metres short of out. Then **walk up and swing**: 60 frames with its wings on the floor |
 | **Talon pass** | mid | It drops out of its circle, lines up along a lane and skims it with talons forward. Catches the first fighter standing in the lane and carries them up | 70 / 80 / 60 — the front crosses 24 m at 18 m/s. The lane (24 m × 3 m) is marked from the first frame, with a front that travels along it at the bird's speed; the talons swing forward 20 frames before they reach you | **Crouch.** Talons clear 1.2 m, a crouched fighter is 1.0 m tall and a standing one 1.8. Beside the lane, the wing passes over you at 3 m: **that** is the swing |
-| **Carry** | — | The catch: 90 frames climbing to 12 m, then it lets go. 40 on the grab, 135 for the fall | — | **Hit the legs.** The carried fighter can swing at them; three hits, or 150 damage from anybody, drops them at whatever height it has reached |
+| **Carry** | — | The catch: 90 frames climbing to 12 m, then it lets go. 40 on the grab, 75 for the fall | — | **Hit the legs.** The carried fighter can swing at them; three hits, or 150 damage from anybody, drops them at whatever height it has reached |
 | **Downwash** | mid, and the tower | It stops in the air eight metres up and beats down. Everyone within 14 m is pushed straight outward from the point under it at 8 m/s for two seconds. No damage: the damage is the edge, the fall, and the volley that follows | 50 / 120 / 40. Wings stand vertical and it hangs still — the loudest silhouette it has. A ring 28 m across on the floor, with the still eye in its middle | **Get into its lee**: behind a solid (a stone, the tower, a planted shield) the push is zero, and in the eye — 2.5 m under it — the air goes straight down. Crouching only slows the slide to a quarter |
 | **Feather volley** | long | Rolled onto its side, it rakes a curtain of blade feathers down a lane from above. 60 a feather, three at most | 36 / 30 / 40. Its upper wing lifts and the feathers stand up along it with a rattle; the lane (22 m × 3 m) is marked through the startup | **Leave the lane sideways.** Each point of the lane is under feathers for 20 frames, longer than a dodge's ten invulnerable ones, so a dodge *through* it fails and a dodge *out* of it works |
 | **Screech** | mid, on the ground | Head back, throat swollen, then a cone 70° wide and 11 m long. 40 damage and 80 frames stunned | 32 / 12 / 36. The crest rises and the throat fills; the cone is drawn | **Get out of the cone** — beside it or behind it. The cone is only thrown on the ground: after a Stoop, at the end of a crash, on the perch, and for the rest of the fight once it is grounded |
@@ -145,7 +146,7 @@ so a rider is threatened by the ride and by nothing else.
 most of the circle, so it is the obvious place to fight from. It is covered by
 the Downwash, which it hovers beside the tower to throw, pushing along the top:
 six metres of tower is under a second of slide for anybody standing still, and
-a crouched fighter holds only while walking into it, which is not swinging. Blown off the top is a twelve-metre fall: 135.
+a crouched fighter holds only while walking into it, which is not swinging. Blown off the top is a twelve-metre fall: 75.
 
 **The tempting safe spot** is **the foot of the tower**, on the side away from
 it. The tower is a solid, so it shades you from the Downwash, and a dive has to
@@ -153,7 +154,7 @@ come down past it. It is safe for as long as the circle keeps the bird on the
 other side, which is two and a half seconds. The volley is aimed along the
 tower's flank when a target stands there (the lane runs down the wall, not into
 it), and a bird that has come round the tower dives into the patch it could not
-reach before. **The shelf below the cliff** is the other: nine metres down, out
+reach before. **The shelf below the cliff** is the other: twelve metres down, out
 of every close move's reach — and the volley's lanes run along it, three metres
 wide on a ledge four metres wide.
 
@@ -196,7 +197,7 @@ and where a fight goes wrong fastest.
 **Breaking a wing with somebody aboard** is the ride's jackpot. The bird drops,
 and whoever is on it rides the crash down, taking a third of the fall's damage
 (`crash_ride_share`) and landing on a crashed bird. A wing broken at twenty
-metres is a 125-damage landing on top of the big window.
+metres is a 90-damage landing on top of the big window.
 
 **The arc**, fresh to desperate. Strain works as it does on the Ridgeback, on the
 same scale, with the thresholds falling as health does (`strain_desperation`).
@@ -504,11 +505,11 @@ ride), P8 (its plan and report lines). Not P3, P4, P5 or P7.
   sky. It is keyed to **height fallen** instead: `fell_from`, the highest point
   since the fighter last stood on something or was last pushed up by an impulse
   (a jump, a wing beat, an Updraft), in the snapshot per fighter. Free below
-  `fall_free_height` (7.5 m: a Dual mage's full hop off a platform, the highest
-  anyone goes by themselves), then `fall_damage_per_metre` (30): 45 off the
-  cliff onto the shelf, 135 from the tower top or a talon drop, 375 from a ride
-  at 20 m. Halved for a landing under `soft_landing_speed` (12 m/s), which only
-  the Dual mage's slow fall achieves. It applies in every fight, including the
+  `fall_free_height` (9 m, as built in F3b), then `fall_damage_per_metre`
+  (25): 75 off the plateau onto the shelf, 75 from the tower top or a talon
+  drop, 275 from a ride at 20 m and 375 from its second lap at 24. Halved
+  for a landing under `soft_landing_speed` (12 m/s), which only the Dual
+  mage's slow fall achieves. It applies in every fight, including the
   Ridgeback's back.
 - **The wing parts**: two breakable, mountable parts per wing (root and blade)
   whose flags come from the species table, and the crash pose in which the
@@ -585,8 +586,8 @@ thing to watch, not the thing that dominates.
 
 **The Cliffs**, on the edge of the world map, reached from the Saddle. The
 arena is a plateau **44 × 44 m** of bare rock and short grass. Three sides drop
-to **the shelf**, a ledge four metres wide nine metres below, with stairs back up
-at each end of each side — about three seconds' walk. The fourth side is a rock
+to **the shelf**, a ledge four metres wide twelve metres below, with stairs back up
+at each end of each side — six steps of two metres, a hop each. The fourth side is a rock
 face. **The tower** stands off-centre, ten metres from the rock face: a ruined
 pillar six metres square, with a gallery at six metres and a flat top at twelve,
 reached by a spiral of ledges each 1.5 m above the last — a hop for everybody —
@@ -627,7 +628,7 @@ is worth more than the hang. Neither side of it beats the next creature.
    facing arc; feathers coming down at sixty degrees are in front of her and
    above. Yes makes her the volley's answer as well as the Downwash's; no keeps
    one answer per move.
-6. **Is 375 for a throw at twenty metres the right price?** It has to be enough
+6. **Is 275 for a throw at twenty metres the right price?** It has to be enough
    that stepping off at the swoop is a decision, and not so much that nobody
    rides. The knob is `fall_damage_per_metre`, and it is shared with every fall
    in the game — fall damage is a global rule (the Ridgeback's 5.5 m back and

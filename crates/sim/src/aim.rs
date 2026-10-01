@@ -1160,23 +1160,32 @@ pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
 /// the character's own. Found by the Gnawers' report, whose every bite on a
 /// hunter backed against a wall counted as begun off screen.
 pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
-    let p = &scene.players[who];
-    let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
-    let to = at.sub(eye);
-    let reach = crate::math::wide_len(to);
-    if reach.raw() <= 0 {
-        return true;
-    }
-    let dir = crate::math::wide_normalized(to);
-    if dir.dot(look.look_dir()).raw() < cos_turns(half_angle).raw() {
+    if !on_screen(who, look, at, half_angle, scene) {
         return false;
     }
+    let p = &scene.players[who];
     // And nothing hides it **from the character's own chest**: the camera
     // the renderer draws is pulled in off any wall behind the fighter, so
     // what stands between the character and the point is what can hide it.
     // From the eye this function places, a fighter with their back to a
     // wall had the wall between the camera and everything in front of them.
     sight_clear(origin(p.pos), at, scene)
+}
+
+/// **Is that point inside this fighter's screen at all**: [`in_view`]'s
+/// cone, with nothing asked about what stands in front of it. For what the
+/// renderer draws over everything -- the floor markers are (`OnTop`), so a
+/// lane on the plateau is on the screen of a fighter on a ledge above it,
+/// with the ledge between them.
+pub fn on_screen(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
+    let p = &scene.players[who];
+    let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
+    let to = at.sub(eye);
+    if crate::math::wide_len(to).raw() <= 0 {
+        return true;
+    }
+    let dir = crate::math::wide_normalized(to);
+    dir.dot(look.look_dir()).raw() >= cos_turns(half_angle).raw()
 }
 
 /// **[`in_view`] as a creature remembers it**: a fighter who stood at `pos`
