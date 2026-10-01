@@ -770,7 +770,7 @@ fn shell<'a>(pack: &Pack, herd: &'a Herd) -> Option<&'a Monster> {
 /// Is critter `c` roosting: on the shell, and the pack not called down (its
 /// frame decides that, and says so on the body: `fight::called`).
 fn roosting(pack: &Pack, herd: &Herd, c: &Critter) -> bool {
-    c.mounted() && !shell(pack, herd).is_some_and(fight::called)
+    c.mounted() && shell(pack, herd).is_some_and(|m| !fight::called(m))
 }
 
 impl PackMind for Roost {

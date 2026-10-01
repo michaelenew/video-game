@@ -441,6 +441,16 @@ pub fn frame(w: &mut World) {
     if w.lore.word(word::FLAGS) & flag::SET_UP == 0 {
         set_up(w, slot);
     }
+    // Dead, it settles into the valley as a hill, and what lived on it
+    // scatters into the rocks: the hunt is over.
+    if w.monsters[slot].is_some_and(|m| !m.alive()) {
+        for c in w.critters.iter_mut() {
+            if c.alive() {
+                c.state = crate::critter::is::GONE;
+            }
+        }
+        return;
+    }
     walk(w, slot);
     footfall(w, slot);
     super::mind::legs(w, slot);

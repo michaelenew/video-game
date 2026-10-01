@@ -689,3 +689,119 @@ fn probe_throws() {
         }
     }
 }
+
+#[test]
+fn a_fighter_at_an_anchor_can_break_it() {
+    let mut w = hunt();
+    for _ in 0..3 {
+        walk_only(&mut w);
+        step(&mut w, Input::default());
+    }
+    // On the crown, two metres behind the fore anchor, facing it.
+    let b = *w.monster().unwrap();
+    let sh = b.sp().shape(ss::CROWN_PART);
+    let spot = V3::new(Fx::ratio(16, 10), sh.max.y, Fx::ZERO);
+    board(&mut w, ss::CROWN_PART, Some(spot));
+    let before = w.monster().unwrap().part_health(ss::anchor_part(0));
+    for f in 0..600 {
+        walk_only(&mut w);
+        let b = *w.monster().unwrap();
+        let at = {
+            let sh = b.sp().shape(ss::anchor_part(0));
+            b.rig().part_to_world(
+                ss::anchor_part(0),
+                sh.min.add(sh.max).scale(Fx::ratio(1, 2)),
+            )
+        };
+        let me = w.players[0];
+        let d = V3::new(at.x.sub(me.pos.x), Fx::ZERO, at.z.sub(me.pos.z));
+        let yaw = sim::math::atan2_turns(d.z, d.x);
+        let wire = (yaw.sub(me.carry_yaw).raw() as u32 & 0xFFFF) as u16;
+        let pitch = sim::aim::look_onto_closely(me.pos, wire, me.aloft, at);
+        let bits = if f % 20 == 0 { Input::LEFT } else { 0 };
+        step(&mut w, Input::looking_at(bits, wire, pitch));
+    }
+    let after = w.monster().unwrap().part_health(ss::anchor_part(0));
+    assert!(
+        after < before,
+        "thirty swings at an anchor from beside it did nothing ({before} -> {after}); aboard {}",
+        w.players[0].aboard()
+    );
+}
+
+#[test]
+#[ignore]
+fn probe_stumble_profile() {
+    let mut w = hunt();
+    step(&mut w, Input::default());
+    break_ankle(&mut w, 0);
+    break_ankle(&mut w, 2);
+    for _ in 0..60 {
+        step(&mut w, Input::default());
+    }
+    let b = *w.monster().unwrap();
+    let rig = b.rig();
+    for zc in (-130..=0).step_by(5) {
+        let z = Fx::ratio(zc, 10);
+        let at = gait::flat_world(&b, V3::new(Fx::ZERO, Fx::from_int(30), z));
+        let top = rig.surface_within(at, Fx::ratio(4, 10), Fx::from_int(40), Fx::ZERO);
+        eprintln!(
+            "z {:5.1} -> {:?}",
+            zc as f32 / 10.0,
+            top.map(|(p, _)| (
+                ss::PARTS[p].name,
+                rig.part_to_world(
+                    p,
+                    V3::new(
+                        rig.world_to_part(p, at).x,
+                        b.sp().shape(p).max.y,
+                        rig.world_to_part(p, at).z
+                    )
+                )
+                .y
+                .to_f32_for_render()
+            ))
+        );
+    }
+}
+
+#[test]
+#[ignore]
+fn probe_cross_in_a_stumble() {
+    let mut w = hunt();
+    step(&mut w, Input::default());
+    break_ankle(&mut w, 0);
+    break_ankle(&mut w, 2);
+    for _ in 0..60 {
+        step(&mut w, Input::default());
+    }
+    // Put the fighter on the left rim, mid, and walk in.
+    board(&mut w, ss::rim_part(1, -1), None);
+    let aim = (Fx::ratio(1, 4).raw() as u32 & 0xFFFF) as u16;
+    let mut hold = 0;
+    for f in 0..600 {
+        let p = w.players[0];
+        let mut bits = Input::W;
+        if p.grounded && hold == 0 && f % 25 == 0 {
+            hold = 18;
+        }
+        if hold > 0 {
+            bits |= Input::SPACE;
+            hold -= 1;
+        }
+        step(&mut w, Input::aimed(bits, aim));
+        let p = w.players[0];
+        if f % 10 == 0 {
+            eprintln!(
+                "f{f} y {:.2} z {:.2} mount {}",
+                p.pos.y.to_f32_for_render(),
+                p.pos.z.to_f32_for_render(),
+                if p.aboard() {
+                    ss::PARTS[sim::monster::mount_part(p.mount)].name
+                } else {
+                    "-"
+                }
+            );
+        }
+    }
+}

@@ -39,7 +39,7 @@ pub mod mantis;
 
 // pub mod galewing;
 
-// pub mod siegeshell;
+pub mod siegeshell;
 
 /// Make a hunter: which fighter it drives, the hunt's seed, and how high its
 /// class jumps.
@@ -107,8 +107,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
         SpeciesId::MANTIS => Some(&mantis::CARD),
 
         // SpeciesId::GALEWING => Some(&galewing::CARD),
-
-        // SpeciesId::SIEGESHELL => Some(&siegeshell::CARD),
+        SpeciesId::SIEGESHELL => Some(&siegeshell::CARD),
         _ => None,
     }
 }
