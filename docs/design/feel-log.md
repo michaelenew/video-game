@@ -7063,3 +7063,54 @@ the Elementalist's identity or a hole in every creature at once; is the Blood
 mage's kit meant to fight creatures at all; is the Dual mage's tempo-bound fight
 right against creatures that leave few windows; and the Reaver's Mantis -- her
 shadow beside its guard is played and still wins nothing.
+
+### 2026-10-01 — The scripted Bulwark throws his shield
+
+**Changed** The class layer (`hunt::class`, `Hands::throw_in`) gives the
+Bulwark his mechanic where a creature plan walks in on a window from range
+(`close_in`): five to eleven metres off, on a window long enough for the
+whole of it, with the shield in hand and the work on his screen, he throws the
+shield at the work, lets it fly six frames, leaps to it (it turns and meets
+him) and Slams out of the leap at the work. A dodge the plan asks for in the
+middle gives the throw up, and a shield left planted is recalled the next
+frame he is free (`shield_home`). He rests 150 to 240 frames before the next.
+
+**Why** It was the one class tool the hunter never used (bestiary §8, "Not
+built: the shield thrown"), and the kit's own sentence for it is "throw to
+commit, leap to follow".
+
+**What the harness caught** The thrown shield **does not strike a creature**:
+`World::advance` tests a flying shield against the other fighter only, and
+skips it in a hunt. Three creature documents assume otherwise (the Galewing's
+wing on a pass, the Broodmother's sac, the Siegeshell's planted climb). The
+simulation was left alone -- this pass changes no sim behaviour -- and the
+question is `CLASS-5` in [review.md](review.md). So the throw is his way in,
+not a ranged blow. With only the class's ordinary rest it was thrown about
+once a second against the Ridgeback (1431 throws in 24 hunts); the longer
+rest halved that and changed no row by more than a hunt.
+
+Same seeds, the guard-only build against this one (Bulwark, 24 hunts; the
+crossing and the pairs 12): the Ridgeback 0 → 1, the Gnawers 24 → 24, the
+Hornback 20 → 19 (170 s → 163 s), the crossing 8 → 7, the Mireback 16 → 18,
+the Sandmaw 24 → 22, **the Pair 12 → 21** (186 s → 161 s), the Broodmother
+(balanced) 0 → 1 with sac pops 5 in 139 slam windows → 49 in 109, the
+Veilstalker 8 → 9, the Mantis 18 → 18 (never called), the Galewing 0 → 0 and
+2 → 2, the Siegeshell 0 → 0 alone and as a pair (never called), the Mantis
+pair 11 → 11. The guard-only build reproduced bestiary §8's Bulwark rows
+exactly, so the before is the table's.
+
+**Re-pinned, deliberately** `crates/hunt/tests/pin.rs`'s Bulwark hunt (seed
+101) moves, because the Ridgeback plan's walk-in now throws; the Champion's
+two pins and the other four classes' did not move. Two tests hold the new
+behaviour: the Bulwark throws, leaps and Slams against the Pair
+(`every_class_plays_its_own_kit_against_a_creature`), and his shield never
+lies planted two seconds running (`the_bulwarks_shield_comes_home`).
+
+**Reverted** Nothing in the end; the rest between throws was raised from the
+class's 24-48 frames to 150-240 (above).
+
+**Verdict** kept. It wins where a gap has to be crossed before a window
+closes (the Pair, the Broodmother's sacs) and costs a hunt where a throw cut
+short leaves him without his guard (the Hornback, the Sandmaw). For a person:
+should a thrown and recalled shield strike a creature (`CLASS-5`), and should
+the throw cost frames (`CLASS-6`).
