@@ -135,6 +135,8 @@ pub const FOLLOWS: [usize; 2] = [ROOT, bones::HEAD];
 
 pub const BELLY: usize = 0;
 pub const FLANK_L: usize = 1;
+/// A part of the rim, for the tools and tests that stand somebody on it.
+pub const LEFT_RIM: usize = FLANK_L;
 pub const FLANK_R: usize = 2;
 pub const RUMP: usize = 3;
 pub const BROW: usize = 4;
@@ -206,12 +208,14 @@ pub const PARTS: [Part; PART_COUNT] = [
         Knob::VulnHide as u16,
     )
     .mountable(),
-    // The brow: the front of the rim, on the head, over the mouth.
+    // The brow: the front of the rim, over the mouth. On the body rather than
+    // the head, so the head nodding through a move does not take the rim
+    // down with it: what opens the rim is the flop and the winding, by design.
     part(
         "brow",
-        bones::HEAD,
-        v((0, 1), (20, 100), (-390, 100)),
-        v((300, 100), (280, 100), (390, 100)),
+        ROOT,
+        v((260, 100), (20, 100), (-390, 100)),
+        v((560, 100), (280, 100), (390, 100)),
         Knob::VulnHide as u16,
     )
     .mountable(),

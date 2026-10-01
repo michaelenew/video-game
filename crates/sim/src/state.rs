@@ -10364,6 +10364,17 @@ impl World {
         }
     }
 
+    /// **What the fight's species draws besides its hazards and telegraphs**
+    /// (`FightDecl::marks`): read by the renderer and the overlay, and by the
+    /// tests that pin the drawing to the rule.
+    pub fn marks(&self) -> crate::species::Marks {
+        let mut out = crate::species::Marks::NONE;
+        if let Some(hook) = self.lore.owner.and_then(|s| s.get().fight.marks) {
+            hook(self, &mut out);
+        }
+        out
+    }
+
     /// How much of a creature part can be seen, nought to one: its species'
     /// `shown`, or fully. What the renderer draws a part at, and what the
     /// report and the scripted hunter call visible.
