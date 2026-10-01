@@ -795,6 +795,17 @@ because a guessed Ready is a stance it is not hit in. The windows sit on §9's
   blows and not the fire it stands in. The Reaver's shadow beside it is played
   and is not enough.
 
+**The Bulwark, looked at again (2026-10-01,
+[plans/polish-fights.md](../plans/polish-fights.md)); nothing changed.** He
+still wins 18 of 24 with the shield throw learned. The habit reads him as §7
+says it will -- it took Ready against his Bash eleven times in a hunt -- and
+every one timed out, because his wins are not into the guard at all: 22 Bashes
+blocked, and the damage is his Slam into its recoveries, 180 a hit. No rule
+in this document answers a whiff punish that heavy, and the levers that would
+-- less from a Slam, a parry that staggers it (§12 4), his kit -- are each a
+rule about one class or about the class itself, so question 9 stands as
+written.
+
 **Open questions added.**
 
 9. **The Bulwark is the easiest class, not the hardest.** §7 calls the mirror

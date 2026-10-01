@@ -646,7 +646,7 @@ cast")
 ## 5 · Please confirm
 
 Every `C` above, in one list, so a single reply can carry them:
-`REV-C1`, `REV-C2`, `CAST-C1`–`CAST-C7`, `GNAW-C1`–`C4`, `HORN-C1`–`C5`,
+`REV-C1`, `REV-C2`, `POL-C1`–`POL-C6`, `CAST-C1`–`CAST-C7`, `GNAW-C1`–`C4`, `HORN-C1`–`C5`,
 `MIRE-C1`–`C5`, `SAND-C1`–`C5`, `PAIR-C1`–`C5`, `BROOD-C1`–`C4`,
 `VEIL-C1`–`C4`, `MANT-C1`–`C4`, `GALE-C1`–`C4`, `SIEGE-C1`–`C5`.
 
@@ -673,3 +673,63 @@ Every `C` above, in one list, so a single reply can carry them:
   and every fight's desktop capture is in the [gallery](gallery/README.md). The
   Sandmaw and the Veilstalker show no creature in their arena shots, by design.
 
+
+## 7 · Polished after the review was written
+
+*2026-10-01, [plans/polish-fights.md](plans/polish-fights.md).* A pass over the
+defects the builds left open. What it answers or moves above, by ID, and what
+it decided for you.
+
+**Answered or moved**
+- **Unanswerable hits are zero for every creature, every class, solo and in
+  pairs** (the §2 column's 0–1, 0–3 and 0–5). A pack's bite begun off your
+  screen now lands only through a marker under you for a reaction
+  (`POL-C1`); the Mireback's own count was measuring the wrong tar (`POL-C3`).
+- `CLASS-1` **Looked into, not changed**: no creature fails its own document
+  against the pillar. Only the Mireback (flee) and the Veilstalker (panic)
+  have a rule about fire, and both follow it; the rest stand in it because
+  nothing says they should not. The choice is set out in bestiary §8, "The
+  fire pillar, looked into".
+- `GNAW-1` Health is not the lever for a short fight: tried at three sizes,
+  each bought five to fourteen seconds and cost the Blood mage and the Dual
+  mage most of their wins (gnawers.md §13). Not changed.
+- `CAST-1` The Siegeshell alone is now one in twenty-four across the classes
+  (`POL-C4`); the Mantis is unchanged.
+- `CAST-C4` The Mireback is back at its document's 11 000 (`POL-C5`).
+
+**Decided for you**
+- `POL-C1` **A pack's referee** (critters.md §2): a windup begun off a
+  fighter's screen lands on them only if its marker has been under them for
+  fifteen frames, and a committed body keeps its target through the glance.
+  Every pack: the Gnawers, the herd, the brood, the parasites. Their wins did
+  not move.
+- `POL-C2` **The four windows are each body's own, and of the frames they are
+  about** (bestiary §8; the-pair.md, galewing.md, veilstalker.md §13). The
+  Pair's are each cat's (the old min-of-two is kept as "threatening,
+  together"); the Galewing's leave out the frames it is out of reach and do
+  not count its lift as a threat; the Veilstalker's leave out its unseen
+  stalk; the Sandmaw's target is amended, not its measure. Every other
+  creature prints the same windows as before, to the frame.
+- `POL-C3` **The Mireback's "flop from fresh tar"** counts tar that was not on
+  the floor at the commit and was under you the frame before the crash -- not
+  the crash's own ring, and not old tar you walked into.
+- `POL-C4` **The Siegeshell alone has anchors of 5 900** (7 000 for a pair):
+  six wins in 144 solo hunts, the Champion one in 24.
+- `POL-C5` **The Mireback pauses 60 frames between moves** (from 40), with
+  11 000 health: threatening 35–41 % from 45, the Champion 18 of 24 in 147 s.
+- `POL-C6` **The Galewing's out of reach** counts a bird you could walk to as
+  in reach: 49–59 % for the melee classes. Every creature lever that took it
+  lower cost the ride its wager (plan B 7 of 24 to 1), so none was kept.
+
+**New, for a person**
+- `POL-1` The Galewing's coop loss (0–1 of 12) is the scripted pair dropping
+  out of their jump under the Wing buffet, not the bird: a hunter fix, or is
+  a buffet that catches a falling jumper right?
+- `POL-2` The Broodmother's pops (a quarter a slam window) and her short
+  fights come from a balanced Champion that spends no time at the sacs: the
+  hunter's to fix before the creature is judged.
+- `POL-3` The Siegeshell's Reaver pair (12 of 12) and its floor's tenth
+  threatening are unchanged: the first is her §7, the second the price of a
+  ground half meant to be won. Accept both?
+- `POL-4` The Mantis's Bulwark still wins 18 of 24 by Slam into its
+  recoveries; its habit reads his Bash and is never right. `MANT-9` stands.
