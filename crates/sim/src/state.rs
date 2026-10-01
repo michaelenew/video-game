@@ -2119,6 +2119,7 @@ impl World {
                 travelled,
                 weight,
                 struck,
+                met,
             }) = *shield
             else {
                 continue;
@@ -2190,6 +2191,7 @@ impl World {
                             travelled,
                             weight,
                             struck: true,
+                            met,
                         }
                     });
                 }
@@ -2197,6 +2199,7 @@ impl World {
         }
 
         if self.hunting() {
+            self.shields_strike_the_quarry();
             self.trade_with_the_creature();
             self.trade_with_the_pack();
         }
@@ -4952,6 +4955,36 @@ fn pole_drive_boost(p: &mut Player, input: Input) {
     clamp_air_speed(p);
 }
 
+/// **The thrown shield's volume this frame**, in the same shape a swing's
+/// is: a capsule along the stretch it flew this frame, as thick as the
+/// shield. `None` unless it is in flight.
+///
+/// What a creature and a critter are struck by (`World::shields_strike_the_quarry`,
+/// through [`part_under`] and `critter::Body::touched_by`, the two a swing
+/// goes through) and what the overlay draws, so the drawing cannot drift from
+/// the test. Along the frame's stretch rather than at the point it reached,
+/// for the reason a bolt is (`bolt::step`): a fast throw does not step over a
+/// knee-high body between two frames.
+pub fn shield_hitbox(p: &Player) -> Option<Hitbox> {
+    let Some(Shield::Flying {
+        pos, vel, struck, ..
+    }) = p.shield()
+    else {
+        return None;
+    };
+    Some(Hitbox {
+        from: pos.sub(vel.scale(DT)),
+        to: pos,
+        radius: t::shield_radius(),
+        flat: false,
+        hits_crouching: true,
+        unblockable: false,
+        spent: struck,
+        sector: None,
+        tipper: false,
+    })
+}
+
 /// Which part of the creature a fighter's attack volume touches.
 ///
 /// The creature's own test takes a point and a height above it, so each kind of
@@ -5784,6 +5817,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                     travelled: Fx::ZERO,
                     weight,
                     struck: false,
+                    met: 0,
                 },
                 Shield::Planted { pos, weight } => {
                     let to_owner = from.sub(pos);
@@ -5794,6 +5828,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                         travelled: Fx::ZERO,
                         weight,
                         struck: false,
+                        met: 0,
                     }
                 }
                 // **The leap and the shield meet in the middle**, since
@@ -5829,6 +5864,7 @@ fn mechanic_action(p: &mut Player, who: usize, input: Input, scene: &Scene) {
                         travelled,
                         weight,
                         struck: false,
+                        met: 0,
                     }
                 }
             });
@@ -5882,6 +5918,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
             travelled,
             weight,
             struck,
+            met,
         }) => {
             let step = vel.scale(DT);
             let next = pos.add(step);
@@ -5906,6 +5943,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                         travelled: gone,
                         weight,
                         struck,
+                        met,
                     }
                 }
             } else {
@@ -5925,6 +5963,7 @@ fn step_mechanic(p: &mut Player, arena: &Terrain) {
                         travelled: gone,
                         weight,
                         struck,
+                        met,
                     }
                 }
             });
@@ -6120,6 +6159,7 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             travelled,
             weight,
             struck,
+            met,
         }) => {
             h.write_u32(2);
             hash_v3(h, pos);
@@ -6127,7 +6167,9 @@ fn hash_mechanic(h: &mut Fnv, m: &Mechanic) {
             h.write_u32(*outbound as u32);
             h.write_i32(travelled.raw());
             h.write_i32(weight.raw());
-            h.write_u32(*struck as u32);
+            // One word for both: a flight that has met no creature hashes as
+            // it did before there was anything to remember.
+            h.write_u32(*struck as u32 | (*met as u32) << 1);
         }
         Mechanic::Forms {
             form,
@@ -10021,6 +10063,180 @@ impl World {
         let p = &mut self.players[who.min(MAX_PLAYERS - 1)];
         let aerial = !p.grounded;
         p.action = begin_move(p, who, kind, look, &scene, aerial);
+    }
+
+    /// **A thrown or recalled shield strikes the creatures and the critters
+    /// it meets** (`CLASS-5` in `docs/design/review.md`), as it strikes a
+    /// fighter in versus: thrown, the first it meets takes `bulwark::throw_damage`
+    /// and the shield plants there empty, having spent what it carried; on the
+    /// way home it deals `shield_damage` to each it passes through, once each,
+    /// and goes on (`kits/bulwark.md`, *Throw / Recall*).
+    ///
+    /// **The swing's own path, not a second one.** The volume is
+    /// [`shield_hitbox`], the overlay's; a creature's part is found by
+    /// [`part_under`] and struck through `Monster::take_blow`, so its guard,
+    /// its weak points, its breakable parts and whether a part is there at all
+    /// (a buried Sandmaw, a cloaked Veilstalker) are its own rules, as they are
+    /// for a sword. A critter is touched by `critter::Body::touched_by`, asked
+    /// of its guard (`PackMind::guarded`) and struck by `pack::struck`.
+    ///
+    /// Within one frame's stretch -- a third of a metre at most -- a critter is
+    /// met before the creature: a body standing in front of a leg, or riding
+    /// it, is what a shield flying at the leg reaches first.
+    fn shields_strike_the_quarry(&mut self) {
+        for owner in 0..MAX_PLAYERS {
+            let thrower = self.players[owner];
+            let Some(Shield::Flying {
+                pos,
+                vel,
+                outbound,
+                travelled,
+                weight,
+                struck,
+                met,
+            }) = thrower.shield()
+            else {
+                continue;
+            };
+            let Some(volume) = shield_hitbox(&thrower) else {
+                continue;
+            };
+            if thrower.health <= 0 {
+                continue;
+            }
+            let damage = if outbound {
+                bulwark::throw_damage(weight)
+            } else {
+                t::shield_damage()
+            };
+            let along = V3::new(vel.x, Fx::ZERO, vel.z).normalized();
+            // **Where the blow comes from**, for a guard to ask: back along
+            // its flight by as far as it has flown, on the floor -- where it
+            // was thrown from, or where it was planted. A guard reads the
+            // point a blow is delivered from as a body's feet (the Mantis's
+            // asks whether it is under its own belly), and the shield is
+            // delivered from there, not from the place it touched.
+            let came = pos.sub(along.scale(travelled));
+            let from = V3::new(came.x, self.terrain().ground_under(came), came.z);
+            let mut met = met;
+            let mut hit = false;
+
+            // The small bodies first.
+            if let Some(mut brain) = self.pack {
+                let sp = brain.sp();
+                for c in 0..critter::MAX_CRITTERS {
+                    if hit && outbound {
+                        break;
+                    }
+                    let body = self.critters[c];
+                    if !body.alive() || met & (1 << c) != 0 || !body.body(sp).touched_by(&volume) {
+                        continue;
+                    }
+                    met |= 1 << c;
+                    hit = true;
+                    let guarded = match sp.pack {
+                        Some(decl) => decl.mind.guarded(
+                            &mut brain,
+                            &mut self.critters,
+                            c,
+                            &pack::Blow {
+                                who: owner,
+                                from,
+                                hitbox: &volume,
+                                damage,
+                                breaks: false,
+                            },
+                        ),
+                        None => pack::Guarded::Lands,
+                    };
+                    // Turned: nothing reaches the body. The thrower is metres
+                    // away, so there is nobody for the recoil to stop.
+                    if matches!(guarded, pack::Guarded::Bounces { .. }) {
+                        continue;
+                    }
+                    pack::struck(
+                        &mut brain,
+                        &mut self.critters,
+                        c,
+                        damage,
+                        along,
+                        t::shield_knockback(),
+                        Fx::ZERO,
+                    );
+                    // Loaded, it knocks a small body down as it would a
+                    // fighter, for the frames a fighter would lie there --
+                    // **if the blow knocked it out of what it was doing at
+                    // all**, which is its kind's own rule (`FlinchAt`): a bull
+                    // that shrugs the blow off is not lying on the floor.
+                    let body = &mut self.critters[c];
+                    if outbound
+                        && bulwark::knocks_down(weight)
+                        && body.alive()
+                        && body.state == critter::is::FLINCH
+                    {
+                        body.timer = body.timer.max(t::knockdown_frames());
+                    }
+                }
+                self.pack = Some(brain);
+            }
+
+            // Then the creatures.
+            for slot in 0..MAX_MONSTERS {
+                if hit && outbound {
+                    break;
+                }
+                let bit = 1u16 << (Shield::MET_MONSTER as usize + slot);
+                let Some(mut beast) = self.monsters[slot] else {
+                    continue;
+                };
+                if !beast.alive() || met & bit != 0 {
+                    continue;
+                }
+                let Some(part) = part_under(&beast, &thrower, &volume) else {
+                    continue;
+                };
+                met |= bit;
+                hit = true;
+                // Its guard is asked as it is of any blow: blocked, parried
+                // or broken is the creature's to say, and a blocked throw has
+                // still struck something.
+                beast.take_blow(
+                    part,
+                    damage,
+                    &monster::Blow {
+                        from,
+                        unblockable: false,
+                        who: owner as u8,
+                        class: thrower.class,
+                        kind: monster::Blow::NO_MOVE,
+                    },
+                );
+                self.monsters[slot] = Some(beast);
+            }
+
+            if !hit {
+                continue;
+            }
+            // Thrown, it plants where it struck, empty -- what it carried
+            // went in. Recalled, it goes on home, remembering whom it has
+            // been through.
+            self.players[owner].mechanic = Mechanic::Shield(if outbound {
+                Shield::Planted {
+                    pos: V3::new(pos.x, self.terrain().ground_under(pos), pos.z),
+                    weight: Fx::ZERO,
+                }
+            } else {
+                Shield::Flying {
+                    pos,
+                    vel,
+                    outbound,
+                    travelled,
+                    weight,
+                    struck,
+                    met,
+                }
+            });
+        }
     }
 
     /// Both directions of the exchange with the pack's small bodies.

@@ -147,6 +147,15 @@ pub fn draw(show: Res<ShowDebug>, sim: Res<crate::Sim>, mut gizmos: Gizmos) {
             gizmos.line(centre, centre + facing * 1.5, colour);
         }
 
+        // The thrown shield's own volume, from the simulation: the stretch
+        // it flew this frame, as thick as the shield -- what a creature and a
+        // critter are struck by.
+        if let Some(hb) = sim::state::shield_hitbox(&sim.cur.players[i]) {
+            let colour = hitbox_colour(hb.hits_crouching, hb.spent);
+            let radius = hb.radius.to_f32_for_render();
+            capsule(&mut gizmos, v3(hb.from), v3(hb.to), radius, colour);
+        }
+
         // The class mechanic, wherever it lives in the world.
         for spot in mechanic_markers(&sim.cur.players[i].mechanic) {
             gizmos.sphere(Isometry3d::from_translation(spot), 0.45, SHIELD);
