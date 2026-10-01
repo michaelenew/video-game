@@ -280,7 +280,8 @@ pub fn play_tempered(
     seed: u32,
     watch: impl FnMut(&World),
 ) -> Report {
-    play_in(species, None, temper, classes, partners, limit, seed, watch)
+    let card = plans::card(species).expect("no hunter plan is registered for that species");
+    play_card(card, temper, classes, partners, limit, seed, watch)
 }
 
 /// [`play_tempered`] in an arena other than the creature's own: what
@@ -294,9 +295,39 @@ pub fn play_in(
     partners: usize,
     limit: u32,
     seed: u32,
-    mut watch: impl FnMut(&World),
+    watch: impl FnMut(&World),
 ) -> Report {
     let card = plans::card(species).expect("no hunter plan is registered for that species");
+    play_card_in(card, arena, temper, classes, partners, limit, seed, watch)
+}
+
+/// The whole loop, with a card in hand rather than a species: what
+/// `fight --gamble` runs, with the card's second plan in its first's place.
+pub fn play_card(
+    card: &'static plans::Card,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
+    watch: impl FnMut(&World),
+) -> Report {
+    play_card_in(card, None, temper, classes, partners, limit, seed, watch)
+}
+
+/// [`play_card`] in a chosen arena, or the creature's own for `None`.
+#[allow(clippy::too_many_arguments)]
+pub fn play_card_in(
+    card: &'static plans::Card,
+    arena: Option<sim::arena::ArenaId>,
+    temper: u8,
+    classes: [sim::Class; MAX_PLAYERS],
+    partners: usize,
+    limit: u32,
+    seed: u32,
+    mut watch: impl FnMut(&World),
+) -> Report {
+    let species = card.species;
     let w = match arena {
         Some(place) => World::hunt_in(classes, [Some(species), None], place),
         None => World::hunt_of(classes, species),

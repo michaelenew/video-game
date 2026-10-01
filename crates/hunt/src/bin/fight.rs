@@ -5,16 +5,19 @@
 //!     cargo run -p hunt --bin fight -- --species ridgeback
 //!     cargo run -p hunt --bin fight -- --temper 3 --repeats 10
 //!     cargo run -p hunt --bin fight -- --species hornback --arena crossing
+//!     cargo run -p hunt --bin fight -- --species mireback --gamble
 //!
 //! Any species with a plan (`crates/hunt/src/plans/`); the Ridgeback by
 //! default. `--temper <n>` fights it at a temper (`sim::temper`), as tuned by
 //! default. `--arena <name>` fights it somewhere other than its own arena:
-//! the Hornback's crossing is `--arena crossing`.
+//! the Hornback's crossing is `--arena crossing`. `--gamble` plays the card's
+//! second plan, the one that takes a risk the first will not (the Mireback's
+//! `swallow_greed`), where it has one.
 //!
 //! The point is not the outcome. It is the eight or nine numbers underneath
 //! it, which are what turn "the fight feels off" into a thing you can point at.
 
-use hunt::Outcome;
+use hunt::{Outcome, play_card_in};
 
 fn arg(flag: &str) -> Option<String> {
     let mut args = std::env::args().skip(1);
@@ -69,6 +72,21 @@ fn main() {
         .and_then(|n| n.parse().ok())
         .unwrap_or(0x2545_F491);
 
+    let mut card = hunt::plans::card(species).expect("checked above");
+    if has("--gamble") {
+        match card.gamble {
+            // A card lives for the program; this one is made once.
+            Some(plan) => card = Box::leak(Box::new(hunt::plans::Card { plan, ..*card })),
+            None => {
+                eprintln!(
+                    "{} has no second plan to gamble with",
+                    card.species.get().name
+                );
+                std::process::exit(2);
+            }
+        }
+    }
+
     let mut killed = 0;
     let mut total = 0u32;
     // Across the runs: the four windows, what the hunters kept, what was
@@ -81,8 +99,8 @@ fn main() {
     let mut landed = [0u32; sim::species::MAX_MOVES];
     let mut names: Vec<&'static str> = Vec::new();
     for run in 0..repeats.max(1) {
-        let report = hunt::play_in(
-            species,
+        let report = play_card_in(
+            card,
             arena,
             temper,
             [class; sim::state::MAX_PLAYERS],

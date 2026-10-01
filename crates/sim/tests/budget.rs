@@ -246,7 +246,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 9] {
+fn scenarios() -> [Scenario; 10] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -303,6 +303,12 @@ fn scenarios() -> [Scenario; 9] {
                 sim::arena::ArenaId::RANGE,
             ))
         }),
+        // The Mireback with its whole floor down: every one of its sixteen
+        // hazard slots full round the hunters -- tar, fire spreading along
+        // it, slag standing, coals -- every brazier and swallow word read.
+        ("full mire", |c| {
+            full_mire(World::hunt_of([c; MAX_PLAYERS], SpeciesId::MIREBACK))
+        }),
     ]
 }
 
@@ -322,6 +328,36 @@ fn herd_running(mut w: World) -> World {
         bull.state = sim::critter::is::STARTUP;
         bull.act = h::BELLOW;
         bull.timer = 1;
+    }
+    w
+}
+
+/// Every hazard slot of the Mireback's fight filled round the hunters.
+fn full_mire(mut w: World) -> World {
+    use sim::hazard::{self, Hazard};
+    use sim::species::mireback::fight as f;
+    let at =
+        |x: i32, z: i32| sim::V3::new(sim::Fx::from_int(x), sim::Fx::ZERO, sim::Fx::from_int(z));
+    let r = sim::Fx::from_int(2);
+    let kinds = [
+        f::TAR,
+        f::TAR,
+        f::BURNING,
+        f::TAR,
+        f::SLAG,
+        f::TAR,
+        f::BURNING,
+        f::TAR,
+    ];
+    for i in 0..16 {
+        let kind = kinds[i % kinds.len()];
+        let (x, z) = (-16 + (i as i32 % 4) * 4, (i as i32 / 4) * 4 - 6);
+        let placed = if i == 15 {
+            Hazard::strand(f::COALS, at(x, z), at(x + 4, z), sim::Fx::ONE)
+        } else {
+            Hazard::disc(kind, at(x, z), r)
+        };
+        hazard::place(&mut w.lore, placed);
     }
     w
 }

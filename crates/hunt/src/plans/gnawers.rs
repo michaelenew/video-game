@@ -590,4 +590,5 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
         toppled_pool: "off a pool under a fallen body",
     },
     tally: Some(|| Box::new(Lines::default())),
+    gamble: None,
 };

@@ -56,7 +56,7 @@ pub mod gnawers;
 
 pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -131,7 +131,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::HORNBACK_CROSSING => Some(&hornback::CROSSING),
 
-        // ArenaId::MIREBACK => Some(&mireback::ARENA),
+        ArenaId::MIREBACK => Some(&mireback::ARENA),
 
         // ArenaId::SANDMAW => Some(&sandmaw::ARENA),
 

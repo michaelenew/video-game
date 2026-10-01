@@ -1134,17 +1134,17 @@ impl crate::report::Tally for Lines {
                     self.charge_dodging = false;
                     self.charge_hit = false;
                 }
-                if a.act == h::CHARGE && a.state == is::ACTIVE {
-                    if after
+                if a.act == h::CHARGE
+                    && a.state == is::ACTIVE
+                    && after
                         .players
                         .iter()
                         .any(|p| matches!(p.action, Action::Dodge { .. }) && p.health > 0)
-                    {
-                        let rel = flat(after.players[0].pos.sub(a.pos));
-                        let side = V3::new(a.facing().z.neg(), Fx::ZERO, a.facing().x);
-                        if rel.dot(side).abs().raw() < Fx::from_int(2).raw() {
-                            self.charge_dodging = true;
-                        }
+                {
+                    let rel = flat(after.players[0].pos.sub(a.pos));
+                    let side = V3::new(a.facing().z.neg(), Fx::ZERO, a.facing().x);
+                    if rel.dot(side).abs().raw() < Fx::from_int(2).raw() {
+                        self.charge_dodging = true;
                     }
                 }
                 if landed && a.act == h::CHARGE {
@@ -1360,4 +1360,5 @@ pub static CARD: crate::plans::Card = crate::plans::Card {
         toppled_pool: "off a pool under a stunned bull",
     },
     tally: Some(|| Box::new(Lines::default())),
+    gamble: None,
 };

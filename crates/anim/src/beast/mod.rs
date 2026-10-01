@@ -57,7 +57,7 @@ pub mod ridgeback;
 
 // pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -110,8 +110,7 @@ pub fn authored(id: SpeciesId) -> Option<&'static dyn Authored> {
         // SpeciesId::GNAWERS => Some(&gnawers::GNAWERS),
 
         // SpeciesId::HORNBACK => Some(&hornback::HORNBACK),
-
-        // SpeciesId::MIREBACK => Some(&mireback::MIREBACK),
+        SpeciesId::MIREBACK => Some(&mireback::MIREBACK),
 
         // SpeciesId::SANDMAW => Some(&sandmaw::SANDMAW),
 

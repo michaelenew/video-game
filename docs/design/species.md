@@ -32,7 +32,7 @@ the re-baked pose table is the same table.
 | `clips`, `stock` | `ClipDecl` (name, looping, phased) per clip, and which clips stand for idle, walk, gallop, flinch, stumble, topple and dead. |
 | `span`, `rows`, `row` | The baked pose table, from the species' own `baked.rs`. |
 | `own`, `tuned`, `tuned_path` | Its own knobs, and its own baked tuning file. |
-| `fight` | What it brings to the fight besides its body and pack: its hazard kinds, its defended things, its perception filter and whether it hears, whether it collides with solids, the layout of its share of the hunt's lore, and its hooks (`frame`, `bumped`, `shown`, and `signs` -- the shapes it draws on the floor, `sim::sign`, added with the Hornback). `FightDecl::PLAIN` for none of it, which is the Ridgeback. See [hazards.md](hazards.md). |
+| `fight` | What it brings to the fight besides its body and pack: its hazard kinds, its defended things, its perception filter and whether it hears, whether it collides with solids, the layout of its share of the hunt's lore, and its hooks (`frame`, `bumped`, `shown`, and `signs` -- the shapes it draws on the floor, `sim::sign`, added with the Hornback; and the Mireback's seams below). `FightDecl::PLAIN` for none of it, which is the Ridgeback. See [hazards.md](hazards.md). |
 
 `Monster` keeps a `SpeciesId` (one byte) in the snapshot and reads the rest
 through `Monster::sp()`. `beast::Rig` carries the `&'static Species` it was built
@@ -214,6 +214,24 @@ edit outside its own files and its registry lines.
 What you should **not** need to touch: `monster.rs`, `beast.rs`, `state.rs`,
 `oven.rs`, the report. If you do, it is a place the rig was not data yet — fix
 it there, for every creature, and say so in this document.
+
+**The seams a creature that changes its own fight adds** (the Mireback,
+2026-10-01). Every one is `None` or off in `FightDecl::PLAIN`, so every other
+creature, and both pins, are unchanged:
+
+| Seam | What it is for |
+| --- | --- |
+| `appetite(m, move, score, mind)` | its own terms in the scoring, after the shared ones; `monster::Mind` is what the brain may read (the glance, the `Terrain`, the lore) |
+| `prowl_to(m, mind)` | where it walks when free, if not at its target (the toad walks to its tar) |
+| `commit(m, move, mind)` | as a move commits: where a lobbed move lands, which way a leap goes |
+| `hide(m, part)` | a multiplier on a part's vulnerability from its own state (the tar coat) |
+| `struck(m, part, dealt)` | a hit has landed; returning true skips the shared ladder (the sac tearing, a wallow broken) |
+| `landed(world, slot, fighter, move, guarded)` | one of its moves landed on somebody: what it does besides hurt (the tongue's grab) |
+| `marks(world, out)` | what it draws besides hazards and telegraph: rings, kindling, the braziers (`species::Mark`) |
+| `lands_on_bodies`, `rolls_over` | a creature that lands *on* fighters pushes them out sideways, not into the floor; a part facing the floor is no surface on a creature that rolls over |
+| `MoveDecl::lobbed`, `stops_at_aim`, `harmless`, `never_chosen` | a volume landing at a point chosen at commit (`Brain::aim`), a reach that stops at its aim, a move that hits for nothing and still lands, a move only the species starts |
+| `Part::hollow` | a part you are inside (the stomach): mounted only by being put there (`state::put_inside`), no jump, no buck |
+| `Monster::own` | four words of its own on the body, hashed only when not zero |
 
 ## 6 · Decided while building, for a person to review
 

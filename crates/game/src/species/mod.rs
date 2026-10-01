@@ -20,7 +20,7 @@ pub mod gnawers;
 
 pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -85,11 +85,15 @@ pub struct Look {
     /// bodies have them: the world, and the critter's slot. `None` for every
     /// creature without horns. The Hornback's bull: a broken horn is gone
     /// from its head, and that is a consequence the player did.
-    pub horns: Option<fn(&sim::World, usize) -> Option<[bool; 2]>>,
+    pub horns: Option<HornsFn>,
     /// **A stance of a critter's own**, beyond the stock poses: the stunned
     /// bull, head in the dirt. `None`: the stock poses only.
     pub stance: Option<Stance>,
 }
+
+/// [`Look::horns`]: the world and a critter's slot, to which of its two horns
+/// are whole, or `None` for a body with none.
+pub type HornsFn = fn(&sim::World, usize) -> Option<[bool; 2]>;
 
 /// A species' own stance for a critter, if it has one this frame.
 pub type Stance = fn(&sim::critter::Critter) -> Option<StanceHint>;
@@ -135,8 +139,7 @@ pub fn look(id: SpeciesId) -> &'static Look {
         SpeciesId::GNAWERS => &gnawers::LOOK,
 
         SpeciesId::HORNBACK => &hornback::LOOK,
-
-        // SpeciesId::MIREBACK => &mireback::LOOK,
+        SpeciesId::MIREBACK => &mireback::LOOK,
 
         // SpeciesId::SANDMAW => &sandmaw::LOOK,
 

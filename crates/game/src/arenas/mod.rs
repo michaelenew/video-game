@@ -27,7 +27,7 @@ pub mod gnawers;
 
 pub mod hornback;
 
-// pub mod mireback;
+pub mod mireback;
 
 // pub mod sandmaw;
 
@@ -84,7 +84,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
 
         ArenaId::HORNBACK_CROSSING => &hornback::CROSSING,
 
-        // ArenaId::MIREBACK => &mireback::DRESSING,
+        ArenaId::MIREBACK => &mireback::DRESSING,
 
         // ArenaId::SANDMAW => &sandmaw::DRESSING,
 

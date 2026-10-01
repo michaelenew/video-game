@@ -1591,6 +1591,7 @@ impl World {
         // that can quietly become true. See `monster::Quarry`.
         let mut spin = [Fx::ZERO; MAX_MONSTERS];
         let senses = self.senses(here, &field);
+        let herd_before = self.monsters;
         for (slot, place) in self.monsters.iter_mut().enumerate() {
             let Some(mut beast) = *place else { continue };
             let before = beast.yaw;
@@ -1598,10 +1599,11 @@ impl World {
                 pos: self.players[i].pos,
                 vel: self.players[i].vel,
                 alive: self.players[i].health > 0,
-                aboard: self.players[i].aboard(),
+                // Somebody it has swallowed is not standing on it.
+                aboard: self.players[i].aboard() && !inside(&self.players[i], &herd_before),
                 stunned: self.players[i].action.stunned(),
             });
-            beast.step_in(&seen, &senses[slot], here);
+            beast.step_with(&seen, &senses[slot], here, &self.lore);
             // Its *heading*, not its wobble: a shake would otherwise spin the
             // rider's camera as hard as it spins the animal, and you are about
             // to be thrown off anyway.
@@ -2538,6 +2540,19 @@ impl World {
                 }
                 h.write_u32(m.brain.rng);
                 h.write_u32(m.brain.grace as u32);
+                // A species' mark and its words on the body, only when a
+                // species has used them: every creature before them hashes
+                // as it did.
+                if m.brain.aim != [0; 2] {
+                    h.write_u32(0x3A4C);
+                    h.write_u32(crate::lore::halves(m.brain.aim[0], m.brain.aim[1]));
+                }
+                if m.own != [0; 4] {
+                    h.write_u32(0x0E);
+                    for w in m.own {
+                        h.write_i32(w);
+                    }
+                }
             }
         }
         match self.phase {
@@ -8646,6 +8661,13 @@ fn step_rider(
         p.ride_clip = clip;
         p.grip_settle = p.grip_settle.max(t::mount_settle() as u8);
     }
+    // **Inside it, nothing throws you**: there is nowhere to be thrown to.
+    let inside = beast.sp().parts[part.min(beast.sp().parts.len() - 1)]
+        .shape
+        .hollow;
+    if inside {
+        p.grip_settle = t::mount_settle() as u8;
+    }
     let rig = beast.rig();
     let felt = rig.dir_to_part(part, accel);
     // `big_len`, not `len`: these are accelerations in the hundreds, and a
@@ -8669,8 +8691,9 @@ fn step_rider(
 
     // Jumping is how you leave, and it carries the surface's own velocity with
     // you -- which is what makes stepping off the back of a charging animal a
-    // real option rather than a mistake.
-    if input.has(Input::SPACE) && p.action.actionable() {
+    // real option rather than a mistake. Not from inside: the creature lets
+    // you out, when it does.
+    if input.has(Input::SPACE) && p.action.actionable() && !inside {
         let mob = p.class.mobility();
         p.mount = monster::NO_PART;
         // **What the leap carries is capped.** You take the surface's own
@@ -8709,6 +8732,20 @@ fn step_rider(
     p.stride = p
         .stride
         .wrapping_add(walked.div(stride_length(p)).raw().clamp(0, 65535) as u16);
+
+    // Inside, the walls keep you in: the part's own box, less your width,
+    // with your feet on its floor. No other part is a step or a wall here.
+    if inside {
+        let sh = beast.sp().shape(part);
+        let lo = |v: Fx| v.add(radius);
+        let hi = |v: Fx| v.sub(radius);
+        next.x = next.x.clamp(lo(sh.min.x), hi(sh.max.x).max(lo(sh.min.x)));
+        next.z = next.z.clamp(lo(sh.min.z), hi(sh.max.z).max(lo(sh.min.z)));
+        next.y = sh.min.y;
+        p.local = next;
+        p.pos = beast.world_of(part, next);
+        return;
+    }
 
     // A step you can walk up. The creature is terrain rather than a set of
     // ledges, and the climb from the tail to the nape crosses five parts: a
@@ -9067,6 +9104,47 @@ fn step_critter_rider(
     }
     p.local = next;
     p.pos = c.back_point(sp, next);
+}
+
+/// **Put a fighter inside a creature's hollow part** (`beast::Shape::hollow`):
+/// its floor's middle, held in its own frame from here on, as a rider is. What
+/// the Mireback's swallow does; the species lets them out with
+/// [`let_out`].
+pub fn put_inside(p: &mut Player, slot: usize, beast: &Monster, part: usize) {
+    let sh = beast.sp().shape(part);
+    let mid = sh.min.add(sh.max).scale(Fx::ratio(1, 2));
+    let rest = V3::new(mid.x, sh.min.y, mid.z);
+    p.ride_clip = beast.doing.clip_key(beast.sp().moves.len());
+    p.mount = mount_of(slot, part);
+    p.local = rest;
+    p.pos = beast.world_of(part, rest);
+    p.vel = V3::ZERO;
+    p.grounded = true;
+    p.air_dodged = false;
+    p.jump_hold = 0;
+    p.air_stall = 0;
+    p.air_stalls = 0;
+    p.grip_vel = V3::ZERO;
+    p.grip_settle = t::mount_settle() as u8;
+}
+
+/// **Let a fighter out of wherever they are inside**, at `at`, moving at
+/// `vel`: no longer aboard, in the air.
+pub fn let_out(p: &mut Player, at: V3, vel: V3) {
+    p.mount = monster::NO_PART;
+    p.pos = at;
+    p.vel = vel;
+    p.grounded = false;
+}
+
+/// Is this fighter inside a creature, rather than on one?
+pub fn inside(p: &Player, herd: &Herd) -> bool {
+    ridden(p, herd).is_some_and(|beast| {
+        let sp = beast.sp();
+        sp.parts
+            .get(mount_part(p.mount))
+            .is_some_and(|part| part.shape.hollow)
+    })
 }
 
 /// How much of the surface's momentum you take with you when you leave it.
@@ -10076,6 +10154,9 @@ impl World {
         // What the creature has out. Every fighter it reaches is hit on the
         // same frame -- spending the hit on whoever happened to be checked
         // first would make a coop partner a shield.
+        // Who it landed on, and whether they had it on a guard: handed to the
+        // species once the exchange is over (`FightDecl::landed`).
+        let mut struck = [None; MAX_PLAYERS];
         if let (Doing::Active { kind, .. }, false) = (beast.doing, beast.hit_used) {
             let m = beast.sp().attack(kind);
             let anchor = beast
@@ -10083,9 +10164,13 @@ impl World {
                 .map(|(a, _, _, _)| a)
                 .unwrap_or(beast.pos);
             let mut landed = false;
-            for i in 0..MAX_PLAYERS {
+            for (i, struck_one) in struck.iter_mut().enumerate() {
                 let victim = self.players[i];
                 if victim.health <= 0 || victim.action.invulnerable() {
+                    continue;
+                }
+                // Nothing it swings reaches somebody it has swallowed.
+                if inside(&victim, &self.monsters) {
                     continue;
                 }
                 if !beast.reaches(victim.pos, victim.hurt_height(), t::body_radius()) {
@@ -10141,6 +10226,7 @@ impl World {
                     impact_freeze(t::creature_freeze(), guarding && !parried),
                 );
                 landed = true;
+                *struck_one = Some((kind, guarding || parried));
             }
             if landed {
                 beast.hit_used = true;
@@ -10229,6 +10315,14 @@ impl World {
             }
         }
         self.monsters[slot] = Some(beast);
+        // What its moves do besides hurt, with the whole world to do it in.
+        if let Some(hook) = beast.sp().fight.landed {
+            for (i, hit) in struck.into_iter().enumerate() {
+                if let Some((kind, guarded)) = hit {
+                    hook(self, slot, i, kind, guarded);
+                }
+            }
+        }
     }
 }
 
@@ -10544,6 +10638,17 @@ impl World {
         let mut out = crate::sign::Signs::NONE;
         if let Some(f) = self.lore.owner.and_then(|s| s.get().fight.signs) {
             f(self, &mut out);
+        }
+        out
+    }
+
+    /// **What the fight's species draws besides its hazards and telegraphs**
+    /// (`FightDecl::marks`): read by the renderer and the overlay, and by the
+    /// tests that pin the drawing to the rule.
+    pub fn marks(&self) -> crate::species::Marks {
+        let mut out = crate::species::Marks::NONE;
+        if let Some(hook) = self.lore.owner.and_then(|s| s.get().fight.marks) {
+            hook(self, &mut out);
         }
         out
     }

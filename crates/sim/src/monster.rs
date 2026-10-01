@@ -489,6 +489,19 @@ pub struct Heard {
     pub who: u8,
 }
 
+/// **What a species' brain hooks may read** (`species::FightDecl`'s
+/// `appetite`, `prowl_to`, `commit`): the fighters as the brain sees them --
+/// positions and velocities, never buttons -- the ground as it stands, its
+/// floor hazards included, and the hunt's lore. The same small window the
+/// shared brain has, with the floor added, so a species' own terms cannot
+/// read an input either.
+#[derive(Clone, Copy)]
+pub struct Mind<'a> {
+    pub quarry: &'a [Quarry],
+    pub ground: &'a Terrain,
+    pub lore: &'a crate::lore::Lore,
+}
+
 /// Where its attention is, and what it remembers seeing.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Brain {
@@ -519,6 +532,13 @@ pub struct Brain {
     /// hunt. It stands its ground and turns to face you, and throws nothing;
     /// a hit wakes it at once. See `Species::hunt_grace`.
     pub grace: u16,
+    /// **Where the move in progress is aimed at, on the floor**, in
+    /// centimetres: chosen when it commits and held. What a `lobbed` move's
+    /// volume lands on -- the Mireback's glob and its belly flop -- and where a
+    /// move that `stops_at_aim` stops travelling: the tongue, at the first
+    /// solid on its line. See `species::MoveDecl`. Zero, and never read, for a
+    /// move with neither flag, so it is only hashed when it is not.
+    pub aim: [i16; 2],
 }
 
 impl Default for Brain {
@@ -538,6 +558,7 @@ impl Default for Brain {
             // starting point as any other.
             rng: 0x2545_F491,
             grace: 0,
+            aim: [0; 2],
         }
     }
 }
@@ -604,6 +625,15 @@ pub struct Monster {
     /// open question in `docs/design/shadow-reaver-v2.md`.
     pub marks: u8,
     pub mark_clock: u16,
+    /// **Four words the species keeps on the body**, for the hooks that are
+    /// handed the creature and nothing else: what its hide is worth this
+    /// frame (`FightDecl::hide`) and what a hit does to it besides the ladder
+    /// (`FightDecl::struck`). The hit path reaches a creature from a dozen
+    /// places that have no world to hand, so state those two read lives here
+    /// rather than in the hunt's lore. Its file says what each word means;
+    /// zero for a species with no such hooks, and only hashed when not zero.
+    /// The Mireback's coat and its throat sac's poise.
+    pub own: [i32; 4],
 }
 
 impl Monster {
@@ -631,6 +661,7 @@ impl Monster {
             rooted: 0,
             marks: 0,
             mark_clock: 0,
+            own: [0; 4],
         }
     }
 
@@ -1007,6 +1038,11 @@ impl Rig {
             if !part.shape.mountable {
                 continue;
             }
+            // **A face pointing at the floor is not a surface**, for a species
+            // that rolls onto its back (`FightDecl::rolls_over`).
+            if self.species.fight.rolls_over && self.of(index).rot.r[1].y.raw() <= 0 {
+                continue;
+            }
             let sh = self.species.shape(index);
             let local = self.world_to_part(index, world);
             let over = local.x.raw() > sh.min.x.sub(lip).raw()
@@ -1196,7 +1232,45 @@ impl Rig {
             // hoisted on top. Using the step here lifted a rider off the tail
             // onto the haunch mid-sweep and dropped them off the far side.
             let step = part.mountable && up.raw() >= 0 && up.raw() <= t::mount_snap().raw();
-            if step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw()) {
+            // **Never pressed down**, for a species whose parts come down on
+            // bodies (`FightDecl::lands_on_bodies`): a body under the
+            // Mireback's belly as a flop lands -- on the floor, or on a slag
+            // mound -- is shoved out sideways, where least penetration would
+            // push its feet through whatever it stood on and nothing pushes
+            // them back. The Ridgeback does not
+            // say so, and keeps its pinned hunts: whether it should is a
+            // person's call (`docs/design/hazards.md` §8).
+            let into_floor = self.species.fight.lands_on_bodies && up.raw() > down.raw();
+            if into_floor {
+                // Out the way it is from the creature's middle, all the way
+                // out of this box: every box it is in pushes it the same way,
+                // so a body the creature landed on comes out of the side of
+                // it rather than being passed from box to box inside.
+                let from_middle = at.sub(self.origin);
+                let away = V3::new(from_middle.x, Fx::ZERO, from_middle.z);
+                let away = if away.flat_len().raw() > 0 {
+                    crate::math::wide_normalized(away)
+                } else {
+                    self.facing.apply(V3::new(Fx::ONE, Fx::ZERO, Fx::ZERO))
+                };
+                let d = frame.rot.unapply(away);
+                let exit = |v: Fx, dv: Fx, lo: Fx, hi: Fx| -> Fx {
+                    if dv.raw() > 0 {
+                        hi.sub(v).div(dv)
+                    } else if dv.raw() < 0 {
+                        lo.sub(v).div(dv)
+                    } else {
+                        Fx::MAX
+                    }
+                };
+                let t = exit(p.x, d.x, min_x, max_x).min(exit(p.z, d.z, min_z, max_z));
+                if t.raw() < Fx::MAX.raw() {
+                    p.x = p.x.add(d.x.mul(t));
+                    p.z = p.z.add(d.z.mul(t));
+                    shoved = true;
+                }
+            } else if step || (vertical.raw() <= px.abs().raw() && vertical.raw() <= pz.abs().raw())
+            {
                 if step || up.raw() <= down.raw() {
                     p.y = sh.max.y;
                     landed = Some(index);
@@ -1238,8 +1312,20 @@ impl Monster {
             return None;
         };
         let m = self.sp().attack(kind);
-        if m.damage <= 0 {
+        let decl = self.move_decl(kind);
+        if m.damage <= 0 && !decl.harmless {
             return None;
+        }
+        // **A lobbed move lands at its aim point**, on the floor, wherever the
+        // body is: the glob, the belly flop. Nothing about the bone it rides.
+        if decl.lobbed {
+            let at = self.aimed_at();
+            return Some((
+                V3::new(at.x, Fx::ZERO, at.z),
+                m.hit_radius,
+                m.hit_low,
+                m.hit_high,
+            ));
         }
         // The spray's volume leaves the animal: so many metres a second along
         // the facing, from the first active frame. Everything else has zero
@@ -1250,6 +1336,11 @@ impl Monster {
                 m.active.saturating_sub(left).saturating_sub(1) as i32,
             ))
             .mul(DT);
+        let flown = if decl.stops_at_aim {
+            flown.min(self.room_to_aim(m.hit_x))
+        } else {
+            flown
+        };
         let rig = self.rig();
         // The anchor is authored in body space and carried by whichever bone
         // the move rides, so a bite whose head has been thrown forward puts its
@@ -1305,6 +1396,21 @@ impl Monster {
             };
             landing.hit_volume()?
         };
+        let sweep = m
+            .travel
+            .add(m.advance)
+            .mul(Fx::from_int(frames as i32))
+            .mul(DT);
+        // A lane that stops at the aim point is drawn stopping there: the line is
+        // the hit test's own answer, solid in the way and all.
+        let sweep = if self.move_decl(kind).stops_at_aim {
+            let along = V3::from_turns(self.yaw);
+            let gone = anchor.sub(self.pos).dot(along);
+            let mark = self.aimed_at().sub(self.pos).dot(along);
+            sweep.min(mark.sub(gone).max(Fx::ZERO))
+        } else {
+            sweep
+        };
         Some(Telegraph {
             kind,
             anchor,
@@ -1312,14 +1418,41 @@ impl Monster {
             low,
             high,
             along: V3::from_turns(self.yaw),
-            sweep: m
-                .travel
-                .add(m.advance)
-                .mul(Fx::from_int(frames as i32))
-                .mul(DT),
+            sweep,
             progress,
             live,
         })
+    }
+
+    /// One of its moves' declarations.
+    pub fn move_decl(&self, kind: u8) -> crate::species::MoveDecl {
+        let sp = self.sp();
+        sp.moves[(kind as usize).min(sp.moves.len() - 1)]
+    }
+
+    /// The brain's aim point, on the floor. See [`Brain::aim`].
+    pub fn aimed_at(&self) -> V3 {
+        V3::new(
+            crate::lore::from_cm(self.brain.aim[0]),
+            Fx::ZERO,
+            crate::lore::from_cm(self.brain.aim[1]),
+        )
+    }
+
+    /// Set the brain's aim point. See [`Brain::aim`].
+    pub fn aim_at(&mut self, at: V3) {
+        self.brain.aim = [crate::lore::to_cm(at.x), crate::lore::to_cm(at.z)];
+    }
+
+    /// How far a travelling volume that starts `start` metres ahead of the
+    /// body may go before it reaches the aim point, along the facing.
+    fn room_to_aim(&self, start: Fx) -> Fx {
+        let along = V3::from_turns(self.yaw);
+        self.aimed_at()
+            .sub(self.pos)
+            .dot(along)
+            .sub(start)
+            .max(Fx::ZERO)
     }
 
     /// Does the volume out this frame reach a body standing at `world`?
@@ -1489,10 +1622,15 @@ impl Monster {
         }
         // Hit while it is still taking you in, and it has taken you in.
         self.brain.grace = 0;
-        let dealt = Fx::from_int(raw)
-            .mul(self.sp().vulnerability(part))
-            .to_int()
-            .max(0);
+        let worth = Fx::from_int(raw).mul(self.sp().vulnerability(part));
+        // What its hide is worth on that part this frame, if its species
+        // says: the Mireback's coat. Not asked at all otherwise, so a creature
+        // without one takes exactly the arithmetic it always did.
+        let worth = match self.sp().fight.hide {
+            Some(hide) => worth.mul(hide(self, part)),
+            None => worth,
+        };
+        let dealt = worth.to_int().max(0);
         self.health = (self.health - dealt).max(0);
         self.strain += dealt;
         if self.sp().is_weak_point(part) {
@@ -1502,6 +1640,13 @@ impl Monster {
         if self.health <= 0 {
             self.doing = Doing::Dead;
             return dealt;
+        }
+
+        // Its species may decide what the hit did instead of the ladder below.
+        if let Some(struck) = self.sp().fight.struck {
+            if struck(self, part, dealt) {
+                return dealt;
+            }
         }
 
         // A foot going is the ground game's whole payout, so it is checked
@@ -1806,6 +1951,23 @@ impl Monster {
         score
     }
 
+    /// [`Monster::appetite`], with its species' own terms after it
+    /// (`FightDecl::appetite`) and nothing at all for a move the brain never
+    /// picks. What the choice is made on.
+    pub fn appetite_in(&self, kind: u8, riders: i32, mind: &Mind) -> i32 {
+        let sp = self.sp();
+        if self.move_decl(kind).never_chosen {
+            return 0;
+        }
+        let base = self.appetite(kind, riders);
+        match sp.fight.appetite {
+            Some(hook) if self.brain.cooldown[(kind as usize).min(sp.moves.len() - 1)] == 0 => {
+                hook(self, kind, base, mind)
+            }
+            _ => base,
+        }
+    }
+
     /// Pick something to do, if anything is worth doing.
     ///
     /// Not the maximum. Everything scoring at least `decisiveness` of the best
@@ -1814,13 +1976,13 @@ impl Monster {
     /// noise. In between, the *distribution* is learnable while the next move
     /// is not, which is the only version of "hard but fair" that survives a
     /// player who has fought it fifty times.
-    fn choose(&mut self, riders: i32) {
+    fn choose(&mut self, riders: i32, mind: &Mind) {
         let sp = self.sp();
         let mut scores = [0i32; MAX_MOVES];
         let scores = &mut scores[..sp.moves.len()];
         let mut best = 0;
         for (kind, slot) in scores.iter_mut().enumerate() {
-            *slot = self.appetite(kind as u8, riders);
+            *slot = self.appetite_in(kind as u8, riders, mind);
             best = best.max(*slot);
         }
         if best <= 0 {
@@ -1865,6 +2027,32 @@ impl Monster {
         self.brain.repeat_left = self.sp().variety_frames();
         self.brain.cooldown[kind as usize] = m.cooldown;
         self.brain.think_left = 0;
+        if sp.moves[kind as usize].lobbed {
+            self.lob(kind);
+        }
+        if let Some(commit) = sp.fight.commit {
+            commit(self, kind, mind);
+        }
+    }
+
+    /// **Aim a lobbed move**: where the target will be when it lands, kept
+    /// inside the move's own range -- the aim point, held from here on. What
+    /// the brain does as a lobbed move commits; a species may aim it again
+    /// (`FightDecl::commit`).
+    pub fn lob(&mut self, kind: u8) {
+        let m = self.sp().attack(kind);
+        let aim = self.lead_point(m.startup);
+        let to = V3::new(aim.x.sub(self.pos.x), Fx::ZERO, aim.z.sub(self.pos.z));
+        let far = crate::math::wide_flat_len(to);
+        let near = m.ideal_range.sub(m.range_span).max(Fx::ZERO);
+        let most = m.ideal_range.add(m.range_span);
+        let reach = far.clamp(near, most);
+        let dir = if far.raw() > 0 {
+            crate::math::wide_normalized(to)
+        } else {
+            V3::from_turns(self.yaw)
+        };
+        self.aim_at(self.pos.add(dir.scale(reach)));
     }
 
     /// Turn. A proportional controller behind a rate limit and an acceleration
@@ -1875,7 +2063,7 @@ impl Monster {
     /// when it has been turning hard, and that overshoot is the window a player
     /// gets for cutting back across its nose. A rate limit alone would not give
     /// them one.
-    fn steer(&mut self) {
+    fn steer(&mut self, prowl: Option<V3>) {
         // **The windup follows you; the hit does not.** During a startup the
         // animal keeps turning toward where it thinks you will be, at a
         // fraction of its free turn rate, and the yaw locks on the first active
@@ -1923,7 +2111,15 @@ impl Monster {
             }
             _ => self.sp().prowl_lead(),
         };
-        let aim = self.lead_point(horizon);
+        // Walking somewhere of its own, it faces where it is going -- until it
+        // is within a stride of it, and then it faces you.
+        let arrived = |to: V3| {
+            crate::math::wide_flat_dist(to, self.pos).raw() <= self.sp().gait_stride().raw()
+        };
+        let aim = match prowl {
+            Some(to) if self.doing.free() && !arrived(to) => to,
+            _ => self.lead_point(horizon),
+        };
         let want = crate::math::atan2_turns(aim.z.sub(self.pos.z), aim.x.sub(self.pos.x));
         let error = crate::math::wrap_turns(want.sub(self.yaw));
 
@@ -1973,18 +2169,15 @@ impl Monster {
 
     /// Walk. Forward along its own facing, and never sideways -- a quadruped
     /// that could strafe would make its turn limit decorative.
-    fn walk(&mut self, bounds: &Bounds) {
+    fn walk(&mut self, bounds: &Bounds, prowl: Option<V3>) {
         let want = match self.doing {
             _ if self.rooted > 0 => Fx::ZERO,
             // Noticing you: it stands its ground and turns to face you.
             Doing::Prowl if self.brain.grace > 0 => Fx::ZERO,
             Doing::Active { kind, .. } => self.sp().attack(kind).advance,
             Doing::Prowl => {
-                let to = V3::new(
-                    self.brain.seen.x.sub(self.pos.x),
-                    Fx::ZERO,
-                    self.brain.seen.z.sub(self.pos.z),
-                );
+                let goal = prowl.unwrap_or(self.brain.seen);
+                let to = V3::new(goal.x.sub(self.pos.x), Fx::ZERO, goal.z.sub(self.pos.z));
                 let range = crate::math::wide_flat_len(to);
                 // **It gallops when you run.** The clamp used to be the walk,
                 // which is slower than a fighter's, so the whole fight was
@@ -2006,8 +2199,15 @@ impl Monster {
                     .dot(crate::math::wide_normalized(to))
                     .max(Fx::ZERO)
                     .mul(self.sp().pursuit_gain());
+                // Somewhere of its own is somewhere to stand on; the
+                // preferred distance is from a target.
+                let stand_off = if prowl.is_some() {
+                    Fx::ZERO
+                } else {
+                    self.sp().prowl_range()
+                };
                 let want = range
-                    .sub(self.sp().prowl_range())
+                    .sub(stand_off)
                     .mul(self.sp().approach_gain())
                     .add(fleeing)
                     .clamp(self.sp().back().neg(), self.sp().gallop());
@@ -2187,6 +2387,19 @@ impl Monster {
     /// that `collides` -- its solids are what it walks into. `senses` is what
     /// its perception filter allows the glance this frame.
     pub fn step_in(&mut self, quarry: &[Quarry], senses: &Senses, arena: &Terrain) {
+        self.step_with(quarry, senses, arena, &crate::lore::Lore::NONE);
+    }
+
+    /// [`Monster::step_in`], with the hunt's lore for its species' brain
+    /// hooks to read (`FightDecl::appetite`, `prowl_to`, `commit`). What the
+    /// world calls.
+    pub fn step_with(
+        &mut self,
+        quarry: &[Quarry],
+        senses: &Senses,
+        arena: &Terrain,
+        lore: &crate::lore::Lore,
+    ) {
         if self.health <= 0 {
             self.doing = Doing::Dead;
             self.speed = Fx::ZERO;
@@ -2200,11 +2413,16 @@ impl Monster {
         let riders = quarry.iter().filter(|q| q.alive && q.aboard).count() as i32;
         let noticing = self.brain.grace > 0;
         self.brain.grace = self.brain.grace.saturating_sub(1);
+        let mind = Mind {
+            quarry,
+            ground: arena,
+            lore,
+        };
         if self.doing.free() && !noticing {
             if self.brain.think_left > 0 {
                 self.brain.think_left -= 1;
             } else {
-                self.choose(riders);
+                self.choose(riders, &mind);
             }
             // Poise comes back while it is on its feet, so a topple has to be
             // earned again rather than saved up across a whole fight.
@@ -2212,8 +2430,12 @@ impl Monster {
         }
         self.brain.repeat_left = self.brain.repeat_left.saturating_sub(1);
 
-        self.steer();
-        self.walk(&arena.bounds);
+        let prowl = match self.sp().fight.prowl_to {
+            Some(hook) if self.doing.free() => hook(self, &mind),
+            _ => None,
+        };
+        self.steer(prowl);
+        self.walk(&arena.bounds, prowl);
         self.fence(arena);
     }
 
