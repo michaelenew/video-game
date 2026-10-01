@@ -275,6 +275,17 @@ spells -- was being charged to the last commit, however far away it was. No
 pinned report moved; a Blood mage's against the Ridgeback can (one hunt in
 twelve read a phantom one).
 
+**The seams an unseen creature adds** (the Veilstalker, 2026-10-01), on the
+same terms -- every one off in `PLAIN`, and no other creature's code moved:
+
+| Seam | What it is for |
+| --- | --- |
+| `FightDecl::apparition` / `World::apparition()` | a decloak drawn where no body is -- the mimic's ghost: where it stands, which way, which rear it plays and its frame, from the lore. What the renderer draws of a decloak, real or not, and the only thing the hunter reads to see one |
+| `FightDecl::shown` (P5's, first used here) | how strongly each part is drawn, `0` cloaked to `1` whole: the veil, derived each frame from the move, the fade, speed, paint, mottle and hazards (`fight::shown`) |
+| `aim::in_view_from`, `aim::off_look` | *is that point on a screen looked along this yaw, from here, and not behind anything* -- the creature's view gate, built from the eye `aim.rs` builds every other eye from |
+| `Tally::until_free(w, slot, free)` | a species' own correction to `frames_until_free` for the windows: the Veilstalker adds its decloak floor, so a stalk is free but not threatening until it is in reach and in view; identity for everybody else |
+| `MonsterField::Cooldown` range to 900 | the smoke's fifteen seconds |
+
 ## 6 · Decided while building, for a person to review
 
 - **Sizes are maximums, not generics.** `MAX_BONES` 40, `MAX_PARTS` 48,

@@ -82,7 +82,7 @@ const JUDGE: i32 = 10;
 const SLOP_LATE: i32 = 3;
 /// What the renderer shows faintly enough that a person still sees it: a
 /// shimmer is, a part fading out of its last frames is not.
-const SEE: Fx = Fx::ratio(1, 5);
+pub const SEE: Fx = Fx::ratio(1, 5);
 /// The silhouette tells the move by this frame of a decloak (§2).
 const SILHOUETTE: i32 = 8;
 /// A print this young is "fresh": a second.
