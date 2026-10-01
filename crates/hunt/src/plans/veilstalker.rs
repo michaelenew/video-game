@@ -476,6 +476,19 @@ impl Plan for Veilstalker {
 
         if std::env::var_os("VEIL_DEBUG").is_some() {
             let m = slot_of(w).and_then(|s| w.monsters[s]);
+            if let Some(m) = m {
+                eprintln!(
+                    "   veil: stalk {} plan {:.1} view {:b} edge {:.2} strikes {} d {:.1} think {} hits {}",
+                    fight::stalk_left(&w.lore),
+                    fight::plan_range(&w.lore).to_f32_for_render(),
+                    fight::view_of(&w.lore, 0),
+                    fight::edge_of(&w.lore, 0).to_f32_for_render(),
+                    fight::strikes_this_engagement(&w.lore),
+                    wide_flat_dist(m.pos, me.pos).to_f32_for_render(),
+                    m.brain.think_left,
+                    fight::hits(&m),
+                );
+            }
             eprintln!(
                 "{} me ({:.1},{:.1}) hp {} {:?} look {:.2} | {:?} ({:.1},{:.1}) | known {:?} decloak {:?} prints {} intent {:?}",
                 now,
@@ -508,6 +521,10 @@ impl Plan for Veilstalker {
         }
         // 3. Punish what it can see that cannot answer.
         if let Some(input) = self.punish(w, &seen, &me, &scene, view) {
+            return input;
+        }
+        // 3, the second half: the second hit, aimed at the lamp.
+        if let Some(input) = self.on_the_paint(&seen, &me, &scene, view, paint) {
             return input;
         }
         // 6. A brazier across the trail.
@@ -569,6 +586,21 @@ impl Veilstalker {
         // is seen: the floor says it before the silhouette does.
         if let Some(input) = self.walk_out(w, seen, me, scene, view, toward) {
             return Some(input);
+        }
+        // **A decloak beside it is the rake**: nothing else is thrown from
+        // that close, and the rake does not wait for its silhouette to be
+        // read -- over it, now.
+        let rake = vs::SPECIES.attack(vs::RAKE);
+        let beside = wide_flat_dist(d.at, me.pos).raw()
+            <= rake.hit_x.add(rake.hit_radius).add(sim::tuning::body_radius()).add(MARGIN).raw();
+        if beside && !d.empty {
+            self.intent = JUMP;
+            if me.grounded && self.leap_left == 0 {
+                self.leap_left = LEAP_HOLD;
+                self.mark_done();
+                return Some(self.turn_and(me, toward, V3::ZERO, Input::SPACE));
+            }
+            return Some(self.turn_and(me, toward, V3::ZERO, 0));
         }
         // Nothing under it: hold, and watch it.
         if d.empty && matches!(d.rear, vs::LUNGE | vs::SPEAR) {
@@ -841,6 +873,48 @@ impl Veilstalker {
         Some(self.turn_and(me, Some(target), dir, swing))
     }
 
+    /// **Unload into the second hit on the paint** (§9.3): a lit mark it can
+    /// see, near enough to reach before the creature could start anything it
+    /// has not already been seen to start -- no decloak under way -- is hit
+    /// where it hangs.
+    fn on_the_paint(
+        &mut self,
+        seen: &World,
+        me: &Player,
+        scene: &Scene,
+        view: Input,
+        paint: Option<V3>,
+    ) -> Option<Input> {
+        let at = paint.or_else(|| body_seen(seen, self.who, view, scene))?;
+        if fight::apparitions(seen).iter().flatten().next().is_some() {
+            return None;
+        }
+        let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
+        let reach = poke.reach.add(Fx::ONE);
+        let d = wide_flat_dist(at, me.pos);
+        // Not across the arena: a few strides at most.
+        if d.raw() > reach.add(Fx::from_int(4)).raw() {
+            return None;
+        }
+        self.intent = PUNISH;
+        let dir = if d.raw() > reach.raw() {
+            unit(at.sub(me.pos), V3::ZERO)
+        } else {
+            V3::ZERO
+        };
+        let ready = self.cooldown == 0
+            && me.action.actionable()
+            && d.raw() <= reach.raw()
+            && self.facing(me, at, Fx::ratio(3, 100));
+        let swing = if ready {
+            self.cooldown = SWING_GAP;
+            Input::LEFT
+        } else {
+            0
+        };
+        Some(self.turn_and(me, Some(at), dir, swing))
+    }
+
     /// **A brazier across the trail**: when the newest prints head toward a
     /// standing brazier within six metres of their head, go and tip it.
     fn tip(&mut self, w: &World, seen: &World, me: &Player, prints: &[Print]) -> Option<Input> {
@@ -1069,8 +1143,14 @@ impl Tally for VeilTally {
         }
         if let (Some((target, v, seen, kind)), Some((k, e))) = (self.commit, fight::elapsed(&now)) {
             if k == kind && e <= fight::decloak(kind) && seen < u32::MAX / 2 {
-                let mid = fight::middle_of(&now);
-                if in_view(target, v, mid, HALF_VIEW, &scene) {
+                // On the screen: its middle, its head or its hips.
+                let rig = now.rig();
+                let points = [
+                    fight::middle_of(&now),
+                    rig.bone[vs::bones::HEAD].at,
+                    rig.bone[vs::bones::ROOT].at,
+                ];
+                if points.iter().any(|p| in_view(target, v, *p, HALF_VIEW, &scene)) {
                     self.commit = Some((target, v, seen + 1, kind));
                 }
             }
@@ -1102,6 +1182,40 @@ impl Tally for VeilTally {
             && matches!(now.doing, Doing::Flinch { .. })
         {
             self.kept += 1;
+        }
+        if std::env::var_os("VEIL_EVENTS").is_some() {
+            let pl = &after.players[0];
+            if now.health < was.health {
+                eprintln!(
+                    "{:6} HIT IT {:4} doing {:?} hits {} shown {:.2} d {:.1}",
+                    after.frame,
+                    was.health - now.health,
+                    was.doing,
+                    fight::hits(&now),
+                    after.shown(slot, vs::BARREL_L).to_f32_for_render(),
+                    wide_flat_dist(now.pos, pl.pos).to_f32_for_render()
+                );
+            }
+            if pl.health < before.players[0].health {
+                eprintln!(
+                    "{:6} HUNTER HIT {:4} by {:?} hunter {:?}",
+                    after.frame,
+                    before.players[0].health - pl.health,
+                    now.doing,
+                    before.players[0].action
+                );
+            }
+            if let Doing::Startup { kind, left } = now.doing {
+                if left == vs::SPECIES.attack(kind).startup && was.doing.attacking() != Some(kind) {
+                    eprintln!(
+                        "{:6} START {} d {:.1} stalk {}",
+                        after.frame,
+                        vs::MOVES[kind as usize].name,
+                        wide_flat_dist(now.pos, pl.pos).to_f32_for_render(),
+                        fight::stalk_left(&after.lore)
+                    );
+                }
+            }
         }
         // A hit on it: the end of a hunt for it, and a second hit is a
         // follow-up.

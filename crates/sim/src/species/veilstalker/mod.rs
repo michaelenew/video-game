@@ -612,6 +612,9 @@ crate::species_knobs! {
     FireShy,         "fire",   "Walks no nearer fire than",              Fixed, 0, fx(10,1);
     // veil_glance is the common `GlanceFrames`; veil_view_cone:
     ViewCone,        "mind",   "View gate, half-angle (turns)",          Fixed, 0, fx(1,4);
+    ExposedNear,     "mind",   "Exposed and stalking, runs from a target within", Fixed, 0, fx(20,1);
+    EngagementStrikes,"mind",  "Strikes an engagement, at most",          Int, 1, 9;
+    ViewMargin,      "mind",   "View gate, seen from this far either side too", Fixed, 0, fx(4,1);
     // veil_edge_bias
     EdgeBias,        "mind",   "Edge of the view, more appetite",        Int, 0, 8000;
     // veil_bait_appetite
@@ -639,6 +642,7 @@ crate::species_knobs! {
     DesperateHealth, "mind",   "Desperate below health (x)",             Fixed, 0, fx(1,1);
     LeaveHits,       "retreat","Leaves after hits",                      Int, 1, 9;
     LeaveDesperate,  "retreat","Desperate, leaves after hits",           Int, 1, 9;
+    HitGap,          "retreat","Blows closer than this are one hit",     Frames, 1, 60;
     RetreatStagger,  "retreat","A burst in the recoil staggers it for",  Frames, 0, 240;
     RetreatFar,      "retreat","Bounds away this far",                   Fixed, 0, fx(30,1);
     PerchReach,      "perch",  "Climbs a perch within",                  Fixed, 0, fx(20,1);

@@ -541,7 +541,7 @@ fn it_never_strikes_out_of_its_own_smoke_or_into_it_early() {
 fn after_two_hits_it_leaves_and_a_burst_in_the_recoil_keeps_it() {
     // Two hits, a moment apart: it recoils.
     let mut w = duel(8);
-    let gap = vs::SPECIES.flinch_frames() as u32 + 1;
+    let gap = Knob::HitGap.raw() as u32 + 1;
     for _ in 0..2 {
         {
             let m = w.monsters[0].as_mut().unwrap();

@@ -182,6 +182,8 @@ pub mod word {
     /// The frame the hook last ran on: the brain, which steps first, thinks
     /// on the one after.
     pub const NOW: usize = 74;
+    /// Strikes begun since it last cloaked.
+    pub const STRIKES: usize = 75;
 }
 
 /// The bits of a hunter's [`word::VIEW`].
@@ -233,6 +235,9 @@ pub mod flag {
     pub const COOP: Bits = 4;
     /// Stalking: slinking, never faster than its slink.
     pub const STALKING: Bits = 8;
+    /// Exposed: a lit mark on it, or a region mottled. Slinking is no
+    /// disguise, so it goes at its bound.
+    pub const EXPOSED: Bits = 16;
     /// Hits this engagement, four bits from here.
     pub const HITS_SHIFT: Bits = 8;
     pub const HITS: Bits = 0xF << HITS_SHIFT;
@@ -402,6 +407,11 @@ pub fn panicked(m: &Monster) -> bool {
 
 pub fn stalking(m: &Monster) -> bool {
     flags(m) & flag::STALKING != 0
+}
+
+/// Painted or mottled: seen, whatever its veil does.
+pub fn exposed(m: &Monster) -> bool {
+    flags(m) & flag::EXPOSED != 0
 }
 
 /// Hits it has taken this engagement.
@@ -767,7 +777,7 @@ pub fn fire_near(lore: &Lore) -> Option<V3> {
 /// `StalkSpeed`, which a fighter walking away outpaces. Out of the stalk it
 /// bounds at its gallop, and shimmers doing it.
 pub fn pace(m: &Monster) -> Fx {
-    if stalking(m) {
+    if stalking(m) && flags(m) & flag::EXPOSED == 0 {
         let gallop = SPECIES.gallop().max(SMALLEST);
         Knob::StalkSpeed.fx().div(gallop).min(Fx::ONE)
     } else {
@@ -848,6 +858,8 @@ pub fn frame(w: &mut World) {
         mimic(w, &mut m, now);
         panic(w, &mut m, now);
     }
+    let exposed = paints(w).next().is_some() || mottled_count(&m) > 0;
+    set_flag(&mut m, flag::EXPOSED, exposed);
     trail(w, &m, now);
     braziers(w);
     veil_clock(w, &mut m);
@@ -967,8 +979,11 @@ fn hits_and_paint(w: &mut World, m: &mut Monster, now: u32) {
     // **One hit, not one frame of a beam**: a hit that lands within a few
     // frames of the last is the same hit, so a channel ticking on it is one.
     let last = w.lore.word(word::LAST_HIT);
-    let gap = SPECIES.flinch_frames().max(1) as u32;
-    if last == 0 || now.wrapping_sub(last.wrapping_sub(1)) >= gap {
+    let gap = Knob::HitGap.raw().max(1) as u32;
+    // Leaving, it is not engaged: a blow on its way out paints it and is not
+    // the first of the next engagement.
+    let leaving = matches!(m.doing.attacking(), Some(RETREAT | GETUP));
+    if !leaving && (last == 0 || now.wrapping_sub(last.wrapping_sub(1)) >= gap) {
         set_hits(m, hits(m) + 1);
     }
     w.lore.set_word(word::LAST_HIT, now.wrapping_add(1));
@@ -1052,14 +1067,8 @@ fn leave(w: &mut World, m: &mut Monster) {
 /// up after a panic and the bound that follows it, and the retreat turning
 /// away as its recoil ends.
 fn chains(w: &mut World, m: &mut Monster) {
-    let away = |m: &Monster| {
-        let from = flat(m.pos.sub(m.brain.seen));
-        if from.flat_len().raw() > 0 {
-            math::atan2_turns(from.z, from.x)
-        } else {
-            m.yaw.add(math::QUARTER_TURN.add(math::QUARTER_TURN))
-        }
-    };
+    let bounds = w.arena().bounds;
+    let away = |m: &Monster| open_way(m.pos, m.brain.seen, Knob::RetreatFar.fx(), &bounds);
     match m.doing {
         Doing::Recovery { kind: RAKE, left: 0 } => {
             m.doing = Doing::Startup {
@@ -1123,6 +1132,44 @@ fn chains(w: &mut World, m: &mut Monster) {
             }
         }
     }
+}
+
+/// **The way away from `from` with the most floor in it**: straight away if
+/// a run of `far` that way stays inside the walls, otherwise turned toward
+/// the middle of the arena an eighth at a time until it does -- a retreat
+/// into a corner is a retreat to be cornered in.
+pub fn open_way(at: V3, from: V3, far: Fx, b: &crate::arena::Bounds) -> Fx {
+    let off = flat(at.sub(from));
+    let straight = if off.flat_len().raw() > 0 {
+        math::atan2_turns(off.z, off.x)
+    } else {
+        Fx::ZERO
+    };
+    let room = SPECIES.margin().add(Knob::WallLook.fx());
+    let fits = |yaw: Fx| {
+        let end = at.add(V3::from_turns(yaw).scale(far));
+        end.x.raw() > b.lo_x.add(room).raw()
+            && end.x.raw() < b.hi_x.sub(room).raw()
+            && end.z.raw() > b.lo_z.add(room).raw()
+            && end.z.raw() < b.hi_z.sub(room).raw()
+    };
+    let middle = flat(V3::ZERO.sub(at));
+    let toward = if middle.flat_len().raw() > 0 {
+        math::wrap_turns(math::atan2_turns(middle.z, middle.x).sub(straight))
+    } else {
+        Fx::ZERO
+    };
+    let eighth = Fx::ratio(1, 8);
+    let step = if toward.raw() >= 0 { eighth } else { eighth.neg() };
+    let mut yaw = straight;
+    for _ in 0..4 {
+        if fits(yaw) {
+            return yaw;
+        }
+        yaw = yaw.add(step);
+    }
+    // Nowhere fits: toward the middle.
+    straight.add(toward)
 }
 
 /// **The spear's lane locks** at `SpearLock` frames into its tell: it follows
@@ -1975,6 +2022,7 @@ fn veil_clock(w: &mut World, m: &mut Monster) {
     if was > 0 && now == 0 && m.alive() {
         // Cloaked again: a new engagement, after a stalk.
         set_hits(m, 0);
+        w.lore.set_word(word::STRIKES, 0);
         let frames = stalk_frames(m);
         w.lore.set_word(word::STALK, frames);
         set_flag(m, flag::STALKING, true);
@@ -1985,8 +2033,18 @@ fn veil_clock(w: &mut World, m: &mut Monster) {
         let pick = SPECIES.attack(kind).ideal_range;
         w.lore.set_word(word::PLAN, lore::to_cm(pick) as u16 as u32);
     } else if stalk > 0 && m.doing.free() {
-        w.lore.set_word(word::STALK, stalk - 1);
-        if stalk == 1 {
+        // **Cornered**: seen, the target close, and a wall at its back --
+        // the stalk is over, and it fights.
+        let b = w.arena().bounds;
+        let room = Knob::WallLook.fx().add(SPECIES.margin());
+        let walled = m.pos.x.raw() < b.lo_x.add(room).raw()
+            || m.pos.x.raw() > b.hi_x.sub(room).raw()
+            || m.pos.z.raw() < b.lo_z.add(room).raw()
+            || m.pos.z.raw() > b.hi_z.sub(room).raw();
+        let near = math::wide_flat_dist(m.pos, m.brain.seen).raw() < Knob::ExposedNear.fx().raw();
+        let left = if exposed(m) && walled && near { 1 } else { stalk };
+        w.lore.set_word(word::STALK, left - 1);
+        if left == 1 {
             set_flag(m, flag::STALKING, false);
         }
     }
@@ -1996,6 +2054,11 @@ fn veil_clock(w: &mut World, m: &mut Monster) {
     } else if w.lore.word(word::STALK) > 0 && m.doing.free() {
         set_flag(m, flag::STALKING, true);
     }
+}
+
+/// Strikes begun since it last cloaked.
+pub fn strikes_this_engagement(lore: &Lore) -> u32 {
+    lore.word(word::STRIKES)
 }
 
 /// Frames of stalk left.
@@ -2048,7 +2111,7 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
         }
         let (at, yaw) = led_look(&w.lore, i);
         let aloft = Fx::ZERO;
-        if aim::in_view_from(at, aloft, yaw, point_of, cone, &scene) {
+        if plainly_in_view(at, yaw, point_of, cone, &scene) {
             bits |= view::IN_VIEW;
         } else if aim::off_look(at, aloft, yaw, point_of, &scene).raw() <= cone.raw() {
             bits |= view::HIDDEN;
@@ -2103,12 +2166,34 @@ fn sense(w: &mut World, m: &Monster, slot: usize) {
     // Decloaks by where they were on the screen, counted as each begins.
     if let Doing::Startup { kind, left } = m.doing {
         if strikes(kind) && left == SPECIES.attack(kind).startup {
+            let n = w.lore.word(word::STRIKES);
+            w.lore.set_word(word::STRIKES, n + 1);
             let target = (m.brain.target as usize).min(1);
             let share = w.lore.word(word::VIEW + target) >> 16;
             let third = (share * 3 / 0x10000).min(2);
             count_byte(&mut w.lore, word::THIRDS, third, 1);
         }
     }
+}
+
+/// **In view, and not by a hair**: the point inside the glanced view from
+/// where the hunter stood, and from `ViewMargin` either side of it -- a
+/// hunter who has stepped a pace since the glance still sees it, and a
+/// decloak just behind a trunk's edge is not one the creature trusts. The
+/// glance is stale by design; the margin is what keeps a stale glance from
+/// becoming a blind hit.
+fn plainly_in_view(at: V3, yaw: Fx, point: V3, cone: Fx, scene: &Scene) -> bool {
+    let to = flat(point.sub(at));
+    let across = if to.flat_len().raw() > 0 {
+        let d = math::wide_normalized(to);
+        V3::new(d.z.neg(), Fx::ZERO, d.x)
+    } else {
+        V3::ZERO
+    };
+    let side = across.scale(Knob::ViewMargin.fx());
+    [at, at.add(side), at.sub(side)]
+        .iter()
+        .all(|from| aim::in_view_from(*from, Fx::ZERO, yaw, point, cone, scene))
 }
 
 /// Where it would play a mimic for a hunter who stood at `at` looking along

@@ -70,10 +70,12 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
             Knob::ClimbAppetite.raw()
         }
         SMOKE => {
-            if !strained || v & view::IN_SMOKE != 0 {
+            let exposed = painted(lore) || fight::mottled_count(m) > 0;
+            // Strained, or exposed and hunting: not while it stalks unseen.
+            let hunting = fight::stalk_left(lore) == 0;
+            if !strained || v & view::IN_SMOKE != 0 || !(hunting || exposed) {
                 return 0;
             }
-            let exposed = painted(lore) || fight::mottled_count(m) > 0;
             score.max(0)
                 + if exposed {
                     Knob::ExposureSmoke.raw()
@@ -82,7 +84,15 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
                 }
         }
         MIMIC => {
+            // A mimic is a strike it does not make: thrown when a strike
+            // could be, not while it stalks.
             if !strained || v & view::GHOST_OK == 0 || fight::quiet(lore) {
+                return 0;
+            }
+            if fight::stalk_left(lore) > 0
+                || fight::strikes_this_engagement(lore)
+                    >= Knob::EngagementStrikes.raw().max(1) as u32
+            {
                 return 0;
             }
             let bait = fight::bait_seen(lore, fight::now(lore))
@@ -91,6 +101,11 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         }
         LUNGE | SPEAR | RAKE | QUILLS => {
             if fight::stalk_left(lore) > 0 || fight::quiet(lore) {
+                return 0;
+            }
+            // **An engagement is a strike and its follow-up**: then it
+            // vanishes, and hunts again.
+            if fight::strikes_this_engagement(lore) >= Knob::EngagementStrikes.raw().max(1) as u32 {
                 return 0;
             }
             // **Only where its feet would show**: a decloak on floor that
@@ -178,6 +193,20 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
     let at = if at == V3::ZERO { target } else { at };
     let stalking = fight::stalk_left(lore) > 0;
     let gap = math::wide_flat_dist(m.pos, target);
+    // **Seen, and followed**: painted or mottled and stalking with the
+    // target close, it does not slink -- it runs, straight away from them,
+    // out to where it stalks from.
+    if stalking && fight::exposed(m) && gap.raw() < Knob::ExposedNear.fx().raw() {
+        let away = fight::flat(m.pos.sub(target));
+        let dir = if away.flat_len().raw() > 0 {
+            math::wide_normalized(away)
+        } else {
+            V3::from_turns(m.yaw)
+        };
+        let _ = dir;
+        let yaw = fight::open_way(m.pos, target, Knob::StalkRange.fx(), &mind.ground.bounds);
+        return avoid_fire(m, mind, Some(inside(m.pos.add(V3::from_turns(yaw).scale(Knob::StalkRange.fx())), mind)));
+    }
     if !stalking && gap.raw() > Knob::BoundFrom.fx().raw() {
         return avoid_fire(m, mind, None);
     }
@@ -201,16 +230,34 @@ pub fn prowl_to(m: &Monster, mind: &Mind) -> Option<V3> {
     let want = yaw.add(edge);
     // Round the target a step at a time, from the bearing it is on.
     let mine = fight::flat(m.pos.sub(at));
+    // Hidden from the view it wants by something solid -- a trunk between
+    // them -- it keeps going round until the line is clear.
+    let hidden = fight::view_of(lore, i) & fight::view::HIDDEN != 0;
     let goal = if mine.flat_len().raw() <= 0 {
         at.add(V3::from_turns(want).scale(range))
     } else {
         let a = math::atan2_turns(mine.z, mine.x);
         let error = math::wrap_turns(want.sub(a));
         let step = Knob::StalkStep.fx();
-        let turn = error.clamp(step.neg(), step);
+        let turn = if hidden && !stalking {
+            step.mul(side).neg()
+        } else {
+            error.clamp(step.neg(), step)
+        };
         at.add(V3::from_turns(a.add(turn)).scale(range))
     };
-    avoid_fire(m, mind, Some(goal))
+    avoid_fire(m, mind, Some(inside(goal, mind)))
+}
+
+/// A goal kept inside the walls, a wall-look in from them.
+fn inside(p: V3, mind: &Mind) -> V3 {
+    let b = mind.ground.bounds;
+    let room = Knob::WallLook.fx().add(SPECIES.margin());
+    V3::new(
+        p.x.clamp(b.lo_x.add(room), b.hi_x.sub(room)),
+        p.y,
+        p.z.clamp(b.lo_z.add(room), b.hi_z.sub(room)),
+    )
 }
 
 /// **It sees fire and will not walk into it**: a goal near the fire the frame
