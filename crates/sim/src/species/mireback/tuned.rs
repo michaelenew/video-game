@@ -9,7 +9,7 @@
 #[rustfmt::skip]
 pub const KNOBS: [i32; 397] = [
            65536, // mireback.size_(x) = 1
-           10000, // mireback.health = 10000
+           11000, // mireback.health = 11000
              600, // mireback.breakable_part_health = 600
           458752, // mireback.keep-out_from_the_wall = 7
           131072, // mireback.walk_speed = 2
@@ -26,7 +26,7 @@ pub const KNOBS: [i32; 397] = [
               30, // mireback_·_mind.frames_between_glances = 30
            78643, // mireback_·_mind.lead_on_the_target_(x) = 1.2
               20, // mireback_·_mind.lead_horizon,_prowling = 20
-              40, // mireback_·_mind.pause_between_moves = 40
+              60, // mireback_·_mind.pause_between_moves = 60
               55, // mireback_·_mind.decisiveness_(%) = 55
              100, // mireback_·_mind.aggression_when_wounded = 100
              900, // mireback_·_mind.repeat_penalty = 900

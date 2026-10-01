@@ -642,6 +642,16 @@ wins by ignoring the brood, and the Reaver, the Bulwark and the Blood mage do
 not. Not yet played: the Elementalist's free pop from a stone, and the
 Reaver's throw into the window.
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)):
+the length and the pops are the plan's, and nothing was changed.** The
+balanced Champion spends **0 %** of its time on the sacs and puts 3 % of its
+damage into them: a quarter of a pop per slam window is a hunter that does
+not go to the abdomen, not a window too short to use (§4: every sac inside
+every class's reach for 90 frames). Her length follows from the same thing --
+a fight with few pops is a fight against her 6000 alone -- and lengthening it
+on the creature (more health) would take the balanced Champion below the 5 of
+24 it wins against a target of a third. For the hunter's next pass.
+
 **What changed from the sections above.**
 
 - **A sac's health is 250 at x2** (`SacHealth`, `VulnSac`), which a Champion

@@ -7263,3 +7263,25 @@ unchanged to the hunt.
 
 **Verdict** kept. The floor's tenth threatening and the Reaver pair's 12 of
 12 are recorded in the creature's §13, not changed.
+
+### 2026-10-01 — The Mireback pauses; the Gnawers and the Broodmother left
+
+**Changed** The Mireback waits 60 frames between moves (from 40) and has
+11 000 health (from 10 000, §1's first guess).
+
+**Why** Threatening was 45 % against 35: a toad that decides every two
+thirds of a second leaves only a poke between its long tells. The health
+pays for the turn it gives back.
+
+**Found** Threatening 35–41 % for every class; the Champion 18 of 24 in
+147 s (from 21 in 120); zero unanswerable; two Champions 12 of 12.
+
+**Reverted** 70 frames and 12 000 (the Champion 12 of 24 in 190 s, the
+Blood mage none). The Gnawers' length by health -- 260 and 800, 1000 for the
+Big One alone, 200 and 650: five to fourteen seconds bought, and the Blood
+mage and the Dual mage lost most of their wins each time. Nothing changed
+for the Broodmother: her balanced Champion spends no time on the sacs, so
+the pops and the length are the plan's.
+
+**Verdict** kept the Mireback; the Gnawers' length and the Broodmother's pops
+recorded in their §13.

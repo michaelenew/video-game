@@ -781,6 +781,18 @@ shadow crossing and the Blood mage's blink only now and then (one dash and one
 blink in 24 hunts), which are what §4 says reach the leader in a window.
 *Changed 2026-10-01:* it plays the Dual mage's bars now, and she wins 20.
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)):
+the fight is still short, and nothing was changed.** Every class played, the
+won fights run 24 s (the Elementalist) to 87 s (the Dual mage), the Champion
+35. Health is not the lever: gnawers at 260 and the Big One at 800 bought
+the Champion 14 seconds and took the Blood mage from 21 wins to 6 and the
+Dual mage from 20 to 6; the Big One alone at 1000, eleven seconds and the
+Blood mage to 3; 200 and 650, five seconds and the Blood mage to 18. The
+pack is short of danger rather than of health -- one hit taken in a typical
+Champion hunt, two bodies winding up at once 3 % of it -- so the levers left
+are the ones this section already names (the front arc, the tokens, the
+crouch), and they are a person's to pull with the fight in their hands.
+
 ### Still open -- for a person
 
 - **Is it too easy?** The scripted hunter keeps most of its health. The

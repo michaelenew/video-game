@@ -697,6 +697,18 @@ way (`tests/mireback.rs`).
   has one material per paint, not per creature state); the stomach camera
   stays outside (§12 question 7).
 
+**2026-10-01, polished ([plans/polish-fights.md](../plans/polish-fights.md)):
+a pause of 60 frames between moves, not 40, and health 11 000, not 10 000**
+(§1's first guess). Threatening was 45 % against 35 because a toad that
+decides every two thirds of a second leaves nothing but a poke between its
+long tells; at 60 it is 35–41 % for every class (the Champion 38 / 8 / 13 /
+41), and the thousand back keeps the fight where it was asked rather than
+handing it over: the Champion 18 of 24 (from 21) in 147 s (from 120), the
+Bulwark 16, the Reaver 21, the Elementalist 24 in 48 s, the Blood mage 4,
+the Dual mage 0; two Champions 12 of 12 in 98 s; zero unanswerable. Walk-up
+is 40–52 % against 25 -- the pause is where it went. Tried: 70 and 12 000
+(37 % threatening, the Champion 12 of 24 in 190 s, the Blood mage none).
+
 **Questions for a person**, beyond §12: is the Elementalist's one-minute fight
 her identity or a hole (`flee` could favour her fire); is 45 % threatening
 oppressive in the hands or only in the harness; and does the flop -- the
