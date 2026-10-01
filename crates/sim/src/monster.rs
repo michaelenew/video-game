@@ -797,6 +797,11 @@ impl Monster {
     /// The baked clip underneath everything else.
     fn clip_pose(&self) -> Pose {
         let sp = self.sp();
+        // Its posture first, for a species whose posture is not its speed
+        // (`FightDecl::clip`).
+        if let Some(posed) = sp.fight.clip.and_then(|f| f(self)) {
+            return posed;
+        }
         let stock = sp.stock;
         match self.doing {
             Doing::Dead => beast::sample(sp, stock.dead, Fx::ONE),
@@ -974,7 +979,13 @@ impl Monster {
 
     /// Every bone, placed in the world.
     pub fn rig(&self) -> Rig {
-        Rig::build(self.sp(), self.pos, self.yaw, &self.pose())
+        let mut rig = Rig::build(self.sp(), self.pos, self.yaw, &self.pose());
+        // What of it is under the floor this frame, for a species with a
+        // body that is not always there (`FightDecl::buried`).
+        if let Some(buried) = self.sp().fight.buried {
+            rig.buried = buried(self, &rig);
+        }
+        rig
     }
 
     /// Body-space position of a world point in a part's own frame -- what a
@@ -1035,7 +1046,7 @@ impl Rig {
         let lip = body_radius.mul(t::edge_grace());
         let mut best: Option<(usize, Fx, Fx)> = None;
         for (index, part) in self.species.parts.iter().enumerate() {
-            if !part.shape.mountable {
+            if !part.shape.mountable || !self.there(index) {
                 continue;
             }
             // **A face pointing at the floor is not a surface**, for a species
@@ -1134,7 +1145,7 @@ impl Monster {
         let rig = self.rig();
         let sp = self.sp();
         sp.parts.iter().enumerate().any(|(index, part)| {
-            if !part.shape.solid {
+            if !part.shape.solid || !rig.there(index) {
                 return false;
             }
             let sh = sp.shape(index);
@@ -1158,7 +1169,7 @@ impl Monster {
         let sp = self.sp();
         let mut best = Fx::ZERO;
         for (index, part) in sp.parts.iter().enumerate() {
-            if !part.shape.solid {
+            if !part.shape.solid || !rig.there(index) {
                 continue;
             }
             let sh = sp.shape(index);
@@ -1188,7 +1199,7 @@ impl Rig {
 
         for (index, part) in self.species.parts.iter().enumerate() {
             let part = part.shape;
-            if !part.solid {
+            if !part.solid || !self.there(index) {
                 continue;
             }
             let sh = self.species.shape(index);
@@ -1313,9 +1324,20 @@ impl Monster {
         };
         let m = self.sp().attack(kind);
         let decl = self.move_decl(kind);
-        if m.damage <= 0 && !decl.harmless {
+        // A move whose species tests its own hit has no cylinder at all
+        // (`MoveDecl::own_hit`): what it reaches and what is drawn for it are
+        // the species' one shape.
+        if (m.damage <= 0 && !decl.harmless) || decl.own_hit {
             return None;
         }
+        // Its species' say on how big the move is now (`FightDecl::radius`).
+        let m = match self.sp().fight.radius {
+            Some(f) => Attack {
+                hit_radius: f(self, kind, m.hit_radius),
+                ..m
+            },
+            None => m,
+        };
         // **A lobbed move lands at its aim point**, on the floor, wherever the
         // body is: the glob, the belly flop. Nothing about the bone it rides.
         if decl.lobbed {
@@ -1486,6 +1508,9 @@ impl Monster {
         let sp = self.sp();
         let mut best: Option<(V3, Fx)> = None;
         for index in 0..sp.parts.len() {
+            if !rig.there(index) {
+                continue;
+            }
             let sh = sp.shape(index);
             let frame = rig.of(index);
             let local = frame.world_to_local(world);
@@ -1514,6 +1539,9 @@ impl Monster {
         let sp = self.sp();
         let mut best: Option<(usize, Fx)> = None;
         for index in 0..sp.parts.len() {
+            if !rig.there(index) {
+                continue;
+            }
             let sh = sp.shape(index);
             let frame = rig.of(index);
             let feet = frame.world_to_local(centre);
@@ -1558,6 +1586,9 @@ impl Monster {
         let sp = self.sp();
         let mut best: Option<(usize, Fx)> = None;
         for index in 0..sp.parts.len() {
+            if !rig.there(index) {
+                continue;
+            }
             let sh = sp.shape(index);
             let frame = rig.of(index);
             let o = frame.world_to_local(from);

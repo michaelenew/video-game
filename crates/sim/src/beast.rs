@@ -370,9 +370,19 @@ pub struct Rig {
     pub facing: Mat3,
     /// Whose skeleton this is: the table every part and bone lookup reads.
     pub species: &'static Species,
+    /// **Parts with no body this frame**, a bit per part: no hurtbox, not
+    /// solid, not mountable. Zero from [`Rig::build`]; a creature's rig
+    /// (`Monster::rig`) fills it from its species' `FightDecl::buried`. The
+    /// Sandmaw under the sand.
+    pub buried: u64,
 }
 
 impl Rig {
+    /// Is this part there to be hit, stood on or walked into this frame?
+    pub fn there(&self, part: usize) -> bool {
+        self.buried & (1u64 << (part as u64 & 63)) == 0
+    }
+
     /// Place every bone. One forward pass, parents before children.
     pub fn build(species: &'static Species, origin: V3, yaw: Fx, pose: &Pose) -> Rig {
         let facing = Mat3::from_yaw(yaw);
@@ -407,6 +417,7 @@ impl Rig {
             yaw,
             facing,
             species,
+            buried: 0,
         }
     }
 
