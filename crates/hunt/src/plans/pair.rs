@@ -84,6 +84,9 @@ const SWING_GAP: u16 = 18;
 /// Frames of an opening kept back to get out in.
 const EXIT: i32 = 8;
 /// Frames after a dodge before another.
+/// A free cat this near where you would stand to punish makes the punish
+/// a walk into its rake.
+const BESIDE: Fx = Fx::ratio(35, 10);
 const DODGE_REST: u16 = 2;
 /// The pounce's tail is up by this frame of its coil.
 const FLICK: i32 = 13;
@@ -662,7 +665,14 @@ impl Pair {
                         seen.frame.saturating_sub(f) < STALE
                             && wide_flat_dist(at, me.pos).raw() > FAR.raw()
                     });
-                    down || in_sight && !marker_covers(&o, me.pos, MARGIN) || !in_sight && far
+                    // In sight and free beside the one you would hit, it
+                    // is a rake waiting for you to walk up.
+                    let to_me = sim::math::wide_normalized(flat(me.pos.sub(m.pos)));
+                    let stand = m.pos.add(to_me.scale(reach));
+                    let beside = !down
+                        && o.doing.free()
+                        && wide_flat_dist(o.pos, stand).raw() < BESIDE.raw();
+                    down || in_sight && !beside && !marker_covers(&o, me.pos, MARGIN) || !in_sight && far
                 }
             };
             if !safe {
@@ -848,7 +858,6 @@ pub fn hop_of(p: &Pair) -> Fx {
 // ---------------------------------------------------------------------------
 
 /// What the report counts about the Pair (`the-pair.md` §9).
-#[derive(Default)]
 pub struct PairTally {
     /// Frames both living cats were in the hunter's view, and the frames
     /// there were two to watch.
@@ -887,6 +896,13 @@ pub struct PairTally {
     interposes: u32,
     interposes_punished: u32,
     death_at: [Option<u32>; MAX_MONSTERS],
+    /// Where each fighter was over the last `REACTION` frames, oldest first:
+    /// whether a hit was walked into.
+    trail: [[V3; REACTION + 1]; sim::state::MAX_PLAYERS],
+    /// Hits whose marker was on screen too briefly, taken by a fighter who
+    /// walked into it in that time: theirs, as the shared rule says of a
+    /// stomp run into.
+    walked_in: u32,
     enraged: u32,
     fought: u32,
     perches: u32,
@@ -912,6 +928,10 @@ impl Tally for PairTally {
                 .find(|h| h.who == who)
                 .map(|h| Input::aimed(0, h.last.aim))
         };
+        for (i, p) in after.players.iter().enumerate() {
+            self.trail[i].rotate_left(1);
+            self.trail[i][REACTION] = p.pos;
+        }
         let alive: Vec<usize> = (0..MAX_MONSTERS)
             .filter(|s| after.monsters[*s].is_some_and(|m| m.alive()))
             .collect();
@@ -1055,8 +1075,14 @@ impl Tally for PairTally {
                     let tell = pair::SPECIES.attack(kind).startup as usize;
                     if tell >= REACTION || kind == pair::RAKE2 {
                         self.marker_hits += 1;
+                        // Where it was a reaction ago, against the mark as
+                        // it landed: outside it, it walked in since.
+                        let then = self.trail[who][0];
+                        let walked = !marker_covers(&now, then, Fx::ZERO);
                         if self.marker_seen[s] as usize >= REACTION {
                             self.marker_ok += 1;
+                        } else if walked {
+                            self.walked_in += 1;
                         } else {
                             self.unseen_markers += 1;
                         }
@@ -1099,8 +1125,11 @@ impl Tally for PairTally {
             ),
             (
                 "markers seen >= 15f".into(),
-                format!("{} of {}", self.marker_ok, self.marker_hits),
-                "must be all of them: the second clause of unanswerable".into(),
+                format!(
+                    "{} of {} ({} walked in)",
+                    self.marker_ok, self.marker_hits, self.walked_in
+                ),
+                "the rest are the second clause of unanswerable".into(),
             ),
             (
                 "feints bitten".into(),
@@ -1150,6 +1179,45 @@ impl Tally for PairTally {
 
     fn unanswerable(&self) -> u32 {
         self.unseen_markers
+    }
+}
+
+impl Default for PairTally {
+    fn default() -> PairTally {
+        PairTally {
+            both_in_view: 0,
+            two_alive: 0,
+            began_seen: [true; MAX_MONSTERS],
+            marker_seen: [0; MAX_MONSTERS],
+            hits: 0,
+            off_screen: 0,
+            marker_hits: 0,
+            marker_ok: 0,
+            unseen_markers: 0,
+            feints: 0,
+            bitten: 0,
+            feint_at: [None; MAX_MONSTERS],
+            after_feint_thrown: 0,
+            after_feint_landed: 0,
+            after_feint: [false; MAX_MONSTERS],
+            twins: 0,
+            crashed: 0,
+            twin_landed: 0,
+            twin_hit: false,
+            split: 0,
+            blind_hits: 0,
+            scars: 0,
+            interposes: 0,
+            interposes_punished: 0,
+            death_at: [None; MAX_MONSTERS],
+            trail: [[V3::ZERO; REACTION + 1]; sim::state::MAX_PLAYERS],
+            walked_in: 0,
+            enraged: 0,
+            fought: 0,
+            perches: 0,
+            dives: 0,
+            frame: 0,
+        }
     }
 }
 

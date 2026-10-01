@@ -540,6 +540,7 @@ crate::species_knobs! {
     // pincer_angle
     PincerAngle,     "pair",  "Pincer: apart round the target (turns)",  Fixed, 0, fx(1,2);
     BehindAngle,     "pair",  "Striker behind: round the target (turns)",Fixed, 0, fx(1,2);
+    FeintAngle,      "pair",  "Feints with its mate this far round (turns)",Fixed, 0, fx(1,2);
     StrainedHealth,  "pair",  "Strained below health (x)",               Fixed, 0, fx(1,1);
     // feint_share
     FeintShare,      "pair",  "A coil is a feint, fresh (%)",            Percent, 0, 100;

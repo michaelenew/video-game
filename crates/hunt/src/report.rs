@@ -1025,7 +1025,10 @@ impl Report {
                 after.players[i].pos.z.sub(at.z),
             )
             .flat_len();
+            // Health nothing connected for -- a Blood mage paying for her
+            // own spells -- is not the move's, however far away it was.
             if (m.startup as usize) < REACTION
+                && any_connected
                 && range[i].raw() > reach.raw()
                 && from_commit.raw() > reach.raw()
             {

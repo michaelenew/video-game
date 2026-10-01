@@ -31,7 +31,7 @@ use crate::state::World;
 
 use super::{
     AMBUSH, COCK, DIVE, DROP, FEINT, HEAD, HOWL, INTERPOSE, Knob, PERCH, POUNCE, RAKE, RAKE2,
-    SPECIES, TWIN, leaps,
+    SPECIES, SWAT, TWIN, leaps,
 };
 
 pub static FIGHT: FightDecl = FightDecl {
@@ -752,12 +752,17 @@ fn roles(
         if cross > 0 && !split && !bonded {
             bits |= state::CROSSING;
         }
-        // A feint is only ever thrown while the Striker is behind the
-        // target and free: the feint is a message about the other one.
-        if r == flag::HOLDER && !split && !bonded && mate.doing.free() && sees[o] {
+        // A feint is only ever thrown while the Striker is round the
+        // target and on its feet -- prowling, or already coming: the feint
+        // is a message about the other one.
+        let mate_ready = matches!(
+            mate.doing,
+            Doing::Prowl | Doing::Startup { .. } | Doing::Active { .. }
+        );
+        if r == flag::HOLDER && !split && !bonded && mate_ready && sees[o] {
             let t = me.brain.seen;
             let round = cos_between(flat(me.pos.sub(t)), flat(mate.pos.sub(t)));
-            if round.raw() <= cos_turns(Knob::BehindAngle.fx()).raw() {
+            if round.raw() <= cos_turns(Knob::FeintAngle.fx()).raw() {
                 bits |= state::MAY_FEINT;
             }
         }
@@ -1040,6 +1045,23 @@ fn moves(m: &mut Monster, ground: &crate::arena::Terrain, field: &crate::stones:
         }
     }
 
+    // **The ambush's lane is chosen as it commits**, and the cat lies along
+    // it: a lane that swung onto you halfway through its tell would be a
+    // marker that arrived late.
+    if let Doing::Startup { kind: AMBUSH, .. } = m.doing {
+        let to = flat(m.aimed_at().sub(m.pos));
+        if to.flat_len().raw() > 0 {
+            m.yaw = math::atan2_turns(to.z, to.x);
+            m.yaw_rate = Fx::ZERO;
+        }
+    }
+
+    // **The swat is thrown from planted feet**: its tell is under a
+    // reaction, so it must only ever reach what was already in reach.
+    if let Doing::Startup { kind: SWAT, .. } = m.doing {
+        m.speed = Fx::ZERO;
+    }
+
     // **The interpose run**: squared to the line as the run starts, and set
     // as soon as it gets there.
     match m.doing {
@@ -1239,7 +1261,11 @@ fn stuck(
             let far = goal.is_some_and(|g| {
                 math::wide_flat_dist(g, m.pos).raw() > Knob::LandShort.fx().mul(Fx::from_int(2)).raw()
             });
-            if far && m.speed.abs().raw() < Knob::LandShort.fx().raw() {
+            // Getting nowhere is measured by where it got, not by how hard
+            // it is walking: a cat leaning on a wall walks at a full run.
+            let moved = math::wide_flat_dist(m.pos, pos_of(lore, s));
+            let slow = moved.raw() < Knob::LandShort.fx().mul(crate::DT).raw();
+            if far && slow {
                 count += 1;
             } else {
                 count = 0;

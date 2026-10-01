@@ -37,6 +37,13 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
     let target = m.brain.seen;
     let range = math::wide_flat_dist(target, m.pos);
 
+    // Nothing that hurts is thrown at a memory: a cat that cannot see you
+    // now would be swinging at where you were, and where you are may be
+    // behind its own tell.
+    if st & state::SEES == 0 && SPECIES.attack(kind).damage > 0 {
+        return 0;
+    }
+
     // Up on a top, the dive is all it has -- and nothing reaches under the
     // lip.
     if fight::perched(m) {
@@ -165,9 +172,14 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
 /// Is the target, as last seen and led, inside this move's own range?
 fn in_reach(m: &Monster, kind: u8) -> bool {
     let a = SPECIES.attack(kind);
-    let at = m.lead_point(a.startup);
-    let d = math::wide_flat_dist(at, m.pos);
-    d.raw() >= a.ideal_range.sub(a.range_span).raw() && d.raw() <= a.ideal_range.add(a.range_span).raw()
+    // Where it will be and where it was last seen, both: a lead alone lets a
+    // move start on somebody standing well inside its shortest range.
+    let inside = |at: V3| {
+        let d = math::wide_flat_dist(at, m.pos);
+        d.raw() >= a.ideal_range.sub(a.range_span).raw()
+            && d.raw() <= a.ideal_range.add(a.range_span).raw()
+    };
+    inside(m.lead_point(a.startup)) && inside(m.brain.seen)
 }
 
 /// Where the guard runs to: on the line from its wounded mate to the target,
@@ -366,6 +378,10 @@ pub fn commit(m: &mut Monster, kind: u8, mind: &Mind) {
             };
             let far = math::wide_flat_len(to).add(Knob::AmbushPast.fx());
             m.aim_at(m.pos.add(dir.scale(far)));
+            // Its lane is chosen now and drawn now: it lies flat along it
+            // from the first frame (`fight::moves` holds it there).
+            m.yaw = math::atan2_turns(dir.z, dir.x);
+            m.yaw_rate = Fx::ZERO;
         }
         INTERPOSE => {
             if let Some(at) = interpose_point(m, mind) {
