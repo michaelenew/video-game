@@ -34,14 +34,32 @@ use crate::state::{self, Hit, MAX_PLAYERS, QUARRY, World};
 // The floor's kinds
 // ---------------------------------------------------------------------------
 
-/// A web patch: a disc of sticky floor where a glob landed.
+/// A web patch: a disc of sticky floor where a glob landed. A crouch walk
+/// through it; it roots nobody.
 pub const PATCH: u8 = 0;
 /// A strand: a line a web line left behind, a shin's height off the floor.
+/// It slows nobody; what it does to a run is her rules' (`trip`).
 pub const STRAND: u8 = 1;
+/// The glob's catch: a root under the feet of whoever a web shot struck, for
+/// `Life` frames -- less every attack they throw (`cut_free`).
+pub const GLOB: u8 = 2;
+/// Fire on the web: a patch or a glob burning away.
+pub const FLASH: u8 = 3;
+/// Fire along a strand.
+pub const FLARE: u8 = 4;
 
-pub const HAZARDS: [HazardDecl; 2] = [
-    HazardDecl::disc("web patch").reaching(reach::FIGHTERS),
-    HazardDecl::strand("strand").reaching(reach::FIGHTERS),
+pub const HAZARDS: [HazardDecl; 5] = [
+    HazardDecl::disc("web patch")
+        .reaching(reach::FIGHTERS)
+        .ignites_into(FLASH),
+    HazardDecl::strand("strand")
+        .reaching(reach::FIGHTERS)
+        .ignites_into(FLARE),
+    HazardDecl::disc("glob")
+        .reaching(reach::FIGHTERS)
+        .ignites_into(FLASH),
+    HazardDecl::disc("burning web").burning(),
+    HazardDecl::strand("burning strand").burning(),
 ];
 
 // ---------------------------------------------------------------------------
@@ -55,6 +73,18 @@ pub mod word {
     /// One word per sac site, in site order: the clock in the low half, its
     /// state ([`super::sac`]) in the next byte.
     pub const SAC0: usize = 1;
+    /// The web line under way: where it set off from, in centimetres
+    /// (`lore::halves`).
+    pub const LINE_FROM: usize = 7;
+    /// Fighters the line under way has struck, a bit each.
+    pub const LINE_STRUCK: usize = 8;
+    /// Each fighter's action last frame, a byte each (`Action::tag`): an
+    /// attack starting is one that was not under way.
+    pub const LAST_ACTION: usize = 9;
+    /// Fighters a glob holds, a bit each, and the frames they were webbed
+    /// down from the air for, in the high half: the glob is laid where they
+    /// land.
+    pub const WEBBED: usize = 10;
 }
 
 /// The bits of [`word::FLAGS`].
@@ -87,12 +117,15 @@ pub mod body {
     /// this frame (the Brood guard). Bit 24: enraged.
     pub const SACS: usize = 0;
     /// The stab under way: its leg plus one (low byte), stabs left in the
-    /// flurry (next byte), legs already used in it (next).
+    /// flurry (next byte), legs already used in it (next). The top byte is
+    /// the web anchors a line could reach from where she stands, a bit each
+    /// ([`super::anchors_clear`]).
     pub const STAB: usize = 1;
     /// The Brood guard: the fighter it names plus one (low byte), and the
     /// frames it has left (high half).
     pub const GUARD: usize = 2;
-    /// Fighters a web glob has rooted, a bit each.
+    /// Fighters a web glob has rooted, a bit each (low byte); the screech's
+    /// appetite above it (`mind::work_out_recall`).
     pub const WEBBED: usize = 3;
 
     pub const POPPED_SHIFT: u32 = 8;
@@ -106,7 +139,7 @@ pub mod body {
 
 pub static FIGHT: FightDecl = FightDecl {
     layout: Layout {
-        hazards: 10,
+        hazards: 12,
         noises: 0,
         objectives: 0,
         own: 6,
@@ -117,11 +150,14 @@ pub static FIGHT: FightDecl = FightDecl {
     // The slam lays her abdomen down on whoever is under it.
     lands_on_bodies: true,
     frame: Some(frame),
+    landed: Some(landed),
+    signs: Some(signs),
     appetite: Some(super::mind::appetite),
     commit: Some(super::mind::commit),
     struck: Some(struck),
     hide: Some(hide),
     presence: Some(presence),
+    repose: Some(super::legs::repose),
     ..FightDecl::PLAIN
 };
 
@@ -321,12 +357,18 @@ pub fn frame(w: &mut World) {
         set_up(w, &mut m);
     }
     if m.alive() {
+        flurry(&mut m);
         take_in_pops(w, &mut m);
         run_the_clocks(w, &mut m);
         guard(w, &mut m);
         arc(w, &mut m);
+        web_shot(w, &mut m);
+        web_line(w, &mut m);
+        anchors_clear(w, &mut m);
         super::mind::work_out_recall(&mut m, &w.critters, &w.players);
     }
+    webbed(w, &mut m);
+    strands(w);
     w.monsters[0] = Some(m);
 }
 
@@ -367,6 +409,40 @@ fn reset_sac(m: &mut Monster, i: usize) {
         m.breaks[slot] = Knob::SacHealth.raw().max(1);
     }
     m.own[body::SACS] &= !(1 << i);
+}
+
+/// **The flurry**: on the last frame of a stab's hit, if more are due,
+/// another leg -- one not yet used, and sound -- winds up at once, `FlurryEvery`
+/// frames behind it. Out of a stab altogether, the stab's words are cleared.
+fn flurry(m: &mut Monster) {
+    use super::{FLURRY, STAB};
+    let kind = m.doing.attacking();
+    if !matches!(kind, Some(STAB | FLURRY)) {
+        m.own[body::STAB] = 0;
+        return;
+    }
+    let Doing::Active { left: 0, .. } = m.doing else {
+        return;
+    };
+    let words = m.own[body::STAB] as u32;
+    let left = (words >> 8) & 0xFF;
+    if left == 0 {
+        return;
+    }
+    let windup = Knob::FlurryEvery.raw().max(1) as u16;
+    let lead = m.lead_point(windup);
+    let Some(leg) = super::mind::stab_leg(m, lead) else {
+        return;
+    };
+    let used = (words >> 16) & 0xFF | 1 << leg;
+    m.own[body::STAB] = (leg as i32 + 1) | ((left - 1) << 8 | used << 16) as i32;
+    let disc = super::mind::stab_disc(m, lead);
+    m.aim_at(disc);
+    m.doing = Doing::Startup {
+        kind: FLURRY,
+        left: windup,
+    };
+    m.hit_used = false;
 }
 
 /// The sacs her `struck` hook popped since last frame: scars, for good.
@@ -568,6 +644,536 @@ fn arc(w: &mut World, m: &mut Monster) {
                 .mul(Knob::EnrageThink.fx())
                 .to_int()
                 .max(0) as u16;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The web
+// ---------------------------------------------------------------------------
+
+/// Her spinnerets: the tip of the abdomen, at the middle of its height.
+pub fn spinnerets(m: &Monster) -> V3 {
+    let sh = m.sp().shape(super::ABDOMEN_PART);
+    let mid = sh.min.y.add(sh.max.y).mul(Fx::ratio(1, 2));
+    m.world_of(super::ABDOMEN_PART, V3::new(sh.min.x, mid, Fx::ZERO))
+}
+
+/// The world as a scene to ask a straight line through: the arena and what
+/// is raised on it, the stones (and a planted shield, which is one). No
+/// bodies.
+fn scene_of<R>(w: &World, ask: impl FnOnce(&crate::aim::Scene) -> R) -> R {
+    let field = crate::stones::gather(&w.players);
+    let ground = w.terrain();
+    let fighters = w.players;
+    let effects = w.effects;
+    let critters = w.critters;
+    let scene = crate::aim::Scene {
+        stones: &field,
+        players: &fighters,
+        effects: &effects,
+        quarry: &[None; crate::monster::MAX_MONSTERS],
+        critters: &critters,
+        arena: &ground,
+    };
+    ask(&scene)
+}
+
+/// **Where a glob lands**: its aim, unless a solid stands between the
+/// spinnerets and it -- a pillar, a stone, a planted shield -- in which case
+/// it lands at the solid. The answer to the web shot, and the one the
+/// telegraph and the hit both use: on the hit's first frame the aim point is
+/// moved there, so the disc drawn through the windup's last frame and the
+/// volume that lands are the same disc.
+pub fn glob_lands(w: &World, m: &Monster) -> V3 {
+    let aim = m.aimed_at();
+    let a = m.sp().attack(super::WEB_SHOT);
+    let from = spinnerets(m);
+    let to = V3::new(aim.x, a.hit_high.mul(Fx::ratio(1, 2)), aim.z);
+    let hit = scene_of(w, |scene| {
+        crate::aim::first_along(
+            crate::aim::Path { from, to },
+            Knob::GlobRadius.fx().mul(Fx::ratio(1, 2)),
+            state::NOBODY,
+            scene,
+            crate::aim::Targets::none().stones().terrain(),
+        )
+    });
+    match hit {
+        Some(c) => {
+            let along = math::wide_normalized(to.sub(from));
+            let at = from.add(along.scale(c.dist()));
+            // On the near face of what stopped it, on the floor.
+            let back = V3::new(along.x, Fx::ZERO, along.z).scale(Knob::GlobRadius.fx());
+            V3::new(at.x.sub(back.x), Fx::ZERO, at.z.sub(back.z))
+        }
+        None => aim,
+    }
+}
+
+/// The web shot, as its hit comes out: the glob stopped by whatever stands
+/// in its way, and a patch where it lands.
+fn web_shot(w: &mut World, m: &mut Monster) {
+    let a = m.sp().attack(super::WEB_SHOT);
+    let Doing::Active { kind, left } = m.doing else {
+        return;
+    };
+    if kind != super::WEB_SHOT || left != a.active {
+        return;
+    }
+    let at = glob_lands(w, m);
+    m.aim_at(at);
+    crate::hazard::place(
+        &mut w.lore,
+        crate::hazard::Hazard::disc(PATCH, at, Knob::PatchRadius.fx()),
+    );
+}
+
+/// **A glob landed on somebody** (`FightDecl::landed`): rooted where they
+/// stand -- a glob under their feet -- or, caught in the air, webbed down to
+/// the floor and rooted where they land.
+pub fn landed(w: &mut World, _slot: usize, who: usize, kind: u8, guarded: bool) {
+    if kind != super::WEB_SHOT || guarded || who >= MAX_PLAYERS {
+        return;
+    }
+    let held = w.lore.word(word::WEBBED) | 1 << who;
+    w.lore.set_word(word::WEBBED, held);
+}
+
+/// The webbed: brought down out of the air, a glob laid under them once they
+/// are on the floor, and let go when it is gone. Every attack they throw cuts
+/// `CutFree` frames off it.
+fn webbed(w: &mut World, m: &mut Monster) {
+    let mut held = w.lore.word(word::WEBBED);
+    let mut last = w.lore.word(word::LAST_ACTION);
+    let mut caught = 0u32;
+    for who in 0..MAX_PLAYERS {
+        let p = w.players[who];
+        let tag = p.action.tag() & 0xFF;
+        let was = (last >> (8 * who)) & 0xFF;
+        let started = matches!(p.action, state::Action::Startup { .. }) && tag != was;
+        last = (last & !(0xFF << (8 * who))) | tag << (8 * who);
+        let glob = crate::hazard::all(&w.lore)
+            .find(|(_, h)| h.index() == GLOB && h.state == who as u8 + 1)
+            .map(|(i, _)| i);
+        if held & 1 << who != 0 {
+            if p.health <= 0 {
+                held &= !(1 << who);
+            } else if !p.grounded {
+                // Webbed down: out of the air, at the glob's own speed.
+                let down = Knob::WebDown.fx().neg();
+                if w.players[who].vel.y.raw() > down.raw() {
+                    w.players[who].vel.y = down;
+                }
+            } else {
+                held &= !(1 << who);
+                let mut g = crate::hazard::Hazard::disc(
+                    GLOB,
+                    V3::new(p.pos.x, Fx::ZERO, p.pos.z),
+                    crate::tuning::body_radius(),
+                );
+                g.state = who as u8 + 1;
+                crate::hazard::place(&mut w.lore, g);
+            }
+        }
+        if let Some(i) = glob {
+            caught |= 1 << who;
+            // Cutting free: each attack thrown takes its frames off the root.
+            if started {
+                let mut g = crate::hazard::get(&w.lore, i);
+                let life = crate::hazard::stat(m.sp(), GLOB, crate::hazard::HazardField::Life);
+                let aged = g.age as i32 + Knob::CutFree.raw().max(0);
+                if aged >= life {
+                    crate::hazard::clear(&mut w.lore, i);
+                    caught &= !(1 << who);
+                } else {
+                    g.age = aged as u16;
+                    crate::hazard::set(&mut w.lore, i, g);
+                }
+            }
+        }
+    }
+    w.lore.set_word(word::WEBBED, held);
+    w.lore.set_word(word::LAST_ACTION, last);
+    m.own[body::WEBBED] = (m.own[body::WEBBED] & !0xFF) | (caught | held) as i32;
+}
+
+/// **Which web anchors a line could reach from where she stands**: in reach
+/// and with nothing solid on the way -- a pillar is the one place a line
+/// cannot cross. Kept on her body for the brain (`mind::anchor_for`).
+fn anchors_clear(w: &World, m: &mut Monster) {
+    let reach = Knob::LineReach.fx();
+    let from = V3::new(m.pos.x, crate::tuning::body_height(), m.pos.z);
+    let mut bits = 0u32;
+    for (k, site) in w
+        .arena()
+        .sites
+        .iter()
+        .filter(|s| s.name == "anchor")
+        .take(8)
+        .enumerate()
+    {
+        let (at, _) = site.at(Fx::ZERO);
+        let to = V3::new(at.x, from.y, at.z);
+        let near = math::wide_flat_dist(at, m.pos).raw() <= reach.raw();
+        if near && scene_of(w, |scene| crate::aim::line_clear(from, to, scene)) {
+            bits |= 1 << k;
+        }
+    }
+    m.own[body::STAB] = (m.own[body::STAB] & 0x00FF_FFFF) | (bits << 24) as i32;
+}
+
+/// The web line: through its windup she turns her back to the anchor; on
+/// the hit she is reeled across, abdomen first, at `LineSpeed`, striking
+/// whoever is in her lane, until she reaches the anchor's wall or the line's
+/// reach -- and two strands stay behind her.
+fn web_line(w: &mut World, m: &mut Monster) {
+    let anchor = m.aimed_at();
+    match m.doing {
+        Doing::Startup {
+            kind: super::WEB_LINE,
+            left,
+        } => {
+            // Her back to it.
+            let away = V3::new(m.pos.x.sub(anchor.x), Fx::ZERO, m.pos.z.sub(anchor.z));
+            if math::wide_flat_len(away).raw() > 0 {
+                let want = math::atan2_turns(away.z, away.x);
+                let err = math::wrap_turns(want.sub(m.yaw));
+                let step = m.sp().turn_rate_max().mul(crate::DT);
+                m.yaw = m.yaw.add(err.clamp(step.neg(), step));
+            }
+            if left == m.sp().attack(super::WEB_LINE).startup {
+                let from =
+                    crate::lore::halves(crate::lore::to_cm(m.pos.x), crate::lore::to_cm(m.pos.z));
+                w.lore.set_word(word::LINE_FROM, from);
+                w.lore.set_word(word::LINE_STRUCK, 0);
+            }
+        }
+        Doing::Active {
+            kind: super::WEB_LINE,
+            ..
+        } => {
+            let from = w.lore.word(word::LINE_FROM);
+            let start = V3::new(
+                crate::lore::from_cm(crate::lore::lo(from)),
+                Fx::ZERO,
+                crate::lore::from_cm(crate::lore::hi(from)),
+            );
+            let to = V3::new(anchor.x.sub(m.pos.x), Fx::ZERO, anchor.z.sub(m.pos.z));
+            let left_to_go = math::wide_flat_len(to);
+            let step = Knob::LineSpeed.fx().mul(crate::DT);
+            let stop = m.sp().margin();
+            let gone = math::wide_flat_dist(m.pos, start);
+            let before = m.pos;
+            if left_to_go.raw() > stop.add(step).raw() && gone.raw() < Knob::LineReach.fx().raw() {
+                m.pos = m.pos.add(math::wide_normalized(to).scale(step));
+                m.speed = Fx::ZERO;
+                line_strikes(w, m, before);
+            } else {
+                // Arrived: the strands, and the recovery.
+                lay_strands(w, start, m.pos);
+                m.doing = Doing::Recovery {
+                    kind: super::WEB_LINE,
+                    left: m.sp().attack(super::WEB_LINE).recovery,
+                };
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Whoever her body passed through this frame, in the line's lane, once a
+/// line: knocked down.
+fn line_strikes(w: &mut World, m: &Monster, from: V3) {
+    let a = m.sp().attack(super::WEB_LINE);
+    let lane = Knob::LineLane.fx().add(crate::tuning::body_radius());
+    let mut struck = w.lore.word(word::LINE_STRUCK);
+    for i in 0..MAX_PLAYERS {
+        let p = w.players[i];
+        if struck & 1 << i != 0 || p.health <= 0 || p.action.invulnerable() {
+            continue;
+        }
+        let gap = math::flat_segment_gap(p.pos, from, m.pos);
+        if gap.raw() > lane.raw() || p.pos.y.raw() > a.hit_high.raw().max(m.sp().scale().raw()) {
+            continue;
+        }
+        struck |= 1 << i;
+        let away = V3::new(p.pos.x.sub(m.pos.x), Fx::ZERO, p.pos.z.sub(m.pos.z));
+        let dir = if math::wide_flat_len(away).raw() > 0 {
+            math::wide_normalized(away)
+        } else {
+            V3::from_turns(m.yaw)
+        };
+        let facing_it =
+            p.facing.dot(dir.scale(Fx::ONE.neg())).raw() >= crate::tuning::guard_arc_cos().raw();
+        let guarding = !a.unblockable && p.action.guarding() && facing_it;
+        state::apply_hit(
+            &mut w.players[i],
+            Hit {
+                damage: a.damage,
+                hitstun: a.hitstun,
+                blockstun: a.blockstun,
+                knockback: a.knockback,
+                launch: a.launch,
+                grabs: 0,
+                by: QUARRY,
+                dir,
+                blocked: guarding,
+                parried: false,
+                interrupts: true,
+            },
+        );
+    }
+    w.lore.set_word(word::LINE_STRUCK, struck);
+}
+
+/// Two strands along the line she crossed, `StrandApart` apart, from where
+/// she set off to where she stopped.
+fn lay_strands(w: &mut World, from: V3, to: V3) {
+    let along = V3::new(to.x.sub(from.x), Fx::ZERO, to.z.sub(from.z));
+    if math::wide_flat_len(along).raw() <= 0 {
+        return;
+    }
+    let dir = math::wide_normalized(along);
+    let side =
+        V3::new(dir.z.neg(), Fx::ZERO, dir.x).scale(Knob::StrandApart.fx().mul(Fx::ratio(1, 2)));
+    for s in [side, side.scale(Fx::ONE.neg())] {
+        crate::hazard::place(
+            &mut w.lore,
+            crate::hazard::Hazard::strand(STRAND, from.add(s), to.add(s), Knob::StrandHalf.fx()),
+        );
+    }
+}
+
+/// **The strands**: crossing one faster than `TripSpeed` on the floor, not
+/// crouched, trips you; any blow cuts one.
+fn strands(w: &mut World) {
+    let sp = &SPECIES;
+    let high = crate::hazard::stat_fx(sp, STRAND, crate::hazard::HazardField::Height);
+    let lines: [Option<(usize, V3, V3)>; crate::hazard::MAX_HAZARDS] = {
+        let mut out = [None; crate::hazard::MAX_HAZARDS];
+        for (k, (i, h)) in crate::hazard::all(&w.lore)
+            .filter(|(_, h)| h.index() == STRAND)
+            .enumerate()
+        {
+            if k < out.len() {
+                let a = h.centre();
+                let b = V3::new(
+                    crate::lore::from_cm(h.to[0]),
+                    Fx::ZERO,
+                    crate::lore::from_cm(h.to[1]),
+                );
+                out[k] = Some((i, V3::new(a.x, Fx::ZERO, a.z), b));
+            }
+        }
+        out
+    };
+    let trip = SPECIES.attack(super::HATCH);
+    for (i, a, b) in lines.iter().flatten().copied() {
+        let half = crate::hazard::get(&w.lore, i).radius();
+        // Any blow cuts it.
+        let cut = w.players.iter().any(|p| {
+            state::hitbox(p).is_some_and(|hb| {
+                let mid = hb.centre();
+                let low = hb.from.y.min(hb.to.y).sub(hb.radius);
+                low.raw() <= high.raw()
+                    && math::flat_segment_gap(mid, a, b).raw() <= hb.radius.add(half).raw()
+            })
+        });
+        if cut {
+            crate::hazard::clear(&mut w.lore, i);
+            continue;
+        }
+        for who in 0..MAX_PLAYERS {
+            let p = w.players[who];
+            if p.health <= 0
+                || p.crouching
+                || !p.grounded
+                || p.pos.y.raw() > high.raw()
+                || p.action.stunned()
+            {
+                continue;
+            }
+            let speed = V3::new(p.vel.x, Fx::ZERO, p.vel.z).flat_len();
+            if speed.raw() <= Knob::TripSpeed.fx().raw() {
+                continue;
+            }
+            let was = p.pos.sub(p.vel.scale(crate::DT));
+            if !crosses(was, p.pos, a, b, half) {
+                continue;
+            }
+            let dir = math::wide_normalized(V3::new(p.vel.x, Fx::ZERO, p.vel.z));
+            state::apply_hit(
+                &mut w.players[who],
+                Hit {
+                    damage: Knob::TripDamage.raw(),
+                    hitstun: Knob::TripStagger.raw().max(0) as u16,
+                    blockstun: 0,
+                    knockback: Fx::ZERO,
+                    launch: Fx::ZERO,
+                    grabs: 0,
+                    by: QUARRY,
+                    dir,
+                    blocked: false,
+                    parried: false,
+                    interrupts: true,
+                },
+            );
+            let _ = trip;
+        }
+    }
+}
+
+/// Does a step from `p` to `q` cross the line from `a` to `b` (within `half`
+/// of it, in the floor plane)?
+pub fn crosses(p: V3, q: V3, a: V3, b: V3, half: Fx) -> bool {
+    let side = |x: V3| {
+        let ab = V3::new(b.x.sub(a.x), Fx::ZERO, b.z.sub(a.z));
+        let ax = V3::new(x.x.sub(a.x), Fx::ZERO, x.z.sub(a.z));
+        ab.x.mul(ax.z).sub(ab.z.mul(ax.x))
+    };
+    let (sp, sq) = (side(p), side(q));
+    let opposite = (sp.raw() >= 0) != (sq.raw() >= 0);
+    // Along the strand, not past its ends.
+    let mid = math::lerp3(p, q, Fx::ratio(1, 2));
+    opposite
+        && math::flat_segment_gap(mid, a, b).raw() <= half.add(crate::tuning::body_radius()).raw()
+}
+
+// ---------------------------------------------------------------------------
+// What is drawn on the floor
+// ---------------------------------------------------------------------------
+
+/// **What she draws on the floor besides her telegraphs** (`FightDecl::signs`,
+/// `sim::sign`): a ring under every red sac where its brood will land, the
+/// web shot's lane from the spinnerets to where the glob will land, the web
+/// line's lane and the anchor it goes to, the slam's footprint through the
+/// screech that always leads to it, and a shadow line under every strand.
+pub fn signs(w: &World, out: &mut crate::sign::Signs) {
+    use crate::sign::{Says, Sign};
+    let Some(m) = w.monsters[0].filter(|m| m.species == SPECIES.id && m.alive()) else {
+        return;
+    };
+    // The web, first: it is what comes from behind you.
+    match m.doing {
+        Doing::Startup {
+            kind: super::WEB_SHOT,
+            left,
+        } => {
+            let a = m.sp().attack(super::WEB_SHOT);
+            let fill = Fx::ONE.sub(Fx::ratio(left as i32, a.startup.max(1) as i32));
+            let at = glob_lands(w, &m);
+            let from = spinnerets(&m);
+            let from = V3::new(from.x, Fx::ZERO, from.z);
+            let along = V3::new(at.x.sub(from.x), Fx::ZERO, at.z.sub(from.z));
+            let len = math::wide_flat_len(along);
+            if len.raw() > 0 {
+                out.push(
+                    Sign::strip(
+                        Says::Coming,
+                        from,
+                        math::wide_normalized(along),
+                        len,
+                        a.hit_radius.add(a.hit_radius),
+                    )
+                    .filled(fill),
+                );
+            }
+        }
+        Doing::Startup {
+            kind: super::WEB_LINE,
+            left,
+        }
+        | Doing::Active {
+            kind: super::WEB_LINE,
+            left,
+        } => {
+            let a = m.sp().attack(super::WEB_LINE);
+            let live = matches!(m.doing, Doing::Active { .. });
+            let fill = if live {
+                Fx::ONE
+            } else {
+                Fx::ONE.sub(Fx::ratio(left as i32, a.startup.max(1) as i32))
+            };
+            let anchor = m.aimed_at();
+            let from = V3::new(m.pos.x, Fx::ZERO, m.pos.z);
+            let along = V3::new(anchor.x.sub(from.x), Fx::ZERO, anchor.z.sub(from.z));
+            let len = math::wide_flat_len(along)
+                .sub(m.sp().margin())
+                .min(Knob::LineReach.fx())
+                .max(Fx::ZERO);
+            if len.raw() > 0 {
+                let says = if live { Says::Live } else { Says::Coming };
+                let lane = Knob::LineLane.fx();
+                out.push(
+                    Sign::strip(
+                        says,
+                        from,
+                        math::wide_normalized(along),
+                        len,
+                        lane.add(lane),
+                    )
+                    .filled(fill),
+                );
+            }
+            out.push(Sign::ring(Says::Stops, anchor, Knob::StrandApart.fx()));
+        }
+        // The screech always leads to the slam: its footprint, faint, the
+        // whole scream long -- the hit test's own answer, asked of her as the
+        // slam's hit would find her.
+        Doing::Startup {
+            kind: super::SCREECH,
+            ..
+        }
+        | Doing::Active {
+            kind: super::SCREECH,
+            ..
+        } => {
+            let mut crash = m;
+            crash.doing = Doing::Active {
+                kind: super::SLAM,
+                left: m.sp().attack(super::SLAM).active,
+            };
+            if let Some((at, r, _, _)) = crash.hit_volume() {
+                out.push(Sign::disc(Says::Faint, at, r.add(r)));
+            }
+        }
+        _ => {}
+    }
+    // A ring under every red sac: where its brood will land, closing as it
+    // ripens.
+    if !enraged(&m) {
+        let r = ripen(w);
+        let red_for = Knob::SacRed.raw().max(1);
+        let splash = m.sp().attack(super::HATCH).hit_radius;
+        for i in 0..SAC_COUNT {
+            if !red(w, i) {
+                continue;
+            }
+            let (_, clock) = site(w, i);
+            let fill = Fx::ratio((clock - (r - red_for)).clamp(0, red_for), red_for);
+            out.push(Sign::ring(Says::Coming, landing(w, &m, i), splash.add(splash)).filled(fill));
+        }
+    }
+    // A shadow line under every strand.
+    for (_, h) in crate::hazard::all(&w.lore).filter(|(_, h)| h.index() == STRAND) {
+        let a = h.centre();
+        let a = V3::new(a.x, Fx::ZERO, a.z);
+        let b = V3::new(
+            crate::lore::from_cm(h.to[0]),
+            Fx::ZERO,
+            crate::lore::from_cm(h.to[1]),
+        );
+        let along = b.sub(a);
+        let len = math::wide_flat_len(along);
+        if len.raw() > 0 {
+            out.push(Sign::strip(
+                Says::Faint,
+                a,
+                math::wide_normalized(along),
+                len,
+                h.radius().add(h.radius()),
+            ));
         }
     }
 }

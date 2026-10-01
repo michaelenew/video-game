@@ -449,6 +449,16 @@ pub struct FightDecl {
     /// fight -- the Sandmaw's broken tooth ring, which shrinks its rise-bite.
     /// Read by the hit volume, so the telegraph and the hit change together.
     pub radius: Option<fn(&crate::monster::Monster, u8, Fx) -> Fx>,
+
+    // ---- a body with more legs than a clip can say ----
+    /// **Its own say on the pose**, after the shared layers: handed the
+    /// creature and the pose so far, it returns the pose to build the rig
+    /// from. For what the baked clips cannot know -- which of eight legs a
+    /// stab was given to and where it lands, a side sitting low on two broken
+    /// legs with every foot kept where it stood. A pure function of the
+    /// creature, as the pose is. `None` is the pose as it is. The
+    /// Broodmother's legs.
+    pub repose: Option<fn(&crate::monster::Monster, crate::beast::Pose) -> crate::beast::Pose>,
 }
 
 /// Something a species draws beyond its hazards and its telegraph.
@@ -570,6 +580,7 @@ impl FightDecl {
         hearing: None,
         from_inside: None,
         radius: None,
+        repose: None,
     };
 }
 

@@ -31,6 +31,7 @@
 
 pub(crate) mod baked;
 pub mod fight;
+pub mod legs;
 pub mod mind;
 mod tuned;
 
@@ -650,6 +651,8 @@ crate::species_knobs! {
     RecallAppetite,  "mind",    "Recall(m): per brood-metre from her / cap", Int, 0, 400;
     ThreatAppetite,  "mind",    "Recall(m): per fighter at a sac",       Int,   0, 4000;
     LineAppetite,    "mind",    "The web line, at a target far off",     Int,   0, 4000;
+    ListRoll,        "legs",    "Listing, she rolls toward it (turns)",  Fixed, 0, fx(1,8);
+    StabLift,        "stab",    "The stabbing foot rises to",            Fixed, 0, fx(6,1);
 }
 
 const OWN: &[KnobDecl] = Knob::DECLS;

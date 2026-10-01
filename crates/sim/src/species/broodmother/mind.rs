@@ -74,8 +74,10 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         WEB_SHOT => {
             let q = mind.quarry.get(m.brain.target as usize);
             let aloft = q.is_some_and(|q| q.pos.y.raw() > crate::tuning::body_radius().raw());
-            score + if aloft { Knob::AloftAppetite.raw() } else { 0 }
+            let up = if aloft { Knob::AloftAppetite.raw() } else { 0 };
+            score + rooted(m, score) + up
         }
+        LUNGE => score + rooted(m, score),
         WEB_LINE => {
             let far = math::wide_flat_dist(m.brain.seen, m.pos).raw() > Knob::LineFrom.fx().raw();
             if !far || anchor_for(m, mind).is_none() {
@@ -91,6 +93,19 @@ pub fn appetite(m: &Monster, kind: u8, score: i32, mind: &Mind) -> i32 {
         // She cannot stab with no sound leg near enough.
         STAB if stab_leg(m, m.lead_point(m.sp().attack(STAB).startup)).is_none() => 0,
         _ => score,
+    }
+}
+
+/// **rooted(m)**: the lunge and a second web shot, against a target a glob
+/// holds -- the shared `combo_appetite`, which reads a stunned target, and a
+/// fighter rooted by the floor is not stunned. Nothing for a move the shared
+/// terms gave nothing: one that does not reach them.
+fn rooted(m: &Monster, score: i32) -> i32 {
+    let held = m.own[body::WEBBED] & 0b11;
+    if score > 0 && held & (1 << m.brain.target.min(1)) != 0 {
+        m.sp().combo_appetite()
+    } else {
+        0
     }
 }
 
@@ -136,18 +151,22 @@ pub fn stab_disc(m: &Monster, at: V3) -> V3 {
 /// Read off the arena's sites named `anchor`.
 pub fn anchor_for(m: &Monster, mind: &Mind) -> Option<V3> {
     let lane = Knob::LineLane.fx().add(crate::tuning::body_radius());
-    let reach = Knob::LineReach.fx();
     let target = m.brain.seen;
     let near = math::wide_flat_dist(target, m.pos);
+    // Which anchors her frame found a clear line to (`fight::anchors_clear`).
+    let clear = (m.own[body::STAB] as u32) >> 24;
     mind.ground
         .sites
         .iter()
         .filter(|s| s.name == "anchor")
-        .map(|s| s.at(Fx::ZERO).0)
+        .take(8)
+        .enumerate()
+        .filter(|(k, _)| clear & 1 << k != 0)
+        .map(|(_, s)| s.at(Fx::ZERO).0)
         .filter(|a| {
             let len = math::wide_flat_dist(*a, m.pos);
             let gap = math::flat_segment_gap(target, m.pos, *a);
-            len.raw() <= reach.raw() && gap.raw() <= lane.raw() && near.raw() < len.raw()
+            gap.raw() <= lane.raw() && near.raw() < len.raw()
         })
         .max_by_key(|a| math::wide_flat_dist(*a, m.pos).raw())
 }

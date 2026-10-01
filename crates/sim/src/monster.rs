@@ -791,7 +791,11 @@ impl Monster {
         if self.doing.free() {
             p = p.over(&self.tracking_layer(), Fx::ONE);
         }
-        p
+        // Its species' own say, last (`FightDecl::repose`).
+        match self.sp().fight.repose {
+            Some(f) => f(self, p),
+            None => p,
+        }
     }
 
     /// The baked clip underneath everything else.
