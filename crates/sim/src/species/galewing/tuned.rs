@@ -7,7 +7,7 @@
 //! the Galewing's own, then one row per move (`oven::MonsterField`).
 
 #[rustfmt::skip]
-pub const KNOBS: [i32; 450] = [
+pub const KNOBS: [i32; 449] = [
            65536, // galewing.size_(x) = 1
             9000, // galewing.health = 9000
              500, // galewing.breakable_part_health = 500
@@ -96,9 +96,8 @@ pub const KNOBS: [i32; 450] = [
           655360, // galewing_·_flight.taking_off_or_carrying,_climbs_at_(m/s) = 10
           393216, // galewing_·_perch.comes_in_over_the_perch_this_high_(m) = 6
           786432, // galewing_·_perch.drops_onto_the_perch_from_within_(m) = 12
-          720896, // galewing_·_flight.within_this_of_the_perch_(m)... = 11
-          196608, // galewing_·_flight....flies_no_lower_than_its_top_and_(m) = 3
-           98304, // galewing_·_flight....looking_this_far_ahead_(s) = 1.5
+          196608, // galewing_·_flight.clears_what_is_under_it_by_(m) = 3
+           98304, // galewing_·_flight....looking_this_far_ahead_round_its_circle_(s) = 1.5
           393216, // galewing_·_perch.its_ring_on_the_tower_top,_across_(m) = 6
           196608, // galewing_·_downwash.each_lee_drawn_this_wide_(m) = 3
            10945, // galewing_·_mind.decides_only_with_the_target_this_near_its_heading_(turns) = 0.167
@@ -110,7 +109,7 @@ pub const KNOBS: [i32; 450] = [
           851968, // galewing_·_mind.desperate,_circles_at_(m) = 13
             9830, // galewing_·_mind.stoops_twice_below_health_(x) = 0.15
               15, // galewing_·_stoop.its_aim_locks_this_many_frames_before = 15
-          393216, // galewing_·_stoop.its_aim_follows_you_at_(m/s) = 6
+          196608, // galewing_·_stoop.its_aim_follows_you_at_(m/s) = 3
               30, // galewing_·_stoop.recovery's_last_frames_are_the_lift = 30
            78643, // galewing_·_talons.talons_clear_(m) = 1.2
          1572864, // galewing_·_talons.lane_length_(m) = 24

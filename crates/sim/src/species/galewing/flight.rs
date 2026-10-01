@@ -222,12 +222,11 @@ pub fn circle_point(centre: V3, at: V3, height: Fx) -> V3 {
     )
 }
 
-/// **Round its circle** at a height and a speed -- never lower, within
-/// `TowerClear` of the perch, than `TowerOver` above its top: a bird
-/// swooping or gliding low does not fly through the tower.
+/// **Round its circle** at a height and a speed -- never lower than
+/// `TowerOver` above whatever is under it now or round the circle ahead of
+/// it, as far as it flies in `TowerLook` seconds: a bird swooping or gliding
+/// low climbs over the rock face rather than through it, beating hard.
 fn round(w: &World, f: &mut Flight, centre: V3, h: Fx, speed: Fx, lim: &Limits) {
-    // Looking ahead round its circle as far as it flies in `TowerLook`
-    // seconds -- it cannot climb out of the way in a frame.
     let r = Knob::CircleRadius.fx();
     let out = V3::new(f.pos.x.sub(centre.x), Fx::ZERO, f.pos.z.sub(centre.z));
     let now = if math::wide_flat_len(out).raw() > 0 {
@@ -242,29 +241,25 @@ fn round(w: &World, f: &mut Flight, centre: V3, h: Fx, speed: Fx, lim: &Limits) 
     } else {
         Fx::ZERO
     };
-    let near = |top: V3| {
-        math::wide_flat_dist(f.pos, top).raw() < Knob::TowerClear.fx().raw()
-            || (1..=LOOKS as i32).any(|k| {
-                let at = now.add(reach.mul(Fx::from_int(k)).div(Fx::from_int(LOOKS as i32)));
-                let p = centre.add(V3::from_turns(at).scale(r));
-                math::wide_flat_dist(p, top).raw() < Knob::TowerClear.fx().raw()
-            })
-    };
-    match fight::perch_top(w) {
-        // Beating hard to clear it.
-        Some(top) if near(top) => {
-            let h = h.max(top.y.add(Knob::TowerOver.fx()));
-            let up = Limits {
-                climb: lim.climb.max(Knob::LiftClimb.fx()),
-                ..*lim
-            };
-            f.steer(circle_point(centre, f.pos, h), speed, &up);
-        }
-        _ => f.steer(circle_point(centre, f.pos, h), speed, lim),
+    let mut floor = fight::ground_at(w, f.pos);
+    for k in 1..=LOOKS as i32 {
+        let at = now.add(reach.mul(Fx::from_int(k)).div(Fx::from_int(LOOKS as i32)));
+        let p = centre.add(V3::from_turns(at).scale(r));
+        floor = floor.max(fight::ground_at(w, p));
+    }
+    let clear = floor.add(Knob::TowerOver.fx());
+    if h.raw() < clear.raw() {
+        let up = Limits {
+            climb: lim.climb.max(Knob::LiftClimb.fx()),
+            ..*lim
+        };
+        f.steer(circle_point(centre, f.pos, clear), speed, &up);
+    } else {
+        f.steer(circle_point(centre, f.pos, h), speed, lim);
     }
 }
 
-/// How many points round the circle ahead it looks at for the tower: a
+/// How many points round the circle ahead it looks at the ground under: a
 /// count, not a distance.
 const LOOKS: usize = 4;
 
@@ -597,8 +592,9 @@ fn finish(w: &mut World, m: &mut Monster, f: Flight, aloft: bool, beating: bool,
     if beating != (fight::flags(m) & BEATING != 0) && beat_phase(m) == 0 {
         fight::set_flag(m, BEATING, beating);
     }
-    let ground = fight::ground_at(w, f.pos);
-    let low = f.pos.y.sub(ground).raw() < Knob::LowBelow.fx().raw();
+    // **Low** is measured from the plateau the fight is on -- not from the
+    // tower's top, which it may pass a few metres over.
+    let low = f.pos.y.sub(fight::base(w)).raw() < Knob::LowBelow.fx().raw();
     fight::set_flag(m, flag::LOW, low);
     // The bank is the turn it is making, as a share of its fullest.
     let turn = Knob::AirTurn.fx();
@@ -773,15 +769,24 @@ pub fn heave(m: &Monster) -> Fx {
     let period = beat_period(m);
     let k = beat_phase(m);
     let down = Knob::BeatDown.raw().clamp(1, period - 1);
-    // Kicked up at `BeatKick`, slowing evenly to nothing over the
-    // downstroke: half the kick times its time.
-    let top = math::half(Knob::BeatKick.fx().mul(DT).mul(Fx::from_int(down)));
+    let top = heave_top_over(down);
     if k < down {
         let u = Fx::ONE.sub(Fx::ratio(k, down));
         top.mul(Fx::ONE.sub(u.mul(u)))
     } else {
         top.mul(Fx::ONE.sub(Fx::ratio(k - down, period - down)))
     }
+}
+
+/// **The highest a wingbeat heaves the back**: kicked up at `BeatKick`,
+/// slowing evenly to nothing over the downstroke -- half the kick times its
+/// time.
+pub fn heave_top() -> Fx {
+    heave_top_over(Knob::BeatDown.raw().max(1))
+}
+
+fn heave_top_over(down: i32) -> Fx {
+    math::half(Knob::BeatKick.fx().mul(DT).mul(Fx::from_int(down)))
 }
 
 /// Frames in one wingbeat: one breath of its clock.

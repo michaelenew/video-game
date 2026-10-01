@@ -147,10 +147,13 @@ const SOLIDS: [Solid; 54] = [
 
 /// Where its circle is and where it perches.
 const SITES: [Site; 2] = [
+    // It circles the tower, fourteen metres out: never over it, and over
+    // the rock face's top on its north side. Its height is the level it
+    // measures its own from: the plateau's top.
     Site {
         name: "circle",
-        route: &[(0, 0)],
-        size: (1400, 1400, 0),
+        route: &[TOWER],
+        size: (1400, 1400, 1200),
         material: Grass,
     },
     Site {

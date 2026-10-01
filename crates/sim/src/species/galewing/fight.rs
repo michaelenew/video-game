@@ -50,6 +50,7 @@ pub static FIGHT: FightDecl = FightDecl {
     struck: Some(struck),
     signs: Some(signs),
     clip: Some(flight::clip),
+    presence: Some(presence),
     repose: Some(flight::repose),
     lob_height: Some(lob_height),
     glance: Some(glance),
@@ -407,32 +408,27 @@ pub fn perch_top(w: &World) -> Option<V3> {
     Some(V3::new(at.x, ground_at(w, at), at.z))
 }
 
-/// [`base`], from the ground alone: what the brain may read.
+/// [`base`], from the ground alone: what the brain may read. The arena's
+/// `circle` site says it in its height; with no such site, the ground at the
+/// middle of the arena.
 pub fn base_of(ground: &crate::arena::Terrain) -> Fx {
     let a: &crate::arena::Arena = ground;
-    let c = match a.sites.iter().find(|s| s.name == "circle") {
-        Some(s) => V3::new(
-            crate::arena::cm(s.route[0].0),
-            Fx::ZERO,
-            crate::arena::cm(s.route[0].1),
-        ),
-        None => {
-            let b = a.bounds;
-            V3::new(
-                math::half(b.lo_x.add(b.hi_x)),
-                Fx::ZERO,
-                math::half(b.lo_z.add(b.hi_z)),
-            )
-        }
-    };
+    if let Some(s) = a.sites.iter().find(|s| s.name == "circle") {
+        return crate::arena::cm(s.size.2);
+    }
+    let b = a.bounds;
+    let c = V3::new(
+        math::half(b.lo_x.add(b.hi_x)),
+        Fx::ZERO,
+        math::half(b.lo_z.add(b.hi_z)),
+    );
     ground.ground_under(c)
 }
 
-/// The level it measures its heights from: the floor under its circle's
-/// middle -- the plateau, in the Cliffs.
+/// **The level it measures its heights from**: the plateau, in the Cliffs --
+/// the floor the fight is on, not the tower it circles.
 pub fn base(w: &World) -> Fx {
-    let c = circle_centre(w);
-    ground_at(w, c)
+    base_of(&w.terrain())
 }
 
 /// The ground under a point: the top of whatever stands under it, however
@@ -895,6 +891,28 @@ pub fn struck(m: &mut Monster, part: usize, dealt: i32) -> bool {
     false
 }
 
+/// **Coming down on a point it has no body to shove with**: through a
+/// Stoop's dive and its hit, and the grounded hop's, every part is passable
+/// -- hit, never walked into -- so the hit is the hit, and a fighter is not
+/// barged out of its circle by the body arriving a frame early.
+pub fn presence(m: &Monster, _rig: &crate::beast::Rig) -> crate::beast::Presence {
+    let diving = matches!(
+        m.doing,
+        Doing::Startup {
+            kind: STOOP | HOP,
+            ..
+        } | Doing::Active {
+            kind: STOOP | HOP,
+            ..
+        }
+    );
+    crate::beast::Presence {
+        buried: 0,
+        unmountable: 0,
+        passable: if diving { u64::MAX } else { 0 },
+    }
+}
+
 /// **What its hide is worth this frame**: everything ×`CrashHide` while it
 /// lies crashed.
 pub fn hide(m: &Monster, _part: usize) -> Fx {
@@ -1052,8 +1070,11 @@ fn talons(w: &mut World, m: &mut Monster, slot: usize) {
     let _ = slot;
 }
 
-/// Where a carried fighter hangs: under its talons.
-pub fn talon_point(m: &Monster) -> V3 {
+/// **Where a carried fighter hangs**: held round the chest in its talons --
+/// their middle at the talons' tips, their feet a body's half-height and
+/// more below -- and never under the ground beneath them, which they are
+/// dragged along until the climb lifts them off it.
+pub fn talon_point(w: &World, m: &Monster) -> V3 {
     let rig = m.rig();
     let l = rig.bone[bones::SHIN_L].at;
     let r = rig.bone[bones::SHIN_R].at;
@@ -1062,13 +1083,10 @@ pub fn talon_point(m: &Monster) -> V3 {
         math::half(l.y.add(r.y)),
         math::half(l.z.add(r.z)),
     );
-    V3::new(
-        mid.x,
-        mid.y
-            .add(SPECIES.shape(super::TALON_L).min.y)
-            .sub(t::body_height()),
-        mid.z,
-    )
+    let tips = mid.y.add(SPECIES.shape(super::TALON_L).min.y);
+    let feet = tips.sub(math::half(t::body_height()));
+    let at = V3::new(mid.x, feet, mid.z);
+    V3::new(at.x, feet.max(ground_at(w, at)), at.z)
 }
 
 /// **The carry**: the fighter held under the talons for the climb, and let
@@ -1103,7 +1121,8 @@ fn carry(w: &mut World, m: &mut Monster, _slot: usize) {
         }
         return;
     }
-    let at = talon_point(m);
+    let at = talon_point(w, m);
+    let p = &mut w.players[i];
     p.pos = at;
     p.vel = V3::ZERO;
     p.grounded = false;
