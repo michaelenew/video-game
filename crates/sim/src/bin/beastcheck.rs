@@ -311,6 +311,74 @@ fn main() {
         );
     }
 
+    // **Its guard against the hops** (a creature with a guard: the Mantis).
+    // Every stance it has -- a move with no hit -- held up, and asked of a
+    // blow thrown from the top of each class's hop in front of it: is that
+    // covered? With the cone's top at each distance, the highest a blow can
+    // come from and still be stopped. Read off its own `covers`, so this is
+    // the guard's answer rather than a second description of it.
+    if sp.fight.covers.is_some() {
+        // A metre and a half, three and four and a half out, in centimetres.
+        let out = [150, 300, 450].map(|cm| Fx::ratio(cm, 100));
+        for kind in 0..sp.moves.len() as u8 {
+            let a = sp.attack(kind);
+            if a.damage > 0 || a.active == 0 {
+                continue;
+            }
+            let mut up = Monster::new(sp.id);
+            up.doing = Doing::Active {
+                kind,
+                left: a.active,
+            };
+            if !out
+                .iter()
+                .any(|d| up.covers(V3::new(*d, Fx::ZERO, Fx::ZERO)))
+            {
+                continue;
+            }
+            println!(
+                "\nits {} against every class's hop (a blow from the top of the hop, in front):",
+                sp.moves[kind as usize].name.to_lowercase()
+            );
+            let tops: Vec<String> = out
+                .iter()
+                .map(|d| {
+                    // The highest feet a covered blow comes from, to a centimetre.
+                    let mut lo = 0i32;
+                    let mut hi = 2000i32;
+                    while hi - lo > 1 {
+                        let mid = (lo + hi) / 2;
+                        if up.covers(V3::new(*d, Fx::ratio(mid, 100), Fx::ZERO)) {
+                            lo = mid;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+                    format!("{} m out, feet up to {} m", m(*d), m(Fx::ratio(lo, 100)))
+                })
+                .collect();
+            println!("  covered: {}", tops.join("; "));
+            for (class, apex) in &apexes {
+                let at: Vec<&str> = out
+                    .iter()
+                    .map(|d| {
+                        if up.covers(V3::new(*d, *apex, Fx::ZERO)) {
+                            "stopped"
+                        } else {
+                            "over it"
+                        }
+                    })
+                    .collect();
+                println!(
+                    "  {:<13} hop {:>5} m: {}",
+                    class.name(),
+                    m(*apex),
+                    at.join(" / ")
+                );
+            }
+        }
+    }
+
     // **What sheds you**: the parts nobody stands on (`Part::sheds`), and
     // whether a hop clears them. For an animal you cannot climb, this is the
     // body's height against the hop spread: what you can jump over and what

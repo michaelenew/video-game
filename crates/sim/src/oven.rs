@@ -1152,7 +1152,8 @@ impl MonsterField {
             MonsterField::Startup | MonsterField::Active | MonsterField::Recovery => (0, 240),
             MonsterField::Cooldown => (0, 600),
             MonsterField::Root => (0, 300),
-            MonsterField::Travel => (0, fx(90, 1)),
+            // The Mantis's lunge crosses nine metres in eight frames.
+            MonsterField::Travel | MonsterField::Advance => (0, fx(90, 1)),
             MonsterField::Hitstun | MonsterField::Blockstun => (0, 120),
             MonsterField::Damage => (0, 900),
             MonsterField::Follows => (0, 7),

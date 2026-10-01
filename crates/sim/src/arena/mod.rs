@@ -66,7 +66,7 @@ pub mod broodmother;
 
 // pub mod veilstalker;
 
-// pub mod mantis;
+pub mod mantis;
 
 // pub mod galewing;
 
@@ -140,8 +140,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
         ArenaId::BROODMOTHER => Some(&broodmother::ARENA),
 
         // ArenaId::VEILSTALKER => Some(&veilstalker::ARENA),
-
-        // ArenaId::MANTIS => Some(&mantis::ARENA),
+        ArenaId::MANTIS => Some(&mantis::ARENA),
 
         // ArenaId::GALEWING => Some(&galewing::ARENA),
 

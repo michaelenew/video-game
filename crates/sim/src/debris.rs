@@ -182,7 +182,20 @@ pub fn step(
                 slot: which, part, ..
             }) => {
                 if let Some(beast) = prey.herd[which].as_mut() {
-                    beast.take_hit(part, t::debris_damage());
+                    let class = players
+                        .get(piece.owner as usize)
+                        .map_or(crate::Class::Elementalist, |p| p.class);
+                    beast.take_blow(
+                        part,
+                        t::debris_damage(),
+                        &crate::monster::Blow {
+                            from: piece.pos,
+                            unblockable: false,
+                            who: piece.owner,
+                            class: class,
+                            kind: crate::monster::Blow::NO_MOVE,
+                        },
+                    );
                 }
                 *slot = None;
                 continue;

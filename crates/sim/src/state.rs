@@ -3356,12 +3356,21 @@ pub(crate) fn guard_against(defender: &Player, from: V3, unblockable: bool) -> (
     if unblockable {
         return (false, false);
     }
-    let toward = from.sub(defender.pos).normalized();
-    let facing_it = defender.facing.dot(toward).raw() >= t::guard_arc_cos().raw();
+    let facing_it = in_guard_arc(defender.pos, defender.facing, from, t::guard_arc_cos());
     let guarding = defender.action.guarding() && facing_it;
     let parried =
         facing_it && matches!(defender.action, Action::Guard { held } if held < t::parry_window());
     (guarding, parried)
+}
+
+/// **Is `from` inside a guard's arc**: a defender at `at`, facing `facing`,
+/// whose arc is `arc_cos` (the cosine of its half-width). The one cone test
+/// both kinds of defender use -- a fighter's guard (`guard_against`) and a
+/// creature's (the Mantis, `species::mantis::fight::guard`), which adds an
+/// elevation of its own on top.
+pub fn in_guard_arc(at: V3, facing: V3, from: V3, arc_cos: Fx) -> bool {
+    let toward = from.sub(at).normalized();
+    facing.dot(toward).raw() >= arc_cos.raw()
 }
 
 /// How long a blow of `hitstop` frames freezes for, blocked or not.
@@ -6479,7 +6488,7 @@ impl World {
             t::shadow_echo_attending()
         };
         let landed = if self.hunting() {
-            self.echo_gores_the_creature(&ghost, share, out)
+            self.echo_gores_the_creature(owner, &ghost, share, out)
         } else {
             self.echo_cuts_the_other_fighter(owner, &ghost, share, out)
         };
@@ -6514,7 +6523,13 @@ impl World {
         true
     }
 
-    fn echo_gores_the_creature(&mut self, ghost: &Player, share: Fx, marks: bool) -> bool {
+    fn echo_gores_the_creature(
+        &mut self,
+        owner: usize,
+        ghost: &Player,
+        share: Fx,
+        marks: bool,
+    ) -> bool {
         let (Some(box_out), Some(kind)) = (hitbox(ghost), ghost.action.attack_kind()) else {
             return false;
         };
@@ -6530,12 +6545,25 @@ impl World {
             let Some(part) = part_under(beast, ghost, &box_out) else {
                 continue;
             };
-            let raw = Fx::from_int(moves::get(ghost.class, kind).damage)
+            let m = moves::get(ghost.class, kind);
+            let raw = Fx::from_int(m.damage)
                 .mul(preying(ghost.class, beast.disabled()))
                 .mul(share)
                 .to_int();
-            beast.take_hit(part, raw);
-            if marks {
+            // **A copy is guarded against from where the copy stands** -- so
+            // one thrown from a shadow behind a guard lands (mantis.md §4).
+            let (_, guarded) = beast.take_blow(
+                part,
+                raw,
+                &monster::Blow {
+                    from: ghost.pos,
+                    unblockable: m.unblockable,
+                    who: owner as u8,
+                    class: ghost.class,
+                    kind,
+                },
+            );
+            if marks && !guarded.turned() {
                 beast.mark();
             }
             return true;
@@ -6570,15 +6598,27 @@ impl World {
                         let raw = Fx::from_int(m.damage)
                             .mul(preying(Class::ShadowReaver, beast.disabled()))
                             .to_int();
-                        beast.take_hit(part, raw);
-                        beast.mark();
-                        // The recall's slow, offered the same way everything
-                        // else is. It is half the reason to recall through
-                        // something.
-                        beast.take_control(monster::Control::slowing(
-                            t::slow_frames(),
-                            t::shadow_recall_slow(),
-                        ));
+                        let (_, guarded) = beast.take_blow(
+                            part,
+                            raw,
+                            &monster::Blow {
+                                from: ghost.pos,
+                                unblockable: m.unblockable,
+                                who: owner as u8,
+                                class: Class::ShadowReaver,
+                                kind: SLOT_MECHANIC,
+                            },
+                        );
+                        if !guarded.turned() {
+                            beast.mark();
+                            // The recall's slow, offered the same way
+                            // everything else is. It is half the reason to
+                            // recall through something.
+                            beast.take_control(monster::Control::slowing(
+                                t::slow_frames(),
+                                t::shadow_recall_slow(),
+                            ));
+                        }
                         self.monsters[slot] = Some(beast);
                         shadow::mark_cut(&mut self.players[owner], victim);
                     }
@@ -8077,11 +8117,25 @@ impl World {
             .mul(share)
             .mul(preying(effect.class, beast.disabled()))
             .to_int();
-        let dealt = beast.take_hit(struck, raw);
+        // Asked of its guard from where the effect is: a burst behind a
+        // guard, or a pillar under it, comes from outside it.
+        let (dealt, guarded) = beast.take_blow(
+            struck,
+            raw,
+            &monster::Blow {
+                from: at,
+                unblockable: effect.source().unblockable,
+                who: effect.owner,
+                class: effect.class,
+                kind: effect.slot,
+            },
+        );
         // The same control a fighter would have taken, offered rather than
         // applied: the creature decides how much of it it is currently in a
         // state to feel. See `monster::Monster::take_control`.
-        beast.take_control(effect.control());
+        if !guarded.turned() {
+            beast.take_control(effect.control());
+        }
         self.monsters[slot] = Some(beast);
         // A field has one part and hits over and over on its tick; a blade or an
         // arm has a pass to spend and spends it here.
@@ -9331,7 +9385,17 @@ impl World {
             }
             Some(Contact::Quarry { slot, part, .. }) => {
                 if let Some(beast) = self.monsters[slot].as_mut() {
-                    beast.take_hit(part, m.damage);
+                    beast.take_blow(
+                        part,
+                        m.damage,
+                        &monster::Blow {
+                            from: shooter.pos,
+                            unblockable: m.unblockable,
+                            who: i as u8,
+                            class: shooter.class,
+                            kind: kind,
+                        },
+                    );
                     self.players[i].hit_used = true;
                 }
             }
@@ -9478,7 +9542,17 @@ impl World {
             }
             Some(Contact::Quarry { slot, part, .. }) => {
                 if let Some(beast) = self.monsters[slot].as_mut() {
-                    beast.take_hit(part, m.damage);
+                    beast.take_blow(
+                        part,
+                        m.damage,
+                        &monster::Blow {
+                            from: shooter.pos,
+                            unblockable: m.unblockable,
+                            who: i as u8,
+                            class: shooter.class,
+                            kind: kind,
+                        },
+                    );
                     self.players[i].hit_used = true;
                 }
             }
@@ -9580,7 +9654,17 @@ impl World {
             }
             Some(Contact::Quarry { slot, part, .. }) => {
                 if let Some(beast) = self.monsters[slot].as_mut() {
-                    beast.take_hit(part, m.damage);
+                    beast.take_blow(
+                        part,
+                        m.damage,
+                        &monster::Blow {
+                            from: p.pos,
+                            unblockable: m.unblockable,
+                            who: i as u8,
+                            class: p.class,
+                            kind: SLOT_COMMITTED,
+                        },
+                    );
                 }
                 self.players[i].hit_used = true;
             }
@@ -10279,7 +10363,7 @@ impl World {
             // and poise rules' business -- a hit three times the size is
             // already the thing those read.
             let cash = if attacker.class == Class::ShadowReaver {
-                shadow::cash_multiple(beast.spend_marks())
+                shadow::cash_multiple(beast.marks)
             } else {
                 Fx::ONE
             };
@@ -10287,7 +10371,24 @@ impl World {
                 .mul(preying(attacker.class, beast.disabled()))
                 .mul(cash)
                 .to_int();
-            let dealt = beast.take_hit(part, raw);
+            // Asked of its guard first, from where the swing comes from:
+            // the same point the fighters' guard is handed.
+            let (dealt, guarded) = beast.take_blow(
+                part,
+                raw,
+                &monster::Blow {
+                    from: attacker.pos,
+                    unblockable: m.unblockable,
+                    who: i as u8,
+                    class: attacker.class,
+                    kind,
+                },
+            );
+            // The marks are spent by a blow that landed; one its guard
+            // turned spends nothing.
+            if attacker.class == Class::ShadowReaver && !guarded.turned() {
+                beast.spend_marks();
+            }
             // Her double duty, against the creature: drink over the pool the
             // blade passes through, then spill under the part it struck.
             if dealt > 0 {
@@ -10305,11 +10406,13 @@ impl World {
             // that is already reeling should still be a decision -- so the move
             // offers what it would have done to a fighter and the creature
             // takes what it can. Nothing at all, unless it is susceptible.
-            beast.take_control(monster::Control {
-                launch: m.launch,
-                grabs: m.grabs,
-                ..monster::Control::default()
-            });
+            if !guarded.turned() {
+                beast.take_control(monster::Control {
+                    launch: m.launch,
+                    grabs: m.grabs,
+                    ..monster::Control::default()
+                });
+            }
             self.players[i].heal(m.leeched(dealt));
             self.players[i].hit_used = true;
             if dealt > 0 {
