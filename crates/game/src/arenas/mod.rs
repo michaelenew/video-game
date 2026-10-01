@@ -41,7 +41,7 @@ pub mod mantis;
 
 // pub mod galewing;
 
-// pub mod siegeshell;
+pub mod siegeshell;
 
 /// One thing to look at that nothing collides with.
 #[derive(Clone, Copy, Debug)]
@@ -97,8 +97,7 @@ pub fn dressing(id: ArenaId) -> &'static Dressing {
         ArenaId::MANTIS => &mantis::DRESSING,
 
         // ArenaId::GALEWING => &galewing::DRESSING,
-
-        // ArenaId::SIEGESHELL => &siegeshell::DRESSING,
+        ArenaId::SIEGESHELL => &siegeshell::DRESSING,
         _ => &proving_ground::DRESSING,
     }
 }

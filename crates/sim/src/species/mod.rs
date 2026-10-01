@@ -77,7 +77,7 @@ pub mod mantis;
 
 // pub mod galewing;
 
-// pub mod siegeshell;
+pub mod siegeshell;
 
 /// Which kind of creature. The one byte of species a `Monster` keeps in the
 /// snapshot; everything else is looked up.
@@ -138,8 +138,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
         SpeciesId::MANTIS => Some(&mantis::SPECIES),
 
         // SpeciesId::GALEWING => Some(&galewing::SPECIES),
-
-        // SpeciesId::SIEGESHELL => Some(&siegeshell::SPECIES),
+        SpeciesId::SIEGESHELL => Some(&siegeshell::SPECIES),
         _ => None,
     }
 }
