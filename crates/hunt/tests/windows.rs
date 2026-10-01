@@ -81,3 +81,31 @@ fn the_galewings_windows_leave_out_the_frames_it_is_out_of_reach() {
     );
     assert!(counted > 0, "no frame was in reach in a hundred seconds");
 }
+
+#[test]
+fn a_bird_on_the_floor_across_the_plateau_is_in_reach_and_one_circling_is_not() {
+    // §9's out of reach is the waiting room: nothing this class can do from
+    // where it stands, or from the floor under the bird, walked to, touches it.
+    let w0 = sim::World::hunt_of([sim::Class::Champion; MAX_PLAYERS], SpeciesId::GALEWING);
+    let slot = gw::fight::slot_of(&w0).expect("the bird");
+    let me = w0.players[0].pos;
+    let bots = [hunt::Hunter::for_species(SpeciesId::GALEWING, 0).expect("a plan")];
+    let at = |dy: i32| {
+        let mut w = w0.clone();
+        let m = w.monsters[slot].as_mut().unwrap();
+        m.brain.grace = 0;
+        m.pos = sim::V3::new(
+            me.x.add(sim::fixed::Fx::from_int(9)),
+            me.y.add(sim::fixed::Fx::from_int(dy)),
+            me.z,
+        );
+        let mut tally = hunt::plans::galewing::GaleTally::default();
+        tally.observe_with(&w, &w, &bots);
+        tally.windowed(&w)
+    };
+    assert!(
+        at(0),
+        "a bird on the floor nine metres off was counted out of reach"
+    );
+    assert!(!at(16), "a bird sixteen metres up was counted in reach");
+}

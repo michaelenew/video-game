@@ -1033,7 +1033,11 @@ impl Tally for GaleTally {
         };
         // Out of reach: nothing the first hunter has touches it from where
         // it stands -- its swing from the top of a hop, or its longest
-        // throw.
+        // throw -- **or from the floor under it**, walked to. §9's measure
+        // is the waiting room: a bird on the floor across the plateau, or
+        // skimming a lane ten metres off, is a bird you go to, and until
+        // 2026-10-01 it counted as out of reach as much as one circling
+        // sixteen metres up.
         self.out_now = false;
         if let Some(bot) = bots.first() {
             let p = after.players[bot.who];
@@ -1046,9 +1050,19 @@ impl Tally for GaleTally {
                 let swing_top = feet
                     .add(V3::new(Fx::ZERO, sim::tuning::body_height(), Fx::ZERO))
                     .add(V3::new(Fx::ZERO, hop, Fx::ZERO));
-                let nearest = now.nearest_to(swing_top);
-                let melee =
-                    sim::math::wide_len(nearest.sub(swing_top)).raw() <= Fx::from_int(3).raw();
+                let reaches = |top: V3| {
+                    sim::math::wide_len(now.nearest_to(top).sub(top)).raw() <= Fx::from_int(3).raw()
+                };
+                // The same swing from the floor under its middle, if that
+                // floor is the floor the hunter stands on (within a hop):
+                // somewhere a walk gets to.
+                let under = V3::new(now.pos.x, feet.y.add(Fx::ONE), now.pos.z);
+                let floor = ground.ground_under(under);
+                let walkable = floor.sub(feet.y).abs().raw() <= hop.max(Fx::ONE).raw();
+                let under_top = V3::new(now.pos.x, floor, now.pos.z)
+                    .add(V3::new(Fx::ZERO, sim::tuning::body_height(), Fx::ZERO))
+                    .add(V3::new(Fx::ZERO, hop, Fx::ZERO));
+                let melee = reaches(swing_top) || (walkable && reaches(under_top));
                 let throw = sim::math::wide_len(
                     now.nearest_to(sim::aim::origin(feet))
                         .sub(sim::aim::origin(feet)),

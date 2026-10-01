@@ -692,6 +692,29 @@ eight minutes, and plan B -- the ride -- wins more often (7 against 4) and
 loses its rider to throws and the roll. **Zero unanswerable hits and zero
 unseen tells** for every class and both plans. Short of the targets:
 
+- **Out of reach, 2026-10-01** ([plans/polish-fights.md](../plans/polish-fights.md)):
+  **the measure was half wrong, and is changed; the creature was left.** A
+  bird on the floor across the plateau, or skimming a lane ten metres off,
+  counted as out of reach as much as one circling sixteen metres up; §9's
+  measure is the waiting room, so the report now asks whether the class
+  could touch it from where it stands *or from the floor under it, walked to*
+  (`windows.rs` pins both). Melee classes: **49–59 %**, from 55–67 (the
+  Champion 59, the Bulwark 53, the Reaver 50); the Elementalist 4. What is
+  left is the bird circling (about a third of the fight) and on the tower.
+  Every lever on the creature that brought it lower cost the ride its
+  wager: a wider line-up arc (90°) and a longer dwell after a Stoop (4 s)
+  took the Champion to 43 % and plan B from **7 wins in 24 to 1**; the dwell
+  alone to 52 % and plan B to 1; a lower patience aloft and a faster wind
+  moved it three points and lost wins. §9 says plan B should win more often
+  than plan A; at a third out of reach it does not, so the third is the
+  person's question it was, with these numbers beside it.
+- **Coop, two Champions, 0–1 of 12**: not the bird's. Its Wing buffet lands
+  on the pair 77–90 times in twelve hunts against 3–4 on one hunter, every
+  one on a hunter in the air: the pair's plan jumps it on time, eight frames
+  ahead, and then drops out of the jump from under two metres before the
+  sweep has passed (traced frame by frame; a Champion's hop tops out at
+  3.97 m). A slower buffet (28 frames) changed nothing. A finding for the
+  scripted pair, not the creature.
 - **Out of reach is two thirds for the melee classes, not a third** (§12's
   second question, answered "too much" by the numbers). It is counted from
   where the fighter stands -- a grounded bird across the plateau is out of

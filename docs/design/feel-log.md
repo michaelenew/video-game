@@ -7174,3 +7174,23 @@ the owner's call: one rule for the cast (a creature that can move does not
 stand in fire it has seen), or the pillar's burn on a creature.
 
 **Verdict** kept; nothing changed for the pillar.
+
+### 2026-10-01 — The Galewing's waiting room, measured as one
+
+**Changed** The Galewing's *out of reach* line: a bird the class could touch
+from the floor under it, walked to, is in reach (a grounded bird across the
+plateau, a low pass ten metres off). Melee classes 49–59 % out of reach, from
+55–67; nothing in the creature changed.
+
+**Why** §9's measure is the waiting room. A bird you can walk to is not one.
+
+**Reverted** A 90° line-up arc with a 4-second dwell after a Stoop: the
+Champion's out of reach to 43 %, and plan B from 7 wins in 24 to 1 -- the
+ride stops being the better wager §9 asks it to be. The dwell alone (52 %,
+plan B 1); patience aloft 250 (47 %, plan A 0 of 24); wind at 2.5 a second
+and perching at 15 (40 %, plan A 2). A Wing buffet at 28 frames for coop: the
+pair still takes 82 buffets in twelve hunts -- they jump on time and fall
+out of the jump before the sweep passes, which is the scripted pair's.
+
+**Verdict** kept the measure; the third out of reach stays a person's call
+between the waiting room and the ride.
