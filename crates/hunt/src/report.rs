@@ -51,6 +51,8 @@ pub struct Beat {
     /// middle of when it did, which is the difference between "the telegraph
     /// is too short" and "the bot swung a hammer into the next move".
     pub hit: Option<HunterState>,
+    /// A small body's windup that began off its target's screen.
+    pub hidden: bool,
 }
 
 /// What the first hunter was doing on the frame a hit landed on it.
@@ -132,6 +134,8 @@ pub struct Report {
     pub dealt: i32,
     pub taken: i32,
     pub hits_taken: u32,
+    /// What the hunters had left between them when it ended.
+    pub health_left: i32,
     /// The Bulwark's shield: blows it took, the weight they stored, and the
     /// weight its Slams spent. Zero for every other class. Whether the loop
     /// the class is built on -- take a blow, give it back -- happens at all in
@@ -192,6 +196,37 @@ pub struct Report {
     /// what falling cost them (bestiary P4, P6, P7). Printed only when there
     /// is something in it, so a fight with none of it reads as it always did.
     pub ground: GroundTally,
+
+    /// The creature's own lines, if its card has any.
+    pub extra: Option<Box<dyn Tally>>,
+
+    /// For a pack: whether each body's windup began on its target's screen,
+    /// and each fighter's swing so far (passed over a body, struck one).
+    seen_commit: [bool; critter::MAX_CRITTERS],
+    swing_over: [bool; MAX_PLAYERS],
+    swing_struck: [bool; MAX_PLAYERS],
+}
+
+/// How far above a crown a swing counts as passing over it.
+pub const OVER: Fx = Fx::from_raw(1 << 15);
+
+/// A body this near, in the rear third, is a body behind you.
+pub const BEHIND_NEAR: Fx = Fx::from_raw(3 << 16);
+
+/// Half the width of what the camera shows, in turns: a little over fifty
+/// degrees either side, a 16:9 screen at the default field of view. What
+/// "on screen" means to the hidden-commit count.
+pub const HALF_VIEW: Fx = Fx::from_raw(9100);
+
+/// **A creature's own report lines**: fed every frame beside the shared
+/// measures, printed under the creature's name. A species' card offers one
+/// (`plans::Card::tally`) when its document asks for measures the shared
+/// report cannot know to take -- the Gnawers' pile-ons and howls.
+pub trait Tally: Send + Sync {
+    /// One tick, the world before and after it.
+    fn observe(&mut self, before: &World, after: &World);
+    /// Its lines: a name, a value, and why it is counted.
+    fn lines(&self) -> Vec<(String, String, String)>;
 }
 
 /// What the report counts about the hunt's lore: the defended things, falls,
@@ -245,6 +280,22 @@ pub struct PackTally {
     pub routs: u32,
     pub regroups: u32,
     pub broke: u32,
+    /// **Hits from a body that committed while it was off the hunter's
+    /// screen**: outside the camera's view, or behind something, when its
+    /// windup began. The second kind of unanswerable a pack can deal
+    /// (Gnawers §6); counted into `unanswerable` too.
+    pub hidden: u32,
+    /// **Swings that passed over a small body**: a fighter's attack volume
+    /// within `OVER` above a crown without touching the body. The aim bug
+    /// detector (Gnawers §9): zero once small bodies are aimed at.
+    pub swings_over: u32,
+    /// Frames with a body within `BEHIND_NEAR` of a hunter, in the rear third
+    /// of the way it faces.
+    pub behind_frames: u32,
+    /// Windups of moves that need a token, and those a hit knocked a body
+    /// out of: the crouch the Gnawers' rhythm is about.
+    pub crouches: u32,
+    pub crouches_interrupted: u32,
 }
 
 impl Report {
@@ -282,6 +333,7 @@ impl Report {
             dealt: 0,
             taken: 0,
             hits_taken: 0,
+            health_left: 0,
             guarded: 0,
             stored: 0,
             spent: 0,
@@ -304,11 +356,15 @@ impl Report {
             timeline: Vec::new(),
             pack: PackTally::default(),
             ground: GroundTally::default(),
+            extra: card.tally.map(|make| make()),
+            seen_commit: [true; critter::MAX_CRITTERS],
+            swing_over: [false; MAX_PLAYERS],
+            swing_struck: [false; MAX_PLAYERS],
         }
     }
 
     /// Fold one tick of the pack into the report, if there is one.
-    fn observe_pack(&mut self, before: &World, after: &World) {
+    fn observe_pack(&mut self, before: &World, after: &World, bots: &[Hunter]) {
         let (Some(was), Some(now)) = (before.pack, after.pack) else {
             return;
         };
@@ -346,7 +402,24 @@ impl Report {
             // A move starting: counted with the creature's own, by the
             // species' move numbering, so the report's move table covers a
             // pack's moves too.
+            let token_move = |c: &critter::Critter| {
+                sp.kind(c.kind)
+                    .moves
+                    .iter()
+                    .any(|m| m.kind == c.act && m.token)
+                    && sp.attack(c.act).damage > 0
+            };
+            if b.alive()
+                && b.state == critter::is::STARTUP
+                && token_move(b)
+                && matches!(a.state, critter::is::FLINCH | critter::is::DEAD)
+            {
+                t.crouches_interrupted += 1;
+            }
             if a.state == critter::is::STARTUP && b.state != critter::is::STARTUP {
+                if token_move(a) {
+                    t.crouches += 1;
+                }
                 if (a.act as usize) < MAX_MOVES {
                     self.starts[a.act as usize] += 1;
                 }
@@ -383,10 +456,196 @@ impl Report {
                 _ => {}
             }
         }
+        self.observe_crowd(before, after, bots);
         if after.monster().is_none() {
             self.frames = after.frame;
             if now.grace == 0 {
                 self.fought += 1;
+            }
+            self.observe_pack_alone(before, after, bots);
+        }
+    }
+
+    /// What a pack does to a camera, in any fight that has one: who was on
+    /// screen when it committed, swings over a crown, bodies at your back.
+    fn observe_crowd(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        let sp = after.critters.sp();
+        let stones = sim::stones::gather(&after.players);
+        let ground = after.terrain();
+        let scene = sim::aim::Scene {
+            stones: &stones,
+            players: &after.players,
+            effects: &after.effects,
+            quarry: &after.monsters,
+            critters: &after.critters,
+            arena: &ground,
+        };
+        for (i, (b, a)) in before
+            .critters
+            .iter()
+            .zip(after.critters.iter())
+            .enumerate()
+        {
+            // A windup beginning: was it on its target's screen?
+            if a.alive()
+                && a.state == critter::is::STARTUP
+                && b.state != critter::is::STARTUP
+                && sp.attack(a.act).damage > 0
+            {
+                let who = (a.target as usize).min(MAX_PLAYERS - 1);
+                self.seen_commit[i] = match bots.iter().find(|h| h.who == who) {
+                    Some(h) => {
+                        sim::aim::in_view(who, h.last, a.body(sp).middle(), HALF_VIEW, &scene)
+                    }
+                    None => true,
+                };
+            }
+            // Its hit landing, from a windup nobody could see begin.
+            let landed = a.state == critter::is::ACTIVE
+                && a.has(critter::flag::HIT_USED)
+                && !(b.state == critter::is::ACTIVE && b.has(critter::flag::HIT_USED));
+            if landed && !self.seen_commit[i] {
+                self.pack.hidden += 1;
+                self.unanswerable += 1;
+            }
+        }
+        // Swings over a crown, once per swing; and bodies behind.
+        for i in 0..MAX_PLAYERS {
+            let (was, now) = (&before.players[i], &after.players[i]);
+            let new_swing = matches!(now.action, sim::state::Action::Startup { .. })
+                && !matches!(was.action, sim::state::Action::Startup { .. });
+            let out = sim::state::hitbox(now).filter(|_| now.health > 0);
+            if new_swing || out.is_none() {
+                if self.swing_over[i] && !self.swing_struck[i] {
+                    self.pack.swings_over += 1;
+                }
+                self.swing_over[i] = false;
+                self.swing_struck[i] = false;
+            }
+            if let Some(hb) = out {
+                for c in after.critters.iter().filter(|c| c.alive()) {
+                    let body = c.body(sp);
+                    if body.touched_by(&hb) {
+                        self.swing_struck[i] = true;
+                        continue;
+                    }
+                    let above = critter::Body {
+                        foot: V3::new(body.foot.x, body.crown(), body.foot.z),
+                        height: OVER,
+                        ..body
+                    };
+                    if above.touched_by(&hb) {
+                        self.swing_over[i] = true;
+                    }
+                }
+            }
+        }
+        let behind = after.players.iter().enumerate().any(|(i, p)| {
+            p.health > 0
+                && bots.iter().any(|h| h.who == i)
+                && after.critters.iter().any(|c| {
+                    let d = V3::new(c.pos.x.sub(p.pos.x), Fx::ZERO, c.pos.z.sub(p.pos.z));
+                    c.alive()
+                        && d.flat_len().raw() <= BEHIND_NEAR.raw()
+                        && d.flat_len().raw() > 0
+                        && p.facing.dot(d.normalized()).raw() < Fx::ratio(-1, 2).raw()
+                })
+        });
+        if behind {
+            self.pack.behind_frames += 1;
+        }
+        if let Some(extra) = self.extra.as_mut() {
+            extra.observe(before, after);
+        }
+    }
+
+    /// The shared measures of a fight that is only a pack: what the
+    /// creature's own branch of [`Report::observe`] takes for a body -- the
+    /// four windows, the swings, the damage both ways, the play sequence --
+    /// taken off the critters instead.
+    fn observe_pack_alone(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        let Some(now) = after.pack else { return };
+        let sp = now.sp();
+        let intent = bots.first().map(|b| b.intent()).unwrap_or(NOBODY);
+        if now.grace == 0 && now.fighting() && !sim::pack::beaten(&after.critters) {
+            let free = sim::pack::frames_until_free(&now, &after.critters, &after.monsters);
+            self.threat[Threat::of(free.min(i32::MAX as u16) as i32) as usize] += 1;
+        }
+        let mut dealt = 0;
+        for (index, (b, a)) in before
+            .critters
+            .iter()
+            .zip(after.critters.iter())
+            .enumerate()
+        {
+            if b.alive() {
+                dealt += (b.health as i32 - a.health as i32).max(0);
+            }
+            if a.alive() && a.state == critter::is::STARTUP && b.state != critter::is::STARTUP {
+                let mut nearest = Fx::MAX;
+                for p in after.players.iter().filter(|p| p.health > 0) {
+                    nearest = nearest.min(
+                        V3::new(p.pos.x.sub(a.pos.x), Fx::ZERO, p.pos.z.sub(a.pos.z)).flat_len(),
+                    );
+                }
+                self.commit_kind = a.act;
+                self.timeline.push(Beat {
+                    frame: after.frame,
+                    kind: a.act,
+                    intent,
+                    aboard: false,
+                    range: nearest,
+                    hit: None,
+                    hidden: !self.seen_commit[index],
+                });
+            }
+        }
+        self.dealt += dealt;
+        if dealt > 0 {
+            self.connected += 1;
+        }
+        for i in 0..MAX_PLAYERS {
+            let (a, b) = (&before.players[i], &after.players[i]);
+            if matches!(b.action, sim::state::Action::Startup { .. })
+                && !matches!(a.action, sim::state::Action::Startup { .. })
+            {
+                self.swings += 1;
+            }
+            let lost = a.health - b.health;
+            if lost <= 0 {
+                continue;
+            }
+            self.taken += lost;
+            self.hits_taken += 1;
+            // Which body did it: the one whose bite connected this frame,
+            // if one did; a latch's bite otherwise.
+            let by = after
+                .critters
+                .iter()
+                .zip(before.critters.iter())
+                .find(|(n, w)| {
+                    n.state == critter::is::ACTIVE
+                        && n.has(critter::flag::HIT_USED)
+                        && !(w.state == critter::is::ACTIVE && w.has(critter::flag::HIT_USED))
+                })
+                .map(|(n, _)| n.act)
+                .unwrap_or(self.commit_kind);
+            if (by as usize) < sp.moves.len() {
+                self.timeline.push(Beat {
+                    frame: after.frame,
+                    kind: by,
+                    intent,
+                    aboard: false,
+                    range: Fx::ZERO,
+                    hidden: false,
+                    hit: Some(HunterState {
+                        bucked: false,
+                        airborne: !a.grounded,
+                        busy: !a.action.actionable(),
+                        dodging: matches!(a.action, sim::state::Action::Dodge { .. }),
+                        health: b.health,
+                    }),
+                });
             }
         }
     }
@@ -429,7 +688,7 @@ impl Report {
 
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
-        self.observe_pack(before, after);
+        self.observe_pack(before, after, bots);
         self.observe_ground(before, after);
         // The first creature. A fight against two (the Pair) reports on the
         // first; a report per creature is that fight's to add.
@@ -494,6 +753,7 @@ impl Report {
                     aboard: after.players.iter().any(|p| p.aboard()),
                     range: nearest,
                     hit: None,
+                    hidden: false,
                 });
             }
         }
@@ -637,6 +897,7 @@ impl Report {
                 intent: bots.first().map(|b| b.intent()).unwrap_or(NOBODY),
                 aboard: p.aboard(),
                 range: self.commit_range[i],
+                hidden: false,
                 hit: Some(HunterState {
                     bucked,
                     airborne: !before.players[i].grounded,
@@ -691,6 +952,7 @@ impl Report {
     }
 
     pub fn finish(&mut self, w: &World) {
+        self.health_left = w.players.iter().map(|p| p.health.max(0)).sum();
         if self.was_aboard {
             self.rides += 1;
             self.longest_ride = self.longest_ride.max(self.run_ride);
@@ -1113,6 +1375,37 @@ impl Report {
                 format!("{} / {}", t.regroups, t.broke),
                 "came back, and left for good",
             );
+            line(
+                &mut out,
+                "crouches interrupted",
+                format!("{} / {}", t.crouches_interrupted, t.crouches),
+                "token windups a hit stopped, of those thrown",
+            );
+            line(
+                &mut out,
+                "behind you",
+                format!("{:.0}%", ratio(t.behind_frames, self.fought) * 100.0),
+                "a body in your rear third within 3 m",
+            );
+            line(
+                &mut out,
+                "swings over",
+                format!("{}", t.swings_over),
+                "passed over a crown and touched nothing: the aim bug",
+            );
+            line(
+                &mut out,
+                "hidden commits",
+                format!("{}", t.hidden),
+                "hits from a windup begun off your screen",
+            );
+        }
+
+        if let Some(extra) = self.extra.as_ref() {
+            out.push_str(&format!("\n{}\n", self.species.name.to_uppercase()));
+            for (name, value, why) in extra.lines() {
+                line(&mut out, &name, value, &why);
+            }
         }
 
         if self.ground.any() {
@@ -1205,12 +1498,13 @@ impl Report {
                 continue;
             }
             out.push_str(&format!(
-                "  {:>5}  {:<16} at {:>6?} m   hunter: {:?}{}\n",
+                "  {:>5}  {:<16} at {:>6?} m   hunter: {:?}{}{}\n",
                 beat.frame,
                 self.species.attack(beat.kind).name,
                 beat.range,
                 beat.intent,
-                if beat.aboard { "  [aboard]" } else { "" }
+                if beat.aboard { "  [aboard]" } else { "" },
+                if beat.hidden { "  [off screen]" } else { "" }
             ));
         }
         out

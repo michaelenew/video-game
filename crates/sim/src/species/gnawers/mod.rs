@@ -31,7 +31,7 @@ mod mind;
 pub mod rules;
 mod tuned;
 
-pub use mind::{Mind, gnawed, howling, latched, stumbling};
+pub use mind::{Mind, gnawed, howling, latched, piling, stumbling, treed_now};
 
 use crate::critter::{CritterKind, CritterMove};
 use crate::lore::Layout;
@@ -85,9 +85,9 @@ pub const KINDS: [CritterKind; 2] = [
     GNAWER_KIND,
     CritterKind {
         name: "Big one",
-        // The maul shares the pack's budget: a Big One that has come in is
-        // one of the two that may bite.
-        moves: &[CritterMove::token(MAUL), CritterMove::free(HOWL)],
+        // Neither needs a token: the maul is its answer to somebody who has
+        // come to it, and the howl is what hands the tokens out.
+        moves: &[CritterMove::free(MAUL), CritterMove::free(HOWL)],
         role: 0,
         yields: false,
     },
@@ -116,6 +116,9 @@ crate::species_knobs! {
     StrainDesperate, "big one",   "The same, below half health",         Int,     0,  2000;
     StrainBleed,     "big one",   "Strain bled per frame",               Int,     0,  50;
     StumbleFrames,   "big one",   "Stumble length",                      Frames,  0,  300;
+    DartFrom,        "dart-bite", "Crouches this far from its target",   Fixed,   0,  fx(10,1);
+    DartArc,         "dart-bite", "Only from in front of its target (cos)", Fixed, fx(-1,1), fx(1,1);
+    DartGiveUp,      "dart-bite", "Gives the token back if not there in", Frames, 0,  240;
     RearCos,         "hamstring", "Rear third, beyond (cos)",            Fixed,   fx(-1,1), fx(1,1);
     HamstringSlow,   "hamstring", "Speed while hamstrung (x)",           Fixed,   0,  fx(1,1);
     HamstringFrames, "hamstring", "The slow lasts",                      Frames,  0,  600;

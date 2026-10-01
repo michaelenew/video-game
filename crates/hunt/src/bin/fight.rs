@@ -79,12 +79,13 @@ fn main() {
             }
         } else {
             println!(
-                "  run {run}: {:?} in {:.0}s, {} rides, {} topples, {} unanswerable",
+                "  run {run}: {:?} in {:.0}s, {} rides, {} topples, {} unanswerable, {} health left",
                 report.outcome,
                 report.frames as f32 / 60.0,
                 report.rides,
                 report.topples,
-                report.unanswerable
+                report.unanswerable,
+                report.health_left
             );
         }
         if let Outcome::Killed(f) = report.outcome {

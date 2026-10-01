@@ -1090,15 +1090,33 @@ pub fn sight_clear(a: V3, b: V3, scene: &Scene) -> bool {
 /// **Is that point on this fighter's screen, and not behind anything?** (A5.)
 ///
 /// Inside a cone of `half_angle` (in turns) round where they are looking, from
-/// their eye, and [`sight_clear`] from the eye to it. Built from the eye and
-/// the look, so it lives here beside [`pointing_at`]: the Veilstalker uses it
-/// so that it never reveals itself off-screen -- its brain with the look it
-/// last glanced, the fight report with the live one. A question about the
-/// camera rather than a line of effect; it points nothing anywhere.
+/// their eye, and [`sight_clear`] to it. Built from the eye and the look, so
+/// it lives here beside [`pointing_at`]: the Veilstalker uses it so that it
+/// never reveals itself off-screen -- its brain with the look it last
+/// glanced, the fight report with the live one. A question about the camera
+/// rather than a line of effect; it points nothing anywhere.
+///
+/// **Nothing between the camera and the character hides anything**, as
+/// nothing there is on the crosshair's ray ([`sight`]): the eye sits behind
+/// the shoulder, and a fighter with their back to a wall has the camera
+/// looking through it. So the line of sight starts at the front of the
+/// character along it -- the same near clip the crosshair's ray has. Found
+/// by the Gnawers' report, whose every bite on a hunter backed against a
+/// wall counted as begun off screen.
 pub fn in_view(who: usize, look: Input, at: V3, half_angle: Fx, scene: &Scene) -> bool {
     let p = &scene.players[who];
     let eye = crate::camera::eye_under(p.pos, look, p.aloft, scene.arena);
-    in_view_of(eye, look.look_dir(), at, half_angle, scene)
+    let to = at.sub(eye);
+    let reach = crate::math::wide_len(to);
+    if reach.raw() <= 0 {
+        return true;
+    }
+    let dir = crate::math::wide_normalized(to);
+    if dir.dot(look.look_dir()).raw() < cos_turns(half_angle).raw() {
+        return false;
+    }
+    let near = near_clip(eye, dir, origin(p.pos)).min(reach);
+    sight_clear(eye.add(dir.scale(near)), at, scene)
 }
 
 /// [`in_view`] from an eye and a look direction already known -- a look the

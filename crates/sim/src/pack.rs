@@ -664,6 +664,54 @@ pub fn hurt(
     dealt
 }
 
+/// **Frames until the pack can start another attack**, as things stand: the
+/// pack's answer to `Monster::frames_until_free`, which the fight report
+/// divides the fight by (the Gnawers' §9). A pack is many bodies, so its
+/// window is the soonest any of them could go:
+///
+/// - zero while anybody is winding up or out with a move that hurts;
+/// - the grace, or the scatter, while either lasts -- nothing attacks until
+///   it is over; never, routed or broken;
+/// - with a token free, the cadence a body decides on;
+/// - with every token out, the soonest one comes back: a holder's recovery
+///   and the rest after it, or a resting token's rest.
+pub fn frames_until_free(pack: &Pack, critters: &Critters, herd: &Herd) -> u16 {
+    let sp = pack.sp();
+    let hurts = |c: &Critter| sp.attack(c.act).damage > 0;
+    if critters
+        .iter()
+        .any(|c| c.alive() && c.attacking() && hurts(c))
+    {
+        return 0;
+    }
+    if !critters.iter().any(Critter::alive) {
+        return u16::MAX;
+    }
+    match pack.mood {
+        mood::ROUTED | mood::BROKEN => return u16::MAX,
+        mood::SCATTERED => return pack.mood_left,
+        mood::CALM => return u16::MAX,
+        _ => {}
+    }
+    if pack.grace > 0 {
+        return pack.grace;
+    }
+    if tokens_out(pack, critters, herd) < pack.token_cap() {
+        return pack.think_every() as u16;
+    }
+    let rest = sp.pack_raw(PackKnob::TokenRest).max(0) as u16;
+    let back = critters
+        .iter()
+        .filter(|c| c.alive() && c.has(flag::TOKEN))
+        .map(|c| match c.state {
+            is::RECOVERY | is::FLINCH => c.timer.saturating_add(rest),
+            // Holding one some other way (a latch): not coming back soon.
+            _ => u16::MAX,
+        });
+    let resting = pack.rest.iter().copied().filter(|r| *r > 0);
+    back.chain(resting).min().unwrap_or(0)
+}
+
 /// Is the pack beaten: nobody left in the fight?
 pub fn beaten(critters: &Critters) -> bool {
     !critters.iter().any(Critter::alive)
@@ -813,6 +861,13 @@ pub fn step(pack: &mut Pack, critters: &mut Critters, w: &World) {
             }
         }
     }
+}
+
+/// Where the pack thinks fighter `who` will be: the glance, projected by
+/// `Lead`. What [`Look::lead`] answers, for a species' own rules that hold
+/// the pack rather than a look at it.
+pub fn lead_of(pack: &Pack, who: usize) -> V3 {
+    lead_point(pack, &pack.seen[who.min(MAX_PLAYERS - 1)])
 }
 
 /// Where a fighter will be, by the pack's reckoning.

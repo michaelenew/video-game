@@ -21,7 +21,7 @@ pub mod ridgeback;
 /// The dev pack's hunter.
 pub mod gnats;
 
-// pub mod gnawers;
+pub mod gnawers;
 
 // pub mod hornback;
 
@@ -51,6 +51,10 @@ pub struct Card {
     /// one of these is under way is a rider who read it and left.
     pub bucks: fn(kind: u8) -> bool,
     pub words: Words,
+    /// **Its own report lines**, if it has any beyond the shared ones: a
+    /// tally the report feeds every frame and prints under the creature's
+    /// name. The Gnawers' pile-ons, howls and windows (§9).
+    pub tally: Option<fn() -> Box<dyn crate::report::Tally>>,
 }
 
 /// What the report calls the creature's parts, in its own words.
@@ -77,7 +81,7 @@ pub fn card(id: SpeciesId) -> Option<&'static Card> {
 
         SpeciesId::GNATS => Some(&gnats::CARD),
 
-        // SpeciesId::GNAWERS => Some(&gnawers::CARD),
+        SpeciesId::GNAWERS => Some(&gnawers::CARD),
 
         // SpeciesId::HORNBACK => Some(&hornback::CARD),
 
