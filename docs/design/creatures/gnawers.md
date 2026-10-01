@@ -661,11 +661,15 @@ report's pack lines are [critters.md](../critters.md) §5's and its own are
 ```text
                 won    mean    health left   threat / poke / way in / walk up   unanswerable
   Champion     24/24    35 s    812 of 1000      27 / 43 / 13 / 17 %                  0
-  Reaver       24/24    33 s    627 of  750      27 / 43 / 11 / 19 %                  0
-  Elementalist 24/24    45 s    585 of 1000      26 / 49 /  9 / 15 %                  0
-  Blood mage   24/24    57 s    308 of 1000      29 / 37 /  9 / 24 %                  0
+  Reaver       24/24    33 s    599 of  750      25 / 45 / 11 / 20 %                  0
+  Elementalist 24/24    24 s    889 of 1000      23 / 52 / 12 / 13 %                  0
+  Blood mage   21/24    57 s    272 of 1000      26 / 46 /  8 / 20 %                  0
   Bulwark      24/24    35 s   1084 of 1250      26 / 45 / 11 / 18 %                  0
-  Dual mage     2/24   111 s     24 of 1000      24 / 54 / 12 / 10 %                  0
+  Dual mage    20/24    87 s    312 of 1000      28 / 49 / 12 / 11 %                  0
+
+  (2026-10-01, every class played: before it, the Reaver 627 left, the
+   Elementalist 45 s and 585, the Blood mage 24/24 and 308, the Dual mage
+   2/24 in 111 s and 24)
 
   coop, two Champions 12/12 in 22 s; two Bulwarks 12/12 in 23 s
   temper 3, Champion  12/12 in 33 s, 755 left, threatening 39 %
@@ -674,6 +678,19 @@ report's pack lines are [critters.md](../critters.md) §5's and its own are
     Dart-bite 47/275   Hamstring 15/29   Pile-on 5/29   Maul 15/198   Howl 43
     (Blood mage: Dart-bite 41/525, Hamstring 43/65, Pile-on 43/132, Maul 97/373)
 ```
+
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8), so the rows above are each class's own fight
+rather than the Champion's pressed by everybody. **The Dual mage** wins 20 of 24
+from 2: both hands now, the bars kept level and goaded up between bites (344
+goads in the 24), and the punch turned so the line from the shoulder it leaves
+meets the body. **The Elementalist**
+wins in 24 s keeping nine tenths of her health: bolts aimed down at the
+bodies, a pillar on the ring (36 over the 24 hunts) -- the fight's easiest for
+any class. **The Blood mage** loses three: the scythe the plan pressed is
+unchanged, and the Haemorrhage it now throws from range (55 in the 24) costs
+her red. **The Reaver** sends her shadow into the ring (61) and is as quick as
+the Champion. The Champion's and the Bulwark's hunts did not move.
 
 **Against the targets.** Zero unanswerable hits of both kinds, and zero hidden
 commits, for every class -- held by rule since 2026-10-01 rather than by luck
@@ -759,11 +776,10 @@ platform, so the gnaw and the scramble are pinned by tests
 and not by the report. It rarely reaches the Big One in a scatter (windows used
 0 of 3 in a typical hunt) and never in a howl, so the stumble -- the big window
 -- is pinned by `a_burst_past_its_strain_knocks_the_big_one_down` and is
-otherwise unmeasured. It does not use the Champion's Rush, the Reaver's
-shadow crossing or the Blood mage's blink, which are what §4 says reach the
-leader in a window. **It does not play the Dual mage's bars** -- it loses the
-Ridgeback with her too -- so her two wins in twenty-four say nothing about the
-fight.
+otherwise unmeasured. It does not use the Champion's Rush, and the Reaver's
+shadow crossing and the Blood mage's blink only now and then (one dash and one
+blink in 24 hunts), which are what §4 says reach the leader in a window.
+*Changed 2026-10-01:* it plays the Dual mage's bars now, and she wins 20.
 
 ### Still open -- for a person
 
@@ -781,9 +797,11 @@ fight.
   the rout not working.
 - **The hedge** makes the Commons a box from some angles; arenas.md says tall
   walls read badly. Six metres is what nobody hops.
-- **The Dual mage** is unmeasured; her dark auto also runs through a gnawer
-  inside two metres (`critcheck`), the lunge-through question critters.md §7
-  leaves to a person.
+- **The Dual mage** wins 20 of 24 now (2026-10-01), in 87 s, the slowest
+  class; her dark auto also runs through a gnawer inside two metres
+  (`critcheck`), the lunge-through question critters.md §7 leaves to a person.
+- **Is the Elementalist's 24 s with nine tenths of her health the fight
+  working?** (2026-10-01) Her bolts reach the ring from outside it.
 
 *Changed from the seed:* the dart-bite's tell is 24 f rather than 18 (so it is
 answerable on sight); the pile-on leaps in sequence rather than at once (so the

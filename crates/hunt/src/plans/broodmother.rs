@@ -40,7 +40,7 @@ use sim::state::{MAX_PLAYERS, Phase, Player};
 use sim::{Input, V3, World};
 
 use crate::report::Tally;
-use crate::{Intent, Plan, QUARTER, REACTION, steer, turns_to_aim};
+use crate::{Hands, Intent, Plan, QUARTER, REACTION, steer, turns_to_aim};
 
 /// Hold the post between her legs.
 pub const POST: Intent = Intent("Post");
@@ -120,6 +120,13 @@ pub struct Broodmother {
     last: V3,
     stuck: u16,
     detour_left: u16,
+    /// Its class (`crate::class`), and what this frame's choice was, for
+    /// it: the point a swing was aimed at and the window it was thrown in,
+    /// the way a dodge went, or where it waits.
+    hands: Hands,
+    aimed: Option<(V3, Option<i32>)>,
+    out: Option<V3>,
+    waiting: Option<(V3, V3, i32)>,
 }
 
 impl Broodmother {
@@ -142,6 +149,10 @@ impl Broodmother {
             last: V3::ZERO,
             stuck: 0,
             detour_left: 0,
+            hands: Hands::new(who, seed),
+            aimed: None,
+            out: None,
+            waiting: None,
         }
     }
 
@@ -488,13 +499,50 @@ impl Plan for Broodmother {
     }
 
     fn act(&mut self, w: &World) -> Input {
+        self.aimed = None;
+        self.out = None;
+        self.waiting = None;
         let input = self.choose(w);
         let me = w.players[self.who];
-        self.unstick(&me, input)
+        let input = self.unstick(&me, input);
+        // The class's turn: what the choice was for, in its own hands.
+        const ATTACKS: u16 =
+            Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL | Input::MECHANIC;
+        if input.bits & ATTACKS != 0
+            && let Some((at, window)) = self.aimed
+        {
+            return self.hands.hit(w, &me, at, input, window);
+        }
+        if input.bits & Input::SHIFT != 0
+            && let Some(out) = self.out
+        {
+            return self.hands.leave(w, &me, out, input);
+        }
+        // Walking in on a window: the class's own way in, if it has one.
+        if let Some((at, Some(window))) = self.aimed
+            && wide_flat_dist(at, me.pos).raw() > self.hands.reach(&me).add(Fx::ONE).raw()
+            && let Some(go) = self.hands.close_in(w, &me, at, window)
+        {
+            return go;
+        }
+        if let Some((beast, at, safe)) = self.waiting
+            && let Some(own) = self.hands.idle(w, &me, beast, at, safe)
+        {
+            return own;
+        }
+        input
     }
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 
@@ -625,6 +673,7 @@ impl Broodmother {
                     self.intent = EVADE;
                     self.dodge_left = sim::tuning::dodge_frames();
                     let away = unit(me.pos.sub(at));
+                    self.out = Some(away);
                     return face_walk(&me, &m, away, Input::SHIFT);
                 }
                 self.intent = EDGE;
@@ -669,6 +718,7 @@ impl Broodmother {
                 }
                 if !walkable && contact <= DODGE_LEAD && self.dodge_left == 0 && free {
                     self.dodge_left = sim::tuning::dodge_frames();
+                    self.out = Some(out);
                     return face_walk(&me, &m, out, Input::SHIFT);
                 }
                 return face_walk(&me, &m, out, 0);
@@ -793,7 +843,13 @@ impl Broodmother {
         if to.flat_len().raw() > SETTLED.raw() {
             return face_walk(&me, &m, unit(to), crouch);
         }
-        looking(&me, part_point(&m, bm::THORAX, me.pos), 0)
+        let thorax = part_point(&m, bm::THORAX, me.pos);
+        let safe = match m.doing {
+            Doing::Startup { .. } | Doing::Active { .. } => to_contact(&m) - self.slop,
+            _ => i32::MAX,
+        };
+        self.waiting = Some((m.pos, thorax, safe));
+        looking(&me, thorax, 0)
     }
 
     /// **Swing at a broodling coming in**: one with its tail up or crouched,
@@ -844,6 +900,7 @@ impl Broodmother {
         } else {
             0
         };
+        self.aimed = Some((middle, None));
         Some(looking(me, middle, walk | swing))
     }
 
@@ -903,6 +960,8 @@ impl Broodmother {
         } else {
             0
         };
+        let window = m.frames_until_free() as i32 - REACTION as i32;
+        self.aimed = Some((sac, Some(window)));
         looking(me, sac, walk | swing)
     }
 
@@ -934,7 +993,8 @@ impl Broodmother {
         } else {
             0
         };
-        let _ = m;
+        let window = m.frames_until_free() as i32 - REACTION as i32;
+        self.aimed = Some((aimed, Some(window)));
         looking(me, aimed, walk | swing)
     }
 }

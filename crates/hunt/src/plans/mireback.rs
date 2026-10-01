@@ -24,7 +24,7 @@ use sim::state::{Action, Phase};
 use sim::{Input, V3, World};
 
 use crate::report::Tally;
-use crate::{HALF, Intent, Plan, QUARTER, REACTION, heavy, steer, turns_to_aim};
+use crate::{HALF, Hands, Intent, Plan, QUARTER, REACTION, heavy, steer, turns_to_aim};
 
 /// Hold at the flank, on clean floor.
 pub const FLANK: Intent = Intent("Flank");
@@ -129,6 +129,8 @@ pub struct Mireback {
     rest_left: u16,
     /// Frames before the Elementalist plants another pillar.
     fire_left: u16,
+    /// Its class (`crate::class`).
+    hands: Hands,
 }
 
 impl Mireback {
@@ -156,6 +158,7 @@ impl Mireback {
             greed: false,
             rest_left: 0,
             fire_left: 0,
+            hands: Hands::new(who, seed),
         }
     }
 
@@ -413,7 +416,7 @@ impl Mireback {
             return Input::aimed(0, wire);
         }
         if me.aboard() {
-            return self.ride(&me, &beast);
+            return self.ride(w, &me, &beast);
         }
         self.ground(w, &me, &beast, &seen)
     }
@@ -514,7 +517,8 @@ impl Mireback {
                 if contact <= DODGE_LEAD && self.dodge_left == 0 && me.action.actionable() {
                     self.intent = EVADE;
                     self.dodge_left = sim::tuning::dodge_frames();
-                    return Input::aimed(steer(aim, out) | Input::SHIFT, wire);
+                    let dodge = Input::aimed(steer(aim, out) | Input::SHIFT, wire);
+                    return self.hands.leave(w, me, out, dodge);
                 }
                 // Not yet: walk out anyway, it is never wrong.
                 self.intent = EVADE;
@@ -691,7 +695,7 @@ impl Mireback {
             _ => V3::new(target.x, Fx::ratio(15, 10), target.z),
         };
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-        let strike = poke.reach.add(Fx::ratio(1, 2));
+        let strike = self.hands.reach(me).add(Fx::ratio(1, 2));
         let to_target = flat(target.sub(me.pos));
         let at_target = atan2_turns(to_target.z, to_target.x);
         let target_wire = turns_to_aim(at_target.sub(me.carry_yaw));
@@ -738,11 +742,25 @@ impl Mireback {
                 0
             };
             let _ = target_wire;
-            return looking(me, target_point, walk | swing | hop);
+            let input = looking(me, target_point, walk | swing | hop);
+            if swing != 0 {
+                return self.hands.hit(w, me, target_point, input, Some(window));
+            }
+            if to_target.flat_len().raw() > strike.raw()
+                && let Some(input) = self.hands.close_in(w, me, target_point, window)
+            {
+                return input;
+            }
+            return input;
         }
 
-        // Hold the flank, on clean floor.
+        // Hold the flank, on clean floor -- and while it waits there, the
+        // class's own business.
         self.intent = FLANK;
+        let safe = coming.map_or(i32::MAX, |k| to_contact(beast, k, me.pos) - self.slop);
+        if let Some(input) = self.hands.idle(w, me, beast.pos, target_point, safe) {
+            return input;
+        }
         let station = self.station(seen, beast, me.pos, side);
         let to_station = flat(station.sub(me.pos));
         let walk = if to_station.flat_len().raw() > SETTLED.raw() {
@@ -895,7 +913,7 @@ impl Mireback {
         Input::aimed(walk, wire)
     }
 
-    fn ride(&mut self, me: &sim::state::Player, beast: &Monster) -> Input {
+    fn ride(&mut self, w: &World, me: &sim::state::Player, beast: &Monster) -> Input {
         let along = V3::from_turns(beast.yaw);
         let aim = atan2_turns(along.z, along.x);
         let wire = turns_to_aim(aim.sub(me.carry_yaw));
@@ -945,7 +963,11 @@ impl Mireback {
             0
         };
         let _ = face;
-        looking(me, target, swing)
+        let input = looking(me, target, swing);
+        if swing != 0 {
+            return self.hands.hit(w, me, target, input, None);
+        }
+        input
     }
 }
 
@@ -986,6 +1008,14 @@ impl Plan for Mireback {
 
     fn intent(&self) -> Intent {
         self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
     }
 }
 

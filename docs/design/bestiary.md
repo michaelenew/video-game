@@ -435,3 +435,242 @@ own):
 3. **Riding the herd, riding the Galewing into the sky, climbing the
    Siegeshell** — three new rides. Is the ride the Ridgeback's thing, or the
    game's?
+
+## 8 · Where the cast landed
+
+*2026-10-01.* Ten creatures and the Ridgeback are built, and until today the
+scripted hunter played two of the six classes: the Champion well and the
+Bulwark less well. It pressed a poke, a heavy and a dodge, which is the
+Champion's whole fight and a fraction of anybody else's -- so four classes lost
+almost every hunt against every creature, and every creature's §13 said the
+same sentence about it. **The hunter now plays all six**, and this section is
+where each creature landed for each of them.
+
+### How the hunter plays a class
+
+A creature's plan (`crates/hunt/src/plans/<x>.rs`) still says *what* to do --
+hit the foot now, go in on this window, get out, wait. A per-class layer,
+`crates/hunt/src/class.rs` (`hunt::Hands`), says *how* this class does it.
+Each plan calls it at the places it already had: where it swung (`hit`), where
+it waited (`idle`), where it walked in on a window (`close_in`), where it
+dodged (`leave`), and where a Bulwark could block (`guard`); the hunter runs
+every frame's input through it last (`finish`). Which button throws which move
+is learned by pressing them, as the sparring bot learns its kit
+(`duel::Kit::learn`); aim is `aim::look_onto`, as the sparring bot's is. It
+reads the creature only through the plan's fifteen-frame delay line, and its
+own body -- its shadow, its pools, its bars, its shield -- as a player does;
+where a plan keeps a camera (the Pair, the Veilstalker, the Mantis), the layer
+acts only on what is on that screen and moves the mouse off it by a flick.
+
+| Class | What it does now |
+| --- | --- |
+| Champion | **Exactly what the plan says** -- the plans were written for him, and the Ridgeback's pin proves his hunts did not move. |
+| Bulwark | The plans' own guards where they had them (the Ridgeback, the Mireback, the Sandmaw, the Broodmother), and now the Hornback's hook and shoulder taken on the shield; a Slam answers a blow the shield took. A guard on the Pair's answers was tried and took him from 12 wins in 24 to 3 -- two cats, one shield -- and taken out. Not built: the shield thrown. |
+| Shadow Reaver | Sends the shadow beside the work between openings, and calls it home when the work has moved; swings at nothing now and then so its copy marks the creature; **the lotus** on a shadow standing at the work, dragged home through it by a recall; **dashes** to a shadow standing there to go in, and to one lying the way out to leave; the **Executioner** to cash marks. |
+| Elementalist | **Bolts and the Cataclysm aimed** through the crosshair onto the point (the plans had levelled them at the horizon), the **fire pillar** planted where the creature stands in any window or quiet moment long enough. A cover stone raised between her and the creature was tried and cost her hunts on every creature it was tried on (they block her own bolts and her way); not kept. The plans that raised stones already (the Hornback's lanes, the Sandmaw's beaches, the Pair's split) still do. |
+| Blood mage | The scythe where the plan pressed her Haemorrhage in reach (four in a hundred of her red for thirty, against something that does not bleed), measured by the scythe's own reach -- several plans measured her by her poke slot, the Bloodletter, and swung the scythe at the air from seven metres. **The spike on a pool under it** worth the price (eighty of essence and up), **blinks** to a pool to go in or out, the **Grasp** as a way in on a long window, the cut from range with red to spare. |
+| Dual mage | **Both hands**: every auto in the hand that keeps the bars inside the band; **never into ascension** (the first hunts that let her climb there lost seven hundred health to it on the Mireback); goads the bars up between openings; **Judgement and the Sweep** in a window; the **second jump** off the three-quarter tier when the plan holds jump for height; the punch turned so the line from that shoulder meets the point. |
+
+The report's new section **THE CLASS** (and `the class, over the runs` under
+`fight --repeats`) counts what each class did, so a zero says a tool was never
+found a use for. `crates/hunt/tests/class.rs` holds that every class uses its
+own kit against a creature, that the Champion's input comes through unchanged,
+and that the Dual mage never ascends on a hunt; `tests/pin.rs` pins a Reaver,
+an Elementalist and a Blood mage hunt beside the Champion's, the Bulwark's and
+the Dual mage's.
+
+### The numbers
+
+`cargo run -p hunt --bin fight -- --species <x> --class <c> --repeats 24`,
+solo; the Hornback's crossing `--arena crossing --repeats 12`; the Galewing's
+plan B `--gamble`; the Broodmother `cargo run -p hunt --bin brood -- --all
+--repeats 24` (the balanced plan here; the other two in her §13). *Before* is
+the same command on main the hour before the class layer; for the Siegeshell,
+which arrived later, the same build before its plan was wired to the layer. Alone and as a pair (`--hunters 2 --repeats 12`, both of the class).
+
+| Creature | Class | Won | Mean win | Unanswerable | Before (won) |
+| --- | --- | --- | --- | --- | --- |
+| Ridgeback | Champion | 14/24 | 64 s | 0 | 14/24 |
+|  | Bulwark | 0/24 | -- | 0 | 0/24 |
+|  | Reaver | 12/24 | 64 s | 0 | 5/24 |
+|  | Elementalist | 6/24 | 141 s | 0 | 0/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 0/24 | -- | 0 | 0/24 |
+| Gnawers | Champion | 24/24 | 35 s | 0 | 24/24 |
+|  | Bulwark | 24/24 | 35 s | 0 | 24/24 |
+|  | Reaver | 24/24 | 33 s | 0 | 24/24 |
+|  | Elementalist | 24/24 | 24 s | 0 | 24/24 |
+|  | Blood mage | 21/24 | 57 s | 0 | 24/24 |
+|  | Dual mage | 20/24 | 87 s | 0 | 2/24 |
+| Hornback, meadow | Champion | 22/24 | 109 s | 0 | 22/24 |
+|  | Bulwark | 20/24 | 170 s | 1 | 19/24 |
+|  | Reaver | 15/24 | 163 s | 1 | 16/24 |
+|  | Elementalist | 24/24 | 36 s | 0 | 23/24 |
+|  | Blood mage | 21/24 | 109 s | 1 | 5/24 |
+|  | Dual mage | 14/24 | 219 s | 1 | 1/24 |
+| Hornback, crossing | Champion | 11/12 | 56 s | 0 | 11/12 |
+|  | Bulwark | 8/12 | 59 s | 0 | 9/12 |
+|  | Reaver | 9/12 | 56 s | 0 | 9/12 |
+|  | Elementalist | 11/12 | 49 s | 0 | 7/12 |
+|  | Blood mage | 4/12 | 58 s | 0 | 8/12 |
+|  | Dual mage | 9/12 | 67 s | 0 | 11/12 |
+| Mireback | Champion | 21/24 | 120 s | 1 | 21/24 |
+|  | Bulwark | 16/24 | 98 s | 0 | 16/24 |
+|  | Reaver | 22/24 | 89 s | 2 | 23/24 |
+|  | Elementalist | 24/24 | 42 s | 0 | 24/24 |
+|  | Blood mage | 5/24 | 149 s | 3 | 5/24 |
+|  | Dual mage | 0/24 | -- | 0 | 0/24 |
+| Sandmaw | Champion | 18/24 | 191 s | 0 | 18/24 |
+|  | Bulwark | 24/24 | 214 s | 0 | 24/24 |
+|  | Reaver | 10/24 | 223 s | 0 | 8/24 |
+|  | Elementalist | 11/24 | 338 s | 0 | 4/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 3/24 | 209 s | 0 | 0/24 |
+| The Pair | Champion | 16/24 | 159 s | 0 | 16/24 |
+|  | Bulwark | 12/24 | 186 s | 0 | 12/24 |
+|  | Reaver | 7/24 | 111 s | 0 | 4/24 |
+|  | Elementalist | 24/24 | 46 s | 0 | 4/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 4/24 | 128 s | 0 | 0/24 |
+| Broodmother (balanced) | Champion | 7/24 | 143 s | 2 | 7/24 |
+|  | Bulwark | 0/24 | -- | 0 | 0/24 |
+|  | Reaver | 0/24 | -- | 0 | 0/24 |
+|  | Elementalist | 1/24 | 142 s | 1 | 0/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 10/24 | 152 s | 3 | 0/24 |
+| Veilstalker | Champion | 6/24 | 336 s | 0 | 6/24 |
+|  | Bulwark | 8/24 | 463 s | 0 | 8/24 |
+|  | Reaver | 6/24 | 491 s | 0 | 3/24 |
+|  | Elementalist | 22/24 | 208 s | 0 | 5/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 0/24 | -- | 0 | 0/24 |
+| Mantis | Champion | 0/24 | -- | 0 | 0/24 |
+|  | Bulwark | 18/24 | 246 s | 0 | 18/24 |
+|  | Reaver | 0/24 | -- | 0 | 0/24 |
+|  | Elementalist | 24/24 | 71 s | 0 | 0/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 2/24 | 212 s | 0 | 0/24 |
+| Galewing, plan A | Champion | 4/24 | 482 s | 0 | 4/24 |
+|  | Bulwark | 0/24 | -- | 0 | 0/24 |
+|  | Reaver | 9/24 | 646 s | 0 | 0/24 |
+|  | Elementalist | 17/24 | 176 s | 0 | 0/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 0/24 | -- | 0 | 0/24 |
+| Galewing, plan B | Champion | 7/24 | 491 s | 0 | 7/24 |
+|  | Bulwark | 2/24 | 752 s | 0 | 2/24 |
+|  | Reaver | 11/24 | 580 s | 0 | 2/24 |
+|  | Elementalist | 18/24 | 230 s | 0 | 0/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 0/24 | -- | 0 | 0/24 |
+| Siegeshell, alone | Champion | 0/24 | -- | 1 | 0/24 |
+|  | Bulwark | 0/24 | -- | 0 | 0/24 |
+|  | Reaver | 3/24 | 265 s | 0 | 3/24 |
+|  | Elementalist | 2/24 | 407 s | 0 | 1/24 |
+|  | Blood mage | 0/24 | -- | 0 | 0/24 |
+|  | Dual mage | 0/24 | -- | 0 | 0/24 |
+| Siegeshell, two | Champion | 5/12 | 468 s | 5 | 5/12 |
+|  | Bulwark | 0/12 | -- | 1 | 0/12 |
+|  | Reaver | 12/12 | 223 s | 0 | 11/12 |
+|  | Elementalist | 6/12 | 339 s | 0 | 7/12 |
+|  | Blood mage | 0/12 | -- | 0 | 0/12 |
+|  | Dual mage | 9/12 | 452 s | 0 | 1/12 |
+
+The Mantis's ablations, every class 24 hunts (`MANTIS_PLAN=repeater|jumper|dodger`,
+`MANTIS_HABIT=off`): the Elementalist wins 23-24 of each but the jumper's (1);
+the Bulwark 11 (repeater), 2 (habit off), 1 (dodger), 0 (jumper); everybody
+else 0-2. The Champion's are 0 of 48 for the plan and every ablation, on main
+before this change as after it.
+
+### Across the cast, by class
+
+- **The Elementalist's pillar decides most fights.** 24 of 24 against the
+  Gnawers (24 s), the Hornback (36 s), the Mireback (41 s), the Pair (46 s)
+  and the Mantis (71 s); 22 the Veilstalker, 17-18 the Galewing, 11 the
+  Sandmaw; 22 the Broodmother's mother-only plan against 1 for the balanced
+  one. **No creature steps out of a fire pillar**, so its whole burn -- 390
+  over the pillar's 175 -- lands on every one planted under it, from nine
+  metres, out of reach of most of what it can do. Either creatures learn
+  fire, or the pillar's burn on a creature comes down, or this is her
+  identity (the Mireback's and the Veilstalker's §12 already ask): a person's
+  call. Her worst are the Siegeshell (2 alone, 6 of 12 as a pair: a pillar
+  fits under a walking leg almost never) and the Ridgeback (6), whose windows
+  are short and whose ride she cannot work as well from its back. Main's aim
+  A3 -- the top of a creature's part seen from above is a place -- cost her
+  on both creatures she shoots from above or onto a back: the Sandmaw 20 to
+  11, the Ridgeback 7 to 6, after the layer learned to send such a shot past
+  the edge (`Hands::spot`; before it, 1 and 3).
+- **The Blood mage loses wherever the Champion has to out-damage something.**
+  21 against the Gnawers and the Hornback (whose stun holds the bull over a
+  spike), 5 the Mireback, none anywhere else. Against a creature her kit is
+  thin: the scythe is 22 (35 at full grey) against a sword's 64; the Grasp
+  closes on a creature with one arm's worth -- forty or fifty, measured on the
+  Pair, for seven in a hundred of her red; the Haemorrhage is thirty for four;
+  and the spike pays only on a big pool, which only big hits make. Every
+  number is the kit document's; "the creature does not bleed" is the sentence
+  that costs her most. For [kits/blood-mage.md](kits/blood-mage.md) and a
+  person.
+- **The Dual mage lives on tempo.** 20 the Gnawers, 14 the Hornback, 10 the
+  Broodmother, 2-4 the Pair, the Sandmaw and the Mantis, none the Ridgeback,
+  the Mireback, the Veilstalker or the Galewing -- and 9 of 12 as a pair
+  against the Siegeshell, from 1, her hands turned onto the ankle beside her. Where the plan swings often
+  her bars climb and her hands keep them level; where windows are scarce they
+  sit near empty and her punches are thin. Her punch also **passes over what
+  is at her feet** -- the Ridgeback's ridge from where the plan stands her to
+  work it, the Mireback's warts from its crown -- where a sword's arc does
+  not: zero ridge hits in her Ridgeback hunts, though her hop puts her on its
+  back more than anybody's.
+- **The Reaver gained most where the shadow can stand by the work**: the
+  Ridgeback 5 to 12, the Pair 4 to 7, the Galewing's two plans 0 and 2 to 9
+  and 11, the Veilstalker 3 to 6, a pair against the Siegeshell 11 to 12. Her marks are cashed rarely (a herd's
+  bodies carry none), and she is 750 health against everybody's 1000. The
+  Mantis is still 0: her shadow out beside its guard is not yet the fight §7
+  of its document describes.
+- **The Bulwark** moved only where the layer guards for him or answers a
+  guarded blow with Slam: the Hornback (19 to 20, 191 s to 170 s), the Sandmaw
+  (the same 24 wins, with more health), the Broodmother and the crossing (one
+  fewer). His Ridgeback (0) and Galewing (0 and 2) are the open questions they
+  were.
+- **The Champion** did not move on any creature.
+
+### Unanswerable
+
+Zero, as before, for every class on the Ridgeback, the Gnawers, the Sandmaw,
+the Pair, the Veilstalker, the Mantis and the Galewing. **The Mireback's
+moved**: its §13 recorded 1/1/1/0/0/0 by class; main measured 1/0/1/0/1/2
+before the class layer -- after the Mantis made the shared rule ask whether the
+hurt hunter was inside the move's reach, and after other merges -- and
+1/0/2/0/3/0 after it. **The Hornback has its first**: one in 24 for the
+Bulwark, the Reaver, the Blood mage and the Dual mage. The one traced, the
+Blood mage's, was the bull's windup begun out of her sight while she walked to
+the rock she posts at, her crosshair on the bull: the plan's walk, on a course
+of the fight the Champion's hunts never take. The Broodmother's are where
+they were for the Champion (2) and 0-3 for the rest. The Siegeshell's are
+its parasites' (its §13): the Champion's 1 alone and 5 as a pair, unchanged,
+the Bulwark's pair 1, and none for the four classes that keep moving.
+
+### Open, by creature
+
+- **The Ridgeback** -- the Blood mage, the Dual mage and the Bulwark win
+  nothing; the Dual mage's punch misses the ridge from where the plan works it.
+- **The Gnawers** -- nothing new; everyone wins, the Elementalist in 24 s.
+- **The Hornback** -- the Elementalist's 36 s with nearly all her health is
+  trivial; four classes take their first unanswerable hit, one each in 24.
+  On the crossing the Blood mage fell from 8 to 4 of 12.
+- **The Mireback** -- the Dual mage climbs onto it and cannot burst a wart from
+  its crown (0 of 24); the Blood mage's unanswerable hits rose to three.
+- **The Sandmaw** -- the Blood mage still wins nothing; the Elementalist now
+  wins 11, slowly (338 s), and was 20 before aim A3 merged.
+- **The Pair** -- the Elementalist wins every hunt in 46 s.
+- **The Broodmother** -- the Elementalist wins by ignoring the brood (22 of 24
+  mother only, 1 balanced): the dilemma does not hold for her.
+- **The Veilstalker** -- §7's worry is confirmed: the Elementalist wins 22 of
+  24.
+- **The Mantis** -- the Elementalist wins every hunt from outside its guard;
+  the Reaver, the Blood mage and the Champion win none solo.
+- **The Galewing** -- the Elementalist and now the Reaver win; the Blood mage
+  and the Dual mage nothing, the Bulwark next to nothing.
+- **The Siegeshell** -- the Bulwark and the Blood mage win nothing alone or as
+  a pair: nothing on it is a blow to guard, and her cuts are all of the Blood
+  mage's kit that fits on a walking leg. A pair of Dual mages went from 1 to 9
+  of 12; alone only the Reaver (3) and the Elementalist (2) win.
+

@@ -177,6 +177,14 @@ pub struct Report {
     pub drank_toppled: i32,
     was_pools: usize,
 
+    /// **What the hunters did with their class** (`crate::class`), summed,
+    /// and which class that was. Printed as THE CLASS for every class but the
+    /// Champion -- whose fight is the plans' own and has nothing to add --
+    /// so a creature's document can say what each class did against it, and
+    /// a zero says the class layer never found a use for something.
+    pub uses: crate::Uses,
+    pub class: Option<sim::Class>,
+
     /// What the creature was committed to, and how far away the hunters were
     /// when it committed. The second is what makes "unanswerable" checkable
     /// rather than arguable.
@@ -394,6 +402,8 @@ impl Report {
             hi: V3::ZERO,
             spread: Fx::ZERO,
             pools_made: 0,
+            uses: crate::Uses::default(),
+            class: None,
             drank: 0,
             drank_toppled: 0,
             was_pools: 0,
@@ -794,6 +804,14 @@ impl Report {
 
     /// Fold one tick into the report.
     pub fn observe(&mut self, before: &World, after: &World, bots: &[Hunter]) {
+        let mut uses = crate::Uses::default();
+        for bot in bots {
+            if let Some(u) = bot.uses() {
+                uses.add(&u);
+            }
+        }
+        self.uses = uses;
+        self.class = bots.first().map(|b| after.players[b.who].class);
         if let Some(extra) = self.extra.as_mut() {
             extra.observe_with(before, after, bots);
         }
@@ -1743,6 +1761,15 @@ impl Report {
                 format!("{}", self.drank_toppled),
                 self.card.words.toppled_pool,
             );
+        }
+        if let Some(class) = self.class {
+            let lines = self.uses.lines(class);
+            if !lines.is_empty() {
+                out.push_str("\nTHE CLASS\n");
+                for (what, n, why) in lines {
+                    line(&mut out, what, format!("{n}"), why);
+                }
+            }
         }
         out
     }

@@ -29,8 +29,8 @@ is a separate question, asked along the ability's own path by
 reticle lands on its chest three metres up, and with it on the ray every
 skillshot came out as a metre-long stub pointed at the sky.
 
-Two kinds of skillshot start with that ray. Two more lines of effect do not —
-they are pointed by something the player decided earlier. **Four in total, and
+Two kinds of skillshot start with that ray. Three more lines of effect do not —
+they are pointed by something the player decided earlier. **Five in total, and
 every one of them is a function in `aim.rs`:**
 
 | Kind | Call | Rule |
@@ -39,8 +39,12 @@ every one of them is a function in `aim.rs`:**
 | Skillshot | `aim::skillshot_path` | Ground: that spot raised to the **middle of whatever stands on it** (`aim::standing_middle`, with the height from `aim::stands_at` — a fighter's, unless the crosshair passed through something shorter), because the floor is never the target — bodies are not on the ray, so a ground hit means "there". Anything else — wall, stone (its top too: `aim::sight_for_attack`), body, monster, range sphere — the point of intersection exactly. Straight line from the caster, and that line is its whole reach. |
 | Swing | `aim::swing_path` | A body moving: no raycast, reach off the body. Yaw is `facing`; pitch follows the camera, **with a dead zone while standing** — level through the first 45° below the horizon, exact above it, and the leftover past it. The camera sits above the shoulder, so looking at somebody at your own height is looking slightly down at them. In the air there is no shared floor to read that way, so the pitch is followed exactly. Standing, pointed at something **shorter than a fighter** (`aim::stands_at`), it dips to meet it at the same share of its height a level swing meets a fighter at (`aim::stoop`); zero where only fighters stand. A **one-armed** move leaves from that shoulder rather than the chest: `Move::hand`, declared in the table beside the shape, and `aim::across` is the only thing that turns it into a direction. |
 | At the mechanic | `aim::mechanic_path` | Where the class mechanic is standing. The player aimed when they placed it. Guillotine lotus only. |
+| Racing | `aim::racing_path` | From the stone the Elementalist is holding churning (her own feet if there is none), **flat along the yaw of her look**, as far as the hold bought. No raycast and no pitch: the place was aimed when the stone was raised, and the hold is the distance. Fissure only. |
 
-Fifteen more functions live there and are **not** lines of effect. `aim::pointing_at`
+The rest of `aim.rs` -- twenty-seven functions as of 2026-10-01 -- are **not**
+lines of effect. `aim::sight` and `aim::sight_for_attack` are the one raycast
+itself, `aim::origin` and `aim::hand_origin` where a cast leaves the body, and
+`aim::first_along` what a path runs into. `aim::pointing_at`
 answers *is the crosshair on that thing*, which the Reaver's forward dodge asks
 about her shadow. It points nothing anywhere, but it is built from the eye and
 the look direction, so it belongs with the rest of them — the alternative is an
@@ -79,8 +83,19 @@ point see that one* -- `line_clear`, and no floor hazard that blocks sight
 (`crate::perception`, bestiary P5). `aim::in_view` and `aim::in_view_of` (A5)
 answer *is that point on this fighter's screen and not behind anything*: a cone
 round the look, from the eye, then `sight_clear` -- the Veilstalker asks so it
-never reveals itself off-screen. A sight test written beside a creature's brain
-would be the mistake below with the roles swapped. **Every eye `aim.rs` starts
+never reveals itself off-screen. `aim::on_screen` is that cone alone, with
+nothing asked about what stands in front -- for what the renderer draws over
+everything, the floor markers (the Galewing's report). `aim::in_view_from` and
+`aim::off_look` ask the same of a look a creature *remembers* -- where you stood
+and which way you faced, a glance old -- and how far off it a point is: the
+Veilstalker's decloak, and the report's thirds of the screen. A sight test
+written beside a creature's brain would be the mistake below with the roles
+swapped. `aim::underfoot_up` answers *which way is up for what a fighter stands
+on* -- `+y` on the floor, the mounted part's own on a creature -- which is what
+`swing_path`'s dead zone is measured against (bestiary A4, the Galewing).
+`aim::blink_to` answers *where does a body sent along the floor stop* -- the
+Dual mage's blink, short of the first thing its feet meet -- and `aim::settle`
+*what does this point stand on*. **Every eye `aim.rs` starts
 from is `camera::eye_under`**: the eye held under a cave's vault, which the
 drawn camera starts from too; with no ceiling overhead it is `camera::eye`.
 
@@ -97,7 +112,7 @@ goes past it — by more the further away it is. If you find yourself writing
 `camera::eye(...)`, `camera::eye_under(...)`, `look_dir()`, or a ray-vs-shape call outside those two
 files, stop: the thing you want already exists.
 
-If none of the four fits a new ability, **change `aim.rs`** rather than working
+If none of the five fits a new ability, **change `aim.rs`** rather than working
 around it. A change there is true of every ability at once, which is the point.
 The full specification is [`docs/design/aiming.md`](docs/design/aiming.md).
 

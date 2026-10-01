@@ -734,6 +734,35 @@ a ring on the helpless, two channels inside the gap) are zero in every run.
 bite begun off your screen lands only through a marker that has been under
 you for a reaction. Zero since, six classes, alone and as a pair.
 
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8). The plan's legs, parasite, anchor and dodge
+lines now go through the class layer. Alone, 24 seeds; as a pair of the same
+class, 12 seeds:
+
+```text
+                alone, won   mean    unanswerable    a pair, won   mean    unanswerable    before (alone / pair)
+  Champion        0/24        --          1             5/12       468 s        5            0 / 5
+  Bulwark         0/24        --          0             0/12        --          1            0 / 0
+  Reaver          3/24       265 s        0            12/12       223 s        0            3 / 11
+  Elementalist    2/24       407 s        0             6/12       339 s        0            1 / 7
+  Blood mage      0/24        --          0             0/12        --          0            0 / 0
+  Dual mage       0/24        --          0             9/12       452 s        0            0 / 1
+```
+
+**The Dual mage** is the one it moved: a pair of them won one in twelve and
+now wins nine, her hands turned onto the ankle she is beside (16 000 turns over
+the twelve) and her goads keeping both bars fed. She never finishes and never
+ascends -- the layer forbids the wings -- so the damage is the autos'. **The
+Reaver** sends her shadow to the ankle ahead of her (215) and swings through
+it (1 810 copies): 12 of 12, quicker. **The Elementalist** shoots (17 000
+bolts) but a pillar fits almost nowhere under a walking leg (6). **The Bulwark
+and the Blood mage win nothing**, alone or paired: the Bulwark lives (754 left
+a hunt alone) and runs out of valley -- nothing on this fight is a blow she
+can guard, so her kit adds nothing to the Champion's, and the Champion's is not
+enough alone; the Blood mage bleeds out on the climb, her cuts (146) the only
+thing of hers that fits. Alone, the Reaver (one in eight) and the
+Elementalist (one in twelve) meet §9's one in twenty; the other four win none.
+
 What the build decided beside the document:
 
 - **Three hundred metres, not 240**: the walk is 233 m of it, and a body forty
@@ -769,5 +798,6 @@ What the build decided beside the document:
   a rider's walk was.
 
 For a person: whether the beat is a rhythm or a chore (§12, 6), whether 0.8
-m/s reads as walking (§12, 5), the solo rate (§12, 7), and the Reaver, who
-wins eleven of twelve as a pair.
+m/s reads as walking (§12, 5), the solo rate (§12, 7), the Reaver, who
+wins twelve of twelve as a pair, and the Bulwark and the Blood mage, who win
+nothing in any company.

@@ -98,6 +98,8 @@ fn main() {
     let mut thrown = [0u32; sim::species::MAX_MOVES];
     let mut landed = [0u32; sim::species::MAX_MOVES];
     let mut names: Vec<&'static str> = Vec::new();
+    // What the hunters did with their class, over every run (`hunt::class`).
+    let mut uses = hunt::Uses::default();
     for run in 0..repeats.max(1) {
         let report = play_card_in(
             card,
@@ -149,6 +151,7 @@ fn main() {
             landed[k] += report.landed[k];
         }
         names = report.species.moves.iter().map(|m| m.name).collect();
+        uses.add(&report.uses);
     }
     if repeats > 1 {
         println!(
@@ -186,5 +189,13 @@ fn main() {
             .map(|(k, name)| format!("{name} {}/{}", landed[k], thrown[k]))
             .collect();
         println!("  landed/thrown: {}", moves.join(", "));
+        let class: Vec<String> = uses
+            .lines(class)
+            .iter()
+            .map(|(what, n, _)| format!("{what} {n}"))
+            .collect();
+        if !class.is_empty() {
+            println!("  the class, over the runs: {}", class.join(", "));
+        }
     }
 }

@@ -36,7 +36,7 @@ use sim::state::{Action, Phase, Player};
 use sim::{Input, V3, World};
 
 use crate::report::{HALF_VIEW, Tally};
-use crate::{Hunter, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
+use crate::{Hands, Hunter, Intent, Plan, REACTION, heavy, steer, turns_to_aim};
 
 /// Watching the floor.
 pub const WATCH: Intent = Intent("Watch");
@@ -152,6 +152,13 @@ pub struct Veilstalker {
     slop: i32,
     rng: u32,
     hop: Fx,
+    /// Its class (`crate::class`), held to this camera; and what this
+    /// frame's choice was for it: the point a swing went at, in what window,
+    /// and which way a dodge went.
+    hands: Hands,
+    aimed: Option<(V3, Option<i32>)>,
+    out: Option<V3>,
+    waiting: Option<(V3, V3, i32)>,
 }
 
 impl Veilstalker {
@@ -178,6 +185,10 @@ impl Veilstalker {
                 ^ seed.wrapping_mul(0x27D4_EB2F))
                 | 1,
             hop,
+            hands: Hands::new(who, seed),
+            aimed: None,
+            out: None,
+            waiting: None,
         };
         p.roll_slop();
         p
@@ -418,6 +429,54 @@ impl Plan for Veilstalker {
     }
 
     fn act(&mut self, w: &World) -> Input {
+        self.aimed = None;
+        self.out = None;
+        self.waiting = None;
+        let input = self.decide(w);
+        let me = w.players[self.who];
+        // The class's turn: what the choice was for, in its own hands.
+        const ATTACKS: u16 =
+            Input::LEFT | Input::RIGHT | Input::MIDDLE | Input::SPECIAL | Input::MECHANIC;
+        if input.bits & ATTACKS != 0
+            && let Some((at, window)) = self.aimed
+        {
+            return self.hands.hit(w, &me, at, input, window);
+        }
+        if input.bits & Input::SHIFT != 0
+            && let Some(out) = self.out
+        {
+            return self.hands.leave(w, &me, out, input);
+        }
+        if let Some((at, Some(window))) = self.aimed
+            && wide_flat_dist(at, me.pos).raw() > self.hands.reach(&me).add(Fx::ONE).raw()
+            && let Some(go) = self.hands.close_in(w, &me, at, window)
+        {
+            return go;
+        }
+        if let Some((beast, at, safe)) = self.waiting
+            && let Some(own) = self.hands.idle(w, &me, beast, at, safe)
+        {
+            return own;
+        }
+        input
+    }
+
+    fn intent(&self) -> Intent {
+        self.intent
+    }
+
+    fn hands(&mut self) -> Option<&mut Hands> {
+        Some(&mut self.hands)
+    }
+
+    fn hands_ref(&self) -> Option<&Hands> {
+        Some(&self.hands)
+    }
+}
+
+impl Veilstalker {
+    /// One frame of the plan, before its class has its turn.
+    fn decide(&mut self, w: &World) -> Input {
         self.cooldown = self.cooldown.saturating_sub(1);
         self.dodge_left = self.dodge_left.saturating_sub(1);
         self.follow_left = self.follow_left.saturating_sub(1);
@@ -559,10 +618,6 @@ impl Plan for Veilstalker {
         // 1 and 4. Watch, read, follow.
         self.watch_floor(w, &seen, &me, &prints)
     }
-
-    fn intent(&self) -> Intent {
-        self.intent
-    }
 }
 
 impl Veilstalker {
@@ -574,6 +629,10 @@ impl Veilstalker {
             let error = wrap_turns(want.sub(self.look));
             let step = TURN.mul(sim::DT);
             self.look = self.look.add(error.clamp(step.neg(), step));
+        }
+        self.hands.camera(Some(self.look));
+        if bits & Input::SHIFT != 0 && dir.flat_len().raw() > 0 {
+            self.out = Some(dir);
         }
         let at = toward.unwrap_or(me.pos.add(V3::from_turns(self.look).scale(Fx::from_int(8))));
         let mut input = wire(me, self.look, at, bits);
@@ -878,7 +937,7 @@ impl Veilstalker {
         let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
         let poke_busy = (poke.startup + poke.active + poke.recovery) as i32;
         let heavy_busy = crate::heavy_commitment(me.class) as i32;
-        let reach = poke.reach.add(Fx::ONE);
+        let reach = self.hands.reach(me).add(Fx::ONE);
         let target = fight::middle_of(&m);
         let window = m.frames_until_free() as i32 - REACTION as i32;
         if window <= poke_busy + EXIT {
@@ -918,6 +977,10 @@ impl Veilstalker {
         } else {
             0
         };
+        self.aimed = Some((target, Some(window - walk_frames)));
+        if d.raw() > reach.raw() {
+            self.waiting = Some((m.pos, target, window - walk_frames));
+        }
         Some(self.turn_and(me, Some(target), dir, swing))
     }
 
@@ -937,8 +1000,7 @@ impl Veilstalker {
         if fight::apparitions(seen).iter().flatten().next().is_some() {
             return None;
         }
-        let poke = sim::moves::get(me.class, sim::state::SLOT_POKE);
-        let reach = poke.reach.add(Fx::ONE);
+        let reach = self.hands.reach(me).add(Fx::ONE);
         let d = wide_flat_dist(at, me.pos);
         // Not across the arena: a few strides at most.
         if d.raw() > reach.add(Fx::from_int(4)).raw() {
@@ -960,6 +1022,7 @@ impl Veilstalker {
         } else {
             0
         };
+        self.aimed = Some((at, None));
         Some(self.turn_and(me, Some(at), dir, swing))
     }
 

@@ -595,15 +595,32 @@ reaction):
 ```text
                 won    mean    health left (a win)   threat / poke / way in / walk up   unanswerable   pops / slam windows
   Champion      7/24   143 s        308                  44 /  9 / 14 / 33 %                 2              30 / 113
-  Bulwark       0/24     --          --                  48 /  9 / 13 / 30 %                 2               9 / 148
-  Reaver        0/24     --          --                  47 /  9 / 14 / 31 %                 1               9 / 128
-  Elementalist  0/24     --          --                  49 /  8 / 12 / 32 %                 0               0 / 101
-  Blood mage    0/24     --          --                  48 /  8 / 13 / 31 %                 0               0 / 170
-  Dual mage     0/24     --          --                  48 /  8 / 13 / 32 %                 1               0 /  94
+  Bulwark       0/24     --          --                  47 /  9 / 13 / 31 %                 0               5 / 139
+  Reaver        0/24     --          --                  47 /  9 / 13 / 31 %                 0              10 / 112
+  Elementalist  1/24   142 s        310                  48 /  7 / 12 / 33 %                 1              81 / 117
+  Blood mage    0/24     --          --                  48 /  8 / 13 / 31 %                 0               0 / 173
+  Dual mage    10/24   152 s        201                  47 /  9 / 14 / 31 %                 3              48 / 182
 
   the three Champion plans, 24 each: balanced 7 won in 143 s; brood only 1 in 176 s; mother only 0
+  (2026-10-01, every class played; before it every class but the Champion
+   won 0 of 24 on every plan.) The other plans, by class, 24 each:
+    Elementalist  mother only 22 in 83 s; brood only 0
+    Dual mage     mother only  5 in 126 s; brood only 0
+    the rest      0 on both
   coop, two Champions 12/12 in 66 s
 ```
+
+**2026-10-01: the hunter plays all six classes** (`hunt::class`,
+[bestiary.md](../bestiary.md) §8). **The Dual mage** wins 10 of 24 on the
+balanced plan, more than the Champion: her autos clear broodlings with both
+hands and her bars climb on them, and she pops a sac in a quarter of the slam
+windows (48 of 182). **The Elementalist** pops more sacs than anybody (81 in
+117 windows, her bolts at them from the edge of the footprint) and wins one
+balanced -- but **22 of 24 mother only**, in 83 s: a pillar under the mother,
+with the brood left to bite. For her the fight's sentence does not hold, and
+§1's dilemma is the creature's to fix (a mother who leaves fire, or brood that
+come for whoever burns her) or a person's to accept. **The Reaver, the
+Bulwark and the Blood mage** still win nothing on any plan.
 
 **Against the targets.** Balanced wins about a third for the Champion, and
 beats both one-sided plans by a distance -- the fight is the division of
@@ -619,11 +636,11 @@ under them for 3 to 14 frames, short of the report's fifteen. **Fixed
 2026-10-01 for every pack** ([critters.md](../critters.md) §2,
 [plans/polish-fights.md](../plans/polish-fights.md)): a bite begun off your
 screen lands only through a marker that has been under you for a reaction.
-Zero since, six classes, solo and coop. The rest of the roster loses:
-the hunter does not play the Elementalist's free pop from a stone, the
-Reaver's throw into the window, the Blood mage's pools or the Dual mage's bars
-and float -- the same gaps the harness has against the Ridgeback, the Mireback
-and the Sandmaw, so their zeros measure the plan.
+The rest of the roster lost until 2026-10-01, when the hunter did not play
+their classes; it does now (above), and the Dual mage wins, the Elementalist
+wins by ignoring the brood, and the Reaver, the Bulwark and the Blood mage do
+not. Not yet played: the Elementalist's free pop from a stone, and the
+Reaver's throw into the window.
 
 **What changed from the sections above.**
 

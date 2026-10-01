@@ -113,7 +113,7 @@ few enough to balance and to read in third person.
 | [elementalist-v2.md](elementalist-v2.md) | v2: four new inputs, hold-to-charge on both placement buttons, Updraft and Downdraft on her body, Cinder spray, Quake and Tremor, lit stones, the dodge through a stone | **Built 2026-09-30**, unplayed; `cargo run -p sim --bin elemental` prints its numbers |
 | [gatekeeper-retirement.md](gatekeeper-retirement.md) | Why it was cut, what was salvaged | Decided |
 | [monsters.md](monsters.md) | The Ridgeback: the climb, the ride, the control algorithm, measuring the fight | Proposed, rebuilt; **hunts since 2026-09-25**: eight moves, a threat at every range, unplayed |
-| [bestiary.md](bestiary.md) | The cast after the Ridgeback: the contract every creature is held to, eleven creatures on five tiers, the shared machinery (P1–P8) and the aiming changes (A1–A5) they need, and the build order | **Proposed 2026-09-30; the cast accepted as the first mix**; P1, P2 and P8 built 2026-10-01 |
+| [bestiary.md](bestiary.md) | The cast after the Ridgeback: the contract every creature is held to, eleven creatures on five tiers, the shared machinery (P1–P8) and the aiming changes (A1–A5) they need, and the build order; §8 **where the cast landed**, every creature for every class | **Proposed 2026-09-30; the cast accepted as the first mix**; P1, P2 and P8 built 2026-10-01; §8 measured 2026-10-01, the scripted hunter playing all six classes (`hunt::class`) |
 | [species.md](species.md) | A creature is a table: the `Species` every creature is declared as, its knobs, two creatures in the world, and **the recipe for adding one** | **Built 2026-10-01** (bestiary P1 and P8); the Ridgeback pinned bit for bit |
 | [critters.md](critters.md) | Small bodies and packs: the 48-byte critter (a box on its feet), the pack brain (glance, ring, tokens, leader, morale, spawning, a monster's pack, standing on a creature), the aim change that makes a knee-high body hittable, `critcheck`, and **the recipe for a pack creature** | **Built 2026-10-01** (bestiary P3, A1, A2); the Ridgeback and versus pinned bit for bit |
 | [hazards.md](hazards.md) | The hunt's shared machinery: the lore (one region of the snapshot each fight lays out), floor hazards, perception and hearing, the one fall rule, defended things, creatures against solids, the eye under a ceiling, lengths across the valley, the dev sentinel, and **the recipe for a creature's share of it** | **Built 2026-10-01** (bestiary P4, P5, P6's falls, P7, A5); the Ridgeback and versus pinned bit for bit |
@@ -184,7 +184,7 @@ crates/net    Rollback session (GGRS) + headless soak.
 crates/view   Interpolation, the follow camera, posing. No engine dependency.
 crates/game   Bevy app. Rendering only.
 crates/anim   Animation factory: recipes, the solver, contact sheets. See animation.md.
-crates/hunt   A scripted hunter and the report that judges it; the sparring bot.
+crates/hunt   A scripted hunter (a plan per creature, a class layer for every class) and the report that judges it; the sparring bot.
 crates/manual Every command, key and flag. No dependencies, so help is instant.
 crates/web    The browser: the playable page, and the frame-data tool.
 ```
