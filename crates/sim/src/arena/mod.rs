@@ -60,7 +60,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 // pub mod broodmother;
 
@@ -130,7 +130,7 @@ pub const fn lookup(id: ArenaId) -> Option<&'static Arena> {
 
         ArenaId::SANDMAW => Some(&sandmaw::ARENA),
 
-        // ArenaId::PAIR => Some(&pair::ARENA),
+        ArenaId::PAIR => Some(&pair::ARENA),
 
         // ArenaId::BROODMOTHER => Some(&broodmother::ARENA),
 

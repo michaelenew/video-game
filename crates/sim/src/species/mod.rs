@@ -67,7 +67,7 @@ pub mod mireback;
 
 pub mod sandmaw;
 
-// pub mod pair;
+pub mod pair;
 
 // pub mod broodmother;
 
@@ -129,7 +129,7 @@ pub const fn lookup(id: SpeciesId) -> Option<&'static Species> {
 
         SpeciesId::SANDMAW => Some(&sandmaw::SPECIES),
 
-        // SpeciesId::PAIR => Some(&pair::SPECIES),
+        SpeciesId::PAIR => Some(&pair::SPECIES),
 
         // SpeciesId::BROODMOTHER => Some(&broodmother::SPECIES),
 
