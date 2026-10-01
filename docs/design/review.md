@@ -661,3 +661,15 @@ Every `C` above, in one list, so a single reply can carry them:
   window five to eleven metres off he throws it at the work, leaps to it, and
   Slams out of the leap; a shield left planted is recalled. See the feel log
   of 2026-10-01 and bestiary §8 for what it did to his numbers.
+- **Fixed: `Shift+H` stopped at the Gnawers.** The cycle stepped from
+  `w.monster()`, and a pack creature (the Gnawers, the herd) has none, so from
+  the Gnawers it went back to the Ridgeback and the nine after them were never
+  offered. It steps from what is hunted now; `picker`'s
+  `the_list_and_the_cycle_hold_every_creature_and_no_dev_species` walks the
+  whole cycle.
+- **Checked, 2026-10-01**: `?hunt=<x>` for all twelve fights loads clean in
+  headless Chromium (`WEB_QUERY=hunt=<x> ./scripts/web-smoke.sh`: no console
+  error, no failed request, the right arena and the `>` on the right creature),
+  and every fight's desktop capture is in the [gallery](gallery/README.md). The
+  Sandmaw and the Veilstalker show no creature in their arena shots, by design.
+

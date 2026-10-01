@@ -135,8 +135,11 @@ pub fn toggle(w: &World) -> Travel {
 /// and the sentinel, `SpeciesId::is_dev`) are not in the cycle; `--hunt`
 /// reaches them by name.
 pub fn next(w: &World) -> Travel {
-    let to = match w.monster() {
-        Some(m) => species::after(m.species).id,
+    // What is hunted, not `w.monster()`: a pack creature (the Gnawers, the
+    // herd) has no monster, and asking for one sent `Shift+H` from the
+    // Gnawers back to the Ridgeback, so the cycle never got past them.
+    let to = match w.hunted().into_iter().flatten().next() {
+        Some(s) => species::after(s).id,
         None => species::shown()
             .next()
             .map_or(SpeciesId::RIDGEBACK, |s| s.id),
