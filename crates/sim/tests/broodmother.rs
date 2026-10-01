@@ -728,3 +728,25 @@ fn a_struck_sac_turns_the_brood_near_her_on_the_one_who_struck_it() {
         "a broodling near her is not on the attacker"
     );
 }
+
+// ---------------------------------------------------------------------------
+// The world
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_dead_broodmother_is_a_won_hunt_with_its_trophy_and_its_temper() {
+    // The trophy is written from `hunt_won` (world W1), and a temper is the
+    // same mother fought cleverer (W2): both name the Broodmother, and a
+    // tempered mother glances more often.
+    let calm = hunt(Class::Champion);
+    let mut w = hunt(Class::Champion).tempered(2);
+    assert_eq!(w.arena().id, sim::arena::ArenaId::BROODMOTHER);
+    let her = |w: &World| w.monsters[0].expect("her");
+    assert!(her(&w).glance_frames() < her(&calm).glance_frames());
+    assert_eq!(w.hunt_won(), None);
+    w.monsters[0].as_mut().unwrap().health = 0;
+    w.advance([Input::default(); MAX_PLAYERS]);
+    let (beaten, at) = w.hunt_won().expect("a dead mother is a won hunt");
+    assert_eq!(beaten[0], Some(SpeciesId::BROODMOTHER));
+    assert_eq!(at, 2);
+}

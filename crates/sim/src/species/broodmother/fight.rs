@@ -410,10 +410,26 @@ pub fn frame(w: &mut World) {
         web_line(w, &mut m);
         anchors_clear(w, &mut m);
         super::mind::work_out_recall(&mut m, &w.critters, &w.players);
+    } else {
+        orphaned(w);
     }
     webbed(w, &mut m);
     strands(w);
     w.monsters[0] = Some(m);
+}
+
+/// **With her dead, the brood die with her**: they are hers, and a hunt
+/// that ended on the mother does not go on as a chase round the cave after
+/// the last of them (the hunt is won when every small body is down too).
+fn orphaned(w: &mut World) {
+    let Some(pack) = w.pack.as_mut() else {
+        return;
+    };
+    for i in 0..crate::critter::MAX_CRITTERS {
+        if w.critters[i].alive() {
+            crate::pack::killed(pack, &mut w.critters, i);
+        }
+    }
 }
 
 /// The first frame of a round: the clocks staggered so a burst comes every

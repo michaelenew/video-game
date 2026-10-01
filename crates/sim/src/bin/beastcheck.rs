@@ -71,6 +71,23 @@ fn holding(sp: &Species, doing: Doing) -> Monster {
     beast
 }
 
+/// The world height of a part's lowest corner.
+fn bottom(beast: &Monster, part: usize) -> Fx {
+    let sh = beast.sp().shape(part);
+    let rig = beast.rig();
+    (0..8)
+        .map(|c| {
+            let p = V3::new(
+                if c & 1 == 0 { sh.min.x } else { sh.max.x },
+                if c & 2 == 0 { sh.min.y } else { sh.max.y },
+                if c & 4 == 0 { sh.min.z } else { sh.max.z },
+            );
+            rig.part_to_world(part, p).y
+        })
+        .min_by_key(|y| y.raw())
+        .unwrap_or(Fx::ZERO)
+}
+
 /// Does a part's top face point up enough to stand on? A creature on its back
 /// has every "top" facing the floor, and one rolling over has them on edge: a
 /// face steeper than forty-five degrees is a wall.
@@ -241,6 +258,41 @@ fn main() {
         }
         let h = top(&standing, part);
         println!("  {:<14} {:>6} m   {}", p.name, m(h), reach(h));
+    }
+
+    // **The breakables against the hops**: each one's lowest corner standing,
+    // and the lowest it comes in any move -- the Broodmother's sacs are not
+    // weak points but the fight turns on which hops reach them (her §1), so
+    // they are measured here rather than argued about.
+    let breakable: Vec<usize> = (0..sp.parts.len())
+        .filter(|p| sp.parts[*p].shape.breakable && !sp.parts[*p].weak)
+        .collect();
+    if !breakable.is_empty() {
+        println!(
+            "\nthe breakable parts, their lowest corner (a hop's feet, before the swing's reach):"
+        );
+        for part in breakable {
+            let low = bottom(&standing, part);
+            let (kind, lowest) = (0..sp.moves.len() as u8)
+                .map(|k| {
+                    let h = through(sp, k)
+                        .map(|b| bottom(&b, part))
+                        .min_by_key(|h| h.raw())
+                        .unwrap_or(low);
+                    (k, h)
+                })
+                .min_by_key(|(_, h)| h.raw())
+                .unwrap_or((0, low));
+            println!(
+                "  {:<16} {:>6} m standing, {}; {:>6} m in the {}, {}",
+                sp.parts[part].name,
+                m(low),
+                reach(low),
+                m(lowest),
+                sp.moves[kind as usize].name.to_lowercase(),
+                reach(lowest)
+            );
+        }
     }
 
     println!("\nthe weak points, standing:");

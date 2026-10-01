@@ -200,6 +200,29 @@ fn a_frame_of_simulation_allocates_nothing() {
     }
 }
 
+/// **The Broodmother's whole fight in the snapshot, run without the heap**: her
+/// clocks, the brood at the cap and her floor full are all cells of the
+/// `World`, so a copy is flat, it fits, and a minute of it never allocates.
+#[test]
+fn the_broodmother_fight_fits_the_snapshot_and_does_not_allocate() {
+    let script = input_script(FRAMES);
+    for class in ALL_CLASSES {
+        let mut world = full_hollows(World::hunt_of([class; MAX_PLAYERS], SpeciesId::BROODMOTHER));
+        assert!(std::mem::size_of_val(&world) <= SNAPSHOT_CAP);
+        let allocations = allocations_during(|| {
+            for inputs in &script {
+                world.advance(*inputs);
+                let copy = world.clone();
+                std::hint::black_box(&copy);
+            }
+        });
+        assert_eq!(
+            allocations, 0,
+            "{class:?} in the Hollows went to the heap {allocations} times"
+        );
+    }
+}
+
 /// Saving and restoring a frame is a copy, and a small one.
 ///
 /// Two claims. The snapshot fits in [`SNAPSHOT_CAP`], and taking one does not
@@ -246,7 +269,7 @@ type Scenario = (&'static str, fn(Class) -> World);
 /// world holds, are twice that. The last is the same in the range: the biggest
 /// arena and the most solids any arena has, which is what every collision,
 /// floor and aiming query walks.
-fn scenarios() -> [Scenario; 11] {
+fn scenarios() -> [Scenario; 12] {
     [
         ("versus", |c| World::with_classes([c; MAX_PLAYERS])),
         ("hunt", |c| World::hunt([c; MAX_PLAYERS])),
@@ -315,7 +338,46 @@ fn scenarios() -> [Scenario; 11] {
         ("the pan, loud", |c| {
             loud_pan(World::hunt_of([c; MAX_PLAYERS], SpeciesId::SANDMAW))
         }),
+        // The Broodmother at her worst: the brood at its cap round the
+        // hunters, every sac held, every hazard slot full -- web patches,
+        // strands across the floor, a glob -- and her clocks, guard and legs
+        // read every frame.
+        ("the hollows, full", |c| {
+            full_hollows(World::hunt_of([c; MAX_PLAYERS], SpeciesId::BROODMOTHER))
+        }),
     ]
+}
+
+/// The Broodmother's fight with everything in it: [`scenarios`]' last.
+fn full_hollows(mut w: World) -> World {
+    use sim::hazard::{self, Hazard};
+    use sim::species::broodmother::{Knob, fight as f};
+    let at =
+        |x: i32, z: i32| sim::V3::new(sim::Fx::from_int(x), sim::Fx::ZERO, sim::Fx::from_int(z));
+    w.advance([Input::default(); MAX_PLAYERS]);
+    if let Some(pack) = w.pack.as_mut() {
+        let cap = Knob::BroodCap.raw().max(0) as i32;
+        for k in 0..cap {
+            sim::pack::spawn(
+                pack,
+                &mut w.critters,
+                sim::species::gnawers::GNAWER,
+                at(-8 + (k % 4) * 2, (k / 4) * 3 - 2),
+                0,
+            );
+        }
+    }
+    let slots = w.lore.layout().hazards as i32;
+    for i in 0..slots {
+        let (x, z) = (-12 + (i % 4) * 5, (i / 4) * 5 - 7);
+        let placed = match i % 3 {
+            0 => Hazard::disc(f::PATCH, at(x, z), sim::Fx::from_int(2)),
+            1 => Hazard::strand(f::STRAND, at(x, z), at(x + 4, z), sim::Fx::ratio(1, 4)),
+            _ => Hazard::disc(f::GLOB, at(x, z), sim::Fx::ONE),
+        };
+        hazard::place(&mut w.lore, placed);
+    }
+    w
 }
 
 /// The Hornback's bull bellowing now, so the whole herd is about to run.
